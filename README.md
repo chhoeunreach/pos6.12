@@ -14,3 +14,4 @@ If you discover a security vulnerability within ultimate POS, please send an e-m
 
 The Ultimate POS software is licensed under the [Codecanyon license](https://codecanyon.net/licenses/standard).
 # pos6.12
+# pos6.12
