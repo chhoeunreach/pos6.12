@@ -17,6 +17,10 @@ use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Activitylog\Models\Activity;
 use App\Events\StockTransferCreatedOrModified;
 use App\Variation;
+use App\Services\TelegramBotService;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use App\Services\WkhtmltopdfPdfService;
 
 class StockTransferController extends Controller
 {
@@ -364,6 +368,17 @@ class StockTransferController extends Controller
 
                         //Copy lot number and expiry date to purchase line
                         $lot_details = PurchaseLine::find($product['lot_no_line_id']);
+                        if (! empty($retransfer_of_id)) {
+                            // For retransfer, require the lot to exist and have available stock in the selected source location.
+                            if (empty($lot_details) || empty($lot_details->transaction) || (int) $lot_details->transaction->location_id !== (int) $input_data['location_id']) {
+                                throw new \Exception('Selected lot/serial is not available in the source location.');
+                            }
+                            $available = (float) ($lot_details->quantity ?? 0) - (float) ($lot_details->quantity_sold ?? 0);
+                            $requested = (float) $sell_line_arr['quantity'];
+                            if ($available < $requested) {
+                                throw new \Exception('Quantity not available in selected lot/serial. Available: ' . $this->productUtil->num_f($available));
+                            }
+                        }
                         $purchase_line_arr['lot_number'] = $lot_details->lot_number;
                         $purchase_line_arr['mfg_date'] = $lot_details->mfg_date;
                         $purchase_line_arr['exp_date'] = $lot_details->exp_date;
@@ -456,6 +471,154 @@ class StockTransferController extends Controller
             ];
 
             DB::commit();
+
+            // Telegram notification + PDF invoice (after DB::commit)
+            $file_path = null;
+            try {
+                $from_location_channels = (array) config('telegram.stock_transfer.from_location_channels', []);
+                $to_location_channels = (array) config('telegram.stock_transfer.to_location_channels', []);
+
+                $sell_transfer_for_print = Transaction::where('business_id', $business_id)
+                    ->where('id', $sell_transfer->id)
+                    ->where('type', 'sell_transfer')
+                    ->with(
+                        'contact',
+                        'sell_lines',
+                        'sell_lines.product',
+                        'sell_lines.variations',
+                        'sell_lines.variations.product_variation',
+                        'sell_lines.lot_details',
+                        'sell_lines.sub_unit',
+                        'location',
+                        'sell_lines.product.unit'
+                    )
+                    ->first();
+
+                $purchase_transfer_for_print = Transaction::where('business_id', $business_id)
+                    ->where('transfer_parent_id', $sell_transfer->id)
+                    ->where('type', 'purchase_transfer')
+                    ->with('location')
+                    ->first();
+
+                if (! empty($sell_transfer_for_print) && ! empty($purchase_transfer_for_print)) {
+                    $sell_transfer = $sell_transfer_for_print;
+                    $location_details = [
+                        'sell' => $sell_transfer->location,
+                        'purchase' => $purchase_transfer_for_print->location,
+                    ];
+
+                    $lot_n_exp_enabled = false;
+                    if ($request->session()->get('business.enable_lot_number') == 1 || $request->session()->get('business.enable_product_expiry') == 1) {
+                        $lot_n_exp_enabled = true;
+                    }
+
+                    $total_qty = 0.0;
+                    foreach ($sell_transfer->sell_lines as $line) {
+                        $total_qty += (float) ($line->quantity ?? 0);
+                    }
+
+                    $status_label = $sell_transfer->status == 'final' ? 'completed' : $sell_transfer->status;
+                    $date_label = ! empty($sell_transfer->transaction_date)
+                        ? \Carbon\Carbon::parse($sell_transfer->transaction_date)->format('Y-m-d H:i')
+                        : '';
+                    $username = '';
+                    try {
+                        $username = trim((string) auth()->user()->first_name . ' ' . (string) auth()->user()->last_name);
+                    } catch (\Exception $e) {
+                        $username = '';
+                    }
+
+                    $message = "📦 <b>Stock Transfer</b>\n\n"
+                        . "Ref No: <b>{$sell_transfer->ref_no}</b>\n"
+                        . 'From: ' . ($location_details['sell']->name ?? '') . "\n"
+                        . 'To: ' . ($location_details['purchase']->name ?? '') . "\n"
+                        . 'Date: ' . $date_label . "\n"
+                        . 'Status: ' . $status_label . "\n"
+                        . 'Total Qty: ' . $this->productUtil->num_f($total_qty, false, null, true)
+                        . (! empty($username) ? "\nBy: <b>{$username}</b>" : '');
+
+                    $temp_dir = storage_path('app/temp');
+                    if (! File::exists($temp_dir)) {
+                        File::makeDirectory($temp_dir, 0755, true);
+                    }
+                    $file_path = storage_path('app/temp/transfer_' . $sell_transfer->id . '.pdf');
+                    $pdf_generated = false;
+                    try {
+                        // Generate PDF using wkhtmltopdf for better Khmer Unicode rendering.
+                        $wk = app(WkhtmltopdfPdfService::class);
+                        $wk->saveViewToPdf(
+                            'stock_transfer.print_pdf',
+                            compact('sell_transfer', 'location_details', 'lot_n_exp_enabled'),
+                            $file_path
+                        );
+                        $pdf_generated = File::exists($file_path) && File::size($file_path) > 0;
+                        Log::info('Stock transfer PDF generated for Telegram', [
+                            'file_path' => $file_path,
+                            'wkhtmltopdf_binary' => method_exists($wk, 'resolveBinaryPath') ? $wk->resolveBinaryPath() : null,
+                            'wkhtmltopdf_version' => method_exists($wk, 'versionString') ? $wk->versionString() : null,
+                            'font_khmer_os_battambang_exists' => File::exists(storage_path('fonts/KhmerOSbattambang.ttf')),
+                            'font_noto_khmer_exists' => File::exists(storage_path('fonts/NotoSansKhmer-Regular.ttf')),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage());
+                    }
+
+                    $document_name = 'transfer_' . $sell_transfer->ref_no . '.pdf';
+
+                    $telegram = new TelegramBotService();
+
+                    $from_name = $location_details['sell']->name ?? '';
+                    $to_name = $location_details['purchase']->name ?? '';
+
+                    $from_chat_ids = $this->telegramChatIdsForLocation($from_name, $from_location_channels);
+                    $to_chat_ids = $this->telegramChatIdsForLocation($to_name, $to_location_channels);
+
+                    // If transfer is within the same location, avoid sending twice.
+                    $normalized_from = mb_strtolower(trim((string) $from_name));
+                    $normalized_to = mb_strtolower(trim((string) $to_name));
+                    if ($normalized_from !== '' && $normalized_from === $normalized_to) {
+                        $to_chat_ids = [];
+                    }
+
+                    $chat_ids = array_values(array_unique(array_filter(array_merge($from_chat_ids, $to_chat_ids))));
+                    Log::info('Telegram stock transfer notify', [
+                        'ref_no' => $sell_transfer->ref_no ?? null,
+                        'from_location' => $from_name,
+                        'to_location' => $to_name,
+                        'from_chat_ids' => $from_chat_ids,
+                        'to_chat_ids' => $to_chat_ids,
+                        'merged_chat_ids' => $chat_ids,
+                    ]);
+
+                    if (empty($chat_ids)) {
+                        Log::warning('Telegram stock transfer notify skipped: no chat_ids resolved', [
+                            'ref_no' => $sell_transfer->ref_no ?? null,
+                            'from_location' => $from_name,
+                            'to_location' => $to_name,
+                        ]);
+                    }
+
+                    foreach ($chat_ids as $chat_id) {
+                        if ($pdf_generated) {
+                            // Send ONE message only: PDF document with full caption (no separate sendMessage).
+                            $telegram->sendDocumentToChat($chat_id, $file_path, $message, $document_name);
+                        } else {
+                            // Fallback: if PDF generation failed, send text only.
+                            $telegram->sendMessageToChat($chat_id, $message);
+                        }
+                    }
+
+                    if (! empty($file_path) && File::exists($file_path) && ! config('app.debug')) {
+                        File::delete($file_path);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Telegram error: ' . $e->getMessage());
+            } finally {
+                if (! empty($file_path ?? null) && File::exists($file_path) && ! config('app.debug')) {
+                    File::delete($file_path);
+                }
+            }
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
@@ -466,6 +629,45 @@ class StockTransferController extends Controller
         }
 
         return redirect('stock-transfers')->with('status', $output);
+    }
+
+    private function telegramChatIdsForLocation(?string $location_name, array $mapping): array
+    {
+        $location_name = trim((string) $location_name);
+        if ($location_name === '' || empty($mapping)) {
+            return [];
+        }
+
+        $value = null;
+        if (array_key_exists($location_name, $mapping)) {
+            $value = $mapping[$location_name];
+        } else {
+            // Case-insensitive + trim match for location names
+            foreach ($mapping as $key => $mappedValue) {
+                if (trim((string) $key) !== '' && mb_strtolower(trim((string) $key)) === mb_strtolower($location_name)) {
+                    $value = $mappedValue;
+                    break;
+                }
+            }
+        }
+
+        if ($value === null) {
+            return [];
+        }
+
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value)));
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return [];
+        }
+
+        // Supports comma-separated chat IDs in config arrays.
+        $parts = array_map('trim', explode(',', $value));
+
+        return array_values(array_filter($parts));
     }
 
     /**
@@ -575,20 +777,33 @@ class StockTransferController extends Controller
                 event( new StockTransferCreatedOrModified($sell_transfer, 'deleted'));
 
                 DB::beginTransaction();
-                //Get purchase lines from transaction_sell_lines_purchase_lines and decrease quantity_sold
+                // Get purchase lines from transaction_sell_lines_purchase_lines and decrease quantity_sold
+                // IMPORTANT: A sell line can be mapped to multiple purchase lines (FIFO or multiple lots),
+                // so we must reverse all mappings, not just the first.
                 $sell_lines = $sell_transfer->sell_lines;
                 $deleted_sell_purchase_ids = [];
                 $products = []; //variation_id as array
 
                 foreach ($sell_lines as $sell_line) {
-                    $purchase_sell_line = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line->id)->first();
+                    $purchase_sell_lines = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line->id)->get();
 
-                    if (! empty($purchase_sell_line)) {
-                        //Decrease quntity sold from purchase line
-                        PurchaseLine::where('id', $purchase_sell_line->purchase_line_id)
-                                ->decrement('quantity_sold', $sell_line->quantity);
+                    if ($purchase_sell_lines->isNotEmpty()) {
+                        foreach ($purchase_sell_lines as $purchase_sell_line) {
+                            $reverse_qty = (float) $purchase_sell_line->quantity;
+                            if ($reverse_qty <= 0) {
+                                $deleted_sell_purchase_ids[] = $purchase_sell_line->id;
+                                continue;
+                            }
 
-                        $deleted_sell_purchase_ids[] = $purchase_sell_line->id;
+                            // Decrease quantity_sold from purchase line (cap at 0)
+                            $purchase_line = PurchaseLine::lockForUpdate()->find($purchase_sell_line->purchase_line_id);
+                            if (! empty($purchase_line)) {
+                                $purchase_line->quantity_sold = max(0, (float) $purchase_line->quantity_sold - $reverse_qty);
+                                $purchase_line->save();
+                            }
+
+                            $deleted_sell_purchase_ids[] = $purchase_sell_line->id;
+                        }
 
                         //variation details
                         if (isset($products[$sell_line->variation_id])) {
@@ -597,6 +812,16 @@ class StockTransferController extends Controller
                         } else {
                             $products[$sell_line->variation_id]['quantity'] = $sell_line->quantity;
                             $products[$sell_line->variation_id]['product_id'] = $sell_line->product_id;
+                        }
+                    } elseif (! empty($sell_line->lot_no_line_id)) {
+                        // Fallback: if mapping rows are missing, reverse against explicitly selected lot purchase line.
+                        $fallback_qty = (float) $sell_line->quantity;
+                        if ($fallback_qty > 0) {
+                            $purchase_line = PurchaseLine::lockForUpdate()->find($sell_line->lot_no_line_id);
+                            if (! empty($purchase_line)) {
+                                $purchase_line->quantity_sold = max(0, (float) $purchase_line->quantity_sold - $fallback_qty);
+                                $purchase_line->save();
+                            }
                         }
                     }
                 }
@@ -619,6 +844,16 @@ class StockTransferController extends Controller
                             $key,
                             $products[$key]['quantity']
                         );
+                    }
+                }
+
+                // Recalculate variation stock for both locations to ensure lot quantities become selectable again.
+                // (Safely ignore if util expects full objects; updateProductQuantity/decreaseProductQuantity already update VLD,
+                // but this extra recalculation helps avoid stale cached qty_available issues.)
+                if (method_exists($this->productUtil, 'recalculateVariationStock')) {
+                    foreach ($products as $variation_id => $value) {
+                        $this->productUtil->recalculateVariationStock($value['product_id'], $variation_id, $sell_transfer->location_id);
+                        $this->productUtil->recalculateVariationStock($value['product_id'], $variation_id, $purchase_transfer->location_id);
                     }
                 }
 
@@ -782,12 +1017,13 @@ class StockTransferController extends Controller
         $original_transfer = Transaction::where('business_id', $business_id)
             ->where('type', 'sell_transfer')
             ->where('status', 'final')
-            ->with(['sell_lines'])
+            ->with(['sell_lines', 'sell_lines.lot_details'])
             ->findOrFail($id);
 
         $purchase_transfer = Transaction::where('business_id', $business_id)
             ->where('transfer_parent_id', $id)
             ->where('type', 'purchase_transfer')
+            ->with(['purchase_lines'])
             ->first();
 
         $business_locations = BusinessLocation::forDropdown($business_id);
@@ -811,6 +1047,7 @@ class StockTransferController extends Controller
 
         $products = [];
         $retransfer_lines = [];
+        $missing_lots = [];
 
         foreach ($original_transfer->sell_lines as $sell_line) {
             $product = $this->productUtil->getDetailsFromVariation(
@@ -837,18 +1074,57 @@ class StockTransferController extends Controller
             }
             $product->lot_numbers = $lot_numbers;
 
+            // Auto-fill the same lot/serial number as original transfer:
+            // Original sell_line.lot_no_line_id points to the source purchase_line at the time of original transfer,
+            // but retransfer source is typically the original destination location. We map by lot_number + exp_date.
+            $original_lot_no = '';
+            $original_exp_date = null;
+            if (! empty($sell_line->lot_details)) {
+                $original_lot_no = (string) ($sell_line->lot_details->lot_number ?? '');
+                $original_exp_date = $sell_line->lot_details->exp_date ?? null;
+            }
+
+            if (! empty($original_lot_no) || ! empty($original_exp_date)) {
+                $matched_purchase_line_id = null;
+                $required_qty = (float) ($sell_line->quantity ?? 0);
+
+                foreach ($lot_numbers as $lot_number) {
+                    $same_lot = (string) ($lot_number->lot_number ?? '') === (string) $original_lot_no;
+                    $same_exp = (string) ($lot_number->exp_date ?? '') === (string) ($original_exp_date ?? '');
+                    if ($same_lot && ($original_exp_date === null || $same_exp)) {
+                        // Ensure availability (qty_available is in base units)
+                        if ((float) ($lot_number->qty_available ?? 0) >= $required_qty) {
+                            $matched_purchase_line_id = $lot_number->purchase_line_id;
+                            break;
+                        }
+                    }
+                }
+
+                if (! empty($matched_purchase_line_id)) {
+                    $product->lot_no_line_id = $matched_purchase_line_id;
+                } else {
+                    $missing_lots[] = [
+                        'product' => $product->product_name ?? '',
+                        'sub_sku' => $product->sub_sku ?? '',
+                        'lot_number' => $original_lot_no,
+                        'exp_date' => $original_exp_date,
+                        'required_qty' => $required_qty,
+                    ];
+                }
+            }
+
             $products[] = $product;
 
             $retransfer_lines[] = [
                 'variation_id' => $sell_line->variation_id,
                 'quantity' => (float) $sell_line->quantity,
                 'sub_unit_id' => $sell_line->sub_unit_id,
-                'lot_no_line_id' => $sell_line->lot_no_line_id,
+                'lot_no_line_id' => $product->lot_no_line_id,
             ];
         }
 
         return view('stock_transfer.retransfer')
-            ->with(compact('original_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products', 'default_location_from_id', 'retransfer_lines', 'suggested_ref_no', 'suggested_additional_notes'));
+            ->with(compact('original_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products', 'default_location_from_id', 'retransfer_lines', 'suggested_ref_no', 'suggested_additional_notes', 'missing_lots'));
     }
 
     /**

@@ -10,6 +10,25 @@
 
     <!-- Main content -->
     <section class="content no-print">
+        @if(!empty($missing_lots))
+            <div class="alert alert-danger">
+                <strong>Lot/Serial not available in selected source location.</strong>
+                <ul style="margin-top: 6px; margin-bottom: 0;">
+                    @foreach($missing_lots as $m)
+                        <li>
+                            {{ $m['product'] }} @if(!empty($m['sub_sku'])) ({{ $m['sub_sku'] }}) @endif
+                            - Lot: {{ $m['lot_number'] ?: '-' }}
+                            @if(!empty($m['exp_date'])) - Exp: {{ @format_date($m['exp_date']) }} @endif
+                            - Qty: {{ @format_quantity($m['required_qty']) }}
+                        </li>
+                    @endforeach
+                </ul>
+                <div style="margin-top: 6px;">
+                    Please change the source location or adjust lots/quantities before saving.
+                </div>
+            </div>
+        @endif
+
         {!! Form::open([
             'url' => action([\App\Http\Controllers\StockTransferController::class, 'store']),
             'method' => 'post',

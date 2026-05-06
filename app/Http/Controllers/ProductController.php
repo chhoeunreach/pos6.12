@@ -1262,6 +1262,56 @@ class ProductController extends Controller
 
             $result = $this->productUtil->filterProduct($business_id, $search_term, $location_id, $not_for_selling, $price_group_id, $product_types, $search_fields, $check_qty);
 
+            // Stock Transfer enhancement: when searching by lot number, return per-lot rows so the UI can preselect the lot.
+            if (! empty($location_id)
+                && ! empty($search_term)
+                && in_array('lot', $search_fields, true)
+                && (int) request()->input('group_by_purchase_line', 0) === 1
+            ) {
+                $lot_rows = \App\PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
+                    ->join('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
+                    ->join('products as p', 'v.product_id', '=', 'p.id')
+                    ->leftJoin('units as U', 'p.unit_id', '=', 'U.id')
+                    ->where('p.business_id', $business_id)
+                    ->where('t.location_id', $location_id)
+                    ->where('p.type', '!=', 'modifier')
+                    ->whereNotNull('purchase_lines.lot_number')
+                    ->where('purchase_lines.lot_number', 'like', '%' . $search_term . '%')
+                    ->select([
+                        'p.id as product_id',
+                        'p.name',
+                        'p.type',
+                        'p.enable_stock',
+                        'v.id as variation_id',
+                        'v.name as variation',
+                        \DB::raw('(purchase_lines.quantity - purchase_lines.quantity_sold - purchase_lines.quantity_adjusted - purchase_lines.quantity_returned - purchase_lines.mfg_quantity_used) as qty_available'),
+                        'v.sell_price_inc_tax as selling_price',
+                        'v.sub_sku',
+                        'U.short_name as unit',
+                        'purchase_lines.id as purchase_line_id',
+                        'purchase_lines.lot_number',
+                    ])
+                    ->orderBy('qty_available', 'desc')
+                    ->limit(25)
+                    ->get();
+
+                // Escape to match existing util behavior
+                $lot_rows->transform(function ($item) {
+                    $item->name = e($item->name);
+                    $item->variation = e($item->variation);
+                    $item->sub_sku = e($item->sub_sku);
+                    return $item;
+                });
+
+                // If lot matches exist, return ONLY per-lot rows (so autocomplete doesn't show duplicates).
+                // If no lot matches, fall back to normal product results.
+                if ($lot_rows->isNotEmpty()) {
+                    return json_encode($lot_rows->unique('purchase_line_id')->values());
+                }
+
+                return json_encode($result);
+            }
+
             // If only one result and location_id is provided (POS context), auto-fetch the product row
             if (count($result) == 1 && !empty($location_id) && request()->get('auto_add_single', false)) {
                 

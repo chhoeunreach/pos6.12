@@ -1,13 +1,26 @@
 $(document).ready(function() {
     //Add products
     if ($('#search_product_for_srock_adjustment').length > 0) {
+        // Prevent barcode scanners (Enter key) from submitting the form / stopping next scans.
+        $(document).on('keydown', '#search_product_for_srock_adjustment', function(e) {
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
         //Add Product
         $('#search_product_for_srock_adjustment')
             .autocomplete({
                 source: function(request, response) {
                     $.getJSON(
                         '/products/list',
-                        { location_id: $('#location_id').val(), term: request.term },
+                        {
+                            location_id: $('#location_id').val(),
+                            term: request.term,
+                            search_fields: ['name', 'sku', 'lot'],
+                            group_by_purchase_line: 1
+                        },
                         response
                     );
                 },
@@ -33,7 +46,15 @@ $(document).ready(function() {
                 select: function(event, ui) {
                     if (ui.item.qty_available > 0) {
                         $(this).val(null);
-                        stock_transfer_product_row(ui.item.variation_id);
+                        stock_transfer_product_row(ui.item.variation_id, function($row) {
+                            if (ui.item.purchase_line_id && $row.find('select.lot_number').length) {
+                                $row.find('select.lot_number').val(ui.item.purchase_line_id).trigger('change');
+                            }
+                        });
+                        // Keep focus for continuous scanning
+                        setTimeout(function() {
+                            $('#search_product_for_srock_adjustment').focus();
+                        }, 50);
                     } else {
                         alert(LANG.out_of_stock);
                     }
@@ -55,6 +76,9 @@ $(document).ready(function() {
                     string += '-' + item.variation;
                 }
                 string += ' (' + item.sub_sku + ') </div>';
+                if (item.lot_number) {
+                    string += '<small class="text-muted">Lot: ' + item.lot_number + '</small>';
+                }
                 return $('<li>')
                     .append(string)
                     .appendTo(ul);
