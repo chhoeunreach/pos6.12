@@ -117,14 +117,18 @@
 @section('javascript')
     @php
         $custom_labels = json_decode(session('business.custom_labels'), true);
+        $pcf1 = trim((string) ($custom_labels['purchase']['custom_field_1'] ?? ''));
+        $pcf2 = trim((string) ($custom_labels['purchase']['custom_field_2'] ?? ''));
+        $pcf3 = trim((string) ($custom_labels['purchase']['custom_field_3'] ?? ''));
+        $pcf4 = trim((string) ($custom_labels['purchase']['custom_field_4'] ?? ''));
     @endphp
     <script>
         // Custom field visibility configuration
         var customFieldVisibility = {
-            custom_field_1: @json(!empty($custom_labels['purchase']['custom_field_1'])),
-            custom_field_2: @json(!empty($custom_labels['purchase']['custom_field_2'])),
-            custom_field_3: @json(!empty($custom_labels['purchase']['custom_field_3'])),
-            custom_field_4: @json(!empty($custom_labels['purchase']['custom_field_4']))
+            custom_field_1: @json($pcf1 !== ''),
+            custom_field_2: @json($pcf2 !== ''),
+            custom_field_3: @json($pcf3 !== ''),
+            custom_field_4: @json($pcf4 !== '')
         };
     </script>
     <script src="{{ asset('js/purchase.js?v=' . $asset_v) }}"></script>

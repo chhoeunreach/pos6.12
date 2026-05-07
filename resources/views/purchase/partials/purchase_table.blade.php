@@ -12,14 +12,18 @@
             <th>Total Qty</th>
             @php
                 $custom_labels = json_decode(session('business.custom_labels'), true);
+                $pcf1 = trim((string) ($custom_labels['purchase']['custom_field_1'] ?? ''));
+                $pcf2 = trim((string) ($custom_labels['purchase']['custom_field_2'] ?? ''));
+                $pcf3 = trim((string) ($custom_labels['purchase']['custom_field_3'] ?? ''));
+                $pcf4 = trim((string) ($custom_labels['purchase']['custom_field_4'] ?? ''));
             @endphp
             
             <th>@lang('purchase.payment_due') &nbsp;&nbsp;<i class="fa fa-info-circle text-info no-print" data-toggle="tooltip" data-placement="bottom" data-html="true" data-original-title="{{ __('messages.purchase_due_tooltip')}}" aria-hidden="true"></i></th>
            
-            <th>{{ $custom_labels['purchase']['custom_field_1'] ?? '' }}</th>
-            <th>{{ $custom_labels['purchase']['custom_field_2'] ?? '' }}</th>
-            <th>{{ $custom_labels['purchase']['custom_field_3'] ?? '' }}</th>
-            <th>{{ $custom_labels['purchase']['custom_field_4'] ?? '' }}</th>
+            <th>{{ $pcf1 }}</th>
+            <th>{{ $pcf2 }}</th>
+            <th>{{ $pcf3 }}</th>
+            <th>{{ $pcf4 }}</th>
             <th>@lang('lang_v1.added_by')</th>
         </tr>
     </thead>
