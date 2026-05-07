@@ -32,6 +32,15 @@ class CustomBackupController extends Controller
     {
         $this->authorizeAccess();
 
+        $is_full_backup = (bool) $request->boolean('full_backup', false);
+
+        if ($is_full_backup) {
+            $zip_path = $this->createFullDbBackup();
+            $download_name = 'full_backup_' . now()->format('Ymd_His') . '_' . basename($zip_path);
+
+            return response()->download($zip_path, $download_name)->deleteFileAfterSend(true);
+        }
+
         $validated = $request->validate([
             'from_date' => ['required'],
             'to_date' => ['required'],
@@ -104,6 +113,12 @@ class CustomBackupController extends Controller
         }, $file, [
             'Content-Type' => 'application/sql; charset=UTF-8',
         ]);
+    }
+
+    private function createFullDbBackup(): string
+    {
+        // Reuse the same spatie backup flow used for pre-import backups (db-only zip)
+        return $this->createPreImportBackup(null);
     }
 
     public function showImportForm()

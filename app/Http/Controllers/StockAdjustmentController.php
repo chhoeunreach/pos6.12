@@ -86,7 +86,6 @@ class StockAdjustmentController extends Controller
             $end_date = request()->get('end_date');
             if (! empty($start_date) && ! empty($end_date)) {
                 $stock_adjustments->whereBetween(DB::raw('date(transaction_date)'), [$start_date, $end_date]);
-                $hide = 'hide';
             }
             $location_id = request()->get('location_id');
             if (! empty($location_id)) {

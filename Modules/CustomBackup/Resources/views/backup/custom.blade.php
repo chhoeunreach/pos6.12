@@ -41,16 +41,23 @@
             @component('components.widget', ['class' => 'box-primary'])
                 {!! Form::open(['url' => action([\Modules\CustomBackup\Http\Controllers\CustomBackupController::class, 'export']), 'method' => 'post']) !!}
                 <div class="row">
-                    <div class="col-sm-3">
+                    <div class="col-sm-6">
                         <div class="form-group">
-                            {!! Form::label('from_date', 'From Date:') !!}
-                            {!! Form::text('from_date', old('from_date'), ['class' => 'form-control', 'readonly', 'id' => 'from_date', 'required']) !!}
+                            {!! Form::label('custom_backup_date_range', 'Date Range:') !!}
+                            <input type="text" id="custom_backup_date_range" class="form-control" readonly placeholder="{{ __('report.select_a_date_range') }}">
+                            {!! Form::hidden('from_date', old('from_date'), ['id' => 'from_date']) !!}
+                            {!! Form::hidden('to_date', old('to_date'), ['id' => 'to_date']) !!}
                         </div>
                     </div>
-                    <div class="col-sm-3">
-                        <div class="form-group">
-                            {!! Form::label('to_date', 'To Date:') !!}
-                            {!! Form::text('to_date', old('to_date'), ['class' => 'form-control', 'readonly', 'id' => 'to_date', 'required']) !!}
+                    <div class="col-sm-6">
+                        <div class="form-group" style="margin-top: 25px;">
+                            <label>
+                                <input type="checkbox" id="full_backup" name="full_backup" value="1" {{ old('full_backup') ? 'checked' : '' }}>
+                                Full Backup (entire database)
+                            </label>
+                            <div class="text-muted">
+                                If checked, system generates a full database backup zip (ignores Date Range and module selection).
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -131,15 +138,66 @@
 @section('javascript')
 <script>
     $(document).ready(function() {
-        $('#from_date').datepicker({
-            autoclose: true,
-            format: datepicker_date_format
+        // Date Range (like sales filters)
+        var oldFrom = $('#from_date').val();
+        var oldTo = $('#to_date').val();
+
+        var start = moment().subtract(29, 'days');
+        var end = moment();
+
+        if (oldFrom && oldTo) {
+            var parsedStart = moment(oldFrom, moment_date_format);
+            var parsedEnd = moment(oldTo, moment_date_format);
+            if (parsedStart.isValid() && parsedEnd.isValid()) {
+                start = parsedStart;
+                end = parsedEnd;
+                $('#custom_backup_date_range').val(
+                    start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+                );
+            }
+        }
+
+        $('#custom_backup_date_range').daterangepicker(
+            $.extend(true, {}, dateRangeSettings, { startDate: start, endDate: end }),
+            function(start, end) {
+                $('#custom_backup_date_range').val(
+                    start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+                );
+                $('#from_date').val(start.format(moment_date_format));
+                $('#to_date').val(end.format(moment_date_format));
+            }
+        );
+
+        $('#custom_backup_date_range').on('apply.daterangepicker', function(ev, picker) {
+            $('#custom_backup_date_range').val(
+                picker.startDate.format(moment_date_format) + ' ~ ' + picker.endDate.format(moment_date_format)
+            );
+            $('#from_date').val(picker.startDate.format(moment_date_format));
+            $('#to_date').val(picker.endDate.format(moment_date_format));
         });
-        $('#to_date').datepicker({
-            autoclose: true,
-            format: datepicker_date_format
+
+        $('#custom_backup_date_range').on('cancel.daterangepicker', function(ev, picker) {
+            $('#custom_backup_date_range').val('');
+            $('#from_date').val('');
+            $('#to_date').val('');
         });
+
+        function toggleFullBackupUI() {
+            var isFull = $('#full_backup').is(':checked');
+
+            $('#custom_backup_date_range').prop('disabled', isFull);
+            if (isFull) {
+                $('#custom_backup_date_range').val('');
+                $('#from_date').val('');
+                $('#to_date').val('');
+            }
+
+            // Disable module selection when full backup is chosen
+            $('input[name^="modules["]').prop('disabled', isFull);
+        }
+
+        $('#full_backup').on('change', toggleFullBackupUI);
+        toggleFullBackupUI();
     });
 </script>
 @endsection
-
