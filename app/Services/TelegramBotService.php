@@ -18,6 +18,23 @@ class TelegramBotService
         return "https://api.telegram.org/bot{$this->token}";
     }
 
+    /**
+     * Build payload for sendDocument.
+     */
+    protected function sendDocumentPayload(string $chat_id, ?string $caption): array
+    {
+        $payload = [
+            'chat_id' => $chat_id,
+            'parse_mode' => 'HTML',
+        ];
+
+        if ($caption !== null && trim($caption) !== '') {
+            $payload['caption'] = $caption;
+        }
+
+        return $payload;
+    }
+
     public function sendMessageToChat(string $chat_id, string $message): void
     {
         $chat_id = trim($chat_id);
@@ -55,15 +72,22 @@ class TelegramBotService
             throw new \RuntimeException('Telegram sendDocument failed: file not readable: ' . $file_path);
         }
 
-        $response = Http::timeout(30)->retry(2, 250)->attach(
-            'document',
-            file_get_contents($file_path),
-            $filename
-        )->post($this->baseUrl() . '/sendDocument', [
-            'chat_id' => $chat_id,
-            'caption' => $caption,
-            'parse_mode' => 'HTML',
-        ]);
+        $handle = fopen($file_path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Telegram sendDocument failed: unable to open file: ' . $file_path);
+        }
+
+        try {
+            $payload = $this->sendDocumentPayload($chat_id, $caption);
+
+            $response = Http::timeout(30)->retry(2, 250)->attach(
+                'document',
+                $handle,
+                $filename
+            )->post($this->baseUrl() . '/sendDocument', $payload);
+        } finally {
+            fclose($handle);
+        }
 
         if ($response->failed()) {
             throw new \RuntimeException('Telegram sendDocument failed: HTTP ' . $response->status() . ' - ' . $response->body());

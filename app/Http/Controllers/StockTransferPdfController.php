@@ -14,6 +14,13 @@ class StockTransferPdfController extends Controller
     public function debug(Request $request, WkhtmltopdfPdfService $pdfService)
     {
         return [
+            'php_extensions' => [
+                'curl' => extension_loaded('curl'),
+                'openssl' => extension_loaded('openssl'),
+            ],
+            'telegram' => [
+                'bot_token_present' => trim((string) config('telegram.bot_token', env('TELEGRAM_BOT_TOKEN', ''))) !== '',
+            ],
             'wkhtmltopdf_enabled' => $pdfService->isEnabled(),
             'wkhtmltopdf_binary' => $pdfService->binaryPath(),
             'wkhtmltopdf_version' => $pdfService->versionString(),

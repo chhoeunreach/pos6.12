@@ -106,6 +106,30 @@ Example (also in `StockTransferPdfController`):
 $telegram->sendDocumentToChat($chatId, $pdfPath, 'វិក្កយបត្រ', basename($pdfPath));
 ```
 
+### Telegram prerequisites (Ubuntu/public server)
+
+Make sure the server can make outbound HTTPS requests to Telegram and PHP has the needed extensions:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates
+sudo apt-get install -y php-curl
+php -m | grep -E 'curl|openssl'
+```
+
+Set `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=123456:ABC-YourBotToken
+```
+
+If you use config cache on production, reload config after changing `.env`:
+
+```bash
+php artisan config:clear
+php artisan cache:clear
+```
+
 ## 6) Troubleshooting
 
 ### wkhtmltopdf path issue
@@ -141,6 +165,12 @@ ls -la storage/fonts
 ```bash
 ls -la storage/app/temp/*.pdf
 ```
+
+### Telegram send fails on server
+- Check `config('telegram.bot_token')` is not empty (token present in `.env` and config is not stale).
+- Check PHP extensions: `curl` + `openssl` are enabled.
+- Check CA certs: `ca-certificates` installed (SSL verification errors).
+- Check firewall/NAT allows outbound `https://api.telegram.org`.
 
 ### Khmer ok in browser but not in PDF
 - Browser can use web fonts; wkhtmltopdf needs system fonts or local `file://` fonts.
