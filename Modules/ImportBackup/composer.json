@@ -1,0 +1,22 @@
+{
+    "name": "nwidart/importbackup",
+    "description": "Import backup module wrapper",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\ImportBackup\\Providers\\ImportBackupServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\\\ImportBackup\\\\": ""
+        }
+    }
+}

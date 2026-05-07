@@ -1,0 +1,14 @@
+{
+    "name": "ClearDataByDate",
+    "alias": "clear-data-by-date",
+    "description": "Clear Data by Date module",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\ClearDataByDate\\Providers\\ClearDataByDateServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

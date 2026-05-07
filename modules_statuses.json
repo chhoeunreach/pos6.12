@@ -19,5 +19,10 @@
     "InboxReport": true,
     "CustomDashboard": true,
     "Gym": true,
-    "ZatcaIntegrationKsa": true
+    "ZatcaIntegrationKsa": true,
+    "FixStockMismatch": true,
+    "CustomBackup": true,
+    "ImportBackup": true,
+    "ImportUsers": true,
+    "ClearDataByDate": true
 }

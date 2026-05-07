@@ -1,0 +1,14 @@
+{
+    "name": "ImportBackup",
+    "alias": "importbackup",
+    "description": "Import SQL backup (custom backup import) tool",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\ImportBackup\\Providers\\ImportBackupServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

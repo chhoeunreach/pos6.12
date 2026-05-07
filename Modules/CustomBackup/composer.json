@@ -1,0 +1,22 @@
+{
+    "name": "nwidart/custombackup",
+    "description": "Custom backup module wrapper",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\CustomBackup\\Providers\\CustomBackupServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\\\CustomBackup\\\\": ""
+        }
+    }
+}

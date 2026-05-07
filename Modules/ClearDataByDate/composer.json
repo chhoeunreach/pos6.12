@@ -1,0 +1,23 @@
+{
+    "name": "twf/clear-data-by-date",
+    "description": "Clear Data by Date module",
+    "authors": [
+        {
+            "name": "The Web Fosters",
+            "email": "thewebfosters@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\ClearDataByDate\\Providers\\ClearDataByDateServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\ClearDataByDate\\": ""
+        }
+    }
+}

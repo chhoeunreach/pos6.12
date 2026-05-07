@@ -1,0 +1,14 @@
+{
+    "name": "FixStockMismatch",
+    "alias": "fixstockmismatch",
+    "description": "Detect and fix stock mismatches (variation_location_details) with full audit logs",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\FixStockMismatch\\Providers\\FixStockMismatchServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

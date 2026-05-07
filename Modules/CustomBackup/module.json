@@ -1,0 +1,14 @@
+{
+    "name": "CustomBackup",
+    "alias": "custombackup",
+    "description": "Custom SQL export (date range) backup tool",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\CustomBackup\\Providers\\CustomBackupServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

@@ -9,6 +9,7 @@ use App\System;
 use App\Transaction;
 use App\User;
 use Composer\Semver\Comparator;
+use Illuminate\Support\Str;
 use Module;
 
 class ModuleUtil extends Util
@@ -26,6 +27,10 @@ class ModuleUtil extends Util
         if ($is_available) {
             //Check if installed by checking the system table {module_name}_version
             $module_version = System::getProperty(strtolower($module_name).'_version');
+            // Backward compatibility: some modules store snake_case keys (ex: clear_data_by_date_version)
+            if (empty($module_version)) {
+                $module_version = System::getProperty(Str::snake($module_name).'_version');
+            }
             if (empty($module_version)) {
                 return false;
             } else {

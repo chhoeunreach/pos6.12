@@ -1,0 +1,23 @@
+{
+    "name": "nwidart/fixstockmismatch",
+    "description": "Detect and fix stock mismatches with audit logs",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\FixStockMismatch\\Providers\\FixStockMismatchServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\FixStockMismatch\\": ""
+        }
+    }
+}
+
