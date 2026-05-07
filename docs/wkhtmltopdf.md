@@ -123,6 +123,12 @@ Set `.env`:
 TELEGRAM_BOT_TOKEN=123456:ABC-YourBotToken
 ```
 
+Test Telegram + PDF together from the server:
+
+```bash
+php artisan telegram:pdf-test --chat=-1002817135261 --caption="Test PDF"
+```
+
 If you use config cache on production, reload config after changing `.env`:
 
 ```bash
