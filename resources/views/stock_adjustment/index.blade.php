@@ -12,6 +12,73 @@
 
 <!-- Main content -->
 <section class="content">
+    @component('components.filters', ['title' => __('report.filters')])
+        <div class="col-md-3">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_location_id', __('purchase.business_location') . ':') !!}
+                {!! Form::select('stock_adjustment_list_filter_location_id', $business_locations, null, [
+                    'class' => 'form-control select2',
+                    'style' => 'width:100%',
+                    'id' => 'stock_adjustment_list_filter_location_id',
+                    'placeholder' => __('lang_v1.all'),
+                ]) !!}
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_adjustment_type', __('stock_adjustment.adjustment_type') . ':') !!}
+                {!! Form::select('stock_adjustment_list_filter_adjustment_type', $adjustment_types, null, [
+                    'class' => 'form-control select2',
+                    'style' => 'width:100%',
+                    'id' => 'stock_adjustment_list_filter_adjustment_type',
+                    'placeholder' => __('lang_v1.all'),
+                ]) !!}
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_product_id', __('sale.product') . ':') !!}
+                {!! Form::select('stock_adjustment_list_filter_product_id', [], null, [
+                    'class' => 'form-control select2',
+                    'style' => 'width:100%',
+                    'id' => 'stock_adjustment_list_filter_product_id',
+                    'placeholder' => __('lang_v1.all'),
+                ]) !!}
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_created_by', __('report.user') . ':') !!}
+                {!! Form::select('stock_adjustment_list_filter_created_by', $users, null, [
+                    'class' => 'form-control select2',
+                    'style' => 'width:100%',
+                    'id' => 'stock_adjustment_list_filter_created_by',
+                    'placeholder' => __('lang_v1.all'),
+                ]) !!}
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_ref_no', __('purchase.ref_no') . ':') !!}
+                {!! Form::text('stock_adjustment_list_filter_ref_no', null, [
+                    'class' => 'form-control',
+                    'id' => 'stock_adjustment_list_filter_ref_no',
+                    'placeholder' => __('purchase.ref_no'),
+                ]) !!}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+                {!! Form::label('stock_adjustment_list_filter_date_range', __('report.date_range') . ':') !!}
+                {!! Form::text('stock_adjustment_list_filter_date_range', null, [
+                    'class' => 'form-control',
+                    'id' => 'stock_adjustment_list_filter_date_range',
+                    'readonly',
+                    'placeholder' => __('report.select_a_date_range'),
+                ]) !!}
+            </div>
+        </div>
+    @endcomponent
     @component('components.widget', ['class' => 'box-primary', 'title' => __('stock_adjustment.all_stock_adjustments')])
         @slot('tool')
             <div class="box-tools">

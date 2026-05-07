@@ -176,6 +176,10 @@ class PurchaseController extends Controller
                     'final_total',
                     '<span class="final_total" data-orig-value="{{$final_total}}">@format_currency($final_total)</span>'
                 )
+                ->editColumn('total_qty', function ($row) {
+                    $qty = $this->transactionUtil->num_f((float) ($row->total_qty ?? 0), false, null, true);
+                    return '<span class="total_qty" data-orig-value="' . e($row->total_qty ?? 0) . '">' . $qty . ' Pc(s)</span>';
+                })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('name', '@if(!empty($supplier_business_name)) {{$supplier_business_name}}, <br> @endif {{$name}}')
                 ->editColumn(
@@ -210,7 +214,7 @@ class PurchaseController extends Controller
                             return '';
                         }
                     }, ])
-                ->rawColumns(['final_total', 'action', 'payment_due', 'payment_status', 'status', 'ref_no', 'name'])
+                ->rawColumns(['final_total', 'total_qty', 'action', 'payment_due', 'payment_status', 'status', 'ref_no', 'name'])
                 ->make(true);
         }
 

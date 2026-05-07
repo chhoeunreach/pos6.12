@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\BusinessLocation;
 use App\PurchaseLine;
 use App\Transaction;
+use App\User;
 use App\Utils\ModuleUtil;
 use App\Utils\ProductUtil;
 use App\Utils\TransactionUtil;
@@ -92,6 +93,31 @@ class StockAdjustmentController extends Controller
                 $stock_adjustments->where('transactions.location_id', $location_id);
             }
 
+            $adjustment_type = request()->get('adjustment_type');
+            if (! empty($adjustment_type)) {
+                $stock_adjustments->where('transactions.adjustment_type', $adjustment_type);
+            }
+
+            $created_by = request()->get('created_by');
+            if (! empty($created_by)) {
+                $stock_adjustments->where('transactions.created_by', $created_by);
+            }
+
+            $ref_no = trim((string) request()->get('ref_no', ''));
+            if ($ref_no !== '') {
+                $stock_adjustments->where('transactions.ref_no', 'like', '%' . $ref_no . '%');
+            }
+
+            $product_id = request()->get('product_id');
+            if (! empty($product_id)) {
+                $stock_adjustments->whereExists(function ($q) use ($product_id) {
+                    $q->select(DB::raw(1))
+                        ->from('stock_adjustment_lines as sal')
+                        ->whereColumn('sal.transaction_id', 'transactions.id')
+                        ->where('sal.product_id', $product_id);
+                });
+            }
+
             if (! auth()->user()->can('stock_adjustment.view') && auth()->user()->can('view_own_stock_adjustment')) {
                 $stock_adjustments->where('transactions.created_by', request()->session()->get('user.id'));
             }
@@ -139,7 +165,15 @@ class StockAdjustmentController extends Controller
                 ->make(true);
         }
 
-        return view('stock_adjustment.index');
+        $business_id = request()->session()->get('user.business_id');
+        $business_locations = BusinessLocation::forDropdown($business_id);
+        $users = User::forDropdown($business_id, false, false, true);
+        $adjustment_types = [
+            'normal' => __('stock_adjustment.normal'),
+            'abnormal' => __('stock_adjustment.abnormal'),
+        ];
+
+        return view('stock_adjustment.index')->with(compact('business_locations', 'users', 'adjustment_types'));
     }
 
     /**

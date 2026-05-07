@@ -9,6 +9,7 @@
             <th>@lang('purchase.purchase_status')</th>
             <th>@lang('purchase.payment_status')</th>
             <th>@lang('purchase.grand_total')</th>
+            <th>Total Qty</th>
             @php
                 $custom_labels = json_decode(session('business.custom_labels'), true);
             @endphp
@@ -28,6 +29,7 @@
             <td class="footer_status_count"></td>
             <td class="footer_payment_status_count"></td>
             <td class="footer_purchase_total"></td>
+            <td class="footer_purchase_total_qty"></td>
             <td class="text-left"><small>@lang('report.purchase_due') - <span class="footer_total_due"></span><br>
             @lang('lang_v1.purchase_return') - <span class="footer_total_purchase_return_due"></span>
             </small></td>

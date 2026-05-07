@@ -104,11 +104,74 @@ $(document).ready(function() {
 
     $('form#stock_adjustment_form').validate();
 
+    // Stock Adjustment list filters (only on index page)
+    if ($('#stock_adjustment_list_filter_product_id').length) {
+        $('#stock_adjustment_list_filter_product_id').select2({
+            ajax: {
+                url: '/products/list-no-variation',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        term: params.term,
+                    };
+                },
+                processResults: function(data) {
+                    return {
+                        results: data,
+                    };
+                },
+            },
+            minimumInputLength: 1,
+            escapeMarkup: function(m) {
+                return m;
+            },
+        });
+    }
+
+    if ($('#stock_adjustment_list_filter_date_range').length) {
+        $('#stock_adjustment_list_filter_date_range').daterangepicker(dateRangeSettings, function(start, end) {
+            if (typeof stock_adjustment_table !== 'undefined') {
+                stock_adjustment_table.ajax.reload();
+            }
+        });
+        $('#stock_adjustment_list_filter_date_range').on('cancel.daterangepicker', function(ev, picker) {
+            $('#stock_adjustment_list_filter_date_range').val('');
+            if (typeof stock_adjustment_table !== 'undefined') {
+                stock_adjustment_table.ajax.reload();
+            }
+        });
+    }
+
     stock_adjustment_table = $('#stock_adjustment_table').DataTable({
         processing: true,
         serverSide: true,
         fixedHeader:false,
-        ajax: '/stock-adjustments',
+        ajax: {
+            url: '/stock-adjustments',
+            data: function(d) {
+                d.location_id = $('#stock_adjustment_list_filter_location_id').val();
+                d.adjustment_type = $('#stock_adjustment_list_filter_adjustment_type').val();
+                d.product_id = $('#stock_adjustment_list_filter_product_id').val();
+                d.created_by = $('#stock_adjustment_list_filter_created_by').val();
+                d.ref_no = $('#stock_adjustment_list_filter_ref_no').val();
+
+                var start = '';
+                var end = '';
+                if ($('#stock_adjustment_list_filter_date_range').val()) {
+                    start = $('input#stock_adjustment_list_filter_date_range')
+                        .data('daterangepicker')
+                        .startDate.format('YYYY-MM-DD');
+                    end = $('input#stock_adjustment_list_filter_date_range')
+                        .data('daterangepicker')
+                        .endDate.format('YYYY-MM-DD');
+                }
+                d.start_date = start;
+                d.end_date = end;
+
+                d = __datatable_ajax_callback(d);
+            },
+        },
         columnDefs: [
             {
                 targets: 0,
@@ -159,6 +222,28 @@ $(document).ready(function() {
             }
         });
     });
+});
+
+$(document).on(
+    'change',
+    '#stock_adjustment_list_filter_location_id, #stock_adjustment_list_filter_adjustment_type, #stock_adjustment_list_filter_product_id, #stock_adjustment_list_filter_created_by',
+    function() {
+        if (typeof stock_adjustment_table !== 'undefined') {
+            stock_adjustment_table.ajax.reload();
+        }
+    }
+);
+
+var stock_adjustment_ref_no_timer = null;
+$(document).on('keyup', '#stock_adjustment_list_filter_ref_no', function() {
+    if (stock_adjustment_ref_no_timer) {
+        clearTimeout(stock_adjustment_ref_no_timer);
+    }
+    stock_adjustment_ref_no_timer = setTimeout(function() {
+        if (typeof stock_adjustment_table !== 'undefined') {
+            stock_adjustment_table.ajax.reload();
+        }
+    }, 400);
 });
 
 function stock_adjustment_product_row(variation_id) {

@@ -1,1 +1,1 @@
-{"version":1,"defects":{"Tests\\Unit\\TelegramBotServiceTest::test_send_document_omits_empty_caption":4},"times":{"Tests\\Unit\\ExampleTest::testBasicTest":0.448,"Tests\\Unit\\TelegramBotServiceTest::test_send_document_omits_empty_caption":0.055}}
+{"version":1,"defects":{"Tests\\Unit\\TelegramBotServiceTest::test_send_document_omits_empty_caption":4},"times":{"Tests\\Unit\\ExampleTest::testBasicTest":0.385,"Tests\\Unit\\TelegramBotServiceTest::test_send_document_omits_empty_caption":0.083}}

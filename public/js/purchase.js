@@ -604,6 +604,7 @@ $(document).ready(function() {
             { data: 'status', name: 'status' },
             { data: 'payment_status', name: 'payment_status' },
             { data: 'final_total', name: 'final_total' },
+            { data: 'total_qty', name: 'total_qty' },
             { data: 'payment_due', name: 'payment_due', orderable: false, searchable: false },
 
             { data: 'custom_field_1', name: 'transactions.custom_field_1', visible: typeof customFieldVisibility !== 'undefined' ? customFieldVisibility.custom_field_1 : false },
@@ -619,11 +620,14 @@ $(document).ready(function() {
         },
         "footerCallback": function ( row, data, start, end, display ) {
             var total_purchase = 0;
+            var total_purchase_qty = 0;
             var total_due = 0;
             var total_purchase_return_due = 0;
             for (var r in data){
                 total_purchase += $(data[r].final_total).data('orig-value') ? 
                 parseFloat($(data[r].final_total).data('orig-value')) : 0;
+                total_purchase_qty += $(data[r].total_qty).data('orig-value') ?
+                parseFloat($(data[r].total_qty).data('orig-value')) : 0;
                 var payment_due_obj = $('<div>' + data[r].payment_due + '</div>');
                 total_due += payment_due_obj.find('.payment_due').data('orig-value') ? 
                 parseFloat(payment_due_obj.find('.payment_due').data('orig-value')) : 0;
@@ -633,6 +637,7 @@ $(document).ready(function() {
             }
 
             $('.footer_purchase_total').html(__currency_trans_from_en(total_purchase));
+            $('.footer_purchase_total_qty').html(__number_f(total_purchase_qty, false) + ' Pc(s)');
             $('.footer_total_due').html(__currency_trans_from_en(total_due));
             $('.footer_total_purchase_return_due').html(__currency_trans_from_en(total_purchase_return_due));
             $('.footer_status_count').html(__count_status(data, 'status'));
@@ -1393,5 +1398,3 @@ $("#purchase_requisition_ids").on("select2:unselect", function (e) {
         }
     });
 });
-
-
