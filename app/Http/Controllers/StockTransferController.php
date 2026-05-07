@@ -560,7 +560,14 @@ class StockTransferController extends Controller
                             'font_noto_khmer_exists' => File::exists(storage_path('fonts/NotoSansKhmer-Regular.ttf')),
                         ]);
                     } catch (\Exception $e) {
-                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage());
+                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage(), [
+                            'exception' => get_class($e),
+                            'file_path' => $file_path,
+                            'temp_dir_writable' => is_writable(dirname($file_path)),
+                            'storage_app_writable' => is_writable(storage_path('app')),
+                            'wkhtmltopdf_binary_config' => (string) config('pdf.wkhtmltopdf.binary'),
+                            'wkhtmltopdf_binary_resolved' => method_exists($wk ?? null, 'resolveBinaryPath') ? $wk->resolveBinaryPath() : null,
+                        ]);
                     }
 
                     $document_name = 'transfer_' . $sell_transfer->ref_no . '.pdf';
