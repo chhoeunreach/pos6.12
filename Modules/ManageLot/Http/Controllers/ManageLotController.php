@@ -488,6 +488,35 @@ class ManageLotController extends Controller
             DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
         ]);
 
+        // Sell fallback (when mapping rows do not exist): transaction_sell_lines.lot_no_line_id
+        $sell_fallback = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as ts', 'tsl.transaction_id', '=', 'ts.id')
+            ->leftJoin('business_locations as bl', 'ts.location_id', '=', 'bl.id')
+            ->leftJoin('users as u', 'ts.created_by', '=', 'u.id')
+            ->where('ts.business_id', $business_id)
+            ->where('ts.type', 'sell')
+            ->where('tsl.lot_no_line_id', $lot_id)
+            ->whereNotExists(function ($q) use ($lot_id) {
+                $q->select(DB::raw(1))
+                    ->from('transaction_sell_lines_purchase_lines as tspl2')
+                    ->whereColumn('tspl2.sell_line_id', 'tsl.id')
+                    ->where('tspl2.purchase_line_id', $lot_id);
+            });
+        if ($permitted_locations !== 'all') {
+            $sell_fallback->whereIn('ts.location_id', $permitted_locations);
+        }
+        $apply_where_date($sell_fallback, 'ts.transaction_date');
+        $sell_fallback = $sell_fallback->select([
+            DB::raw('ts.transaction_date as movement_date'),
+            DB::raw("'sell' as movement_type"),
+            DB::raw("COALESCE(ts.invoice_no, ts.ref_no, '') as ref_no"),
+            DB::raw('bl.name as from_location'),
+            DB::raw("'' as to_location"),
+            DB::raw('0 as qty_in'),
+            DB::raw('COALESCE(tsl.quantity,0) as qty_out'),
+            DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
+        ]);
+
         // Transfer OUT (qty out at from location, to_location resolved)
         $transfer_out = DB::table('transaction_sell_lines_purchase_lines as tspl')
             ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
@@ -514,6 +543,40 @@ class ManageLotController extends Controller
             DB::raw('bl_to.name as to_location'),
             DB::raw('0 as qty_in'),
             DB::raw('(COALESCE(tspl.quantity,0) - COALESCE(tspl.qty_returned,0)) as qty_out'),
+            DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
+        ]);
+
+        // Transfer OUT fallback (when mapping rows do not exist): transaction_sell_lines.lot_no_line_id
+        $transfer_out_fallback = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as tt_out', 'tsl.transaction_id', '=', 'tt_out.id')
+            ->leftJoin('transactions as tt_in', function ($join) {
+                $join->on('tt_in.transfer_parent_id', '=', 'tt_out.id')
+                    ->where('tt_in.type', '=', 'purchase_transfer');
+            })
+            ->leftJoin('business_locations as bl_from', 'tt_out.location_id', '=', 'bl_from.id')
+            ->leftJoin('business_locations as bl_to', 'tt_in.location_id', '=', 'bl_to.id')
+            ->leftJoin('users as u', 'tt_out.created_by', '=', 'u.id')
+            ->where('tt_out.business_id', $business_id)
+            ->where('tt_out.type', 'sell_transfer')
+            ->where('tsl.lot_no_line_id', $lot_id)
+            ->whereNotExists(function ($q) use ($lot_id) {
+                $q->select(DB::raw(1))
+                    ->from('transaction_sell_lines_purchase_lines as tspl2')
+                    ->whereColumn('tspl2.sell_line_id', 'tsl.id')
+                    ->where('tspl2.purchase_line_id', $lot_id);
+            });
+        if ($permitted_locations !== 'all') {
+            $transfer_out_fallback->whereIn('tt_out.location_id', $permitted_locations);
+        }
+        $apply_where_date($transfer_out_fallback, 'tt_out.transaction_date');
+        $transfer_out_fallback = $transfer_out_fallback->select([
+            DB::raw('tt_out.transaction_date as movement_date'),
+            DB::raw("'transfer_out' as movement_type"),
+            DB::raw("COALESCE(tt_out.ref_no, '') as ref_no"),
+            DB::raw('bl_from.name as from_location'),
+            DB::raw('bl_to.name as to_location'),
+            DB::raw('0 as qty_in'),
+            DB::raw('COALESCE(tsl.quantity,0) as qty_out'),
             DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
         ]);
 
@@ -570,11 +633,43 @@ class ManageLotController extends Controller
             DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
         ]);
 
+        // Adjustment fallback: stock_adjustment_lines.lot_no_line_id
+        $adjustment_fallback = DB::table('stock_adjustment_lines as sal')
+            ->join('transactions as ta', 'sal.transaction_id', '=', 'ta.id')
+            ->leftJoin('business_locations as bl', 'ta.location_id', '=', 'bl.id')
+            ->leftJoin('users as u', 'ta.created_by', '=', 'u.id')
+            ->where('ta.business_id', $business_id)
+            ->where('ta.type', 'stock_adjustment')
+            ->where('sal.lot_no_line_id', $lot_id)
+            ->whereNotExists(function ($q) use ($lot_id) {
+                $q->select(DB::raw(1))
+                    ->from('transaction_sell_lines_purchase_lines as tspl2')
+                    ->whereColumn('tspl2.stock_adjustment_line_id', 'sal.id')
+                    ->where('tspl2.purchase_line_id', $lot_id);
+            });
+        if ($permitted_locations !== 'all') {
+            $adjustment_fallback->whereIn('ta.location_id', $permitted_locations);
+        }
+        $apply_where_date($adjustment_fallback, 'ta.transaction_date');
+        $adjustment_fallback = $adjustment_fallback->select([
+            DB::raw('ta.transaction_date as movement_date'),
+            DB::raw("'adjustment' as movement_type"),
+            DB::raw("COALESCE(ta.ref_no, '') as ref_no"),
+            DB::raw('bl.name as from_location'),
+            DB::raw("'' as to_location"),
+            DB::raw('0 as qty_in'),
+            DB::raw('COALESCE(sal.quantity,0) as qty_out'),
+            DB::raw("COALESCE(CONCAT(u.surname, ' ', u.first_name), u.username, '') as created_by"),
+        ]);
+
         $union = $purchase
             ->unionAll($sell)
+            ->unionAll($sell_fallback)
             ->unionAll($transfer_out)
+            ->unionAll($transfer_out_fallback)
             ->unionAll($transfer_in)
             ->unionAll($adjustment);
+        $union = $union->unionAll($adjustment_fallback);
 
         $rows = DB::query()
             ->fromSub($union, 'm')
