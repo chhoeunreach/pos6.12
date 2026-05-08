@@ -330,6 +330,11 @@ return [
     'download_complete_backup' => 'Descargar copia de seguridad completa',
     'backup_doesnt_exist' => 'La copia de seguridad no existe',
     'lot_report' => 'Informe de lote',
+    'manage_lot' => 'Manage Lot',
+    'lot_history' => 'Lot History',
+    'lot_history_note' => 'Report/view only. This page shows recorded lot movements (purchase, sale allocations, and stock adjustments). If totals look wrong, verify source transactions; this report will not auto-correct stock.',
+    'qty_in' => 'Qty In',
+    'qty_out' => 'Qty Out',
     'purchase_payment_report' => 'Informe de pago de compra',
     'paid_on' => 'Pagado en',
     'purchase' => 'Compra',
@@ -1431,4 +1436,3 @@ return [
     'view_own_purchase' => 'Ver compras propias',
     'view_all_purchase' => 'Ver todas las compras',
 ];
-

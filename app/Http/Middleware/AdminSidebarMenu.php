@@ -631,6 +631,14 @@ class AdminSidebarMenu
                                 );
                             }
 
+                            if (\Module::has('ManageLot') && auth()->user()->can('stock_report.view')) {
+                                $sub->url(
+                                    action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']),
+                                    __('lang_v1.manage_lot'),
+                                    ['icon' => '', 'active' => request()->segment(1) == 'manage-lot']
+                                );
+                            }
+
                             if (in_array('stock_adjustment', $enabled_modules)) {
                                 $sub->url(
                                     action([\App\Http\Controllers\ReportController::class, 'getStockAdjustmentReport']),

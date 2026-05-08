@@ -1,0 +1,15 @@
+{
+    "name": "ManageLot",
+    "alias": "manage-lot",
+    "description": "ManageLot (report/view only) - lot history tracking",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\ManageLot\\Providers\\ManageLotServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
+

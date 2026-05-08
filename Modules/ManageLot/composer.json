@@ -1,0 +1,24 @@
+{
+    "name": "twf/manage-lot",
+    "description": "ManageLot (report/view only) - lot history tracking",
+    "authors": [
+        {
+            "name": "The Web Fosters",
+            "email": "thewebfosters@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\ManageLot\\Providers\\ManageLotServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\ManageLot\\": ""
+        }
+    }
+}
+

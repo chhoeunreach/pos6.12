@@ -330,6 +330,11 @@ return [
   'download_complete_backup' => 'הורד גיבוי מלא',
   'backup_doesnt_exist' => 'גיבוי לא קיים',
   'lot_report' => 'דוח אצווה',
+  'manage_lot' => 'Manage Lot',
+  'lot_history' => 'Lot History',
+  'lot_history_note' => 'Report/view only. This page shows recorded lot movements (purchase, sale allocations, and stock adjustments). If totals look wrong, verify source transactions; this report will not auto-correct stock.',
+  'qty_in' => 'Qty In',
+  'qty_out' => 'Qty Out',
   'purchase_payment_report' => 'דוח תשלומי רכישה',
   'paid_on' => 'שולם ב-',
   'purchase' => 'רכישה',
@@ -1574,5 +1579,3 @@ return [
   'gym_subscription' => 'מנוי למכון כושר',
 
   ];
-
-

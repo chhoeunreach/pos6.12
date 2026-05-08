@@ -1148,6 +1148,96 @@ $(document).ready(function() {
         });
     }
 
+    //Lot History Report
+    if ($('#product_id').length) {
+        $('#product_id').select2({
+            ajax: {
+                url: '/products/list-no-variation',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        term: params.term,
+                    };
+                },
+                processResults: function(data) {
+                    return {
+                        results: data,
+                    };
+                },
+            },
+            minimumInputLength: 1,
+            escapeMarkup: function(m) {
+                return m;
+            },
+        });
+    }
+
+    if ($('table#lot_history_report').length == 1) {
+        if ($('#lot_history_date_filter').length) {
+            $('#lot_history_date_filter').daterangepicker(dateRangeSettings, function(start, end) {
+                $('#lot_history_date_filter').val(
+                    start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+                );
+                $('#lot_history_start_date').val(start.format('YYYY-MM-DD'));
+                $('#lot_history_end_date').val(end.format('YYYY-MM-DD'));
+                lot_history_report.ajax.reload();
+            });
+            $('#lot_history_date_filter').on('cancel.daterangepicker', function(ev, picker) {
+                $('#lot_history_date_filter').val('');
+                $('#lot_history_start_date').val('');
+                $('#lot_history_end_date').val('');
+                lot_history_report.ajax.reload();
+            });
+        }
+
+        lot_history_report = $('table#lot_history_report').DataTable({
+            processing: true,
+            serverSide: true,
+            fixedHeader: false,
+            aaSorting: [[0, 'desc']],
+            ajax: {
+                url: '/reports/lot-history',
+                data: function(d) {
+                    d.location_id = $('#location_id').val();
+                    d.product_id = $('#product_id').val();
+                    d.lot_number = $('#lot_number').val();
+                    d.movement_type = $('#movement_type').val();
+                    d.start_date = $('#lot_history_start_date').val();
+                    d.end_date = $('#lot_history_end_date').val();
+                },
+            },
+            columns: [
+                { data: 'movement_date', name: 'movement_date' },
+                { data: 'location_name', name: 'location_name' },
+                { data: 'sku', name: 'sku' },
+                { data: 'product', name: 'product' },
+                { data: 'lot_number', name: 'lot_number' },
+                { data: 'exp_date', name: 'exp_date' },
+                { data: 'movement_type', name: 'movement_type', searchable: false },
+                { data: 'ref_no', name: 'ref_no' },
+                { data: 'contact', name: 'contact' },
+                { data: 'qty_in', name: 'qty_in', searchable: false, orderable: false },
+                { data: 'qty_out', name: 'qty_out', searchable: false, orderable: false },
+                { data: 'notes', name: 'notes' },
+            ],
+            fnDrawCallback: function(oSettings) {
+                __currency_convert_recursively($('#lot_history_report'));
+            },
+        });
+
+        $('#location_id, #product_id, #movement_type').change(function() {
+            lot_history_report.ajax.reload();
+        });
+        var lot_number_reload_timeout;
+        $(document).on('keyup change', '#lot_number', function() {
+            clearTimeout(lot_number_reload_timeout);
+            lot_number_reload_timeout = setTimeout(function() {
+                lot_history_report.ajax.reload();
+            }, 400);
+        });
+    }
+
     //Purchase Payment Report
     purchase_payment_report = $('table#purchase_payment_report_table').DataTable({
         processing: true,

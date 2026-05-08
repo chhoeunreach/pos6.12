@@ -2316,6 +2316,205 @@ class ReportController extends Controller
     }
 
     /**
+     * Shows lot history report (movement log)
+     *
+     * Report/view-only: reads purchase_lines and related sell/adjustment mappings.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getLotHistory(Request $request)
+    {
+        if (! auth()->user()->can('stock_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $location_id = $request->input('location_id');
+            $product_id = $request->input('product_id');
+            $lot_number = $request->input('lot_number');
+            $movement_type = $request->input('movement_type'); // purchase|sell|adjustment|all
+            $start_date = $request->input('start_date');
+            $end_date = $request->input('end_date');
+
+            $apply_common_filters = function ($query, $transactionAlias = 't') use ($permitted_locations, $location_id, $product_id, $lot_number, $start_date, $end_date) {
+                if ($permitted_locations != 'all') {
+                    $query->whereIn($transactionAlias . '.location_id', $permitted_locations);
+                }
+
+                if (! empty($location_id)) {
+                    $query->where($transactionAlias . '.location_id', $location_id);
+                }
+
+                if (! empty($product_id)) {
+                    $query->where('pl.product_id', $product_id);
+                }
+
+                if (! empty($lot_number)) {
+                    $query->where('pl.lot_number', $lot_number);
+                }
+
+                if (! empty($start_date) && ! empty($end_date)) {
+                    $query->whereBetween(DB::raw('date(' . $transactionAlias . '.transaction_date)'), [$start_date, $end_date]);
+                }
+            };
+
+            $purchase_movements = DB::table('purchase_lines as pl')
+                ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+                ->join('products as p', 'pl.product_id', '=', 'p.id')
+                ->join('variations as v', 'pl.variation_id', '=', 'v.id')
+                ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('contacts as supplier', 't.contact_id', '=', 'supplier.id')
+                ->where('t.business_id', $business_id)
+                ->whereNotNull('pl.lot_number');
+
+            $apply_common_filters($purchase_movements, 't');
+
+            $purchase_movements = $purchase_movements->select([
+                DB::raw('t.transaction_date as movement_date'),
+                DB::raw("'purchase' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw('pl.id as purchase_line_id'),
+                DB::raw('t.location_id as location_id'),
+                DB::raw('bl.name as location_name'),
+                DB::raw('v.sub_sku as sku'),
+                DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
+                DB::raw('pl.lot_number as lot_number'),
+                DB::raw('pl.exp_date as exp_date'),
+                DB::raw("COALESCE(t.ref_no, t.invoice_no, '') as ref_no"),
+                DB::raw("COALESCE(NULLIF(supplier.supplier_business_name, ''), supplier.name, '') as contact"),
+                DB::raw('(COALESCE(pl.quantity, 0) - COALESCE(pl.quantity_returned, 0)) as qty_in'),
+                DB::raw('0 as qty_out'),
+                DB::raw('u.short_name as unit'),
+                DB::raw("'' as notes"),
+            ]);
+
+            $sell_movements = DB::table('transaction_sell_lines_purchase_lines as tspl')
+                ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+                ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
+                ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+                ->join('products as p', 'pl.product_id', '=', 'p.id')
+                ->join('variations as v', 'pl.variation_id', '=', 'v.id')
+                ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('contacts as customer', 't.contact_id', '=', 'customer.id')
+                ->where('t.business_id', $business_id)
+                ->whereNotNull('pl.lot_number')
+                ->whereNotNull('tspl.sell_line_id');
+
+            $apply_common_filters($sell_movements, 't');
+
+            $sell_movements = $sell_movements->select([
+                DB::raw('t.transaction_date as movement_date'),
+                DB::raw("'sell' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw('pl.id as purchase_line_id'),
+                DB::raw('t.location_id as location_id'),
+                DB::raw('bl.name as location_name'),
+                DB::raw('v.sub_sku as sku'),
+                DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
+                DB::raw('pl.lot_number as lot_number'),
+                DB::raw('pl.exp_date as exp_date'),
+                DB::raw("COALESCE(t.invoice_no, t.ref_no, '') as ref_no"),
+                DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, '') as contact"),
+                DB::raw('0 as qty_in'),
+                DB::raw('(COALESCE(tspl.quantity, 0) - COALESCE(tspl.qty_returned, 0)) as qty_out'),
+                DB::raw('u.short_name as unit'),
+                DB::raw("COALESCE(t.additional_notes, '') as notes"),
+            ]);
+
+            $adjustment_movements = DB::table('transaction_sell_lines_purchase_lines as tspl')
+                ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+                ->join('stock_adjustment_lines as sal', 'tspl.stock_adjustment_line_id', '=', 'sal.id')
+                ->join('transactions as t', 'sal.transaction_id', '=', 't.id')
+                ->join('products as p', 'pl.product_id', '=', 'p.id')
+                ->join('variations as v', 'pl.variation_id', '=', 'v.id')
+                ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'stock_adjustment')
+                ->whereNotNull('pl.lot_number')
+                ->whereNotNull('tspl.stock_adjustment_line_id');
+
+            $apply_common_filters($adjustment_movements, 't');
+
+            $adjustment_movements = $adjustment_movements->select([
+                DB::raw('t.transaction_date as movement_date'),
+                DB::raw("'adjustment' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw('pl.id as purchase_line_id'),
+                DB::raw('t.location_id as location_id'),
+                DB::raw('bl.name as location_name'),
+                DB::raw('v.sub_sku as sku'),
+                DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
+                DB::raw('pl.lot_number as lot_number'),
+                DB::raw('pl.exp_date as exp_date'),
+                DB::raw("COALESCE(t.ref_no, '') as ref_no"),
+                DB::raw("'' as contact"),
+                DB::raw('0 as qty_in'),
+                DB::raw('COALESCE(tspl.quantity, 0) as qty_out'),
+                DB::raw('u.short_name as unit'),
+                DB::raw("COALESCE(t.additional_notes, '') as notes"),
+            ]);
+
+            $movement_union = $purchase_movements;
+
+            if (empty($movement_type) || $movement_type == 'all') {
+                $movement_union->unionAll($sell_movements)->unionAll($adjustment_movements);
+            } elseif ($movement_type == 'purchase') {
+                // purchase_movements already selected
+            } elseif ($movement_type == 'sell') {
+                $movement_union = $sell_movements;
+            } elseif ($movement_type == 'adjustment') {
+                $movement_union = $adjustment_movements;
+            }
+
+            $movements = DB::query()->fromSub($movement_union, 'lot_movements');
+
+            return Datatables::of($movements)
+                ->editColumn('movement_date', function ($row) {
+                    return $this->productUtil->format_date($row->movement_date, true);
+                })
+                ->editColumn('movement_type', function ($row) {
+                    if ($row->movement_type === 'purchase') {
+                        return __('purchase.purchase');
+                    } elseif ($row->movement_type === 'sell') {
+                        return __('sale.sale');
+                    } elseif ($row->movement_type === 'adjustment') {
+                        return __('stock_adjustment.stock_adjustment');
+                    }
+
+                    return $row->movement_type;
+                })
+                ->editColumn('qty_in', function ($row) {
+                    $qty = (float) ($row->qty_in ?? 0);
+                    return '<span data-is_quantity="true" class="display_currency qty_in" data-currency_symbol=false data-orig-value="' . $qty . '" data-unit="' . e($row->unit) . '">' . $qty . '</span> ' . e($row->unit);
+                })
+                ->editColumn('qty_out', function ($row) {
+                    $qty = (float) ($row->qty_out ?? 0);
+                    return '<span data-is_quantity="true" class="display_currency qty_out" data-currency_symbol=false data-orig-value="' . $qty . '" data-unit="' . e($row->unit) . '">' . $qty . '</span> ' . e($row->unit);
+                })
+                ->editColumn('exp_date', function ($row) {
+                    if (! empty($row->exp_date)) {
+                        return $this->productUtil->format_date($row->exp_date);
+                    }
+
+                    return '--';
+                })
+                ->rawColumns(['qty_in', 'qty_out'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, true);
+
+        return view('report.lot_history')->with(compact('business_locations'));
+    }
+
+    /**
      * Shows purchase payment report
      *
      * @return \Illuminate\Http\Response

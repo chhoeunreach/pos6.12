@@ -24,5 +24,6 @@
     "CustomBackup": true,
     "ImportBackup": true,
     "ImportUsers": true,
-    "ClearDataByDate": true
+    "ClearDataByDate": true,
+    "ManageLot": true
 }
