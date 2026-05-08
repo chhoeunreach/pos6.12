@@ -288,6 +288,18 @@ class ManageLotController extends Controller
             ]);
 
         return DataTables::of($lots)
+            ->filterColumn('product', function ($query, $keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('p.name', 'like', '%' . $keyword . '%')
+                        ->orWhere('v.name', 'like', '%' . $keyword . '%');
+                });
+            })
+            ->filterColumn('supplier', function ($query, $keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('supplier.name', 'like', '%' . $keyword . '%')
+                        ->orWhere('supplier.supplier_business_name', 'like', '%' . $keyword . '%');
+                });
+            })
             ->addColumn('action', function ($row) {
                 $url = action([ManageLotController::class, 'history'], [$row->lot_id]);
                 return '<a class="btn btn-xs btn-primary" href="' . e($url) . '"><i class="fa fa-eye"></i> ' . __('messages.view') . '</a>';
