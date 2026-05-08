@@ -12,6 +12,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/data', [ManageLotController::class, 'indexData'])
             ->name('manage_lot.data');
 
+        Route::get('/lot-search', [ManageLotController::class, 'lotSearch'])
+            ->name('manage_lot.lot_search');
+
         Route::get('/{lot_id}/history', [ManageLotController::class, 'history'])
             ->whereNumber('lot_id')
             ->name('manage_lot.history');

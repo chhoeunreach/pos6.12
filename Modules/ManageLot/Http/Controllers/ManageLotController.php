@@ -43,6 +43,86 @@ class ManageLotController extends Controller
     }
 
     /**
+     * Select2 lot search endpoint (GET only, view/report).
+     * Returns purchase_lines.id as the lot identifier (lot_id).
+     */
+    public function lotSearch(Request $request)
+    {
+        $this->authorizeViewOnly();
+
+        $business_id = $request->session()->get('user.business_id');
+        $permitted_locations = auth()->user()->permitted_locations();
+
+        $term = $request->input('term');
+        $location_id = $request->input('location_id');
+        $product_id = $request->input('product_id');
+
+        $query = PurchaseLine::join('transactions as tp', 'purchase_lines.transaction_id', '=', 'tp.id')
+            ->join('products as p', 'purchase_lines.product_id', '=', 'p.id')
+            ->join('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
+            ->leftJoin('business_locations as bl', 'tp.location_id', '=', 'bl.id')
+            ->where('tp.business_id', $business_id)
+            ->whereNotNull('purchase_lines.lot_number');
+
+        if ($permitted_locations !== 'all') {
+            $query->whereIn('tp.location_id', $permitted_locations);
+        }
+
+        if (! empty($location_id)) {
+            $query->where('tp.location_id', $location_id);
+        }
+
+        if (! empty($product_id)) {
+            $query->where('purchase_lines.product_id', $product_id);
+        }
+
+        if (! empty($term)) {
+            $query->where(function ($q) use ($term) {
+                $q->where('purchase_lines.lot_number', 'like', '%' . $term . '%')
+                    ->orWhere('p.name', 'like', '%' . $term . '%')
+                    ->orWhere('p.sku', 'like', '%' . $term . '%')
+                    ->orWhere('v.sub_sku', 'like', '%' . $term . '%');
+            });
+        }
+
+        $results = $query
+            ->orderBy('tp.transaction_date', 'desc')
+            ->limit(20)
+            ->get([
+                'purchase_lines.id as id',
+                'purchase_lines.lot_number',
+                'purchase_lines.exp_date',
+                'p.name as product_name',
+                'v.name as variation_name',
+                'v.sub_sku as sub_sku',
+                'bl.name as location_name',
+            ])->map(function ($row) {
+                $product = $row->product_name;
+                if (! empty($row->variation_name) && $row->variation_name !== 'DUMMY') {
+                    $product .= ' (' . $row->variation_name . ')';
+                }
+
+                $text = trim((string) $row->lot_number) . ' - ' . $product;
+                if (! empty($row->sub_sku)) {
+                    $text .= ' [' . $row->sub_sku . ']';
+                }
+                if (! empty($row->location_name)) {
+                    $text .= ' @ ' . $row->location_name;
+                }
+                if (! empty($row->exp_date)) {
+                    $text .= ' | ' . $this->productUtil->format_date($row->exp_date);
+                }
+
+                return [
+                    'id' => $row->id,
+                    'text' => $text,
+                ];
+            })->values();
+
+        return response()->json($results);
+    }
+
+    /**
      * Server-side DataTable for lots by location (report/view only)
      */
     public function indexData(Request $request)

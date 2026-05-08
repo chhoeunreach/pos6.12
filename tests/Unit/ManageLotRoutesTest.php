@@ -12,6 +12,7 @@ class ManageLotRoutesTest extends TestCase
         $uris = [
             'manage-lot',
             'manage-lot/data',
+            'manage-lot/lot-search',
             'manage-lot/{lot_id}/history',
             'manage-lot/{lot_id}/history/data',
         ];
@@ -29,4 +30,3 @@ class ManageLotRoutesTest extends TestCase
         }
     }
 }
-
