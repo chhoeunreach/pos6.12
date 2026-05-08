@@ -1,0 +1,23 @@
+{
+    "name": "nwidart/masterdata",
+    "description": "Master data backup & restore module wrapper",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\MasterData\\Providers\\MasterDataServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\\\MasterData\\\\": ""
+        }
+    }
+}
+

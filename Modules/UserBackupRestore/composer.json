@@ -1,0 +1,23 @@
+{
+    "name": "nwidart/userbackuprestore",
+    "description": "User backup & restore module wrapper",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\UserBackupRestore\\Providers\\UserBackupRestoreServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\\\UserBackupRestore\\\\": ""
+        }
+    }
+}
+

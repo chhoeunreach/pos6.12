@@ -1,0 +1,15 @@
+{
+    "name": "MasterData",
+    "alias": "masterdata",
+    "description": "Portable Master Data backup & restore (users, products, categories, brands, units, taxes, settings)",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\MasterData\\Providers\\MasterDataServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
+

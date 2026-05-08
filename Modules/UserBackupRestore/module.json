@@ -1,0 +1,15 @@
+{
+    "name": "UserBackupRestore",
+    "alias": "userbackuprestore",
+    "description": "Portable module to backup & restore USERS data only",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\UserBackupRestore\\Providers\\UserBackupRestoreServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
+

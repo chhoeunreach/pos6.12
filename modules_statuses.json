@@ -25,5 +25,7 @@
     "ImportBackup": true,
     "ImportUsers": true,
     "ClearDataByDate": true,
-    "ManageLot": true
+    "ManageLot": true,
+    "UserBackupRestore": true,
+    "MasterData": true
 }
