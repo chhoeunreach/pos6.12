@@ -3,8 +3,6 @@
 namespace Modules\ManageLot\Http\Controllers;
 
 use App\BusinessLocation;
-use App\Contact;
-use App\Product;
 use App\PurchaseLine;
 use App\Utils\ProductUtil;
 use App\Utils\TransactionUtil;
@@ -41,9 +39,7 @@ class ManageLotController extends Controller
         $business_id = $request->session()->get('user.business_id');
 
         $business_locations = BusinessLocation::forDropdown($business_id, true);
-        $suppliers = Contact::suppliersDropdown($business_id, false);
-
-        return view('manage_lot::index')->with(compact('business_locations', 'suppliers'));
+        return view('manage_lot::index')->with(compact('business_locations'));
     }
 
     /**
@@ -57,12 +53,17 @@ class ManageLotController extends Controller
         $permitted_locations = auth()->user()->permitted_locations();
 
         $location_id = $request->input('location_id');
-        $supplier_id = $request->input('supplier_id');
         $lot_number = $request->input('lot_number');
         $product_id = $request->input('product_id');
-        $transaction_type = $request->input('transaction_type'); // all|purchase|sell|transfer|adjustment
-        $start_date = $request->input('start_date');
-        $end_date = $request->input('end_date');
+        $transaction_type = $request->input('transaction_type'); // optional (kept for API compatibility)
+        $start_date = $request->input('start_date'); // optional
+        $end_date = $request->input('end_date'); // optional
+
+        // Default behavior: DO NOT load "all lots" on initial page load.
+        // Require at least lot_number or product_id to be present.
+        if (empty($lot_number) && empty($product_id)) {
+            return DataTables::of(collect())->make(true);
+        }
 
         $apply_where_date = function ($query, $field) use ($start_date, $end_date) {
             if (! empty($start_date) && ! empty($end_date)) {
@@ -83,9 +84,6 @@ class ManageLotController extends Controller
 
         if (! empty($location_id)) {
             $purchase_base->where('tp.location_id', $location_id);
-        }
-        if (! empty($supplier_id)) {
-            $purchase_base->where('tp.contact_id', $supplier_id);
         }
         if (! empty($lot_number)) {
             $purchase_base->where('pl.lot_number', 'like', '%' . $lot_number . '%');

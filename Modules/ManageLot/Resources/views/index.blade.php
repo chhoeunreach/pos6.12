@@ -31,27 +31,12 @@
                             {!! Form::select('location_id', $business_locations, null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_location_id']); !!}
                         </div>
                     </div>
-
                     <div class="col-md-3">
                         <div class="form-group">
-                            {!! Form::label('supplier_id',  __('purchase.supplier') . ':') !!}
-                            {!! Form::select('supplier_id', $suppliers, null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_supplier_id', 'placeholder' => __('messages.all')]); !!}
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            {!! Form::label('ml_date_filter', __('report.date_range') . ':') !!}
-                            {!! Form::text('ml_date_filter', null, ['placeholder' => __('lang_v1.select_a_date_range'), 'class' => 'form-control', 'readonly', 'id' => 'ml_date_filter']); !!}
-                            {!! Form::hidden('start_date', null, ['id' => 'ml_start_date']) !!}
-                            {!! Form::hidden('end_date', null, ['id' => 'ml_end_date']) !!}
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            {!! Form::label('transaction_type', __('lang_v1.type') . ':') !!}
-                            {!! Form::select('transaction_type', ['all' => __('messages.all'), 'purchase' => __('purchase.purchase'), 'sell' => __('sale.sale'), 'transfer' => __('lang_v1.stock_transfer'), 'adjustment' => __('stock_adjustment.stock_adjustment')], 'all', ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_transaction_type']); !!}
+                            <label>&nbsp;</label>
+                            <button type="button" class="btn btn-primary btn-block" id="ml_search_btn">
+                                <i class="fa fa-search"></i> @lang('messages.search')
+                            </button>
                         </div>
                     </div>
                 {!! Form::close() !!}
@@ -110,21 +95,6 @@
             });
         }
 
-        if ($('#ml_date_filter').length) {
-            $('#ml_date_filter').daterangepicker(dateRangeSettings, function(start, end) {
-                $('#ml_date_filter').val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
-                $('#ml_start_date').val(start.format('YYYY-MM-DD'));
-                $('#ml_end_date').val(end.format('YYYY-MM-DD'));
-                manage_lot_table.ajax.reload();
-            });
-            $('#ml_date_filter').on('cancel.daterangepicker', function() {
-                $('#ml_date_filter').val('');
-                $('#ml_start_date').val('');
-                $('#ml_end_date').val('');
-                manage_lot_table.ajax.reload();
-            });
-        }
-
         var manage_lot_table = $('#manage_lot_table').DataTable({
             processing: true,
             serverSide: true,
@@ -139,10 +109,6 @@
                     d.lot_number = $('#ml_lot_number').val();
                     d.product_id = $('#ml_product_id').val();
                     d.location_id = $('#ml_location_id').val();
-                    d.supplier_id = $('#ml_supplier_id').val();
-                    d.transaction_type = $('#ml_transaction_type').val();
-                    d.start_date = $('#ml_start_date').val();
-                    d.end_date = $('#ml_end_date').val();
                 }
             },
             columns: [
@@ -166,15 +132,15 @@
             }
         });
 
-        var reload_timeout;
-        $('#ml_location_id, #ml_product_id, #ml_supplier_id, #ml_transaction_type').change(function() {
+        $('#ml_search_btn').click(function() {
             manage_lot_table.ajax.reload();
         });
-        $('#ml_lot_number').on('keyup change', function() {
-            clearTimeout(reload_timeout);
-            reload_timeout = setTimeout(function() {
+
+        $('#ml_lot_number').on('keypress', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
                 manage_lot_table.ajax.reload();
-            }, 400);
+            }
         });
     });
 </script>
