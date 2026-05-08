@@ -604,7 +604,9 @@ $(document).ready(function() {
             { data: 'status', name: 'status' },
             { data: 'payment_status', name: 'payment_status' },
             { data: 'final_total', name: 'final_total' },
-            { data: 'total_qty', name: 'total_qty' },
+            // `total_qty` is a computed select alias in the server-side query.
+            // Mark it non-searchable to avoid SQL errors when DataTables applies global search filters.
+            { data: 'total_qty', name: 'total_qty', searchable: false },
             { data: 'payment_due', name: 'payment_due', orderable: false, searchable: false },
 
             { data: 'custom_field_1', name: 'transactions.custom_field_1', visible: typeof customFieldVisibility !== 'undefined' ? customFieldVisibility.custom_field_1 : false },
