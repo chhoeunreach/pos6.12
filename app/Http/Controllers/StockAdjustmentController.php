@@ -6,12 +6,14 @@ use App\BusinessLocation;
 use App\PurchaseLine;
 use App\Transaction;
 use App\User;
+use App\Variation;
 use App\Utils\ModuleUtil;
 use App\Utils\ProductUtil;
 use App\Utils\TransactionUtil;
 use Datatables;
 use DB;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Activitylog\Models\Activity;
 use App\Events\StockAdjustmentCreatedOrModified;
 
@@ -197,6 +199,365 @@ class StockAdjustmentController extends Controller
 
         return view('stock_adjustment.create')
                 ->with(compact('business_locations'));
+    }
+
+    /**
+     * Download CSV import template for stock adjustment lines.
+     */
+    public function downloadImportTemplate()
+    {
+        if (! auth()->user()->can('stock_adjustment.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="stock-adjustment-import-template.csv"',
+        ];
+
+        $columns = ['sku', 'lot_number', 'quantity', 'adjustment_type', 'note'];
+        $sample = ['SKU-OR-SUBSKU-HERE', 'LOT-123 (optional)', '1', 'damaged (optional)', 'optional note'];
+
+        $callback = function () use ($columns, $sample) {
+            $out = fopen('php://output', 'w');
+            // UTF-8 BOM for Excel compatibility
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($out, $columns);
+            fputcsv($out, $sample);
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Import stock adjustment lines (preview only) by SKU and/or Lot Number.
+     * Loads valid items into the create form via JS; does not save transactions.
+     *
+     * Expected columns (by position):
+     * 0: SKU (optional)
+     * 1: Lot Number (optional)
+     * 2: Quantity (required)
+     * 3: Adjustment Type (optional) - normal/damaged/expired/lost
+     * 4: Note (optional)
+     */
+    public function importAdjustmentProducts(Request $request)
+    {
+        try {
+            if (! auth()->user()->can('stock_adjustment.create')) {
+                abort(403, 'Unauthorized action.');
+            }
+
+            if (! $request->ajax()) {
+                abort(404);
+            }
+
+            $request->validate([
+                'file' => 'required|file',
+                'location_id' => 'required',
+            ]);
+
+            $business_id = $request->session()->get('user.business_id');
+            $location_id = $request->input('location_id');
+
+            $file = $request->file('file');
+            $parsed_array = Excel::toArray([], $file);
+
+            if (empty($parsed_array) || empty($parsed_array[0])) {
+                return [
+                    'success' => false,
+                    'msg' => __('messages.something_went_wrong'),
+                ];
+            }
+
+            // Remove header row only if it looks like a header
+            $sheet = $parsed_array[0];
+            $first_row = $sheet[0] ?? [];
+            $first_row_normalized = array_map(function ($v) {
+                return strtolower(trim((string) $v));
+            }, $first_row);
+            $looks_like_header = in_array('sku', $first_row_normalized) || in_array('lot_number', $first_row_normalized) || in_array('quantity', $first_row_normalized);
+            $imported_data = $looks_like_header ? array_splice($sheet, 1) : $sheet;
+
+            $allowed_line_types = ['normal', 'damaged', 'expired', 'lost'];
+
+            $errors = [];
+            $raw_success_lines = [];
+            foreach ($imported_data as $index => $row) {
+                $row_number = $looks_like_header ? ($index + 2) : ($index + 1);
+
+                $sku = isset($row[0]) ? trim((string) $row[0]) : '';
+                $lot_number = isset($row[1]) ? trim((string) $row[1]) : '';
+                $quantity_raw = $row[2] ?? null;
+                $line_type = isset($row[3]) ? strtolower(trim((string) $row[3])) : '';
+                $note = isset($row[4]) ? trim((string) $row[4]) : '';
+
+                if (empty($sku) && empty($lot_number)) {
+                    $errors[] = [
+                        'row' => $row_number,
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                        'quantity' => $quantity_raw,
+                        'adjustment_type' => $line_type,
+                        'note' => $note,
+                        'match_by' => null,
+                        'error' => 'SKU or Lot Number is required.',
+                    ];
+                    continue;
+                }
+
+                if ($quantity_raw === null || $quantity_raw === '' || ! is_numeric($quantity_raw) || (float) $quantity_raw <= 0) {
+                    $errors[] = [
+                        'row' => $row_number,
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                        'quantity' => $quantity_raw,
+                        'adjustment_type' => $line_type,
+                        'note' => $note,
+                        'match_by' => ! empty($lot_number) ? 'lot' : 'sku',
+                        'error' => 'Quantity is required and must be greater than 0.',
+                    ];
+                    continue;
+                }
+
+                if (! empty($line_type) && ! in_array($line_type, $allowed_line_types)) {
+                    $errors[] = [
+                        'row' => $row_number,
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                        'quantity' => $quantity_raw,
+                        'adjustment_type' => $line_type,
+                        'note' => $note,
+                        'match_by' => ! empty($lot_number) ? 'lot' : 'sku',
+                        'error' => 'Invalid adjustment_type. Allowed: ' . implode(', ', $allowed_line_types) . '.',
+                    ];
+                    continue;
+                }
+
+                $qty = (float) $quantity_raw;
+
+                // Prefer lot if provided
+                if (! empty($lot_number)) {
+                    $purchase_line = PurchaseLine::join('transactions as T', 'purchase_lines.transaction_id', '=', 'T.id')
+                        ->where('T.business_id', $business_id)
+                        ->where('T.location_id', $location_id)
+                        ->whereNotNull('purchase_lines.lot_number')
+                        ->where('purchase_lines.lot_number', $lot_number)
+                        ->whereRaw('(purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned) < purchase_lines.quantity')
+                        ->select(
+                            'purchase_lines.id as purchase_line_id',
+                            'purchase_lines.product_id',
+                            'purchase_lines.variation_id',
+                            'purchase_lines.lot_number',
+                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned)) AS qty_available')
+                        )
+                        ->orderByDesc(DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned))'))
+                        ->first();
+
+                    if (empty($purchase_line)) {
+                        $errors[] = [
+                            'row' => $row_number,
+                            'sku' => $sku,
+                            'lot_number' => $lot_number,
+                            'quantity' => $qty,
+                            'adjustment_type' => $line_type,
+                            'note' => $note,
+                            'match_by' => 'lot',
+                            'error' => 'Lot number not found in selected location.',
+                        ];
+                        continue;
+                    }
+
+                    if ($qty > (float) $purchase_line->qty_available) {
+                        $errors[] = [
+                            'row' => $row_number,
+                            'sku' => $sku,
+                            'lot_number' => $lot_number,
+                            'quantity' => $qty,
+                            'adjustment_type' => $line_type,
+                            'note' => $note,
+                            'match_by' => 'lot',
+                            'error' => 'Quantity exceeds available stock in this lot.',
+                        ];
+                        continue;
+                    }
+
+                    // Validate variation exists & is for this business (defensive)
+                    try {
+                        $this->productUtil->getDetailsFromVariation($purchase_line->variation_id, $business_id, $location_id, true, true);
+                    } catch (\Exception $e) {
+                        $errors[] = [
+                            'row' => $row_number,
+                            'sku' => $sku,
+                            'lot_number' => $lot_number,
+                            'quantity' => $qty,
+                            'adjustment_type' => $line_type,
+                            'note' => $note,
+                            'match_by' => 'lot',
+                            'error' => 'Product for this lot could not be loaded.',
+                        ];
+                        continue;
+                    }
+
+                    $raw_success_lines[] = [
+                        'variation_id' => (int) $purchase_line->variation_id,
+                        'quantity' => $qty,
+                        'lot_no_line_id' => (int) $purchase_line->purchase_line_id,
+                        'note' => $note,
+                        'adjustment_type' => $line_type,
+                        'match_by' => 'lot',
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                    ];
+                    continue;
+                }
+
+                // SKU match (sub_sku preferred)
+                $sku_value = $sku;
+                $variation = Variation::where('sub_sku', $sku_value)
+                    ->join('products as p', 'p.id', '=', 'variations.product_id')
+                    ->where('p.business_id', $business_id)
+                    ->select('variations.*')
+                    ->first();
+
+                if (empty($variation)) {
+                    // Try product sku -> first variation
+                    $variation = Variation::join('products as p', 'p.id', '=', 'variations.product_id')
+                        ->where('p.business_id', $business_id)
+                        ->where('p.sku', $sku_value)
+                        ->select('variations.*')
+                        ->first();
+                }
+
+                if (empty($variation)) {
+                    $errors[] = [
+                        'row' => $row_number,
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                        'quantity' => $qty,
+                        'adjustment_type' => $line_type,
+                        'note' => $note,
+                        'match_by' => 'sku',
+                        'error' => 'Product not found for SKU.',
+                    ];
+                    continue;
+                }
+
+                $product_details = $this->productUtil->getDetailsFromVariation($variation->id, $business_id, $location_id, true, true);
+                if ($product_details->enable_stock == 1 && $qty > (float) $product_details->qty_available) {
+                    $errors[] = [
+                        'row' => $row_number,
+                        'sku' => $sku,
+                        'lot_number' => $lot_number,
+                        'quantity' => $qty,
+                        'adjustment_type' => $line_type,
+                        'note' => $note,
+                        'match_by' => 'sku',
+                        'error' => 'Quantity exceeds available stock in selected location.',
+                    ];
+                    continue;
+                }
+
+                $raw_success_lines[] = [
+                    'variation_id' => (int) $variation->id,
+                    'quantity' => $qty,
+                    'lot_no_line_id' => null,
+                    'note' => $note,
+                    'adjustment_type' => $line_type,
+                    'match_by' => 'sku',
+                    'sku' => $sku,
+                    'lot_number' => $lot_number,
+                ];
+            }
+
+            // Merge duplicates: same variation + same lot (or both null)
+            $merged = [];
+            foreach ($raw_success_lines as $line) {
+                $key = $line['variation_id'] . ':' . (! empty($line['lot_no_line_id']) ? $line['lot_no_line_id'] : 0);
+                if (! isset($merged[$key])) {
+                    $merged[$key] = $line;
+                } else {
+                    $merged[$key]['quantity'] += $line['quantity'];
+
+                    if (empty($merged[$key]['adjustment_type']) && ! empty($line['adjustment_type'])) {
+                        $merged[$key]['adjustment_type'] = $line['adjustment_type'];
+                    }
+
+                    if (! empty($line['note'])) {
+                        $existing = trim((string) ($merged[$key]['note'] ?? ''));
+                        $merged[$key]['note'] = trim($existing . (empty($existing) ? '' : "\n") . $line['note']);
+                    }
+                }
+            }
+
+            $success_lines = array_values($merged);
+
+            // Re-validate merged quantities against available stock
+            $final_success = [];
+            foreach ($success_lines as $line) {
+                if (! empty($line['lot_no_line_id'])) {
+                    $pl = PurchaseLine::join('transactions as T', 'purchase_lines.transaction_id', '=', 'T.id')
+                        ->where('T.business_id', $business_id)
+                        ->where('T.location_id', $location_id)
+                        ->where('purchase_lines.id', $line['lot_no_line_id'])
+                        ->select(
+                            'purchase_lines.id as purchase_line_id',
+                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned)) AS qty_available')
+                        )
+                        ->first();
+
+                    if (empty($pl) || (float) $line['quantity'] > (float) $pl->qty_available) {
+                        $errors[] = [
+                            'row' => null,
+                            'sku' => $line['sku'] ?? '',
+                            'lot_number' => $line['lot_number'] ?? '',
+                            'quantity' => $line['quantity'],
+                            'adjustment_type' => $line['adjustment_type'] ?? '',
+                            'note' => $line['note'] ?? '',
+                            'match_by' => 'lot',
+                            'error' => 'Merged quantity exceeds available stock in this lot.',
+                        ];
+                        continue;
+                    }
+                } else {
+                    $product_details = $this->productUtil->getDetailsFromVariation($line['variation_id'], $business_id, $location_id, true, true);
+                    if ($product_details->enable_stock == 1 && (float) $line['quantity'] > (float) $product_details->qty_available) {
+                        $errors[] = [
+                            'row' => null,
+                            'sku' => $line['sku'] ?? '',
+                            'lot_number' => '',
+                            'quantity' => $line['quantity'],
+                            'adjustment_type' => $line['adjustment_type'] ?? '',
+                            'note' => $line['note'] ?? '',
+                            'match_by' => 'sku',
+                            'error' => 'Merged quantity exceeds available stock in selected location.',
+                        ];
+                        continue;
+                    }
+                }
+
+                $final_success[] = $line;
+            }
+
+            return [
+                'success' => true,
+                'summary' => [
+                    'total_rows' => count($imported_data),
+                    'success' => count($final_success),
+                    'failed' => count($errors),
+                ],
+                'valid_rows' => $final_success,
+                'error_rows' => $errors,
+            ];
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
+            return [
+                'success' => false,
+                'msg' => $e->getMessage(),
+            ];
+        }
     }
 
     /**

@@ -65,23 +65,31 @@
         @endcomponent
 
         @component('components.widget', ['class' => 'box-solid'])
-            <div class="row">
-                <div class="col-sm-8 col-sm-offset-2">
-                    <div class="form-group">
-                        <div class="input-group">
-                            <span class="input-group-addon">
-                                <i class="fa fa-search"></i>
-                            </span>
-                            {!! Form::text('search_product', null, [
-                                'class' => 'form-control',
-                                'id' => 'search_product_for_srock_adjustment',
-                                'placeholder' => __('stock_adjustment.search_product'),
-                                'disabled',
-                            ]) !!}
-                        </div>
-                    </div>
-                </div>
-            </div>
+	            <div class="row">
+	                <div class="col-sm-8 col-sm-offset-2">
+	                    <div class="form-group">
+	                        <div class="input-group">
+	                            <span class="input-group-addon">
+	                                <i class="fa fa-search"></i>
+	                            </span>
+	                            {!! Form::text('search_product', null, [
+	                                'class' => 'form-control',
+	                                'id' => 'search_product_for_srock_adjustment',
+	                                'placeholder' => __('stock_adjustment.search_product'),
+	                                'disabled',
+	                            ]) !!}
+	                            <span class="input-group-btn">
+	                                <button type="button" class="btn btn-default" data-toggle="modal" data-target="#import_stock_adjustment_products_modal" title="Import">
+	                                    <i class="fa fa-upload"></i>
+	                                </button>
+	                            </span>
+	                        </div>
+	                        <p class="help-block text-muted" style="margin-bottom:0;">
+	                            Import columns: sku (optional), lot_number (optional), quantity (required), adjustment_type (optional), note (optional)
+	                        </p>
+	                    </div>
+	                </div>
+	            </div>
             <div class="row">
                 <div class="col-sm-10 col-sm-offset-1">
                     <input type="hidden" id="product_row_index" value="0">
@@ -150,8 +158,63 @@
                 </div>
             </div>
         @endcomponent
-        {!! Form::close() !!}
-    </section>
+	        {!! Form::close() !!}
+	    </section>
+
+	    <div class="modal fade" id="import_stock_adjustment_products_modal" tabindex="-1" role="dialog" aria-labelledby="importStockAdjustmentProductsLabel">
+	        <div class="modal-dialog modal-lg" role="document">
+	            <div class="modal-content">
+	                <div class="modal-header">
+	                    <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')"><span aria-hidden="true">&times;</span></button>
+	                    <h4 class="modal-title" id="importStockAdjustmentProductsLabel">Import Products</h4>
+	                </div>
+	                <div class="modal-body">
+	                    <div class="alert alert-info" style="margin-bottom: 10px;">
+	                        <strong>Tip:</strong> Select <strong>Business Location</strong> first. Lot Number matching is prioritized over SKU.
+	                    </div>
+
+	                    <div class="clearfix" style="margin-bottom:10px;">
+	                        <a href="{{ action([\App\Http\Controllers\StockAdjustmentController::class, 'downloadImportTemplate']) }}"
+	                            class="btn btn-default pull-right">
+	                            <i class="fa fa-download"></i> Download Template
+	                        </a>
+	                    </div>
+
+	                    <div class="form-group">
+	                        <label>File (CSV/XLSX)</label>
+	                        <input type="file" class="form-control" id="stock_adjustment_import_file" accept=".csv,.xlsx,.xls">
+	                    </div>
+
+	                    <div id="stock_adjustment_import_summary" class="well well-sm" style="display:none; margin-bottom: 10px;"></div>
+
+	                    <div id="stock_adjustment_import_errors_wrap" style="display:none;">
+	                        <h5 style="margin-top:0;">Failed rows</h5>
+	                        <div class="table-responsive">
+	                            <table class="table table-bordered table-condensed" id="stock_adjustment_import_errors_table">
+	                                <thead>
+	                                    <tr>
+	                                        <th>Row</th>
+	                                        <th>Matched By</th>
+	                                        <th>SKU</th>
+	                                        <th>Lot Number</th>
+	                                        <th>Qty</th>
+	                                        <th>Adj Type</th>
+	                                        <th>Note</th>
+	                                        <th>Error</th>
+	                                    </tr>
+	                                </thead>
+	                                <tbody></tbody>
+	                            </table>
+	                        </div>
+	                    </div>
+	                </div>
+	                <div class="modal-footer">
+	                    <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+	                    <button type="button" class="btn btn-primary" id="btn_import_stock_adjustment_products">Import & Load</button>
+	                </div>
+	            </div>
+	        </div>
+	    </div>
 @stop
 @section('javascript')
     <script src="{{ asset('js/stock_adjustment.js?v=' . $asset_v) }}"></script>
