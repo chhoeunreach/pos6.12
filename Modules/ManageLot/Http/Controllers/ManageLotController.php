@@ -2,7 +2,6 @@
 
 namespace Modules\ManageLot\Http\Controllers;
 
-use App\BusinessLocation;
 use App\PurchaseLine;
 use App\Utils\ProductUtil;
 use App\Utils\TransactionUtil;
@@ -36,10 +35,7 @@ class ManageLotController extends Controller
     {
         $this->authorizeViewOnly();
 
-        $business_id = $request->session()->get('user.business_id');
-
-        $business_locations = BusinessLocation::forDropdown($business_id, true);
-        return view('manage_lot::index')->with(compact('business_locations'));
+        return view('manage_lot::index');
     }
 
     /**
@@ -54,8 +50,6 @@ class ManageLotController extends Controller
         $permitted_locations = auth()->user()->permitted_locations();
 
         $term = $request->input('term');
-        $location_id = $request->input('location_id');
-        $product_id = $request->input('product_id');
 
         $query = PurchaseLine::join('transactions as tp', 'purchase_lines.transaction_id', '=', 'tp.id')
             ->join('products as p', 'purchase_lines.product_id', '=', 'p.id')
@@ -66,14 +60,6 @@ class ManageLotController extends Controller
 
         if ($permitted_locations !== 'all') {
             $query->whereIn('tp.location_id', $permitted_locations);
-        }
-
-        if (! empty($location_id)) {
-            $query->where('tp.location_id', $location_id);
-        }
-
-        if (! empty($product_id)) {
-            $query->where('purchase_lines.product_id', $product_id);
         }
 
         if (! empty($term)) {

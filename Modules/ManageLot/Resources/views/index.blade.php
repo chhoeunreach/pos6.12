@@ -11,21 +11,7 @@
         <div class="col-md-12">
             @component('components.filters', ['title' => __('report.filters')])
                 {!! Form::open(['url' => action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']), 'method' => 'get', 'id' => 'manage_lot_filter_form' ]) !!}
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            {!! Form::label('product_id',  __('product.product') . ':') !!}
-                            {!! Form::select('product_id', [], null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_product_id']); !!}
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            {!! Form::label('location_id',  __('purchase.business_location') . ':') !!}
-                            {!! Form::select('location_id', $business_locations, null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_location_id']); !!}
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
+                    <div class="col-md-8">
                         <div class="form-group">
                             {!! Form::label('lot_id',  __('lang_v1.lot_number') . ':') !!}
                             {!! Form::select('lot_id', [], null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'ml_lot_id']); !!}
@@ -62,20 +48,6 @@
 @section('javascript')
 <script>
     $(function () {
-        if ($('#ml_product_id').length) {
-            $('#ml_product_id').select2({
-                ajax: {
-                    url: '/products/list-no-variation',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) { return { term: params.term }; },
-                    processResults: function (data) { return { results: data }; },
-                },
-                minimumInputLength: 1,
-                escapeMarkup: function (m) { return m; },
-            });
-        }
-
         if ($('#ml_lot_id').length) {
             $('#ml_lot_id').select2({
                 ajax: {
@@ -85,8 +57,6 @@
                     data: function (params) {
                         return {
                             term: params.term,
-                            location_id: $('#ml_location_id').val(),
-                            product_id: $('#ml_product_id').val(),
                         };
                     },
                     processResults: function (data) { return { results: data }; },
@@ -109,10 +79,6 @@
         }
 
         $('#ml_lot_id').on('change', updateHistoryLink);
-        $('#ml_location_id, #ml_product_id').on('change', function () {
-            $('#ml_lot_id').val(null).trigger('change');
-            updateHistoryLink();
-        });
         updateHistoryLink();
     });
 </script>
