@@ -368,17 +368,24 @@
                             <tr>
                                 <td>
                                     @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
-                                        <a class="btn btn-xs btn-default btn-modal"
+                                        <a class="btn btn-xs btn-default btn-modal action-icon-btn action-view"
                                            href="#"
                                            data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
-                                           data-container=".view_modal">View</a>
+                                           data-container=".view_modal"
+                                           title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
                                     @endcanany
                                     @can('sell.update')
-                                        <a class="btn btn-xs btn-primary" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank">Edit POS</a>
+                                        <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit POS">
+                                            <i class="fas fa-pen"></i>
+                                        </a>
                                     @endcan
                                     @cannot('sell.update')
                                         @can('direct_sell.update')
-                                            <a class="btn btn-xs btn-primary" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank">Edit</a>
+                                            <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit">
+                                                <i class="fas fa-pen"></i>
+                                            </a>
                                         @endcan
                                     @endcannot
                                 </td>
@@ -768,6 +775,28 @@
 }
 #local_cashier_report_app #local_cashier_sales_detail_table td .btn {
     margin-right: 4px;
+}
+#local_cashier_report_app .action-icon-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+}
+#local_cashier_report_app .action-icon-btn i {
+    font-size: 12px;
+}
+#local_cashier_report_app .action-view {
+    border-color: #c9d3e6;
+    color: #4b5b79;
+    background: #fff;
+}
+#local_cashier_report_app .action-edit {
+    background: #2f6feb;
+    border-color: #2f6feb;
+    color: #fff;
 }
 #local_cashier_report_app .dataTables_wrapper .dataTables_paginate .paginate_button {
     border-radius: 8px !important;
