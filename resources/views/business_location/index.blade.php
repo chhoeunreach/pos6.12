@@ -1,6 +1,19 @@
 @extends('layouts.app')
 @section('title', __('business.business_locations'))
 
+@section('css')
+    <style>
+        .text-ellipsis {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+    </style>
+@endsection
+
 @section('content')
 
 <!-- Content Header (Page header) -->
@@ -116,6 +129,7 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Name</th>
+                                    <th>Location ID</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                     <th>Errors</th>
@@ -244,6 +258,7 @@
                         var tr = '<tr>'
                             + '<td>' + (r.row_number || '') + '</td>'
                             + '<td>' + (r.name || '') + '</td>'
+                            + '<td>' + (r.location_id || '') + '</td>'
                             + '<td>' + (r.status || '') + '</td>'
                             + '<td>' + (r.action || '') + '</td>'
                             + '<td>' + errors + '</td>'

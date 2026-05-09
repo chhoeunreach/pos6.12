@@ -1306,6 +1306,21 @@ $(document).ready(function() {
         ajax: '/business-location',
         columnDefs: [
             {
+                targets: 2,
+                render: function(data, type, row, meta) {
+                    var landmark = (data || '').toString().replace(/\s+/g, ' ').trim();
+                    if (type !== 'display') {
+                        return landmark;
+                    }
+
+                    var escapedLandmark = $('<div>').text(landmark).html();
+                    var truncatedLandmark = landmark.length > 50 ? landmark.substring(0, 50) + '...' : landmark;
+                    var escapedTruncatedLandmark = $('<div>').text(truncatedLandmark).html();
+
+                    return '<span class="text-ellipsis" title="' + escapedLandmark + '">' + escapedTruncatedLandmark + '</span>';
+                },
+            },
+            {
                 targets: 11,
                 orderable: false,
                 searchable: false,

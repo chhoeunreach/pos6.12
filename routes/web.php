@@ -247,6 +247,10 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
 
     Route::resource('roles', RoleController::class);
 
+    Route::get('users/import-template', [ManageUserController::class, 'downloadTemplate']);
+    Route::get('users/export-users', [ManageUserController::class, 'exportUsers']);
+    Route::post('users/import-preview', [ManageUserController::class, 'previewImportUsers']);
+    Route::post('users/import-users', [ManageUserController::class, 'importUsers']);
     Route::resource('users', ManageUserController::class);
 
     Route::resource('group-taxes', GroupTaxController::class);

@@ -389,6 +389,7 @@ class BusinessLocationController extends Controller
 
         $columns = [
             'name',
+            'location_id',
             'landmark',
             'country',
             'state',
@@ -449,6 +450,7 @@ class BusinessLocationController extends Controller
         foreach ($locations as $loc) {
             $rows[] = [
                 'name' => $loc->name,
+                'location_id' => $loc->location_id,
                 'landmark' => $loc->landmark,
                 'country' => $loc->country,
                 'state' => $loc->state,
@@ -487,6 +489,7 @@ class BusinessLocationController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, array_keys($rows[0] ?? [
                 'name' => null,
+                'location_id' => null,
                 'landmark' => null,
                 'country' => null,
                 'state' => null,
@@ -537,6 +540,7 @@ class BusinessLocationController extends Controller
 
             $normalizedRows = [];
             $names = [];
+            $locationIds = [];
             $rowNumber = 1; // heading row is 1
             foreach ($rawRows as $row) {
                 $rowNumber++;
@@ -545,7 +549,11 @@ class BusinessLocationController extends Controller
                     continue;
                 }
                 $name = trim((string) ($row['name'] ?? ''));
+                $locationId = trim((string) ($row['location_id'] ?? ''));
                 $names[] = $name;
+                if ($locationId !== '') {
+                    $locationIds[] = $locationId;
+                }
                 $normalizedRows[] = [
                     'row_number' => $rowNumber,
                     'data' => $row,
@@ -554,7 +562,18 @@ class BusinessLocationController extends Controller
 
             $existingByName = BusinessLocation::where('business_id', $business_id)
                 ->whereIn('name', array_values(array_unique(array_filter($names))))
-                ->pluck('id', 'name');
+                ->get()
+                ->keyBy('name');
+
+            $existingByLocationId = BusinessLocation::where('business_id', $business_id)
+                ->whereIn('location_id', array_values(array_unique(array_filter($locationIds))))
+                ->get()
+                ->keyBy('location_id');
+
+            $locationIdCounts = [];
+            foreach (array_filter($locationIds) as $locationId) {
+                $locationIdCounts[$locationId] = ($locationIdCounts[$locationId] ?? 0) + 1;
+            }
 
             $summary = [
                 'total_rows' => count($normalizedRows),
@@ -571,8 +590,12 @@ class BusinessLocationController extends Controller
                 $errors = [];
 
                 $name = trim((string) ($row['name'] ?? ''));
+                $locationId = trim((string) ($row['location_id'] ?? ''));
                 if ($name === '') {
                     $errors[] = 'name is required';
+                }
+                if ($locationId !== '' && ($locationIdCounts[$locationId] ?? 0) > 1) {
+                    $errors[] = 'duplicate location_id in file';
                 }
                 if (! empty($row['email']) && ! filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
                     $errors[] = 'invalid email';
@@ -581,7 +604,14 @@ class BusinessLocationController extends Controller
                 $is_active_val = $row['is_active'] ?? null;
                 $parsed_active = $this->parseIsActive($is_active_val, $errors);
 
-                $exists = $name !== '' && isset($existingByName[$name]);
+                $existing = $this->findExistingLocationForImport(
+                    $name,
+                    $locationId,
+                    $existingByName,
+                    $existingByLocationId,
+                    $errors
+                );
+                $exists = ! empty($existing);
                 $status = 'new';
                 $action = 'insert';
                 if ($exists) {
@@ -614,6 +644,7 @@ class BusinessLocationController extends Controller
                 $previewRows[] = [
                     'row_number' => $row_no,
                     'name' => $name,
+                    'location_id' => $locationId,
                     'status' => $status,
                     'action' => $action,
                     'errors' => $errors,
@@ -701,6 +732,11 @@ class BusinessLocationController extends Controller
                 $invoiceLayoutsById = DB::table('invoice_layouts')->where('business_id', $business_id)->pluck('id', 'id');
                 $priceGroups = DB::table('selling_price_groups')->where('business_id', $business_id)->pluck('id', 'name');
                 $priceGroupsById = DB::table('selling_price_groups')->where('business_id', $business_id)->pluck('id', 'id');
+                $existingLocations = BusinessLocation::where('business_id', $business_id)->get();
+                $existingByName = $existingLocations->keyBy('name');
+                $existingByLocationId = $existingLocations->filter(function ($location) {
+                    return ! empty($location->location_id);
+                })->keyBy('location_id');
 
                 $hasIsActive = Schema::hasColumn('business_locations', 'is_active');
 
@@ -720,6 +756,7 @@ class BusinessLocationController extends Controller
                     $input = [
                         'business_id' => $business_id,
                         'name' => $name,
+                        'location_id' => $this->nullableTrimmedString($data['location_id'] ?? null),
                         'landmark' => $data['landmark'] ?? null,
                         'country' => $data['country'] ?? null,
                         'state' => $data['state'] ?? null,
@@ -744,7 +781,12 @@ class BusinessLocationController extends Controller
                     $input['invoice_layout_id'] = $this->resolveLookupId($data['invoice_layout'] ?? null, $invoiceLayouts, $invoiceLayoutsById);
                     $input['selling_price_group_id'] = $this->resolveLookupId($data['selling_price_group'] ?? null, $priceGroups, $priceGroupsById);
 
-                    $existing = BusinessLocation::where('business_id', $business_id)->where('name', $name)->first();
+                    $existing = $this->findExistingLocationForImport(
+                        $name,
+                        trim((string) ($data['location_id'] ?? '')),
+                        $existingByName,
+                        $existingByLocationId
+                    );
 
                     if ($existing) {
                         if ($mode === 'insert') {
@@ -848,5 +890,35 @@ class BusinessLocationController extends Controller
         if (! $this->commonUtil->is_admin(auth()->user(), $business_id)) {
             abort(403, 'Unauthorized action.');
         }
+    }
+
+    private function findExistingLocationForImport(
+        string $name,
+        string $locationId,
+        $existingByName,
+        $existingByLocationId,
+        array &$errors = []
+    ) {
+        $existingByNameMatch = $name !== '' ? ($existingByName[$name] ?? null) : null;
+        $existingByLocationIdMatch = $locationId !== '' ? ($existingByLocationId[$locationId] ?? null) : null;
+
+        if (! empty($existingByNameMatch) && ! empty($existingByLocationIdMatch) && (int) $existingByNameMatch->id !== (int) $existingByLocationIdMatch->id) {
+            $errors[] = 'name and location_id match different existing locations';
+
+            return null;
+        }
+
+        return $existingByLocationIdMatch ?? $existingByNameMatch;
+    }
+
+    private function nullableTrimmedString($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 }
