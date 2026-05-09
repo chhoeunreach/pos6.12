@@ -223,12 +223,14 @@
                 @endcan
             @endif
             @if (Route::has('local-cashier-report.index') && auth()->user()->can('local_cashier_report.view'))
-                <button type="button" id="open_local_cashier_report_modal"
+                <a id="open_local_cashier_report_modal"
                     title="Local Cashier Report"
-                    data-report-url="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}"
-                    class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-rounded-md pull-right">
-                    <strong><i class="fa fa-file-text-o tw-text-[#646EE4] !tw-text-sm"></i> &nbsp;Local Cashier Report</strong>
-                </button>
+                    href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}"
+                    target="_blank"
+                    rel="noopener"
+                    class="local-cashier-pos-link tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-rounded-md pull-right">
+                    <strong><i class="fas fa-chart-bar !tw-text-sm"></i> &nbsp;Local Cashier Report</strong>
+                </a>
             @endif
             @can('expense.add')
                 <button type="button" title="{{ __('expense.add_expense') }}" data-placement="bottom"
@@ -246,32 +248,20 @@
     aria-labelledby="gridSystemModalLabel">
 </div>
 
-<div class="modal fade" id="local_cashier_report_modal" tabindex="-1" role="dialog" aria-labelledby="localCashierReportModalLabel">
-    <div class="modal-dialog modal-lg" role="document" style="width:95%;max-width:1600px;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <h4 class="modal-title" id="localCashierReportModalLabel">Local Cashier Report</h4>
-            </div>
-            <div class="modal-body" style="padding:0;">
-                <iframe id="local_cashier_report_iframe" src="" style="width:100%;height:80vh;border:0;"></iframe>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    (function () {
-        $(document).on('click', '#open_local_cashier_report_modal', function () {
-            var url = $(this).data('report-url');
-            $('#local_cashier_report_iframe').attr('src', url);
-            $('#local_cashier_report_modal').modal('show');
-        });
-
-        $('#local_cashier_report_modal').on('hidden.bs.modal', function () {
-            $('#local_cashier_report_iframe').attr('src', '');
-        });
-    })();
-</script>
+<style>
+    .local-cashier-pos-link {
+        background: #f8fbff !important;
+        border-color: #b8c9e6 !important;
+        color: #1e3a8a !important;
+    }
+    .local-cashier-pos-link:hover,
+    .local-cashier-pos-link:focus {
+        background: #eaf2ff !important;
+        border-color: #8ea9d6 !important;
+        color: #102a6b !important;
+        text-decoration: none !important;
+    }
+    .local-cashier-pos-link i {
+        color: inherit !important;
+    }
+</style>

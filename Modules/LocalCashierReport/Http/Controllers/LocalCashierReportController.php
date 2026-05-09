@@ -164,6 +164,9 @@ class LocalCashierReportController extends Controller
                 'expense_payment_summary' => [],
                 'actual_income_payment_summary' => [],
                 'detail_rows' => [],
+                'summary_user' => [],
+                'summary_location' => [],
+                'summary_payment' => [],
             ];
         }
 

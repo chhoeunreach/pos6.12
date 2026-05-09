@@ -12,7 +12,7 @@
     <div style="margin-top:10px;">
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($classicPlainQuery) }}"
            class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'classic_plain' ? 'btn-primary' : 'btn-default' }}">
-            Old Dashboard
+            Dashboard
         </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($viewReportQuery) }}"
            class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
@@ -91,15 +91,6 @@
                         @foreach($qtyTypes as $key => $label)
                             <option value="{{ $key }}" @if($filters['qty_type'] === $key) selected @endif>{{ $label }}</option>
                         @endforeach
-                    </select>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label>Style</label>
-                    <select name="style_mode" class="form-control">
-                        <option value="classic_plain" @if($filters['style_mode'] === 'classic_plain') selected @endif>Old Dashboard</option>
-                        <option value="view_report" @if($filters['style_mode'] === 'view_report') selected @endif>View Report</option>
                     </select>
                 </div>
             </div>
