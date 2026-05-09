@@ -59,6 +59,7 @@
                                 <th>@lang('lang_v1.qty_out')</th>
                                 <th>@lang('lang_v1.balance')</th>
                                 <th>@lang('business.created_by')</th>
+                                <th>@lang('sale.status')</th>
                             </tr>
                         </thead>
                     </table>
@@ -87,35 +88,35 @@
             });
         }
 
-        var manage_lot_history_table = $('#manage_lot_history_table').DataTable({
-            processing: true,
-            serverSide: true,
-            responsive: true,
-            dom: 'Blfrtip',
-            buttons: ['copy', 'csv', 'excel', 'print'],
-            ajax: {
-                url: '{{ action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'historyData'], [$lot->lot_id]) }}',
-                data: function(d) {
-                    d.start_date = $('#mlh_start_date').val();
-                    d.end_date = $('#mlh_end_date').val();
+            var manage_lot_history_table = $('#manage_lot_history_table').DataTable({
+                processing: true,
+                serverSide: true,
+                responsive: true,
+                dom: 'Blfrtip',
+                buttons: ['copy', 'csv', 'excel', 'print'],
+                ajax: {
+                    url: '{{ route('manage-lot.history-list', [$lot->lot_id]) }}',
+                    data: function(d) {
+                        d.start_date = $('#mlh_start_date').val();
+                        d.end_date = $('#mlh_end_date').val();
+                    }
+                },
+                columns: [
+                    { data: 'movement_date', name: 'movement_date' },
+                    { data: 'movement_type', name: 'movement_type' },
+                    { data: 'ref_no', name: 'ref_no' },
+                    { data: 'from_location', name: 'from_location' },
+                    { data: 'to_location', name: 'to_location' },
+                    { data: 'qty_in', name: 'qty_in', searchable: false, orderable: false },
+                    { data: 'qty_out', name: 'qty_out', searchable: false, orderable: false },
+                    { data: 'balance_qty', name: 'balance_qty', searchable: false, orderable: false },
+                    { data: 'created_by', name: 'created_by' },
+                    { data: 'status', name: 'status', orderable: false, searchable: false },
+                ],
+                fnDrawCallback: function() {
+                    __currency_convert_recursively($('#manage_lot_history_table'));
                 }
-            },
-            columns: [
-                { data: 'movement_date', name: 'movement_date' },
-                { data: 'movement_type', name: 'movement_type' },
-                { data: 'ref_no', name: 'ref_no' },
-                { data: 'from_location', name: 'from_location' },
-                { data: 'to_location', name: 'to_location' },
-                { data: 'qty_in', name: 'qty_in', searchable: false, orderable: false },
-                { data: 'qty_out', name: 'qty_out', searchable: false, orderable: false },
-                { data: 'balance_qty', name: 'balance_qty', searchable: false, orderable: false },
-                { data: 'created_by', name: 'created_by' },
-            ],
-            fnDrawCallback: function() {
-                __currency_convert_recursively($('#manage_lot_history_table'));
-            }
+            });
         });
-    });
 </script>
 @endsection
-

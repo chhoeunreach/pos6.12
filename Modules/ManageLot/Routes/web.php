@@ -8,19 +8,21 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
     ->group(function () {
         // REPORT/VIEW ONLY: GET pages + DataTables GET ajax reads
         Route::get('/', [ManageLotController::class, 'index'])
-            ->name('manage_lot.index');
-        Route::get('/data', [ManageLotController::class, 'indexData'])
-            ->name('manage_lot.data');
+            ->name('manage-lot.index');
+        Route::get('/list', [ManageLotController::class, 'indexData'])
+            ->name('manage-lot.list');
 
         Route::get('/lot-search', [ManageLotController::class, 'lotSearch'])
-            ->name('manage_lot.lot_search');
+            ->name('manage-lot.lot-search');
+        Route::get('/product-search', [ManageLotController::class, 'productSearch'])
+            ->name('manage-lot.product-search');
 
         Route::get('/{lot_id}/history', [ManageLotController::class, 'history'])
             ->whereNumber('lot_id')
-            ->name('manage_lot.history');
-        Route::get('/{lot_id}/history/data', [ManageLotController::class, 'historyData'])
+            ->name('manage-lot.history');
+        Route::get('/{lot_id}/history/list', [ManageLotController::class, 'historyData'])
             ->whereNumber('lot_id')
-            ->name('manage_lot.history_data');
+            ->name('manage-lot.history-list');
 
         // Module install/update/uninstall (used by Install > Modules page)
         Route::get('/install', [InstallController::class, 'index'])->middleware('superadmin');
