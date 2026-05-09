@@ -87,9 +87,10 @@
             <div id="summary_cards" class="row"></div>
             <hr>
             <div class="row">
-                <div class="col-md-4"><h4>Summary by User/Cashier</h4><div id="group_user"></div></div>
-                <div class="col-md-4"><h4>Summary by Location</h4><div id="group_location"></div></div>
-                <div class="col-md-4"><h4>Summary by Payment Method</h4><div id="group_payment"></div></div>
+                <div class="col-md-3"><h4>Summary by User/Cashier</h4><div id="group_user"></div></div>
+                <div class="col-md-3"><h4>Summary by Location</h4><div id="group_location"></div></div>
+                <div class="col-md-3"><h4>Summary by Payment Method</h4><div id="group_payment"></div></div>
+                <div class="col-md-3"><h4>Expense by Payment Method</h4><div id="group_expense_payment"></div></div>
             </div>
         </div>
     </div>
@@ -169,7 +170,7 @@
     function renderSummary(summary){
         const cards = summary.cards || {};
         const cardOrder = [
-            ['Total Sale','total_sale'],['Total Paid','total_paid'],['Total Cash','total_cash'],['Total ABA','total_aba'],['Total ACLEDA','total_acleda'],['Total WING','total_wing'],['Total E&T','total_e_and_t'],['Total Card','total_card'],['Total Other','total_other'],['Total Due','total_due'],['Total Discount','total_discount'],['Total Qty Sold','total_qty']
+            ['Total Sale','total_sale'],['Total Paid','total_paid'],['Total Cash','total_cash'],['Total ABA','total_aba'],['Total ACLEDA','total_acleda'],['Total WING','total_wing'],['Total E&T','total_e_and_t'],['Total Card','total_card'],['Total Other','total_other'],['Total Due','total_due'],['Total Expense','total_expense'],['Close Payment','close_payment'],['Total Discount','total_discount'],['Total Qty Sold','total_qty']
         ];
         let html='';
         cardOrder.forEach(function(c){ html += '<div class="col-md-2"><div class="well well-sm"><strong>'+c[0]+'</strong><br>'+((c[1]==='total_qty')?parseFloat(cards[c[1]]||0).toLocaleString():formatMoney(cards[c[1]]||0))+'</div></div>';});
@@ -179,6 +180,7 @@
         $('#group_user').html(makeList(summary.group_by_user));
         $('#group_location').html(makeList(summary.group_by_location));
         $('#group_payment').html(makeList(summary.group_by_payment_method, true));
+        $('#group_expense_payment').html(makeList(summary.group_by_expense_payment_method, true));
     }
 
     function humanMethod(method){

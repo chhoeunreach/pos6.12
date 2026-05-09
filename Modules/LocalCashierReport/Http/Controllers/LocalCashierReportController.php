@@ -271,8 +271,25 @@ class LocalCashierReportController extends Controller
             ->groupBy('tp.method');
         $this->applyFilters($payMethodGroup, $request, 't');
 
+        $expensePayMethodGroup = DB::table('transactions as t')
+            ->join('transaction_payments as tp', 't.id', '=', 'tp.transaction_id')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'expense')
+            ->where('t.status', 'final')
+            ->selectRaw('tp.method as label, SUM(tp.amount) as amount')
+            ->groupBy('tp.method');
+        $this->applyFilters($expensePayMethodGroup, $request, 't');
+
         $totalSale = (float) ($trxSummary['total_sale'] ?? 0);
         $totalPaid = (float) ($trxSummary['total_paid'] ?? 0);
+        $expense = DB::table('transactions as t')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'expense')
+            ->where('t.status', 'final')
+            ->selectRaw('SUM(t.final_total) as total_expense');
+        $this->applyFilters($expense, $request, 't');
+        $expenseSummary = (array) $expense->first();
+        $totalExpense = (float) ($expenseSummary['total_expense'] ?? 0);
 
         return [
             'cards' => [
@@ -286,12 +303,15 @@ class LocalCashierReportController extends Controller
                 'total_card' => (float) ($trxSummary['total_card'] ?? 0),
                 'total_other' => (float) ($trxSummary['total_other'] ?? 0),
                 'total_due' => $totalSale - $totalPaid,
+                'total_expense' => $totalExpense,
+                'close_payment' => $totalPaid - $totalExpense,
                 'total_discount' => (float) ($trxSummary['total_discount'] ?? 0),
                 'total_qty' => (float) ($qtySummary['total_qty'] ?? 0),
             ],
             'group_by_user' => $userGroup->get(),
             'group_by_location' => $locationGroup->get(),
             'group_by_payment_method' => $payMethodGroup->get(),
+            'group_by_expense_payment_method' => $expensePayMethodGroup->get(),
         ];
     }
 
@@ -401,12 +421,15 @@ class LocalCashierReportController extends Controller
                 'total_card' => 0,
                 'total_other' => 0,
                 'total_due' => 0,
+                'total_expense' => 0,
+                'close_payment' => 0,
                 'total_discount' => 0,
                 'total_qty' => 0,
             ],
             'group_by_user' => [],
             'group_by_location' => [],
             'group_by_payment_method' => [],
+            'group_by_expense_payment_method' => [],
         ];
     }
 
