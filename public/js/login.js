@@ -1,5 +1,29 @@
 var recaptchaRendered = false;
 
+function renderRegisterRecaptcha(form) {
+    var recaptchaContainer = form.find('#recaptcha-container').get(0);
+    var recaptchaSiteKey = window.RECAPTCHA_SITE_KEY;
+
+    if (!recaptchaContainer || !recaptchaSiteKey) {
+        return;
+    }
+
+    if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function') {
+        return;
+    }
+
+    if (recaptchaRendered || recaptchaContainer.childNodes.length > 0) {
+        recaptchaRendered = true;
+
+        return;
+    }
+
+    grecaptcha.render(recaptchaContainer, {
+        sitekey: recaptchaSiteKey,
+    });
+    recaptchaRendered = true;
+}
+
 $(document).ready(function() {
     $('[data-toggle="tooltip"]').tooltip();
 
@@ -30,18 +54,12 @@ $(document).ready(function() {
                 return form.valid();
             },
             onStepChanged: function(event, currentIndex, priorIndex) {
-                // Render reCAPTCHA on last step
-                if (currentIndex === 2 && !recaptchaRendered) { // change 2 to your last step index
-                    if (typeof grecaptcha !== 'undefined') {
-                        grecaptcha.render('recaptcha-container', {
-                            'sitekey': window.RECAPTCHA_SITE_KEY
-                        });
-                        recaptchaRendered = true;
-                    }
-                }
+                renderRegisterRecaptcha(form);
             },
             onFinishing: function(event, currentIndex) {
+                renderRegisterRecaptcha(form);
                 form.validate().settings.ignore = ':disabled';
+
                 return form.valid();
             },
             onFinished: function(event, currentIndex) {
@@ -145,4 +163,6 @@ $(document).ready(function() {
         browseLabel: LANG.file_browse_label,
         removeLabel: LANG.remove,
     });
+
+    renderRegisterRecaptcha($('#business_register_form'));
 });

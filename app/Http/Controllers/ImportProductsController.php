@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Brands;
 use App\BusinessLocation;
 use App\Category;
+use App\Exports\ImportProductsTemplateExport;
 use App\Product;
 use App\TaxRate;
 use App\Transaction;
@@ -67,6 +68,20 @@ class ImportProductsController extends Controller
         } else {
             return view('import_products.index');
         }
+    }
+
+    /**
+     * Download the latest product import template.
+     *
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function downloadImportTemplate()
+    {
+        if (! auth()->user()->can('product.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        return Excel::download(new ImportProductsTemplateExport, 'import_products_template.xlsx');
     }
 
     /**
@@ -165,6 +180,7 @@ class ImportProductsController extends Controller
 
                     //Custom fields
                     if (isset($value[31])) {
+                        // Product keyword is stored in product_custom_field1.
                         $product_array['product_custom_field1'] = trim($value[31]);
                     } else {
                         $product_array['product_custom_field1'] = '';

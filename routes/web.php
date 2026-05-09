@@ -79,7 +79,9 @@ Route::middleware(['setData'])->group(function () {
         return view('welcome');
     });
 
-    Auth::routes(['logout' => false]);
+    Auth::routes(['logout' => false, 'register' => false]);
+
+    Route::redirect('/register', '/business/register');
 
     Route::get('/business/register', [BusinessController::class, 'getRegister'])->name('business.getRegister');
     Route::post('/business/register', [BusinessController::class, 'postRegister'])->name('business.postRegister');
@@ -355,6 +357,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
 
     //Import products
     Route::get('/import-products', [ImportProductsController::class, 'index']);
+    Route::get('/import-products/template', [ImportProductsController::class, 'downloadImportTemplate']);
     Route::post('/import-products/store', [ImportProductsController::class, 'store']);
 
     //Sales Commission Agent

@@ -11,6 +11,11 @@ class RouteServiceProvider extends ServiceProvider
 
     public function map(): void
     {
+        if (! \Nwidart\Modules\Facades\Module::has('ManageLot')
+            || ! \Nwidart\Modules\Facades\Module::isEnabled('ManageLot')) {
+            return;
+        }
+
         $this->mapWebRoutes();
     }
 

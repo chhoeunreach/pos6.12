@@ -23,7 +23,9 @@ class ManageLotController extends Controller
 
     private function authorizeViewOnly(): void
     {
-        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('product.view')) {
+        if (! auth()->user()->can('stock_report.view')
+            && ! auth()->user()->can('product.view')
+            && ! auth()->user()->can('manage_lot.view')) {
             abort(403, 'Unauthorized action.');
         }
     }

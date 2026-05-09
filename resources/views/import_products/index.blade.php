@@ -50,7 +50,7 @@
                 <br><br>
                 <div class="row">
                     <div class="col-sm-4">
-                        <a href="{{ asset('files/import_products_csv_template.xls') }}" class="tw-dw-btn tw-dw-btn-success tw-text-white" download><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
+                        <a href="{{ action([\App\Http\Controllers\ImportProductsController::class, 'downloadImportTemplate']) }}" class="tw-dw-btn tw-dw-btn-success tw-text-white"><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
                     </div>
                 </div>
             @endcomponent
@@ -247,8 +247,8 @@
                     </tr>
                     <tr>
                         <td>32</td>
-                        <td>@lang('lang_v1.product_custom_field1') <small class="text-muted">(@lang('lang_v1.optional'))</small></td>
-                        <td></td>
+                        <td>Product Keyword <small class="text-muted">(@lang('lang_v1.optional'))</small></td>
+                        <td>Imports into Custom Field 1 for product search/reference keywords.</td>
                     </tr>
                     <tr>
                         <td>33</td>

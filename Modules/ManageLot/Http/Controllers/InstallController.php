@@ -58,8 +58,11 @@ class InstallController extends Controller
                     ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
             }
 
+            Artisan::call('module:enable', ['module' => 'ManageLot']);
+
             // No DB writes/migrations needed for this REPORT module, but keep migrate hook for future optional changes.
             Artisan::call('module:migrate', ['module' => 'ManageLot', '--force' => true]);
+            Artisan::call('optimize:clear');
 
             System::addProperty($this->module_name . '_version', $this->appVersion);
 
@@ -84,7 +87,12 @@ class InstallController extends Controller
         }
 
         try {
+            Artisan::call('module:disable', ['module' => 'ManageLot']);
             System::removeProperty($this->module_name . '_version');
+            Artisan::call('optimize:clear');
+            Artisan::call('route:clear');
+            Artisan::call('view:clear');
+            Artisan::call('config:clear');
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];

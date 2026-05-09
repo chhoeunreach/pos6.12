@@ -631,7 +631,9 @@ class AdminSidebarMenu
                                 );
                             }
 
-                            if (\Module::has('ManageLot') && auth()->user()->can('stock_report.view')) {
+                            if (\Nwidart\Modules\Facades\Module::has('ManageLot')
+                                && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot')
+                                && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view'))) {
                                 $sub->url(
                                     action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']),
                                     __('lang_v1.manage_lot'),

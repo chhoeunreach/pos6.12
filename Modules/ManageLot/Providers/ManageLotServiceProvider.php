@@ -8,6 +8,10 @@ class ManageLotServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        if (! $this->isModuleEnabled()) {
+            return;
+        }
+
         $this->registerTranslations();
         $this->registerConfig();
         $this->registerViews();
@@ -15,7 +19,17 @@ class ManageLotServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        if (! $this->isModuleEnabled()) {
+            return;
+        }
+
         $this->app->register(RouteServiceProvider::class);
+    }
+
+    protected function isModuleEnabled(): bool
+    {
+        return \Nwidart\Modules\Facades\Module::has('ManageLot')
+            && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot');
     }
 
     protected function registerConfig(): void
