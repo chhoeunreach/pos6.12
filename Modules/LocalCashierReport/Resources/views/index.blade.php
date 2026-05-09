@@ -92,6 +92,12 @@
                 <div class="col-md-3"><h4>Summary by Payment Method</h4><div id="group_payment"></div></div>
                 <div class="col-md-3"><h4>Expense by Payment Method</h4><div id="group_expense_payment"></div></div>
             </div>
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>Final Payment</h4>
+                    <div id="final_payment_block"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -133,7 +139,17 @@
         ajax: {
             url: '{{ route('local-cashier-report.datatable') }}',
             data: function(d){
-                $('#local_cashier_report_filter').serializeArray().forEach(function(i){ d[i.name]=i.value; });
+                $('#local_cashier_report_filter').serializeArray().forEach(function(i){
+                    if (i.name.endsWith('[]')) {
+                        const key = i.name.replace('[]', '');
+                        if (!Array.isArray(d[key])) {
+                            d[key] = [];
+                        }
+                        d[key].push(i.value);
+                    } else {
+                        d[i.name] = i.value;
+                    }
+                });
             },
             dataSrc: function(json){
                 renderSummary(json.summary || {});
@@ -176,11 +192,30 @@
         cardOrder.forEach(function(c){ html += '<div class="col-md-2"><div class="well well-sm"><strong>'+c[0]+'</strong><br>'+((c[1]==='total_qty')?parseFloat(cards[c[1]]||0).toLocaleString():formatMoney(cards[c[1]]||0))+'</div></div>';});
         $('#summary_cards').html(html);
 
-        const makeList = (arr, mapMethod=false) => '<table class="table table-bordered table-condensed"><thead><tr><th>Name</th><th>Amount</th></tr></thead><tbody>' + (arr||[]).map(i => '<tr><td>' + (mapMethod ? humanMethod(i.label) : (i.label || 'N/A')) + '</td><td>' + formatMoney(i.amount || 0) + '</td></tr>').join('') + '</tbody></table>';
-        $('#group_user').html(makeList(summary.group_by_user));
-        $('#group_location').html(makeList(summary.group_by_location));
+        const makeList = (arr, mapMethod=false) => {
+            const rows = arr || [];
+            const totalAmount = rows.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
+            return '<table class="table table-bordered table-condensed"><thead><tr><th>Name</th><th>Amount</th></tr></thead><tbody>'
+                + rows.map(i => '<tr><td>' + (mapMethod ? humanMethod(i.label) : (i.label || 'N/A')) + '</td><td>' + formatMoney(i.amount || 0) + '</td></tr>').join('')
+                + '</tbody><tfoot><tr><th>Total</th><th>' + formatMoney(totalAmount) + '</th></tr></tfoot></table>';
+        };
+        const makeListWithQty = (arr) => {
+            const rows = arr || [];
+            const totalAmount = rows.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
+            const totalQty = rows.reduce((sum, i) => sum + parseFloat(i.qty || 0), 0);
+            return '<table class="table table-bordered table-condensed"><thead><tr><th>Name</th><th>Amount</th><th>Qty</th></tr></thead><tbody>'
+                + rows.map(i => '<tr><td>' + (i.label || 'N/A') + '</td><td>' + formatMoney(i.amount || 0) + '</td><td>' + parseFloat(i.qty || 0).toLocaleString() + '</td></tr>').join('')
+                + '</tbody><tfoot><tr><th>Total</th><th>' + formatMoney(totalAmount) + '</th><th>' + totalQty.toLocaleString() + '</th></tr></tfoot></table>';
+        };
+        $('#group_user').html(makeListWithQty(summary.group_by_user));
+        $('#group_location').html(makeListWithQty(summary.group_by_location));
         $('#group_payment').html(makeList(summary.group_by_payment_method, true));
         $('#group_expense_payment').html(makeList(summary.group_by_expense_payment_method, true));
+        $('#final_payment_block').html(
+            '<div class="well well-sm">' +
+                '<div><strong>សល់សរុប:</strong> ' + formatMoney(cards.close_payment || 0) + '</div>' +
+            '</div>'
+        );
     }
 
     function humanMethod(method){

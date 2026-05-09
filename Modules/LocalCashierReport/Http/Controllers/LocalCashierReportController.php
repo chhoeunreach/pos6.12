@@ -247,10 +247,49 @@ class LocalCashierReportController extends Controller
             ->where('t.business_id', $businessId)
             ->where('t.type', 'sell')
             ->where('t.status', 'final')
+            ->selectRaw('t.created_by as user_id')
             ->selectRaw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as label")
             ->selectRaw('SUM(t.final_total) as amount')
             ->groupBy('t.created_by', 'u.first_name', 'u.last_name');
-        $this->applyFilters($userGroup, $request, 't');
+        $this->applyFilters($userGroup, $request, 't', false);
+        $userAmountRows = $userGroup->get()->keyBy('user_id');
+
+        $userQtyGroup = DB::table('transactions as t')
+            ->join('transaction_sell_lines as tsl', 't.id', '=', 'tsl.transaction_id')
+            ->leftJoin('users as u', 't.created_by', '=', 'u.id')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->selectRaw('t.created_by as user_id')
+            ->selectRaw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as label")
+            ->selectRaw('SUM(tsl.quantity) as qty')
+            ->groupBy('t.created_by', 'u.first_name', 'u.last_name');
+        $this->applyFilters($userQtyGroup, $request, 't', false);
+        $userQtyRows = $userQtyGroup->get()->keyBy('user_id');
+
+        $selectedUserIds = $this->extractSelectedIds($request, 'user_ids');
+        if (empty($selectedUserIds) && auth()->check()) {
+            $selectedUserIds = [auth()->id()];
+        }
+        $selectedUsers = DB::table('users')
+            ->where('business_id', $businessId)
+            ->where('status', 'active')
+            ->whereIn('id', $selectedUserIds)
+            ->selectRaw('id as user_id')
+            ->selectRaw("TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as label")
+            ->orderBy('first_name')
+            ->get();
+
+        $userSummary = collect();
+        foreach ($selectedUsers as $user) {
+            $amountRow = $userAmountRows->get($user->user_id);
+            $qtyRow = $userQtyRows->get($user->user_id);
+            $userSummary->push((object) [
+                'label' => $user->label,
+                'amount' => (float) ($amountRow->amount ?? 0),
+                'qty' => (float) ($qtyRow->qty ?? 0),
+            ]);
+        }
 
         $locationGroup = DB::table('transactions as t')
             ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
@@ -261,6 +300,29 @@ class LocalCashierReportController extends Controller
             ->selectRaw('SUM(t.final_total) as amount')
             ->groupBy('t.location_id', 'bl.name');
         $this->applyFilters($locationGroup, $request, 't');
+        $locationAmountRows = $locationGroup->get();
+
+        $locationQtyGroup = DB::table('transactions as t')
+            ->join('transaction_sell_lines as tsl', 't.id', '=', 'tsl.transaction_id')
+            ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->selectRaw('COALESCE(bl.name, "N/A") as label')
+            ->selectRaw('SUM(tsl.quantity) as qty')
+            ->groupBy('t.location_id', 'bl.name');
+        $this->applyFilters($locationQtyGroup, $request, 't');
+        $locationQtyRows = $locationQtyGroup->get()->keyBy('label');
+
+        $locationSummary = collect();
+        foreach ($locationAmountRows as $row) {
+            $qtyRow = $locationQtyRows->get($row->label);
+            $locationSummary->push((object) [
+                'label' => $row->label,
+                'amount' => (float) ($row->amount ?? 0),
+                'qty' => (float) ($qtyRow->qty ?? 0),
+            ]);
+        }
 
         $payMethodGroup = DB::table('transactions as t')
             ->join('transaction_payments as tp', 't.id', '=', 'tp.transaction_id')
@@ -308,14 +370,14 @@ class LocalCashierReportController extends Controller
                 'total_discount' => (float) ($trxSummary['total_discount'] ?? 0),
                 'total_qty' => (float) ($qtySummary['total_qty'] ?? 0),
             ],
-            'group_by_user' => $userGroup->get(),
-            'group_by_location' => $locationGroup->get(),
+            'group_by_user' => $userSummary,
+            'group_by_location' => $locationSummary,
             'group_by_payment_method' => $payMethodGroup->get(),
             'group_by_expense_payment_method' => $expensePayMethodGroup->get(),
         ];
     }
 
-    private function applyFilters($query, Request $request, string $prefix = 't'): void
+    private function applyFilters($query, Request $request, string $prefix = 't', bool $includeUserFilter = true): void
     {
         $businessId = (int) session('user.business_id');
         $permittedLocations = auth()->user()->permitted_locations($businessId);
@@ -334,15 +396,15 @@ class LocalCashierReportController extends Controller
             $query->whereDate($prefix . '.transaction_date', '<=', Carbon::parse($endDate)->format('Y-m-d'));
         }
 
-        if ($request->filled('user_ids')) {
-            $ids = array_filter((array) $request->input('user_ids'));
+        if ($includeUserFilter) {
+            $ids = $this->extractSelectedIds($request, 'user_ids');
             if (! empty($ids)) {
                 $query->whereIn($prefix . '.created_by', $ids);
             }
         }
 
         if ($request->filled('location_ids')) {
-            $ids = array_filter((array) $request->input('location_ids'));
+            $ids = $this->extractSelectedIds($request, 'location_ids');
             if (! empty($ids)) {
                 $query->whereIn($prefix . '.location_id', $ids);
             }
@@ -447,5 +509,18 @@ class LocalCashierReportController extends Controller
             'card' => $paymentTypes[$map['card']] ?? __('lang_v1.card'),
             'other' => $paymentTypes[$map['other']] ?? __('lang_v1.other'),
         ];
+    }
+
+    private function extractSelectedIds(Request $request, string $key): array
+    {
+        $values = $request->input($key, $request->input($key.'[]', []));
+        if (is_string($values)) {
+            $values = str_contains($values, ',') ? explode(',', $values) : [$values];
+        }
+        if (! is_array($values)) {
+            $values = [$values];
+        }
+
+        return array_values(array_filter(array_map(static fn ($v) => (int) $v, $values)));
     }
 }
