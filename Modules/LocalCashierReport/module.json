@@ -1,0 +1,14 @@
+{
+    "name": "LocalCashierReport",
+    "alias": "localcashierreport",
+    "description": "Local cashier report with payment breakdown and summary",
+    "keywords": ["report", "cashier"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\LocalCashierReport\\Providers\\LocalCashierReportServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

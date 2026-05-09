@@ -32,12 +32,12 @@
 
                     <div class="col-md-6">
                         <div class="form-group">
-                        {!! Form::label('start_date','Start Date:') !!}
+                        {!! Form::label('start_date','Start Date (MM/DD/YYYY):') !!}
                         <div class="input-group">
                             <span class="input-group-addon">
                                 <i class="fa fa-calendar"></i>
                             </span>
-                            {!! Form::text('start_date', null, ['class' => 'form-control start-date-picker','placeholder' => 'Start Date', 'readonly']); !!}
+                            {!! Form::text('start_date', null, ['class' => 'form-control start-date-picker','placeholder' => 'MM/DD/YYYY', 'readonly']); !!}
                         </div>
                         </div>
                     </div>

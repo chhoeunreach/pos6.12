@@ -162,6 +162,22 @@
                         </a>
                     @endcan
                 @endif
+                @if (Module::has('LocalCashierReport'))
+                    @can('local_cashier_report.view')
+                        <a href="{{ route('local-cashier-report.index') }}"
+                            class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 tw-bg-@if(!empty(session('business.theme_color'))){{session('business.theme_color')}}@else{{'primary'}}@endif-800 hover:tw-bg-@if(!empty(session('business.theme_color'))){{session('business.theme_color')}}@else{{'primary'}}@endif-700 tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="tw-size-5 tw-hidden md:tw-block" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                <path d="M3 3v18h18" />
+                                <path d="M18 17v-8" />
+                                <path d="M13 17v-5" />
+                                <path d="M8 17v-2" />
+                            </svg>
+                            Local Cashier
+                        </a>
+                    @endcan
+                @endif
                 @if (Module::has('Repair'))
                     @includeIf('repair::layouts.partials.header')
                 @endif

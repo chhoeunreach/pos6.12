@@ -1,0 +1,22 @@
+{
+    "name": "nwidart/localcashierreport",
+    "description": "Local Cashier Report module for UltimatePOS",
+    "authors": [
+        {
+            "name": "UltimatePOS Custom"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\LocalCashierReport\\Providers\\LocalCashierReportServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\LocalCashierReport\\": ""
+        }
+    }
+}
