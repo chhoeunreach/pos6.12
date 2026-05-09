@@ -3,14 +3,19 @@
 return [
     'name' => 'LocalCashierReport',
     'module_version' => '1.0.0',
-    'payment_method_map' => [
-        'cash' => 'cash',
-        'aba' => 'custom_pay_1',
-        'acleda' => 'custom_pay_2',
-        'wing' => 'custom_pay_3',
-        'e_and_t' => 'custom_pay_4',
-        'card' => 'card',
-        'other' => 'others',
+    'common_payment_method_keys' => [
+        'cash',
+        'custom_pay_1',
+        'custom_pay_2',
+        'custom_pay_3',
+        'custom_pay_4',
+        'card',
+        'other',
+    ],
+    'payment_statuses' => ['paid', 'partial', 'due'],
+    'qty_types' => [
+        'invoice_count' => 'Invoice Count',
+        'sold_quantity' => 'Sold Quantity',
     ],
     'khmer_font_family' => "'Noto Sans Khmer', 'Khmer OS', 'Battambang', sans-serif",
 ];

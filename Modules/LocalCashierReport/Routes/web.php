@@ -13,7 +13,6 @@ Route::middleware([
     'CheckUserLogin',
 ])->prefix('local-cashier-report')->group(function () {
     Route::get('/', [LocalCashierReportController::class, 'index'])->name('local-cashier-report.index');
-    Route::get('/datatable', [LocalCashierReportController::class, 'datatable'])->name('local-cashier-report.datatable');
-    Route::get('/export/excel', [LocalCashierReportController::class, 'exportExcel'])->name('local-cashier-report.export.excel');
-    Route::get('/export/pdf', [LocalCashierReportController::class, 'exportPdf'])->name('local-cashier-report.export.pdf');
+    Route::get('/export', [LocalCashierReportController::class, 'export'])->name('local-cashier-report.export');
+    Route::get('/print', [LocalCashierReportController::class, 'print'])->name('local-cashier-report.print');
 });
