@@ -316,6 +316,10 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     });
 
     //Business Locations...
+    Route::get('business-location/import-template', [BusinessLocationController::class, 'downloadTemplate']);
+    Route::get('business-location/export', [BusinessLocationController::class, 'export']);
+    Route::post('business-location/import-preview', [BusinessLocationController::class, 'importPreview']);
+    Route::post('business-location/import-confirm', [BusinessLocationController::class, 'importConfirm']);
     Route::post('business-location/check-location-id', [BusinessLocationController::class, 'checkLocationId']);
     Route::resource('business-location', BusinessLocationController::class);
 
