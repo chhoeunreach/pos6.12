@@ -7,7 +7,8 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     ->prefix('stock-mismatch')
     ->group(function () {
         Route::get('/', [StockMismatchController::class, 'index']);
-        Route::get('/data', [StockMismatchController::class, 'data']);
+        Route::get('/data', [StockMismatchController::class, 'checkMismatch']);
+        Route::get('/products/search', [StockMismatchController::class, 'searchProduct']);
         Route::get('/{variation_id}/{location_id}/detail', [StockMismatchController::class, 'detail']);
         Route::post('/fix', [StockMismatchController::class, 'fix']);
         Route::post('/fix-all', [StockMismatchController::class, 'fixAll']);

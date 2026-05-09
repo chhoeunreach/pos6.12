@@ -29,14 +29,17 @@ class StockMismatchController extends Controller
         // Use query builder for max compatibility (some installs use App\Brands model)
         $brands = DB::table('brands')->where('business_id', $business_id)->pluck('name', 'id');
         $categories = DB::table('categories')->where('business_id', $business_id)->whereNull('parent_id')->pluck('name', 'id');
-        $products = DB::table('products')->where('business_id', $business_id)->pluck('name', 'id');
 
         $is_admin = $this->commonUtil->is_admin(auth()->user(), $business_id);
 
-        return view('fixstockmismatch::index', compact('locations', 'brands', 'categories', 'products', 'is_admin'));
+        return view('fixstockmismatch::index', compact('locations', 'brands', 'categories', 'is_admin'));
     }
 
-    public function data(Request $request)
+    /**
+     * DataTables endpoint to check stock mismatches.
+     * Does not run mismatch query unless a filter is provided.
+     */
+    public function checkMismatch(Request $request)
     {
         if (! auth()->user()->can('stock_mismatch.view')) {
             abort(403, 'Unauthorized action.');
@@ -46,9 +49,29 @@ class StockMismatchController extends Controller
 
         $location_id = $request->input('location_id');
         $product_id = $request->input('product_id');
+        $variation_id = $request->input('variation_id');
+        $sku = trim((string) $request->input('sku'));
         $category_id = $request->input('category_id');
         $brand_id = $request->input('brand_id');
-        $only_mismatch = $request->input('only_mismatch', '1') === '1';
+        $mismatch_type = $request->input('mismatch_type', 'mismatch'); // mismatch|matched|all
+        $limit = (int) $request->input('limit', 50);
+        $limit = max(10, min($limit, 200));
+        $should_load = $request->boolean('should_load', false);
+
+        // Default result should be empty; never scan all products/locations on page load.
+        if (! $should_load) {
+            return DataTables::of(collect())->make(true);
+        }
+
+        $has_required_filter = ! empty($location_id) || ! empty($product_id) || ! empty($variation_id) || $sku !== '';
+        if (! $has_required_filter) {
+            return DataTables::of(collect())->with('warning', 'Please select Location or SKU/Product first.')->make(true);
+        }
+
+        // Cap DataTables length to keep queries predictable.
+        $dt_length = (int) $request->input('length', $limit);
+        $dt_length = max(1, min($dt_length, $limit));
+        $request->merge(['length' => $dt_length]);
 
         $query = $this->mismatchQuery($business_id);
 
@@ -58,18 +81,41 @@ class StockMismatchController extends Controller
         if (! empty($product_id)) {
             $query->where('p.id', $product_id);
         }
+        if (! empty($variation_id)) {
+            $query->where('v.id', $variation_id);
+        }
+        if ($sku !== '') {
+            $query->where(function ($q) use ($sku) {
+                $q->where('p.sku', $sku)
+                    ->orWhere('v.sub_sku', $sku);
+            });
+        }
         if (! empty($category_id)) {
             $query->where('p.category_id', $category_id);
         }
         if (! empty($brand_id)) {
             $query->where('p.brand_id', $brand_id);
         }
-        if ($only_mismatch) {
+        if ($mismatch_type === 'mismatch') {
             $query->havingRaw('ROUND(difference, 4) != 0');
+        } elseif ($mismatch_type === 'matched') {
+            $query->havingRaw('ROUND(difference, 4) = 0');
         }
 
         return DataTables::of($query)
-            ->addColumn('status', function ($row) {
+            ->addColumn('product', function ($row) {
+                $name = $row->product_name ?? '';
+                $variation = $row->variation ?? '';
+                if (! empty($variation) && $variation !== 'DUMMY') {
+                    $name .= ' - ' . $variation;
+                }
+                return e($name);
+            })
+            ->addColumn('sku_display', function ($row) {
+                $sku = $row->sub_sku ?: $row->sku;
+                return e((string) $sku);
+            })
+            ->addColumn('mismatch_type', function ($row) {
                 $diff = (float) $row->difference;
                 if (abs($diff) < 0.0001) {
                     return '<span class="label label-success">Matched</span>';
@@ -90,8 +136,63 @@ class StockMismatchController extends Controller
             ->addColumn('current_stock', fn ($row) => $this->productUtil->num_f($row->stock))
             ->addColumn('calculated_stock', fn ($row) => $this->productUtil->num_f($row->total_stock_calculated))
             ->editColumn('difference', fn ($row) => $this->productUtil->num_f($row->difference))
-            ->rawColumns(['status', 'action'])
+            ->rawColumns(['mismatch_type', 'action'])
             ->make(true);
+    }
+
+    /**
+     * AJAX endpoint for Select2 product/SKU search.
+     * Returns variations (variation_id) matched by SKU/sub_sku/product name.
+     */
+    public function searchProduct(Request $request)
+    {
+        if (! auth()->user()->can('stock_mismatch.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+        $term = trim((string) $request->input('term', ''));
+        if (mb_strlen($term) < 2) {
+            return ['results' => []];
+        }
+
+        $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $term) . '%';
+
+        $rows = DB::table('variations as v')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->where('p.business_id', $business_id)
+            ->where(function ($q) use ($like, $term) {
+                $q->where('p.name', 'like', $like)
+                    ->orWhere('p.sku', $term)
+                    ->orWhere('v.sub_sku', $term)
+                    ->orWhere('v.sub_sku', 'like', $like);
+            })
+            ->orderBy('p.name')
+            ->limit(20)
+            ->get([
+                'v.id as variation_id',
+                'p.id as product_id',
+                'p.name as product_name',
+                'p.sku as product_sku',
+                'v.sub_sku as sub_sku',
+                'v.name as variation_name',
+            ]);
+
+        $results = $rows->map(function ($r) {
+            $sku = $r->sub_sku ?: $r->product_sku;
+            $text = $r->product_name . ($sku ? " ({$sku})" : '');
+            if (! empty($r->variation_name) && $r->variation_name !== 'DUMMY') {
+                $text .= ' - ' . $r->variation_name;
+            }
+            return [
+                'id' => $r->variation_id,
+                'text' => $text,
+                'product_id' => $r->product_id,
+                'sku' => $sku,
+            ];
+        })->values();
+
+        return ['results' => $results];
     }
 
     public function detail(Request $request, $variation_id, $location_id)
@@ -194,6 +295,7 @@ class StockMismatchController extends Controller
 
         $location_id = $request->input('location_id');
         $product_id = $request->input('product_id');
+        $variation_id = $request->input('variation_id');
         $category_id = $request->input('category_id');
         $brand_id = $request->input('brand_id');
 
@@ -201,11 +303,22 @@ class StockMismatchController extends Controller
             $fixed = 0;
             $query = $this->mismatchQuery($business_id)->havingRaw('ROUND(difference, 4) != 0');
 
+            $has_required_filter = ! empty($location_id) || ! empty($product_id) || ! empty($variation_id);
+            if (! $has_required_filter) {
+                return [
+                    'success' => 0,
+                    'msg' => 'Please select Location or SKU/Product first.',
+                ];
+            }
+
             if (! empty($location_id)) {
                 $query->where('vld.location_id', $location_id);
             }
             if (! empty($product_id)) {
                 $query->where('p.id', $product_id);
+            }
+            if (! empty($variation_id)) {
+                $query->where('v.id', $variation_id);
             }
             if (! empty($category_id)) {
                 $query->where('p.category_id', $category_id);
@@ -328,8 +441,6 @@ class StockMismatchController extends Controller
             ->join('variations as v', 'v.id', '=', 'vld.variation_id')
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->join('business_locations as bl', 'bl.id', '=', 'vld.location_id')
-            ->leftJoin('brands as br', 'br.id', '=', 'p.brand_id')
-            ->leftJoin('categories as cat', 'cat.id', '=', 'p.category_id')
             ->where('p.business_id', $business_id)
             ->select([
                 'vld.location_id',
