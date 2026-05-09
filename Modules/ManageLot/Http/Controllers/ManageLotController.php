@@ -170,6 +170,7 @@ class ManageLotController extends Controller
     {
         $this->authorizeViewOnly();
 
+        try {
         $business_id = $request->session()->get('user.business_id');
         $permitted_locations = auth()->user()->permitted_locations();
 
@@ -319,8 +320,8 @@ class ManageLotController extends Controller
         }
 
         // Transfers: derive from sell_transfer (out) + its linked purchase_transfer (in) (requires mapping table)
-        $transfer_out = DB::query()->fromSub(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as transfer_out_qty) as x'), 't_out_empty')->whereRaw('1=0');
-        $transfer_in = DB::query()->fromSub(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as transfer_in_qty) as x'), 't_in_empty')->whereRaw('1=0');
+        $transfer_out = DB::query()->from(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as transfer_out_qty) as t_out_empty'))->whereRaw('1=0');
+        $transfer_in = DB::query()->from(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as transfer_in_qty) as t_in_empty'))->whereRaw('1=0');
         if ($has_tspl) {
             $transfers = DB::table('transaction_sell_lines_purchase_lines as tspl')
                 ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
@@ -364,12 +365,12 @@ class ManageLotController extends Controller
         // Ensure the aliases exist even if the underlying tables/columns are not present.
         if (! $sold) {
             $sold = DB::query()
-                ->fromSub(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as sold_qty) as x'), 'sold_empty')
+                ->from(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as sold_qty) as sold_empty'))
                 ->whereRaw('1=0');
         }
         if (! $adjustments) {
             $adjustments = DB::query()
-                ->fromSub(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as adjustment_qty) as x'), 'adj_empty')
+                ->from(DB::raw('(select 0 as purchase_line_id, 0 as location_id, 0 as adjustment_qty) as adj_empty'))
                 ->whereRaw('1=0');
         }
 
@@ -384,21 +385,29 @@ class ManageLotController extends Controller
 
         // IMPORTANT: Keep location_id fully-qualified inside each subquery (do not override select with plain `location_id`)
         // to avoid MySQL "Column 'location_id' ... is ambiguous" errors (e.g. transfers join both out/in transactions).
-        $sold_locations = $sold ? (clone $sold)->select([
-            DB::raw('purchase_line_id as purchase_line_id'),
-            DB::raw('location_id as location_id'),
-        ]) : null;
-        $adjustment_locations = $adjustments ? (clone $adjustments)->select([
-            DB::raw('purchase_line_id as purchase_line_id'),
-            DB::raw('location_id as location_id'),
-        ]) : null;
+        $sold_locations = null;
+        if ($sold) {
+            $sold_locations = (clone $sold)->select([
+                DB::raw(($has_tspl ? 'tspl.purchase_line_id' : 'purchase_line_id') . ' as purchase_line_id'),
+                DB::raw(($has_tspl ? 'ts.location_id' : 'location_id') . ' as location_id'),
+            ]);
+        }
+
+        $adjustment_locations = null;
+        if ($adjustments) {
+            $adjustment_locations = (clone $adjustments)->select([
+                DB::raw(($has_tspl ? 'tspl.purchase_line_id' : 'purchase_line_id') . ' as purchase_line_id'),
+                DB::raw(($has_tspl ? 'ta.location_id' : 'location_id') . ' as location_id'),
+            ]);
+        }
+
         $transfer_out_locations = (clone $transfer_out)->select([
-            DB::raw('purchase_line_id as purchase_line_id'),
-            DB::raw('location_id as location_id'),
+            DB::raw(($has_tspl ? 'tspl.purchase_line_id' : 'purchase_line_id') . ' as purchase_line_id'),
+            DB::raw(($has_tspl ? 'tt_out.location_id' : 'location_id') . ' as location_id'),
         ]);
         $transfer_in_locations = (clone $transfer_in)->select([
-            DB::raw('purchase_line_id as purchase_line_id'),
-            DB::raw('location_id as location_id'),
+            DB::raw(($has_tspl ? 'tspl.purchase_line_id' : 'purchase_line_id') . ' as purchase_line_id'),
+            DB::raw(($has_tspl ? 'tt_in.location_id' : 'location_id') . ' as location_id'),
         ]);
 
         $movement_locations = DB::query()->fromSub(
@@ -566,6 +575,10 @@ class ManageLotController extends Controller
             })
             ->rawColumns(['action', 'status', 'purchase_qty', 'sold_qty', 'transfer_out_qty', 'adjustment_qty', 'current_qty'])
             ->make(true);
+        } catch (\Exception $e) {
+            \Log::emergency('ManageLot indexData error File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
+            return response()->json($this->dataTablesErrorResponse($request, 'ManageLot error: ' . $e->getMessage()));
+        }
     }
 
     /**
@@ -600,6 +613,7 @@ class ManageLotController extends Controller
     {
         $this->authorizeViewOnly();
 
+        try {
         $business_id = $request->session()->get('user.business_id');
         $permitted_locations = auth()->user()->permitted_locations();
 
@@ -643,7 +657,7 @@ class ManageLotController extends Controller
 
         // Sell (qty out at sell location)
         $sell = DB::query()
-            ->fromSub(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as x"), 'sell_empty')
+            ->from(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as sell_empty"))
             ->whereRaw('1=0');
         if ($has_tspl) {
             $sell = DB::table('transaction_sell_lines_purchase_lines as tspl')
@@ -672,7 +686,7 @@ class ManageLotController extends Controller
 
         // Sell fallback (when mapping rows do not exist): transaction_sell_lines.lot_no_line_id
         $sell_fallback = DB::query()
-            ->fromSub(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as x"), 'sell_fb_empty')
+            ->from(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as sell_fb_empty"))
             ->whereRaw('1=0');
         if ($has_tsl_lot_no_line_id) {
             $sell_fallback = DB::table('transaction_sell_lines as tsl')
@@ -711,7 +725,7 @@ class ManageLotController extends Controller
 
         // Transfer OUT (qty out at from location, to_location resolved)
         $transfer_out = DB::query()
-            ->fromSub(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as x"), 'tr_out_empty')
+            ->from(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as tr_out_empty"))
             ->whereRaw('1=0');
         if ($has_tspl) {
             $transfer_out = DB::table('transaction_sell_lines_purchase_lines as tspl')
@@ -781,7 +795,7 @@ class ManageLotController extends Controller
 
         // Transfer IN (mirror of transfer out)
         $transfer_in = DB::query()
-            ->fromSub(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as x"), 'tr_in_empty')
+            ->from(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as tr_in_empty"))
             ->whereRaw('1=0');
         if ($has_tspl) {
             $transfer_in = DB::table('transaction_sell_lines_purchase_lines as tspl')
@@ -815,7 +829,7 @@ class ManageLotController extends Controller
 
         // Adjustment (qty out)
         $adjustment = DB::query()
-            ->fromSub(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as x"), 'adj_empty')
+            ->from(DB::raw("(select '' as movement_date, '' as movement_type, '' as ref_no, '' as from_location, '' as to_location, 0 as qty_in, 0 as qty_out, '' as created_by) as adj_empty"))
             ->whereRaw('1=0');
         if ($has_tspl) {
             $adjustment = DB::table('transaction_sell_lines_purchase_lines as tspl')
@@ -917,6 +931,22 @@ class ManageLotController extends Controller
         }
 
         return DataTables::of($data)->make(true);
+        } catch (\Exception $e) {
+            \Log::emergency('ManageLot historyData error File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
+            return response()->json($this->dataTablesErrorResponse($request, 'ManageLot error: ' . $e->getMessage()));
+        }
+    }
+
+    private function dataTablesErrorResponse(Request $request, string $message): array
+    {
+        $draw = (int) $request->input('draw', 0);
+        return [
+            'draw' => $draw,
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => $message,
+        ];
     }
 
     private function formatMovementType(string $movement_type): string
