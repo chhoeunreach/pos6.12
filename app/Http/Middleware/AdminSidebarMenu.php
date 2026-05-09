@@ -623,13 +623,11 @@ class AdminSidebarMenu
                                     ['icon' => '', 'active' => request()->segment(2) == 'stock-expiry']
                                 );
                             }
-                            if (session('business.enable_lot_number') == 1) {
-                                $sub->url(
-                                    action([\App\Http\Controllers\ReportController::class, 'getLotReport']),
-                                    __('lang_v1.lot_report'),
-                                    ['icon' => '', 'active' => request()->segment(2) == 'lot-report']
-                                );
-                            }
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'getLotReport']),
+                                __('lang_v1.lot_report'),
+                                ['icon' => '', 'active' => request()->segment(2) == 'lot-report']
+                            );
 
                             if (\Module::has('ManageLot') && auth()->user()->can('stock_report.view')) {
                                 $sub->url(
