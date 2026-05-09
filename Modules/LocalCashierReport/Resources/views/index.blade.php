@@ -20,7 +20,7 @@
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">
         Local Cashier Report
         <span id="local_cashier_selected_range" class="tw-text-gray-600 tw-font-normal tw-text-base">
-            {{ request('start_date') ? @format_date(request('start_date')) : @format_date(\Carbon\Carbon::now()->subDays(29)) }}
+            {{ request('start_date') ? @format_date(request('start_date')) : @format_date(\Carbon\Carbon::now()) }}
             ~
             {{ request('end_date') ? @format_date(request('end_date')) : @format_date(\Carbon\Carbon::now()) }}
         </span>
@@ -42,8 +42,11 @@
                     <div class="form-group">
                         <label>Cashier/User</label>
                         <select name="user_ids[]" class="form-control select2" multiple style="width:100%">
+                            @php
+                                $selected_user_ids = (array) request('user_ids', [auth()->id()]);
+                            @endphp
                             @foreach($users as $u)
-                                <option value="{{ $u->id }}" @if(in_array($u->id, (array) request('user_ids', []))) selected @endif>{{ trim($u->first_name . ' ' . $u->last_name) }}</option>
+                                <option value="{{ $u->id }}" @if(in_array($u->id, $selected_user_ids)) selected @endif>{{ trim($u->first_name . ' ' . $u->last_name) }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -105,6 +108,10 @@
     let currencySymbol = @json($currencySymbol);
     function formatMoney(v){ return currencySymbol + parseFloat(v || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
     function queryString(){ return $('#local_cashier_report_filter').serialize(); }
+    function setSearchButtonState(enabled){
+        $('#local_cashier_report_filter button[type="submit"]').prop('disabled', !enabled);
+    }
+    let lastSearchQuery = queryString();
     const tableButtons = [
         { extend: 'csv', text: '<i class="fa fa-file-csv" aria-hidden="true"></i> ' + LANG.export_to_csv, className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2', exportOptions: { columns: ':visible' } },
         { extend: 'excel', text: '<i class="fa fa-file-excel" aria-hidden="true"></i> ' + LANG.export_to_excel, className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2', exportOptions: { columns: ':visible' } },
@@ -185,19 +192,31 @@
 
     $('#local_cashier_report_filter').on('submit', function(e){
         e.preventDefault();
+        const $submitBtn = $(this).find('button[type="submit"]');
         if (!$('input[name=\"start_date\"]').val() || !$('input[name=\"end_date\"]').val()) {
             toastr.warning('Please select Date Range first.');
+            $submitBtn.prop('disabled', false);
             return;
         }
         table.ajax.reload();
         syncExportLinks();
+        lastSearchQuery = queryString();
+        setSearchButtonState(false);
+        $submitBtn.prop('disabled', false);
     });
+
+    $('#local_cashier_report_filter').on('change input', 'input, select', function(){
+        setSearchButtonState(queryString() !== lastSearchQuery);
+    });
+
     $('#local_cashier_report_reset').on('click', function(){
         this.form?.reset();
         $('.select2').val(null).trigger('change');
         table.clear().draw();
         renderSummary({});
         syncExportLinks();
+        lastSearchQuery = queryString();
+        setSearchButtonState(false);
     });
     $('#btn_print').on('click', function(){ window.print(); });
 
@@ -206,6 +225,7 @@
         $('#btn_export_pdf').attr('href', '{{ route('local-cashier-report.export.pdf') }}' + '?' + queryString());
     }
     syncExportLinks();
+    setSearchButtonState(false);
 })(jQuery);
 </script>
 <script>
@@ -213,10 +233,14 @@
     const $dateRange = $('#local_cashier_report_date_range');
     const $startDate = $('#local_cashier_report_filter input[name="start_date"]');
     const $endDate = $('#local_cashier_report_filter input[name="end_date"]');
+    const today = moment();
 
     $('#local_cashier_report_filter .select2').select2();
 
-    $dateRange.daterangepicker(dateRangeSettings, function(start, end) {
+    $dateRange.daterangepicker($.extend(true, {}, dateRangeSettings, {
+        startDate: today,
+        endDate: today
+    }), function(start, end) {
         $dateRange.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
         $startDate.val(start.format('YYYY-MM-DD'));
         $endDate.val(end.format('YYYY-MM-DD'));
@@ -231,15 +255,19 @@
         drp.setEndDate(end);
         $dateRange.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
         $('#local_cashier_selected_range').text(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
+    } else {
+        $startDate.val(today.format('YYYY-MM-DD'));
+        $endDate.val(today.format('YYYY-MM-DD'));
+        $dateRange.val(today.format(moment_date_format) + ' ~ ' + today.format(moment_date_format));
+        $('#local_cashier_selected_range').text(today.format(moment_date_format) + ' ~ ' + today.format(moment_date_format));
     }
 
     $dateRange.on('cancel.daterangepicker', function() {
         $dateRange.val('');
         $startDate.val('');
         $endDate.val('');
-        const defaultStart = moment().subtract(29, 'days').format(moment_date_format);
-        const defaultEnd = moment().format(moment_date_format);
-        $('#local_cashier_selected_range').text(defaultStart + ' ~ ' + defaultEnd);
+        const defaultToday = moment().format(moment_date_format);
+        $('#local_cashier_selected_range').text(defaultToday + ' ~ ' + defaultToday);
     });
 })(jQuery);
 </script>

@@ -23,9 +23,20 @@ class LocalCashierReportController extends Controller
         abort_unless($request->user()->can('local_cashier_report.view'), 403);
 
         $businessId = (int) session('user.business_id');
+        $permittedLocations = auth()->user()->permitted_locations($businessId);
 
-        $users = DB::table('users')->where('business_id', $businessId)->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
-        $locations = DB::table('business_locations')->where('business_id', $businessId)->orderBy('name')->get(['id', 'name']);
+        $users = DB::table('users')
+            ->where('business_id', $businessId)
+            ->where('status', 'active')
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name']);
+        $locations = DB::table('business_locations')
+            ->where('business_id', $businessId)
+            ->when($permittedLocations !== 'all', function ($query) use ($permittedLocations) {
+                $query->whereIn('id', $permittedLocations);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return view('localcashierreport::index', [
             'users' => $users,
@@ -286,6 +297,13 @@ class LocalCashierReportController extends Controller
 
     private function applyFilters($query, Request $request, string $prefix = 't'): void
     {
+        $businessId = (int) session('user.business_id');
+        $permittedLocations = auth()->user()->permitted_locations($businessId);
+
+        if ($permittedLocations !== 'all') {
+            $query->whereIn($prefix . '.location_id', $permittedLocations);
+        }
+
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
