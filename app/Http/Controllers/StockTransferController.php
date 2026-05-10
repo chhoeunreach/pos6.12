@@ -1037,13 +1037,14 @@ class StockTransferController extends Controller
         $statuses = $this->stockTransferStatuses();
 
         // Suggested Ref No: RT-<original>, ensure uniqueness within the business.
-        $suggested_ref_no = 'RT-' . $original_transfer->ref_no;
+        $base_ref_no = $original_transfer->ref_no;
+        $suggested_ref_no = $base_ref_no;
         if (Transaction::where('business_id', $business_id)->where('ref_no', $suggested_ref_no)->exists()) {
             $suffix = 1;
-            while (Transaction::where('business_id', $business_id)->where('ref_no', $suggested_ref_no . '-' . $suffix)->exists()) {
+            while (Transaction::where('business_id', $business_id)->where('ref_no', $base_ref_no . '-' . $suffix)->exists()) {
                 $suffix++;
             }
-            $suggested_ref_no = $suggested_ref_no . '-' . $suffix;
+            $suggested_ref_no = $base_ref_no . '-' . $suffix;
         }
 
         // Notes must match original exactly (no auto-append)
