@@ -60,7 +60,7 @@
         <div class="small-box bg-aqua">
             <div class="inner"><h3>{{ $card['value'] }}</h3><p>{{ $card['label'] }}</p></div>
             <div class="icon"><i class="fa fa-cubes"></i></div>
-            <a href="{{ route('ssi.dashboard.detail', ['metric' => $card['metric'], 'location_id' => request('location_id')]) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
+            <a href="{{ route('ssi.dashboard.detail', ['metric' => $card['metric'], 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
         </div>
     </div>
     @endforeach

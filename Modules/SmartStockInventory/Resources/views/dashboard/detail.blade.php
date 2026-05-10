@@ -11,14 +11,14 @@
     @if(in_array($metric, ['total_products', 'total_stock_qty', 'total_stock_value']))
         @component('components.filters', ['title' => __('report.filters')])
             <form method="get" class="row">
+                <input type="hidden" name="metric" value="{{ $metric }}">
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label for="location_ids">Business Location:</label>
-                        <select class="form-control select2" id="location_ids" name="location_ids[]" multiple style="width:100%;">
-                            @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}" {{ in_array((int)$loc->id, (array)$locationIds, true) ? 'selected' : '' }}>{{ $loc->name }}</option>
-                            @endforeach
-                        </select>
+                        <label>Business Location:</label><br>
+                        <button type="button" class="btn btn-default" data-toggle="modal" data-target="#ssiDetailLocationFilterModal">
+                            <i class="fa fa-map-marker"></i> Select Locations
+                        </button>
+                        <small class="help-block">Selected: <span id="ssi_detail_selected_locations_count">{{ count((array)$locationIds) }}</span></small>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -35,8 +35,8 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <br>
-                        <button class="btn btn-primary">Apply</button>
-                        <a class="btn btn-default" href="{{ route('ssi.dashboard.detail', ['metric' => $metric]) }}">Clear</a>
+                        <button type="button" class="btn btn-primary" id="ssi_apply_detail_filters">Apply</button>
+                        <a class="btn btn-default" href="{{ route('ssi.dashboard.detail', ['metric' => $metric, 'location_ids' => request('location_ids', [])]) }}">Clear</a>
                     </div>
                 </div>
             </form>
@@ -72,6 +72,28 @@
         </table>
     </div>
 </div>
+
+<div class="modal fade" id="ssiDetailLocationFilterModal" tabindex="-1" role="dialog" aria-labelledby="ssiDetailLocationFilterModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="ssiDetailLocationFilterModalLabel">Select Business Locations</h4>
+            </div>
+            <div class="modal-body">
+                <select class="form-control select2" id="location_ids_modal" multiple style="width:100%;">
+                    @foreach($locations as $loc)
+                        <option value="{{ $loc->id }}" {{ in_array((int)$loc->id, (array)$locationIds, true) ? 'selected' : '' }}>{{ $loc->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="ssi_apply_detail_location_modal">Apply Locations</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 @section('module_js')
 <script>
@@ -96,6 +118,20 @@ $(function(){
                 $('#ssi_total_value').text(valTotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}));
             }
         }
+    });
+    $('#location_ids_modal').select2({ width:'100%', dropdownParent: $('#ssiDetailLocationFilterModal') });
+    $('#ssi_apply_detail_location_modal').on('click', function(){
+        $('#ssi_detail_selected_locations_count').text(($('#location_ids_modal').val() || []).length);
+        $('#ssiDetailLocationFilterModal').modal('hide');
+    });
+    $('#ssi_apply_detail_filters').on('click', function(){
+        var form = $('#qty_filter').closest('form');
+        form.find('input[name="location_ids[]"]').remove();
+        var vals = $('#location_ids_modal').val() || [];
+        vals.forEach(function(v){
+            form.append('<input type="hidden" name="location_ids[]" value="'+v+'">');
+        });
+        form.submit();
     });
 });
 </script>
