@@ -427,6 +427,12 @@ class ManageLotController extends Controller
             ])
             ->groupBy('ll.purchase_line_id', 'll.location_id');
 
+        // Strict location filter: when a specific location is selected,
+        // only keep lot rows for that exact location.
+        if (! empty($location_id)) {
+            $movement_locations->where('ll.location_id', (int) $location_id);
+        }
+
         $lots = DB::query()
             ->fromSub($movement_locations, 'll')
             ->join('purchase_lines as pl', 'll.purchase_line_id', '=', 'pl.id')
@@ -482,6 +488,15 @@ class ManageLotController extends Controller
             }
         }
 
+        $base_purchase_qty_sql = "(CASE WHEN tp.location_id = ll.location_id THEN (COALESCE(pl.quantity,0) - " . $pl_qty_returned_sql . ") ELSE 0 END)";
+
+        $status_key_sql = "CASE
+                    WHEN (" . $base_purchase_qty_sql . " + COALESCE(t_in.transfer_in_qty,0) - (COALESCE(sold.sold_qty,0) + COALESCE(t_out.transfer_out_qty,0) + COALESCE(adj.adjustment_qty,0))) > 0 THEN 'in_stock'
+                    WHEN COALESCE(sold.sold_qty,0) > 0 THEN 'sold'
+                    WHEN (COALESCE(t_out.transfer_out_qty,0) > 0 OR COALESCE(t_in.transfer_in_qty,0) > 0) THEN 'transferred'
+                    WHEN COALESCE(adj.adjustment_qty,0) > 0 THEN 'adjusted'
+                    ELSE 'unknown' END";
+
         $lots = $lots->select([
                 DB::raw('pl.id as lot_id'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
@@ -494,24 +509,19 @@ class ManageLotController extends Controller
                 DB::raw("COALESCE(NULLIF(supplier.supplier_business_name,''), supplier.name, '') as supplier"),
                 DB::raw('ll.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw('(COALESCE(pl.quantity,0) - ' . $pl_qty_returned_sql . ') as purchase_qty'),
+                DB::raw($base_purchase_qty_sql . ' as purchase_qty'),
                 DB::raw('COALESCE(sold.sold_qty,0) as sold_qty'),
                 DB::raw('COALESCE(t_out.transfer_out_qty,0) as transfer_out_qty'),
                 DB::raw('COALESCE(t_in.transfer_in_qty,0) as transfer_in_qty'),
                 DB::raw('(COALESCE(t_out.transfer_out_qty,0) - COALESCE(t_in.transfer_in_qty,0)) as transfer_qty'),
                 DB::raw('COALESCE(adj.adjustment_qty,0) as adjustment_qty'),
-                DB::raw('((COALESCE(pl.quantity,0) - ' . $pl_qty_returned_sql . ') + COALESCE(t_in.transfer_in_qty,0) - (COALESCE(sold.sold_qty,0) + COALESCE(t_out.transfer_out_qty,0) + COALESCE(adj.adjustment_qty,0))) as current_qty'),
-                DB::raw("CASE
-                    WHEN ((COALESCE(pl.quantity,0) - " . $pl_qty_returned_sql . ") + COALESCE(t_in.transfer_in_qty,0) - (COALESCE(sold.sold_qty,0) + COALESCE(t_out.transfer_out_qty,0) + COALESCE(adj.adjustment_qty,0))) > 0 THEN 'in_stock'
-                    WHEN COALESCE(sold.sold_qty,0) > 0 THEN 'sold'
-                    WHEN (COALESCE(t_out.transfer_out_qty,0) > 0 OR COALESCE(t_in.transfer_in_qty,0) > 0) THEN 'transferred'
-                    WHEN COALESCE(adj.adjustment_qty,0) > 0 THEN 'adjusted'
-                    ELSE 'unknown' END as status_key"),
+                DB::raw('(' . $base_purchase_qty_sql . ' + COALESCE(t_in.transfer_in_qty,0) - (COALESCE(sold.sold_qty,0) + COALESCE(t_out.transfer_out_qty,0) + COALESCE(adj.adjustment_qty,0))) as current_qty'),
+                DB::raw($status_key_sql . ' as status_key'),
                 DB::raw('u.short_name as unit'),
             ]);
 
         if (! empty($status) && $status !== 'all') {
-            $lots->whereRaw('status_key = ?', [$status]);
+            $lots->whereRaw($status_key_sql . ' = ?', [$status]);
         }
 
         return DataTables::of($lots)
