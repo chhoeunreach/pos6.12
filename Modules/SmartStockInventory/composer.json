@@ -1,0 +1,22 @@
+{
+  "name": "modules/smart-stock-inventory",
+  "description": "Smart Stock Inventory module for Ultimate POS",
+  "authors": [
+    {
+      "name": "Local Team",
+      "email": "dev@example.com"
+    }
+  ],
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Modules\\SmartStockInventory\\Providers\\SmartStockInventoryServiceProvider"
+      ]
+    }
+  },
+  "autoload": {
+    "psr-4": {
+      "Modules\\SmartStockInventory\\": ""
+    }
+  }
+}

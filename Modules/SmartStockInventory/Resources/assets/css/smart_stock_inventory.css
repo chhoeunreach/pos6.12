@@ -1,0 +1,4 @@
+#ssi_app .box { border-radius: 10px; }
+#ssi_app .badge { font-size: 11px; }
+#ssi_app table thead th { position: sticky; top: 0; background: #f8f9fb; z-index: 2; }
+#ssi_app .table-responsive { max-height: 70vh; }

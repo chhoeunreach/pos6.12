@@ -28,5 +28,6 @@
     "ManageLot":  true,
     "UserBackupRestore":  true,
     "MasterData":  true,
-    "LocalCashierReport":  true
+    "LocalCashierReport":  true,
+    "SmartStockInventory":  true
 }
