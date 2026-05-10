@@ -37,6 +37,7 @@
                 </select>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-warning" id="ssi_clear_location_filter">Clear Selection</button>
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-primary" id="ssi_apply_location_filter">Apply</button>
             </div>
@@ -81,6 +82,10 @@ $(function(){
     $('#dashboard_date_filter').daterangepicker(dateRangeSettings, function(s,e){ setDates(s,e); });
     setDates(start,end);
     $('#dashboard_location_modal').select2({ width:'100%', dropdownParent: $('#ssiLocationFilterModal') });
+    $('#ssi_clear_location_filter').on('click', function(){
+        $('#dashboard_location_modal').val(null).trigger('change');
+        $('#ssi_selected_locations_count').text(0);
+    });
     $('#ssi_apply_location_filter').on('click', function(){
         $('#ssi_dashboard_filter_form input[name="location_ids[]"]').remove();
         var vals = $('#dashboard_location_modal').val() || [];
