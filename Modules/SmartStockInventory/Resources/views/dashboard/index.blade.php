@@ -18,7 +18,15 @@
     </button>
 </div>
 <div class="col-md-2"><button class="btn btn-primary">Refresh Data</button></div>
-<div class="col-md-4 text-right"><a class="btn btn-success" href="{{ route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a> <a class="btn btn-default" href="{{ route('ssi.dashboard.print', request()->all()) }}">Print Summary</a></div>
+<div class="col-md-4 text-right">
+    @if(\Nwidart\Modules\Facades\Module::has('ManageLot') && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot') && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view')))
+        <a class="btn btn-primary" href="{{ action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']) }}">
+            <i class="fa fa-tags"></i> Manage Lot
+        </a>
+    @endif
+    <a class="btn btn-success" href="{{ route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
+    <a class="btn btn-default" href="{{ route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
+</div>
 </form>
 </div></div>
 
@@ -65,6 +73,16 @@
         </div>
     </div>
     @endforeach
+
+    @if(\Nwidart\Modules\Facades\Module::has('ManageLot') && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot') && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view')))
+    <div class="col-md-3">
+        <div class="small-box bg-green">
+            <div class="inner"><h3>{{ number_format((int) ($totalLots ?? 0)) }}</h3><p>Total Lots</p></div>
+            <div class="icon"><i class="fa fa-cubes"></i></div>
+            <a href="{{ action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']) }}" class="small-box-footer">Open Manage Lot <i class="fa fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    @endif
 </div>
 @endsection
 

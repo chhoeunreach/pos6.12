@@ -68,9 +68,18 @@ class DashboardController extends BaseSmartStockController
             ->whereIn('vld.location_id', $locationIds)
             ->sum(DB::raw('vld.qty_available * COALESCE(v.default_purchase_price, 0)'));
 
+        $totalLots = DB::table('purchase_lines as pl')
+            ->join('transactions as t', 't.id', '=', 'pl.transaction_id')
+            ->where('t.business_id', $businessId)
+            ->whereIn('t.location_id', $locationIds)
+            ->whereNotNull('pl.lot_number')
+            ->where('pl.lot_number', '!=', '')
+            ->distinct('pl.lot_number')
+            ->count('pl.lot_number');
+
         return view('smartstockinventory::dashboard.index', compact(
             'totalProducts', 'totalStockQty', 'lowStockProducts', 'negativeStockProducts',
-            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday'
+            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday', 'totalLots'
         ))->with([
             'locations' => $this->locationOptions($businessId),
             'filters' => ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
