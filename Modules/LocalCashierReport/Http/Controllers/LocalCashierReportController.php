@@ -193,12 +193,16 @@ class LocalCashierReportController extends Controller
         }
 
         $qtyByCashierLocation = [];
+        $qtyByTransaction = [];
         if ($filters['qty_type'] === 'invoice_count') {
             $invoiceCountRows = $baseTransactions
                 ->groupBy(fn ($t) => $t->created_by . '_' . $t->location_id)
                 ->map(fn ($items) => count($items));
             foreach ($invoiceCountRows as $key => $qty) {
                 $qtyByCashierLocation[$key] = (float) $qty;
+            }
+            foreach ($baseTransactions as $t) {
+                $qtyByTransaction[(int) $t->id] = 1.0;
             }
         } else {
             $sellQtyRows = DB::table('transaction_sell_lines as tsl')
@@ -211,6 +215,7 @@ class LocalCashierReportController extends Controller
             foreach ($baseTransactions as $t) {
                 $key = $t->created_by . '_' . $t->location_id;
                 $qtyByCashierLocation[$key] = ($qtyByCashierLocation[$key] ?? 0) + (float) ($sellQtyRows[$t->id]->qty ?? 0);
+                $qtyByTransaction[(int) $t->id] = (float) ($sellQtyRows[$t->id]->qty ?? 0);
             }
         }
 
@@ -298,15 +303,43 @@ class LocalCashierReportController extends Controller
         $locationSummary = array_values($locationSummaryMap);
 
         $paymentSummaryMap = [];
+        $paymentQtySummaryMap = [];
         foreach ($rowsByCashier as $cashierRow) {
             foreach ($cashierRow['payments'] as $method => $amount) {
                 $paymentSummaryMap[$method] = ($paymentSummaryMap[$method] ?? 0) + (float) $amount;
             }
         }
+        foreach ($baseTransactions as $t) {
+            $txnId = (int) $t->id;
+            $txnQty = (float) ($qtyByTransaction[$txnId] ?? 0);
+            $txnMethods = array_keys($paymentByTransaction[$txnId] ?? []);
+            foreach ($txnMethods as $method) {
+                $paymentQtySummaryMap[$method] = ($paymentQtySummaryMap[$method] ?? 0) + $txnQty;
+            }
+        }
         $paymentSummary = [];
         foreach ($paymentSummaryMap as $method => $amount) {
-            $paymentSummary[] = ['name' => (string) ($paymentTypes[$method] ?? $method), 'amount' => (float) $amount];
+            $paymentSummary[] = [
+                'name' => (string) ($paymentTypes[$method] ?? $method),
+                'amount' => (float) $amount,
+                'qty' => (float) ($paymentQtySummaryMap[$method] ?? 0),
+            ];
         }
+
+        $summaryTotals = [
+            'user' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $userSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $userSummary)),
+            ],
+            'location' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $locationSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $locationSummary)),
+            ],
+            'payment' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $paymentSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $paymentSummary)),
+            ],
+        ];
 
         $expenseQuery = DB::table('transactions as t')
             ->where('t.business_id', $businessId)
@@ -459,6 +492,7 @@ class LocalCashierReportController extends Controller
             'summary_user' => $userSummary,
             'summary_location' => $locationSummary,
             'summary_payment' => $paymentSummary,
+            'summary_totals' => $summaryTotals,
             'detail_rows' => $detailRows,
         ];
     }
