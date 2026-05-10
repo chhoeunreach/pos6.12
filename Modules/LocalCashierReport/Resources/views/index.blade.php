@@ -455,6 +455,10 @@
                 <h4 class="modal-title" id="locationModalLabel">Select Business Locations</h4>
             </div>
             <div class="modal-body">
+                <div style="margin-bottom:10px;">
+                    <button type="button" class="btn btn-xs btn-primary" id="select_all_locations">Select All</button>
+                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_locations">Deselect All</button>
+                </div>
                 @foreach($locations as $location)
                     <div class="checkbox">
                         <label>
@@ -546,6 +550,14 @@
 
             $('#location_preview').val(selectedNames.join(', '));
             $('#location_modal').modal('hide');
+        });
+
+        $('#select_all_locations').on('click', function () {
+            $('.location-checkbox').prop('checked', true);
+        });
+
+        $('#deselect_all_locations').on('click', function () {
+            $('.location-checkbox').prop('checked', false);
         });
 
         $('#apply_cashiers').on('click', function () {
