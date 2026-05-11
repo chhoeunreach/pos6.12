@@ -166,6 +166,7 @@ class LocalCashierReportController extends Controller
                 'detail_rows' => [],
                 'summary_user' => [],
                 'summary_location' => [],
+                'summary_brand' => [],
                 'summary_payment' => [],
             ];
         }
@@ -302,6 +303,29 @@ class LocalCashierReportController extends Controller
         }
         $locationSummary = array_values($locationSummaryMap);
 
+        $brandSummaryQuery = DB::table('transaction_sell_lines as tsl')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->leftJoin('brands as b', 'b.id', '=', 'p.brand_id')
+            ->whereIn('tsl.transaction_id', $transactionIds)
+            ->groupBy('p.brand_id', 'b.name')
+            ->select(
+                DB::raw("COALESCE(NULLIF(TRIM(b.name), ''), 'No Brand') as name"),
+                DB::raw('SUM(tsl.quantity) as sold_qty'),
+                DB::raw('COUNT(DISTINCT tsl.transaction_id) as invoice_qty'),
+                DB::raw('SUM((tsl.quantity * tsl.unit_price_before_discount) - COALESCE(tsl.line_discount_amount, 0)) as amount')
+            )
+            ->get();
+
+        $brandSummary = $brandSummaryQuery->map(function ($row) use ($filters) {
+            return [
+                'name' => (string) ($row->name ?? 'No Brand'),
+                'amount' => (float) ($row->amount ?? 0),
+                'qty' => (float) (($filters['qty_type'] ?? 'invoice_count') === 'invoice_count'
+                    ? ($row->invoice_qty ?? 0)
+                    : ($row->sold_qty ?? 0)),
+            ];
+        })->values()->all();
+
         $paymentSummaryMap = [];
         $paymentQtySummaryMap = [];
         foreach ($rowsByCashier as $cashierRow) {
@@ -334,6 +358,10 @@ class LocalCashierReportController extends Controller
             'location' => [
                 'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $locationSummary)),
                 'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $locationSummary)),
+            ],
+            'brand' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $brandSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $brandSummary)),
             ],
             'payment' => [
                 'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $paymentSummary)),
@@ -491,6 +519,7 @@ class LocalCashierReportController extends Controller
             'actual_income_payment_summary' => $actualIncomeByPayment,
             'summary_user' => $userSummary,
             'summary_location' => $locationSummary,
+            'summary_brand' => $brandSummary,
             'summary_payment' => $paymentSummary,
             'summary_totals' => $summaryTotals,
             'detail_rows' => $detailRows,

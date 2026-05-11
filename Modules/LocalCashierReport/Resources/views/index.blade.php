@@ -224,7 +224,7 @@
     @if($filters['style_mode'] === 'classic')
         <hr>
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <h4>Summary by User/Cashier</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_user">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
@@ -242,7 +242,7 @@
                     </tfoot>
                 </table>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <h4>Summary by Location</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_location">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
@@ -260,7 +260,25 @@
                     </tfoot>
                 </table>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <h4>Summary by Brand</h4>
+                <table class="table table-bordered table-condensed summary-table" id="sum_brand">
+                    <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                    <tbody>
+                        @foreach($report['summary_brand'] as $r)
+                            <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th>Total</th>
+                            <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
+                            <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="col-md-3">
                 <h4>Summary by Payment Method</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_payment">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
@@ -302,7 +320,7 @@
         </div>
         <h4 class="section-title">Summary</h4>
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="summary-panel">
                     <h4>Summary by User/Cashier</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_user_plain">
@@ -322,7 +340,7 @@
                     </table>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="summary-panel">
                     <h4>Summary by Location</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_location_plain">
@@ -342,7 +360,27 @@
                     </table>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <div class="summary-panel">
+                    <h4>Summary by Brand</h4>
+                    <table class="table table-bordered table-condensed summary-table" id="sum_brand_plain">
+                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <tbody>
+                            @foreach($report['summary_brand'] as $r)
+                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
+                                <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-3">
                 <div class="summary-panel">
                     <h4>Summary by Payment Method</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_payment_plain">
