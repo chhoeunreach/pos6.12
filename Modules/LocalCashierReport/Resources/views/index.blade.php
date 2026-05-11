@@ -12,15 +12,15 @@
     @endphp
     <div style="margin-top:10px;">
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($classicPlainQuery) }}"
-           class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'classic_plain' ? 'btn-primary' : 'btn-default' }}">
+           class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'classic_plain' ? 'btn-primary' : 'btn-default' }}">
             Dashboard
         </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($viewReportQuery) }}"
-           class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
+           class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
             View Report
         </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($businessLocationQuery) }}"
-           class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'business_location_report' ? 'btn-primary' : 'btn-default' }}">
+           class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'business_location_report' ? 'btn-primary' : 'btn-default' }}">
             Business Location Report
         </a>
     </div>
@@ -175,7 +175,7 @@
     </div>
     @elseif($filters['style_mode'] === 'business_location_report')
     <div class="table-responsive">
-        <table class="table sheet-table">
+        <table class="table sheet-table business-location-table">
             <thead>
                 <tr>
                     <th>Business Location</th>
@@ -189,7 +189,19 @@
             <tbody>
                 @forelse($report['rows_by_location'] as $row)
                     <tr class="row-sale">
-                        <td class="name-main">{{ $row['location_name'] }}</td>
+                        <td class="name-main">
+                            {{ $row['location_name'] }}
+                            @php
+                                $detailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'location_ids' => [(int) $row['location_id']],
+                                ]);
+                            @endphp
+                            <a class="qty-badge qty-badge-link"
+                               href="{{ route('local-cashier-report.index') . '?' . http_build_query($detailQuery) . '#local_cashier_sales_detail_table' }}">
+                                (Qty: {{ rtrim(rtrim(number_format((float) ($row['qty_total'] ?? 0), 2), '0'), '.') }})
+                            </a>
+                        </td>
                         <td class="text-right">{{ $fmt($row['total']) }}</td>
                         @foreach($report['payment_columns'] as $method)
                             <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
@@ -839,43 +851,83 @@
 #local_cashier_report_app .summary-kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    grid-gap: 12px;
-    margin-bottom: 14px;
+    grid-gap: 14px;
+    margin-bottom: 18px;
 }
 #local_cashier_report_app .summary-kpi-card {
-    background: linear-gradient(135deg, #f8fbff 0%, #edf4ff 100%);
-    border: 1px solid #dbe7f9;
-    border-radius: 12px;
-    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    padding: 14px 16px;
+    border: 1px solid #d9e4f5;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+#local_cashier_report_app .summary-kpi-card::after {
+    content: '';
+    position: absolute;
+    right: -28px;
+    top: -28px;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
 }
 #local_cashier_report_app .summary-kpi-card .kpi-label {
     font-size: 12px;
-    color: #5b6472;
+    color: rgba(255, 255, 255, 0.9);
     text-transform: uppercase;
     letter-spacing: .4px;
+    position: relative;
+    z-index: 1;
 }
 #local_cashier_report_app .summary-kpi-card .kpi-value {
     margin-top: 4px;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
-    color: #0f172a;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+}
+#local_cashier_report_app .summary-kpi-grid .summary-kpi-card:nth-child(1) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+#local_cashier_report_app .summary-kpi-grid .summary-kpi-card:nth-child(2) {
+    background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+}
+#local_cashier_report_app .summary-kpi-grid .summary-kpi-card:nth-child(3) {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+#local_cashier_report_app .summary-kpi-grid .summary-kpi-card:nth-child(4) {
+    background: linear-gradient(135deg, #be123c 0%, #9f1239 100%);
 }
 #local_cashier_report_app .summary-panel {
     background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 10px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    border: 1px solid #dbe5f2;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
 }
 #local_cashier_report_app .summary-panel h4 {
-    margin: 4px 0 10px;
+    margin: 4px 0 12px;
     font-size: 17px;
+    color: #1e3a8a;
+    border-left: 4px solid #2563eb;
+    padding-left: 10px;
 }
 #local_cashier_report_app .summary-panel .summary-filter {
     margin-bottom: 10px;
 }
 #local_cashier_report_app .summary-table thead th {
-    background: #f8fafc;
+    background: #eff6ff;
+}
+#local_cashier_report_app .summary-table tbody tr:nth-child(odd) td {
+    background: #fcfdff;
+}
+#local_cashier_report_app .summary-table tbody tr:nth-child(even) td {
+    background: #f7fbff;
+}
+#local_cashier_report_app .summary-table tfoot th {
+    background: #e0ecff;
 }
 #local_cashier_report_app .box-header .table-meta {
     margin-top: 8px;
@@ -920,11 +972,18 @@
     vertical-align: middle;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table thead th {
-    background: #f5f7fa;
+    background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+    color: #fff;
     font-weight: 700;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table td .btn {
     margin-right: 4px;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr:nth-child(odd) td {
+    background: #fcfdff;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr:hover td {
+    background: #eaf3ff;
 }
 #local_cashier_report_app .action-icon-btn {
     width: 28px;
@@ -951,6 +1010,134 @@
 #local_cashier_report_app .dataTables_wrapper .dataTables_paginate .paginate_button {
     border-radius: 8px !important;
     margin: 0 2px;
+}
+
+/* Global friendly UI across all tabs */
+#local_cashier_report_app .table-responsive {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+#local_cashier_report_app .sheet-table,
+#local_cashier_report_app .summary-table {
+    border-radius: 10px;
+    overflow: hidden;
+}
+#local_cashier_report_app .sheet-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+#local_cashier_report_app .sheet-table tbody tr:hover td {
+    background: #f8fafc;
+}
+#local_cashier_report_app .row-total th,
+#local_cashier_report_app .row-total td {
+    font-weight: 700;
+}
+#local_cashier_report_app .row-summary th,
+#local_cashier_report_app .row-summary td {
+    font-weight: 600;
+}
+.content-header .report-tab-btn {
+    border-radius: 999px;
+    padding: 8px 16px;
+    margin-right: 6px;
+    border: 1px solid #cbd5e1;
+}
+.content-header .report-tab-btn.btn-default {
+    background: #f8fafc;
+    color: #334155;
+}
+.content-header .report-tab-btn.btn-primary {
+    background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: #1e40af;
+}
+
+@media (max-width: 991px) {
+    #local_cashier_report_app .summary-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #local_cashier_report_app .table-responsive {
+        border-radius: 10px;
+        padding: 6px;
+    }
+    #local_cashier_report_app .sheet-table th,
+    #local_cashier_report_app .sheet-table td {
+        font-size: 13px;
+        padding: 6px 8px !important;
+    }
+    .content-header .report-tab-btn {
+        margin-bottom: 6px;
+    }
+}
+@media (max-width: 576px) {
+    #local_cashier_report_app .summary-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    #local_cashier_report_app .summary-panel h4,
+    #local_cashier_report_app .section-title {
+        font-size: 16px;
+    }
+}
+
+/* Business Location Report visual refresh */
+#local_cashier_report_app .business-location-table {
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    border: 1px solid #dbe5f2;
+}
+#local_cashier_report_app .business-location-table thead th {
+    background: linear-gradient(90deg, #0ea5e9 0%, #2563eb 100%) !important;
+    color: #fff;
+    font-weight: 700;
+    border-color: #1f4fc4 !important;
+}
+#local_cashier_report_app .business-location-table tbody tr.row-sale:nth-child(odd) {
+    background: #f8fbff;
+}
+#local_cashier_report_app .business-location-table tbody tr.row-sale:nth-child(even) {
+    background: #eef6ff;
+}
+#local_cashier_report_app .business-location-table tbody tr.row-sale:hover {
+    background: #dbeafe !important;
+    transition: background-color .18s ease;
+}
+#local_cashier_report_app .business-location-table tbody .name-main {
+    color: #0f172a;
+    font-weight: 700;
+}
+#local_cashier_report_app .business-location-table .qty-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #bae6fd;
+}
+#local_cashier_report_app .business-location-table .qty-badge-link {
+    text-decoration: none;
+}
+#local_cashier_report_app .business-location-table .qty-badge-link:hover {
+    background: #bae6fd;
+    color: #0c4a6e;
+}
+#local_cashier_report_app .business-location-table tfoot tr.row-total {
+    background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%) !important;
+    color: #fff;
+}
+#local_cashier_report_app .business-location-table tfoot tr.row-summary {
+    background: #fff7ed !important;
+}
+#local_cashier_report_app .business-location-table tfoot tr.row-summary th,
+#local_cashier_report_app .business-location-table tfoot tr.row-summary td {
+    border-top: 1px solid #fed7aa !important;
 }
 </style>
 @endsection
