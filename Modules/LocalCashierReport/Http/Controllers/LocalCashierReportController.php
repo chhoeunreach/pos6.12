@@ -143,6 +143,33 @@ class LocalCashierReportController extends Controller
             ->when(! empty($filters['payment_status']), function ($query) use ($filters) {
                 $query->where('t.payment_status', $filters['payment_status']);
             })
+            ->when(! empty($filters['payment_methods']), function ($query) use ($filters) {
+                $query->whereExists(function ($sub) use ($filters) {
+                    $sub->select(DB::raw(1))
+                        ->from('transaction_payments as tpf')
+                        ->whereColumn('tpf.transaction_id', 't.id')
+                        ->whereIn('tpf.method', $filters['payment_methods']);
+                });
+            })
+            ->when(! empty($filters['brand_ids']), function ($query) use ($filters) {
+                $brandIds = collect($filters['brand_ids'])->map(fn ($id) => (int) $id)->values();
+                $hasNoBrand = $brandIds->contains(0);
+                $normalBrandIds = $brandIds->filter(fn ($id) => $id > 0)->values()->all();
+                $query->whereExists(function ($sub) use ($normalBrandIds, $hasNoBrand) {
+                    $sub->select(DB::raw(1))
+                        ->from('transaction_sell_lines as tslf')
+                        ->join('products as pf', 'pf.id', '=', 'tslf.product_id')
+                        ->whereColumn('tslf.transaction_id', 't.id')
+                        ->where(function ($w) use ($normalBrandIds, $hasNoBrand) {
+                            if (! empty($normalBrandIds)) {
+                                $w->whereIn('pf.brand_id', $normalBrandIds);
+                            }
+                            if ($hasNoBrand) {
+                                $w->orWhereNull('pf.brand_id');
+                            }
+                        });
+                });
+            })
             ->select('t.id', 't.created_by', 't.location_id', 't.final_total')
             ->get();
 
@@ -293,6 +320,7 @@ class LocalCashierReportController extends Controller
 
             $rows[] = $cashierRow;
             $userSummary[] = [
+                'id' => (int) $cashierId,
                 'name' => $cashierRow['cashier_name'],
                 'amount' => (float) $cashierRow['total'],
                 'qty' => (float) $cashierRow['qty_total'],
@@ -319,7 +347,7 @@ class LocalCashierReportController extends Controller
         foreach ($rowsByCashier as $cashierRow) {
             foreach ($cashierRow['location_qty_map'] as $locId => $qty) {
                 if (! isset($locationSummaryMap[$locId])) {
-                    $locationSummaryMap[$locId] = ['name' => (string) ($locationMap[$locId] ?? 'N/A'), 'amount' => 0.0, 'qty' => 0.0];
+                    $locationSummaryMap[$locId] = ['id' => (int) $locId, 'name' => (string) ($locationMap[$locId] ?? 'N/A'), 'amount' => 0.0, 'qty' => 0.0];
                 }
                 $locationSummaryMap[$locId]['qty'] += (float) $qty;
             }
@@ -327,7 +355,7 @@ class LocalCashierReportController extends Controller
         foreach ($baseTransactions as $t) {
             $locId = (int) $t->location_id;
             if (! isset($locationSummaryMap[$locId])) {
-                $locationSummaryMap[$locId] = ['name' => (string) ($locationMap[$locId] ?? 'N/A'), 'amount' => 0.0, 'qty' => 0.0];
+                $locationSummaryMap[$locId] = ['id' => (int) $locId, 'name' => (string) ($locationMap[$locId] ?? 'N/A'), 'amount' => 0.0, 'qty' => 0.0];
             }
             $locationSummaryMap[$locId]['amount'] += (float) $t->final_total;
         }
@@ -339,6 +367,7 @@ class LocalCashierReportController extends Controller
             ->whereIn('tsl.transaction_id', $transactionIds)
             ->groupBy('p.brand_id', 'b.name')
             ->select(
+                'p.brand_id as brand_id',
                 DB::raw("COALESCE(NULLIF(TRIM(b.name), ''), 'No Brand') as name"),
                 DB::raw('SUM(tsl.quantity) as sold_qty'),
                 DB::raw('COUNT(DISTINCT tsl.transaction_id) as invoice_qty'),
@@ -348,6 +377,7 @@ class LocalCashierReportController extends Controller
 
         $brandSummary = $brandSummaryQuery->map(function ($row) use ($filters) {
             return [
+                'id' => isset($row->brand_id) ? (int) $row->brand_id : 0,
                 'name' => (string) ($row->name ?? 'No Brand'),
                 'amount' => (float) ($row->amount ?? 0),
                 'qty' => (float) (($filters['qty_type'] ?? 'invoice_count') === 'invoice_count'
@@ -633,6 +663,10 @@ class LocalCashierReportController extends Controller
             'location_ids.*' => 'integer',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer',
+            'brand_ids' => 'nullable|array',
+            'brand_ids.*' => 'integer',
+            'payment_methods' => 'nullable|array',
+            'payment_methods.*' => 'string',
             'payment_status' => 'nullable|in:paid,partial,due',
             'qty_type' => 'nullable|in:invoice_count,sold_quantity',
             'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report,business_location_report',
@@ -645,6 +679,8 @@ class LocalCashierReportController extends Controller
             'end_date' => ! empty($validated['end_date']) ? Carbon::parse($validated['end_date'])->format('Y-m-d') : $today,
             'location_ids' => $locationIds,
             'user_ids' => ! empty($validated['user_ids']) ? array_values(array_unique($validated['user_ids'])) : [],
+            'brand_ids' => ! empty($validated['brand_ids']) ? array_values(array_unique($validated['brand_ids'])) : [],
+            'payment_methods' => ! empty($validated['payment_methods']) ? array_values(array_unique($validated['payment_methods'])) : [],
             'payment_status' => $validated['payment_status'] ?? '',
             'qty_type' => $validated['qty_type'] ?? 'invoice_count',
             'style_mode' => $validated['style_mode'] ?? 'classic_plain',

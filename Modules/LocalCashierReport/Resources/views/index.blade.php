@@ -124,51 +124,70 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
-                    <th class="text-right">Expenses</th>
-                    <th class="text-right">Actual Income</th>
+                    <th class="text-right">Total Paid</th>
                     <th class="text-right">Due</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($report['rows'] as $row)
+                    @php
+                        $userDetailQuery = array_merge(request()->query(), [
+                            'style_mode' => 'classic_plain',
+                            'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
+                        ]);
+                    @endphp
                     <tr class="row-sale">
-                        <td class="name-main">{{ $row['cashier_name'] }}</td>
+                        <td class="name-main">
+                            <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                {{ $row['cashier_name'] }}
+                            </a>
+                            <a class="qty-badge qty-badge-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                (Qty: {{ rtrim(rtrim(number_format((float) ($row['qty_total'] ?? 0), 2), '0'), '.') }})
+                            </a>
+                        </td>
                         @foreach($report['payment_columns'] as $method)
-                            <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                            @php
+                                $userPaymentDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
+                                    'payment_methods' => [(string) $method],
+                                ]);
+                            @endphp
+                            <td class="text-right">
+                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userPaymentDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $fmt($row['payments'][$method] ?? null) }}
+                                </a>
+                            </td>
                         @endforeach
-                        <td class="text-right">{{ $fmtStrict($row['expenses'] ?? 0) }}</td>
-                        <td class="text-right">{{ $fmtStrict($row['actual_income'] ?? 0) }}</td>
+                        <td class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
                         <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                     </tr>
                 @endforeach
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th>Total Paid</th>
+                    <th>Grand Total</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
+                    <th class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
+                    <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                </tr>
+                <tr class="row-summary">
+                    <th>Expenses</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
+                    @endforeach
+                    <th class="text-right">$ -</th>
                     <th class="text-right">{{ $fmtStrict($report['grand_expenses'] ?? 0) }}</th>
+                </tr>
+                <tr class="row-summary">
+                    <th>Actual Total Income (Paid - Expenses - Sell Return)</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
+                    @endforeach
+                    <th class="text-right">$ -</th>
                     <th class="text-right">{{ $fmtStrict($report['grand_actual_income'] ?? 0) }}</th>
-                    <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
-                </tr>
-                <tr class="row-summary">
-                    <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Expenses</th>
-                    <th class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
-                    <th class="text-right">$ -</th>
-                    <th class="text-right">$ -</th>
-                </tr>
-                <tr class="row-summary">
-                    <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Actual Total Income (Paid - Expenses - Sell Return)</th>
-                    <th class="text-right">$ -</th>
-                    <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
-                    <th class="text-right">$ -</th>
-                </tr>
-                <tr class="row-summary">
-                    <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Due</th>
-                    <th class="text-right">$ -</th>
-                    <th class="text-right">$ -</th>
-                    <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                 </tr>
             </tfoot>
         </table>
@@ -183,7 +202,7 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
-                    <th class="text-right">Total Payment</th>
+                    <th class="text-right">Due</th>
                 </tr>
             </thead>
             <tbody>
@@ -204,9 +223,20 @@
                         </td>
                         <td class="text-right">{{ $fmt($row['total']) }}</td>
                         @foreach($report['payment_columns'] as $method)
-                            <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                            @php
+                                $locationPaymentDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'location_ids' => [(int) ($row['location_id'] ?? 0)],
+                                    'payment_methods' => [(string) $method],
+                                ]);
+                            @endphp
+                            <td class="text-right">
+                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($locationPaymentDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $fmt($row['payments'][$method] ?? null) }}
+                                </a>
+                            </td>
                         @endforeach
-                        <td class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
+                        <td class="text-right @if(($row['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                     </tr>
                 @empty
                     <tr>
@@ -221,7 +251,7 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
-                    <th class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
+                    <th class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                 </tr>
                 <tr class="row-summary">
                     <th class="text-right">Expenses</th>
@@ -229,7 +259,7 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                     @endforeach
-                    <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
+                    <th class="text-right">$ -</th>
                 </tr>
                 <tr class="row-summary">
                     <th class="text-right">Actual Income</th>
@@ -237,7 +267,7 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                     @endforeach
-                    <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
+                    <th class="text-right">$ -</th>
                 </tr>
             </tfoot>
         </table>
@@ -275,7 +305,11 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th colspan="{{ 2 + count($report['payment_columns']) }}" class="text-right">Grand Total</th>
+                    <th></th>
+                    <th class="text-right">Grand Total</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                    @endforeach
                     <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                     <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
                 </tr>
@@ -311,7 +345,17 @@
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_user'] as $r)
-                            <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                            @php
+                                $userDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'user_ids' => [(int) ($r['id'] ?? 0)],
+                                ]);
+                            @endphp
+                            <tr>
+                                <td>{{ $r['name'] }}</td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                            </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
@@ -329,7 +373,17 @@
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_location'] as $r)
-                            <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                            @php
+                                $locationDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'location_ids' => [(int) ($r['id'] ?? 0)],
+                                ]);
+                            @endphp
+                            <tr>
+                                <td>{{ $r['name'] }}</td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($locationDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($locationDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                            </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
@@ -347,7 +401,17 @@
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_brand'] as $r)
-                            <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                            @php
+                                $brandDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'brand_ids' => [(int) ($r['id'] ?? 0)],
+                                ]);
+                            @endphp
+                            <tr>
+                                <td>{{ $r['name'] }}</td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                            </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
@@ -408,7 +472,17 @@
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_user'] as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                                @php
+                                    $userDetailQuery = array_merge(request()->query(), [
+                                        'style_mode' => 'classic_plain',
+                                        'user_ids' => [(int) ($r['id'] ?? 0)],
+                                    ]);
+                                @endphp
+                                <tr>
+                                    <td>{{ $r['name'] }}</td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($userDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                                </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
@@ -428,7 +502,17 @@
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_location'] as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                                @php
+                                    $locationDetailQuery = array_merge(request()->query(), [
+                                        'style_mode' => 'classic_plain',
+                                        'location_ids' => [(int) ($r['id'] ?? 0)],
+                                    ]);
+                                @endphp
+                                <tr>
+                                    <td>{{ $r['name'] }}</td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($locationDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($locationDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                                </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
@@ -448,7 +532,17 @@
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_brand'] as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
+                                @php
+                                    $brandDetailQuery = array_merge(request()->query(), [
+                                        'style_mode' => 'classic_plain',
+                                        'brand_ids' => [(int) ($r['id'] ?? 0)],
+                                    ]);
+                                @endphp
+                                <tr>
+                                    <td>{{ $r['name'] }}</td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                                </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
@@ -928,6 +1022,16 @@
 }
 #local_cashier_report_app .summary-table tfoot th {
     background: #e0ecff;
+}
+#local_cashier_report_app .summary-link {
+    color: #1d4ed8;
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px dashed #93c5fd;
+}
+#local_cashier_report_app .summary-link:hover {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
 }
 #local_cashier_report_app .box-header .table-meta {
     margin-top: 8px;
