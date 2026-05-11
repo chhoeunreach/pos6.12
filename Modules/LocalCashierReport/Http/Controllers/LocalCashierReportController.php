@@ -152,6 +152,7 @@ class LocalCashierReportController extends Controller
 
             return [
                 'rows' => [],
+                'rows_by_location' => [],
                 'payment_columns' => $paymentColumns,
                 'payment_labels' => $paymentTypes,
                 'grand_total' => 0.0,
@@ -230,8 +231,10 @@ class LocalCashierReportController extends Controller
         $paymentColumns = $this->buildPaymentColumns(array_keys($methodsWithAmount), $paymentTypes);
 
         $rowsByCashier = [];
+        $rowsByLocation = [];
         foreach ($baseTransactions as $t) {
             $cashierId = (int) $t->created_by;
+            $locationId = (int) $t->location_id;
             if (! isset($rowsByCashier[$cashierId])) {
                 $rowsByCashier[$cashierId] = [
                     'cashier_id' => $cashierId,
@@ -243,18 +246,33 @@ class LocalCashierReportController extends Controller
                     'due' => 0.0,
                 ];
             }
+            if (! isset($rowsByLocation[$locationId])) {
+                $rowsByLocation[$locationId] = [
+                    'location_id' => $locationId,
+                    'location_name' => (string) ($locationMap[$locationId] ?? 'N/A'),
+                    'qty_total' => 0.0,
+                    'payments' => [],
+                    'total' => 0.0,
+                    'paid' => 0.0,
+                    'due' => 0.0,
+                ];
+            }
 
             $rowsByCashier[$cashierId]['total'] += (float) $t->final_total;
+            $rowsByLocation[$locationId]['total'] += (float) $t->final_total;
 
-            $locKey = $cashierId . '_' . (int) $t->location_id;
+            $locKey = $cashierId . '_' . $locationId;
             if (isset($qtyByCashierLocation[$locKey])) {
-                $rowsByCashier[$cashierId]['location_qty_map'][(int) $t->location_id] = $qtyByCashierLocation[$locKey];
+                $rowsByCashier[$cashierId]['location_qty_map'][$locationId] = $qtyByCashierLocation[$locKey];
             }
+            $rowsByLocation[$locationId]['qty_total'] += (float) ($qtyByTransaction[(int) $t->id] ?? 0);
 
             $txnPayments = $paymentByTransaction[(int) $t->id] ?? [];
             foreach ($txnPayments as $method => $amount) {
                 $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + (float) $amount;
                 $rowsByCashier[$cashierId]['paid'] += (float) $amount;
+                $rowsByLocation[$locationId]['payments'][$method] = ($rowsByLocation[$locationId]['payments'][$method] ?? 0) + (float) $amount;
+                $rowsByLocation[$locationId]['paid'] += (float) $amount;
             }
         }
 
@@ -284,6 +302,18 @@ class LocalCashierReportController extends Controller
         }
 
         usort($rows, fn ($a, $b) => strcmp($a['cashier_name'], $b['cashier_name']));
+
+        $locationRows = [];
+        foreach ($rowsByLocation as $locationRow) {
+            $locationRow['due'] = (float) $locationRow['total'] - (float) $locationRow['paid'];
+            foreach ($paymentColumns as $method) {
+                if (! isset($locationRow['payments'][$method])) {
+                    $locationRow['payments'][$method] = null;
+                }
+            }
+            $locationRows[] = $locationRow;
+        }
+        usort($locationRows, fn ($a, $b) => strcmp($a['location_name'], $b['location_name']));
 
         $locationSummaryMap = [];
         foreach ($rowsByCashier as $cashierRow) {
@@ -381,6 +411,18 @@ class LocalCashierReportController extends Controller
             ->select('t.created_by', DB::raw('SUM(t.final_total) as amount'))
             ->groupBy('t.created_by')
             ->pluck('amount', 'created_by');
+        $expenseByLocationQuery = DB::table('transactions as t')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'expense')
+            ->where('t.status', 'final')
+            ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+            ->whereIn('t.location_id', $filters['location_ids'])
+            ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                $query->whereIn('t.created_by', $filters['user_ids']);
+            })
+            ->select('t.location_id', DB::raw('SUM(t.final_total) as amount'))
+            ->groupBy('t.location_id')
+            ->pluck('amount', 'location_id');
 
         $expenseTxnIds = DB::table('transactions as t')
             ->where('t.business_id', $businessId)
@@ -419,6 +461,18 @@ class LocalCashierReportController extends Controller
             ->select('t.created_by', DB::raw('SUM(t.final_total) as amount'))
             ->groupBy('t.created_by')
             ->pluck('amount', 'created_by');
+        $sellReturnByLocationQuery = DB::table('transactions as t')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell_return')
+            ->where('t.status', 'final')
+            ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+            ->whereIn('t.location_id', $filters['location_ids'])
+            ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                $query->whereIn('t.created_by', $filters['user_ids']);
+            })
+            ->select('t.location_id', DB::raw('SUM(t.final_total) as amount'))
+            ->groupBy('t.location_id')
+            ->pluck('amount', 'location_id');
 
         $grandPaid = 0.0;
         $grandExpenses = 0.0;
@@ -440,6 +494,16 @@ class LocalCashierReportController extends Controller
             $grandExpenses += $expenses;
             $grandSellReturn += $sellReturn;
             $grandActualIncome += $actualIncome;
+        }
+        unset($row);
+        foreach ($locationRows as &$row) {
+            $locationId = (int) $row['location_id'];
+            $expenses = (float) ($expenseByLocationQuery[$locationId] ?? 0);
+            $sellReturn = (float) ($sellReturnByLocationQuery[$locationId] ?? 0);
+            $actualIncome = (float) $row['paid'] - $expenses - $sellReturn;
+            $row['expenses'] = $expenses;
+            $row['sell_return'] = $sellReturn;
+            $row['actual_income'] = $actualIncome;
         }
         unset($row);
 
@@ -506,6 +570,7 @@ class LocalCashierReportController extends Controller
 
         return [
             'rows' => $rows,
+            'rows_by_location' => $locationRows,
             'payment_columns' => $paymentColumns,
             'payment_labels' => $paymentTypes,
             'grand_total' => $grandTotal,
@@ -570,7 +635,7 @@ class LocalCashierReportController extends Controller
             'user_ids.*' => 'integer',
             'payment_status' => 'nullable|in:paid,partial,due',
             'qty_type' => 'nullable|in:invoice_count,sold_quantity',
-            'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report',
+            'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report,business_location_report',
         ]);
 
         $locationIds = ! empty($validated['location_ids']) ? array_values(array_unique($validated['location_ids'])) : $defaultLocationIds;

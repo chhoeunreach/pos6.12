@@ -8,6 +8,7 @@
         $baseQuery = request()->query();
         $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain']);
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
+        $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);
     @endphp
     <div style="margin-top:10px;">
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($classicPlainQuery) }}"
@@ -18,10 +19,14 @@
            class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
             View Report
         </a>
+        <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($businessLocationQuery) }}"
+           class="btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'business_location_report' ? 'btn-primary' : 'btn-default' }}">
+            Business Location Report
+        </a>
     </div>
 </section>
 
-<section class="content no-print {{ in_array($filters['style_mode'], ['classic','classic_plain']) ? 'classic-theme' : 'sheet-theme' }}" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
+<section class="content no-print {{ in_array($filters['style_mode'], ['classic','classic_plain','business_location_report']) ? 'classic-theme' : 'sheet-theme' }}" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
     @php
         $fmt = function ($value) {
             if ($value === null || abs((float) $value) < 0.00001) {
@@ -31,6 +36,13 @@
                 return '$ (' . number_format(abs((float) $value), 2) . ')';
             }
             return '$ ' . number_format((float) $value, 2);
+        };
+        $fmtStrict = function ($value) {
+            $number = (float) ($value ?? 0);
+            if ($number < 0) {
+                return '$ (' . number_format(abs($number), 2) . ')';
+            }
+            return '$ ' . number_format($number, 2);
         };
     @endphp
     @component('components.filters', ['title' => __('report.filters')])
@@ -124,8 +136,8 @@
                         @foreach($report['payment_columns'] as $method)
                             <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                         @endforeach
-                        <td class="text-right">{{ $fmt($row['expenses'] ?? null) }}</td>
-                        <td class="text-right">{{ $fmt($row['actual_income'] ?? null) }}</td>
+                        <td class="text-right">{{ $fmtStrict($row['expenses'] ?? 0) }}</td>
+                        <td class="text-right">{{ $fmtStrict($row['actual_income'] ?? 0) }}</td>
                         <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                     </tr>
                 @endforeach
@@ -136,8 +148,8 @@
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
-                    <th class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
-                    <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
+                    <th class="text-right">{{ $fmtStrict($report['grand_expenses'] ?? 0) }}</th>
+                    <th class="text-right">{{ $fmtStrict($report['grand_actual_income'] ?? 0) }}</th>
                     <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                 </tr>
                 <tr class="row-summary">
@@ -157,6 +169,63 @@
                     <th class="text-right">$ -</th>
                     <th class="text-right">$ -</th>
                     <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    @elseif($filters['style_mode'] === 'business_location_report')
+    <div class="table-responsive">
+        <table class="table sheet-table">
+            <thead>
+                <tr>
+                    <th>Business Location</th>
+                    <th class="text-right">Grand Total</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                    @endforeach
+                    <th class="text-right">Total Payment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($report['rows_by_location'] as $row)
+                    <tr class="row-sale">
+                        <td class="name-main">{{ $row['location_name'] }}</td>
+                        <td class="text-right">{{ $fmt($row['total']) }}</td>
+                        @foreach($report['payment_columns'] as $method)
+                            <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                        @endforeach
+                        <td class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="{{ 3 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+            <tfoot>
+                <tr class="row-total">
+                    <th class="text-right">Grand Total</th>
+                    <th class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                    @endforeach
+                    <th class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
+                </tr>
+                <tr class="row-summary">
+                    <th class="text-right">Expenses</th>
+                    <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
+                    @endforeach
+                    <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
+                </tr>
+                <tr class="row-summary">
+                    <th class="text-right">Actual Income</th>
+                    <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
+                    @endforeach
+                    <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                 </tr>
             </tfoot>
         </table>
