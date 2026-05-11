@@ -288,11 +288,32 @@
             </thead>
             <tbody>
                 @forelse($report['rows'] as $row)
+                    @php
+                        $dashboardUserDetailQuery = array_merge(request()->query(), [
+                            'style_mode' => 'classic_plain',
+                            'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
+                        ]);
+                    @endphp
                     <tr class="row-sale">
                         <td class="name-main">{{ $row['cashier_name'] }}</td>
-                        <td>{{ $row['location_qty_text'] }}</td>
+                        <td>
+                            <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardUserDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                {{ $row['location_qty_text'] }}
+                            </a>
+                        </td>
                         @foreach($report['payment_columns'] as $method)
-                            <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                            @php
+                                $dashboardUserPaymentDetailQuery = array_merge(request()->query(), [
+                                    'style_mode' => 'classic_plain',
+                                    'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
+                                    'payment_methods' => [(string) $method],
+                                ]);
+                            @endphp
+                            <td class="text-right">
+                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardUserPaymentDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $fmt($row['payments'][$method] ?? null) }}
+                                </a>
+                            </td>
                         @endforeach
                         <td class="text-right">{{ $fmt($row['total']) }}</td>
                         <td class="text-right @if($row['due'] != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
