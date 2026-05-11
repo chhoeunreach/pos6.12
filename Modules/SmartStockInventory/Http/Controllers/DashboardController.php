@@ -77,9 +77,72 @@ class DashboardController extends BaseSmartStockController
             ->distinct('pl.lot_number')
             ->count('pl.lot_number');
 
+        $summaryByLocation = DB::table('variation_location_details as vld')
+            ->join('variations as v', 'v.id', '=', 'vld.variation_id')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->join('business_locations as bl', 'bl.id', '=', 'vld.location_id')
+            ->where('p.business_id', $businessId)
+            ->whereIn('vld.location_id', $locationIds)
+            ->groupBy('vld.location_id', 'bl.name')
+            ->select(
+                'vld.location_id',
+                'bl.name as location_name',
+                DB::raw('SUM(vld.qty_available) as total_qty'),
+                DB::raw('SUM(vld.qty_available * COALESCE(v.default_purchase_price, 0)) as total_value')
+            )
+            ->orderBy('bl.name')
+            ->get();
+
+        $summaryByCategory = DB::table('variation_location_details as vld')
+            ->join('variations as v', 'v.id', '=', 'vld.variation_id')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->leftJoin('categories as c', 'c.id', '=', 'p.category_id')
+            ->where('p.business_id', $businessId)
+            ->whereIn('vld.location_id', $locationIds)
+            ->groupBy('p.category_id', 'c.name')
+            ->select(
+                'p.category_id',
+                DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), 'Uncategorized') as category_name"),
+                DB::raw('SUM(vld.qty_available) as total_qty'),
+                DB::raw('SUM(vld.qty_available * COALESCE(v.default_purchase_price, 0)) as total_value')
+            )
+            ->orderBy('category_name')
+            ->get();
+
+        $summaryByBrand = DB::table('variation_location_details as vld')
+            ->join('variations as v', 'v.id', '=', 'vld.variation_id')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->leftJoin('brands as b', 'b.id', '=', 'p.brand_id')
+            ->where('p.business_id', $businessId)
+            ->whereIn('vld.location_id', $locationIds)
+            ->groupBy('p.brand_id', 'b.name')
+            ->select(
+                'p.brand_id',
+                DB::raw("COALESCE(NULLIF(TRIM(b.name), ''), 'No Brand') as brand_name"),
+                DB::raw('SUM(vld.qty_available) as total_qty'),
+                DB::raw('SUM(vld.qty_available * COALESCE(v.default_purchase_price, 0)) as total_value')
+            )
+            ->orderBy('brand_name')
+            ->get();
+
+        $summaryByProduct = DB::table('variation_location_details as vld')
+            ->join('variations as v', 'v.id', '=', 'vld.variation_id')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->where('p.business_id', $businessId)
+            ->whereIn('vld.location_id', $locationIds)
+            ->groupBy('p.id', 'p.name')
+            ->select(
+                'p.id as product_id',
+                DB::raw("COALESCE(NULLIF(TRIM(p.name), ''), 'Unnamed Product') as product_name"),
+                DB::raw('SUM(vld.qty_available) as total_qty'),
+                DB::raw('SUM(vld.qty_available * COALESCE(v.default_purchase_price, 0)) as total_value')
+            )
+            ->orderBy('product_name')
+            ->get();
+
         return view('smartstockinventory::dashboard.index', compact(
             'totalProducts', 'totalStockQty', 'lowStockProducts', 'negativeStockProducts',
-            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday', 'totalLots'
+            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday', 'totalLots', 'summaryByLocation', 'summaryByCategory', 'summaryByBrand', 'summaryByProduct'
         ))->with([
             'locations' => $this->locationOptions($businessId),
             'filters' => ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
@@ -107,12 +170,16 @@ class DashboardController extends BaseSmartStockController
             $title = $metric === 'total_products' ? 'Total Products Detail' : ($metric === 'total_stock_qty' ? 'Total Stock Qty Detail' : 'Total Stock Value Detail');
             $headers = ['SKU', 'Product', 'Variation', 'Location', 'Qty Available', 'Unit Cost', 'Stock Value'];
             $qtyFilters = (array) $request->input('qty_filter', []);
+            $categoryId = $request->input('category_id');
+            $brandId = $request->input('brand_id');
             $rows = DB::table('variation_location_details as vld')
                 ->join('variations as v', 'v.id', '=', 'vld.variation_id')
                 ->join('products as p', 'p.id', '=', 'v.product_id')
                 ->join('business_locations as bl', 'bl.id', '=', 'vld.location_id')
                 ->where('p.business_id', $businessId)
                 ->whereIn('vld.location_id', $locationIds)
+                ->when(! empty($categoryId), fn ($q) => $q->where('p.category_id', $categoryId))
+                ->when(! empty($brandId), fn ($q) => $q->where('p.brand_id', $brandId))
                 ->when(! empty($qtyFilters), function ($q) use ($qtyFilters) {
                     $q->where(function ($sq) use ($qtyFilters) {
                         if (in_array('non_zero', $qtyFilters, true)) {

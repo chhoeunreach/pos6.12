@@ -84,6 +84,249 @@
     </div>
     @endif
 </div>
+
+<div class="box box-info">
+    <div class="box-header with-border">
+        <h3 class="box-title">Summary</h3>
+        <small class="text-muted">Qty and Value by Location, Category, and Brand</small>
+    </div>
+    <div class="box-body">
+        <div class="row">
+            <div class="col-md-3">
+                <h4>By Location</h4>
+                <div class="form-group">
+                    <button type="button" class="btn btn-xs btn-info summary-open-modal" data-title="Summary by Location" data-source-table="#summary_location_table">View Report</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped summary-data-table" id="summary_location_table">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($summaryByLocation ?? collect()) as $row)
+                                <tr data-name="{{ $row->location_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
+                                    <td>
+                                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            {{ $row->location_name }}
+                                        </a>
+                                    </td>
+                                    <td class="text-right">
+                                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                        </a>
+                                    </td>
+                                    <td class="text-right">$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No location summary.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right summary-total-qty">{{ number_format((float) collect($summaryByLocation ?? [])->sum('total_qty'), 2) }}</th>
+                                <th class="text-right summary-total-value">$ {{ number_format((float) collect($summaryByLocation ?? [])->sum('total_value'), 2) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h4>By Category</h4>
+                <div class="form-group">
+                    <button type="button" class="btn btn-xs btn-info summary-open-modal" data-title="Summary by Category" data-source-table="#summary_category_table">View Report</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped summary-data-table" id="summary_category_table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($summaryByCategory ?? collect()) as $row)
+                                <tr data-name="{{ $row->category_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
+                                    <td>
+                                        @if(!empty($row->category_id))
+                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                {{ $row->category_name }}
+                                            </a>
+                                        @else
+                                            {{ $row->category_name }}
+                                        @endif
+                                    </td>
+                                    <td class="text-right">
+                                        @if(!empty($row->category_id))
+                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                            </a>
+                                        @else
+                                            {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                        @endif
+                                    </td>
+                                    <td class="text-right">$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No category summary.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right summary-total-qty">{{ number_format((float) collect($summaryByCategory ?? [])->sum('total_qty'), 2) }}</th>
+                                <th class="text-right summary-total-value">$ {{ number_format((float) collect($summaryByCategory ?? [])->sum('total_value'), 2) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h4>By Brand</h4>
+                <div class="form-group">
+                    <button type="button" class="btn btn-xs btn-info summary-open-modal" data-title="Summary by Brand" data-source-table="#summary_brand_table">View Report</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped summary-data-table" id="summary_brand_table">
+                        <thead>
+                            <tr>
+                                <th>Brand</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($summaryByBrand ?? collect()) as $row)
+                                <tr data-name="{{ $row->brand_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
+                                    <td>
+                                        @if(!empty($row->brand_id))
+                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                {{ $row->brand_name }}
+                                            </a>
+                                        @else
+                                            {{ $row->brand_name }}
+                                        @endif
+                                    </td>
+                                    <td class="text-right">
+                                        @if(!empty($row->brand_id))
+                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                            </a>
+                                        @else
+                                            {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                        @endif
+                                    </td>
+                                    <td class="text-right">$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No brand summary.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right summary-total-qty">{{ number_format((float) collect($summaryByBrand ?? [])->sum('total_qty'), 2) }}</th>
+                                <th class="text-right summary-total-value">$ {{ number_format((float) collect($summaryByBrand ?? [])->sum('total_value'), 2) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h4>By Product</h4>
+                <div class="form-group">
+                    <button type="button" class="btn btn-xs btn-info summary-open-modal" data-title="Summary by Product" data-source-table="#summary_product_table">View Report</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped summary-data-table" id="summary_product_table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($summaryByProduct ?? collect()) as $row)
+                                <tr data-name="{{ $row->product_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
+                                    <td>{{ $row->product_name }}</td>
+                                    <td class="text-right">{{ number_format((float) ($row->total_qty ?? 0), 2) }}</td>
+                                    <td class="text-right">$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No product summary.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right summary-total-qty">{{ number_format((float) collect($summaryByProduct ?? [])->sum('total_qty'), 2) }}</th>
+                                <th class="text-right summary-total-value">$ {{ number_format((float) collect($summaryByProduct ?? [])->sum('total_value'), 2) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="box box-primary">
+    <div class="box-header with-border">
+        <h3 class="box-title">Location Section</h3>
+        <small class="text-muted">Quick cards by location</small>
+    </div>
+    <div class="box-body">
+        <div class="row">
+            @forelse(($summaryByLocation ?? collect()) as $row)
+                <div class="col-md-3 col-sm-6">
+                    <div class="small-box bg-blue">
+                        <div class="inner">
+                            <h4 style="margin:0 0 8px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $row->location_name }}</h4>
+                            <p style="margin:0;">Qty: <strong>{{ number_format((float) ($row->total_qty ?? 0), 2) }}</strong></p>
+                            <p style="margin:0;">Value: <strong>$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</strong></p>
+                        </div>
+                        <div class="icon"><i class="fa fa-map-marker"></i></div>
+                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}" class="small-box-footer">
+                            View Detail <i class="fa fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+            @empty
+                <div class="col-md-12">
+                    <p class="text-muted">No location data available.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="summaryReportModal" tabindex="-1" role="dialog" aria-labelledby="summaryReportModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="summaryReportModalLabel">Summary Report</h4>
+            </div>
+            <div class="modal-body">
+                <div id="summaryReportModalBody"></div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('module_js')
@@ -100,6 +343,75 @@ $(function(){
     $('#dashboard_date_filter').daterangepicker(dateRangeSettings, function(s,e){ setDates(s,e); });
     setDates(start,end);
     $('#dashboard_location_modal').select2({ width:'100%', dropdownParent: $('#ssiLocationFilterModal') });
+    var summaryTables = {};
+    function formatMoney(value){
+        return '$ ' + Number(value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function updateSummaryFooter(tableSelector){
+        var api = summaryTables[tableSelector];
+        if (!api) return;
+        var qty = 0;
+        var value = 0;
+        api.rows({search:'applied'}).every(function(){
+            var node = this.node();
+            qty += parseFloat($(node).data('qty') || 0);
+            value += parseFloat($(node).data('value') || 0);
+        });
+        var $table = $(tableSelector);
+        $table.find('.summary-total-qty').text(qty.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        $table.find('.summary-total-value').text(formatMoney(value));
+    }
+
+    function openSummaryModalFromTable(tableSelector, title){
+        var $table = $(tableSelector);
+        if (!$table.length) return;
+        var api = summaryTables[tableSelector];
+        var $thead = $table.find('thead').clone();
+        var $tfoot = $table.find('tfoot').clone();
+        var $tbody = $('<tbody></tbody>');
+        if (api) {
+            $(api.rows({search:'applied'}).nodes()).each(function(){
+                $tbody.append($(this).clone());
+            });
+        } else {
+            $tbody = $table.find('tbody').clone();
+        }
+
+        var modalTableHtml = $('<table class="table table-bordered table-striped"></table>')
+            .append($thead)
+            .append($tbody)
+            .append($tfoot)
+            .prop('outerHTML');
+
+        var tableHtml = '<div class="table-responsive">' + modalTableHtml + '</div>';
+        $('#summaryReportModalLabel').text(title || 'Summary Report');
+        $('#summaryReportModalBody').html(tableHtml);
+        $('#summaryReportModal').modal('show');
+    }
+
+    if ($.fn.DataTable) {
+        $('.summary-data-table').each(function(){
+            var id = '#' + this.id;
+            summaryTables[id] = $(this).DataTable({
+                paging: true,
+                searching: true,
+                ordering: true,
+                info: false,
+                pageLength: 10,
+                lengthChange: false,
+                dom: 't<"text-right"p>'
+            });
+            summaryTables[id].on('draw', function(){ updateSummaryFooter(id); });
+            updateSummaryFooter(id);
+        });
+    }
+
+    $(document).on('click', '.summary-open-modal', function(){
+        var title = $(this).data('title') || 'Summary Report';
+        var source = $(this).data('source-table');
+        openSummaryModalFromTable(source, title);
+    });
+
     $('#ssi_clear_location_filter').on('click', function(){
         $('#dashboard_location_modal').val(null).trigger('change');
         $('#ssi_selected_locations_count').text(0);
