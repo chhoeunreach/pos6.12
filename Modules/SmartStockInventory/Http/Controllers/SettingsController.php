@@ -44,6 +44,7 @@ class SettingsController extends BaseSmartStockController
             'auto_generate_adjustment' => 'nullable|boolean',
             'auto_close_session' => 'nullable|boolean',
             'require_imei_validation' => 'nullable|boolean',
+            'enable_super_admin_override' => 'nullable|boolean',
             'reason' => 'required|string|max:500',
         ]);
 
@@ -62,15 +63,22 @@ class SettingsController extends BaseSmartStockController
             'auto_generate_adjustment' => (int) ($data['auto_generate_adjustment'] ?? 0),
             'auto_close_session' => (int) ($data['auto_close_session'] ?? 0),
             'require_imei_validation' => (int) ($data['require_imei_validation'] ?? 0),
+            'enable_super_admin_override' => (int) ($data['enable_super_admin_override'] ?? 1),
             'updated_by' => auth()->id(),
         ])->save();
 
         config()->set('smartstockinventory.telegram.enabled', (bool) $setting->telegram_enabled);
         config()->set('smartstockinventory.telegram.bot_token', $setting->telegram_bot_token);
         config()->set('smartstockinventory.telegram.chat_id', $setting->telegram_chat_id);
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') { $userName = (string) (auth()->user()->username ?? ''); }
         SmartStockActionLog::create([
             'user_id' => auth()->id(),
+            'user_name' => $userName,
             'business_id' => $this->businessId(),
+            'module_name' => 'SmartStockInventory',
+            'table_name' => 'smart_stock_settings',
+            'record_id' => $setting->id,
             'location_id' => null,
             'action_type' => 'update_telegram_settings',
             'reference_type' => 'smart_stock_setting',
@@ -78,6 +86,7 @@ class SettingsController extends BaseSmartStockController
             'old_data' => json_encode($old),
             'new_data' => json_encode($setting->toArray()),
             'reason' => $data['reason'],
+            'ip_address' => $request->ip(),
         ]);
 
         return back()->with('status', ['success' => 1, 'msg' => 'Settings saved']);
@@ -101,7 +110,9 @@ class SettingsController extends BaseSmartStockController
             'freeze_sell_during_count' => 0, 'mismatch_threshold' => 0, 'recount_threshold' => 5,
             'auto_generate_adjustment' => 0, 'auto_close_session' => 0, 'require_imei_validation' => 0,
         ])->save();
-        SmartStockActionLog::create(['user_id' => auth()->id(), 'business_id' => $this->businessId(), 'action_type' => 'reset_settings_default', 'reference_type' => 'smart_stock_setting', 'reference_id' => $setting->id, 'old_data' => json_encode($old), 'new_data' => json_encode($setting->toArray()), 'reason' => 'reset_default']);
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') { $userName = (string) (auth()->user()->username ?? ''); }
+        SmartStockActionLog::create(['user_id' => auth()->id(), 'user_name' => $userName, 'business_id' => $this->businessId(), 'module_name' => 'SmartStockInventory', 'table_name' => 'smart_stock_settings', 'record_id' => $setting->id, 'action_type' => 'reset_settings_default', 'reference_type' => 'smart_stock_setting', 'reference_id' => $setting->id, 'old_data' => json_encode($old), 'new_data' => json_encode($setting->toArray()), 'reason' => 'reset_default', 'ip_address' => $request->ip()]);
         return back()->with('status', ['success' => 1, 'msg' => 'Settings reset']);
     }
 

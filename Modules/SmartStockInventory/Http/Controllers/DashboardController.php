@@ -196,7 +196,18 @@ class DashboardController extends BaseSmartStockController
                         }
                     });
                 })
-                ->select('v.sub_sku as sku', 'p.name as product', 'v.name as variation', 'bl.name as location', 'vld.qty_available', 'v.default_purchase_price as unit_cost', DB::raw('(vld.qty_available * COALESCE(v.default_purchase_price,0)) as stock_value'))
+                ->select(
+                    'p.id as product_id',
+                    'v.id as variation_id',
+                    'vld.location_id',
+                    'v.sub_sku as sku',
+                    'p.name as product',
+                    'v.name as variation',
+                    'bl.name as location',
+                    'vld.qty_available',
+                    'v.default_purchase_price as unit_cost',
+                    DB::raw('(vld.qty_available * COALESCE(v.default_purchase_price,0)) as stock_value')
+                )
                 ->orderBy('p.name')
                 ->limit(3000)
                 ->get();
@@ -249,7 +260,15 @@ class DashboardController extends BaseSmartStockController
                 ->leftJoin('business_locations as bl_to', 'bl_to.id', '=', 't_in.location_id')
                 ->leftJoin('users as u', 'u.id', '=', 't.created_by')
                 ->where('t.business_id', $businessId)->where('t.type', 'sell_transfer')->where('t.status', '!=', 'final')
-                ->select('t.transaction_date', 't.ref_no', 'bl_from.name as from_location', 'bl_to.name as to_location', 't.status', 'u.username as created_by')
+                ->select(
+                    't.id as transfer_id',
+                    't.transaction_date',
+                    't.ref_no',
+                    'bl_from.name as from_location',
+                    'bl_to.name as to_location',
+                    't.status',
+                    DB::raw("COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))), ''), u.username) as created_by")
+                )
                 ->latest('t.transaction_date')->limit(3000)->get();
         } elseif ($metric === 'sessions_today') {
             $title = 'Inventory Sessions Today';

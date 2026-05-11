@@ -103,6 +103,26 @@ class StockFixService
 
     private function audit(string $actionType, ?int $locationId, ?string $refType, ?int $refId, $old, $new, ?string $reason): void
     {
-        SmartStockActionLog::create(['user_id' => auth()->id(), 'business_id' => (int) session('user.business_id'), 'location_id' => $locationId, 'action_type' => $actionType, 'reference_type' => $refType, 'reference_id' => $refId, 'old_data' => json_encode($old), 'new_data' => json_encode($new), 'reason' => $reason]);
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') {
+            $userName = (string) (auth()->user()->username ?? '');
+        }
+
+        SmartStockActionLog::create([
+            'user_id' => auth()->id(),
+            'user_name' => $userName,
+            'business_id' => (int) session('user.business_id'),
+            'module_name' => 'SmartStockInventory',
+            'table_name' => $refType ? ('smart_' . trim($refType, '_')) : null,
+            'record_id' => $refId,
+            'location_id' => $locationId,
+            'action_type' => $actionType,
+            'reference_type' => $refType,
+            'reference_id' => $refId,
+            'old_data' => json_encode($old),
+            'new_data' => json_encode($new),
+            'reason' => $reason,
+            'ip_address' => request()->ip(),
+        ]);
     }
 }

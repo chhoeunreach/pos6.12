@@ -49,6 +49,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
             'end_date' => 'nullable|date',
             'blind_count' => 'nullable|boolean',
         ]);
+        abort_unless(in_array((int) $data['location_id'], $this->permittedLocationIds($this->businessId()), true), 403);
 
         $session = $this->workflow->createSession($this->businessId(), (int) auth()->id(), $data);
         $this->workflow->logAudit($this->businessId(), $session->id, null, 'create_session', $request, null, $session->toArray());
@@ -87,7 +88,10 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function countLine(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.update'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         $data = $request->validate([
+            'product_id' => 'nullable|integer',
+            'variation_id' => 'nullable|integer',
             'sku' => 'nullable|string|max:191',
             'product_name' => 'nullable|string|max:255',
             'variation_name' => 'nullable|string|max:255',
@@ -98,10 +102,13 @@ class InventoryEnterpriseController extends BaseSmartStockController
             'system_qty' => 'nullable|numeric',
             'remark' => 'nullable|string|max:500',
         ]);
+        abort_unless(in_array((string) $session->status, ['draft', 'in_progress', 'recount_required'], true), 422);
 
         $line = SmartStockInventoryLine::create([
             'session_id' => $session->id,
             'counted_by_user_id' => auth()->id(),
+            'product_id' => $data['product_id'] ?? null,
+            'variation_id' => $data['variation_id'] ?? null,
             'sku' => $data['sku'] ?? null,
             'product_name' => $data['product_name'] ?? null,
             'variation_name' => $data['variation_name'] ?? null,
@@ -126,6 +133,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function verifyLine(Request $request, SmartStockInventorySession $session, SmartStockInventoryLine $line)
     {
         abort_unless($request->user()->can('stock_inventory.verify'), 403);
+        abort_unless($session->business_id === $this->businessId() && (int) $line->session_id === (int) $session->id, 403);
         $data = $request->validate(['verified_qty' => 'required|numeric']);
         $setting = SmartStockSetting::firstOrCreate(['business_id' => $this->businessId()]);
         $result = $this->workflow->verifyLine($this->businessId(), $line, (float) $data['verified_qty'], (int) auth()->id(), (float) $setting->recount_threshold);
@@ -143,6 +151,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function approve(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.approve'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         $data = $request->validate(['approval_level' => 'required|string|in:supervisor,manager', 'note' => 'nullable|string|max:500']);
         $approval = $this->workflow->approveSession($session, $data['approval_level'], (string) ($data['note'] ?? ''));
         $this->workflow->logAudit($this->businessId(), $session->id, null, 'approve_session', $request, null, $approval->toArray());
@@ -157,6 +166,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function freeze(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.freeze'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         $data = $request->validate(['freeze_type' => 'required|string|in:full_location,selected_product', 'product_id' => 'nullable|integer']);
         $freeze = $this->workflow->freezeSession($this->businessId(), $session->id, $data['freeze_type'], (int) $session->location_id, $data['product_id'] ?? null);
         $session->freeze_mode = 1;
@@ -169,6 +179,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function dashboard(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.view'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         $lines = SmartStockInventoryLine::where('session_id', $session->id)->whereNull('deleted_at')->get();
         $total = $lines->count();
         $counted = $lines->where('status', 'first_count_done')->count();
@@ -190,6 +201,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function adjustmentPreview(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.adjust'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         $rows = $this->workflow->adjustmentPreview($session->id);
 
         if ($request->input('export') == '1') {
@@ -202,6 +214,7 @@ class InventoryEnterpriseController extends BaseSmartStockController
     public function mobile(Request $request, SmartStockInventorySession $session)
     {
         abort_unless($request->user()->can('stock_inventory.mobile') || $request->user()->can('stock_inventory.update'), 403);
+        abort_unless($session->business_id === $this->businessId(), 403);
         return view('smartstockinventory::count.mobile', compact('session'));
     }
 

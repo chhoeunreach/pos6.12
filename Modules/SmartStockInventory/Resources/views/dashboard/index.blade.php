@@ -2,54 +2,15 @@
 @section('page_title', 'Stock Inventory Dashboard')
 
 @section('module_content')
-<div class="box box-primary"><div class="box-body">
-<form method="get" class="row" id="ssi_dashboard_filter_form">
-<input type="hidden" name="start_date" id="ssi_start_date" value="{{ $filters['start_date'] ?? '' }}">
-<input type="hidden" name="end_date" id="ssi_end_date" value="{{ $filters['end_date'] ?? '' }}">
-<div class="col-md-3">
-    <button type="button" class="btn btn-default" data-toggle="modal" data-target="#ssiLocationFilterModal">
-        <i class="fa fa-map-marker"></i> Select Locations
-    </button>
-    <small class="help-block">Selected: <span id="ssi_selected_locations_count">{{ count((array)($locationIds ?? [])) }}</span></small>
-</div>
-<div class="col-md-3">
-    <button type="button" id="dashboard_date_filter" class="btn btn-default">
-        <i class="fa fa-calendar"></i> {{ __('messages.filter_by_date') }}
-    </button>
-</div>
-<div class="col-md-2"><button class="btn btn-primary">Refresh Data</button></div>
-<div class="col-md-4 text-right">
-    @if(\Nwidart\Modules\Facades\Module::has('ManageLot') && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot') && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view')))
-        <a class="btn btn-primary" href="{{ action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']) }}">
-            <i class="fa fa-tags"></i> Manage Lot
-        </a>
-    @endif
-    <a class="btn btn-success" href="{{ route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
-    <a class="btn btn-default" href="{{ route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
-</div>
-</form>
-</div></div>
-
-<div class="modal fade" id="ssiLocationFilterModal" tabindex="-1" role="dialog" aria-labelledby="ssiLocationFilterModalLabel">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="ssiLocationFilterModalLabel">Select Business Locations</h4>
-            </div>
-            <div class="modal-body">
-                <select class="form-control select2" id="dashboard_location_modal" multiple style="width:100%;">
-                    @foreach($locations as $loc)
-                        <option value="{{ $loc->id }}" {{ in_array((int)$loc->id, (array)($locationIds ?? []), true) ? 'selected' : '' }}>{{ $loc->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-warning" id="ssi_clear_location_filter">Clear Selection</button>
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="ssi_apply_location_filter">Apply</button>
-            </div>
-        </div>
+<div class="box box-primary">
+    <div class="box-body text-right">
+        @if(\Nwidart\Modules\Facades\Module::has('ManageLot') && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot') && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view')))
+            <a class="btn btn-primary" href="{{ action([\Modules\ManageLot\Http\Controllers\ManageLotController::class, 'index']) }}">
+                <i class="fa fa-tags"></i> Manage Lot
+            </a>
+        @endif
+        <a class="btn btn-success" href="{{ route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
+        <a class="btn btn-default" href="{{ route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
     </div>
 </div>
 <div class="row">
@@ -332,17 +293,6 @@
 @section('module_js')
 <script>
 $(function(){
-    var start = moment("{{ $filters['start_date'] ?? now()->toDateString() }}");
-    var end = moment("{{ $filters['end_date'] ?? now()->toDateString() }}");
-    function setDates(s,e){
-        $('#ssi_start_date').val(s.format('YYYY-MM-DD'));
-        $('#ssi_end_date').val(e.format('YYYY-MM-DD'));
-        $('#dashboard_date_filter span').remove();
-        $('#dashboard_date_filter').append(' <span>'+s.format(moment_date_format)+' ~ '+e.format(moment_date_format)+'</span>');
-    }
-    $('#dashboard_date_filter').daterangepicker(dateRangeSettings, function(s,e){ setDates(s,e); });
-    setDates(start,end);
-    $('#dashboard_location_modal').select2({ width:'100%', dropdownParent: $('#ssiLocationFilterModal') });
     var summaryTables = {};
     function formatMoney(value){
         return '$ ' + Number(value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -377,15 +327,72 @@ $(function(){
             $tbody = $table.find('tbody').clone();
         }
 
-        var modalTableHtml = $('<table class="table table-bordered table-striped"></table>')
+        var modalTableHtml = $('<table id="summary_modal_table" class="table table-bordered table-striped"></table>')
             .append($thead)
             .append($tbody)
             .append($tfoot)
             .prop('outerHTML');
 
-        var tableHtml = '<div class="table-responsive">' + modalTableHtml + '</div>';
+        var options = [];
+        $tbody.find('tr').each(function(){
+            var name = ($(this).find('td:first').text() || '').trim();
+            if (name && options.indexOf(name) === -1) options.push(name);
+        });
+        options.sort();
+        var optionHtml = options.map(function(name, idx){
+            var safe = $('<div>').text(name).html();
+            return '<div class="checkbox" style="margin:4px 0;">' +
+                '<label>' +
+                '<input type="checkbox" class="summary_modal_option" id="summary_modal_opt_' + idx + '" value="' + safe + '" checked> ' + safe +
+                '</label>' +
+            '</div>';
+        }).join('');
+
+        var tableHtml =
+            '<div class="row" style="margin-bottom:10px;">' +
+                '<div class="col-md-12 text-right">' +
+                    '<button type="button" class="btn btn-xs btn-default" id="summary_modal_filter_toggle">Filter</button> ' +
+                    '<button type="button" class="btn btn-xs btn-default" id="summary_modal_select_all">Select All</button> ' +
+                    '<button type="button" class="btn btn-xs btn-warning" id="summary_modal_clear">Clear</button>' +
+                '</div>' +
+            '</div>' +
+            '<div id="summary_modal_filter_panel" style="display:none; margin-bottom:10px;">' +
+                '<div style="border:1px solid #ddd; padding:8px; border-radius:4px; background:#fff;">' + optionHtml + '</div>' +
+            '</div>' +
+            '<div class="table-responsive">' + modalTableHtml + '</div>';
         $('#summaryReportModalLabel').text(title || 'Summary Report');
         $('#summaryReportModalBody').html(tableHtml);
+        if ($.fn.DataTable) {
+            var modalDt = $('#summary_modal_table').DataTable({
+                paging: true,
+                searching: true,
+                ordering: true,
+                info: true,
+                pageLength: 10,
+                lengthChange: true,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                dom: 'lt<"text-right"p>'
+            });
+            var updateModalTotals = function(){
+                var qty = 0;
+                var value = 0;
+                modalDt.rows({search:'applied'}).every(function(){
+                    var $cells = $(this.node()).find('td');
+                    var qtyText = (($cells.eq(1).text() || '').replace(/,/g, '')).trim();
+                    var valueText = (($cells.eq(2).text() || '').replace(/\$/g, '').replace(/,/g, '')).trim();
+                    qty += parseFloat(qtyText || 0);
+                    value += parseFloat(valueText || 0);
+                });
+                $('#summary_modal_table tfoot .summary-total-qty').text(
+                    qty.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                );
+                $('#summary_modal_table tfoot .summary-total-value').text(
+                    '$ ' + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                );
+            };
+            modalDt.on('draw', updateModalTotals);
+            updateModalTotals();
+        }
         $('#summaryReportModal').modal('show');
     }
 
@@ -412,20 +419,37 @@ $(function(){
         openSummaryModalFromTable(source, title);
     });
 
-    $('#ssi_clear_location_filter').on('click', function(){
-        $('#dashboard_location_modal').val(null).trigger('change');
-        $('#ssi_selected_locations_count').text(0);
+    $(document).on('click', '#summary_modal_select_all', function(){
+        $('.summary_modal_option').prop('checked', true).trigger('change');
     });
-    $('#ssi_apply_location_filter').on('click', function(){
-        $('#ssi_dashboard_filter_form input[name="location_ids[]"]').remove();
-        var vals = $('#dashboard_location_modal').val() || [];
-        vals.forEach(function(v){
-            $('#ssi_dashboard_filter_form').append('<input type="hidden" name="location_ids[]" value="'+v+'">');
-        });
-        $('#ssi_selected_locations_count').text(vals.length);
-        $('#ssiLocationFilterModal').modal('hide');
-        $('#ssi_dashboard_filter_form').submit();
+
+    $(document).on('click', '#summary_modal_clear', function(){
+        $('.summary_modal_option').prop('checked', false).trigger('change');
     });
+
+    $(document).on('click', '#summary_modal_filter_toggle', function(){
+        $('#summary_modal_filter_panel').toggle();
+    });
+
+    $(document).on('change', '.summary_modal_option', function(){
+        var dt = $('#summary_modal_table').DataTable();
+        var vals = $('.summary_modal_option:checked').map(function(){
+            return ($(this).val() || '').trim();
+        }).get();
+        var totalOptions = $('.summary_modal_option').length;
+        if (!vals.length) {
+            dt.column(0).search('^$', true, false).draw();
+            return;
+        }
+        if (vals.length === totalOptions) {
+            dt.column(0).search('').draw();
+            return;
+        }
+        var escaped = vals.map(function(v){ return $.fn.dataTable.util.escapeRegex(v); });
+        // Strict exact match per cell (trimmed) to avoid matching similar names.
+        dt.column(0).search('^\\s*(?:' + escaped.join('|') + ')\\s*$', true, false).draw();
+    });
+
 });
 </script>
 @endsection

@@ -2,13 +2,16 @@
 
 namespace Modules\SmartStockInventory\Providers;
 
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use Modules\SmartStockInventory\Http\Middleware\SmartStockAccessMiddleware;
 
 class SmartStockInventoryServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->registerRouteMiddlewareAlias();
         $this->registerConfig();
         $this->registerViews();
         $this->registerMigrations();
@@ -52,5 +55,11 @@ class SmartStockInventoryServiceProvider extends ServiceProvider
             }
         } catch (\Throwable $e) {
         }
+    }
+
+    private function registerRouteMiddlewareAlias(): void
+    {
+        $router = $this->app->make(Router::class);
+        $router->aliasMiddleware('ssi.access', SmartStockAccessMiddleware::class);
     }
 }

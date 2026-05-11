@@ -27,11 +27,12 @@ class InventoryCountController extends BaseSmartStockController
     public function store(Request $request)
     {
         abort_unless($request->user()->can('stock_inventory.create'), 403);
-        $data = $request->validate(['session_name' => 'required|string|max:255', 'location_id' => 'required|integer', 'lines' => 'nullable|array', 'lines.*.actual_qty' => 'nullable|numeric', 'lines.*.system_qty' => 'nullable|numeric', 'lines.*.remark' => 'nullable|string|max:500']);
+        $data = $request->validate(['session_name' => 'required|string|max:255', 'location_id' => 'required|integer', 'lines' => 'nullable|array', 'lines.*.product_id' => 'nullable|integer', 'lines.*.variation_id' => 'nullable|integer', 'lines.*.actual_qty' => 'nullable|numeric', 'lines.*.system_qty' => 'nullable|numeric', 'lines.*.remark' => 'nullable|string|max:500']);
+        abort_unless(in_array((int) $data['location_id'], $this->permittedLocationIds($this->businessId()), true), 403);
         $session = SmartStockInventorySession::create(['business_id' => $this->businessId(), 'location_id' => $data['location_id'], 'name' => $data['session_name'], 'status' => 'draft', 'created_by' => auth()->id()]);
         foreach (($data['lines'] ?? []) as $line) {
             $systemQty = (float) ($line['system_qty'] ?? 0); $actualQty = (float) ($line['actual_qty'] ?? 0); $diff = $actualQty - $systemQty;
-            SmartStockInventoryLine::create(['session_id' => $session->id, 'sku' => $line['sku'] ?? null, 'product_name' => $line['product_name'] ?? null, 'variation_name' => $line['variation_name'] ?? null, 'imei' => $line['imei'] ?? null, 'lot_number' => $line['lot_number'] ?? null, 'system_qty' => $systemQty, 'actual_qty' => $actualQty, 'difference_qty' => $diff, 'status' => $diff == 0 ? 'matched' : ($diff > 0 ? 'over_stock' : 'missing'), 'remark' => $line['remark'] ?? null]);
+            SmartStockInventoryLine::create(['session_id' => $session->id, 'product_id' => $line['product_id'] ?? null, 'variation_id' => $line['variation_id'] ?? null, 'sku' => $line['sku'] ?? null, 'product_name' => $line['product_name'] ?? null, 'variation_name' => $line['variation_name'] ?? null, 'imei' => $line['imei'] ?? null, 'lot_number' => $line['lot_number'] ?? null, 'system_qty' => $systemQty, 'actual_qty' => $actualQty, 'difference_qty' => $diff, 'status' => $diff == 0 ? 'matched' : ($diff > 0 ? 'over_stock' : 'missing'), 'remark' => $line['remark'] ?? null]);
         }
         return redirect()->route('ssi.count.index')->with('status', ['success' => 1, 'msg' => 'Inventory count draft saved']);
     }
@@ -119,7 +120,25 @@ class InventoryCountController extends BaseSmartStockController
 
     private function logAction(string $actionType, ?int $locationId, ?string $refType, ?int $refId, $old, $new, ?string $reason): void
     {
-        SmartStockActionLog::create(['user_id' => auth()->id(), 'business_id' => $this->businessId(), 'location_id' => $locationId, 'action_type' => $actionType, 'reference_type' => $refType, 'reference_id' => $refId, 'old_data' => $old ? json_encode($old) : null, 'new_data' => $new ? json_encode($new) : null, 'reason' => $reason]);
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') {
+            $userName = (string) (auth()->user()->username ?? '');
+        }
+        SmartStockActionLog::create([
+            'user_id' => auth()->id(),
+            'user_name' => $userName,
+            'business_id' => $this->businessId(),
+            'module_name' => 'SmartStockInventory',
+            'table_name' => $refType ? ('smart_stock_inventory_' . $refType . 's') : null,
+            'record_id' => $refId,
+            'location_id' => $locationId,
+            'action_type' => $actionType,
+            'reference_type' => $refType,
+            'reference_id' => $refId,
+            'old_data' => $old ? json_encode($old) : null,
+            'new_data' => $new ? json_encode($new) : null,
+            'reason' => $reason,
+            'ip_address' => request()->ip(),
+        ]);
     }
 }
-

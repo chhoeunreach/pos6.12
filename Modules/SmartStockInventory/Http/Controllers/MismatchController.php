@@ -4,6 +4,8 @@ namespace Modules\SmartStockInventory\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Modules\SmartStockInventory\Models\SmartStockActionLog;
+use Modules\SmartStockInventory\Models\SmartStockFixLog;
 use Modules\SmartStockInventory\Services\StockFixService;
 use Modules\SmartStockInventory\Services\TelegramAlertService;
 
@@ -52,11 +54,11 @@ class MismatchController extends BaseSmartStockController
         return back()->with('status', ['success' => $result['ok'] ? 1 : 0, 'msg' => $result['ok'] ? 'Rollback completed' : $result['msg']]);
     }
 
-    public function logs(Request $request) { abort_unless($request->user()->can('stock_inventory.logs'), 403); $logs = DB::table('smart_stock_fix_logs')->where('business_id', $this->businessId())->latest()->paginate(50); return view('smartstockinventory::mismatch.logs', compact('logs')); }
+    public function logs(Request $request) { abort_unless($request->user()->can('stock_inventory.logs'), 403); $logs = DB::table('smart_stock_fix_logs')->where('business_id', $this->businessId())->whereNull('deleted_at')->latest()->paginate(50); return view('smartstockinventory::mismatch.logs', compact('logs')); }
     public function fixLogs(Request $request)
     {
         abort_unless($request->user()->can('stock_inventory.logs'), 403);
-        $logs = DB::table('smart_stock_fix_logs as f')->leftJoin('variations as v', 'v.id', '=', 'f.variation_id')->leftJoin('products as p', 'p.id', '=', 'f.product_id')->leftJoin('business_locations as bl', 'bl.id', '=', 'f.location_id')->where('f.business_id', $this->businessId())
+        $logs = DB::table('smart_stock_fix_logs as f')->leftJoin('variations as v', 'v.id', '=', 'f.variation_id')->leftJoin('products as p', 'p.id', '=', 'f.product_id')->leftJoin('business_locations as bl', 'bl.id', '=', 'f.location_id')->where('f.business_id', $this->businessId())->whereNull('f.deleted_at')
             ->when($request->filled('from'), fn ($q) => $q->whereDate('f.created_at', '>=', $request->from))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('f.created_at', '<=', $request->to))
             ->when($request->filled('user_id'), fn ($q) => $q->where('f.created_by', (int) $request->user_id))
@@ -70,14 +72,16 @@ class MismatchController extends BaseSmartStockController
     {
         abort_unless($request->user()->can('stock_inventory.delete'), 403);
         $reason = (string) $request->input('reason', 'delete_incorrect_module_log');
-        $log = DB::table('smart_stock_fix_logs')->where('business_id', $this->businessId())->where('id', $id)->first();
+        $log = SmartStockFixLog::where('business_id', $this->businessId())->find($id);
         abort_unless($log, 404);
-        DB::table('smart_stock_action_logs')->insert([
-            'user_id' => auth()->id(), 'business_id' => $this->businessId(), 'location_id' => $log->location_id,
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') { $userName = (string) (auth()->user()->username ?? ''); }
+        SmartStockActionLog::create([
+            'user_id' => auth()->id(), 'user_name' => $userName, 'business_id' => $this->businessId(), 'module_name' => 'SmartStockInventory', 'table_name' => 'smart_stock_fix_logs', 'record_id' => $log->id, 'location_id' => $log->location_id,
             'action_type' => 'delete_incorrect_module_log', 'reference_type' => 'smart_stock_fix_logs', 'reference_id' => $log->id,
-            'old_data' => json_encode($log), 'new_data' => null, 'reason' => $reason, 'created_at' => now(), 'updated_at' => now(),
+            'old_data' => json_encode($log->toArray()), 'new_data' => null, 'reason' => $reason, 'ip_address' => $request->ip(),
         ]);
-        DB::table('smart_stock_fix_logs')->where('id', $id)->delete();
+        $log->delete();
         return back()->with('status', ['success' => 1, 'msg' => 'Module log deleted']);
     }
 }

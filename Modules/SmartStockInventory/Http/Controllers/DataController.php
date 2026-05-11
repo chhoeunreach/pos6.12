@@ -7,6 +7,30 @@ use Menu;
 
 class DataController extends Controller
 {
+    private function isReachAdmin(): bool
+    {
+        if (! auth()->check()) {
+            return false;
+        }
+        $user = auth()->user();
+        $reachUsername = strtolower(trim((string) config('smartstockinventory.reach_username', 'Reach')));
+        $username = strtolower(trim((string) ($user->username ?? '')));
+        if ($reachUsername !== '' && $username === $reachUsername) {
+            return true;
+        }
+        $roles = (array) config('smartstockinventory.admin_roles', []);
+        if (method_exists($user, 'hasAnyRole') && ! empty($roles)) {
+            try {
+                if ($user->hasAnyRole($roles)) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return false;
+    }
+
     public function user_permissions(): array
     {
         return [
@@ -32,7 +56,7 @@ class DataController extends Controller
 
     public function modifyAdminMenu(): void
     {
-        if (! auth()->check() || ! auth()->user()->can('stock_inventory.view')) {
+        if (! $this->isReachAdmin() || ! auth()->user()->can('stock_inventory.view')) {
             return;
         }
 

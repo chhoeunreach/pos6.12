@@ -47,15 +47,57 @@
             <thead>
                 <tr>
                     @foreach($headers as $h)<th>{{ $h }}</th>@endforeach
+                    @if(in_array($metric, ['total_products', 'total_stock_qty', 'total_stock_value', 'pending_transfers']))<th>Action</th>@endif
                 </tr>
             </thead>
             <tbody>
                 @forelse($rows as $row)
                     <tr>
-                        @foreach((array)$row as $v)<td>{{ $v }}</td>@endforeach
+                        @if(in_array($metric, ['total_products', 'total_stock_qty', 'total_stock_value']))
+                            <td>{{ $row->sku ?? '' }}</td>
+                            <td>{{ $row->product ?? '' }}</td>
+                            <td>{{ $row->variation ?? '' }}</td>
+                            <td>{{ $row->location ?? '' }}</td>
+                            <td>{{ $row->qty_available ?? '' }}</td>
+                            <td>{{ $row->unit_cost ?? '' }}</td>
+                            <td>{{ $row->stock_value ?? '' }}</td>
+                            <td>
+                                <a class="btn btn-xs btn-info"
+                                   href="{{ route('ssi.movement.index', ['product' => $row->product ?? '', 'product_id' => $row->product_id ?? '', 'variation_id' => $row->variation_id ?? '', 'location_id' => $row->location_id ?? '']) }}">
+                                    View History
+                                </a>
+                            </td>
+                        @elseif($metric === 'pending_transfers')
+                            <td>{{ $row->transaction_date ?? '' }}</td>
+                            <td>{{ $row->ref_no ?? '' }}</td>
+                            <td>{{ $row->from_location ?? '' }}</td>
+                            <td>{{ $row->to_location ?? '' }}</td>
+                            <td>{{ $row->status ?? '' }}</td>
+                            <td>{{ $row->created_by ?? '' }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-xs btn-info dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+                                        Actions <span class="caret"></span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-right" role="menu">
+                                        <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0)) }}" target="_blank"><i class="fa fa-eye"></i> View</a></li>
+                                        <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0) . '/edit') }}" target="_blank"><i class="fa fa-pencil"></i> Edit</a></li>
+                                        <li class="divider"></li>
+                                        <li><a href="#" class="ssi-post-action" data-form-id="pt_completed_{{ $loop->index }}" data-confirm-msg="Mark this transfer as completed?"><i class="fa fa-check text-success"></i> Set Completed</a></li>
+                                        <li><a href="#" class="ssi-post-action" data-form-id="pt_in_transit_{{ $loop->index }}" data-confirm-msg="Mark this transfer as in transit?"><i class="fa fa-truck text-warning"></i> Set In Transit</a></li>
+                                        <li><a href="#" class="ssi-post-action" data-form-id="pt_pending_{{ $loop->index }}" data-confirm-msg="Mark this transfer as pending?"><i class="fa fa-clock-o text-info"></i> Set Pending</a></li>
+                                    </ul>
+                                </div>
+                                <form id="pt_completed_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="completed"></form>
+                                <form id="pt_in_transit_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="in_transit"></form>
+                                <form id="pt_pending_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="pending"></form>
+                            </td>
+                        @else
+                            @foreach((array)$row as $v)<td>{{ $v }}</td>@endforeach
+                        @endif
                     </tr>
                 @empty
-                    <tr><td colspan="{{ count($headers) }}" class="text-center">No data found</td></tr>
+                    <tr><td colspan="{{ count($headers) + (in_array($metric, ['total_products', 'total_stock_qty', 'total_stock_value', 'pending_transfers']) ? 1 : 0) }}" class="text-center">No data found</td></tr>
                 @endforelse
             </tbody>
             <tfoot>
@@ -67,9 +109,24 @@
                             @endif
                         </th>
                     @endforeach
+                    @if(in_array($metric, ['total_products', 'total_stock_qty', 'total_stock_value', 'pending_transfers']))<th></th>@endif
                 </tr>
             </tfoot>
         </table>
+    </div>
+</div>
+
+<div class="modal fade" id="ssiTxFixModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" style="width:95%; max-width:1400px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Edit Sold Transaction</h4>
+            </div>
+            <div class="modal-body" style="padding:0;">
+                <iframe id="ssiTxFixFrame" src="about:blank" style="width:100%; height:75vh; border:0;"></iframe>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -98,6 +155,20 @@
 @section('module_js')
 <script>
 $(function(){
+    $(document).on('click', '.ssi-post-action', function(e){
+        e.preventDefault();
+        var formId = $(this).data('form-id');
+        var confirmMsg = $(this).data('confirm-msg') || 'Are you sure?';
+        if (!formId) return;
+        if (confirm(confirmMsg)) {
+            $('#' + formId).submit();
+        }
+    });
+
+    $('#ssiTxFixModal').on('hidden.bs.modal', function(){
+        $('#ssiTxFixFrame').attr('src', 'about:blank');
+    });
+
     function n(v){ return parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0; }
     $('#ssi_dashboard_detail_table').DataTable({
         pageLength:25,

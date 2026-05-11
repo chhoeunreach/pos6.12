@@ -12,7 +12,7 @@ use Modules\SmartStockInventory\Http\Controllers\SettingsController;
 use Modules\SmartStockInventory\Http\Controllers\VerificationController;
 
 Route::middleware([
-    'web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin',
+    'web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'ssi.access',
 ])->prefix('smart-stock-inventory')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('ssi.dashboard');
     Route::get('/dashboard/detail/{metric}', [DashboardController::class, 'detail'])->name('ssi.dashboard.detail');
@@ -58,8 +58,13 @@ Route::middleware([
     Route::delete('/fix-logs/delete/{id}', [MismatchController::class, 'deleteLog'])->name('ssi.fix_logs.delete');
 
     Route::get('/movement', [MovementController::class, 'index'])->name('ssi.movement.index');
+    Route::get('/movement/search-sku', [MovementController::class, 'searchSku'])->name('ssi.movement.search_sku');
     Route::get('/movement/export', [MovementController::class, 'export'])->name('ssi.movement.export');
     Route::get('/movement/print', [MovementController::class, 'print'])->name('ssi.movement.print');
+    Route::get('/movement/{transaction}/edit-modal', [MovementController::class, 'editModal'])->name('ssi.movement.edit_modal');
+    Route::post('/movement/{transaction}/edit-modal', [MovementController::class, 'updateModal'])->name('ssi.movement.update_modal');
+    Route::post('/movement/{transaction}/void', [MovementController::class, 'voidTransaction'])->name('ssi.movement.void');
+    Route::post('/movement/{transaction}/restore', [MovementController::class, 'restoreTransaction'])->name('ssi.movement.restore');
 
     Route::get('/imei', [ImeiController::class, 'index'])->name('ssi.imei.index');
     Route::get('/imei/export', [ImeiController::class, 'export'])->name('ssi.imei.export');

@@ -36,16 +36,28 @@ class InventoryWorkflowService
 
     public function logAudit(int $businessId, ?int $sessionId, ?int $lineId, string $action, Request $request, $old, $new): void
     {
+        $userName = trim((string) ((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')));
+        if ($userName === '') {
+            $userName = (string) (auth()->user()->username ?? '');
+        }
+        $tableName = $lineId ? 'smart_stock_inventory_lines' : 'smart_stock_inventory_sessions';
+        $recordId = $lineId ?: $sessionId;
         SmartInventoryAuditLog::create([
             'business_id' => $businessId,
             'session_id' => $sessionId,
             'line_id' => $lineId,
             'user_id' => auth()->id(),
+            'user_name' => $userName,
             'action' => $action,
+            'action_type' => $action,
+            'module_name' => 'SmartStockInventory',
+            'table_name' => $tableName,
+            'record_id' => $recordId,
             'device' => substr((string) $request->userAgent(), 0, 180),
             'ip_address' => $request->ip(),
             'old_value' => $old ? json_encode($old) : null,
             'new_value' => $new ? json_encode($new) : null,
+            'reason' => (string) ($request->input('reason') ?? $request->input('override_reason') ?? ''),
         ]);
     }
 
