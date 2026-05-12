@@ -71,7 +71,7 @@ return [
             'port' => env('DB_LOAN_PORT', '3306'),
             'database' => env('DB_LOAN_DATABASE', 'loan_management'),
             'username' => env('DB_LOAN_USERNAME', 'root'),
-            'password' => env('DB_LOAN_PASSWORD', ''),
+            'password' => env('DB_LOAN_PASSWORD', '090569070oK$'),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
