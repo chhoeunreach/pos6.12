@@ -1955,7 +1955,7 @@ class SellPosController extends Controller
             $title = $transaction->business->name . ' | ' . $transaction->invoice_no;
 
             return view('sale_pos.partials.show_invoice')
-                ->with(compact('receipt', 'title', 'payment_link'));
+                ->with(compact('receipt', 'title', 'payment_link', 'transaction'));
         } else {
             exit(__('messages.something_went_wrong'));
         }

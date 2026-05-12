@@ -1,0 +1,14 @@
+{
+    "name": "MismatchFixer",
+    "alias": "mismatchfixer",
+    "description": "Safe detector and fixer for stock mismatch and broken transfer links",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\MismatchFixer\\Providers\\MismatchFixerServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

@@ -65,6 +65,21 @@ return [
             // Uncomment above line for windows & provide path to mysql dump binary for backup to work
         ],
 
+        'mysql_loan' => [
+            'driver' => 'mysql',
+            'host' => env('DB_LOAN_HOST', '127.0.0.1'),
+            'port' => env('DB_LOAN_PORT', '3306'),
+            'database' => env('DB_LOAN_DATABASE', 'loan_management'),
+            'username' => env('DB_LOAN_USERNAME', 'root'),
+            'password' => env('DB_LOAN_PASSWORD', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => false,
+            'engine' => null,
+        ],
+
         'loan_management' => [
             'driver' => 'mysql',
             'host' => env('LOAN_DB_HOST', '127.0.0.1'),

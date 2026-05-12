@@ -1,0 +1,18 @@
+{
+    "name": "nwidart/loanmanagement",
+    "description": "LoanManagement module for Ultimate POS",
+    "authors": [{"name": "UltimatePOS Custom"}],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\LoanManagement\\Providers\\LoanManagementServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\LoanManagement\\": ""
+        }
+    }
+}

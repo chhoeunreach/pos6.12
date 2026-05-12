@@ -412,6 +412,14 @@
     @if($sell->type != 'sales_order')
     <a href="#" class="print-invoice tw-dw-btn tw-dw-btn-success tw-text-white" data-href="{{route('sell.printInvoice', [$sell->id])}}?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> @lang("lang_v1.packing_slip")</a>
     @endif
+    @can('loan_management.create_from_sell')
+      <a href="{{ url('/loan-management/loans/sell/'.$sell->id.'/clone') }}"
+         class="tw-dw-btn tw-dw-btn-warning tw-text-white convert-to-installment-detail"
+         data-check-url="{{ url('/loan-management/loans/sell/'.$sell->id.'/check-duplicate') }}"
+         data-clone-url="{{ url('/loan-management/loans/sell/'.$sell->id.'/clone') }}">
+         <i class="fa fa-credit-card" aria-hidden="true"></i> Convert To Installment
+      </a>
+    @endcan
     @can('print_invoice')
       <a href="#" class="print-invoice tw-dw-btn tw-dw-btn-primary tw-text-white" data-href="{{route('sell.printInvoice', [$sell->id])}}"><i class="fa fa-print" aria-hidden="true"></i> @lang("lang_v1.print_invoice")</a>
     @endcan
@@ -424,5 +432,39 @@
   $(document).ready(function(){
     var element = $('div.modal-xl');
     __currency_convert_recursively(element);
+
+    $(document).on('click', 'a.convert-to-installment-detail', function(e){
+      e.preventDefault();
+      var checkUrl = $(this).data('check-url');
+      var cloneUrl = $(this).data('clone-url') || $(this).attr('href');
+      $.get(checkUrl, function(res){
+        if (res.success && res.data && res.data.exists) {
+          if (typeof swal !== 'undefined') {
+            swal({
+              title: 'This sell already has installment loan.',
+              text: 'Do you want to view the existing loan?',
+              icon: 'warning',
+              buttons: {
+                cancel: 'Cancel',
+                confirm: {
+                  text: 'View Loan',
+                  value: true
+                }
+              }
+            }).then(function(ok){
+              if (ok && res.data.loan_url) {
+                window.location = res.data.loan_url;
+              }
+            });
+          } else {
+            alert('This sell already has installment loan.');
+          }
+        } else {
+          window.location = cloneUrl;
+        }
+      }).fail(function(){
+        window.location = cloneUrl;
+      });
+    });
   });
 </script>

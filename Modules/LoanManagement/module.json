@@ -1,0 +1,14 @@
+{
+    "name": "LoanManagement",
+    "alias": "loanmanagement",
+    "description": "Installment and loan management module with dedicated loan database",
+    "keywords": ["loan", "installment", "finance"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\LoanManagement\\Providers\\LoanManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

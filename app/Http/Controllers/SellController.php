@@ -347,6 +347,10 @@ class SellController extends Controller
 
                                     <li><a href="'.action([\App\Http\Controllers\SellPosController::class, 'showInvoiceUrl'], [$row->id]).'" class="view_invoice_url"><i class="fas fa-eye"></i> '.__('lang_v1.view_invoice_url').'</a></li>';
                                 }
+
+                                if (auth()->user()->can('loan_management.create_from_sell')) {
+                                    $html .= '<li><a href="'.url('/loan-management/loans/sell/'.$row->id.'/clone').'" class="convert-to-installment" data-transaction-id="'.$row->id.'" data-check-url="'.url('/loan-management/loans/sell/'.$row->id.'/check-duplicate').'" data-clone-url="'.url('/loan-management/loans/sell/'.$row->id.'/clone').'"><i class="fa fa-credit-card"></i> Convert To Installment</a></li>';
+                                }
                             }
 
                             $html .= '<li><a href="#" data-href="'.action([\App\Http\Controllers\NotificationController::class, 'getTemplate'], ['transaction_id' => $row->id, 'template_for' => 'new_sale']).'" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>'.__('lang_v1.new_sale_notification').'</a></li>';

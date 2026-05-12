@@ -50,6 +50,21 @@ return [
             'driver' => 'session',
             'provider' => 'contacts',
         ],
+
+        'loan_web' => [
+            'driver' => 'session',
+            'provider' => 'loan_users',
+        ],
+
+        'loan_api' => [
+            'driver' => 'passport',
+            'provider' => 'loan_users',
+        ],
+
+        'customer_loan_api' => [
+            'driver' => 'passport',
+            'provider' => 'loan_customers',
+        ],
     ],
 
     /*
@@ -78,6 +93,16 @@ return [
         'contacts' => [
             'driver' => 'eloquent',
             'model' => App\Contact::class,
+        ],
+
+        'loan_users' => [
+            'driver' => 'eloquent',
+            'model' => Modules\LoanManagement\Entities\LoanUser::class,
+        ],
+
+        'loan_customers' => [
+            'driver' => 'eloquent',
+            'model' => Modules\LoanManagement\Entities\LoanCustomer::class,
         ],
 
         // 'users' => [
@@ -113,6 +138,20 @@ return [
             'provider' => 'contacts',
             'table' => 'password_resets_contacts',
             'expire' => 60,
+        ],
+
+        'loan_users' => [
+            'provider' => 'loan_users',
+            'table' => 'loan_password_resets',
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+
+        'loan_customers' => [
+            'provider' => 'loan_customers',
+            'table' => 'loan_customer_password_resets',
+            'expire' => 60,
+            'throttle' => 60,
         ],
     ],
 

@@ -1,0 +1,18 @@
+{
+    "name": "nwidart/mismatchfixer",
+    "description": "Safe detector and fixer for stock mismatch and broken transfer links",
+    "authors": [{"name": "UltimatePOS Custom"}],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\MismatchFixer\\Providers\\MismatchFixerServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\MismatchFixer\\": ""
+        }
+    }
+}

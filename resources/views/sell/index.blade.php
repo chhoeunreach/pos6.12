@@ -389,6 +389,40 @@
             $('#only_subscriptions').on('ifChanged', function(event) {
                 sell_table.ajax.reload();
             });
+
+            $(document).on('click', 'a.convert-to-installment', function(e){
+                e.preventDefault();
+                var checkUrl = $(this).data('check-url');
+                var cloneUrl = $(this).data('clone-url') || $(this).attr('href');
+                $.get(checkUrl, function(res){
+                    if (res.success && res.data && res.data.exists) {
+                        if (typeof swal !== 'undefined') {
+                            swal({
+                                title: 'This sell already has installment loan.',
+                                text: 'Do you want to view the existing loan?',
+                                icon: 'warning',
+                                buttons: {
+                                    cancel: 'Cancel',
+                                    confirm: {
+                                        text: 'View Loan',
+                                        value: true
+                                    }
+                                }
+                            }).then(function(ok){
+                                if (ok && res.data.loan_url) {
+                                    window.location = res.data.loan_url;
+                                }
+                            });
+                        } else {
+                            alert('This sell already has installment loan.');
+                        }
+                    } else {
+                        window.location = cloneUrl;
+                    }
+                }).fail(function(){
+                    window.location = cloneUrl;
+                });
+            });
         });
     </script>
     <script src="{{ asset('js/payment.js?v=' . $asset_v) }}"></script>

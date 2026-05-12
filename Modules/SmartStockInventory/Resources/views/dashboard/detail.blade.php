@@ -82,6 +82,13 @@
                                     <ul class="dropdown-menu dropdown-menu-right" role="menu">
                                         <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0)) }}" target="_blank"><i class="fa fa-eye"></i> View</a></li>
                                         <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0) . '/edit') }}" target="_blank"><i class="fa fa-pencil"></i> Edit</a></li>
+                                        @if(auth()->user()->can('stock_transfer.delete') && !in_array((string)($row->status ?? ''), ['final', 'completed'], true))
+                                            <li>
+                                                <a href="#" class="ssi-delete-transfer" data-transfer-id="{{ (int)($row->transfer_id ?? 0) }}">
+                                                    <i class="fa fa-trash text-danger"></i> Delete
+                                                </a>
+                                            </li>
+                                        @endif
                                         <li class="divider"></li>
                                         <li><a href="#" class="ssi-post-action" data-form-id="pt_completed_{{ $loop->index }}" data-confirm-msg="Mark this transfer as completed?"><i class="fa fa-check text-success"></i> Set Completed</a></li>
                                         <li><a href="#" class="ssi-post-action" data-form-id="pt_in_transit_{{ $loop->index }}" data-confirm-msg="Mark this transfer as in transit?"><i class="fa fa-truck text-warning"></i> Set In Transit</a></li>
@@ -163,6 +170,36 @@ $(function(){
         if (confirm(confirmMsg)) {
             $('#' + formId).submit();
         }
+    });
+
+    $(document).on('click', '.ssi-delete-transfer', function(e){
+        e.preventDefault();
+        var transferId = parseInt($(this).data('transfer-id'), 10) || 0;
+        if (!transferId) return;
+        if (!confirm('Delete this pending transfer?')) return;
+
+        $.ajax({
+            url: '/stock-transfers/' + transferId,
+            method: 'POST',
+            data: {
+                _token: $('meta[name="csrf-token"]').attr('content'),
+                _method: 'DELETE'
+            },
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            success: function(resp){
+                alert((resp && resp.msg) ? resp.msg : 'Deleted successfully');
+                window.location.reload();
+            },
+            error: function(xhr){
+                var msg = 'Delete failed';
+                if (xhr.responseJSON && xhr.responseJSON.msg) {
+                    msg = xhr.responseJSON.msg;
+                }
+                alert(msg);
+            }
+        });
     });
 
     $('#ssiTxFixModal').on('hidden.bs.modal', function(){
