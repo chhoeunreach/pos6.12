@@ -60,6 +60,13 @@
                                         @can('loan_management.edit')
                                             <a href="{{ route('loan-management.customers.edit', $c->id) }}" class="btn btn-xs btn-primary">Edit</a>
                                         @endcan
+                                        @can('loan_management.delete')
+                                            <form method="POST" action="{{ route('loan-management.customers.destroy', $c->id) }}" style="display:inline;" onsubmit="return confirm('Delete this customer?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+                                            </form>
+                                        @endcan
                                     </td>
                                     <td>{{ $c->id }}</td>
                                     <td>{{ $c->customer_code ?? '-' }}</td>
