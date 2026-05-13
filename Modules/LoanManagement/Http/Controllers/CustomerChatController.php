@@ -9,6 +9,8 @@ use Modules\LoanManagement\Services\LoanChatService;
 
 class CustomerChatController extends Controller
 {
+    use ApiResponseTrait;
+
     public function __construct(protected LoanChatService $chatService)
     {
     }
@@ -17,7 +19,7 @@ class CustomerChatController extends Controller
     {
         $customer = auth('customer_loan_api')->user();
         $threads = $this->chatService->getCustomerThreads((int) $customer->id);
-        return response()->json(['success' => true, 'message' => 'OK', 'data' => $threads]);
+        return $this->ok('Threads loaded', $threads);
     }
 
     public function store(Request $request)
@@ -43,7 +45,7 @@ class CustomerChatController extends Controller
                 ['type' => 'customer', 'id' => $customer->id, 'name' => $customer->name],
             ],
         ]);
-        return response()->json(['success' => true, 'message' => 'Thread created', 'data' => $thread]);
+        return $this->ok('Thread created', $thread);
     }
 
     public function show(int $thread)
@@ -51,16 +53,18 @@ class CustomerChatController extends Controller
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
         if (! $row) {
-            return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+            return $this->fail('Thread not found', 404, (object) []);
         }
-        return response()->json(['success' => true, 'message' => 'OK', 'data' => $row->load(['messages', 'participants'])]);
+        $row->load(['participants']);
+        $row->setRelation('messages', $row->messages()->orderBy('created_at')->orderBy('id')->get());
+        return $this->ok('Thread loaded', $row);
     }
 
     public function sendMessage(Request $request, int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
-        if (! $row) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+        if (! $row) return $this->fail('Thread not found', 404, (object) []);
 
         $data = $request->validate([
             'message' => 'nullable|string',
@@ -72,25 +76,24 @@ class CustomerChatController extends Controller
         $msg = $this->chatService->sendMessage($row, 'customer', (int) $customer->id, array_merge($data, [
             'sender_name_snapshot' => $customer->name,
         ]));
-        return response()->json(['success' => true, 'message' => 'Message sent', 'data' => $msg]);
+        return $this->ok('Message sent', $msg);
     }
 
     public function read(int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
-        if (! $row) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+        if (! $row) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->markAsRead($row, 'customer', (int) $customer->id);
-        return response()->json(['success' => true, 'message' => 'Marked as read', 'data' => (object) []]);
+        return $this->ok('Marked as read', (object) []);
     }
 
     public function close(int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
-        if (! $row) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+        if (! $row) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->closeThread($row, (int) $customer->id);
-        return response()->json(['success' => true, 'message' => 'Thread closed', 'data' => (object) []]);
+        return $this->ok('Thread closed', (object) []);
     }
 }
-

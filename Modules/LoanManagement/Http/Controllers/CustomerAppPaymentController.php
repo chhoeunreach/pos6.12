@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Schema;
 
 class CustomerAppPaymentController extends Controller
 {
+    use ApiResponseTrait;
+
     public function payments()
     {
         $customer = auth('customer_loan_api')->user();
@@ -16,9 +18,16 @@ class CustomerAppPaymentController extends Controller
             ->where('customer_id', $customer->id)
             ->orderByDesc('id')
             ->limit(200)
-            ->get();
+            ->get()
+            ->map(function ($r) {
+                $r->amount = $this->money($r->amount ?? 0);
+                if (! empty($r->paid_at)) {
+                    $r->paid_at = date('Y-m-d H:i:s', strtotime((string) $r->paid_at));
+                }
+                return $r;
+            })->values()->all();
 
-        return response()->json(['success' => true, 'message' => 'OK', 'data' => $rows]);
+        return $this->ok('Payments loaded', $rows);
     }
 
     public function summary()
@@ -45,14 +54,10 @@ class CustomerAppPaymentController extends Controller
             }
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'OK',
-            'data' => [
-                'total_balance' => $totalBalance,
-                'next_due_date' => $nextDueDate,
-                'late_amount' => $lateAmount,
-            ],
+        return $this->ok('Summary loaded', [
+            'total_balance' => $this->money($totalBalance),
+            'next_due_date' => $nextDueDate ? date('Y-m-d', strtotime((string) $nextDueDate)) : null,
+            'late_amount' => $this->money($lateAmount),
         ]);
     }
 
@@ -66,7 +71,7 @@ class CustomerAppPaymentController extends Controller
             ->where('customer_id', $customer->id)
             ->first();
         if (! $payment) {
-            return response()->json(['success' => false, 'message' => 'Payment not found', 'data' => (object) []], 404);
+            return $this->fail('Payment not found', 404, (object) []);
         }
 
         DB::connection('mysql_loan')->table('loan_payments')->where('id', $paymentId)->update([
@@ -74,7 +79,7 @@ class CustomerAppPaymentController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Payment proof uploaded', 'data' => (object) []]);
+        return $this->ok('Payment proof uploaded', (object) []);
     }
 
     public function uploadPaymentProof(Request $request)

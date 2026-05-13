@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Schema;
 
 class AuthController extends Controller
 {
+    use ApiResponseTrait;
+
     protected function applyLoginScope($query)
     {
         if (Schema::hasColumn('users', 'allow_login')) {
@@ -45,7 +47,7 @@ class AuthController extends Controller
         }
 
         if (empty($field) || empty($value)) {
-            return response()->json(['success' => false, 'message' => 'username or email or mobile is required'], 422);
+            return $this->fail('username or email or mobile is required', 422, (object) []);
         }
 
         if ($field === 'mobile') {
@@ -74,7 +76,7 @@ class AuthController extends Controller
                     $token = $tokenResult->accessToken ?? ($tokenResult->plainTextToken ?? null);
                 }
 
-                return response()->json(['success' => true, 'token' => $token, 'user' => $user]);
+                return $this->ok('Login success', ['token' => $token, 'user' => $user]);
             }
         }
 
@@ -88,11 +90,11 @@ class AuthController extends Controller
                     $token = $tokenResult->accessToken ?? ($tokenResult->plainTextToken ?? null);
                 }
 
-                return response()->json(['success' => true, 'token' => $token, 'user' => $user]);
+                return $this->ok('Login success', ['token' => $token, 'user' => $user]);
             }
         }
 
-        return response()->json(['success' => false, 'message' => 'Invalid credentials'], 401);
+        return $this->fail('Invalid credentials', 401, (object) []);
     }
 
     public function logout(Request $request)
@@ -104,12 +106,12 @@ class AuthController extends Controller
         }
         auth()->logout();
 
-        return response()->json(['success' => true]);
+        return $this->ok('Logout success', (object) []);
     }
 
     public function profile(Request $request)
     {
-        return response()->json(['success' => true, 'user' => $request->user()]);
+        return $this->ok('Profile loaded', $request->user() ?: (object) []);
     }
 
     public function changePassword(Request $request)
@@ -121,12 +123,12 @@ class AuthController extends Controller
 
         $user = $request->user();
         if (! Hash::check($data['current_password'], $user->password)) {
-            return response()->json(['success' => false, 'message' => 'Current password is incorrect'], 422);
+            return $this->fail('Current password is incorrect', 422, (object) []);
         }
 
         $user->password = Hash::make($data['new_password']);
         $user->save();
 
-        return response()->json(['success' => true, 'message' => 'Password changed']);
+        return $this->ok('Password changed', (object) []);
     }
 }

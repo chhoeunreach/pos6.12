@@ -9,6 +9,8 @@ use Modules\LoanManagement\Services\LoanChatService;
 
 class LoanChatController extends Controller
 {
+    use ApiResponseTrait;
+
     public function __construct(protected LoanChatService $chatService)
     {
     }
@@ -36,7 +38,7 @@ class LoanChatController extends Controller
         if ($request->filled('customer_id')) $q->where('customer_id', $request->input('customer_id'));
         if ($request->filled('staff_id') && $this->isAdmin()) $q->where('staff_id', $request->input('staff_id'));
         $rows = $q->orderByDesc('last_message_at')->orderByDesc('id')->paginate(30);
-        return response()->json(['success' => true, 'message' => 'OK', 'data' => $rows]);
+        return $this->ok('Threads loaded', $rows);
     }
 
     public function store(Request $request)
@@ -57,21 +59,23 @@ class LoanChatController extends Controller
                 ['type' => $this->isAdmin() ? 'admin' : 'staff', 'id' => (int) auth()->id(), 'name' => trim((string) (auth()->user()->first_name ?? auth()->user()->username ?? ''))],
             ],
         ]));
-        return response()->json(['success' => true, 'message' => 'Thread created', 'data' => $thread]);
+        return $this->ok('Thread created', $thread);
     }
 
     public function show(int $thread)
     {
         $row = LoanChatThread::query()->find($thread);
-        if (! $row || ! $this->canViewThread($row)) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
-        return response()->json(['success' => true, 'message' => 'OK', 'data' => $row->load(['messages', 'participants'])]);
+        if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
+        $row->load(['participants']);
+        $row->setRelation('messages', $row->messages()->orderBy('created_at')->orderBy('id')->get());
+        return $this->ok('Thread loaded', $row);
     }
 
     public function sendMessage(Request $request, int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.reply'), 403);
         $row = LoanChatThread::query()->find($thread);
-        if (! $row || ! $this->canViewThread($row)) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+        if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $data = $request->validate([
             'message' => 'nullable|string',
             'message_type' => 'required|in:text,image,file,audio,location,system',
@@ -83,7 +87,7 @@ class LoanChatController extends Controller
         $msg = $this->chatService->sendMessage($row, $senderType, (int) auth()->id(), array_merge($data, [
             'sender_name_snapshot' => trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? ''))),
         ]));
-        return response()->json(['success' => true, 'message' => 'Message sent', 'data' => $msg]);
+        return $this->ok('Message sent', $msg);
     }
 
     public function assign(Request $request, int $thread)
@@ -92,15 +96,15 @@ class LoanChatController extends Controller
         $data = $request->validate(['staff_id' => 'required|integer']);
         $row = LoanChatThread::query()->findOrFail($thread);
         $this->chatService->assignStaff($row, (int) $data['staff_id']);
-        return response()->json(['success' => true, 'message' => 'Thread assigned', 'data' => $row]);
+        return $this->ok('Thread assigned', $row);
     }
 
     public function read(int $thread)
     {
         $row = LoanChatThread::query()->find($thread);
-        if (! $row || ! $this->canViewThread($row)) return response()->json(['success' => false, 'message' => 'Thread not found', 'data' => (object) []], 404);
+        if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->markAsRead($row, $this->isAdmin() ? 'admin' : 'staff', (int) auth()->id());
-        return response()->json(['success' => true, 'message' => 'Marked as read', 'data' => (object) []]);
+        return $this->ok('Marked as read', (object) []);
     }
 
     public function close(int $thread)
@@ -109,7 +113,7 @@ class LoanChatController extends Controller
         $row = LoanChatThread::query()->findOrFail($thread);
         if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
         $this->chatService->closeThread($row, (int) auth()->id());
-        return response()->json(['success' => true, 'message' => 'Thread closed', 'data' => (object) []]);
+        return $this->ok('Thread closed', (object) []);
     }
 
     public function reopen(int $thread)
@@ -118,7 +122,7 @@ class LoanChatController extends Controller
         $row = LoanChatThread::query()->findOrFail($thread);
         if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
         $this->chatService->reopenThread($row);
-        return response()->json(['success' => true, 'message' => 'Thread reopened', 'data' => (object) []]);
+        return $this->ok('Thread reopened', (object) []);
     }
 
     public function webInbox()
@@ -131,4 +135,3 @@ class LoanChatController extends Controller
         return view('loanmanagement::chat.detail', ['threadId' => $thread]);
     }
 }
-

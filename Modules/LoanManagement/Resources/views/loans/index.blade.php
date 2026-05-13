@@ -32,6 +32,7 @@
         </table>
     @endcomponent
 </section>
+@include('loanmanagement::layouts.sidebar_focus')
 @endsection
 
 @section('javascript')

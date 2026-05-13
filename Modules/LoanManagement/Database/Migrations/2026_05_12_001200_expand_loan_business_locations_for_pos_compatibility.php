@@ -6,8 +6,8 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected string $connection = 'mysql_loan';
-    protected string $table = 'loan_business_locations';
+    protected $connection = 'mysql_loan';
+    protected $table = 'loan_business_locations';
 
     public function up(): void
     {

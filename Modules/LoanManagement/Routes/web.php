@@ -17,6 +17,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
     ->group(function () {
         Route::get('/', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.home')->middleware('can:loan_management.view');
         Route::get('/dashboard', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard')->middleware('can:loan_management.view');
+        Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
 
         Route::get('/sell-list', [LoanSellListController::class, 'index'])->name('loan-management.sell-list')->middleware('can:loan_management.sell_list');
@@ -38,6 +39,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::delete('/loans/{loan}', [LoanInstallmentListController::class, 'destroy'])->name('loan-management.loans.destroy')->middleware('can:loan_management.delete');
 
         Route::get('/customers', [LoanCustomerController::class, 'index'])->name('loan-management.customers')->middleware('can:loan_management.view');
+        Route::get('/customers/list', [LoanCustomerController::class, 'index'])->name('loan-management.customers.index')->middleware('can:loan_management.view');
         Route::get('/customers/create', [LoanCustomerController::class, 'create'])->name('loan-management.customers.create')->middleware('can:loan_management.create');
         Route::post('/customers', [LoanCustomerController::class, 'store'])->name('loan-management.customers.store')->middleware('can:loan_management.create');
         Route::get('/customers/clone-from-pos', [LoanCustomerController::class, 'cloneFromUltimatePos'])->name('loan-management.customers.clone-from-pos')->middleware('can:loan_management.create');
@@ -61,11 +63,37 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/live-chat', [LoanChatController::class, 'webInbox'])->name('loan-management.live-chat')->middleware('can:loan_management.chat.view');
         Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.live-chat.detail')->middleware('can:loan_management.chat.view');
         Route::get('/loans', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans')->middleware('can:loan_management.view');
-        Route::get('/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments');
-        Route::get('/late-customers', [DashboardController::class, 'placeholder'])->defaults('page', 'Late Customers')->name('loan-management.late-customers');
-        Route::get('/reports', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports');
+        Route::get('/loans/list', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans.index')->middleware('can:loan_management.view');
+        Route::get('/schedules', [DashboardController::class, 'placeholder'])->defaults('page', 'Installment Schedules')->name('loan-management.schedules.index')->middleware('can:loan_management.view');
+        Route::get('/monthly-payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments')->name('loan-management.monthly-payments.index')->middleware('can:loan_management.view');
+        Route::get('/overdue', [DashboardController::class, 'overdue'])->name('loan-management.overdue.index')->middleware('can:loan_management.view');
+
+        Route::get('/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments')->middleware('can:loan_management.view');
+        Route::get('/payments/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments.index')->middleware('can:loan_management.view');
+        Route::get('/payment-history', [DashboardController::class, 'placeholder'])->defaults('page', 'Payment History')->name('loan-management.payment-history.index')->middleware('can:loan_management.view');
+        Route::get('/collection-visits', [DashboardController::class, 'placeholder'])->defaults('page', 'Collection Visits')->name('loan-management.collection-visits.index')->middleware('can:loan_management.view');
+        Route::get('/gps', [AdminCustomerTrackingController::class, 'index'])->name('loan-management.gps.index')->middleware('can:loan_management.view');
+        Route::get('/chat', [LoanChatController::class, 'webInbox'])->name('loan-management.chat.index')->middleware('can:loan_management.chat.view');
+
+        Route::get('/finance/aba-transactions', [DashboardController::class, 'placeholder'])->defaults('page', 'ABA Transactions')->name('loan-management.aba.index')->middleware('can:loan_management.view');
+        Route::get('/aba', [DashboardController::class, 'placeholder'])->defaults('page', 'ABA Transactions')->name('loan-management.aba')->middleware('can:loan_management.view');
+        Route::get('/reports', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports')->middleware('can:loan_management.view');
+        Route::get('/reports/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports.index')->middleware('can:loan_management.view');
+        Route::get('/reports/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments Report')->name('loan-management.reports.payments')->middleware('can:loan_management.view');
+
+        Route::get('/tools/import', [DashboardController::class, 'placeholder'])->defaults('page', 'Import Excel')->name('loan-management.import.index')->middleware('can:loan_management.view');
+        Route::get('/import', [DashboardController::class, 'placeholder'])->defaults('page', 'Import Excel')->name('loan-management.import')->middleware('can:loan_management.view');
+        Route::get('/tools/monthly-import-export', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments Import/Export')->name('loan-management.tools.monthly-import-export')->middleware('can:loan_management.view');
+        Route::get('/tools/loan-import-export', [DashboardController::class, 'placeholder'])->defaults('page', 'Loan Import/Export')->name('loan-management.tools.loan-import-export')->middleware('can:loan_management.view');
+        Route::get('/tools/send-notification', [DashboardController::class, 'placeholder'])->defaults('page', 'Send Notification')->name('loan-management.tools.send-notification')->middleware('can:loan_management.view');
         Route::get('/settings', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings')->middleware('can:loan_management.view');
+        Route::get('/settings/index', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings.index')->middleware('can:loan_management.view');
+        Route::get('/settings/payment-methods', [DashboardController::class, 'placeholder'])->defaults('page', 'Payment Methods')->name('loan-management.settings.payment-methods')->middleware('can:loan_management.view');
+        Route::get('/settings/currencies', [DashboardController::class, 'placeholder'])->defaults('page', 'Currencies')->name('loan-management.settings.currencies')->middleware('can:loan_management.view');
         Route::post('/settings/invoice-prefix', [SettingsController::class, 'updateInvoicePrefix'])->name('loan-management.settings.invoice-prefix')->middleware('can:loan_management.view');
+
+        Route::get('/guarantors', [DashboardController::class, 'placeholder'])->defaults('page', 'Guarantors')->name('loan-management.guarantors.index')->middleware('can:loan_management.view');
+        Route::get('/blacklist', [DashboardController::class, 'placeholder'])->defaults('page', 'Blacklist')->name('loan-management.blacklist.index')->middleware('can:loan_management.view');
 
         Route::get('/install', [InstallController::class, 'index'])->middleware('superadmin');
         Route::post('/install', [InstallController::class, 'install'])->middleware('superadmin');

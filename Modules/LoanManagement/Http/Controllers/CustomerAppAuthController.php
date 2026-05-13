@@ -10,6 +10,8 @@ use Modules\LoanManagement\Http\Requests\CustomerLoginRequest;
 
 class CustomerAppAuthController extends Controller
 {
+    use ApiResponseTrait;
+
     public function login(CustomerLoginRequest $request)
     {
         $login = trim((string) $request->input('login'));
@@ -24,7 +26,7 @@ class CustomerAppAuthController extends Controller
             ->first();
 
         if (! $customer || empty($customer->password) || ! Hash::check($request->input('password'), (string) $customer->password)) {
-            return response()->json(['success' => false, 'message' => 'Invalid credentials', 'data' => (object) []], 401);
+            return $this->fail('Invalid credentials', 401, (object) []);
         }
 
         $customer->last_login_at = now();
@@ -32,7 +34,7 @@ class CustomerAppAuthController extends Controller
 
         $tokenResult = $customer->createToken($request->input('device_name', 'customer-app'));
         $token = $tokenResult->accessToken ?? ($tokenResult->plainTextToken ?? null);
-        return response()->json(['success' => true, 'message' => 'Login success', 'data' => ['token' => $token]]);
+        return $this->ok('Login success', ['token' => $token]);
     }
 
     public function logout()
@@ -43,7 +45,7 @@ class CustomerAppAuthController extends Controller
         } elseif ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
             $user->currentAccessToken()->delete();
         }
-        return response()->json(['success' => true, 'message' => 'Logout success', 'data' => (object) []]);
+        return $this->ok('Logout success', (object) []);
     }
 
     public function changePassword(CustomerChangePasswordRequest $request)
@@ -51,12 +53,12 @@ class CustomerAppAuthController extends Controller
         /** @var LoanCustomer $customer */
         $customer = auth('customer_loan_api')->user();
         if (! $customer || empty($customer->password) || ! Hash::check($request->input('current_password'), (string) $customer->password)) {
-            return response()->json(['success' => false, 'message' => 'Current password is incorrect', 'data' => (object) []], 422);
+            return $this->fail('Current password is incorrect', 422, (object) []);
         }
 
         $customer->password = Hash::make((string) $request->input('new_password'));
         $customer->save();
 
-        return response()->json(['success' => true, 'message' => 'Password updated', 'data' => (object) []]);
+        return $this->ok('Password updated', (object) []);
     }
 }

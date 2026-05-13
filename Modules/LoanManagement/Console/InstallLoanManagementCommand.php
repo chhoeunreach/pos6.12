@@ -93,13 +93,45 @@ class InstallLoanManagementCommand extends Command
 
     private function checkLoanConnection(): void
     {
-        DB::connection('mysql_loan')->getPdo();
-        DB::connection('mysql_loan')->select('SELECT 1');
+        try {
+            DB::connection('mysql_loan')->getPdo();
+            DB::connection('mysql_loan')->select('SELECT 1');
+        } catch (\Throwable $e) {
+            $msg = 'mysql_loan connection failed. Check DB_LOAN_HOST/PORT/DATABASE/USERNAME/PASSWORD and DB user privileges. Error: '.$e->getMessage();
+            throw new \RuntimeException($msg, 0, $e);
+        }
     }
 
     private function registerPermissions(): void
     {
         $required = [
+            'loan_management.dashboard.view',
+            'loan_management.customers.view',
+            'loan_management.customers.create',
+            'loan_management.customers.edit',
+            'loan_management.customers.delete',
+            'loan_management.guarantors.view',
+            'loan_management.blacklist.view',
+            'loan_management.loans.view',
+            'loan_management.loans.create',
+            'loan_management.loans.edit',
+            'loan_management.loans.approve',
+            'loan_management.loans.reject',
+            'loan_management.schedules.view',
+            'loan_management.monthly_payments.view',
+            'loan_management.overdue.view',
+            'loan_management.payments.view',
+            'loan_management.payments.create',
+            'loan_management.payment_history.view',
+            'loan_management.collection_visits.view',
+            'loan_management.gps.view',
+            'loan_management.chat.view',
+            'loan_management.chat.reply',
+            'loan_management.aba.view',
+            'loan_management.reports.view',
+            'loan_management.import.view',
+            'loan_management.settings.view',
+
             'loan_management.view',
             'loan_management.create',
             'loan_management.edit',
@@ -149,6 +181,9 @@ class InstallLoanManagementCommand extends Command
         $path = base_path('modules_statuses.json');
         if (! file_exists($path)) {
             return;
+        }
+        if (! is_writable($path)) {
+            throw new \RuntimeException('modules_statuses.json is not writable: '.$path);
         }
 
         $raw = file_get_contents($path);

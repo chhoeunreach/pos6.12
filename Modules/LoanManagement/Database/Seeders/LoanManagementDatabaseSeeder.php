@@ -8,6 +8,7 @@ class LoanManagementDatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // STEP 1 placeholder. Detailed seeders will be added in STEP 2.
+        $this->call(LoanManagementPermissionSeeder::class);
+        $this->call(LoanManagementReferenceSeeder::class);
     }
 }

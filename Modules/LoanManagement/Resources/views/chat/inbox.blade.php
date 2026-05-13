@@ -27,6 +27,7 @@
 @endsection
 
 @section('javascript')
+@include('loanmanagement::layouts.sidebar_focus')
 <script>
 (function($){
     function loadInbox(){
@@ -44,4 +45,3 @@
 })(jQuery);
 </script>
 @endsection
-

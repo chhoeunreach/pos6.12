@@ -86,3 +86,7 @@
     </div>
 </section>
 @endsection
+
+@section('javascript')
+@include('loanmanagement::layouts.sidebar_focus')
+@endsection

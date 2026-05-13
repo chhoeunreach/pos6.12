@@ -95,4 +95,5 @@
         </div>
     @endif
 </section>
+@include('loanmanagement::layouts.sidebar_focus')
 @endsection

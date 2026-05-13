@@ -17,9 +17,10 @@ class UninstallLoanManagementCommand extends Command
     public function handle(): int
     {
         if (! $this->option('force')) {
-            $this->error('Use --force to uninstall.');
-
-            return self::FAILURE;
+            if (! $this->confirm('This will uninstall LoanManagement module configuration and permissions. Continue?', false)) {
+                $this->warn('Uninstall cancelled.');
+                return self::FAILURE;
+            }
         }
 
         try {

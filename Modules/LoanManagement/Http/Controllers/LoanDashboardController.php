@@ -38,13 +38,16 @@ class LoanDashboardController extends Controller
                 ->all();
         }
 
+        $quickCards = $this->service->getQuickCards($filters);
+
         return view('loanmanagement::dashboard.index', compact(
             'filters',
             'locations',
             'statuses',
             'collectors',
             'currencies',
-            'paymentMethods'
+            'paymentMethods',
+            'quickCards'
         ));
     }
 

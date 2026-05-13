@@ -26,6 +26,10 @@
 @endsection
 
 @section('javascript')
+@include('loanmanagement::layouts.sidebar_focus')
+@endsection
+
+@section('javascript')
 <script>
 (function($){
     var map, markers = [];
