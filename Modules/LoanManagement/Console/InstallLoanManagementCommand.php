@@ -20,6 +20,7 @@ class InstallLoanManagementCommand extends Command
     {
         try {
             $this->info('LoanManagement install started...');
+            $this->showExpectedDatabaseConfig();
             $this->ensureLoanDatabaseExists();
             $this->checkLoanConnection();
 
@@ -49,6 +50,7 @@ class InstallLoanManagementCommand extends Command
             $this->line(Artisan::output());
 
             $this->registerPermissions();
+            $this->showCustomerAuthDriver();
             $this->enableModuleInStatuses();
             System::setProperty('loanmanagement_version', (string) config('loanmanagement.version', '1.0.0'));
 
@@ -97,10 +99,49 @@ class InstallLoanManagementCommand extends Command
 
     private function registerPermissions(): void
     {
-        foreach ((array) config('loanmanagement.permissions', []) as $perm) {
+        $required = [
+            'loan_management.view',
+            'loan_management.create',
+            'loan_management.edit',
+            'loan_management.delete',
+            'loan_management.approve',
+            'loan_management.payment',
+            'loan_management.report',
+            'loan_management.customers.view',
+            'loan_management.customers.create',
+            'loan_management.chat.view',
+            'loan_management.chat.reply',
+            'loan_management.customer_gps.manage',
+        ];
+        $configured = (array) config('loanmanagement.permissions', []);
+        $permissions = array_values(array_unique(array_merge($required, $configured)));
+
+        foreach ($permissions as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
         $this->info('Permissions registered.');
+    }
+
+    private function showExpectedDatabaseConfig(): void
+    {
+        $this->line('Expected DB connection: mysql_loan');
+        $this->line('Config path: config/database.php > connections.mysql_loan');
+        $this->line('Target database: ' . (string) config('database.connections.mysql_loan.database', 'loan_management'));
+    }
+
+    private function showCustomerAuthDriver(): void
+    {
+        $configured = (string) config('loanmanagement.customer_api_driver', 'auto');
+        $resolved = $configured === 'auto'
+            ? (class_exists(\Laravel\Sanctum\Sanctum::class) ? 'sanctum' : 'passport')
+            : $configured;
+
+        $this->info(sprintf(
+            'Customer guard [%s] uses [%s] driver with provider [%s].',
+            (string) config('loanmanagement.customer_api_guard', 'customer_loan_api'),
+            $resolved,
+            (string) config('loanmanagement.customer_api_provider', 'loan_customers')
+        ));
     }
 
     private function enableModuleInStatuses(): void

@@ -4,6 +4,7 @@ namespace Modules\LoanManagement\Providers;
 
 use App\Transaction;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use Modules\LoanManagement\Console\InstallLoanManagementCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
@@ -14,8 +15,9 @@ class LoanManagementServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $this->registerRouteMiddlewareAlias();
         $this->registerConfig();
+        $this->registerCustomerLoanAuth();
+        $this->registerRouteMiddlewareAlias();
         $this->registerViews();
         $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
         Transaction::observe(TransactionInvoicePrefixObserver::class);
@@ -52,5 +54,27 @@ class LoanManagementServiceProvider extends ServiceProvider
     {
         $router = $this->app->make(Router::class);
         $router->aliasMiddleware('loan.permission', LoanPermissionMiddleware::class);
+    }
+
+    private function registerCustomerLoanAuth(): void
+    {
+        $guard = (string) config('loanmanagement.customer_api_guard', 'customer_loan_api');
+        $provider = (string) config('loanmanagement.customer_api_provider', 'loan_customers');
+        $configuredDriver = (string) config('loanmanagement.customer_api_driver', 'auto');
+
+        $driver = $configuredDriver;
+        if ($configuredDriver === 'auto') {
+            $driver = class_exists(\Laravel\Sanctum\Sanctum::class) ? 'sanctum' : 'passport';
+        }
+
+        Config::set("auth.providers.{$provider}", [
+            'driver' => 'eloquent',
+            'model' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+        ]);
+
+        Config::set("auth.guards.{$guard}", [
+            'driver' => $driver,
+            'provider' => $provider,
+        ]);
     }
 }

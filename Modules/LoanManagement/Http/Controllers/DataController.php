@@ -43,7 +43,6 @@ class DataController extends Controller
         Menu::modify('admin-sidebar-menu', function ($menu) {
             $root = $menu->dropdown('Installment / Loan', function ($sub) {
                 $sub->url(route('loan-management.dashboard'), 'Dashboard', ['icon' => 'fa fa-dashboard']);
-                $sub->url(route('loan-management.sell-list'), 'Sell List', ['icon' => 'fa fa-list']);
                 $sub->url(route('loan-management.loans.create-from-sell'), 'Create Loan From Sell', ['icon' => 'fa fa-plus-circle']);
                 $sub->url(route('loan-management.loans'), 'Installment List', ['icon' => 'fa fa-file-text-o']);
                 $sub->url(route('loan-management.payments'), 'Payments', ['icon' => 'fa fa-money']);
