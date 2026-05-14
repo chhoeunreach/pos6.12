@@ -2,6 +2,8 @@
 
 Base URL: `/api/loan-management`
 
+Polling: call thread detail every `5s` (config `LOAN_CHAT_POLLING_SECONDS`, default `5`).
+
 ## Customer
 
 ### Get my chats
@@ -21,7 +23,7 @@ Base URL: `/api/loan-management`
 ### Thread detail
 `GET /customer/chats/{thread}`
 
-### Send message
+### Send text message
 `POST /customer/chats/{thread}/messages`
 ```json
 {
@@ -35,15 +37,19 @@ Location message:
 {
   "message_type": "location",
   "latitude": 11.5564,
-  "longitude": 104.9282
+  "longitude": 104.9282,
+  "address": "Phnom Penh"
 }
 ```
 
+Image/file/audio message: `multipart/form-data`
+- `message_type`: `image|file|audio`
+- `file`: upload
+- `message`: optional caption
+- `audio_duration_seconds`: optional (audio only)
+
 ### Mark read
 `POST /customer/chats/{thread}/read`
-
-### Close thread
-`POST /customer/chats/{thread}/close`
 
 ## Staff/Admin
 
@@ -66,4 +72,3 @@ Location message:
 - `POST /chats/{thread}/read`
 - `POST /chats/{thread}/close`
 - `POST /chats/{thread}/reopen`
-

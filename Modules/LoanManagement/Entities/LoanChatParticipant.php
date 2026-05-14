@@ -11,9 +11,14 @@ class LoanChatParticipant extends BaseLoanModel
         'last_read_at', 'joined_at', 'left_at',
     ];
 
+    protected $casts = [
+        'last_read_at' => 'datetime',
+        'joined_at' => 'datetime',
+        'left_at' => 'datetime',
+    ];
+
     public function thread()
     {
         return $this->belongsTo(LoanChatThread::class, 'thread_id');
     }
 }
-

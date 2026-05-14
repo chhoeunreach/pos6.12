@@ -5,6 +5,8 @@ namespace Modules\LoanManagement\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\LoanManagement\Entities\LoanChatThread;
+use Modules\LoanManagement\Http\Resources\ChatMessageResource;
+use Modules\LoanManagement\Http\Resources\ChatThreadResource;
 use Modules\LoanManagement\Services\LoanChatService;
 
 class CustomerChatController extends Controller
@@ -18,8 +20,8 @@ class CustomerChatController extends Controller
     public function index()
     {
         $customer = auth('customer_loan_api')->user();
-        $threads = $this->chatService->getCustomerThreads((int) $customer->id);
-        return $this->ok('Threads loaded', $threads);
+        $threads = $this->chatService->listCustomerThreads((int) $customer->id);
+        return $this->ok('Threads loaded', ChatThreadResource::collection($threads)->resolve());
     }
 
     public function store(Request $request)
@@ -45,7 +47,7 @@ class CustomerChatController extends Controller
                 ['type' => 'customer', 'id' => $customer->id, 'name' => $customer->name],
             ],
         ]);
-        return $this->ok('Thread created', $thread);
+        return $this->ok('Thread created', (new ChatThreadResource($thread))->resolve());
     }
 
     public function show(int $thread)
@@ -55,9 +57,8 @@ class CustomerChatController extends Controller
         if (! $row) {
             return $this->fail('Thread not found', 404, (object) []);
         }
-        $row->load(['participants']);
-        $row->setRelation('messages', $row->messages()->orderBy('created_at')->orderBy('id')->get());
-        return $this->ok('Thread loaded', $row);
+        $row = $this->chatService->showThread($row, true);
+        return $this->ok('Thread loaded', (new ChatThreadResource($row))->resolve());
     }
 
     public function sendMessage(Request $request, int $thread)
@@ -67,16 +68,78 @@ class CustomerChatController extends Controller
         if (! $row) return $this->fail('Thread not found', 404, (object) []);
 
         $data = $request->validate([
+            'message_type' => 'required|in:text,image,file,audio,location',
             'message' => 'nullable|string',
-            'message_type' => 'required|in:text,image,file,audio,location,system',
-            'file_id' => 'nullable|integer',
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric',
+            'metadata' => 'nullable|array',
+            'file' => 'nullable|file|max:51200',
+            'audio_duration_seconds' => 'nullable|integer|min:0|max:86400',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'address' => 'nullable|string|max:255',
         ]);
-        $msg = $this->chatService->sendMessage($row, 'customer', (int) $customer->id, array_merge($data, [
-            'sender_name_snapshot' => $customer->name,
-        ]));
-        return $this->ok('Message sent', $msg);
+
+        $senderName = (string) ($customer->name ?? '');
+        $metadata = (array) ($data['metadata'] ?? []);
+
+        $type = $data['message_type'];
+        if (in_array($type, ['image', 'file'], true)) {
+            $request->validate([
+                'file' => $type === 'image'
+                    ? 'required|file|mimes:jpg,jpeg,png,webp|max:51200'
+                    : 'required|file|mimes:pdf,doc,docx,xls,xlsx,txt,zip|max:51200',
+            ]);
+            $msg = $this->chatService->sendFileMessage(
+                $row,
+                'customer',
+                (int) $customer->id,
+                $request->file('file'),
+                $type,
+                $data['message'] ?? null,
+                $metadata
+            );
+        } elseif ($type === 'audio') {
+            $request->validate([
+                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|max:51200',
+            ]);
+            $msg = $this->chatService->sendAudioMessage(
+                $row,
+                'customer',
+                (int) $customer->id,
+                $request->file('file'),
+                $data['audio_duration_seconds'] ?? null,
+                $data['message'] ?? null,
+                $metadata
+            );
+        } elseif ($type === 'location') {
+            $request->validate([
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+            ]);
+            $msg = $this->chatService->sendLocationMessage(
+                $row,
+                'customer',
+                (int) $customer->id,
+                (float) $data['latitude'],
+                (float) $data['longitude'],
+                $data['address'] ?? null,
+                $metadata
+            );
+        } else {
+            $request->validate(['message' => 'required|string']);
+            $msg = $this->chatService->sendMessage($row, 'customer', (int) $customer->id, [
+                'sender_name_snapshot' => $senderName,
+                'message_type' => 'text',
+                'message' => (string) $data['message'],
+                'metadata' => $metadata,
+            ]);
+        }
+
+        if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
+            $msg->sender_name_snapshot = $senderName;
+            $msg->save();
+        }
+
+        return $this->ok('Message sent', (new ChatMessageResource($msg))->resolve());
     }
 
     public function read(int $thread)

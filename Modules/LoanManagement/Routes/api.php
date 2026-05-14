@@ -61,7 +61,6 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/chats/{thread}', [CustomerChatController::class, 'show']);
         Route::post('/chats/{thread}/messages', [CustomerChatController::class, 'sendMessage']);
         Route::post('/chats/{thread}/read', [CustomerChatController::class, 'read']);
-        Route::post('/chats/{thread}/close', [CustomerChatController::class, 'close']);
 
         Route::post('/aba-payway/create', [LoanAbaPaywayController::class, 'create']);
         Route::post('/aba-payway/check-status', [LoanAbaPaywayController::class, 'checkStatus']);
