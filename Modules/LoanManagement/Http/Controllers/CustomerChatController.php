@@ -76,6 +76,7 @@ class CustomerChatController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'address' => 'nullable|string|max:255',
+            'local_uuid' => 'nullable|string|max:80',
         ]);
 
         $senderName = (string) ($customer->name ?? '');
@@ -95,11 +96,12 @@ class CustomerChatController extends Controller
                 $request->file('file'),
                 $type,
                 $data['message'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } elseif ($type === 'audio') {
             $request->validate([
-                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|max:51200',
+                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm|max:51200',
             ]);
             $msg = $this->chatService->sendAudioMessage(
                 $row,
@@ -108,7 +110,8 @@ class CustomerChatController extends Controller
                 $request->file('file'),
                 $data['audio_duration_seconds'] ?? null,
                 $data['message'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } elseif ($type === 'location') {
             $request->validate([
@@ -122,16 +125,12 @@ class CustomerChatController extends Controller
                 (float) $data['latitude'],
                 (float) $data['longitude'],
                 $data['address'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } else {
             $request->validate(['message' => 'required|string']);
-            $msg = $this->chatService->sendMessage($row, 'customer', (int) $customer->id, [
-                'sender_name_snapshot' => $senderName,
-                'message_type' => 'text',
-                'message' => (string) $data['message'],
-                'metadata' => $metadata,
-            ]);
+            $msg = $this->chatService->sendTextMessage($row, 'customer', (int) $customer->id, (string) $data['message'], $metadata, $data['local_uuid'] ?? null);
         }
 
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {

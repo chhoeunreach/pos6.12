@@ -5,8 +5,6 @@ namespace Modules\LoanManagement\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\LoanManagement\Entities\LoanChatMessage;
 use Modules\LoanManagement\Entities\LoanChatParticipant;
@@ -94,13 +92,26 @@ class LoanChatService
         );
     }
 
-    public function sendTextMessage(LoanChatThread $thread, string $senderType, int $senderId, string $message, array $metadata = []): LoanChatMessage
+    public function sendTextMessage(LoanChatThread $thread, string $senderType, int $senderId, string $message, array $metadata = [], ?string $localUuid = null): LoanChatMessage
     {
         return $this->persistMessage($thread, $senderType, $senderId, [
             'message_type' => 'text',
             'message' => $message,
             'metadata' => $metadata,
+            'local_uuid' => $localUuid,
         ]);
+    }
+
+    public function sendImageMessage(
+        LoanChatThread $thread,
+        string $senderType,
+        int $senderId,
+        UploadedFile $file,
+        ?string $message = null,
+        array $metadata = [],
+        ?string $localUuid = null
+    ): LoanChatMessage {
+        return $this->sendFileMessage($thread, $senderType, $senderId, $file, 'image', $message, $metadata, $localUuid);
     }
 
     public function sendLocationMessage(
@@ -110,7 +121,8 @@ class LoanChatService
         float $latitude,
         float $longitude,
         ?string $address = null,
-        array $metadata = []
+        array $metadata = [],
+        ?string $localUuid = null
     ): LoanChatMessage {
         return $this->persistMessage($thread, $senderType, $senderId, [
             'message_type' => 'location',
@@ -118,6 +130,7 @@ class LoanChatService
             'longitude' => $longitude,
             'location_address' => $address,
             'metadata' => $metadata,
+            'local_uuid' => $localUuid,
         ]);
     }
 
@@ -128,8 +141,13 @@ class LoanChatService
         UploadedFile $file,
         string $messageType,
         ?string $message = null,
-        array $metadata = []
+        array $metadata = [],
+        ?string $localUuid = null
     ): LoanChatMessage {
+        if ($localUuid && ($existing = $this->findExistingLocalMessage($thread, $senderType, $senderId, $localUuid))) {
+            return $existing;
+        }
+
         $loanFile = $this->storeLoanFile($file, 'chat_'.$messageType, $senderId);
 
         return $this->persistMessage($thread, $senderType, $senderId, [
@@ -141,6 +159,7 @@ class LoanChatService
             'file_mime' => $loanFile->mime_type ?? null,
             'file_size' => (int) ($loanFile->size_bytes ?? 0) ?: null,
             'metadata' => $metadata,
+            'local_uuid' => $localUuid,
         ]);
     }
 
@@ -151,8 +170,13 @@ class LoanChatService
         UploadedFile $file,
         ?int $durationSeconds = null,
         ?string $message = null,
-        array $metadata = []
+        array $metadata = [],
+        ?string $localUuid = null
     ): LoanChatMessage {
+        if ($localUuid && ($existing = $this->findExistingLocalMessage($thread, $senderType, $senderId, $localUuid))) {
+            return $existing;
+        }
+
         $loanFile = $this->storeLoanFile($file, 'chat_audio', $senderId);
 
         return $this->persistMessage($thread, $senderType, $senderId, [
@@ -165,6 +189,7 @@ class LoanChatService
             'file_size' => (int) ($loanFile->size_bytes ?? 0) ?: null,
             'audio_duration_seconds' => $durationSeconds,
             'metadata' => $metadata,
+            'local_uuid' => $localUuid,
         ]);
     }
 
@@ -190,6 +215,42 @@ class LoanChatService
         $q->update(['is_read' => 1, 'read_at' => now(), 'updated_at' => now()]);
 
         $this->recalculateUnreadCounters($thread);
+    }
+
+    public function updateLastMessage(LoanChatThread $thread, LoanChatMessage $message): LoanChatThread
+    {
+        $thread->last_message_at = $message->created_at ?? now();
+        $thread->last_message = $this->threadLastMessageSnapshot($message);
+        $thread->last_message_type = $message->message_type;
+        $thread->save();
+
+        return $thread;
+    }
+
+    public function increaseUnreadCount(LoanChatThread $thread, string $senderType): LoanChatThread
+    {
+        if ($senderType === 'customer') {
+            $thread->unread_staff_count = (int) ($thread->unread_staff_count ?? 0) + 1;
+        } else {
+            $thread->unread_customer_count = (int) ($thread->unread_customer_count ?? 0) + 1;
+        }
+
+        $thread->save();
+
+        return $thread;
+    }
+
+    public function resetUnreadCount(LoanChatThread $thread, string $readerType): LoanChatThread
+    {
+        if ($readerType === 'customer') {
+            $thread->unread_customer_count = 0;
+        } else {
+            $thread->unread_staff_count = 0;
+        }
+
+        $thread->save();
+
+        return $thread;
     }
 
     public function assignStaff($thread, $staffId): LoanChatThread
@@ -232,7 +293,15 @@ class LoanChatService
 
     public function broadcastMessage($message): void
     {
-        event(new LoanChatMessageSent($message->load('thread')));
+        if (config('loanmanagement.chat_realtime_driver') === 'none') {
+            return;
+        }
+
+        try {
+            event(new LoanChatMessageSent($message->load('thread')));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     protected function notifyParticipants(LoanChatMessage $message): void
@@ -264,6 +333,14 @@ class LoanChatService
 
     protected function persistMessage(LoanChatThread $thread, string $senderType, int $senderId, array $data): LoanChatMessage
     {
+        if (! empty($data['local_uuid'])) {
+            $existing = $this->findExistingLocalMessage($thread, $senderType, $senderId, $data['local_uuid']);
+
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $message = DB::connection('mysql_loan')->transaction(function () use ($thread, $senderType, $senderId, $data) {
             $msg = LoanChatMessage::query()->create([
                 'thread_id' => $thread->id,
@@ -282,26 +359,37 @@ class LoanChatService
                 'longitude' => $data['longitude'] ?? null,
                 'location_address' => $data['location_address'] ?? null,
                 'metadata' => $data['metadata'] ?? null,
+                'local_uuid' => $data['local_uuid'] ?? null,
             ]);
 
-            $thread->last_message_at = now();
-            $thread->last_message = $this->threadLastMessageSnapshot($msg);
-            $thread->last_message_type = $msg->message_type;
             $thread->status = in_array($thread->status, ['closed'], true) ? 'open' : $thread->status;
+            $thread->save();
+            $this->updateLastMessage($thread, $msg);
+            $this->increaseUnreadCount($thread, $senderType);
 
-            if ($senderType === 'customer') {
-                $thread->unread_staff_count = (int) ($thread->unread_staff_count ?? 0) + 1;
-            } else {
-                $thread->unread_customer_count = (int) ($thread->unread_customer_count ?? 0) + 1;
+            if (! empty($msg->file_id)) {
+                DB::connection('mysql_loan')->table('loan_files')->where('id', $msg->file_id)->update([
+                    'fileable_id' => $msg->id,
+                    'updated_at' => now(),
+                ]);
             }
 
-            $thread->save();
             return $msg;
         });
 
         $this->broadcastMessage($message);
         $this->notifyParticipants($message);
         return $message;
+    }
+
+    protected function findExistingLocalMessage(LoanChatThread $thread, string $senderType, int $senderId, string $localUuid): ?LoanChatMessage
+    {
+        return LoanChatMessage::query()
+            ->where('thread_id', $thread->id)
+            ->where('sender_type', $senderType)
+            ->where('sender_id', $senderId)
+            ->where('local_uuid', $localUuid)
+            ->first();
     }
 
     protected function threadLastMessageSnapshot(LoanChatMessage $message): ?string
@@ -336,38 +424,11 @@ class LoanChatService
 
     protected function storeLoanFile(UploadedFile $file, string $category, ?int $uploadedBy = null): LoanFile
     {
-        $disk = 'public';
-        $path = $file->store('loan-management/chat/'.date('Y/m'), $disk);
-
-        $payload = [
-            'fileable_type' => 'loan_chat',
-            'fileable_id' => 0,
-            'category' => $category,
-            'disk' => $disk,
-            'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'mime_type' => $file->getClientMimeType(),
-            'size_bytes' => $file->getSize(),
-            'uploaded_by' => $uploadedBy,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
-
-        $columns = Schema::connection('mysql_loan')->hasTable('loan_files')
-            ? Schema::connection('mysql_loan')->getColumnListing('loan_files')
-            : [];
-        $safe = array_intersect_key($payload, array_flip($columns));
-
-        $id = DB::connection('mysql_loan')->table('loan_files')->insertGetId($safe);
-
-        return LoanFile::query()->findOrFail($id);
+        return app(LoanChatUploadService::class)->storeChatFile($file, $category, $uploadedBy);
     }
 
     protected function safeFileUrl(LoanFile $file): ?string
     {
-        $disk = $file->disk ?? 'public';
-        $path = $file->path ?? null;
-        if (! $path) return null;
-        return Storage::disk($disk)->url($path);
+        return app(LoanChatUploadService::class)->url($file);
     }
 }

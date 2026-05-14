@@ -15,7 +15,7 @@ class LoanChatMessage extends BaseLoanModel
         'file_id', 'file_url', 'file_name', 'file_mime', 'file_size',
         'audio_duration_seconds',
         'latitude', 'longitude', 'location_address',
-        'is_read', 'read_at', 'metadata',
+        'is_read', 'read_at', 'metadata', 'local_uuid',
     ];
 
     protected $casts = [

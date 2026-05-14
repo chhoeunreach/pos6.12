@@ -32,9 +32,11 @@ class ChatMessageResource extends JsonResource
             'latitude' => $this->latitude === null ? null : (float) $this->latitude,
             'longitude' => $this->longitude === null ? null : (float) $this->longitude,
             'location_address' => $this->location_address === null ? null : (string) $this->location_address,
+            'location' => (new ChatLocationResource($this))->toArray($request),
             'is_read' => (bool) ($this->is_read ?? false),
             'read_at' => $this->read_at ? $this->read_at->toISOString() : null,
             'metadata' => $this->metadata ?? (object) [],
+            'local_uuid' => $this->local_uuid === null ? null : (string) $this->local_uuid,
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
         ];
     }

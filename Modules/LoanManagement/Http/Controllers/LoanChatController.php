@@ -20,7 +20,7 @@ class LoanChatController extends Controller
     protected function isAdmin(): bool
     {
         $u = auth()->user();
-        return $u && ($u->can('loan_management.chat.admin') || $u->can('loan_management.chat.assign'));
+        return $u && $u->can('loan_management.chat.admin');
     }
 
     protected function canViewThread(LoanChatThread $thread): bool
@@ -31,6 +31,8 @@ class LoanChatController extends Controller
 
     public function index(Request $request)
     {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+
         $q = LoanChatThread::query();
         if (! $this->isAdmin()) {
             $q->where('staff_id', auth()->id());
@@ -54,6 +56,9 @@ class LoanChatController extends Controller
             'type' => 'nullable|in:customer_staff,customer_collector,customer_admin,staff_admin',
             'priority' => 'nullable|in:low,normal,high,urgent',
         ]);
+        if (! $this->isAdmin()) {
+            $data['staff_id'] = (int) auth()->id();
+        }
         $thread = $this->chatService->createThread(array_merge($data, [
             'created_by_type' => $this->isAdmin() ? 'admin' : 'staff',
             'created_by_id' => (int) auth()->id(),
@@ -86,6 +91,7 @@ class LoanChatController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'address' => 'nullable|string|max:255',
+            'local_uuid' => 'nullable|string|max:80',
         ]);
         $senderType = $this->isAdmin() ? 'admin' : 'staff';
         $senderName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
@@ -105,11 +111,12 @@ class LoanChatController extends Controller
                 $request->file('file'),
                 $type,
                 $data['message'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } elseif ($type === 'audio') {
             $request->validate([
-                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|max:51200',
+                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm|max:51200',
             ]);
             $msg = $this->chatService->sendAudioMessage(
                 $row,
@@ -118,7 +125,8 @@ class LoanChatController extends Controller
                 $request->file('file'),
                 $data['audio_duration_seconds'] ?? null,
                 $data['message'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } elseif ($type === 'location') {
             $request->validate([
@@ -132,16 +140,21 @@ class LoanChatController extends Controller
                 (float) $data['latitude'],
                 (float) $data['longitude'],
                 $data['address'] ?? null,
-                $metadata
+                $metadata,
+                $data['local_uuid'] ?? null
             );
         } else {
             $request->validate(['message' => 'required|string']);
-            $msg = $this->chatService->sendMessage($row, $senderType, (int) auth()->id(), [
-                'sender_name_snapshot' => $senderName,
-                'message_type' => 'text',
-                'message' => (string) $data['message'],
-                'metadata' => $metadata,
-            ]);
+            $msg = $this->chatService->sendTextMessage(
+                $row,
+                $senderType,
+                (int) auth()->id(),
+                (string) $data['message'],
+                $metadata,
+                $data['local_uuid'] ?? null
+            );
+            $msg->sender_name_snapshot = $msg->sender_name_snapshot ?: $senderName;
+            $msg->save();
         }
 
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
@@ -157,6 +170,7 @@ class LoanChatController extends Controller
         abort_unless(auth()->user()->can('loan_management.chat.assign'), 403);
         $data = $request->validate(['staff_id' => 'required|integer']);
         $row = LoanChatThread::query()->findOrFail($thread);
+        if (! $this->isAdmin() && ! $this->canViewThread($row)) abort(403);
         $this->chatService->assignStaff($row, (int) $data['staff_id']);
         return $this->ok('Thread assigned', (new ChatThreadResource($row))->resolve());
     }

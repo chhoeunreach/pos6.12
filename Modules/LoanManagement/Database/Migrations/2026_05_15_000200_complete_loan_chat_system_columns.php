@@ -20,15 +20,14 @@ return new class extends Migration
                 if (! in_array('last_message_type', $columns, true)) {
                     $table->string('last_message_type', 50)->nullable()->after('last_message');
                 }
+                if (! in_array('last_message_at', $columns, true)) {
+                    $table->timestamp('last_message_at')->nullable()->after('last_message_type');
+                }
                 if (! in_array('unread_customer_count', $columns, true)) {
                     $table->unsignedInteger('unread_customer_count')->default(0)->after('last_message_at');
                 }
                 if (! in_array('unread_staff_count', $columns, true)) {
                     $table->unsignedInteger('unread_staff_count')->default(0)->after('unread_customer_count');
-                }
-
-                if (! in_array('last_message_at', $columns, true)) {
-                    $table->timestamp('last_message_at')->nullable()->after('last_message_type');
                 }
             });
         }
@@ -63,15 +62,12 @@ return new class extends Migration
                 }
             });
 
-            $columns = Schema::connection($conn)->getColumnListing('loan_chat_messages');
-            if (in_array('local_uuid', $columns, true)) {
-                try {
-                    Schema::connection($conn)->table('loan_chat_messages', function (Blueprint $table) {
-                        $table->unique(['thread_id', 'sender_type', 'sender_id', 'local_uuid'], 'loan_chat_messages_local_uuid_unique');
-                    });
-                } catch (\Throwable $e) {
-                    // Index may already exist on installations that ran a newer base migration.
-                }
+            try {
+                Schema::connection($conn)->table('loan_chat_messages', function (Blueprint $table) {
+                    $table->unique(['thread_id', 'sender_type', 'sender_id', 'local_uuid'], 'loan_chat_messages_local_uuid_unique');
+                });
+            } catch (\Throwable $e) {
+                // Existing installs may already have this index.
             }
         }
     }
@@ -81,4 +77,3 @@ return new class extends Migration
         // Non-destructive down.
     }
 };
-
