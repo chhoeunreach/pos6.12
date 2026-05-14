@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Loan Management')
 @section('content')
 <section class="content-header">
@@ -55,5 +55,4 @@
         </div>
     </div>
 </section>
-@include('loanmanagement::layouts.sidebar_focus')
 @endsection

@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Create Loan From Sell')
 @section('content')
 <section class="content-header"><h1>Create Loan From Sell</h1></section>

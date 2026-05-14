@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Live Chat Inbox')
 
 @section('content')
@@ -27,7 +27,6 @@
 @endsection
 
 @section('javascript')
-@include('loanmanagement::layouts.sidebar_focus')
 <script>
 (function($){
     function loadInbox(){

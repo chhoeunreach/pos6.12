@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Overdue / Late Payments')
 
 @php
@@ -53,5 +53,4 @@
         </div>
     </div>
 </section>
-@include('loanmanagement::layouts.sidebar_focus')
 @endsection

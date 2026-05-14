@@ -39,6 +39,11 @@ class LoanDashboardController extends Controller
         }
 
         $quickCards = $this->service->getQuickCards($filters);
+        $recentPayments = $this->service->getRecentPayments($filters);
+        $overdueCustomers = $this->service->getOverdueCustomers($filters);
+        $visitSchedule = $this->service->getFollowUpCustomers($filters);
+        $collectorPerformance = $this->service->getCollectorPerformanceChart($filters);
+        $loanStatusChart = $this->service->getLoanStatusChart($filters);
 
         return view('loanmanagement::dashboard.index', compact(
             'filters',
@@ -47,7 +52,12 @@ class LoanDashboardController extends Controller
             'collectors',
             'currencies',
             'paymentMethods',
-            'quickCards'
+            'quickCards',
+            'recentPayments',
+            'overdueCustomers',
+            'visitSchedule',
+            'collectorPerformance',
+            'loanStatusChart'
         ));
     }
 

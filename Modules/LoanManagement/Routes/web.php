@@ -15,7 +15,9 @@ use Modules\LoanManagement\Http\Controllers\SettingsController;
 Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])
     ->prefix('loan-management')
     ->group(function () {
-        Route::get('/', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.home')->middleware('can:loan_management.view');
+        Route::get('/', function () {
+            return redirect()->route('loan-management.dashboard');
+        })->name('loan-management.dashboard.home')->middleware('can:loan_management.view');
         Route::get('/dashboard', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard')->middleware('can:loan_management.view');
         Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');

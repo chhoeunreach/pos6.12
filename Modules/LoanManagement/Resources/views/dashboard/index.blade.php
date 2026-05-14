@@ -1,7 +1,6 @@
-@extends('layouts.app')
-@section('title', 'Loan Management Dashboard')
+@extends('loanmanagement::layouts.app')
+@section('title', 'Dashboard')
 
-@section('content')
+@section('content_body')
     @include('loanmanagement::dashboard.dashboard')
-    @include('loanmanagement::layouts.sidebar_focus')
 @endsection

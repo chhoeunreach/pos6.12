@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Loan Settings')
 
 @section('content')
@@ -88,5 +88,4 @@
 @endsection
 
 @section('javascript')
-@include('loanmanagement::layouts.sidebar_focus')
 @endsection

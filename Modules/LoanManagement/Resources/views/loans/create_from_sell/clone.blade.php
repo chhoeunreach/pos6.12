@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Convert To Installment')
 @section('content')
 <section class="content-header"><h1>Convert To Installment</h1></section>

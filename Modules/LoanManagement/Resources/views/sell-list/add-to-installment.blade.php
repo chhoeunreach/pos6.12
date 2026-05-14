@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Add To Installment')
 @section('content')
 <section class="content-header"><h1>Add to Installment - {{ $sell['header']->invoice_no }}</h1></section>

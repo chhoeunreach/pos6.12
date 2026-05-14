@@ -1,34 +1,30 @@
-# Manual Integration (Core Files Not Auto-Modified)
+# Manual Integration: LoanManagement Entry Link
 
-This module intentionally does **not** auto-edit Ultimate POS core files.
+Do not modify Ultimate POS core automatically.
 
-## 1) API Auth Driver Choice
-If your project uses Passport, keep:
-- `auth:api` for staff endpoints
-- `auth:customer_loan_api` for customer endpoints
+To open LoanManagement full layout from Ultimate POS sidebar/top nav, add this link manually in your POS menu blade:
 
-If your project uses Sanctum for API tokens, manually align guards in `config/auth.php`:
-- `customer_loan_api` driver => `sanctum`
-- provider => `loan_customers`
-
-## 2) Sidebar Injection
-LoanManagement sidebar is registered via module `DataController`.
-If your installation has custom sidebar hooks, manually ensure module hook calls:
-- `Modules\LoanManagement\Http\Controllers\DataController@modifyAdminMenu`
-
-## 3) Storage Link (for file upload URL)
-Run:
-```bash
-php artisan storage:link
+```blade
+<a href="{{ url('/loan-management') }}">
+    <i class="fa fa-credit-card"></i>
+    <span>Installment / Loan</span>
+</a>
 ```
-So `/storage/...` URLs returned by file upload are publicly accessible.
 
-## 4) Web Server Limits for Upload
-For 10MB upload endpoint, verify php.ini:
-- `upload_max_filesize >= 10M`
-- `post_max_size >= 12M`
+Or top navigation button:
 
-## 5) Optional Role/Permission Mapping
-Module includes granular permissions and legacy fallback.
-Assign role permissions manually in Ultimate POS role UI as needed.
+```blade
+<a href="{{ url('/loan-management') }}" class="btn btn-primary">
+    Installment / Loan
+</a>
+```
 
+Routes:
+- `/loan-management` redirects to `/loan-management/dashboard`
+- `/loan-management/dashboard` loads LoanManagement dedicated full layout
+
+All LoanManagement pages now extend:
+
+```blade
+@extends('loanmanagement::layouts.app')
+```

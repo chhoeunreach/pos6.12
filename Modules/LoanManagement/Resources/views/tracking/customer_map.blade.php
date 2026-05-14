@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('loanmanagement::layouts.app')
 @section('title', 'Customer Tracking Map')
 
 @section('content')
@@ -26,7 +26,6 @@
 @endsection
 
 @section('javascript')
-@include('loanmanagement::layouts.sidebar_focus')
 @endsection
 
 @section('javascript')
