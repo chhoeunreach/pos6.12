@@ -66,6 +66,7 @@ return [
         'loan_management.create_from_sell',
         'loan_management.chat.assign',
         'loan_management.chat.close',
+        'loan_management.chat.delete',
         'loan_management.chat.admin',
     ],
 ];

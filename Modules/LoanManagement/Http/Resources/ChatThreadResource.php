@@ -8,10 +8,13 @@ class ChatThreadResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $messageCount = (int) $this->messages()->count();
         $viewerType = $request->attributes->get('loan_chat_viewer_type');
         if ($viewerType) {
             $service = app(\Modules\LoanManagement\Services\LoanChatService::class);
             $data = $service->formatMessengerThread($this->resource, $viewerType);
+            $data['message_count'] = $messageCount;
+            $data['can_delete'] = $messageCount === 0;
             if ($this->relationLoaded('messages')) {
                 $data['messages'] = ChatMessageResource::collection($this->messages)->resolve($request);
             }
@@ -57,6 +60,8 @@ class ChatThreadResource extends JsonResource
             'closed_by' => $this->closed_by === null ? null : (int) $this->closed_by,
             'created_by_type' => (string) ($this->created_by_type ?? ''),
             'created_by_id' => (int) ($this->created_by_id ?? 0),
+            'message_count' => $messageCount,
+            'can_delete' => $messageCount === 0,
             'participants' => $participants,
             'messages' => $this->relationLoaded('messages') ? ChatMessageResource::collection($this->messages)->resolve() : [],
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,

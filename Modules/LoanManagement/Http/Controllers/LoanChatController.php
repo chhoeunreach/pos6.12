@@ -4,6 +4,7 @@ namespace Modules\LoanManagement\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\ValidationException;
 use Modules\LoanManagement\Entities\LoanChatThread;
 use Modules\LoanManagement\Http\Requests\Chat\MarkChatReadRequest;
 use Modules\LoanManagement\Http\Requests\Chat\MarkChatTypingRequest;
@@ -238,6 +239,26 @@ class LoanChatController extends Controller
         if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
         $this->chatService->reopenThread($row);
         return $this->ok('Thread reopened', (object) []);
+    }
+
+    public function destroy(int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.delete'), 403);
+
+        $row = LoanChatThread::query()->findOrFail($thread);
+        if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
+
+        try {
+            $this->chatService->deleteEmptyThread($row);
+        } catch (ValidationException $e) {
+            return $this->fail(
+                'This chat already has messages and cannot be deleted. You can close it instead.',
+                422,
+                (object) []
+            );
+        }
+
+        return $this->ok('Empty chat deleted successfully.', (object) []);
     }
 
     public function webInbox()

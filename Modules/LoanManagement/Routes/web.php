@@ -64,6 +64,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/customer-tracking/{customerId}/toggle', [AdminCustomerTrackingController::class, 'toggle'])->name('loan-management.customer-tracking.toggle')->middleware('can:loan_management.customer_gps.manage');
         Route::get('/live-chat', [LoanChatController::class, 'webInbox'])->name('loan-management.live-chat')->middleware('can:loan_management.chat.view');
         Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.live-chat.detail')->middleware('can:loan_management.chat.view');
+        Route::delete('/chat/{thread}', [LoanChatController::class, 'destroy'])->name('loan-management.chat.destroy')->middleware('can:loan_management.chat.delete');
         Route::get('/loans', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans')->middleware('can:loan_management.view');
         Route::get('/loans/list', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans.index')->middleware('can:loan_management.view');
         Route::get('/schedules', [DashboardController::class, 'placeholder'])->defaults('page', 'Installment Schedules')->name('loan-management.schedules.index')->middleware('can:loan_management.view');

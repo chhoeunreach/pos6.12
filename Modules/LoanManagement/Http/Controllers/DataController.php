@@ -28,6 +28,7 @@ class DataController extends Controller
             ['value' => 'loan_management.monthly_payments.view', 'label' => 'Monthly Payments (view)', 'default' => false],
             ['value' => 'loan_management.gps.view', 'label' => 'GPS (view)', 'default' => false],
             ['value' => 'loan_management.chat.view', 'label' => 'Chat (view)', 'default' => false],
+            ['value' => 'loan_management.chat.delete', 'label' => 'Chat (delete empty)', 'default' => false],
             ['value' => 'loan_management.reports.view', 'label' => 'Reports (view)', 'default' => false],
             ['value' => 'loan_management.aba.view', 'label' => 'ABA (view)', 'default' => false],
             ['value' => 'loan_management.import.view', 'label' => 'Import (view)', 'default' => false],

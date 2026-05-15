@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Modules\LoanManagement\Entities\LoanCustomer;
 use Modules\LoanManagement\Entities\LoanChatMessage;
 use Modules\LoanManagement\Entities\LoanChatParticipant;
@@ -384,6 +385,25 @@ class LoanChatService
         $thread->closed_by = null;
         $thread->save();
         return $thread;
+    }
+
+    public function canDeleteThread(LoanChatThread $thread): bool
+    {
+        return $thread->messages()->count() === 0;
+    }
+
+    public function deleteEmptyThread(LoanChatThread $thread): void
+    {
+        if (! $this->canDeleteThread($thread)) {
+            throw ValidationException::withMessages([
+                'chat' => 'This chat already has messages and cannot be deleted. You can close it instead.',
+            ]);
+        }
+
+        DB::connection('mysql_loan')->transaction(function () use ($thread) {
+            $thread->participants()->delete();
+            $thread->delete();
+        });
     }
 
     public function getCustomerThreads($customerId)

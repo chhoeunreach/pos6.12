@@ -71,6 +71,7 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/chats', [LoanChatController::class, 'index']);
         Route::post('/chats', [LoanChatController::class, 'store']);
         Route::get('/chats/{thread}', [LoanChatController::class, 'show']);
+        Route::delete('/chats/{thread}', [LoanChatController::class, 'destroy']);
         Route::post('/chats/{thread}/messages', [LoanChatController::class, 'sendMessage']);
         Route::post('/chats/{thread}/assign', [LoanChatController::class, 'assign']);
         Route::post('/chats/{thread}/read', [LoanChatController::class, 'read']);
