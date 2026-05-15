@@ -44,13 +44,20 @@ class LoanChatController extends Controller
         if ($request->filled('priority')) $q->where('priority', $request->input('priority'));
         if ($request->filled('customer_id')) $q->where('customer_id', $request->input('customer_id'));
         if ($request->filled('staff_id') && $this->isAdmin()) $q->where('staff_id', $request->input('staff_id'));
-        $rows = $q->with(['customer', 'loan'])->orderByDesc('is_pinned')->orderByDesc('last_message_at')->orderByDesc('id')->limit(200)->get();
+        $q->with(['customer', 'loan']);
+        if (LoanChatService::hasThreadColumn('is_pinned')) {
+            $q->orderByDesc('is_pinned');
+        }
+        if (LoanChatService::hasThreadColumn('last_message_at')) {
+            $q->orderByDesc('last_message_at');
+        }
+        $rows = $q->orderByDesc('id')->limit(200)->get();
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
         foreach ($rows as $row) {
             $this->chatService->markSeen($row, 'staff');
         }
-        return $this->ok('Threads loaded', ChatThreadResource::collection($rows)->resolve());
+        return $this->ok('Chats loaded', ChatThreadResource::collection($rows)->resolve());
     }
 
     public function store(Request $request)
@@ -173,8 +180,12 @@ class LoanChatController extends Controller
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
             $msg->sender_name_snapshot = $senderName;
         }
-        $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
-        $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        if (LoanChatService::hasMessageColumn('reply_to_message_id')) {
+            $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
+        }
+        if (LoanChatService::hasMessageColumn('reaction')) {
+            $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        }
         $msg->save();
 
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');

@@ -1,0 +1,62 @@
+<?php
+
+namespace Modules\LoanManagement\Console;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
+
+class TestChatSchemaCommand extends Command
+{
+    protected $signature = 'loan-management:test-chat-schema';
+
+    protected $description = 'Check LoanManagement Messenger chat schema columns on mysql_loan';
+
+    public function handle(): int
+    {
+        $connection = 'mysql_loan';
+        $checks = [
+            'loan_chat_threads' => [
+                'avatar_url',
+                'is_pinned',
+                'is_muted',
+                'last_seen_customer_at',
+                'last_seen_staff_at',
+                'typing_customer_at',
+                'typing_staff_at',
+            ],
+            'loan_chat_messages' => [
+                'delivered_at',
+                'read_by_customer_at',
+                'read_by_staff_at',
+                'reaction',
+                'reply_to_message_id',
+                'local_uuid',
+            ],
+        ];
+
+        try {
+            $failed = false;
+            foreach ($checks as $table => $columns) {
+                if (! Schema::connection($connection)->hasTable($table)) {
+                    $this->error("FAIL {$table}: table missing");
+                    $failed = true;
+                    continue;
+                }
+
+                foreach ($columns as $column) {
+                    if (Schema::connection($connection)->hasColumn($table, $column)) {
+                        $this->info("PASS {$table}.{$column}");
+                    } else {
+                        $this->error("FAIL {$table}.{$column}");
+                        $failed = true;
+                    }
+                }
+            }
+
+            return $failed ? self::FAILURE : self::SUCCESS;
+        } catch (\Throwable $e) {
+            $this->error('FAIL mysql_loan connection: '.$e->getMessage());
+            return self::FAILURE;
+        }
+    }
+}

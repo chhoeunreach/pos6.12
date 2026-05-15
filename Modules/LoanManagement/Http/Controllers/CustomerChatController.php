@@ -29,7 +29,7 @@ class CustomerChatController extends Controller
         foreach ($threads as $thread) {
             $this->chatService->markSeen($thread, 'customer');
         }
-        return $this->ok('Threads loaded', ChatThreadResource::collection($threads)->resolve());
+        return $this->ok('Chats loaded', ChatThreadResource::collection($threads)->resolve());
     }
 
     public function store(Request $request)
@@ -149,8 +149,12 @@ class CustomerChatController extends Controller
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
             $msg->sender_name_snapshot = $senderName;
         }
-        $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
-        $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        if (LoanChatService::hasMessageColumn('reply_to_message_id')) {
+            $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
+        }
+        if (LoanChatService::hasMessageColumn('reaction')) {
+            $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        }
         $msg->save();
 
         $request->attributes->set('loan_chat_viewer_type', 'customer');

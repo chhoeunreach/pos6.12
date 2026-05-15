@@ -7,6 +7,7 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use Modules\LoanManagement\Console\InstallLoanManagementCommand;
+use Modules\LoanManagement\Console\TestChatSchemaCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
 use Modules\LoanManagement\Http\Middleware\LoanPermissionMiddleware;
 use Modules\LoanManagement\Observers\TransactionInvoicePrefixObserver;
@@ -25,6 +26,7 @@ class LoanManagementServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallLoanManagementCommand::class,
+                TestChatSchemaCommand::class,
                 UninstallLoanManagementCommand::class,
             ]);
         }
