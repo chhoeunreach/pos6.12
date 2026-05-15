@@ -26,6 +26,7 @@ class ChatMessageResource extends JsonResource
                 'file_name' => $this->file_name,
                 'file_mime' => $this->file_mime,
                 'file_size' => $this->file_size,
+                'extension' => pathinfo((string) ($this->file_name ?? ''), PATHINFO_EXTENSION),
             ]);
         }
 
@@ -34,6 +35,8 @@ class ChatMessageResource extends JsonResource
             'thread_id' => (int) $this->thread_id,
             'sender_type' => (string) ($this->sender_type ?? ''),
             'sender_id' => (int) ($this->sender_id ?? 0),
+            'sender_name' => (string) ($this->sender_name_snapshot ?? ''),
+            'sender_avatar_url' => '',
             'sender_name_snapshot' => (string) ($this->sender_name_snapshot ?? ''),
             'message' => (string) ($this->message ?? ''),
             'message_type' => (string) ($this->message_type ?? 'text'),
@@ -44,10 +47,12 @@ class ChatMessageResource extends JsonResource
             'location_address' => $this->location_address === null ? null : (string) $this->location_address,
             'location' => (new ChatLocationResource($this))->toArray($request),
             'is_read' => (bool) ($this->is_read ?? false),
+            'is_own' => false,
+            'delivered_at' => $this->delivered_at ? $this->delivered_at->format('Y-m-d H:i:s') : null,
             'read_at' => $this->read_at ? $this->read_at->toISOString() : null,
             'metadata' => $this->metadata ?? (object) [],
             'local_uuid' => $this->local_uuid === null ? null : (string) $this->local_uuid,
-            'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
+            'created_at' => $this->created_at ? $this->created_at->format('Y-m-d H:i:s') : null,
         ];
     }
 }

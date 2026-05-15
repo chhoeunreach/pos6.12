@@ -13,17 +13,26 @@ class LoanChatUploadService
     public function storeChatFile(UploadedFile $file, string $category, ?int $uploadedBy = null): LoanFile
     {
         $disk = 'public';
-        $path = $file->store('loan-management/chat/'.date('Y/m'), $disk);
+        $directory = $category === 'chat_audio'
+            ? 'loan/chat/audio/'.date('Y/m')
+            : 'loan-management/chat/'.date('Y/m');
+        $path = $file->store($directory, $disk);
+        $url = Storage::disk($disk)->url($path);
 
         $payload = [
             'fileable_type' => 'loan_chat_message',
             'fileable_id' => 0,
             'category' => $category,
+            'file_type' => $category,
             'disk' => $disk,
+            'storage_provider' => 'local',
             'path' => $path,
+            'url' => $url,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
+            'size' => $file->getSize(),
+            'extension' => strtolower((string) $file->getClientOriginalExtension()),
             'uploaded_by' => $uploadedBy,
             'created_at' => now(),
             'updated_at' => now(),
@@ -42,6 +51,10 @@ class LoanChatUploadService
 
     public function url(LoanFile $file): ?string
     {
+        if (! empty($file->url)) {
+            return (string) $file->url;
+        }
+
         if (empty($file->path)) {
             return null;
         }

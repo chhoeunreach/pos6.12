@@ -113,9 +113,6 @@ class CustomerChatController extends Controller
                 $data['local_uuid'] ?? null
             );
         } elseif ($type === 'audio') {
-            $request->validate([
-                'file' => 'required|file|mimes:mp3,m4a,aac,wav,ogg,webm|mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm|max:51200',
-            ]);
             $msg = $this->chatService->sendAudioMessage(
                 $row,
                 'customer',

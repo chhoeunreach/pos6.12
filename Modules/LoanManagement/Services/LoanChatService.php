@@ -3,6 +3,7 @@
 namespace Modules\LoanManagement\Services;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -186,7 +187,7 @@ class LoanChatService
             'file_url' => $this->safeFileUrl($loanFile),
             'file_name' => $loanFile->original_name ?? null,
             'file_mime' => $loanFile->mime_type ?? null,
-            'file_size' => (int) ($loanFile->size_bytes ?? 0) ?: null,
+            'file_size' => (int) ($loanFile->size_bytes ?? $loanFile->size ?? 0) ?: null,
             'metadata' => $metadata,
             'local_uuid' => $localUuid,
         ]);
@@ -207,17 +208,22 @@ class LoanChatService
         }
 
         $loanFile = $this->storeLoanFile($file, 'chat_audio', $senderId);
+        $audioMetadata = array_merge($metadata, [
+            'file_type' => 'chat_audio',
+            'extension' => strtolower((string) ($loanFile->extension ?? $file->getClientOriginalExtension())),
+            'duration_seconds' => $durationSeconds,
+        ]);
 
         return $this->persistMessage($thread, $senderType, $senderId, [
             'message_type' => 'audio',
-            'message' => $message,
+            'message' => $message ?? '',
             'file_id' => $loanFile->id,
             'file_url' => $this->safeFileUrl($loanFile),
             'file_name' => $loanFile->original_name ?? null,
             'file_mime' => $loanFile->mime_type ?? null,
-            'file_size' => (int) ($loanFile->size_bytes ?? 0) ?: null,
+            'file_size' => (int) ($loanFile->size_bytes ?? $loanFile->size ?? 0) ?: null,
             'audio_duration_seconds' => $durationSeconds,
-            'metadata' => $metadata,
+            'metadata' => $audioMetadata,
             'local_uuid' => $localUuid,
         ]);
     }
@@ -499,11 +505,13 @@ class LoanChatService
 
         if (! empty($message->file_id)) {
             $file = [
+                'id' => (int) $message->file_id,
                 'file_id' => (int) $message->file_id,
                 'url' => (string) ($message->file_url ?? ''),
                 'name' => (string) ($message->file_name ?? ''),
                 'mime' => (string) ($message->file_mime ?? ''),
                 'size' => (int) ($message->file_size ?? 0),
+                'extension' => pathinfo((string) ($message->file_name ?? ''), PATHINFO_EXTENSION),
             ];
         }
 
@@ -618,6 +626,8 @@ class LoanChatService
 
     protected function persistMessage(LoanChatThread $thread, string $senderType, int $senderId, array $data): LoanChatMessage
     {
+        $this->ensureSenderCanAccessThread($thread, $senderType, $senderId);
+
         if (! empty($data['local_uuid']) && self::hasMessageColumn('local_uuid')) {
             $existing = $this->findExistingLocalMessage($thread, $senderType, $senderId, $data['local_uuid']);
 
@@ -708,9 +718,26 @@ class LoanChatService
             'location' => $message->location_address ? 'Location: '.$message->location_address : 'Location shared',
             'image' => $message->file_name ? 'Image: '.$message->file_name : 'Image',
             'file' => $message->file_name ? 'File: '.$message->file_name : 'File',
-            'audio' => $message->file_name ? 'Audio: '.$message->file_name : 'Audio',
+            'audio' => 'Voice message',
             default => $message->message ? (string) $message->message : strtoupper((string) $message->message_type),
         };
+    }
+
+    protected function ensureSenderCanAccessThread(LoanChatThread $thread, string $senderType, int $senderId): void
+    {
+        if ($senderType === 'admin') {
+            return;
+        }
+
+        if ($senderType === 'customer' && (int) ($thread->customer_id ?? 0) === $senderId) {
+            return;
+        }
+
+        if ($senderType === 'staff' && (int) ($thread->staff_id ?? 0) === $senderId) {
+            return;
+        }
+
+        throw new AuthorizationException('You are not allowed to send messages in this chat thread.');
     }
 
     protected function recalculateUnreadCounters(LoanChatThread $thread): void
