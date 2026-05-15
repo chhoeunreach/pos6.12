@@ -16,11 +16,15 @@ class LoanChatMessage extends BaseLoanModel
         'audio_duration_seconds',
         'latitude', 'longitude', 'location_address',
         'is_read', 'read_at', 'metadata', 'local_uuid',
+        'delivered_at', 'read_by_customer_at', 'read_by_staff_at', 'reaction', 'reply_to_message_id',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'read_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'read_by_customer_at' => 'datetime',
+        'read_by_staff_at' => 'datetime',
         'metadata' => 'array',
         'audio_duration_seconds' => 'integer',
         'latitude' => 'float',
@@ -35,5 +39,10 @@ class LoanChatMessage extends BaseLoanModel
     public function file()
     {
         return $this->belongsTo(LoanFile::class, 'file_id');
+    }
+
+    public function replyToMessage()
+    {
+        return $this->belongsTo(self::class, 'reply_to_message_id');
     }
 }

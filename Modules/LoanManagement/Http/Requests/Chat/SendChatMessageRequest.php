@@ -23,6 +23,8 @@ class SendChatMessageRequest extends FormRequest
             'address' => 'nullable|string|max:255',
             'metadata' => 'nullable|array',
             'local_uuid' => 'nullable|string|max:80',
+            'reply_to_message_id' => 'nullable|integer',
+            'reaction' => 'nullable|string|max:80',
         ];
     }
 }

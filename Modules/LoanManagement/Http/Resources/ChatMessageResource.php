@@ -8,6 +8,16 @@ class ChatMessageResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $viewerType = $request->attributes->get('loan_chat_viewer_type');
+        if ($viewerType) {
+            return app(\Modules\LoanManagement\Services\LoanChatService::class)
+                ->formatMessengerMessage(
+                    $this->resource,
+                    $viewerType,
+                    (int) $request->attributes->get('loan_chat_viewer_id', 0)
+                );
+        }
+
         $file = null;
         if (! empty($this->file_id)) {
             $file = new ChatFileResource((object) [

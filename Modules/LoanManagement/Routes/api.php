@@ -61,6 +61,7 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/chats/{thread}', [CustomerChatController::class, 'show']);
         Route::post('/chats/{thread}/messages', [CustomerChatController::class, 'sendMessage']);
         Route::post('/chats/{thread}/read', [CustomerChatController::class, 'read']);
+        Route::post('/chats/{thread}/typing', [CustomerChatController::class, 'typing']);
 
         Route::post('/aba-payway/create', [LoanAbaPaywayController::class, 'create']);
         Route::post('/aba-payway/check-status', [LoanAbaPaywayController::class, 'checkStatus']);
@@ -73,6 +74,7 @@ Route::prefix('loan-management')->group(function () {
         Route::post('/chats/{thread}/messages', [LoanChatController::class, 'sendMessage']);
         Route::post('/chats/{thread}/assign', [LoanChatController::class, 'assign']);
         Route::post('/chats/{thread}/read', [LoanChatController::class, 'read']);
+        Route::post('/chats/{thread}/typing', [LoanChatController::class, 'typing']);
         Route::post('/chats/{thread}/close', [LoanChatController::class, 'close']);
         Route::post('/chats/{thread}/reopen', [LoanChatController::class, 'reopen']);
     });

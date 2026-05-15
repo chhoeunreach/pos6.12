@@ -5,6 +5,9 @@ namespace Modules\LoanManagement\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\LoanManagement\Entities\LoanChatThread;
+use Modules\LoanManagement\Http\Requests\Chat\MarkChatReadRequest;
+use Modules\LoanManagement\Http\Requests\Chat\MarkChatTypingRequest;
+use Modules\LoanManagement\Http\Requests\Chat\SendChatMessageRequest;
 use Modules\LoanManagement\Http\Resources\ChatMessageResource;
 use Modules\LoanManagement\Http\Resources\ChatThreadResource;
 use Modules\LoanManagement\Services\LoanChatService;
@@ -41,7 +44,12 @@ class LoanChatController extends Controller
         if ($request->filled('priority')) $q->where('priority', $request->input('priority'));
         if ($request->filled('customer_id')) $q->where('customer_id', $request->input('customer_id'));
         if ($request->filled('staff_id') && $this->isAdmin()) $q->where('staff_id', $request->input('staff_id'));
-        $rows = $q->orderByDesc('last_message_at')->orderByDesc('id')->limit(200)->get();
+        $rows = $q->with(['customer', 'loan'])->orderByDesc('is_pinned')->orderByDesc('last_message_at')->orderByDesc('id')->limit(200)->get();
+        $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
+        $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
+        foreach ($rows as $row) {
+            $this->chatService->markSeen($row, 'staff');
+        }
         return $this->ok('Threads loaded', ChatThreadResource::collection($rows)->resolve());
     }
 
@@ -55,6 +63,9 @@ class LoanChatController extends Controller
             'subject' => 'nullable|string|max:255',
             'type' => 'nullable|in:customer_staff,customer_collector,customer_admin,staff_admin',
             'priority' => 'nullable|in:low,normal,high,urgent',
+            'avatar_url' => 'nullable|string|max:2048',
+            'is_pinned' => 'nullable|boolean',
+            'is_muted' => 'nullable|boolean',
         ]);
         if (! $this->isAdmin()) {
             $data['staff_id'] = (int) auth()->id();
@@ -69,33 +80,35 @@ class LoanChatController extends Controller
         return $this->ok('Thread created', (new ChatThreadResource($thread))->resolve());
     }
 
-    public function show(int $thread)
+    public function show(Request $request, int $thread)
     {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $row = $this->chatService->showThread($row, true);
+        $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
+        $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
+        $this->chatService->markSeen($row, 'staff');
+        foreach ($row->messages as $message) {
+            if ($message->sender_type === 'customer') {
+                $this->chatService->markDelivered($message);
+            }
+        }
         return $this->ok('Thread loaded', (new ChatThreadResource($row))->resolve());
     }
 
-    public function sendMessage(Request $request, int $thread)
+    public function sendMessage(SendChatMessageRequest $request, int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.reply'), 403);
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
-        $data = $request->validate([
-            'message_type' => 'required|in:text,image,file,audio,location',
-            'message' => 'nullable|string',
-            'metadata' => 'nullable|array',
-            'file' => 'nullable|file|max:51200',
-            'audio_duration_seconds' => 'nullable|integer|min:0|max:86400',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
-            'address' => 'nullable|string|max:255',
-            'local_uuid' => 'nullable|string|max:80',
-        ]);
+        $data = $request->validated();
         $senderType = $this->isAdmin() ? 'admin' : 'staff';
         $senderName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
         $metadata = (array) ($data['metadata'] ?? []);
+        if (! empty($data['reply_to_message_id'])) {
+            $metadata['reply_to_message_id'] = (int) $data['reply_to_message_id'];
+        }
 
         $type = $data['message_type'];
         if (in_array($type, ['image', 'file'], true)) {
@@ -159,9 +172,14 @@ class LoanChatController extends Controller
 
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
             $msg->sender_name_snapshot = $senderName;
-            $msg->save();
         }
+        $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
+        $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        $msg->save();
 
+        $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
+        $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
+        $this->chatService->markSeen($row, 'staff');
         return $this->ok('Message sent', (new ChatMessageResource($msg))->resolve());
     }
 
@@ -175,12 +193,22 @@ class LoanChatController extends Controller
         return $this->ok('Thread assigned', (new ChatThreadResource($row))->resolve());
     }
 
-    public function read(int $thread)
+    public function read(MarkChatReadRequest $request, int $thread)
     {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->markAsRead($row, $this->isAdmin() ? 'admin' : 'staff', (int) auth()->id());
         return $this->ok('Marked as read', (object) []);
+    }
+
+    public function typing(MarkChatTypingRequest $request, int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $row = LoanChatThread::query()->find($thread);
+        if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
+        $this->chatService->markTyping($row, 'staff');
+        return $this->ok('Typing updated', (object) []);
     }
 
     public function close(int $thread)

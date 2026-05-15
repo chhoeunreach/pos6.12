@@ -8,6 +8,17 @@ class ChatThreadResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $viewerType = $request->attributes->get('loan_chat_viewer_type');
+        if ($viewerType) {
+            $service = app(\Modules\LoanManagement\Services\LoanChatService::class);
+            $data = $service->formatMessengerThread($this->resource, $viewerType);
+            if ($this->relationLoaded('messages')) {
+                $data['messages'] = ChatMessageResource::collection($this->messages)->resolve($request);
+            }
+
+            return $data;
+        }
+
         $participants = [];
         if ($this->relationLoaded('participants')) {
             foreach ($this->participants as $p) {

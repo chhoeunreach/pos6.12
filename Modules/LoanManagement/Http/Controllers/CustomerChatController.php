@@ -5,6 +5,9 @@ namespace Modules\LoanManagement\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\LoanManagement\Entities\LoanChatThread;
+use Modules\LoanManagement\Http\Requests\Chat\MarkChatReadRequest;
+use Modules\LoanManagement\Http\Requests\Chat\MarkChatTypingRequest;
+use Modules\LoanManagement\Http\Requests\Chat\SendChatMessageRequest;
 use Modules\LoanManagement\Http\Resources\ChatMessageResource;
 use Modules\LoanManagement\Http\Resources\ChatThreadResource;
 use Modules\LoanManagement\Services\LoanChatService;
@@ -17,10 +20,15 @@ class CustomerChatController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $customer = auth('customer_loan_api')->user();
         $threads = $this->chatService->listCustomerThreads((int) $customer->id);
+        $request->attributes->set('loan_chat_viewer_type', 'customer');
+        $request->attributes->set('loan_chat_viewer_id', (int) $customer->id);
+        foreach ($threads as $thread) {
+            $this->chatService->markSeen($thread, 'customer');
+        }
         return $this->ok('Threads loaded', ChatThreadResource::collection($threads)->resolve());
     }
 
@@ -33,6 +41,8 @@ class CustomerChatController extends Controller
             'type' => 'nullable|in:customer_staff,customer_collector,customer_admin',
             'priority' => 'nullable|in:low,normal,high,urgent',
             'staff_id' => 'nullable|integer',
+            'avatar_url' => 'nullable|string|max:2048',
+            'is_muted' => 'nullable|boolean',
         ]);
         $thread = $this->chatService->createThread([
             'customer_id' => $customer->id,
@@ -41,6 +51,8 @@ class CustomerChatController extends Controller
             'subject' => $data['subject'] ?? null,
             'type' => $data['type'] ?? 'customer_staff',
             'priority' => $data['priority'] ?? 'normal',
+            'avatar_url' => $data['avatar_url'] ?? null,
+            'is_muted' => (bool) ($data['is_muted'] ?? false),
             'created_by_type' => 'customer',
             'created_by_id' => $customer->id,
             'participants' => [
@@ -50,7 +62,7 @@ class CustomerChatController extends Controller
         return $this->ok('Thread created', (new ChatThreadResource($thread))->resolve());
     }
 
-    public function show(int $thread)
+    public function show(Request $request, int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
@@ -58,29 +70,30 @@ class CustomerChatController extends Controller
             return $this->fail('Thread not found', 404, (object) []);
         }
         $row = $this->chatService->showThread($row, true);
+        $request->attributes->set('loan_chat_viewer_type', 'customer');
+        $request->attributes->set('loan_chat_viewer_id', (int) $customer->id);
+        $this->chatService->markSeen($row, 'customer');
+        foreach ($row->messages as $message) {
+            if ($message->sender_type !== 'customer') {
+                $this->chatService->markDelivered($message);
+            }
+        }
         return $this->ok('Thread loaded', (new ChatThreadResource($row))->resolve());
     }
 
-    public function sendMessage(Request $request, int $thread)
+    public function sendMessage(SendChatMessageRequest $request, int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
         if (! $row) return $this->fail('Thread not found', 404, (object) []);
 
-        $data = $request->validate([
-            'message_type' => 'required|in:text,image,file,audio,location',
-            'message' => 'nullable|string',
-            'metadata' => 'nullable|array',
-            'file' => 'nullable|file|max:51200',
-            'audio_duration_seconds' => 'nullable|integer|min:0|max:86400',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
-            'address' => 'nullable|string|max:255',
-            'local_uuid' => 'nullable|string|max:80',
-        ]);
+        $data = $request->validated();
 
         $senderName = (string) ($customer->name ?? '');
         $metadata = (array) ($data['metadata'] ?? []);
+        if (! empty($data['reply_to_message_id'])) {
+            $metadata['reply_to_message_id'] = (int) $data['reply_to_message_id'];
+        }
 
         $type = $data['message_type'];
         if (in_array($type, ['image', 'file'], true)) {
@@ -135,19 +148,33 @@ class CustomerChatController extends Controller
 
         if (! empty($senderName) && empty($msg->sender_name_snapshot)) {
             $msg->sender_name_snapshot = $senderName;
-            $msg->save();
         }
+        $msg->reply_to_message_id = $data['reply_to_message_id'] ?? $msg->reply_to_message_id;
+        $msg->reaction = $data['reaction'] ?? $msg->reaction;
+        $msg->save();
 
+        $request->attributes->set('loan_chat_viewer_type', 'customer');
+        $request->attributes->set('loan_chat_viewer_id', (int) $customer->id);
+        $this->chatService->markSeen($row, 'customer');
         return $this->ok('Message sent', (new ChatMessageResource($msg))->resolve());
     }
 
-    public function read(int $thread)
+    public function read(MarkChatReadRequest $request, int $thread)
     {
         $customer = auth('customer_loan_api')->user();
         $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
         if (! $row) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->markAsRead($row, 'customer', (int) $customer->id);
         return $this->ok('Marked as read', (object) []);
+    }
+
+    public function typing(MarkChatTypingRequest $request, int $thread)
+    {
+        $customer = auth('customer_loan_api')->user();
+        $row = LoanChatThread::query()->where('id', $thread)->where('customer_id', $customer->id)->first();
+        if (! $row) return $this->fail('Thread not found', 404, (object) []);
+        $this->chatService->markTyping($row, 'customer');
+        return $this->ok('Typing updated', (object) []);
     }
 
     public function close(int $thread)

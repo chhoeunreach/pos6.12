@@ -12,7 +12,9 @@ class LoanChatThread extends BaseLoanModel
 
     protected $fillable = [
         'thread_number', 'customer_id', 'staff_id', 'loan_id', 'subject', 'type', 'status', 'priority',
+        'avatar_url', 'is_pinned', 'is_muted',
         'last_message', 'last_message_type', 'last_message_at', 'unread_customer_count', 'unread_staff_count',
+        'last_seen_customer_at', 'last_seen_staff_at', 'typing_customer_at', 'typing_staff_at',
         'closed_at', 'closed_by', 'created_by_type', 'created_by_id',
     ];
 
@@ -21,6 +23,12 @@ class LoanChatThread extends BaseLoanModel
         'closed_at' => 'datetime',
         'unread_customer_count' => 'integer',
         'unread_staff_count' => 'integer',
+        'is_pinned' => 'boolean',
+        'is_muted' => 'boolean',
+        'last_seen_customer_at' => 'datetime',
+        'last_seen_staff_at' => 'datetime',
+        'typing_customer_at' => 'datetime',
+        'typing_staff_at' => 'datetime',
     ];
 
     public function messages()
@@ -31,5 +39,15 @@ class LoanChatThread extends BaseLoanModel
     public function participants()
     {
         return $this->hasMany(LoanChatParticipant::class, 'thread_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(LoanCustomer::class, 'customer_id');
+    }
+
+    public function loan()
+    {
+        return $this->belongsTo(Loan::class, 'loan_id');
     }
 }
