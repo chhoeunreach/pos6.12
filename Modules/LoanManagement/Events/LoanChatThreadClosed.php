@@ -33,5 +33,13 @@ class LoanChatThreadClosed implements ShouldBroadcastNow
     {
         return 'loan.chat.thread.closed';
     }
-}
 
+    public function broadcastWhen(): bool
+    {
+        return (bool) (
+            config('loan_management.chat.broadcasting_enabled')
+            ?? config('loanmanagement.chat.broadcasting_enabled')
+            ?? false
+        );
+    }
+}

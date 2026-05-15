@@ -16,7 +16,7 @@ class PublicAppController extends Controller
             'support_gps' => true,
             'support_aba_payway' => true,
             'support_file_upload' => true,
-            'chat_polling_seconds' => (int) config('loanmanagement.chat_polling_seconds', 5),
+            'chat_polling_seconds' => (int) config('loanmanagement.chat.polling_interval_seconds', config('loanmanagement.chat_polling_seconds', 5)),
             'customer_api_guard' => (string) config('loanmanagement.customer_api_guard', 'customer_loan_api'),
         ]);
     }
@@ -30,4 +30,3 @@ class PublicAppController extends Controller
         ]);
     }
 }
-

@@ -11,8 +11,12 @@ return [
     'loan_web_guard' => 'loan_web',
     'loan_api_guard' => 'loan_api',
     'loan_user_provider' => 'loan_users',
-    'chat_realtime_driver' => env('LOAN_CHAT_REALTIME_DRIVER', 'reverb'),
-    'chat_polling_seconds' => (int) env('LOAN_CHAT_POLLING_SECONDS', 5),
+    'chat_realtime_driver' => env('LOAN_CHAT_REALTIME_DRIVER', 'none'),
+    'chat_polling_seconds' => (int) env('LOAN_CHAT_POLLING_INTERVAL', env('LOAN_CHAT_POLLING_SECONDS', 5)),
+    'chat' => [
+        'broadcasting_enabled' => (bool) env('LOAN_CHAT_BROADCASTING_ENABLED', false),
+        'polling_interval_seconds' => (int) env('LOAN_CHAT_POLLING_INTERVAL', 5),
+    ],
     'allow_without_pos_stock' => true,
     'menu_order' => 38,
     'permissions' => [

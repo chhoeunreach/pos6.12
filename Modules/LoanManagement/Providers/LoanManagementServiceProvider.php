@@ -44,6 +44,7 @@ class LoanManagementServiceProvider extends ServiceProvider
         ], 'config');
 
         $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loanmanagement');
+        $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loan_management');
     }
 
     private function registerViews(): void

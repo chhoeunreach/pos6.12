@@ -34,5 +34,13 @@ class LoanChatMessageSent implements ShouldBroadcastNow
     {
         return 'loan.chat.message.sent';
     }
-}
 
+    public function broadcastWhen(): bool
+    {
+        return (bool) (
+            config('loan_management.chat.broadcasting_enabled')
+            ?? config('loanmanagement.chat.broadcasting_enabled')
+            ?? false
+        );
+    }
+}

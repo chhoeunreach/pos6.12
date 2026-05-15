@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Modules\LoanManagement\Entities\LoanCustomer;
 use Modules\LoanManagement\Entities\LoanChatMessage;
@@ -362,7 +363,7 @@ class LoanChatService
         $thread->staff_id = $staffId;
         $thread->save();
         $this->addParticipant($thread, 'staff', (int) $staffId);
-        event(new LoanChatThreadAssigned($thread));
+        $this->broadcastChatEvent(new LoanChatThreadAssigned($thread), 'Chat thread assignment broadcast failed');
         return $thread;
     }
 
@@ -372,7 +373,7 @@ class LoanChatService
         $thread->closed_at = now();
         $thread->closed_by = $closedBy;
         $thread->save();
-        event(new LoanChatThreadClosed($thread));
+        $this->broadcastChatEvent(new LoanChatThreadClosed($thread), 'Chat thread close broadcast failed');
         return $thread;
     }
 
@@ -522,15 +523,34 @@ class LoanChatService
 
     public function broadcastMessage($message): void
     {
-        if (config('loanmanagement.chat_realtime_driver') === 'none') {
+        $this->broadcastChatEvent(
+            new LoanChatMessageSent($message->load('thread')),
+            'Chat broadcast failed'
+        );
+    }
+
+    protected function broadcastChatEvent(object $event, string $warningMessage): void
+    {
+        if (! $this->chatBroadcastingEnabled()) {
             return;
         }
 
         try {
-            event(new LoanChatMessageSent($message->load('thread')));
+            broadcast($event)->toOthers();
         } catch (\Throwable $e) {
-            report($e);
+            Log::warning($warningMessage, [
+                'message' => $e->getMessage(),
+            ]);
         }
+    }
+
+    protected function chatBroadcastingEnabled(): bool
+    {
+        return (bool) (
+            config('loan_management.chat.broadcasting_enabled')
+            ?? config('loanmanagement.chat.broadcasting_enabled')
+            ?? false
+        );
     }
 
     protected function notifyParticipants(LoanChatMessage $message): void

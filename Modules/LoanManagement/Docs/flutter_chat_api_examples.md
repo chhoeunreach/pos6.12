@@ -2,7 +2,16 @@
 
 Base URL: `/api/loan-management`
 
-Polling: call thread detail every `5s` (config `LOAN_CHAT_POLLING_SECONDS`, default `5`).
+Polling: call thread detail every `5s` (config `LOAN_CHAT_POLLING_INTERVAL`, default `5`).
+
+Realtime broadcasting is optional and disabled by default so chat APIs do not require Pusher, WebSocket, Soketi, or Laravel Reverb:
+
+```env
+LOAN_CHAT_BROADCASTING_ENABLED=false
+LOAN_CHAT_POLLING_INTERVAL=5
+```
+
+When `LOAN_CHAT_BROADCASTING_ENABLED=true`, the backend will attempt to broadcast chat events and log a warning if broadcasting fails. Message creation still returns success after the message is stored, so Flutter polling remains the safe fallback.
 
 All success responses use:
 ```json
