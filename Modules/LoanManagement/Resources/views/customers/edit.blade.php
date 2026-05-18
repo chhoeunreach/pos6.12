@@ -1,7 +1,7 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Edit Loan Customer')
 
-@section('content')
+@section('content_body')
 <section class="content-header">
     <h1>Edit Loan Customer</h1>
 </section>

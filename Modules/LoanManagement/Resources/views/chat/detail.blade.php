@@ -1,7 +1,7 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Live Chat Detail')
 
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Live Chat #{{ $threadId }}</h1></section>
 <section class="content">
     <div class="box box-primary">

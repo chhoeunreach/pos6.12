@@ -1,7 +1,7 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Clone From Ultimate POS')
 
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Clone Customer From Ultimate POS</h1></section>
 <section class="content">
     <div class="box box-primary"><div class="box-body">

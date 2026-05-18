@@ -178,6 +178,22 @@
                         </a>
                     @endcan
                 @endif
+                @if (Module::has('LoanManagement') && Route::has('loan-management.dashboard'))
+                    @can('loan_management.view')
+                        <a href="{{ route('loan-management.dashboard') }}"
+                            class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 tw-bg-@if(!empty(session('business.theme_color'))){{session('business.theme_color')}}@else{{'primary'}}@endif-800 hover:tw-bg-@if(!empty(session('business.theme_color'))){{session('business.theme_color')}}@else{{'primary'}}@endif-700 tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="tw-size-5 tw-hidden md:tw-block" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                <path d="M7 10h10" />
+                                <path d="M7 14h6" />
+                                <path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2z" />
+                                <path d="M9 4v16" />
+                            </svg>
+                            Loan Management
+                        </a>
+                    @endcan
+                @endif
                 @if (Module::has('Repair'))
                     @includeIf('repair::layouts.partials.header')
                 @endif

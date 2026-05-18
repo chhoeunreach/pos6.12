@@ -1,7 +1,7 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Customer Tracking')
 
-@section('content')
+@section('content_body')
 <section class="content-header">
     <h1>Customer Realtime Tracking</h1>
 </section>

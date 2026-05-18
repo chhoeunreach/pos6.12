@@ -13,7 +13,7 @@
     $active = request('tab', 'today_due');
 @endphp
 
-@section('content')
+@section('content_body')
 <section class="content-header">
     <h1>Overdue / Late Payments</h1>
 </section>

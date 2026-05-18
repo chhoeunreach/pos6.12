@@ -1,6 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Create Loan From Sell')
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Create Loan From Sell</h1></section>
 <section class="content">
 @if(session('duplicate_installment_warning'))

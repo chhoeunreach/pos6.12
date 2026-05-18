@@ -1,6 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Edit Loan')
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Edit Loan #{{ $loanRow->id }}</h1></section>
 <section class="content">
 <div class="row">

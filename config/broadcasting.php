@@ -1,5 +1,18 @@
 <?php
 
+$broadcastDriver = env('BROADCAST_DRIVER') ?: 'null';
+$pusherAppId = env('PUSHER_APP_ID');
+$pusherAppKey = env('PUSHER_APP_KEY');
+$pusherAppSecret = env('PUSHER_APP_SECRET');
+$pusherAppCluster = env('PUSHER_APP_CLUSTER', 'mt1');
+
+if (
+    $broadcastDriver === 'pusher'
+    && (! extension_loaded('curl') || empty($pusherAppId) || empty($pusherAppKey) || empty($pusherAppSecret))
+) {
+    $broadcastDriver = 'null';
+}
+
 return [
 
     /*
@@ -15,7 +28,7 @@ return [
     |
     */
 
-    'default' => env('BROADCAST_DRIVER', 'null'),
+    'default' => $broadcastDriver,
 
     /*
     |--------------------------------------------------------------------------
@@ -32,11 +45,12 @@ return [
 
         'pusher' => [
             'driver' => 'pusher',
-            'key' => env('PUSHER_APP_KEY'),
-            'secret' => env('PUSHER_APP_SECRET'),
-            'app_id' => env('PUSHER_APP_ID'),
+            'key' => $pusherAppKey,
+            'secret' => $pusherAppSecret,
+            'app_id' => $pusherAppId,
             'options' => [
-                'host' => env('PUSHER_HOST') ?: 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com',
+                'cluster' => $pusherAppCluster,
+                'host' => env('PUSHER_HOST') ?: 'api-'.$pusherAppCluster.'.pusher.com',
                 'port' => env('PUSHER_PORT', 443),
                 'scheme' => env('PUSHER_SCHEME', 'https'),
                 'encrypted' => true,

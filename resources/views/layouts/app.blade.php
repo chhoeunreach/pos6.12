@@ -46,7 +46,7 @@
                 body.className += " sidebar-collapse";
             }
         </script>
-        @if (!$pos_layout && $request->segment(1) != 'customer-display')
+        @if (!$pos_layout && $request->segment(1) != 'customer-display' && $request->segment(1) != 'loan-management')
             @include('layouts.partials.sidebar')
         @endif
 

@@ -19,7 +19,7 @@
             <i class="fa fa-bars"></i>
         </button>
         <div>
-            <h1 class="lm-title">LoanManagement / Installment</h1>
+            <h1 class="lm-title">Loan Management</h1>
             <p class="lm-subtitle">Dedicated loan operation workspace</p>
         </div>
     </div>

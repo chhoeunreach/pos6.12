@@ -1,4 +1,4 @@
-@extends('loanmanagement::layouts.app')
+@extends('layouts.app')
 
 @php
     use Modules\LoanManagement\Helpers\LoanMenuHelper;
@@ -34,11 +34,7 @@
         <main class="lm-content">
             @include('loanmanagement::layouts.breadcrumb')
             <div class="container-fluid lm-workspace">
-                @hasSection('content_body')
-                    @yield('content_body')
-                @else
-                    @yield('content')
-                @endif
+                @yield('content_body')
             </div>
         </main>
 

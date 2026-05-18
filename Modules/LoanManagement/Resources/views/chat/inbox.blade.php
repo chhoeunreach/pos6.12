@@ -1,7 +1,7 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Live Chat Inbox')
 
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Live Chat Inbox</h1></section>
 <section class="content">
     <div class="box box-primary">

@@ -1,6 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'View Sell Transaction')
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Sell Detail - {{ $sell['header']->invoice_no }}</h1></section>
 <section class="content">
 <div class="box box-primary"><div class="box-body">

@@ -1,6 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Loan Detail')
-@section('content')
+@section('content_body')
 @php
     $customerName = $customerDisplayName ?? ($loanRow->customer_name_snapshot ?? ($customerRow->name ?? ($customerRow->full_name ?? '-')));
     $customerPhone = $customerPhoneDisplay ?? ($loanRow->customer_phone_snapshot ?? ($customerRow->phone ?? ($customerRow->mobile ?? '-')));

@@ -1,6 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Convert To Installment')
-@section('content')
+@section('content_body')
 <section class="content-header"><h1>Convert To Installment</h1></section>
 <section class="content">
     @include('loanmanagement::loans.create_from_sell.form', ['sell' => $sell, 'collectors' => $collectors])

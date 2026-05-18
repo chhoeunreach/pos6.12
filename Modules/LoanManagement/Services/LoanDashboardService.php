@@ -83,6 +83,8 @@ class LoanDashboardService
             $cards['total_principal'] = (float) (clone $q)->sum('principal_amount');
             if ($this->columnExists('loans', 'total_payable_amount')) {
                 $cards['total_payable'] = (float) (clone $q)->sum('total_payable_amount');
+            } elseif ($this->columnExists('loans', 'total_payable')) {
+                $cards['total_payable'] = (float) (clone $q)->sum('total_payable');
             } elseif ($this->columnExists('loans', 'total_amount')) {
                 $cards['total_payable'] = (float) (clone $q)->sum('total_amount');
             } else {
@@ -113,13 +115,13 @@ class LoanDashboardService
 
         if ($this->tableExists('loan_payments')) {
             $paidQ = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payments'), $filters)
-                ->where('status', $this->columnExists('loan_payments', 'status') ? 'paid' : 'confirmed');
+                ->when($this->columnExists('loan_payments', 'status'), fn ($query) => $query->whereIn('status', ['paid', 'confirmed']));
             $paidDateCol = $this->paymentDateColumn();
             $paidAmountCol = $this->paymentAmountColumn();
             $cards['today_collection'] = (float) (clone $paidQ)->whereDate($paidDateCol, Carbon::today()->toDateString())->sum($paidAmountCol);
             $cards['month_collection'] = (float) (clone $paidQ)->whereBetween($paidDateCol, [Carbon::now()->startOfMonth()->toDateString(), Carbon::now()->endOfMonth()->toDateString()])->sum($paidAmountCol);
-            $cards['penalty_collected'] = (float) (clone $paidQ)->sum('penalty_amount');
-            $cards['discount_given'] = (float) (clone $paidQ)->sum('discount_amount');
+            $cards['penalty_collected'] = $this->sumExistingPaymentColumn(clone $paidQ, 'penalty_amount');
+            $cards['discount_given'] = $this->sumExistingPaymentColumn(clone $paidQ, 'discount_amount');
             $cards['payment_proof_pending'] = (int) $this->getPaymentProofPendingCount($filters);
         }
 
@@ -135,11 +137,7 @@ class LoanDashboardService
         if ($this->tableExists('loan_customer_followups')) {
             $fQ = DB::connection($this->connection)->table('loan_customer_followups')
                 ->whereIn('status', ['pending', 'today', 'in_progress']);
-            if ($this->columnExists('loan_customer_followups', 'follow_up_date')) {
-                $fQ->whereDate('follow_up_date', '<=', Carbon::today()->toDateString());
-            } elseif ($this->columnExists('loan_customer_followups', 'created_at')) {
-                $fQ->whereDate('created_at', '<=', Carbon::today()->toDateString());
-            }
+            $fQ->whereDate($this->followUpDateColumn(), '<=', Carbon::today()->toDateString());
             $cards['follow_up_customers'] = (int) $fQ->count();
         }
 
@@ -241,7 +239,7 @@ class LoanDashboardService
     {
         if (! $this->tableExists('loan_payments')) return ['labels' => [], 'amount' => []];
         $rows = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payments'), $filters)
-            ->where('status', $this->columnExists('loan_payments', 'status') ? 'paid' : 'confirmed')
+            ->when($this->columnExists('loan_payments', 'status'), fn ($query) => $query->whereIn('status', ['paid', 'confirmed']))
             ->selectRaw("DATE_FORMAT(".$this->paymentDateColumn().", '%Y-%m') as month_key, COALESCE(SUM(".$this->paymentAmountColumn()."),0) as total_amount")
             ->groupBy('month_key')->orderBy('month_key')->get();
         return ['labels' => $rows->pluck('month_key')->all(), 'amount' => $rows->pluck('total_amount')->map(fn ($v) => (float) $v)->all()];
@@ -296,22 +294,22 @@ class LoanDashboardService
     {
         if (! $this->tableExists('loans')) return [];
 
-        $loans = $this->applyLoanFilters(DB::connection($this->connection)->table('loans'), $filters)
-            ->selectRaw('COALESCE(collector_name_snapshot, CONCAT("Collector #", collector_id), "Unassigned") as collector_name, COUNT(*) as assigned_loans')
+        $loans = $this->applyLoanFilters(DB::connection($this->connection)->table('loans as l'), $filters, 'l')
+            ->selectRaw($this->loanCollectorExpression('l').' as collector_name, COUNT(*) as assigned_loans')
             ->groupBy('collector_name')->get()->keyBy('collector_name');
 
         $payments = collect();
         if ($this->tableExists('loan_payments')) {
             $payments = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payments'), $filters)
-                ->where('status', $this->columnExists('loan_payments', 'status') ? 'paid' : 'confirmed')
-                ->selectRaw('COALESCE(collected_by_name_snapshot, "Unknown") as collector_name, COALESCE(SUM('.$this->paymentAmountColumn().'),0) as collected_amount')
+                ->when($this->columnExists('loan_payments', 'status'), fn ($query) => $query->whereIn('status', ['paid', 'confirmed']))
+                ->selectRaw('COALESCE('.$this->paymentCollectorColumn().', "Unknown") as collector_name, COALESCE(SUM('.$this->paymentAmountColumn().'),0) as collected_amount')
                 ->groupBy('collector_name')->get()->keyBy('collector_name');
         }
 
         $visits = collect();
         if ($this->tableExists('loan_collection_visits')) {
-            $visits = DB::connection($this->connection)->table('loan_collection_visits')
-                ->selectRaw('COALESCE(staff_name_snapshot, "Unknown") as collector_name, COUNT(*) as visit_count')
+            $visits = $this->collectionVisitQuery()
+                ->selectRaw($this->collectionVisitStaffExpression().' as collector_name, COUNT(*) as visit_count')
                 ->groupBy('collector_name')->get()->keyBy('collector_name');
         }
 
@@ -348,7 +346,7 @@ class LoanDashboardService
         $to = Carbon::parse($filters['date_to']);
 
         $rows = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payments'), $filters)
-            ->where('status', $this->columnExists('loan_payments', 'status') ? 'paid' : 'confirmed')
+            ->when($this->columnExists('loan_payments', 'status'), fn ($query) => $query->whereIn('status', ['paid', 'confirmed']))
             ->selectRaw('DATE('.$this->paymentDateColumn().') as paid_day, COALESCE(SUM('.$this->paymentAmountColumn().'),0) as total_amount')
             ->groupBy('paid_day')->orderBy('paid_day')->get()->keyBy('paid_day');
 
@@ -366,27 +364,41 @@ class LoanDashboardService
     public function getLatestLoans($filters): array
     {
         if (! $this->tableExists('loans')) return [];
-        return $this->applyLoanFilters(DB::connection($this->connection)->table('loans'), $filters)
-            ->select('id', 'loan_number', 'customer_name_snapshot', 'customer_phone_snapshot', 'principal_amount', 'paid_amount', 'balance_amount', 'currency', 'status', 'loan_date')
-            ->orderByDesc('loan_date')->limit(20)->get()->map(fn ($r) => (array) $r)->all();
+
+        $query = $this->loanQueryWithCustomer('l');
+
+        return $this->applyLoanFilters($query, $filters, 'l')
+            ->selectRaw(implode(', ', [
+                'l.id',
+                'l.loan_number',
+                $this->loanCustomerNameExpression('l').' as customer_name_snapshot',
+                $this->loanCustomerPhoneExpression('l').' as customer_phone_snapshot',
+                'l.principal_amount',
+                'l.paid_amount',
+                'l.balance_amount',
+                'l.currency',
+                'l.status',
+                'l.loan_date',
+            ]))
+            ->orderByDesc('l.loan_date')->limit(20)->get()->map(fn ($r) => (array) $r)->all();
     }
 
     public function getTodayDuePayments($filters): array
     {
         if (! $this->tableExists('loan_payment_schedules') || ! $this->tableExists('loans')) return [];
-        return $this->applyScheduleFilters(DB::connection($this->connection)->table('loan_payment_schedules as s')->join('loans as l', 'l.id', '=', 's.loan_id'), $filters)
+        return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', Carbon::today()->toDateString())
-            ->selectRaw('l.id, l.loan_number, l.customer_name_snapshot as customer, l.customer_phone_snapshot as phone, s.due_date, COALESCE(s.schedule_amount,0) as schedule_amount, COALESCE(s.paid_amount,0) as paid_amount, COALESCE(s.balance_amount,0) as balance, COALESCE(l.collector_name_snapshot,"-") as collector')
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, s.due_date, COALESCE(s.schedule_amount,0) as schedule_amount, COALESCE(s.paid_amount,0) as paid_amount, COALESCE(s.balance_amount,0) as balance, '.$this->loanCollectorExpression('l').' as collector')
             ->orderBy('s.due_date')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
     public function getOverdueCustomers($filters): array
     {
         if (! $this->tableExists('loan_payment_schedules') || ! $this->tableExists('loans')) return [];
-        return $this->applyScheduleFilters(DB::connection($this->connection)->table('loan_payment_schedules as s')->join('loans as l', 'l.id', '=', 's.loan_id'), $filters)
+        return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', '<', Carbon::today()->toDateString())
             ->whereIn('s.status', ['unpaid', 'partial', 'late'])
-            ->selectRaw('l.id, l.loan_number, l.customer_name_snapshot as customer, l.customer_phone_snapshot as phone, DATEDIFF(CURDATE(), s.due_date) as overdue_days, COALESCE(s.balance_amount,0) as overdue_amount, COALESCE(l.collector_name_snapshot,"-") as collector, NULL as last_visit')
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, DATEDIFF(CURDATE(), s.due_date) as overdue_days, COALESCE(s.balance_amount,0) as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
             ->orderByDesc('overdue_days')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -394,7 +406,7 @@ class LoanDashboardService
     {
         if (! $this->tableExists('loan_payments')) return [];
         return $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payments'), $filters)
-            ->selectRaw('id, payment_ref_no as receipt_number, customer_name_snapshot, loan_number_snapshot as loan_number, COALESCE('.$this->paymentAmountColumn().',0) as paid_amount, payment_method_snapshot as payment_method, received_by_name_snapshot, '.$this->paymentDateColumn().' as paid_date')
+            ->selectRaw($this->recentPaymentSelect())
             ->orderByDesc($this->paymentDateColumn())->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -410,8 +422,8 @@ class LoanDashboardService
     {
         if (! $this->tableExists('loan_staff_location_latest')) return [];
         $onlineCutoff = Carbon::now()->subMinutes(10)->toDateTimeString();
-        return DB::connection($this->connection)->table('loan_staff_location_latest')
-            ->selectRaw('id, staff_name_snapshot, latitude, longitude, battery_level, recorded_at')
+        return $this->staffLocationQuery()
+            ->selectRaw('s.id, '.$this->staffLocationNameExpression().' as staff_name_snapshot, s.latitude, s.longitude, s.battery_level, s.recorded_at')
             ->orderByDesc('recorded_at')->limit(100)->get()->map(function ($r) use ($onlineCutoff) {
                 $a = (array) $r;
                 $a['online_status'] = ($r->recorded_at >= $onlineCutoff) ? 'online' : 'offline';
@@ -422,22 +434,27 @@ class LoanDashboardService
     public function getFollowUpCustomers($filters): array
     {
         if (! $this->tableExists('loan_customer_followups')) return [];
-        $dateCol = $this->columnExists('loan_customer_followups', 'follow_up_date') ? 'follow_up_date' : 'created_at';
-        $customerCol = $this->columnExists('loan_customer_followups', 'customer_name_snapshot') ? 'customer_name_snapshot' : 'customer_id';
-        $phoneCol = $this->columnExists('loan_customer_followups', 'customer_phone_snapshot') ? 'customer_phone_snapshot' : 'customer_id';
-        $staffCol = $this->columnExists('loan_customer_followups', 'assigned_staff_name_snapshot') ? 'assigned_staff_name_snapshot' : 'assigned_staff_id';
-        $typeCol = $this->columnExists('loan_customer_followups', 'follow_up_type') ? 'follow_up_type' : 'status';
-        return DB::connection($this->connection)->table('loan_customer_followups')
-            ->selectRaw("id, {$customerCol} as customer, {$phoneCol} as phone, {$dateCol} as follow_up_date, {$typeCol} as follow_up_type, status, {$staffCol} as assigned_staff, note")
-            ->whereDate($dateCol, '<=', Carbon::today()->toDateString())
-            ->orderBy($dateCol)->limit(50)->get()->map(fn ($r) => (array) $r)->all();
+        $dateCol = $this->followUpDateColumn();
+        return $this->followUpQuery()
+            ->selectRaw(implode(', ', [
+                'f.id',
+                $this->followUpCustomerNameExpression().' as customer',
+                $this->followUpCustomerPhoneExpression().' as phone',
+                'f.'.$dateCol.' as follow_up_date',
+                $this->followUpTypeExpression().' as follow_up_type',
+                'f.status',
+                $this->followUpStaffExpression().' as assigned_staff',
+                'f.note',
+            ]))
+            ->whereDate('f.'.$dateCol, '<=', Carbon::today()->toDateString())
+            ->orderBy('f.'.$dateCol)->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
     public function getBlacklistCustomers($filters): array
     {
         if (! $this->tableExists('loan_customers')) return [];
         return DB::connection($this->connection)->table('loan_customers')
-            ->selectRaw('id, customer_name as customer, phone, id_card_number, blacklist_reason, created_at')
+            ->selectRaw('id, '.$this->customerNameExpression().' as customer, phone, id_card_number, blacklist_reason, created_at')
             ->where('blacklist_status', 1)
             ->orderByDesc('created_at')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
@@ -488,9 +505,9 @@ class LoanDashboardService
     {
         $prefix = $alias.'.';
         $this->applyDateRange($query, $prefix.$this->paymentDateColumn(), $filters['date_from'], $filters['date_to']);
-        if (! empty($filters['currency'])) $query->where($prefix.'base_currency', $filters['currency']);
+        if (! empty($filters['currency']) && $this->columnExists('loan_payments', 'base_currency')) $query->where($prefix.'base_currency', $filters['currency']);
         if (! empty($filters['payment_method_snapshot'])) {
-            if (str_contains(strtolower($alias), 'loan_payment_details') || str_contains(strtolower($alias), ' d')) {
+            if ((str_contains(strtolower($alias), 'loan_payment_details') || str_contains(strtolower($alias), ' d')) && $this->columnExists('loan_payment_details', 'payment_method_snapshot')) {
                 $query->where('d.payment_method_snapshot', $filters['payment_method_snapshot']);
             } elseif ($this->columnExists('loan_payments', 'payment_method_snapshot')) {
                 $query->where($prefix.'payment_method_snapshot', $filters['payment_method_snapshot']);
@@ -577,5 +594,312 @@ class LoanDashboardService
             return 'amount';
         }
         return 'amount';
+    }
+
+    protected function loanQueryWithCustomer(string $loanAlias = 'l'): Builder
+    {
+        $query = DB::connection($this->connection)->table('loans as '.$loanAlias);
+
+        if ($this->canJoinLoanCustomers()) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', $loanAlias.'.customer_id');
+        }
+
+        return $query;
+    }
+
+    protected function scheduleQueryWithLoanCustomer(): Builder
+    {
+        $query = DB::connection($this->connection)->table('loan_payment_schedules as s')
+            ->join('loans as l', 'l.id', '=', 's.loan_id');
+
+        if ($this->canJoinLoanCustomers()) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
+        }
+
+        return $query;
+    }
+
+    protected function canJoinLoanCustomers(): bool
+    {
+        return $this->tableExists('loan_customers')
+            && $this->columnExists('loans', 'customer_id')
+            && $this->columnExists('loan_customers', 'id');
+    }
+
+    protected function loanCustomerNameExpression(string $loanAlias): string
+    {
+        if ($this->columnExists('loans', 'customer_name_snapshot')) {
+            return $loanAlias.'.customer_name_snapshot';
+        }
+        if ($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'name')) {
+            return 'COALESCE(c.name, CONCAT("Customer #", '.$loanAlias.'.customer_id))';
+        }
+        if ($this->columnExists('loans', 'customer_id')) {
+            return 'CONCAT("Customer #", '.$loanAlias.'.customer_id)';
+        }
+
+        return 'NULL';
+    }
+
+    protected function loanCustomerPhoneExpression(string $loanAlias): string
+    {
+        if ($this->columnExists('loans', 'customer_phone_snapshot')) {
+            return $loanAlias.'.customer_phone_snapshot';
+        }
+        if ($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'phone')) {
+            return 'c.phone';
+        }
+
+        return 'NULL';
+    }
+
+    protected function loanCollectorExpression(string $loanAlias): string
+    {
+        if ($this->columnExists('loans', 'collector_name_snapshot')) {
+            return 'COALESCE('.$loanAlias.'.collector_name_snapshot, "-")';
+        }
+        if ($this->columnExists('loans', 'collector_id') && $this->columnExists('loans', 'assigned_to')) {
+            return 'COALESCE(CONCAT("Collector #", '.$loanAlias.'.collector_id), CONCAT("Collector #", '.$loanAlias.'.assigned_to), "-")';
+        }
+        if ($this->columnExists('loans', 'collector_id')) {
+            return 'COALESCE(CONCAT("Collector #", '.$loanAlias.'.collector_id), "-")';
+        }
+        if ($this->columnExists('loans', 'assigned_to')) {
+            return 'COALESCE(CONCAT("Collector #", '.$loanAlias.'.assigned_to), "-")';
+        }
+
+        return '"-"';
+    }
+
+    protected function followUpQuery(): Builder
+    {
+        $query = DB::connection($this->connection)->table('loan_customer_followups as f');
+
+        if ($this->canJoinFollowUpCustomers()) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', 'f.customer_id');
+        }
+        if ($this->canJoinFollowUpStaff()) {
+            $query->leftJoin('loan_users as u', 'u.id', '=', 'f.staff_id');
+        }
+
+        return $query;
+    }
+
+    protected function followUpDateColumn(): string
+    {
+        if ($this->columnExists('loan_customer_followups', 'follow_up_date')) {
+            return 'follow_up_date';
+        }
+        if ($this->columnExists('loan_customer_followups', 'followup_at')) {
+            return 'followup_at';
+        }
+
+        return 'created_at';
+    }
+
+    protected function followUpCustomerNameExpression(): string
+    {
+        if ($this->columnExists('loan_customer_followups', 'customer_name_snapshot')) {
+            return 'f.customer_name_snapshot';
+        }
+        if ($this->canJoinFollowUpCustomers() && $this->columnExists('loan_customers', 'name')) {
+            return 'COALESCE(c.name, CONCAT("Customer #", f.customer_id))';
+        }
+
+        return 'CONCAT("Customer #", f.customer_id)';
+    }
+
+    protected function followUpCustomerPhoneExpression(): string
+    {
+        if ($this->columnExists('loan_customer_followups', 'customer_phone_snapshot')) {
+            return 'f.customer_phone_snapshot';
+        }
+        if ($this->canJoinFollowUpCustomers() && $this->columnExists('loan_customers', 'phone')) {
+            return 'c.phone';
+        }
+
+        return 'NULL';
+    }
+
+    protected function followUpTypeExpression(): string
+    {
+        return $this->columnExists('loan_customer_followups', 'follow_up_type') ? 'f.follow_up_type' : 'f.status';
+    }
+
+    protected function followUpStaffExpression(): string
+    {
+        if ($this->columnExists('loan_customer_followups', 'assigned_staff_name_snapshot')) {
+            return 'f.assigned_staff_name_snapshot';
+        }
+        if ($this->canJoinFollowUpStaff() && $this->columnExists('loan_users', 'name')) {
+            return 'COALESCE(u.name, CONCAT("Staff #", f.staff_id))';
+        }
+        if ($this->columnExists('loan_customer_followups', 'staff_id')) {
+            return 'CONCAT("Staff #", f.staff_id)';
+        }
+        if ($this->columnExists('loan_customer_followups', 'assigned_staff_id')) {
+            return 'CONCAT("Staff #", f.assigned_staff_id)';
+        }
+
+        return 'NULL';
+    }
+
+    protected function canJoinFollowUpCustomers(): bool
+    {
+        return $this->tableExists('loan_customers')
+            && $this->columnExists('loan_customer_followups', 'customer_id')
+            && $this->columnExists('loan_customers', 'id');
+    }
+
+    protected function canJoinFollowUpStaff(): bool
+    {
+        return $this->tableExists('loan_users')
+            && $this->columnExists('loan_customer_followups', 'staff_id')
+            && $this->columnExists('loan_users', 'id');
+    }
+
+    protected function customerNameExpression(): string
+    {
+        if ($this->columnExists('loan_customers', 'customer_name')) {
+            return 'customer_name';
+        }
+        if ($this->columnExists('loan_customers', 'name')) {
+            return 'name';
+        }
+
+        return 'CONCAT("Customer #", id)';
+    }
+
+    protected function collectionVisitQuery(): Builder
+    {
+        $query = DB::connection($this->connection)->table('loan_collection_visits as v');
+
+        if ($this->canJoinCollectionVisitStaff()) {
+            $query->leftJoin('loan_users as u', 'u.id', '=', 'v.staff_id');
+        }
+
+        return $query;
+    }
+
+    protected function collectionVisitStaffExpression(): string
+    {
+        if ($this->columnExists('loan_collection_visits', 'staff_name_snapshot')) {
+            return 'COALESCE(v.staff_name_snapshot, "Unknown")';
+        }
+        if ($this->canJoinCollectionVisitStaff() && $this->columnExists('loan_users', 'name')) {
+            return 'COALESCE(u.name, CONCAT("Staff #", v.staff_id))';
+        }
+        if ($this->columnExists('loan_collection_visits', 'staff_id')) {
+            return 'CONCAT("Staff #", v.staff_id)';
+        }
+
+        return '"Unknown"';
+    }
+
+    protected function canJoinCollectionVisitStaff(): bool
+    {
+        return $this->tableExists('loan_users')
+            && $this->columnExists('loan_collection_visits', 'staff_id')
+            && $this->columnExists('loan_users', 'id');
+    }
+
+    protected function staffLocationQuery(): Builder
+    {
+        $query = DB::connection($this->connection)->table('loan_staff_location_latest as s');
+
+        if ($this->canJoinStaffLocationUser()) {
+            $query->leftJoin('loan_users as u', 'u.id', '=', 's.user_id');
+        }
+
+        return $query;
+    }
+
+    protected function staffLocationNameExpression(): string
+    {
+        if ($this->columnExists('loan_staff_location_latest', 'staff_name_snapshot')) {
+            return 'COALESCE(s.staff_name_snapshot, "Unknown")';
+        }
+        if ($this->canJoinStaffLocationUser() && $this->columnExists('loan_users', 'name')) {
+            return 'COALESCE(u.name, CONCAT("Staff #", s.user_id))';
+        }
+        if ($this->columnExists('loan_staff_location_latest', 'user_id')) {
+            return 'CONCAT("Staff #", s.user_id)';
+        }
+
+        return '"Unknown"';
+    }
+
+    protected function canJoinStaffLocationUser(): bool
+    {
+        return $this->tableExists('loan_users')
+            && $this->columnExists('loan_staff_location_latest', 'user_id')
+            && $this->columnExists('loan_users', 'id');
+    }
+
+    protected function sumExistingPaymentColumn(Builder $query, string $column): float
+    {
+        if (! $this->columnExists('loan_payments', $column)) {
+            return 0.0;
+        }
+
+        return (float) $query->sum($column);
+    }
+
+    protected function recentPaymentSelect(): string
+    {
+        return implode(', ', [
+            'id',
+            $this->paymentReceiptExpression().' as receipt_number',
+            $this->paymentDisplayColumn('customer_name_snapshot').' as customer_name_snapshot',
+            $this->paymentDisplayColumn('loan_number_snapshot').' as loan_number',
+            'COALESCE('.$this->paymentAmountColumn().',0) as paid_amount',
+            $this->paymentMethodColumn().' as payment_method',
+            $this->paymentCollectorColumn().' as received_by_name_snapshot',
+            $this->paymentDateColumn().' as paid_date',
+        ]);
+    }
+
+    protected function paymentReceiptExpression(): string
+    {
+        if ($this->columnExists('loan_payments', 'receipt_number') && $this->columnExists('loan_payments', 'payment_ref_no')) {
+            return 'COALESCE(receipt_number, payment_ref_no, CONCAT("PMT-", id))';
+        }
+        if ($this->columnExists('loan_payments', 'receipt_number')) {
+            return 'COALESCE(receipt_number, CONCAT("PMT-", id))';
+        }
+        if ($this->columnExists('loan_payments', 'payment_ref_no')) {
+            return 'COALESCE(payment_ref_no, CONCAT("PMT-", id))';
+        }
+
+        return 'CONCAT("PMT-", id)';
+    }
+
+    protected function paymentDisplayColumn(string $column): string
+    {
+        return $this->columnExists('loan_payments', $column) ? $column : 'NULL';
+    }
+
+    protected function paymentMethodColumn(): string
+    {
+        if ($this->columnExists('loan_payments', 'payment_method_snapshot')) {
+            return 'payment_method_snapshot';
+        }
+        if ($this->columnExists('loan_payments', 'channel')) {
+            return 'channel';
+        }
+
+        return 'NULL';
+    }
+
+    protected function paymentCollectorColumn(): string
+    {
+        if ($this->columnExists('loan_payments', 'received_by_name_snapshot')) {
+            return 'received_by_name_snapshot';
+        }
+        if ($this->columnExists('loan_payments', 'collected_by_name_snapshot')) {
+            return 'collected_by_name_snapshot';
+        }
+
+        return 'NULL';
     }
 }
