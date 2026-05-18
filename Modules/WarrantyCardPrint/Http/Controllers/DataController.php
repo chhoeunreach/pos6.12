@@ -3,9 +3,21 @@
 namespace Modules\WarrantyCardPrint\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class DataController extends Controller
 {
+    public function superadmin_package(): array
+    {
+        return [[
+            'name' => 'warrantycardprint_module',
+            'label' => 'Warranty Card Print Module',
+            'default' => false,
+        ]];
+    }
+
     public function user_permissions(): array
     {
         return [
@@ -28,7 +40,9 @@ class DataController extends Controller
             return [];
         }
 
-        if (! auth()->user()->can('warranty_card_print.view') && ! auth()->user()->can('product.view') && ! auth()->user()->can('product.create')) {
+        $this->ensurePermissionsExist();
+
+        if (! $this->userCanAny(['warranty_card_print.view', 'product.view', 'product.create'])) {
             return [];
         }
 
@@ -227,5 +241,38 @@ CSS;
                 });
             </script>',
         ];
+    }
+
+    private function ensurePermissionsExist(): void
+    {
+        try {
+            if (! Schema::hasTable('permissions')) {
+                return;
+            }
+
+            Permission::firstOrCreate([
+                'name' => 'warranty_card_print.view',
+                'guard_name' => 'web',
+            ]);
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+        } catch (\Throwable $e) {
+        }
+    }
+
+    private function userCanAny(array $permissions): bool
+    {
+        $user = auth()->user();
+
+        foreach ($permissions as $permission) {
+            try {
+                if ($user->can($permission)) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return false;
     }
 }
