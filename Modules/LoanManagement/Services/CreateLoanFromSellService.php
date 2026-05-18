@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\Schema;
 
 class CreateLoanFromSellService
 {
+    public function searchSales(array $filters)
+    {
+        return $this->searchSells($filters);
+    }
+
     public function searchSells(array $filters)
     {
         $paidSub = DB::table('transaction_payments')
@@ -20,24 +25,47 @@ class CreateLoanFromSellService
                 $join->on('tp.transaction_id', '=', 't.id');
             })
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
             ->leftJoin('business_locations as bl', 'bl.id', '=', 't.location_id')
             ->leftJoin('users as u', 'u.id', '=', 't.created_by')
             ->leftJoin('transaction_sell_lines as tsl', 'tsl.transaction_id', '=', 't.id')
+            ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
+            ->leftJoin('products as p', 'p.id', '=', 'v.product_id')
             ->where('t.type', 'sell')
-            ->where('t.status', 'final')
-            ->selectRaw("t.id, t.transaction_date, t.invoice_no, c.name as customer_name, c.mobile as customer_phone, bl.name as location_name, t.final_total, COALESCE(tp.paid_amount,0) as paid_amount, (t.final_total - COALESCE(tp.paid_amount,0)) as due_amount, t.payment_status, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))), ''), u.username) as created_by_name")
+            ->selectRaw("t.id, t.transaction_date, t.invoice_no, c.name as customer_name, c.mobile as customer_phone, COALESCE(tcg.name, ccg.name) as customer_group_name, bl.name as location_name, t.final_total, COALESCE(tp.paid_amount,0) as paid_amount, (t.final_total - COALESCE(tp.paid_amount,0)) as due_amount, t.payment_status, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))), ''), u.username) as created_by_name")
             ->groupBy('t.id');
 
         if (! empty($filters['invoice_no'])) $query->where('t.invoice_no', 'like', '%'.$filters['invoice_no'].'%');
         if (! empty($filters['customer_name'])) $query->where('c.name', 'like', '%'.$filters['customer_name'].'%');
         if (! empty($filters['customer_phone'])) $query->where('c.mobile', 'like', '%'.$filters['customer_phone'].'%');
+        $customerGroupName = trim((string) ($filters['customer_group_name'] ?? 'រំលស់'));
+        if ($customerGroupName !== '') {
+            $query->where(function ($q) use ($customerGroupName) {
+                $q->where('tcg.name', $customerGroupName)
+                    ->orWhere(function ($fallback) use ($customerGroupName) {
+                        $fallback->whereNull('tcg.id')
+                            ->where('ccg.name', $customerGroupName);
+                    });
+            });
+        }
         if (! empty($filters['location_id'])) $query->where('t.location_id', $filters['location_id']);
         if (! empty($filters['payment_status'])) $query->where('t.payment_status', $filters['payment_status']);
+        if (! empty($filters['sale_status'])) $query->where('t.status', $filters['sale_status']);
+        if (empty($filters['sale_status'])) $query->where('t.status', 'final');
         if (! empty($filters['final_total'])) $query->where('t.final_total', $filters['final_total']);
         if (! empty($filters['imei_or_lot'])) {
             $query->where(function ($q) use ($filters) {
                 $q->where('tsl.lot_no_line_id', 'like', '%'.$filters['imei_or_lot'].'%')
                     ->orWhere('tsl.sell_line_note', 'like', '%'.$filters['imei_or_lot'].'%');
+            });
+        }
+        if (! empty($filters['product_name_sku'])) {
+            $query->where(function ($q) use ($filters) {
+                $keyword = '%'.$filters['product_name_sku'].'%';
+                $q->where('p.name', 'like', $keyword)
+                    ->orWhere('p.sku', 'like', $keyword)
+                    ->orWhere('v.sub_sku', 'like', $keyword);
             });
         }
         if (! empty($filters['start_date'])) $query->whereDate('t.transaction_date', '>=', $filters['start_date']);
@@ -49,6 +77,11 @@ class CreateLoanFromSellService
             $row->is_converted = $this->preventDuplicateLoan((int) $row->id);
             return $row;
         });
+    }
+
+    public function getSaleFullData($transactionId): array
+    {
+        return $this->getSellFullData($transactionId);
     }
 
     public function getSellFullData($transactionId): array
@@ -127,6 +160,41 @@ class CreateLoanFromSellService
         ];
     }
 
+    public function cloneSaleToLoanFormData($transaction): array
+    {
+        $full = is_array($transaction) ? $transaction : $this->getSellFullData((int) $transaction);
+        $sale = $full['transaction'];
+
+        return [
+            'source_type' => 'ultimate_pos_sell',
+            'source_transaction_id' => $sale->id,
+            'source_invoice_no' => $sale->invoice_no,
+            'stock_already_deducted' => true,
+            'transaction' => $sale,
+            'customer_snapshot' => $this->cloneCustomerSnapshot($sale),
+            'location_snapshot' => $this->cloneLocationSnapshot($sale),
+            'payment_summary' => [
+                'final_total' => (float) $sale->final_total,
+                'paid_amount' => (float) $full['paid_amount'],
+                'due_amount' => (float) $full['due_amount'],
+                'payment_status' => $sale->payment_status ?? null,
+            ],
+            'sell_lines' => $this->cloneProductSnapshots($full),
+            'defaults' => $full['defaults'],
+        ];
+    }
+
+    public function prepareLoanDefaults($transaction): array
+    {
+        $full = is_array($transaction) ? $transaction : $this->getSellFullData((int) $transaction);
+
+        return $full['defaults'] ?? $this->calculateLoanDefaults((object) [
+            'final_total' => $full['transaction']->final_total ?? 0,
+            'paid_amount' => $full['paid_amount'] ?? 0,
+            'due_amount' => $full['due_amount'] ?? 0,
+        ]);
+    }
+
     public function cloneCustomerSnapshot($transaction): array
     {
         $resolved = $this->resolveCustomerSnapshot($transaction);
@@ -176,7 +244,7 @@ class CreateLoanFromSellService
             'down_payment' => (float) $transaction->paid_amount,
             'interest_rate' => 0,
             'interest_type' => 'flat',
-            'duration_months' => 6,
+            'duration_months' => 12,
             'payment_frequency' => 'monthly',
             'first_due_date' => Carbon::today()->addMonth()->toDateString(),
             'currency' => 'USD',
@@ -225,7 +293,7 @@ class CreateLoanFromSellService
         return DB::connection('mysql_loan')->transaction(function () use ($data, $full, $transaction, $transactionId) {
             $effectiveDownPayment = (float) ($data['payment']['amount'] ?? ($data['down_payment'] ?? 0));
             $resolvedCustomer = $this->resolveCustomerSnapshot($transaction);
-            $customerId = $this->createLoanCustomerSnapshot($transaction, $resolvedCustomer);
+            $customerId = $this->createLoanCustomerSnapshot($transaction, $resolvedCustomer, $data);
             $locationId = $this->upsertSnapshot('loan_business_locations', 'main_location_id', $transaction->main_location_id, $this->cloneLocationSnapshot($transaction));
 
             $loanPayload = $this->filterColumns('loans', array_merge([
@@ -235,6 +303,7 @@ class CreateLoanFromSellService
                 'customer_name_snapshot' => $resolvedCustomer['name'],
                 'customer_phone_snapshot' => $resolvedCustomer['phone'],
                 'customer_address_snapshot' => $resolvedCustomer['address'],
+                'customer_group_name_snapshot' => $this->resolveCustomerGroupName($data),
                 'business_location_id' => $locationId,
                 'main_location_id' => $transaction->main_location_id,
                 'location_name_snapshot' => $transaction->location_name_snapshot,
@@ -416,7 +485,7 @@ class CreateLoanFromSellService
         return (int) DB::connection('mysql_loan')->table($table)->insertGetId($this->filterColumns($table, $payload));
     }
 
-    protected function createLoanCustomerSnapshot($transaction, array $resolvedCustomer): ?int
+    protected function createLoanCustomerSnapshot($transaction, array $resolvedCustomer, array $data = []): ?int
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
             return null;
@@ -427,6 +496,7 @@ class CreateLoanFromSellService
         $payload['name'] = $resolvedCustomer['name'] ?? ($payload['name'] ?? null);
         $payload['phone'] = $resolvedCustomer['phone'] !== '' ? $resolvedCustomer['phone'] : ($payload['phone'] ?? '-');
         $payload['address'] = $resolvedCustomer['address'] ?? ($payload['address'] ?? null);
+        $payload['customer_group_name_snapshot'] = $this->resolveCustomerGroupName($data);
         $payload['business_location_id'] = $transaction->main_location_id ?? ($payload['business_location_id'] ?? null);
         $payload['created_by'] = auth()->id() ?? ($payload['created_by'] ?? null);
         $payload['status'] = $payload['status'] ?? 'active';
@@ -448,6 +518,13 @@ class CreateLoanFromSellService
         $columns = Schema::connection('mysql_loan')->getColumnListing($table);
 
         return Arr::only($payload, $columns);
+    }
+
+    protected function resolveCustomerGroupName(array $data): string
+    {
+        $groupName = trim((string) ($data['customer_group_name'] ?? ''));
+
+        return $groupName !== '' ? $groupName : 'រំលស់';
     }
 
     protected function resolveCustomerSnapshot($transaction): array

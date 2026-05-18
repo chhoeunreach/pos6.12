@@ -1,5 +1,5 @@
 <div class="box box-info">
-    <div class="box-header"><h3 class="box-title">Payment Schedule Preview</h3></div>
+    <div class="box-header"><h3 class="box-title">Schedule Preview</h3></div>
     <div class="box-body table-responsive">
         <table class="table table-bordered" id="schedulePreviewTable">
             <thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Total</th><th>Balance</th></tr></thead>

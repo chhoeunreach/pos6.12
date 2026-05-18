@@ -13,7 +13,6 @@
         ['label' => 'Loans', 'icon' => 'fa fa-credit-card', 'children' => [
             ['label' => 'Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view'],
             ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell'],
-            ['label' => 'Create Loan From Sell', 'route' => 'loan-management.sell-list', 'can' => 'loan_management.sell_convert'],
             ['label' => 'Installment Schedules', 'route' => 'loan-management.schedules.index', 'can' => 'loan_management.view'],
             ['label' => 'Monthly Payments', 'route' => 'loan-management.monthly-payments.index', 'can' => 'loan_management.monthly_payments.view'],
             ['label' => 'Overdue / Late Payments', 'route' => 'loan-management.overdue.index', 'can' => 'loan_management.overdue.view', 'badge' => $badgeCounts['overdue'] ?? 0],

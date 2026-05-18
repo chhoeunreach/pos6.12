@@ -1,5 +1,5 @@
 <div class="box box-primary">
-    <div class="box-header"><h3 class="box-title">Sell Information</h3></div>
+    <div class="box-header"><h3 class="box-title">Selected Sale Information</h3></div>
     <div class="box-body row">
         <div class="col-sm-6 col-md-3 loan-info-item"><strong>Invoice No:</strong> {{ $sell['transaction']->invoice_no }}</div>
         <div class="col-sm-6 col-md-3 loan-info-item"><strong>Sell Date:</strong> {{ $sell['transaction']->transaction_date }}</div>

@@ -20,34 +20,79 @@ class LoanFromSellController extends Controller
     public function index()
     {
         $locations = DB::table('business_locations')->orderBy('name')->pluck('name', 'id');
+        $customerNames = DB::table('contacts')
+            ->whereNotNull('name')
+            ->where('name', '!=', '')
+            ->orderBy('name')
+            ->distinct()
+            ->limit(500)
+            ->pluck('name', 'name');
+        $customerPhones = DB::table('contacts')
+            ->whereNotNull('mobile')
+            ->where('mobile', '!=', '')
+            ->orderBy('mobile')
+            ->distinct()
+            ->limit(500)
+            ->pluck('mobile', 'mobile');
+        $customerGroups = collect(['រំលស់' => 'រំលស់']);
+        if (Schema::hasTable('customer_groups')) {
+            $customerGroups = $customerGroups->merge(
+                DB::table('customer_groups')
+                    ->whereNotNull('name')
+                    ->where('name', '!=', '')
+                    ->orderBy('name')
+                    ->pluck('name', 'name')
+            );
+        }
 
         return view('loanmanagement::loans.create_from_sell.index', [
             'locations' => $locations,
+            'customerNames' => $customerNames,
+            'customerPhones' => $customerPhones,
+            'customerGroups' => $customerGroups,
             'paymentStatuses' => ['paid' => 'Paid', 'due' => 'Due', 'partial' => 'Partial', 'overdue' => 'Overdue'],
         ]);
     }
 
     public function search(Request $request): JsonResponse
     {
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+        if ($request->filled('date_range') && (! $startDate || ! $endDate)) {
+            $parts = preg_split('/\s+(?:to|–|—)\s+/i', trim((string) $request->date_range));
+            if (count($parts) >= 2) {
+                $startDate = trim($parts[0]);
+                $endDate = trim($parts[1]);
+            }
+        }
+
         $filters = [
             'invoice_no' => $request->invoice_no,
             'customer_name' => $request->customer_name,
             'customer_phone' => $request->customer_phone,
+            'customer_group_name' => $request->input('customer_group_name', 'រំលស់'),
             'location_id' => $request->location_id,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'payment_status' => $request->payment_status,
+            'sale_status' => $request->sale_status,
             'final_total' => $request->final_total,
             'imei_or_lot' => $request->imei_or_lot,
+            'product_name_sku' => $request->product_name_sku,
         ];
 
-        $rows = $this->service->searchSells($filters);
+        $rows = $this->service->searchSales($filters);
 
         return response()->json([
             'success' => true,
             'message' => 'Sells loaded successfully',
             'data' => $rows,
         ]);
+    }
+
+    public function searchSales(Request $request): JsonResponse
+    {
+        return $this->search($request);
     }
 
     public function clone(Request $request, $transaction_id)
@@ -129,10 +174,16 @@ class LoanFromSellController extends Controller
             'message' => 'Sell cloned successfully',
             'data' => [
                 'sell' => $sell,
+                'clone' => $this->service->cloneSaleToLoanFormData($sell),
                 'form_html' => $html,
                 'loan_url' => null,
             ],
         ]);
+    }
+
+    public function cloneData(Request $request, $transaction_id): JsonResponse
+    {
+        return $this->clone($request, $transaction_id);
     }
 
     public function checkDuplicateLoan($transaction_id): JsonResponse
@@ -175,7 +226,22 @@ class LoanFromSellController extends Controller
     public function store(StoreLoanFromSellRequest $request): JsonResponse
     {
         try {
-            $loanId = $this->service->createLoanFromSell($request->validated());
+            $validated = $request->validated();
+            $transactionId = (int) $validated['transaction_id'];
+            if ($this->service->preventDuplicateLoan($transactionId)) {
+                $loanId = $this->service->getLoanIdBySourceTransactionId($transactionId);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This sale already has installment loan.',
+                    'data' => [
+                        'loan_id' => $loanId,
+                        'loan_url' => ! empty($loanId) ? route('loan-management.loans.view', $loanId) : null,
+                    ],
+                ], 422);
+            }
+
+            $loanId = $this->service->createLoanFromSell($validated);
 
             return response()->json([
                 'success' => true,
@@ -189,5 +255,10 @@ class LoanFromSellController extends Controller
                 'data' => [],
             ], 422);
         }
+    }
+
+    public function storeFromSell(StoreLoanFromSellRequest $request): JsonResponse
+    {
+        return $this->store($request);
     }
 }

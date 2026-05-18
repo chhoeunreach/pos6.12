@@ -1,5 +1,5 @@
 <div class="box box-success">
-    <div class="box-header"><h3 class="box-title">Payment Information</h3></div>
+    <div class="box-header"><h3 class="box-title">Payment Summary</h3></div>
     <div class="box-body row">
         <div class="col-md-12">
             <h4 class="m-0">Payment info:</h4>

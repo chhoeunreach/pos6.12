@@ -28,6 +28,7 @@ class StoreLoanFromSellRequest extends FormRequest
             'penalty_type' => 'nullable|string|max:50',
             'penalty_amount' => 'nullable|numeric|min:0',
             'assigned_collector_id' => 'nullable|integer',
+            'customer_group_name' => 'nullable|string|max:255',
             'note' => 'nullable|string|max:1000',
             'payment' => 'nullable|array',
             'payment.amount' => 'nullable|numeric|min:0',
