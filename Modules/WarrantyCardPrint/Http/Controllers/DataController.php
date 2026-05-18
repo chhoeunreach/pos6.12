@@ -61,10 +61,6 @@ class DataController extends Controller
     font-family: 'Khmer OS Battambang';
     src: url('/fonts/khmer/Battambang-Regular.ttf') format('truetype');
 }
-@page {
-    size: 85.6mm 53.98mm;
-    margin: 0;
-}
 .warranty-card-preview-wrap {
     overflow: auto;
 }
@@ -200,7 +196,21 @@ CSS;
                         for (var i = 0; i < copies; i++) {
                             html += cardHtml;
                         }
-                        $("#receipt_section").html(html);
+                        $("#receipt_section").html(html).attr("data-warranty-card-print", "1");
+                    }
+
+                    function installWarrantyPrintPageStyle() {
+                        $("#warranty_card_print_page_style").remove();
+                        $("head").append("<style id=\"warranty_card_print_page_style\">@page{size:85.6mm 53.98mm;margin:0;}@media print{body.warranty-card-printing{margin:0;}}</style>");
+                        $("body").addClass("warranty-card-printing");
+                    }
+
+                    function cleanupWarrantyPrint() {
+                        $("#warranty_card_print_page_style").remove();
+                        $("body").removeClass("warranty-card-printing");
+                        if ($("#receipt_section").attr("data-warranty-card-print") === "1") {
+                            $("#receipt_section").removeAttr("data-warranty-card-print").empty();
+                        }
                     }
 
                     if ($("#pos_header_more_options").length && !$("#warranty_card_print_pos_header_link").length) {
@@ -233,11 +243,14 @@ CSS;
                         var $workspace = $(this).closest(".modal-content").find(".warranty-card-workspace");
                         updateWarrantyPreview($workspace);
                         buildWarrantyPrint($workspace);
+                        installWarrantyPrintPageStyle();
                         $(".view_modal").modal("hide");
                         setTimeout(function () {
                             window.print();
                         }, 200);
                     });
+
+                    window.addEventListener("afterprint", cleanupWarrantyPrint);
                 });
             </script>',
         ];
