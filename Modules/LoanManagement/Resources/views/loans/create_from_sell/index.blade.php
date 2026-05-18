@@ -2,11 +2,75 @@
 @section('title', 'Create Loan')
 
 @section('content_body')
-<section class="content-header">
+<style>
+    .loan-create-workspace .dataTables_scrollBody {
+        overflow: visible !important;
+    }
+    .loan-create-action-dropdown {
+        position: relative;
+    }
+    .loan-create-action-toggle {
+        background: #fff;
+        border: 1px solid #00a9ff;
+        border-radius: 12px;
+        color: #00a9ff;
+        font-weight: 600;
+        padding: 6px 14px;
+    }
+    .loan-create-action-toggle:hover,
+    .loan-create-action-toggle:focus {
+        background: #f2fbff;
+        color: #008fd8;
+    }
+    .loan-create-action-menu {
+        min-width: 230px;
+        padding: 8px 0;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+        z-index: 3000;
+    }
+    .loan-create-action-menu > li > a,
+    .loan-create-action-menu > li > button {
+        display: block;
+        width: 100%;
+        padding: 9px 18px;
+        border: 0;
+        background: transparent;
+        color: #777;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: left;
+    }
+    .loan-create-action-menu > li > a:hover,
+    .loan-create-action-menu > li > button:hover {
+        background: #f5f5f5;
+        color: #333;
+        text-decoration: none;
+    }
+    .loan-create-action-menu i {
+        width: 24px;
+        margin-right: 8px;
+        color: #777;
+        text-align: center;
+    }
+    .loan-create-action-menu .divider {
+        margin: 7px 0;
+    }
+    .loan-create-action-menu .disabled > a {
+        color: #999;
+        cursor: not-allowed;
+    }
+    .loan-create-action-menu .text-danger,
+    .loan-create-action-menu .text-danger i {
+        color: #d9534f;
+    }
+</style>
+<section class="content-header no-print">
     <h1>Create Loan</h1>
 </section>
 
-<section class="content loan-create-workspace">
+<section class="content loan-create-workspace no-print">
     @php
         $posAddSellUrl = Route::has('pos.create') ? route('pos.create') : url('/pos/create');
     @endphp
@@ -121,11 +185,22 @@
                         <th>Contact Number</th>
                         <th>Location</th>
                         <th>Payment Status</th>
+                        <th>SKU</th>
+                        <th>Product Name</th>
+                        <th>Lots</th>
                         <th>Total amount</th>
                         <th>Total paid</th>
                         <th>Sell Due</th>
                     </tr>
                 </thead>
+                <tfoot>
+                    <tr>
+                        <th colspan="10" class="text-right">Total:</th>
+                        <th id="footer_total_amount">0.00</th>
+                        <th id="footer_total_paid">0.00</th>
+                        <th id="footer_sell_due">0.00</th>
+                    </tr>
+                </tfoot>
                 <tbody></tbody>
             </table>
         </div>
@@ -135,15 +210,6 @@
         <strong>This sale already has installment loan.</strong>
         <a href="#" class="btn btn-xs btn-primary m-l-10" id="duplicateLoanViewLink">View Loan</a>
         <button type="button" class="btn btn-xs btn-default m-l-5" id="duplicateLoanCancel">Cancel</button>
-    </div>
-
-    <div id="selectedSaleWorkspace">
-        <div class="box box-info">
-            <div class="box-header with-border"><h3 class="box-title">Selected Sale Information</h3></div>
-            <div class="box-body">
-                <p class="text-muted">Use the filters above to search sales, then click Add to Installment.</p>
-            </div>
-        </div>
     </div>
 
     @include('loanmanagement::loans.create_from_sell.partials.add_sell_modal')
@@ -172,6 +238,10 @@
         cloneBase: "{{ url('/loan-management/loans/sales') }}",
         previewSchedule: "{{ route('loan-management.loans.preview-schedule') }}",
         loanViewBase: "{{ url('/loan-management/loans') }}",
+        sellViewBase: "{{ url('/sells') }}",
+        sellEditBase: "{{ url('/sells') }}",
+        sellDeleteBase: "{{ url('/pos') }}",
+        sellPrintBase: "{{ url('/sells') }}",
         posCreate: "{{ $posAddSellUrl }}"
     };
     var searchRequest = null;
@@ -183,8 +253,62 @@
         return Number.isFinite(number) ? number.toFixed(2) : '0.00';
     }
 
+    function numberValue(value) {
+        if (typeof value === 'number') {
+            return value;
+        }
+
+        var number = parseFloat(String(value || '').replace(/<[^>]*>/g, '').replace(/,/g, ''));
+        return Number.isFinite(number) ? number : 0;
+    }
+
     function esc(value) {
         return $('<div>').text(value == null ? '' : value).html();
+    }
+
+    function renderJoinedValue(value) {
+        var parts = String(value || '')
+            .split('|')
+            .map(function(item) { return item.trim(); })
+            .filter(function(item) { return item !== ''; });
+
+        if (!parts.length) {
+            return '';
+        }
+
+        return parts.map(function(item) {
+            return '<div>'+esc(item)+'</div>';
+        }).join('');
+    }
+
+    function buildActionDropdown(row) {
+        var rowId = esc(row.id);
+        var viewUrl = row.is_converted && row.loan_id
+            ? urls.loanViewBase + '/' + encodeURIComponent(row.loan_id) + '/view'
+            : urls.sellViewBase + '/' + encodeURIComponent(row.id);
+        var viewAction = row.is_converted && row.loan_id
+            ? '<li><a href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Loan</a></li>'
+            : '<li><a href="#" class="btn-modal" data-container=".view_modal" data-href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Sale</a></li>';
+        var addAction = row.is_converted
+            ? '<li class="disabled"><a href="#" tabindex="-1"><i class="fa fa-check"></i> Already Added</a></li>'
+            : '<li><a href="#" class="btn-select-sale" data-id="'+rowId+'"><i class="fa fa-credit-card"></i> Add to Installment</a></li>';
+        var editAction = '<li><a target="_blank" href="'+urls.sellEditBase+'/'+encodeURIComponent(row.id)+'/edit"><i class="fa fa-edit"></i> Edit Sale</a></li>';
+        var printAction = '<li><a href="#" class="print-invoice" data-href="'+urls.sellPrintBase+'/'+encodeURIComponent(row.id)+'/print"><i class="fa fa-print"></i> Print Invoice</a></li>';
+        var deleteAction = '<li><a href="#" class="btn-delete-create-loan-sale text-danger" data-href="'+urls.sellDeleteBase+'/'+encodeURIComponent(row.id)+'"><i class="fa fa-trash"></i> Delete Sale</a></li>';
+
+        return '<div class="btn-group loan-create-action-dropdown">' +
+            '<button type="button" class="btn btn-sm dropdown-toggle loan-create-action-toggle" data-toggle="dropdown" aria-expanded="false">' +
+                'Actions <span class="caret m-l-5"></span>' +
+            '</button>' +
+            '<ul class="dropdown-menu loan-create-action-menu">' +
+                addAction +
+                '<li class="divider"></li>' +
+                viewAction +
+                editAction +
+                printAction +
+                deleteAction +
+            '</ul>' +
+        '</div>';
     }
 
     function loadSells(){
@@ -258,17 +382,25 @@
             scrollY: '55vh',
             scrollCollapse: true,
             aaSorting: [[1, 'desc']],
+            footerCallback: function() {
+                var api = this.api();
+                var sumColumn = function(index) {
+                    return api.column(index, {search: 'applied'}).data().reduce(function(total, value) {
+                        return total + numberValue(value);
+                    }, 0);
+                };
+
+                $(api.column(10).footer()).html(money(sumColumn(10)));
+                $(api.column(11).footer()).html(money(sumColumn(11)));
+                $(api.column(12).footer()).html(money(sumColumn(12)));
+            },
             columns: [
                 {
                     data: null,
                     orderable: false,
                     searchable: false,
                     render: function(data, type, row) {
-                        if (row.is_converted) {
-                            return '<button class="btn btn-xs btn-warning btn-duplicate-sale" data-id="'+esc(row.id)+'">Already Has Loan</button>';
-                        }
-
-                        return '<button class="btn btn-xs btn-primary btn-select-sale" data-id="'+esc(row.id)+'">Add to Installment</button>';
+                        return buildActionDropdown(row);
                     }
                 },
                 {data: 'transaction_date', defaultContent: ''},
@@ -282,6 +414,21 @@
                     render: function(data) {
                         return data ? '<span class="label label-info">'+esc(data)+'</span>' : '';
                     }
+                },
+                {
+                    data: 'skus',
+                    defaultContent: '',
+                    render: function(data) { return renderJoinedValue(data); }
+                },
+                {
+                    data: 'product_names',
+                    defaultContent: '',
+                    render: function(data) { return renderJoinedValue(data); }
+                },
+                {
+                    data: 'lots',
+                    defaultContent: '',
+                    render: function(data) { return renderJoinedValue(data); }
                 },
                 {
                     data: 'final_total',
@@ -298,6 +445,7 @@
             ],
             createdRow: function(row) {
                 $(row).find('td:eq(0)').addClass('no-print');
+                $(row).find('td:eq(0)').css({'white-space': 'nowrap', 'min-width': '130px'});
             }
         });
     }
@@ -457,6 +605,47 @@
     });
     $(document).on('click', '.btn-select-sale', function(){ selectSale($(this).data('id')); });
     $(document).on('click', '.btn-duplicate-sale', function(){ alert('This sale already has installment loan.'); });
+    $(document).on('click', '.btn-delete-create-loan-sale', function(e){
+        e.preventDefault();
+        var deleteUrl = $(this).data('href');
+        var runDelete = function(){
+            $.ajax({
+                method: 'DELETE',
+                url: deleteUrl,
+                dataType: 'json',
+                success: function(result) {
+                    if (result.success) {
+                        if (window.toastr) {
+                            toastr.success(result.msg || 'Sale deleted successfully');
+                        }
+                        loadSells();
+                    } else if (window.toastr) {
+                        toastr.error(result.msg || 'Unable to delete sale');
+                    } else {
+                        alert(result.msg || 'Unable to delete sale');
+                    }
+                },
+                error: function(xhr) {
+                    alert(xhr.responseJSON?.msg || xhr.responseJSON?.message || 'Unable to delete sale');
+                }
+            });
+        };
+
+        if (window.swal) {
+            swal({
+                title: (window.LANG && LANG.sure) ? LANG.sure : 'Are you sure?',
+                icon: 'warning',
+                buttons: true,
+                dangerMode: true
+            }).then(function(willDelete){
+                if (willDelete) {
+                    runDelete();
+                }
+            });
+        } else if (confirm('Are you sure?')) {
+            runDelete();
+        }
+    });
     $('#duplicateLoanCancel').on('click', function(){ $('#duplicateLoanWarning').hide(); });
     $('#btnOpenAddSellModal').on('click', openAddSellModal);
     $('#btnRefreshSalesAfterPosSell').on('click', function(){

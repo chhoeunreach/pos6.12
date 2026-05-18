@@ -11,8 +11,8 @@
             ['label' => 'Blacklist', 'route' => 'loan-management.blacklist.index', 'can' => 'loan_management.blacklist.view'],
         ]],
         ['label' => 'Loans', 'icon' => 'fa fa-credit-card', 'children' => [
-            ['label' => 'Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view'],
-            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell'],
+            ['label' => 'Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view', 'active_routes' => ['loan-management.loans', 'loan-management.loans.index', 'loan-management.loans.view', 'loan-management.loans.edit']],
+            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell', 'active_routes' => ['loan-management.loans.create-from-sell', 'loan-management.loans.create', 'loan-management.loans.clone-sell', 'loan-management.loans.sales.clone-data']],
             ['label' => 'Installment Schedules', 'route' => 'loan-management.schedules.index', 'can' => 'loan_management.view'],
             ['label' => 'Monthly Payments', 'route' => 'loan-management.monthly-payments.index', 'can' => 'loan_management.monthly_payments.view'],
             ['label' => 'Overdue / Late Payments', 'route' => 'loan-management.overdue.index', 'can' => 'loan_management.overdue.view', 'badge' => $badgeCounts['overdue'] ?? 0],
@@ -60,8 +60,8 @@
 
                 $routes = empty($children)
                     ? [$item['route'] ?? '']
-                    : $visibleChildren->pluck('route')->all();
-                $isActive = LoanMenuHelper::activeRoute($routes);
+                    : $visibleChildren->flatMap(fn ($child) => $child['active_routes'] ?? [$child['route']])->all();
+                $isActive = LoanMenuHelper::activeRoute($routes, false);
             @endphp
 
             @if(empty($children))
@@ -79,7 +79,7 @@
 
                     <div class="lm-submenu" style="{{ $isActive ? 'display:block;' : '' }}">
                         @foreach($visibleChildren as $child)
-                            @php $childActive = LoanMenuHelper::activeRoute([$child['route']]); @endphp
+                            @php $childActive = LoanMenuHelper::activeRoute($child['active_routes'] ?? [$child['route']], false); @endphp
                             <a href="{{ Route::has($child['route']) ? route($child['route']) : '#' }}" class="lm-submenu-link {{ $childActive ? 'active' : '' }}">
                                 @if(!empty($child['icon']))
                                     <i class="{{ $child['icon'] }} lm-submenu-icon"></i>

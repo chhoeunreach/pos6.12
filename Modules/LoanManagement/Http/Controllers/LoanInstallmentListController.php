@@ -16,40 +16,152 @@ class LoanInstallmentListController extends Controller
         return Schema::connection('mysql_loan')->hasColumn('loans', $col);
     }
 
+    protected function coreLocationNames($ids): array
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty() || ! Schema::hasTable('business_locations')) {
+            return [];
+        }
+
+        return DB::table('business_locations')
+            ->whereIn('id', $ids)
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    protected function loanLocationNames($ids): array
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty() || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return [];
+        }
+
+        return DB::connection('mysql_loan')->table('loan_business_locations')
+            ->whereIn('id', $ids)
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    protected function coreLocationIdsByName(string $name): array
+    {
+        if (! Schema::hasTable('business_locations')) {
+            return [];
+        }
+
+        return DB::table('business_locations')
+            ->where('name', $name)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    protected function loanLocationIdsByName(string $name): array
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return [];
+        }
+
+        return DB::connection('mysql_loan')->table('loan_business_locations')
+            ->where('name', $name)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    protected function resolveLocationDisplay($row): string
+    {
+        $snapshot = trim((string) ($row->location_name_snapshot ?? ''));
+        if ($snapshot !== '' && ! preg_match('/^Location #\d+$/', $snapshot)) {
+            return $snapshot;
+        }
+
+        $loanLocationId = $row->business_location_id ?? null;
+        $loanNames = $this->loanLocationNames([$loanLocationId]);
+        if (! empty($loanNames[$loanLocationId])) {
+            return $loanNames[$loanLocationId];
+        }
+
+        $mainLocationId = $row->main_location_id ?? null;
+        $coreNames = $this->coreLocationNames([$mainLocationId]);
+        if (! empty($coreNames[$mainLocationId])) {
+            return $coreNames[$mainLocationId];
+        }
+
+        return $loanLocationId ? 'Location #'.$loanLocationId : '-';
+    }
+
+    protected function coreUserNames($ids): array
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty() || ! Schema::hasTable('users')) {
+            return [];
+        }
+
+        return DB::table('users')
+            ->whereIn('id', $ids)
+            ->selectRaw("id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))), ''), username) as display_name")
+            ->pluck('display_name', 'id')
+            ->all();
+    }
+
     public function index()
     {
         $locations = [];
         $collectors = [];
 
         if (Schema::connection('mysql_loan')->hasTable('loans')) {
+            $collectorIdCol = $this->hasCol('collector_id')
+                ? 'collector_id'
+                : ($this->hasCol('assigned_to') ? 'assigned_to' : null);
+
             if ($this->hasCol('location_name_snapshot')) {
                 $locations = DB::connection('mysql_loan')->table('loans')
                     ->whereNotNull('location_name_snapshot')
+                    ->where('location_name_snapshot', '!=', '')
                     ->distinct()
                     ->orderBy('location_name_snapshot')
-                    ->pluck('location_name_snapshot', 'location_name_snapshot');
-            } elseif ($this->hasCol('business_location_id')) {
-                $locations = DB::connection('mysql_loan')->table('loans')
+                    ->pluck('location_name_snapshot', 'location_name_snapshot')
+                    ->all();
+            }
+            if ($this->hasCol('business_location_id')) {
+                $loanLocationIds = DB::connection('mysql_loan')->table('loans')
                     ->whereNotNull('business_location_id')
                     ->distinct()
                     ->orderBy('business_location_id')
-                    ->pluck('business_location_id', 'business_location_id')
-                    ->mapWithKeys(fn ($v) => [$v => 'Location #'.$v]);
+                    ->pluck('business_location_id');
+                foreach ($this->loanLocationNames($loanLocationIds) as $id => $name) {
+                    $locations[$name] = $name;
+                }
+            }
+            if ($this->hasCol('main_location_id')) {
+                $mainLocationIds = DB::connection('mysql_loan')->table('loans')
+                    ->whereNotNull('main_location_id')
+                    ->distinct()
+                    ->orderBy('main_location_id')
+                    ->pluck('main_location_id');
+                foreach ($this->coreLocationNames($mainLocationIds) as $id => $name) {
+                    $locations[$name] = $name;
+                }
             }
 
             if ($this->hasCol('collector_name_snapshot')) {
                 $collectors = DB::connection('mysql_loan')->table('loans')
                     ->whereNotNull('collector_name_snapshot')
+                    ->where('collector_name_snapshot', '!=', '')
                     ->distinct()
                     ->orderBy('collector_name_snapshot')
-                    ->pluck('collector_name_snapshot', 'collector_name_snapshot');
-            } elseif ($this->hasCol('collector_id')) {
-                $collectors = DB::connection('mysql_loan')->table('loans')
-                    ->whereNotNull('collector_id')
+                    ->pluck('collector_name_snapshot', 'collector_name_snapshot')
+                    ->all();
+            }
+            if ($collectorIdCol) {
+                $collectorIds = DB::connection('mysql_loan')->table('loans')
+                    ->whereNotNull($collectorIdCol)
                     ->distinct()
-                    ->orderBy('collector_id')
-                    ->pluck('collector_id', 'collector_id')
-                    ->mapWithKeys(fn ($v) => [$v => 'Collector #'.$v]);
+                    ->orderBy($collectorIdCol)
+                    ->pluck($collectorIdCol);
+                foreach ($this->coreUserNames($collectorIds) as $id => $name) {
+                    $collectors[$id] = $name;
+                }
             }
         }
 
@@ -69,6 +181,8 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('loan_date') ? 'l.loan_date' : 'l.created_at').' as loan_date, '.
                 ($this->hasCol('customer_name_snapshot') ? 'l.customer_name_snapshot' : 'NULL').' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
+                ($this->hasCol('main_location_id') ? 'l.main_location_id' : 'NULL').' as main_location_id, '.
+                ($this->hasCol('business_location_id') ? 'l.business_location_id' : 'NULL').' as business_location_id, '.
                 ($this->hasCol('location_name_snapshot') ? 'l.location_name_snapshot' : ($this->hasCol('business_location_id') ? "CONCAT('Location #', l.business_location_id)" : 'NULL')).' as location_name_snapshot, '.
                 ($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' as principal_amount, '.
                 ($this->hasCol('paid_amount') ? 'l.paid_amount' : '0').' as paid_amount, '.
@@ -76,6 +190,8 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('status') ? 'l.status' : "'pending'").' as status, '.
                 ($this->hasCol('currency') ? 'l.currency' : "'USD'").' as currency, '.
                 ($this->hasCol('source_invoice_no') ? 'l.source_invoice_no' : 'NULL').' as source_invoice_no, '.
+                ($this->hasCol('collector_id') ? 'l.collector_id' : 'NULL').' as collector_id, '.
+                ($this->hasCol('assigned_to') ? 'l.assigned_to' : 'NULL').' as assigned_to, '.
                 ($this->hasCol('collector_name_snapshot') ? 'l.collector_name_snapshot' : ($this->hasCol('collector_id') ? "CONCAT('Collector #', l.collector_id)" : 'NULL')).' as collector_name_snapshot'
             );
 
@@ -83,20 +199,36 @@ class LoanInstallmentListController extends Controller
         if ($request->filled('end_date')) $q->whereDate('l.loan_date', '<=', $request->end_date);
         if ($request->filled('status') && $this->hasCol('status')) $q->where('l.status', $request->status);
         if ($request->filled('location_name')) {
-            if ($this->hasCol('location_name_snapshot')) {
-                $q->where('l.location_name_snapshot', $request->location_name);
-            } elseif ($this->hasCol('business_location_id')) {
-                $id = preg_replace('/\D+/', '', (string) $request->location_name);
-                if ($id !== '') $q->where('l.business_location_id', (int) $id);
-            }
+            $locationFilter = (string) $request->location_name;
+            $q->where(function ($query) use ($locationFilter) {
+                if ($this->hasCol('location_name_snapshot')) {
+                    $query->orWhere('l.location_name_snapshot', $locationFilter);
+                }
+                $loanLocationIds = $this->loanLocationIdsByName($locationFilter);
+                if (! empty($loanLocationIds) && $this->hasCol('business_location_id')) {
+                    $query->orWhereIn('l.business_location_id', $loanLocationIds);
+                }
+                $coreLocationIds = $this->coreLocationIdsByName($locationFilter);
+                if (! empty($coreLocationIds) && $this->hasCol('main_location_id')) {
+                    $query->orWhereIn('l.main_location_id', $coreLocationIds);
+                }
+                if (is_numeric($locationFilter)) {
+                    if ($this->hasCol('main_location_id')) $query->orWhere('l.main_location_id', (int) $locationFilter);
+                    if ($this->hasCol('business_location_id')) $query->orWhere('l.business_location_id', (int) $locationFilter);
+                }
+            });
         }
         if ($request->filled('collector_name')) {
-            if ($this->hasCol('collector_name_snapshot')) {
-                $q->where('l.collector_name_snapshot', $request->collector_name);
-            } elseif ($this->hasCol('collector_id')) {
-                $id = preg_replace('/\D+/', '', (string) $request->collector_name);
-                if ($id !== '') $q->where('l.collector_id', (int) $id);
-            }
+            $collectorFilter = (string) $request->collector_name;
+            $q->where(function ($query) use ($collectorFilter) {
+                if ($this->hasCol('collector_name_snapshot')) {
+                    $query->orWhere('l.collector_name_snapshot', $collectorFilter);
+                }
+                if (is_numeric($collectorFilter)) {
+                    if ($this->hasCol('collector_id')) $query->orWhere('l.collector_id', (int) $collectorFilter);
+                    if ($this->hasCol('assigned_to')) $query->orWhere('l.assigned_to', (int) $collectorFilter);
+                }
+            });
         }
         if ($request->filled('customer') && $this->hasCol('customer_name_snapshot')) $q->where('l.customer_name_snapshot', 'like', '%'.$request->customer.'%');
 
@@ -104,6 +236,20 @@ class LoanInstallmentListController extends Controller
             ->editColumn('principal_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->principal_amount.'</span>')
             ->editColumn('paid_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->paid_amount.'</span>')
             ->editColumn('balance_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->balance_amount.'</span>')
+            ->editColumn('location_name_snapshot', function ($r) {
+                return e($this->resolveLocationDisplay($r));
+            })
+            ->editColumn('collector_name_snapshot', function ($r) {
+                $snapshot = trim((string) ($r->collector_name_snapshot ?? ''));
+                if ($snapshot !== '' && ! preg_match('/^Collector #\d+$/', $snapshot)) {
+                    return e($snapshot);
+                }
+
+                $id = $r->collector_id ?? $r->assigned_to ?? null;
+                $names = $this->coreUserNames([$id]);
+
+                return e($names[$id] ?? ($id ? 'Collector #'.$id : '-'));
+            })
             ->editColumn('status', function ($r) {
                 $map = ['draft' => 'default', 'pending' => 'warning', 'approved' => 'info', 'active' => 'primary', 'completed' => 'success', 'rejected' => 'danger', 'cancelled' => 'default', 'defaulted' => 'danger'];
                 $c = $map[$r->status] ?? 'default';

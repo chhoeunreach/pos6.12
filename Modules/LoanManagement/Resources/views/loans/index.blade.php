@@ -34,7 +34,7 @@
 </section>
 @endsection
 
-@section('javascript')
+@section('loan_js')
 <script>
 $(document).ready(function(){
     $('.select2').select2();

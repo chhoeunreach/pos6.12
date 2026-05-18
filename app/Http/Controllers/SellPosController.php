@@ -630,6 +630,7 @@ class SellPosController extends Controller
                 if (!$is_direct_sale) {
                     if ($input['status'] == 'draft') {
                         $msg = trans('sale.draft_added');
+                        $print_invoice = true;
 
                         if ($input['is_quotation'] == 1) {
                             $msg = trans('lang_v1.quotation_added');
@@ -1475,6 +1476,11 @@ class SellPosController extends Controller
 
                 if ($input['status'] == 'draft' && $input['is_quotation'] == 0) {
                     $msg = trans('sale.draft_added');
+                    if (!$is_direct_sale && $can_print_invoice) {
+                        $receipt = $this->receiptContent($business_id, $input['location_id'], $transaction->id, null, false, true, $invoice_layout_id);
+                    } else {
+                        $receipt = '';
+                    }
                 } elseif ($input['status'] == 'draft' && $input['is_quotation'] == 1) {
                     $msg = trans('lang_v1.quotation_updated');
                     if (!$is_direct_sale && $can_print_invoice) {

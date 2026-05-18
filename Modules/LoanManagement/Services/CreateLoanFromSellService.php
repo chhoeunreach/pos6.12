@@ -32,8 +32,9 @@ class CreateLoanFromSellService
             ->leftJoin('transaction_sell_lines as tsl', 'tsl.transaction_id', '=', 't.id')
             ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
             ->leftJoin('products as p', 'p.id', '=', 'v.product_id')
+            ->leftJoin('purchase_lines as pl', 'pl.id', '=', 'tsl.lot_no_line_id')
             ->where('t.type', 'sell')
-            ->selectRaw("t.id, t.transaction_date, t.invoice_no, c.name as customer_name, c.mobile as customer_phone, COALESCE(tcg.name, ccg.name) as customer_group_name, bl.name as location_name, t.final_total, COALESCE(tp.paid_amount,0) as paid_amount, (t.final_total - COALESCE(tp.paid_amount,0)) as due_amount, t.payment_status, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))), ''), u.username) as created_by_name")
+            ->selectRaw("t.id, t.transaction_date, t.invoice_no, c.name as customer_name, c.mobile as customer_phone, COALESCE(tcg.name, ccg.name) as customer_group_name, bl.name as location_name, GROUP_CONCAT(DISTINCT NULLIF(COALESCE(v.sub_sku, p.sku), '') SEPARATOR ' | ') as skus, GROUP_CONCAT(DISTINCT NULLIF(p.name, '') SEPARATOR ' | ') as product_names, GROUP_CONCAT(DISTINCT NULLIF(COALESCE(pl.lot_number, tsl.sell_line_note), '') SEPARATOR ' | ') as lots, t.final_total, COALESCE(tp.paid_amount,0) as paid_amount, (t.final_total - COALESCE(tp.paid_amount,0)) as due_amount, t.payment_status, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))), ''), u.username) as created_by_name")
             ->groupBy('t.id');
 
         if (! empty($filters['invoice_no'])) $query->where('t.invoice_no', 'like', '%'.$filters['invoice_no'].'%');
@@ -57,6 +58,7 @@ class CreateLoanFromSellService
         if (! empty($filters['imei_or_lot'])) {
             $query->where(function ($q) use ($filters) {
                 $q->where('tsl.lot_no_line_id', 'like', '%'.$filters['imei_or_lot'].'%')
+                    ->orWhere('pl.lot_number', 'like', '%'.$filters['imei_or_lot'].'%')
                     ->orWhere('tsl.sell_line_note', 'like', '%'.$filters['imei_or_lot'].'%');
             });
         }
@@ -75,6 +77,7 @@ class CreateLoanFromSellService
 
         return $rows->map(function ($row) {
             $row->is_converted = $this->preventDuplicateLoan((int) $row->id);
+            $row->loan_id = $row->is_converted ? $this->getLoanIdBySourceTransactionId((int) $row->id) : null;
             return $row;
         });
     }

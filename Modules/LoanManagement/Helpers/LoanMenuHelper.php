@@ -6,7 +6,7 @@ use Modules\LoanManagement\Services\LoanSidebarBadgeService;
 
 class LoanMenuHelper
 {
-    public static function activeRoute(array $routeNames): bool
+    public static function activeRoute(array $routeNames, bool $matchChildren = true): bool
     {
         $current = request()->route() ? request()->route()->getName() : '';
         if (empty($current)) {
@@ -14,7 +14,7 @@ class LoanMenuHelper
         }
 
         foreach ($routeNames as $name) {
-            if ($current === $name || str_starts_with($current, $name.'.')) {
+            if ($current === $name || ($matchChildren && str_starts_with($current, $name.'.'))) {
                 return true;
             }
         }

@@ -1599,6 +1599,7 @@ class TransactionUtil extends Util
 
         //Additional notes
         $output['additional_notes'] = $transaction->additional_notes;
+        $output['staff_note'] = $transaction->staff_note;
         $output['footer_text'] = $invoice_layout->footer_text;
 
         //Barcode related information.
@@ -2080,6 +2081,8 @@ class TransactionUtil extends Util
                 // add for zatca pdf
                 'line_discount_amount_uf' => $line->line_discount_amount,
                 'line_discount_type_uf' => $line->line_discount_type,
+                'sell_line_note_raw' => ! empty($line->sell_line_note) ? $line->sell_line_note : '',
+                'lot_number_raw' => ! empty($line->lot_details->lot_number) ? $line->lot_details->lot_number : '',
             ];
 
             $temp = [];
