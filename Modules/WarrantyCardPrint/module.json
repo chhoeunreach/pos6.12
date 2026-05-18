@@ -1,0 +1,14 @@
+{
+    "name": "WarrantyCardPrint",
+    "alias": "warrantycardprint",
+    "description": "Manual warranty card printing module",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\WarrantyCardPrint\\Providers\\WarrantyCardPrintServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

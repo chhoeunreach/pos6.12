@@ -31,5 +31,6 @@
     "LocalCashierReport": true,
     "SmartStockInventory": true,
     "MismatchFixer": true,
-    "LoanManagement": true
+    "LoanManagement": true,
+    "WarrantyCardPrint": true
 }
