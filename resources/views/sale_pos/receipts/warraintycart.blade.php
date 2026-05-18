@@ -28,8 +28,6 @@ body {
     height: 53.98mm;
     font-family: Arial, sans-serif;
     box-sizing: border-box;
-    transform: rotate(180deg);
-    transform-origin: center center;
     page-break-after: always;
     break-after: page;
 }
@@ -37,6 +35,13 @@ body {
 .warranty-card:last-child {
     page-break-after: auto;
     break-after: auto;
+}
+
+@media print {
+    .warranty-card {
+        transform: rotate(180deg);
+        transform-origin: center center;
+    }
 }
 
 /* ======================
