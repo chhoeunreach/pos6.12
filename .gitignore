@@ -9,7 +9,7 @@
 Homestead.json
 Homestead.yaml
 npm-debug.log
-.env
+.env*
 /public/uploads/business_logos
 /public/uploads/documents
 /public/uploads/img
@@ -22,4 +22,5 @@ npm-debug.log
 .scribe
 /public/docs
 /config/database.php
+
 
