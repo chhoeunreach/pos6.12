@@ -37,13 +37,6 @@ body {
     break-after: auto;
 }
 
-@media print {
-    .warranty-card {
-        transform: rotate(180deg);
-        transform-origin: center center;
-    }
-}
-
 /* ======================
    ROW DEFINITIONS
    ====================== */
