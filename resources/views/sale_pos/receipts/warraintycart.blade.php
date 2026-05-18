@@ -28,6 +28,8 @@ body {
     height: 53.98mm;
     font-family: Arial, sans-serif;
     box-sizing: border-box;
+    transform: rotate(180deg);
+    transform-origin: center center;
     page-break-after: always;
     break-after: page;
 }
