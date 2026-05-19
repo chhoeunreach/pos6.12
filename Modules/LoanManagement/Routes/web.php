@@ -113,9 +113,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/live-chat', [LoanChatController::class, 'webInbox'])->name('loan-management.live-chat')->middleware('can:loan_management.chat.view');
         Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.live-chat.detail')->middleware('can:loan_management.chat.view');
         Route::get('/chat-api/chats', [LoanChatController::class, 'index'])->name('loan-management.chat-api.index')->middleware('can:loan_management.chat.view');
-        Route::post('/chat-api/chats', [LoanChatController::class, 'store'])->name('loan-management.chat-api.store')->middleware('can:loan_management.chat.reply');
+        Route::post('/chat-api/chats', [LoanChatController::class, 'store'])->name('loan-management.chat-api.store')->middleware('can:loan_management.chat.view');
         Route::get('/chat-api/chats/{thread}', [LoanChatController::class, 'show'])->name('loan-management.chat-api.show')->middleware('can:loan_management.chat.view');
-        Route::post('/chat-api/chats/{thread}/messages', [LoanChatController::class, 'sendMessage'])->name('loan-management.chat-api.messages')->middleware('can:loan_management.chat.reply');
+        Route::post('/chat-api/chats/{thread}/messages', [LoanChatController::class, 'sendMessage'])->name('loan-management.chat-api.messages')->middleware('can:loan_management.chat.view');
         Route::post('/chat-api/chats/{thread}/assign', [LoanChatController::class, 'assign'])->name('loan-management.chat-api.assign')->middleware('can:loan_management.chat.assign');
         Route::post('/chat-api/chats/{thread}/transfer', [LoanChatController::class, 'transfer'])->name('loan-management.chat-api.transfer')->middleware('loan.permission:loan_management.chat.transfer|loan_management.chat.assign');
         Route::post('/chat-api/chats/{thread}/read', [LoanChatController::class, 'read'])->name('loan-management.chat-api.read')->middleware('can:loan_management.chat.view');

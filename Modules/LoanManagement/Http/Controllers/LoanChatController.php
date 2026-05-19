@@ -39,6 +39,22 @@ class LoanChatController extends Controller
             || empty($thread->assigned_staff_id);
     }
 
+    protected function canReply(Request $request): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->can('loan_management.chat.reply')) {
+            return true;
+        }
+
+        $webSupportInbox = $request->is('loan-management/chat-api/*') || $request->is('loan-management/chat-api/chats');
+
+        return $webSupportInbox && $user->can('loan_management.chat.view');
+    }
+
     public function index(Request $request)
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
@@ -59,7 +75,7 @@ class LoanChatController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless(auth()->user()->can('loan_management.chat.reply'), 403);
+        abort_unless($this->canReply($request), 403);
         $data = $request->validate([
             'customer_id' => 'nullable|integer',
             'staff_id' => 'nullable|integer',
@@ -122,7 +138,7 @@ class LoanChatController extends Controller
 
     public function sendMessage(SendChatMessageRequest $request, int $thread)
     {
-        abort_unless(auth()->user()->can('loan_management.chat.reply'), 403);
+        abort_unless($this->canReply($request), 403);
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $data = $request->validated();

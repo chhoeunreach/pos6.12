@@ -269,6 +269,8 @@
         loadInbox(false);
     });
     function openCustomerTarget(customerId){
+        $('#activeTitle').text('Opening customer chat...');
+        $('#activeSubtitle').text('Preparing conversation');
         $.post(chatBaseUrl, {_token: csrf, customer_id: customerId, type: 'customer_staff', priority: 'normal'}, function(resp){
             var row = apiData(resp);
             if (row && row.id) {
@@ -276,6 +278,11 @@
                 loadInbox(true);
                 loadThread(row.id);
             }
+        }).fail(function(xhr){
+            var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot open chat for this customer.';
+            $('#messageList').html('<div class="lm-chat-empty">'+esc(message)+'</div>');
+            $('#activeTitle').text('Chat not opened');
+            $('#activeSubtitle').text('Please check Live Chat permission');
         });
     }
 
@@ -299,6 +306,9 @@
             $('#messageText').val('');
             loadThread(activeThread);
             loadInbox(true);
+        }).fail(function(xhr){
+            var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot send reply.';
+            $('#messageList').append('<div class="lm-chat-empty" style="height:auto;padding:10px">'+esc(message)+'</div>');
         });
     });
     $('#btnImage').on('click', function(){ $('#chatFile').attr('accept','image/*').data('type','image').click(); });
