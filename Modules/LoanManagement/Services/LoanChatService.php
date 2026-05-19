@@ -656,6 +656,9 @@ class LoanChatService
         return [
             'id' => (int) $thread->id,
             'thread_number' => (string) ($thread->thread_number ?? ''),
+            'customer_id' => $thread->customer_id === null ? null : (int) $thread->customer_id,
+            'staff_id' => $thread->staff_id === null ? null : (int) $thread->staff_id,
+            'loan_id' => $thread->loan_id === null ? null : (int) $thread->loan_id,
             'display_name' => $this->getDisplayName($thread, $viewerType),
             'display_subtitle' => $this->getDisplaySubtitle($thread, $viewerType),
             'avatar_url' => $this->getAvatarUrl($thread, $viewerType),

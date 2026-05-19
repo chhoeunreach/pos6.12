@@ -43,6 +43,7 @@
     .lm-info-row span:first-child{color:#64748b}
     .lm-info-row span:last-child{font-weight:700;color:#111827;text-align:right}
     .lm-priority{font-size:11px;border-radius:10px;padding:2px 7px;background:#e2e8f0;color:#334155;text-transform:capitalize}
+    .lm-priority.new{background:#dcfce7;color:#166534}
     .lm-priority.high,.lm-priority.urgent{background:#fee2e2;color:#991b1b}
     @media(max-width:1100px){.lm-chat-shell{grid-template-columns:280px 1fr}.lm-chat-side{display:none}}
     @media(max-width:760px){.lm-chat-shell{height:auto;min-height:700px;grid-template-columns:1fr}.lm-chat-inbox{height:260px}.lm-chat-main{min-height:520px}}
@@ -145,6 +146,7 @@
     var activeView = 'all';
     var threads = [];
     var csrf = '{{ csrf_token() }}';
+    var chatBaseUrl = '{{ url('loan-management/chat-api/chats') }}';
     var pollMs = {{ (int) config('loanmanagement.chat_polling_seconds', 5) * 1000 }};
 
     function apiData(resp){ return resp && resp.data && resp.data.data ? resp.data.data : (resp && resp.data ? resp.data : []); }
@@ -153,7 +155,7 @@
     function money(v){ var n = parseFloat(v || 0); return '$ ' + n.toFixed(2); }
 
     function loadInbox(keepActive){
-        $.get('/api/loan-management/chats', {view: activeView}, function(resp){
+        $.get(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}, function(resp){
             threads = apiData(resp) || [];
             renderCards(threads);
             renderThreads();
@@ -186,12 +188,12 @@
         }
         filtered.forEach(function(r){
             var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-chat-badge">'+Number(r.unread_count)+'</span>' : '';
-            var item = $('<div class="lm-chat-item" data-id="'+r.id+'">'+
+            var item = $('<div class="lm-chat-item" data-id="'+(r.id || '')+'" data-customer-id="'+(r.customer_id || '')+'" data-new-chat="'+(r.is_customer_only ? '1' : '0')+'">'+
                 '<div class="lm-chat-avatar '+(r.is_online ? 'online' : '')+'">'+initials(r.display_name)+'</div>'+
                 '<div style="min-width:0"><div class="lm-chat-title">'+esc(r.display_name)+'</div>'+
                 '<div class="lm-chat-subtitle">'+esc(r.display_subtitle || '')+'</div>'+
                 '<div class="lm-chat-preview">'+esc(r.typing ? 'Typing...' : (r.last_sender_name ? r.last_sender_name + ': ' : '') + (r.last_message || 'No messages yet'))+'</div></div>'+
-                '<div style="text-align:right"><span class="lm-priority '+esc(r.priority || '')+'">'+esc(r.priority || 'normal')+'</span><div style="margin-top:6px">'+badge+'</div></div>'+
+                '<div style="text-align:right"><span class="lm-priority '+esc(r.status === 'new' ? 'new' : (r.priority || ''))+'">'+esc(r.status === 'new' ? 'new' : (r.priority || 'normal'))+'</span><div style="margin-top:6px">'+badge+'</div></div>'+
             '</div>');
             if (String(r.id) === String(activeThread)) item.addClass('active');
             list.append(item);
@@ -202,7 +204,7 @@
         activeThread = id;
         $('.lm-chat-item').removeClass('active');
         $('.lm-chat-item[data-id="'+id+'"]').addClass('active');
-        $.get('/api/loan-management/chats/' + id, function(resp){
+        $.get(chatBaseUrl + '/' + id, function(resp){
             var row = apiData(resp);
             $('#activeTitle').text(row.display_name || 'Customer');
             $('#activeSubtitle').text((row.display_subtitle || '') + (row.status ? ' - ' + row.status : ''));
@@ -211,7 +213,7 @@
             renderMessages(row.messages || []);
             renderSidebar(row.sidebar || {});
             if (markRead !== false) {
-                $.post('/api/loan-management/chats/' + id + '/read', {_token: csrf});
+                $.post(chatBaseUrl + '/' + id + '/read', {_token: csrf});
             }
         });
     }
@@ -256,7 +258,7 @@
         data.append('message_type', type);
         data.append('file', file);
         data.append('message', $('#messageText').val() || '');
-        $.ajax({url:'/api/loan-management/chats/'+activeThread+'/messages', method:'POST', data:data, processData:false, contentType:false})
+        $.ajax({url:chatBaseUrl + '/' + activeThread + '/messages', method:'POST', data:data, processData:false, contentType:false})
             .done(function(){ $('#messageText').val(''); $('#chatFile').val(''); loadThread(activeThread); loadInbox(true); });
     }
 
@@ -266,13 +268,34 @@
         $(this).addClass('active');
         loadInbox(false);
     });
-    $('#chatList').on('click', '.lm-chat-item', function(){ loadThread($(this).data('id')); });
-    $('#chatSearch').on('input', renderThreads);
-    $('#messageText').on('input', function(){ if(activeThread) $.post('/api/loan-management/chats/'+activeThread+'/typing', {_token:csrf}); });
+    function openCustomerTarget(customerId){
+        $.post(chatBaseUrl, {_token: csrf, customer_id: customerId, type: 'customer_staff', priority: 'normal'}, function(resp){
+            var row = apiData(resp);
+            if (row && row.id) {
+                activeThread = row.id;
+                loadInbox(true);
+                loadThread(row.id);
+            }
+        });
+    }
+
+    $('#chatList').on('click', '.lm-chat-item', function(){
+        var id = $(this).data('id');
+        if (id) {
+            loadThread(id);
+            return;
+        }
+        var customerId = $(this).data('customer-id');
+        if (customerId) {
+            openCustomerTarget(customerId);
+        }
+    });
+    $('#chatSearch').on('input', function(){ renderThreads(); loadInbox(false); });
+    $('#messageText').on('input', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/typing', {_token:csrf}); });
     $('#messageForm').on('submit', function(e){
         e.preventDefault();
         if (!activeThread || !$('#messageText').val().trim()) return;
-        $.post('/api/loan-management/chats/'+activeThread+'/messages', {_token:csrf, message_type:'text', message:$('#messageText').val()}, function(){
+        $.post(chatBaseUrl + '/' + activeThread + '/messages', {_token:csrf, message_type:'text', message:$('#messageText').val()}, function(){
             $('#messageText').val('');
             loadThread(activeThread);
             loadInbox(true);
@@ -284,21 +307,21 @@
     $('#btnLocation').on('click', function(){
         if (!activeThread || !navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition(function(pos){
-            $.post('/api/loan-management/chats/'+activeThread+'/messages', {_token:csrf,message_type:'location',latitude:pos.coords.latitude,longitude:pos.coords.longitude}, function(){ loadThread(activeThread); });
+            $.post(chatBaseUrl + '/' + activeThread + '/messages', {_token:csrf,message_type:'location',latitude:pos.coords.latitude,longitude:pos.coords.longitude}, function(){ loadThread(activeThread); });
         });
     });
     $('#btnAssign').on('click', function(){
         if (!activeThread || !$('#assignStaffId').val()) return;
-        $.post('/api/loan-management/chats/'+activeThread+'/assign', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
+        $.post(chatBaseUrl + '/' + activeThread + '/assign', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
     });
     $('#btnTransfer').on('click', function(){
         if (!activeThread || !$('#assignStaffId').val()) return;
-        $.post('/api/loan-management/chats/'+activeThread+'/transfer', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
+        $.post(chatBaseUrl + '/' + activeThread + '/transfer', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
     });
-    $('#btnClose').on('click', function(){ if(activeThread) $.post('/api/loan-management/chats/'+activeThread+'/close', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnReopen').on('click', function(){ if(activeThread) $.post('/api/loan-management/chats/'+activeThread+'/reopen', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnPin').on('click', function(){ if(activeThread) $.post('/api/loan-management/chats/'+activeThread+'/pin', {_token:csrf, is_pinned:1}, function(){ loadInbox(true); }); });
-    $('#btnMute').on('click', function(){ if(activeThread) $.post('/api/loan-management/chats/'+activeThread+'/mute', {_token:csrf, is_muted:1}, function(){ loadInbox(true); }); });
+    $('#btnClose').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/close', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
+    $('#btnReopen').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/reopen', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
+    $('#btnPin').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/pin', {_token:csrf, is_pinned:1}, function(){ loadInbox(true); }); });
+    $('#btnMute').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/mute', {_token:csrf, is_muted:1}, function(){ loadInbox(true); }); });
 
     loadInbox(false);
     setInterval(function(){ loadInbox(true); }, pollMs);

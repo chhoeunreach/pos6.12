@@ -112,6 +112,18 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/customer-tracking/{customerId}/toggle', [AdminCustomerTrackingController::class, 'toggle'])->name('loan-management.customer-tracking.toggle')->middleware('can:loan_management.customer_gps.manage');
         Route::get('/live-chat', [LoanChatController::class, 'webInbox'])->name('loan-management.live-chat')->middleware('can:loan_management.chat.view');
         Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.live-chat.detail')->middleware('can:loan_management.chat.view');
+        Route::get('/chat-api/chats', [LoanChatController::class, 'index'])->name('loan-management.chat-api.index')->middleware('can:loan_management.chat.view');
+        Route::post('/chat-api/chats', [LoanChatController::class, 'store'])->name('loan-management.chat-api.store')->middleware('can:loan_management.chat.reply');
+        Route::get('/chat-api/chats/{thread}', [LoanChatController::class, 'show'])->name('loan-management.chat-api.show')->middleware('can:loan_management.chat.view');
+        Route::post('/chat-api/chats/{thread}/messages', [LoanChatController::class, 'sendMessage'])->name('loan-management.chat-api.messages')->middleware('can:loan_management.chat.reply');
+        Route::post('/chat-api/chats/{thread}/assign', [LoanChatController::class, 'assign'])->name('loan-management.chat-api.assign')->middleware('can:loan_management.chat.assign');
+        Route::post('/chat-api/chats/{thread}/transfer', [LoanChatController::class, 'transfer'])->name('loan-management.chat-api.transfer')->middleware('loan.permission:loan_management.chat.transfer|loan_management.chat.assign');
+        Route::post('/chat-api/chats/{thread}/read', [LoanChatController::class, 'read'])->name('loan-management.chat-api.read')->middleware('can:loan_management.chat.view');
+        Route::post('/chat-api/chats/{thread}/typing', [LoanChatController::class, 'typing'])->name('loan-management.chat-api.typing')->middleware('can:loan_management.chat.view');
+        Route::post('/chat-api/chats/{thread}/close', [LoanChatController::class, 'close'])->name('loan-management.chat-api.close')->middleware('can:loan_management.chat.close');
+        Route::post('/chat-api/chats/{thread}/reopen', [LoanChatController::class, 'reopen'])->name('loan-management.chat-api.reopen')->middleware('can:loan_management.chat.close');
+        Route::post('/chat-api/chats/{thread}/pin', [LoanChatController::class, 'pin'])->name('loan-management.chat-api.pin')->middleware('can:loan_management.chat.view');
+        Route::post('/chat-api/chats/{thread}/mute', [LoanChatController::class, 'mute'])->name('loan-management.chat-api.mute')->middleware('can:loan_management.chat.view');
         Route::delete('/chat/{thread}', [LoanChatController::class, 'destroy'])->name('loan-management.chat.destroy')->middleware('can:loan_management.chat.delete');
         Route::get('/loans', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans')->middleware('can:loan_management.view');
         Route::get('/loans/list', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans.index')->middleware('can:loan_management.view');

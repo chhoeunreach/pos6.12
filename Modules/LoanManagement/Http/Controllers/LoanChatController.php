@@ -4,6 +4,8 @@ namespace Modules\LoanManagement\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Modules\LoanManagement\Entities\LoanChatThread;
 use Modules\LoanManagement\Http\Requests\Chat\MarkChatReadRequest;
@@ -41,10 +43,18 @@ class LoanChatController extends Controller
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
 
-        $rows = $this->chatService->getStaffInbox((int) auth()->id(), $this->isAdmin(), $request->all())->take(200);
+        $webSupportInbox = $request->is('loan-management/chat-api/*') || $request->is('loan-management/chat-api/chats');
+        $adminInbox = $this->isAdmin() || $webSupportInbox;
+        $rows = $this->chatService->getStaffInbox((int) auth()->id(), $adminInbox, $request->all())->take(200);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
-        return $this->ok('Chats loaded', ChatThreadResource::collection($rows)->resolve());
+        $data = ChatThreadResource::collection($rows)->resolve();
+
+        if ($webSupportInbox && (string) $request->input('view', 'all') === 'all') {
+            $data = $this->appendCustomerChatTargets($data, $request);
+        }
+
+        return $this->ok('Chats loaded', $data);
     }
 
     public function store(Request $request)
@@ -65,6 +75,22 @@ class LoanChatController extends Controller
         if (! $this->isAdmin()) {
             $data['staff_id'] = (int) auth()->id();
         }
+
+        if (! empty($data['customer_id'])) {
+            $existing = LoanChatThread::query()
+                ->where('customer_id', (int) $data['customer_id'])
+                ->whereIn('status', ['open', 'pending', 'active'])
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing) {
+                $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
+                $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
+                return $this->ok('Thread loaded', (new ChatThreadResource($existing))->resolve());
+            }
+        }
+
         $thread = $this->chatService->createThread(array_merge($data, [
             'created_by_type' => $this->isAdmin() ? 'admin' : 'staff',
             'created_by_id' => (int) auth()->id(),
@@ -286,5 +312,78 @@ class LoanChatController extends Controller
     public function webDetail(int $thread)
     {
         return view('loanmanagement::chat.inbox', ['initialThreadId' => $thread]);
+    }
+
+    protected function appendCustomerChatTargets(array $threads, Request $request): array
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            return $threads;
+        }
+
+        $existingCustomerIds = [];
+        foreach ($threads as $thread) {
+            if (! empty($thread['customer_id'])) {
+                $existingCustomerIds[(int) $thread['customer_id']] = true;
+            }
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_customers');
+        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        $search = trim((string) $request->input('search', ''));
+        if ($search !== '') {
+            $query->where(function ($inner) use ($search) {
+                foreach (['name', 'khmer_name', 'phone', 'login_phone', 'customer_code'] as $column) {
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_customers', $column)) {
+                        $inner->orWhere($column, 'like', '%'.$search.'%');
+                    }
+                }
+            });
+        }
+
+        $customers = $query->orderByDesc('id')->limit(300)->get();
+        foreach ($customers as $customer) {
+            if (isset($existingCustomerIds[(int) $customer->id])) {
+                continue;
+            }
+
+            $name = (string) ($customer->name ?? $customer->khmer_name ?? 'Customer');
+            $phone = (string) ($customer->phone ?? $customer->login_phone ?? '');
+            $threads[] = [
+                'id' => null,
+                'customer_id' => (int) $customer->id,
+                'thread_number' => '',
+                'display_name' => $name,
+                'display_subtitle' => trim($phone.($phone ? ' - ' : '').'New chat'),
+                'avatar_url' => '',
+                'customer_name' => $name,
+                'customer_phone' => $phone,
+                'staff_name' => '',
+                'assigned_staff_name' => '',
+                'assigned_staff_id' => null,
+                'assigned_team' => '',
+                'type' => 'customer_staff',
+                'priority' => 'normal',
+                'status' => 'new',
+                'is_online' => false,
+                'is_pinned' => false,
+                'is_muted' => false,
+                'is_closed' => false,
+                'unread_count' => 0,
+                'last_message' => '',
+                'last_message_type' => 'text',
+                'last_message_at' => null,
+                'last_message_time' => null,
+                'last_sender_name' => '',
+                'typing' => false,
+                'is_customer_only' => true,
+                'message_count' => 0,
+                'can_delete' => false,
+            ];
+        }
+
+        return $threads;
     }
 }
