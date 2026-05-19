@@ -32,6 +32,8 @@ class LoanChatController extends Controller
     protected function canViewThread(LoanChatThread $thread): bool
     {
         if ($this->isAdmin()) return true;
+        if (auth()->user() && auth()->user()->can('loan_management.chat.view')) return true;
+
         $userId = (int) auth()->id();
         return (int) ($thread->staff_id ?? 0) === $userId
             || (int) ($thread->assigned_staff_id ?? 0) === $userId

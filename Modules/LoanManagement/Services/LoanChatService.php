@@ -1064,12 +1064,7 @@ class LoanChatService
             return;
         }
 
-        if ($senderType === 'staff' && (
-            (int) ($thread->staff_id ?? 0) === $senderId
-            || (int) ($thread->assigned_staff_id ?? 0) === $senderId
-            || empty($thread->staff_id)
-            || empty($thread->assigned_staff_id)
-        )) {
+        if ($senderType === 'staff') {
             return;
         }
 
