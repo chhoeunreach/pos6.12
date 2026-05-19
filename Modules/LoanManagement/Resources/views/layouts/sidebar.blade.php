@@ -11,7 +11,7 @@
             ['label' => 'Due Today', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view'],
             ['label' => 'Partial Payments', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.view'],
             ['label' => 'Closed Accounts', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view'],
-            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell'],
+            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create'],
             ['label' => 'All Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view'],
         ]],
         ['label' => 'Collection Cases', 'icon' => 'fa fa-phone', 'children' => [

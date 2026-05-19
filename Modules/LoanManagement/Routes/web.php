@@ -18,6 +18,9 @@ use Modules\LoanManagement\Http\Controllers\SettingsController;
 Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])
     ->prefix('loan-management')
     ->group(function () {
+        $createLoanPermission = 'loan.permission:loan_management.create_from_sell|loan_management.loans.create|loan_management.create';
+        $sellConvertPermission = 'loan.permission:loan_management.sell_convert|loan_management.create_from_sell|loan_management.loans.create|loan_management.create';
+
         Route::get('/', function () {
             return redirect()->route('loan-management.dashboard');
         })->name('loan-management.dashboard.home')->middleware('can:loan_management.view');
@@ -54,24 +57,24 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
 
         Route::get('/sell-list', function () {
             return redirect()->route('loan-management.loans.create-from-sell');
-        })->name('loan-management.sell-list')->middleware('can:loan_management.create_from_sell');
+        })->name('loan-management.sell-list')->middleware($createLoanPermission);
         Route::get('/sell-list/{transaction}/view', [LoanSellListController::class, 'view'])->name('loan-management.sell-list.view')->middleware('can:loan_management.sell_view');
-        Route::get('/sell-list/{transaction}/add-to-installment', [LoanSellListController::class, 'createFromSell'])->name('loan-management.sell-list.add')->middleware('can:loan_management.sell_convert');
-        Route::post('/sell-list/{transaction}/add-to-installment', [LoanSellListController::class, 'storeFromSell'])->name('loan-management.sell-list.store')->middleware('can:loan_management.sell_convert');
+        Route::get('/sell-list/{transaction}/add-to-installment', [LoanSellListController::class, 'createFromSell'])->name('loan-management.sell-list.add')->middleware($sellConvertPermission);
+        Route::post('/sell-list/{transaction}/add-to-installment', [LoanSellListController::class, 'storeFromSell'])->name('loan-management.sell-list.store')->middleware($sellConvertPermission);
 
-        Route::get('/loans/create-from-sell', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create-from-sell')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/create', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/search-sales', [LoanFromSellController::class, 'searchSales'])->name('loan-management.loans.search-sales')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/search-sells', [LoanFromSellController::class, 'search'])->name('loan-management.loans.search-sells')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/sales/{transaction}/clone-data', [LoanFromSellController::class, 'cloneData'])->name('loan-management.loans.sales.clone-data')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/sell/{transaction_id}/clone', [LoanFromSellController::class, 'clone'])->name('loan-management.loans.clone-sell')->middleware('can:loan_management.create_from_sell');
-        Route::get('/loans/sell/{transaction_id}/check-duplicate', [LoanFromSellController::class, 'checkDuplicateLoan'])->name('loan-management.loans.check-duplicate')->middleware('can:loan_management.create_from_sell');
-        Route::post('/loans/preview-schedule', [LoanFromSellController::class, 'previewSchedule'])->name('loan-management.loans.preview-schedule')->middleware('can:loan_management.create_from_sell');
-        Route::post('/loans/store-from-sell', [LoanFromSellController::class, 'store'])->name('loan-management.loans.store-from-sell')->middleware('can:loan_management.create_from_sell');
-        Route::post('/loans/add-sell', [LoanUltimatePosSellController::class, 'storeSell'])->name('loan-management.loans.add-sell')->middleware('can:loan_management.create_from_sell');
-        Route::get('/ajax/customers/search', [LoanUltimatePosSellController::class, 'searchCustomers'])->name('loan-management.ajax.customers.search')->middleware('can:loan_management.create_from_sell');
-        Route::get('/ajax/products/search', [LoanUltimatePosSellController::class, 'searchProducts'])->name('loan-management.ajax.products.search')->middleware('can:loan_management.create_from_sell');
-        Route::get('/ajax/imei/search', [LoanUltimatePosSellController::class, 'searchImei'])->name('loan-management.ajax.imei.search')->middleware('can:loan_management.create_from_sell');
+        Route::get('/loans/create-from-sell', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create-from-sell')->middleware($createLoanPermission);
+        Route::get('/loans/create', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create')->middleware($createLoanPermission);
+        Route::get('/loans/search-sales', [LoanFromSellController::class, 'searchSales'])->name('loan-management.loans.search-sales')->middleware($createLoanPermission);
+        Route::get('/loans/search-sells', [LoanFromSellController::class, 'search'])->name('loan-management.loans.search-sells')->middleware($createLoanPermission);
+        Route::get('/loans/sales/{transaction}/clone-data', [LoanFromSellController::class, 'cloneData'])->name('loan-management.loans.sales.clone-data')->middleware($createLoanPermission);
+        Route::get('/loans/sell/{transaction_id}/clone', [LoanFromSellController::class, 'clone'])->name('loan-management.loans.clone-sell')->middleware($createLoanPermission);
+        Route::get('/loans/sell/{transaction_id}/check-duplicate', [LoanFromSellController::class, 'checkDuplicateLoan'])->name('loan-management.loans.check-duplicate')->middleware($createLoanPermission);
+        Route::post('/loans/preview-schedule', [LoanFromSellController::class, 'previewSchedule'])->name('loan-management.loans.preview-schedule')->middleware($createLoanPermission);
+        Route::post('/loans/store-from-sell', [LoanFromSellController::class, 'store'])->name('loan-management.loans.store-from-sell')->middleware($createLoanPermission);
+        Route::post('/loans/add-sell', [LoanUltimatePosSellController::class, 'storeSell'])->name('loan-management.loans.add-sell')->middleware($createLoanPermission);
+        Route::get('/ajax/customers/search', [LoanUltimatePosSellController::class, 'searchCustomers'])->name('loan-management.ajax.customers.search')->middleware($createLoanPermission);
+        Route::get('/ajax/products/search', [LoanUltimatePosSellController::class, 'searchProducts'])->name('loan-management.ajax.products.search')->middleware($createLoanPermission);
+        Route::get('/ajax/imei/search', [LoanUltimatePosSellController::class, 'searchImei'])->name('loan-management.ajax.imei.search')->middleware($createLoanPermission);
         Route::get('/loans/list-data', [LoanInstallmentListController::class, 'data'])->name('loan-management.loans.list-data')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/print-modal', [LoanInstallmentListController::class, 'printModal'])->name('loan-management.loans.print-modal')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/print', [LoanInstallmentListController::class, 'print'])->name('loan-management.loans.print')->middleware('can:loan_management.view');

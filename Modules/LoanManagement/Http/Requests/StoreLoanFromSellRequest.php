@@ -8,7 +8,11 @@ class StoreLoanFromSellRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return auth()->check() && auth()->user()->can('loan_management.create_from_sell');
+        return auth()->check() && (
+            auth()->user()->can('loan_management.create_from_sell')
+            || auth()->user()->can('loan_management.loans.create')
+            || auth()->user()->can('loan_management.create')
+        );
     }
 
     public function rules(): array

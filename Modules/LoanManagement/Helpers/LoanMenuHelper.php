@@ -25,7 +25,12 @@ class LoanMenuHelper
     public static function loanUserCan(string $permission): bool
     {
         try {
-            return auth()->check() && auth()->user()->can($permission);
+            $permissions = preg_split('/[|,]/', $permission) ?: [];
+
+            return auth()->check() && collect($permissions)
+                ->map(fn ($item) => trim((string) $item))
+                ->filter()
+                ->contains(fn ($item) => auth()->user()->can($item));
         } catch (\Throwable $e) {
             return true;
         }

@@ -9,7 +9,13 @@ class LoanPermissionMiddleware
 {
     public function handle(Request $request, Closure $next, string $permission)
     {
-        abort_unless(auth()->check() && auth()->user()->can($permission), 403, 'Unauthorized action.');
+        $permissions = preg_split('/[|,]/', $permission) ?: [];
+        $allowed = auth()->check() && collect($permissions)
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->contains(fn ($item) => auth()->user()->can($item));
+
+        abort_unless($allowed, 403, 'Unauthorized action.');
 
         return $next($request);
     }
