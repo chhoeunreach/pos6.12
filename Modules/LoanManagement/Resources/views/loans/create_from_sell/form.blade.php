@@ -26,7 +26,7 @@
     @include('loanmanagement::loans.create_from_sell.partials.customer_snapshot', ['sell' => $sell])
     @include('loanmanagement::loans.create_from_sell.partials.product_items', ['sell' => $sell])
     @include('loanmanagement::loans.create_from_sell.partials.loan_terms', ['sell' => $sell, 'collectors' => $collectors])
-    @include('loanmanagement::loans.create_from_sell.partials.payment_information', ['sell' => $sell, 'paymentMethods' => $paymentMethods ?? [], 'defaultPaymentMethodId' => $defaultPaymentMethodId ?? null])
+    @include('loanmanagement::loans.create_from_sell.partials.payment_information', ['sell' => $sell, 'paymentTypes' => $paymentTypes ?? [], 'defaultPaymentMethod' => $defaultPaymentMethod ?? 'cash'])
     @include('loanmanagement::loans.create_from_sell.partials.schedule_preview')
 
     <div class="box box-solid">

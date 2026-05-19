@@ -33,6 +33,7 @@ class StoreLoanFromSellRequest extends FormRequest
             'payment' => 'nullable|array',
             'payment.amount' => 'nullable|numeric|min:0',
             'payment.paid_date' => 'nullable|date',
+            'payment.method' => 'nullable|string|max:100',
             'payment.payment_method_id' => 'nullable|integer',
             'payment.currency' => 'nullable|in:USD,KHR',
             'payment.exchange_rate' => 'nullable|numeric|min:0',

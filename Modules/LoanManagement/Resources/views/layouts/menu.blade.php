@@ -54,7 +54,18 @@
             <a href="#"><i class="fa fa-cogs"></i> Tools <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 <li><a href="{{ route('loan-management.import.index') }}"><i class="fa fa-upload"></i> Import Excel</a></li>
-                <li><a href="{{ route('loan-management.settings.index') }}"><i class="fa fa-cog"></i> Settings</a></li>
+                <li><a href="{{ route('loan-management.tools.monthly-import-export') }}"><i class="fa fa-exchange"></i> Monthly Import/Export</a></li>
+                <li><a href="{{ route('loan-management.tools.loan-import-export') }}"><i class="fa fa-file-excel-o"></i> Loan Import/Export</a></li>
+            </ul>
+        </li>
+
+        <li class="treeview">
+            <a href="#"><i class="fa fa-cog"></i> Settings <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
+            <ul class="treeview-menu">
+                <li><a href="{{ route('loan-management.settings.index') }}"><i class="fa fa-building"></i> Business Setting</a></li>
+                <li><a href="{{ route('loan-management.locations.index') }}"><i class="fa fa-map-marker"></i> Locations</a></li>
+                <li><a href="{{ route('loan-management.settings.payment-methods') }}"><i class="fa fa-credit-card"></i> Payment Methods</a></li>
+                <li><a href="{{ route('loan-management.settings.currencies') }}"><i class="fa fa-money"></i> Currencies</a></li>
             </ul>
         </li>
     </ul>

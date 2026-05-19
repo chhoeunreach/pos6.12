@@ -19,11 +19,11 @@
                         <input type="text" class="form-control js-card-input" id="manual_product_code" data-target="preview_product_code" placeholder="I15PMZA256SC">
                     </div>
                     <div class="form-group">
-                        <label>Serial / IMEI</label>
-                        <input type="text" class="form-control js-card-input" id="manual_serial" data-target="preview_serial" placeholder="456546445646">
+                        <label>Phone Number</label>
+                        <input type="text" class="form-control js-card-input" id="manual_serial" data-target="preview_serial" placeholder="016469756">
                     </div>
                     <div class="form-group">
-                        <label>Lot / Note</label>
+                        <label>Serial / IMEI</label>
                         <input type="text" class="form-control js-card-input" id="manual_line_note" data-target="preview_line_note" placeholder="JHKHDFKSHFKS">
                     </div>
                     <div class="form-group">

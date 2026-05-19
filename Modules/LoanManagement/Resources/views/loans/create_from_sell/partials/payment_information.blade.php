@@ -35,7 +35,17 @@
         </div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Amount</label><input type="number" step="0.01" id="payment_amount_input" name="payment[amount]" class="form-control" value="{{ $sell['defaults']['down_payment'] ?? 0 }}"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Paid Date</label><input type="date" name="payment[paid_date]" class="form-control" value="{{ date('Y-m-d') }}"></div></div>
-        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Method</label><select name="payment[payment_method_id]" class="form-control"><option value="">Select</option>@foreach(($paymentMethods ?? []) as $m)<option value="{{ $m->id }}" {{ (int) ($defaultPaymentMethodId ?? 0) === (int) $m->id ? 'selected' : '' }}>{{ $m->name }}</option>@endforeach</select></div></div>
+        <div class="col-sm-6 col-md-3">
+            <div class="form-group">
+                {!! Form::label('loan_payment_method', __('lang_v1.payment_method') . ':') !!}
+                <div class="input-group">
+                    <span class="input-group-addon">
+                        <i class="fas fa-money-bill-alt"></i>
+                    </span>
+                    {!! Form::select('payment[method]', $paymentTypes ?? [], $defaultPaymentMethod ?? 'cash', ['class' => 'form-control payment_types_dropdown select2', 'id' => 'loan_payment_method', 'style' => 'width:100%;']) !!}
+                </div>
+            </div>
+        </div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Reference Number</label><input name="payment[reference_number]" class="form-control"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Currency</label><select name="payment[currency]" class="form-control"><option value="USD">USD</option><option value="KHR">KHR</option></select></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Exchange Rate</label><input type="number" step="0.0001" name="payment[exchange_rate]" class="form-control" value="{{ $sell['defaults']['exchange_rate'] ?? 1 }}"></div></div>

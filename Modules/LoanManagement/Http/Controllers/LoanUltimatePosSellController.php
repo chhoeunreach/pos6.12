@@ -6,7 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use App\Utils\TransactionUtil;
 use Modules\LoanManagement\Services\CreateLoanFromSellService;
 use Modules\LoanManagement\Services\UltimatePosSellService;
 
@@ -78,16 +78,9 @@ class LoanUltimatePosSellController extends Controller
             if ($request->boolean('use_for_loan')) {
                 $sell = $this->loanFromSellService->getSellFullData((int) $transaction->id);
                 $collectors = DB::table('users')->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")->orderBy('first_name')->get();
-                $paymentMethods = collect();
-                $defaultPaymentMethodId = null;
-                if (Schema::hasTable('payment_methods')) {
-                    $paymentMethodsQuery = DB::table('payment_methods')->select('id', 'name');
-                    if (Schema::hasColumn('payment_methods', 'deleted_at')) {
-                        $paymentMethodsQuery->whereNull('deleted_at');
-                    }
-                    $paymentMethods = $paymentMethodsQuery->orderBy('name')->get();
-                }
-                $formHtml = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'collectors', 'paymentMethods', 'defaultPaymentMethodId'))->render();
+                $paymentTypes = $this->ultimatePosPaymentTypes($sell);
+                $defaultPaymentMethod = $this->defaultPaymentMethod($sell, $paymentTypes);
+                $formHtml = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'collectors', 'paymentTypes', 'defaultPaymentMethod'))->render();
                 $loanPayload = $this->sellService->formatSellForLoanClone((int) $transaction->id);
             }
 
@@ -108,5 +101,24 @@ class LoanUltimatePosSellController extends Controller
                 'data' => [],
             ], 422);
         }
+    }
+
+    protected function ultimatePosPaymentTypes(array $sell): array
+    {
+        $businessId = (int) (session('user.business_id') ?? 0);
+        $locationId = $sell['transaction']->location_id ?? null;
+
+        return app(TransactionUtil::class)->payment_types($locationId, true, $businessId);
+    }
+
+    protected function defaultPaymentMethod(array $sell, array $paymentTypes): string
+    {
+        $method = (string) ($sell['default_payment_method'] ?? '');
+
+        if ($method !== '' && array_key_exists($method, $paymentTypes)) {
+            return $method;
+        }
+
+        return array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
     }
 }

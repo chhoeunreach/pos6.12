@@ -2,9 +2,11 @@
 
 namespace Modules\LoanManagement\Services;
 
+use App\Services\TelegramBotService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class LoanSellConversionService
@@ -213,7 +215,7 @@ class LoanSellConversionService
             throw new \RuntimeException('Sell transaction not found.');
         }
 
-        return DB::connection('mysql_loan')->transaction(function () use ($sell, $transactionId, $userId, $data) {
+        $loanId = DB::connection('mysql_loan')->transaction(function () use ($sell, $transactionId, $userId, $data) {
             $h = $sell['header'];
             $loanDate = ! empty($data['loan_date']) ? Carbon::parse($data['loan_date'])->toDateString() : Carbon::today()->toDateString();
 
@@ -234,6 +236,10 @@ class LoanSellConversionService
 
             return $loanId;
         });
+
+        $this->notifyLocationTelegram($loanId);
+
+        return $loanId;
     }
 
     protected function insertLoan($h, array $sell, ?int $customerId, ?int $locationId, string $loanDate, int $userId, array $data): int
@@ -444,5 +450,75 @@ class LoanSellConversionService
     {
         $columns = Schema::connection('mysql_loan')->getColumnListing($table);
         return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function notifyLocationTelegram(int $loanId): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans') || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return;
+        }
+
+        $loan = DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->first();
+        if (! $loan) {
+            return;
+        }
+
+        $location = null;
+        if (! empty($loan->business_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('id', $loan->business_location_id)->first();
+        }
+        if (! $location && ! empty($loan->main_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('main_location_id', $loan->main_location_id)->first();
+        }
+
+        if (! $location || empty($location->telegram_notify_installment)) {
+            return;
+        }
+
+        $chatId = $this->telegramChatIdForEvent($location, 'installment');
+        if ($chatId === '') {
+            return;
+        }
+
+        $message = "Installment loan created\nLoan: ".($loan->loan_number ?? $loan->id)."\nCustomer: ".($loan->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loan->principal_amount ?? $loan->total_payable_amount ?? 0), 2).' '.($loan->currency ?? 'USD');
+
+        try {
+            app(TelegramBotService::class)->sendMessageToChat($chatId, $message);
+            $this->logTelegramNotification($loan, $location, $message, 'sent', $chatId);
+        } catch (\Throwable $e) {
+            Log::warning('LoanManagement conversion Telegram notification failed', [
+                'loan_id' => $loanId,
+                'message' => $e->getMessage(),
+            ]);
+            $this->logTelegramNotification($loan, $location, $message."\n\nError: ".$e->getMessage(), 'failed', $chatId);
+        }
+    }
+
+    protected function telegramChatIdForEvent(object $location, string $event): string
+    {
+        $chatId = $event === 'payment'
+            ? ($location->telegram_payment_chat_id ?? null)
+            : ($location->telegram_installment_chat_id ?? null);
+
+        return trim((string) ($chatId ?: ($location->telegram_chat_id ?? '')));
+    }
+
+    protected function logTelegramNotification(object $loan, object $location, string $message, string $status, ?string $chatId = null): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_telegram_notifications')) {
+            return;
+        }
+
+        DB::connection('mysql_loan')->table('loan_telegram_notifications')->insert($this->filterColumns('loan_telegram_notifications', [
+            'loan_id' => $loan->id ?? null,
+            'customer_id' => $loan->customer_id ?? null,
+            'event_code' => 'installment',
+            'chat_id' => $chatId ?: $this->telegramChatIdForEvent($location, 'installment'),
+            'message' => $message,
+            'status' => $status,
+            'sent_at' => $status === 'sent' ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
     }
 }

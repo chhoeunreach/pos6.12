@@ -2,9 +2,12 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use App\Services\TelegramBotService;
+use App\Utils\TransactionUtil;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Yajra\DataTables\Facades\DataTables;
@@ -14,6 +17,191 @@ class LoanInstallmentListController extends Controller
     protected function hasCol(string $col): bool
     {
         return Schema::connection('mysql_loan')->hasColumn('loans', $col);
+    }
+
+    protected function loanTableHasCol(string $table, string $col): bool
+    {
+        return Schema::connection('mysql_loan')->hasTable($table)
+            && Schema::connection('mysql_loan')->hasColumn($table, $col);
+    }
+
+    protected function loanSafeColumns(string $table, array $payload): array
+    {
+        if (! Schema::connection('mysql_loan')->hasTable($table)) {
+            return [];
+        }
+
+        return array_intersect_key($payload, array_flip(Schema::connection('mysql_loan')->getColumnListing($table)));
+    }
+
+    protected function assetFromPublicPath(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', $path);
+        if (Str::startsWith($path, ['http://', 'https://', '//'])) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
+        if (Str::startsWith($path, 'public/')) {
+            $path = substr($path, 7);
+        }
+
+        if (preg_match('#^uploads/loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            return $this->fileDataUri($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+        }
+
+        if (preg_match('#^loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            return $this->fileDataUri($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+        }
+
+        if (file_exists(public_path($path))) {
+            return asset($path);
+        }
+
+        if (preg_match('#^loan-management/location-assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            return $this->fileDataUri($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+        }
+
+        if (Str::startsWith($path, 'storage/') && file_exists(storage_path('app/public/'.substr($path, 8)))) {
+            return asset($path);
+        }
+
+        return null;
+    }
+
+    protected function moduleLocationAssetPath(int $location, string $filename): ?string
+    {
+        if (Str::contains($filename, ['/', '\\']) || $filename !== basename($filename)) {
+            return null;
+        }
+
+        $path = base_path('Modules/LoanManagement/loan_location_assets/'.$location.'/'.$filename);
+
+        return is_file($path) ? $path : null;
+    }
+
+    protected function fileDataUri(?string $path): ?string
+    {
+        if (empty($path) || ! is_file($path)) {
+            return null;
+        }
+
+        $mime = function_exists('mime_content_type') ? mime_content_type($path) : null;
+        if (empty($mime) || ! Str::startsWith($mime, 'image/')) {
+            $mime = 'image/'.strtolower(pathinfo($path, PATHINFO_EXTENSION) ?: 'jpeg');
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
+    }
+
+    protected function firstExistingPublicAsset(array $paths): ?string
+    {
+        foreach ($paths as $path) {
+            $asset = $this->assetFromPublicPath($path);
+            if (! empty($asset)) {
+                return $asset;
+            }
+        }
+
+        return null;
+    }
+
+    protected function businessLogoAsset(): ?string
+    {
+        $logoName = session('business.logo');
+        if (empty($logoName) && Schema::hasTable('business')) {
+            $businessId = session('business.id') ?: (auth()->user()->business_id ?? null);
+            if (! empty($businessId) && Schema::hasColumn('business', 'logo')) {
+                $logoName = DB::table('business')->where('id', $businessId)->value('logo');
+            }
+        }
+
+        $paths = [];
+        if (! empty($logoName)) {
+            $paths[] = 'uploads/business_logos/'.$logoName;
+            $paths[] = 'storage/business_logos/'.$logoName;
+            $paths[] = 'business_logos/'.$logoName;
+            $paths[] = $logoName;
+        }
+
+        return $this->firstExistingPublicAsset(array_merge($paths, [
+            'uploads/logo.png',
+            'img/logo.png',
+            'logo.png',
+        ]));
+    }
+
+    protected function paymentsForPrintSchedules($payments, $installments)
+    {
+        $assigned = $payments
+            ->filter(fn ($payment) => ! empty($payment->schedule_id))
+            ->map(function ($payment) {
+                $payment->_print_schedule_id = $payment->schedule_id;
+                $payment->_print_amount = (float) ($payment->total_paid_base ?? $payment->amount ?? 0);
+
+                return $payment;
+            });
+
+        $unassigned = $payments
+            ->filter(fn ($payment) => empty($payment->schedule_id))
+            ->sortBy(fn ($payment) => $payment->paid_at ?? $payment->paid_date ?? $payment->id ?? 0)
+            ->values();
+
+        if ($unassigned->isEmpty()) {
+            return $assigned->values();
+        }
+
+        $allocated = collect();
+        $scheduleRemaining = $installments->mapWithKeys(function ($row) {
+            $paid = (float) ($row->paid_value ?? 0);
+            $due = (float) ($row->amount_due ?? 0);
+            if ($due <= 0) {
+                $due = round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2);
+            }
+
+            return [$row->id => max(0, min($paid, $due > 0 ? $due : $paid))];
+        });
+
+        foreach ($unassigned as $payment) {
+            $remainingPayment = (float) ($payment->total_paid_base ?? $payment->amount ?? 0);
+            if ($remainingPayment <= 0) {
+                continue;
+            }
+
+            foreach ($installments as $row) {
+                $remainingSchedule = (float) ($scheduleRemaining[$row->id] ?? 0);
+                if ($remainingSchedule <= 0) {
+                    continue;
+                }
+
+                $amount = min($remainingPayment, $remainingSchedule);
+                $line = clone $payment;
+                $line->_print_schedule_id = $row->id;
+                $line->_print_amount = $amount;
+                $allocated->push($line);
+
+                $remainingPayment -= $amount;
+                $scheduleRemaining[$row->id] = $remainingSchedule - $amount;
+
+                if ($remainingPayment <= 0) {
+                    break;
+                }
+            }
+
+            if ($remainingPayment > 0) {
+                $line = clone $payment;
+                $line->_print_schedule_id = null;
+                $line->_print_amount = $remainingPayment;
+                $allocated->push($line);
+            }
+        }
+
+        return $assigned->concat($allocated)->values();
     }
 
     protected function coreLocationNames($ids): array
@@ -258,6 +446,7 @@ class LoanInstallmentListController extends Controller
             ->addColumn('action', function ($r) {
                 $user = auth()->user();
                 $view = '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info">View</a>';
+                $print = ' <button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-modal"><i class="fa fa-print"></i> Print Loan</button>';
                 $edit = ($user && $user->can('loan_management.edit') && in_array(strtolower((string) $r->status), ['draft', 'pending']))
                     ? ' <a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary">Edit</a>'
                     : '';
@@ -281,10 +470,548 @@ class LoanInstallmentListController extends Controller
                     </div>';
                 }
 
-                return $view.$edit.$delete.$statusBtn;
+                return $view.$print.$edit.$delete.$statusBtn;
             })
             ->rawColumns(['status', 'principal_amount', 'paid_amount', 'balance_amount', 'action'])
             ->make(true);
+    }
+
+    public function printModal(int $loan)
+    {
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $printUrl = route('loan-management.loans.print', $loan);
+        $autoPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1]);
+
+        return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'autoPrintUrl'));
+    }
+
+    public function print(int $loan)
+    {
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $customerRow = null;
+        if (Schema::connection('mysql_loan')->hasTable('loan_customers') && ! empty($loanRow->customer_id)) {
+            $customerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanRow->customer_id)->first();
+        }
+
+        $contact = null;
+        if (! empty($loanRow->main_contact_id) && Schema::hasTable('contacts')) {
+            $contact = DB::table('contacts')->where('id', $loanRow->main_contact_id)->first();
+        }
+
+        $customer = (object) [
+            'name' => $loanRow->customer_name_snapshot
+                ?? ($customerRow->name ?? ($customerRow->customer_name ?? ($contact->name ?? '-'))),
+            'mobile' => $loanRow->customer_phone_snapshot
+                ?? ($customerRow->phone ?? ($customerRow->mobile ?? ($customerRow->login_phone ?? ($contact->mobile ?? '-')))),
+            'address_line_1' => $loanRow->customer_address_snapshot
+                ?? ($customerRow->address ?? ($contact->address_line_1 ?? '-')),
+            'custom_field1' => $customerRow->id_card_number ?? ($contact->custom_field1 ?? '-'),
+            'co_borrower' => $customerRow->spouse_name ?? ($customerRow->family_contact_name ?? '-'),
+            'co_borrower_phone' => $customerRow->spouse_phone ?? ($customerRow->family_contact_phone ?? '-'),
+        ];
+
+        $locationRow = null;
+        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            if (! empty($loanRow->business_location_id)) {
+                $locationRow = DB::connection('mysql_loan')->table('loan_business_locations')
+                    ->where('id', $loanRow->business_location_id)
+                    ->orWhere('main_location_id', $loanRow->business_location_id)
+                    ->first();
+            }
+            if (! $locationRow && ! empty($loanRow->main_location_id)) {
+                $locationRow = DB::connection('mysql_loan')->table('loan_business_locations')->where('main_location_id', $loanRow->main_location_id)->first();
+            }
+            if (! $locationRow && ! empty($loanRow->location_name_snapshot)) {
+                $locationRow = DB::connection('mysql_loan')->table('loan_business_locations')->where('name', $loanRow->location_name_snapshot)->first();
+            }
+        }
+
+        $locationName = $loanRow->location_name_snapshot ?? ($locationRow->name ?? null);
+        if (empty($locationName)) {
+            $locationId = $loanRow->main_location_id ?? $loanRow->business_location_id ?? null;
+            if ($locationId && Schema::hasTable('business_locations')) {
+                $locationName = DB::table('business_locations')->where('id', $locationId)->value('name');
+            }
+        }
+
+        $products = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loan_items')) {
+            $products = DB::connection('mysql_loan')->table('loan_items')
+                ->where('loan_id', $loan)
+                ->get()
+                ->map(function ($item) {
+                    $qty = $item->qty ?? $item->quantity ?? 1;
+                    $unitPrice = $item->unit_price ?? $item->unit_price_inc_tax ?? 0;
+
+                    return (object) [
+                        'product_sku' => $item->sku_snapshot ?? $item->product_sku ?? '-',
+                        'product_name' => $item->product_name_snapshot ?? $item->product_name ?? '-',
+                        'quantity' => $qty,
+                        'unit_price_inc_tax' => $unitPrice,
+                        'subtotal' => $item->line_total ?? $item->total_price ?? ((float) $qty * (float) $unitPrice),
+                        'imei' => $item->imei_snapshot ?? '-',
+                        'serial' => $item->serial_number_snapshot ?? '-',
+                        'lot' => $item->lot_number_snapshot ?? '-',
+                    ];
+                });
+        }
+
+        $installments = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+            $installments = DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'installment_no') ? 'installment_no' : 'due_date')
+                ->get()
+                ->map(function ($row, $index) {
+                    $principal = (float) ($row->principal_amount ?? 0);
+                    if ($principal <= 0) {
+                        $principal = (float) ($row->principal_due ?? 0);
+                    }
+                    $interest = (float) ($row->interest_amount ?? 0);
+                    if ($interest <= 0) {
+                        $interest = (float) ($row->interest_due ?? 0);
+                    }
+                    $amountDue = (float) ($row->schedule_amount ?? 0);
+                    if ($amountDue <= 0) {
+                        $amountDue = (float) ($row->amount_due ?? 0);
+                    }
+                    if ($amountDue <= 0) {
+                        $amountDue = round($principal + $interest, 2);
+                    }
+                    $paidAmount = (float) ($row->paid_amount ?? 0);
+                    if ($paidAmount <= 0) {
+                        $paidAmount = (float) ($row->amount_paid ?? 0);
+                    }
+                    $balance = (float) ($row->balance_amount ?? 0);
+                    if ($balance <= 0) {
+                        $balance = (float) ($row->amount_balance ?? 0);
+                    }
+                    if ($balance <= 0 && $amountDue > $paidAmount) {
+                        $balance = max(0, $amountDue - $paidAmount);
+                    }
+
+                    return (object) [
+                        'id' => $row->id ?? null,
+                        'installment_number' => $row->installment_no ?? ($index + 1),
+                        'installmentdate' => $row->due_date ?? null,
+                        'installment_value' => $principal,
+                        'benefit_value' => $interest,
+                        'amount_due' => $amountDue,
+                        'paid_value' => $paidAmount,
+                        'balance_amount' => $balance,
+                        'paid_at' => $row->paid_at ?? null,
+                        'status' => $row->status ?? '-',
+                    ];
+                });
+        }
+
+        $payments = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loan_payments')) {
+            $payments = DB::connection('mysql_loan')->table('loan_payments')
+                ->where('loan_id', $loan)
+                ->orderByDesc($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at')
+                ->get();
+        }
+        $payments = $this->paymentsForPrintSchedules($payments, $installments);
+
+        $createdByName = trim((string) ($loanRow->created_by_name_snapshot ?? ''));
+        if (($createdByName === '' || $createdByName === '-') && ! empty($loanRow->created_by) && Schema::hasTable('users')) {
+            $userColumns = Schema::getColumnListing('users');
+            $selectColumns = array_values(array_intersect(['first_name', 'last_name', 'username', 'name'], $userColumns));
+            if (! empty($selectColumns)) {
+                $createdByUser = DB::table('users')
+                    ->select($selectColumns)
+                    ->where('id', $loanRow->created_by)
+                    ->first();
+
+                if ($createdByUser) {
+                    $createdByName = trim(implode(' ', array_filter([
+                        $createdByUser->first_name ?? null,
+                        $createdByUser->last_name ?? null,
+                    ])));
+                    if ($createdByName === '') {
+                        $createdByName = $createdByUser->username ?? ($createdByUser->name ?? '');
+                    }
+                }
+            }
+        }
+        $createdByName = Str::of($createdByName !== '' ? $createdByName : '-')->squish()->value();
+
+        $businessName = $locationRow->name ?? $locationName ?? session('business.name', config('app.name'));
+        $logo = null;
+        $paymentQr = null;
+        $telegramQr = null;
+        if ($locationRow) {
+            $logo = $this->assetFromPublicPath($locationRow->logo_path ?? null);
+            $paymentQr = $this->assetFromPublicPath($locationRow->payment_qr_path ?? null);
+            $telegramQr = $this->assetFromPublicPath($locationRow->telegram_qr_path ?? null);
+        }
+        $logo = $logo ?: $this->businessLogoAsset();
+
+        return view('loanmanagement::loans.print.loan', compact(
+            'loanRow',
+            'customer',
+            'locationName',
+            'products',
+            'installments',
+            'payments',
+            'businessName',
+            'logo',
+            'paymentQr',
+            'telegramQr',
+            'createdByName'
+        ));
+    }
+
+    public function createPayment(int $loan)
+    {
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loan_payments'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $schedules = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
+                ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
+                ->orderBy('id')
+                ->get();
+        }
+
+        $selectedScheduleId = request()->integer('schedule_id') ?: null;
+        $selectedSchedule = $selectedScheduleId ? $schedules->firstWhere('id', $selectedScheduleId) : $schedules->first();
+        $defaultAmount = $selectedSchedule
+            ? (float) ($selectedSchedule->balance_amount ?? $selectedSchedule->amount_balance ?? $selectedSchedule->schedule_amount ?? $selectedSchedule->amount_due ?? 0)
+            : (float) ($loanRow->balance_amount ?? 0);
+
+        $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
+        $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
+
+        return view('loanmanagement::loans.payments.create', compact(
+            'loanRow',
+            'schedules',
+            'selectedSchedule',
+            'selectedScheduleId',
+            'defaultAmount',
+            'paymentTypes',
+            'defaultPaymentMethod'
+        ));
+    }
+
+    public function storePayment(Request $request, int $loan)
+    {
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! Schema::connection('mysql_loan')->hasTable('loan_payments'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $payload = $request->validate([
+            'schedule_id' => 'nullable|integer|min:1',
+            'paid_date' => 'required|date',
+            'payment_lines' => 'required|array|min:1',
+            'payment_lines.*.amount' => 'required|numeric|min:0.01',
+            'payment_lines.*.method' => 'nullable|string|max:100',
+            'payment_lines.*.reference_number' => 'nullable|string|max:191',
+            'payment_lines.*.note' => 'nullable|string|max:1000',
+        ]);
+
+        $paidDate = $payload['paid_date'];
+        $paidAt = $paidDate.' '.now()->format('H:i:s');
+        $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
+        $paymentLines = collect($payload['payment_lines'])
+            ->map(function ($line) use ($paymentTypes) {
+                $amount = round((float) ($line['amount'] ?? 0), 2);
+                $method = trim((string) ($line['method'] ?? ''));
+
+                if ($method === '') {
+                    $method = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? 'cash');
+                }
+
+                return [
+                    'amount' => $amount,
+                    'method' => $method,
+                    'method_name' => $this->paymentMethodName($method, $paymentTypes),
+                    'reference_number' => trim((string) ($line['reference_number'] ?? '')) ?: null,
+                    'note' => trim((string) ($line['note'] ?? '')) ?: null,
+                ];
+            })
+            ->filter(fn ($line) => $line['amount'] > 0)
+            ->values();
+
+        $totalAmount = round((float) $paymentLines->sum('amount'), 2);
+
+        if ($paymentLines->isEmpty() || $totalAmount <= 0) {
+            return redirect()
+                ->back()
+                ->with('status', ['success' => 0, 'msg' => 'Please add at least one payment line.']);
+        }
+
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $payload, $paymentLines, $totalAmount, $paidDate, $paidAt) {
+            $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
+            if ($userName === '') {
+                $userName = auth()->user()->username ?? null;
+            }
+
+            foreach ($paymentLines as $line) {
+                $receipt = 'RCP-'.now()->format('YmdHis').'-'.$loan.'-'.random_int(10, 99);
+                $paymentRef = 'PMT-'.strtoupper(Str::random(10));
+
+                $paymentId = DB::connection('mysql_loan')->table('loan_payments')->insertGetId($this->loanSafeColumns('loan_payments', [
+                    'payment_number' => $this->generateUniquePaymentNumber($loan),
+                    'payment_ref_no' => $paymentRef,
+                    'receipt_number' => $receipt,
+                    'loan_id' => $loan,
+                    'loan_number_snapshot' => $loanRow->loan_number ?? null,
+                    'customer_id' => $loanRow->customer_id ?? 0,
+                    'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
+                    'schedule_id' => $payload['schedule_id'] ?? null,
+                    'received_by' => auth()->id(),
+                    'received_by_name_snapshot' => $userName,
+                    'collected_by_name_snapshot' => $userName,
+                    'channel' => $line['method_name'],
+                    'payment_method_snapshot' => $line['method_name'],
+                    'amount' => $line['amount'],
+                    'total_paid' => $line['amount'],
+                    'total_paid_base' => $line['amount'],
+                    'currency' => $loanRow->currency ?? 'USD',
+                    'base_currency' => $loanRow->currency ?? 'USD',
+                    'exchange_rate' => 1,
+                    'reference_number' => $line['reference_number'],
+                    'paid_date' => $paidDate,
+                    'paid_at' => $paidAt,
+                    'status' => 'confirmed',
+                    'note' => $line['note'],
+                    'created_by' => auth()->id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+
+                if (Schema::connection('mysql_loan')->hasTable('loan_payment_details')) {
+                    DB::connection('mysql_loan')->table('loan_payment_details')->insert($this->loanSafeColumns('loan_payment_details', [
+                        'payment_id' => $paymentId,
+                        'payment_method_id' => null,
+                        'payment_method_snapshot' => $line['method_name'],
+                        'method' => $line['method'],
+                        'currency' => $loanRow->currency ?? 'USD',
+                        'amount' => $line['amount'],
+                        'exchange_rate' => 1,
+                        'amount_base' => $line['amount'],
+                        'reference_number' => $line['reference_number'],
+                        'transaction_no' => $line['reference_number'],
+                        'note' => $line['note'],
+                        'meta_json' => json_encode(['source' => 'loan_detail']),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]));
+                }
+            }
+
+            $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $payload['schedule_id'] ?? null);
+            $this->refreshLoanPaymentTotals($loan, $totalAmount);
+        });
+
+        $this->notifyLocationTelegram($loan, 'payment', $totalAmount);
+
+        return redirect()
+            ->route('loan-management.loans.view', $loan)
+            ->with('status', ['success' => 1, 'msg' => 'Payment added successfully']);
+    }
+
+    protected function ultimatePosPaymentTypes(object $loanRow): array
+    {
+        $businessId = (int) (session('user.business_id') ?? 0);
+        $locationId = $loanRow->main_location_id ?? null;
+
+        $paymentTypes = app(TransactionUtil::class)->payment_types($locationId, true, $businessId);
+
+        return ! empty($paymentTypes) ? $paymentTypes : ['cash' => 'Cash'];
+    }
+
+    protected function paymentMethodName(string $method, array $paymentTypes): string
+    {
+        return (string) ($paymentTypes[$method] ?? ucfirst(str_replace('_', ' ', $method)));
+    }
+
+    protected function generateUniquePaymentNumber(int $loanId): string
+    {
+        $prefix = 'PAY-'.now()->format('YmdHis').'-'.$loanId.'-';
+        $attempt = 0;
+
+        do {
+            $candidate = $prefix.random_int(1000, 9999);
+            $exists = DB::connection('mysql_loan')->table('loan_payments')
+                ->where('payment_number', $candidate)
+                ->exists();
+            $attempt++;
+        } while ($exists && $attempt < 10);
+
+        return $exists ? $prefix.uniqid() : $candidate;
+    }
+
+    protected function applyLoanPaymentToSchedules(int $loan, float $amount, string $paidAt, ?int $selectedScheduleId = null): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+            return;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_payment_schedules')
+            ->where('loan_id', $loan)
+            ->whereIn('status', ['pending', 'unpaid', 'partial', 'late']);
+
+        if ($selectedScheduleId) {
+            $query->orderByRaw('CASE WHEN id = '.((int) $selectedScheduleId).' THEN 0 ELSE 1 END');
+        }
+
+        $schedules = $query
+            ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
+            ->orderBy('id')
+            ->get();
+
+        $remaining = $amount;
+        foreach ($schedules as $schedule) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $due = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? $schedule->schedule_amount ?? $schedule->amount_due ?? 0);
+            if ($due <= 0) {
+                continue;
+            }
+
+            $applied = min($remaining, $due);
+            $existingPaidAmount = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+            $newPaid = $existingPaidAmount + $applied;
+            $newBalance = max(0, $due - $applied);
+
+            DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+                'amount_paid' => $newPaid,
+                'paid_amount' => $newPaid,
+                'amount_balance' => $newBalance,
+                'balance_amount' => $newBalance,
+                'status' => $newBalance <= 0 ? 'paid' : 'partial',
+                'paid_at' => $newBalance <= 0 ? $paidAt : null,
+                'updated_at' => now(),
+            ]));
+
+            $remaining -= $applied;
+        }
+    }
+
+    protected function refreshLoanPaymentTotals(int $loan, float $amount): void
+    {
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        if (! $loanRow) {
+            return;
+        }
+
+        $newPaidAmount = (float) ($loanRow->paid_amount ?? 0) + $amount;
+        $scheduleBalance = 0.0;
+        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+            if ($this->loanTableHasCol('loan_payment_schedules', 'balance_amount')) {
+                $scheduleBalance = (float) DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->sum('balance_amount');
+            } elseif ($this->loanTableHasCol('loan_payment_schedules', 'amount_balance')) {
+                $scheduleBalance = (float) DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->sum('amount_balance');
+            }
+        }
+        $currentBalance = (float) ($loanRow->balance_amount ?? 0);
+        $newBalanceAmount = $scheduleBalance > 0 ? $scheduleBalance : max(0, $currentBalance - $amount);
+
+        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+            'paid_amount' => $newPaidAmount,
+            'balance_amount' => $newBalanceAmount,
+            'status' => $newBalanceAmount <= 0 ? 'completed' : ($loanRow->status ?? 'active'),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function notifyLocationTelegram(int $loan, string $event, ?float $amount = null): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans') || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return;
+        }
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        if (! $loanRow) {
+            return;
+        }
+
+        $location = null;
+        if (! empty($loanRow->business_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('id', $loanRow->business_location_id)->first();
+        }
+        if (! $location && ! empty($loanRow->main_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('main_location_id', $loanRow->main_location_id)->first();
+        }
+
+        if (! $location) {
+            return;
+        }
+
+        if ($event === 'payment' && empty($location->telegram_notify_payment)) {
+            return;
+        }
+        if ($event === 'installment' && empty($location->telegram_notify_installment)) {
+            return;
+        }
+
+        $chatId = $this->telegramChatIdForEvent($location, $event);
+        if ($chatId === '') {
+            return;
+        }
+
+        $message = $event === 'payment'
+            ? "Loan payment received\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nAmount: ".number_format((float) $amount, 2).' '.($loanRow->currency ?? 'USD')."\nBalance: ".number_format((float) ($loanRow->balance_amount ?? 0), 2)
+            : "Installment loan created\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loanRow->principal_amount ?? $loanRow->total_payable_amount ?? 0), 2).' '.($loanRow->currency ?? 'USD');
+
+        try {
+            app(TelegramBotService::class)->sendMessageToChat($chatId, $message);
+            $this->logTelegramNotification($loanRow, $location, $event, $message, 'sent', null, $chatId);
+        } catch (\Throwable $e) {
+            Log::warning('LoanManagement Telegram notification failed', [
+                'loan_id' => $loan,
+                'event' => $event,
+                'message' => $e->getMessage(),
+            ]);
+            $this->logTelegramNotification($loanRow, $location, $event, $message, 'failed', $e->getMessage(), $chatId);
+        }
+    }
+
+    protected function telegramChatIdForEvent(object $location, string $event): string
+    {
+        $chatId = $event === 'payment'
+            ? ($location->telegram_payment_chat_id ?? null)
+            : ($location->telegram_installment_chat_id ?? null);
+
+        return trim((string) ($chatId ?: ($location->telegram_chat_id ?? '')));
+    }
+
+    protected function logTelegramNotification(object $loanRow, object $location, string $event, string $message, string $status, ?string $error = null, ?string $chatId = null): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_telegram_notifications')) {
+            return;
+        }
+
+        DB::connection('mysql_loan')->table('loan_telegram_notifications')->insert($this->loanSafeColumns('loan_telegram_notifications', [
+            'customer_id' => $loanRow->customer_id ?? null,
+            'loan_id' => $loanRow->id ?? null,
+            'event_code' => $event,
+            'chat_id' => $chatId ?: $this->telegramChatIdForEvent($location, $event),
+            'message' => $error ? ($message."\n\nError: ".$error) : $message,
+            'status' => $status,
+            'sent_at' => $status === 'sent' ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
     }
 
     public function show(int $loan)

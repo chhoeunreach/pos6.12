@@ -30,7 +30,14 @@
         ]],
         ['label' => 'Tools', 'icon' => 'fa fa-wrench', 'children' => [
             ['label' => 'Import Excel', 'route' => 'loan-management.import.index', 'can' => 'loan_management.import.view'],
-            ['label' => 'Settings', 'route' => 'loan-management.settings', 'can' => 'loan_management.settings.view'],
+            ['label' => 'Monthly Import/Export', 'route' => 'loan-management.tools.monthly-import-export', 'can' => 'loan_management.view'],
+            ['label' => 'Loan Import/Export', 'route' => 'loan-management.tools.loan-import-export', 'can' => 'loan_management.view'],
+        ]],
+        ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [
+            ['label' => 'Business Setting', 'icon' => 'fa fa-building', 'route' => 'loan-management.settings', 'can' => 'loan_management.settings.view', 'active_routes' => ['loan-management.settings', 'loan-management.settings.index']],
+            ['label' => 'Locations', 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view'],
+            ['label' => 'Payment Methods', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
+            ['label' => 'Currencies', 'icon' => 'fa fa-money', 'route' => 'loan-management.settings.currencies', 'can' => 'loan_management.view'],
         ]],
     ];
 @endphp

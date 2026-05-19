@@ -10,6 +10,7 @@ use Modules\LoanManagement\Http\Controllers\LoanFromSellController;
 use Modules\LoanManagement\Http\Controllers\LoanUltimatePosSellController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
 use Modules\LoanManagement\Http\Controllers\LoanInstallmentListController;
+use Modules\LoanManagement\Http\Controllers\LoanLocationController;
 use Modules\LoanManagement\Http\Controllers\LoanSellListController;
 use Modules\LoanManagement\Http\Controllers\SettingsController;
 
@@ -44,6 +45,10 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/ajax/products/search', [LoanUltimatePosSellController::class, 'searchProducts'])->name('loan-management.ajax.products.search')->middleware('can:loan_management.create_from_sell');
         Route::get('/ajax/imei/search', [LoanUltimatePosSellController::class, 'searchImei'])->name('loan-management.ajax.imei.search')->middleware('can:loan_management.create_from_sell');
         Route::get('/loans/list-data', [LoanInstallmentListController::class, 'data'])->name('loan-management.loans.list-data')->middleware('can:loan_management.view');
+        Route::get('/loans/{loan}/print-modal', [LoanInstallmentListController::class, 'printModal'])->name('loan-management.loans.print-modal')->middleware('can:loan_management.view');
+        Route::get('/loans/{loan}/print', [LoanInstallmentListController::class, 'print'])->name('loan-management.loans.print')->middleware('can:loan_management.view');
+        Route::get('/loans/{loan}/payment/create', [LoanInstallmentListController::class, 'createPayment'])->name('loan-management.loans.payment.create')->middleware('can:loan_management.view');
+        Route::post('/loans/{loan}/payment', [LoanInstallmentListController::class, 'storePayment'])->name('loan-management.loans.payment.store')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/view', [LoanInstallmentListController::class, 'show'])->name('loan-management.loans.view')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/edit', [LoanInstallmentListController::class, 'edit'])->name('loan-management.loans.edit')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/update', [LoanInstallmentListController::class, 'update'])->name('loan-management.loans.update')->middleware('can:loan_management.edit');
@@ -80,6 +85,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/schedules', [DashboardController::class, 'placeholder'])->defaults('page', 'Installment Schedules')->name('loan-management.schedules.index')->middleware('can:loan_management.view');
         Route::get('/monthly-payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments')->name('loan-management.monthly-payments.index')->middleware('can:loan_management.view');
         Route::get('/overdue', [DashboardController::class, 'overdue'])->name('loan-management.overdue.index')->middleware('can:loan_management.view');
+        Route::get('/locations', [LoanLocationController::class, 'index'])->name('loan-management.locations.index')->middleware('can:loan_management.view');
+        Route::post('/locations/{location}/assets', [LoanLocationController::class, 'update'])->name('loan-management.locations.assets.update')->middleware('can:loan_management.view');
+        Route::get('/location-assets/{location}/{filename}', [LoanLocationController::class, 'asset'])->name('loan-management.locations.assets.show')->middleware('can:loan_management.view');
 
         Route::get('/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments')->middleware('can:loan_management.view');
         Route::get('/payments/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments.index')->middleware('can:loan_management.view');
@@ -101,7 +109,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/tools/send-notification', [DashboardController::class, 'placeholder'])->defaults('page', 'Send Notification')->name('loan-management.tools.send-notification')->middleware('can:loan_management.view');
         Route::get('/settings', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings')->middleware('can:loan_management.view');
         Route::get('/settings/index', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings.index')->middleware('can:loan_management.view');
-        Route::get('/settings/payment-methods', [DashboardController::class, 'placeholder'])->defaults('page', 'Payment Methods')->name('loan-management.settings.payment-methods')->middleware('can:loan_management.view');
+        Route::get('/settings/payment-methods', [SettingsController::class, 'paymentMethods'])->name('loan-management.settings.payment-methods')->middleware('can:loan_management.view');
+        Route::post('/settings/payment-methods', [SettingsController::class, 'updatePaymentMethods'])->name('loan-management.settings.payment-methods.update')->middleware('can:loan_management.view');
         Route::get('/settings/currencies', [DashboardController::class, 'placeholder'])->defaults('page', 'Currencies')->name('loan-management.settings.currencies')->middleware('can:loan_management.view');
         Route::post('/settings/invoice-prefix', [SettingsController::class, 'updateInvoicePrefix'])->name('loan-management.settings.invoice-prefix')->middleware('can:loan_management.view');
 

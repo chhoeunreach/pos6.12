@@ -22,7 +22,13 @@ return new class extends Migration
             $this->addColumnIfMissing($table, 'location_code', fn () => $table->string('location_code')->nullable()->after('name'));
             $this->addColumnIfMissing($table, 'address', fn () => $table->text('address')->nullable()->after('location_code'));
             $this->addColumnIfMissing($table, 'phone', fn () => $table->string('phone', 50)->nullable()->after('address'));
-            $this->addColumnIfMissing($table, 'invoice_scheme_id', fn () => $table->unsignedBigInteger('invoice_scheme_id')->nullable()->after('phone'));
+            $this->addColumnIfMissing($table, 'logo_path', fn () => $table->string('logo_path')->nullable()->after('phone'));
+            $this->addColumnIfMissing($table, 'payment_qr_path', fn () => $table->string('payment_qr_path')->nullable()->after('logo_path'));
+            $this->addColumnIfMissing($table, 'telegram_qr_path', fn () => $table->string('telegram_qr_path')->nullable()->after('payment_qr_path'));
+            $this->addColumnIfMissing($table, 'telegram_chat_id', fn () => $table->string('telegram_chat_id')->nullable()->after('telegram_qr_path'));
+            $this->addColumnIfMissing($table, 'telegram_notify_payment', fn () => $table->boolean('telegram_notify_payment')->default(false)->after('telegram_chat_id'));
+            $this->addColumnIfMissing($table, 'telegram_notify_installment', fn () => $table->boolean('telegram_notify_installment')->default(false)->after('telegram_notify_payment'));
+            $this->addColumnIfMissing($table, 'invoice_scheme_id', fn () => $table->unsignedBigInteger('invoice_scheme_id')->nullable()->after('telegram_notify_installment'));
             $this->addColumnIfMissing($table, 'status', fn () => $table->string('status', 20)->default('active')->after('invoice_scheme_id'));
             $this->addColumnIfMissing($table, 'synced_at', fn () => $table->timestamp('synced_at')->nullable()->after('updated_at'));
         });

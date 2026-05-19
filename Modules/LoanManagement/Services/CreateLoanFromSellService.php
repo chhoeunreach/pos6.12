@@ -2,9 +2,11 @@
 
 namespace Modules\LoanManagement\Services;
 
+use App\Services\TelegramBotService;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class CreateLoanFromSellService
@@ -293,7 +295,7 @@ class CreateLoanFromSellService
         $full = $this->getSellFullData($transactionId);
         $transaction = $full['transaction'];
 
-        return DB::connection('mysql_loan')->transaction(function () use ($data, $full, $transaction, $transactionId) {
+        $loanId = DB::connection('mysql_loan')->transaction(function () use ($data, $full, $transaction, $transactionId) {
             $effectiveDownPayment = (float) ($data['payment']['amount'] ?? ($data['down_payment'] ?? 0));
             $resolvedCustomer = $this->resolveCustomerSnapshot($transaction);
             $customerId = $this->createLoanCustomerSnapshot($transaction, $resolvedCustomer, $data);
@@ -430,6 +432,10 @@ class CreateLoanFromSellService
 
             return $loanId;
         });
+
+        $this->notifyLocationTelegram($loanId, 'installment');
+
+        return $loanId;
     }
 
     public function previewSchedule(array $data): array
@@ -683,8 +689,17 @@ class CreateLoanFromSellService
         }
 
         $paymentMethodId = ! empty($payment['payment_method_id']) ? (int) $payment['payment_method_id'] : null;
+        $paymentMethod = trim((string) ($payment['method'] ?? ''));
         $paymentMethodName = 'Unknown';
-        if (! empty($paymentMethodId) && Schema::hasTable('payment_methods')) {
+
+        if ($paymentMethod !== '') {
+            $paymentTypes = app(\App\Utils\TransactionUtil::class)->payment_types(
+                $loanPayload['main_location_id'] ?? null,
+                true,
+                (int) (session('user.business_id') ?? 0)
+            );
+            $paymentMethodName = (string) ($paymentTypes[$paymentMethod] ?? ucfirst(str_replace('_', ' ', $paymentMethod)));
+        } elseif (! empty($paymentMethodId) && Schema::hasTable('payment_methods')) {
             $paymentMethodName = (string) (DB::table('payment_methods')->where('id', $paymentMethodId)->value('name') ?: 'Unknown');
         }
 
@@ -764,6 +779,7 @@ class CreateLoanFromSellService
             'payment_id' => $paymentId,
             'payment_method_id' => $paymentMethodId,
             'payment_method_snapshot' => $paymentMethodName,
+            'method' => $paymentMethod !== '' ? $paymentMethod : $paymentMethodName,
             'currency' => $currency,
             'amount' => $amount,
             'exchange_rate' => $exchangeRate,
@@ -793,5 +809,75 @@ class CreateLoanFromSellService
         }
 
         return $candidate;
+    }
+
+    protected function notifyLocationTelegram(int $loanId, string $event): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans') || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return;
+        }
+
+        $loan = DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->first();
+        if (! $loan) {
+            return;
+        }
+
+        $location = null;
+        if (! empty($loan->business_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('id', $loan->business_location_id)->first();
+        }
+        if (! $location && ! empty($loan->main_location_id)) {
+            $location = DB::connection('mysql_loan')->table('loan_business_locations')->where('main_location_id', $loan->main_location_id)->first();
+        }
+
+        if (! $location || empty($location->telegram_notify_installment)) {
+            return;
+        }
+
+        $chatId = $this->telegramChatIdForEvent($location, $event);
+        if ($chatId === '') {
+            return;
+        }
+
+        $message = "Installment loan created\nLoan: ".($loan->loan_number ?? $loan->id)."\nCustomer: ".($loan->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loan->principal_amount ?? $loan->total_payable_amount ?? 0), 2).' '.($loan->currency ?? 'USD');
+
+        try {
+            app(TelegramBotService::class)->sendMessageToChat($chatId, $message);
+            $this->logTelegramNotification($loan, $location, $event, $message, 'sent', $chatId);
+        } catch (\Throwable $e) {
+            Log::warning('LoanManagement installment Telegram notification failed', [
+                'loan_id' => $loanId,
+                'message' => $e->getMessage(),
+            ]);
+            $this->logTelegramNotification($loan, $location, $event, $message."\n\nError: ".$e->getMessage(), 'failed', $chatId);
+        }
+    }
+
+    protected function telegramChatIdForEvent(object $location, string $event): string
+    {
+        $chatId = $event === 'payment'
+            ? ($location->telegram_payment_chat_id ?? null)
+            : ($location->telegram_installment_chat_id ?? null);
+
+        return trim((string) ($chatId ?: ($location->telegram_chat_id ?? '')));
+    }
+
+    protected function logTelegramNotification(object $loan, object $location, string $event, string $message, string $status, ?string $chatId = null): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_telegram_notifications')) {
+            return;
+        }
+
+        DB::connection('mysql_loan')->table('loan_telegram_notifications')->insert($this->filterColumns('loan_telegram_notifications', [
+            'loan_id' => $loan->id ?? null,
+            'customer_id' => $loan->customer_id ?? null,
+            'event_code' => $event,
+            'chat_id' => $chatId ?: $this->telegramChatIdForEvent($location, $event),
+            'message' => $message,
+            'status' => $status,
+            'sent_at' => $status === 'sent' ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Utils\TransactionUtil;
 use Modules\LoanManagement\Http\Requests\StoreLoanFromSellRequest;
 use Modules\LoanManagement\Services\CreateLoanFromSellService;
 
@@ -116,57 +117,12 @@ class LoanFromSellController extends Controller
 
         $sell = $this->service->getSellFullData((int) $transaction_id);
         $collectors = DB::table('users')->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")->orderBy('first_name')->get();
-        $paymentMethods = [];
-        $defaultPaymentMethodId = null;
-        if (Schema::hasTable('payment_methods')) {
-            $query = DB::table('payment_methods')->select('id', 'name');
-            if (Schema::hasColumn('payment_methods', 'deleted_at')) {
-                $query->whereNull('deleted_at');
-            }
-            $paymentMethods = $query->orderBy('name')->get();
-            $sourceMethod = strtolower(trim((string) ($sell['default_payment_method'] ?? '')));
-            if ($sourceMethod !== '') {
-                $normalizedSource = str_replace(['-', ' '], '_', $sourceMethod);
-                $aliases = [
-                    'cash' => ['cash'],
-                    'card' => ['card', 'credit_card', 'debit_card', 'visa', 'mastercard'],
-                    'bank_transfer' => ['bank_transfer', 'bank', 'transfer'],
-                    'cheque' => ['cheque', 'check'],
-                    'other' => ['other'],
-                    'aba' => ['aba'],
-                ];
-
-                $matched = $paymentMethods->first(function ($m) use ($sourceMethod, $normalizedSource, $aliases) {
-                    $name = strtolower(trim((string) $m->name));
-                    $normalizedName = str_replace(['-', ' '], '_', $name);
-                    if ($name === $sourceMethod || $normalizedName === $normalizedSource) {
-                        return true;
-                    }
-
-                    foreach ($aliases as $key => $variants) {
-                        if (
-                            $normalizedSource === $key ||
-                            in_array($normalizedSource, $variants, true) ||
-                            $normalizedName === $key ||
-                            in_array($normalizedName, $variants, true)
-                        ) {
-                            return true;
-                        }
-                    }
-
-                    if (str_starts_with($normalizedSource, 'custom_pay_')) {
-                        return str_contains($normalizedName, 'custom') || str_contains($normalizedName, 'other');
-                    }
-
-                    return str_contains($normalizedName, $normalizedSource) || str_contains($normalizedSource, $normalizedName);
-                });
-                $defaultPaymentMethodId = $matched->id ?? null;
-            }
-        }
-        $html = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'collectors', 'paymentMethods', 'defaultPaymentMethodId'))->render();
+        $paymentTypes = $this->ultimatePosPaymentTypes($sell);
+        $defaultPaymentMethod = $this->defaultPaymentMethod($sell, $paymentTypes);
+        $html = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'collectors', 'paymentTypes', 'defaultPaymentMethod'))->render();
 
         if (! $request->ajax() && ! $request->wantsJson()) {
-            return view('loanmanagement::loans.create_from_sell.clone', compact('sell', 'collectors', 'paymentMethods', 'defaultPaymentMethodId'));
+            return view('loanmanagement::loans.create_from_sell.clone', compact('sell', 'collectors', 'paymentTypes', 'defaultPaymentMethod'));
         }
 
         return response()->json([
@@ -179,6 +135,25 @@ class LoanFromSellController extends Controller
                 'loan_url' => null,
             ],
         ]);
+    }
+
+    protected function ultimatePosPaymentTypes(array $sell): array
+    {
+        $businessId = (int) (session('user.business_id') ?? 0);
+        $locationId = $sell['transaction']->location_id ?? null;
+
+        return app(TransactionUtil::class)->payment_types($locationId, true, $businessId);
+    }
+
+    protected function defaultPaymentMethod(array $sell, array $paymentTypes): string
+    {
+        $method = (string) ($sell['default_payment_method'] ?? '');
+
+        if ($method !== '' && array_key_exists($method, $paymentTypes)) {
+            return $method;
+        }
+
+        return array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
     }
 
     public function cloneData(Request $request, $transaction_id): JsonResponse

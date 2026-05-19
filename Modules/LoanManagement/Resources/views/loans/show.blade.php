@@ -9,7 +9,21 @@
     $locationAddress = $locationAddressDisplay ?? ($locationRow->address ?? '-');
     $sourceInvoice = $sourceInvoiceDisplay ?? ($loanRow->source_invoice_no ?? '-');
 @endphp
-<section class="content-header"><h1>Loan Detail #{{ $loanRow->id }}</h1></section>
+<section class="content-header">
+    <h1>Loan Detail #{{ $loanRow->id }}</h1>
+    <button type="button"
+            class="btn btn-success btn-modal"
+            data-href="{{ route('loan-management.loans.payment.create', $loanRow->id) }}"
+            data-container=".view_modal">
+        <i class="fa fa-money"></i> Add Payment
+    </button>
+    <button type="button"
+            class="btn btn-default btn-modal"
+            data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
+            data-container=".view_modal">
+        <i class="fa fa-print"></i> Print Loan
+    </button>
+</section>
 <section class="content">
 
 <div class="row">
@@ -123,21 +137,31 @@
 <div class="box-header"><h3 class="box-title">Payment Schedule</h3></div>
 <div class="box-body table-responsive">
 <table class="table table-bordered">
-<thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Schedule Amount</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+<thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Schedule Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Action</th></tr></thead>
 <tbody>
 @forelse($schedules as $s)
 <tr>
 <td>{{ $loop->iteration }}</td>
 <td>{{ $s->due_date ?? '-' }}</td>
-<td>{{ number_format((float)($s->principal_amount ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->interest_amount ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->schedule_amount ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->paid_amount ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->balance_amount ?? 0),2) }}</td>
+<td>{{ number_format((float)($s->principal_amount ?? $s->principal_due ?? 0),2) }}</td>
+<td>{{ number_format((float)($s->interest_amount ?? $s->interest_due ?? 0),2) }}</td>
+<td>{{ number_format((float)($s->schedule_amount ?? $s->amount_due ?? 0),2) }}</td>
+<td>{{ number_format((float)($s->paid_amount ?? $s->amount_paid ?? 0),2) }}</td>
+<td>{{ number_format((float)($s->balance_amount ?? $s->amount_balance ?? 0),2) }}</td>
 <td>{{ $s->status ?? '-' }}</td>
+<td>
+    @if(! in_array($s->status ?? '', ['paid', 'completed'], true))
+        <button type="button"
+                class="btn btn-xs btn-success btn-modal"
+                data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loanRow->id, 'schedule_id' => $s->id]) }}"
+                data-container=".view_modal">
+            <i class="fa fa-money"></i> Pay
+        </button>
+    @endif
+</td>
 </tr>
 @empty
-<tr><td colspan="8" class="text-center">No schedules</td></tr>
+<tr><td colspan="9" class="text-center">No schedules</td></tr>
 @endforelse
 </tbody>
 </table>

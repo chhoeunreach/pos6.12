@@ -77,6 +77,12 @@ return new class extends Migration
             $table->unsignedBigInteger('main_location_id')->nullable()->index();
             $table->string('name');
             $table->string('location_code')->nullable()->index();
+            $table->string('logo_path')->nullable();
+            $table->string('payment_qr_path')->nullable();
+            $table->string('telegram_qr_path')->nullable();
+            $table->string('telegram_chat_id')->nullable()->index();
+            $table->boolean('telegram_notify_payment')->default(false);
+            $table->boolean('telegram_notify_installment')->default(false);
             $table->string('status', 20)->default('active')->index();
             $table->timestamps();
             $table->softDeletes();

@@ -1,9 +1,9 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Loan Settings')
+@section('title', 'Business Setting')
 
 @section('content_body')
 <section class="content-header">
-    <h1>Loan Settings</h1>
+    <h1>Business Setting</h1>
 </section>
 
 <section class="content">
