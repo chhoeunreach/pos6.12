@@ -182,6 +182,80 @@
             font-family: 'Khmer OS Battambang', Arial, sans-serif;
             text-align: left !important;
         }
+        .product-summary-cell {
+            padding: 0 !important;
+            text-align: left !important;
+        }
+        .summary-inner {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .print-table .summary-inner > tbody > tr > td {
+            border: 0;
+            padding: 0;
+            vertical-align: top;
+        }
+        .summary-terms-cell {
+            width: 67%;
+            border-right: 1px solid var(--line) !important;
+            padding: 2mm 2.5mm !important;
+        }
+        .summary-totals-cell {
+            width: 33%;
+        }
+        .summary-terms {
+            width: 62mm;
+            border-collapse: collapse;
+        }
+        .print-table .summary-terms td {
+            border: 0;
+            padding: 0.4mm 0;
+            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-size: 10px;
+            text-align: left;
+            line-height: 1.2;
+        }
+        .print-table .summary-terms .term-value {
+            width: 18mm;
+            text-align: right;
+        }
+        .summary-totals {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .print-table .summary-totals td {
+            border: 0;
+            border-bottom: 1px solid var(--line);
+            padding: 1.4mm 1.6mm;
+            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.15;
+        }
+        .print-table .summary-totals tr:last-child td {
+            border-bottom: 0;
+        }
+        .summary-total-label {
+            text-align: left !important;
+        }
+        .summary-method-line {
+            display: block;
+            margin-top: 0.5mm;
+            color: #333;
+            font-family: 'Roboto', 'Khmer OS Battambang', Arial, sans-serif;
+            font-size: 8.8px;
+            line-height: 1.15;
+            word-break: break-word;
+        }
+        .summary-currency {
+            width: 12mm;
+            text-align: center !important;
+        }
+        .summary-amount {
+            width: 24mm;
+            text-align: right !important;
+        }
         .schedule-table th,
         .schedule-table td {
             padding: 1mm 1mm;
@@ -317,6 +391,91 @@
     $interestRate = (float) ($loanRow->interest_rate ?? 0);
     $downPercent = $productTotal > 0 ? ($downPayment / max($productTotal, 1) * 100) : 0;
     $paymentsBySchedule = $payments->groupBy(fn ($payment) => $payment->_print_schedule_id ?? $payment->schedule_id ?? null);
+    $paymentTypes = [];
+    try {
+        $paymentTypes = app(\App\Utils\TransactionUtil::class)->payment_types(
+            $loanRow->main_location_id ?? null,
+            true,
+            (int) (session('user.business_id') ?? 0)
+        );
+    } catch (\Throwable $e) {
+        $paymentTypes = [];
+    }
+    $paymentMethodDisplayName = function ($method) use ($paymentTypes) {
+        $method = trim((string) $method);
+        if ($method === '') {
+            return 'Payment';
+        }
+
+        $normalized = strtolower(str_replace([' ', '-', '_'], '', $method));
+        $knownNames = [
+            'aba' => 'ធនាគារអេប៊ីអេ (ABA)',
+            'ababank' => 'ធនាគារអេប៊ីអេ (ABA)',
+            'abapay' => 'ធនាគារអេប៊ីអេ (ABA)',
+            'wing' => 'វីងវេលុយ (Wing)',
+            'wingmoney' => 'វីងវេលុយ (Wing)',
+            'cash' => 'Cash',
+        ];
+
+        return $knownNames[$normalized]
+            ?? (string) ($paymentTypes[$method] ?? ucfirst(str_replace('_', ' ', $method)));
+    };
+    $paymentMethodNameForPrint = function ($payment) use ($paymentMethodDisplayName) {
+        $method = trim((string) ($payment->payment_method_snapshot ?? ''));
+        if ($method !== '') {
+            return $paymentMethodDisplayName($method);
+        }
+
+        return $paymentMethodDisplayName($payment->method ?? $payment->channel ?? '');
+    };
+    $paymentLinesForPrint = function ($rows) use ($paymentMethodNameForPrint) {
+        return collect($rows)
+            ->reduce(function ($carry, $payment) use ($paymentMethodNameForPrint) {
+                $amount = (float) ($payment->_print_amount ?? $payment->total_paid_base ?? $payment->amount ?? 0);
+                if ($amount <= 0) {
+                    return $carry;
+                }
+
+                $method = $paymentMethodNameForPrint($payment);
+                $carry[$method] = ($carry[$method] ?? 0) + $amount;
+
+                return $carry;
+            }, collect())
+            ->map(fn ($amount, $method) => e($method).'='.number_format($amount, 2))
+            ->values();
+    };
+    $downPaymentLines = collect();
+    if ($downPayment > 0) {
+        $downPaymentRows = $payments
+            ->filter(fn ($payment) => empty($payment->schedule_id) && empty($payment->_print_schedule_id))
+            ->values();
+        $downPaymentLines = $paymentLinesForPrint($downPaymentRows);
+
+        if ($downPaymentLines->isEmpty()) {
+            $remainingDownPayment = $downPayment;
+            $downPaymentRows = $payments
+                ->sortBy(fn ($payment) => ($payment->paid_date ?? $payment->paid_at ?? '').'-'.str_pad((string) ($payment->id ?? 0), 10, '0', STR_PAD_LEFT))
+                ->map(function ($payment) use (&$remainingDownPayment) {
+                    if ($remainingDownPayment <= 0) {
+                        return null;
+                    }
+
+                    $amount = (float) ($payment->total_paid_base ?? $payment->amount ?? 0);
+                    if ($amount <= 0) {
+                        return null;
+                    }
+
+                    $line = clone $payment;
+                    $line->_print_amount = min($amount, $remainingDownPayment);
+                    $remainingDownPayment -= $line->_print_amount;
+
+                    return $line;
+                })
+                ->filter()
+                ->values();
+            $downPaymentLines = $paymentLinesForPrint($downPaymentRows);
+        }
+    }
     $printedAt = \Carbon\Carbon::now()->format('d-M-Y H:i:s');
 @endphp
 
@@ -407,23 +566,51 @@
                 <tr><td colspan="8">No products</td></tr>
             @endforelse
             <tr class="summary-row">
-                <td colspan="4" rowspan="4" class="summary-label">
-                    រយៈពេលបង់(ខែ) <span style="margin-left:30mm;">{{ $duration }}</span><br>
-                    ភាគរយបង់មុន <span style="margin-left:29mm;">{{ number_format($downPercent, 2) }}%</span><br>
-                    អត្រាការប្រាក់ <span style="margin-left:30mm;" class="red">{{ number_format($interestRate, 2) }}%</span>
+                <td colspan="8" class="product-summary-cell">
+                    <table class="summary-inner">
+                        <tr>
+                            <td class="summary-terms-cell">
+                                <table class="summary-terms">
+                                    <tr>
+                                        <td>រយៈពេលបង់(ខែ)</td>
+                                        <td class="term-value">{{ $duration }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>ភាគរយបង់មុន</td>
+                                        <td class="term-value">{{ number_format($downPercent, 2) }}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>អត្រាការប្រាក់</td>
+                                        <td class="term-value red">{{ number_format($interestRate, 2) }}%</td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td class="summary-totals-cell">
+                                <table class="summary-totals">
+                                    <tr>
+                                        <td class="summary-total-label">តម្លៃសរុប</td>
+                                        <td class="summary-currency">$</td>
+                                        <td class="summary-amount">{{ number_format($productTotal, 2) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-total-label">
+                                            ប្រាក់ចូលរួមមុន
+                                            @if($downPaymentLines->isNotEmpty())
+                                                <span class="summary-method-line">{!! $downPaymentLines->implode(' ') !!}</span>
+                                            @endif
+                                        </td>
+                                        <td class="summary-currency">$</td>
+                                        <td class="summary-amount">{{ number_format($downPayment, 2) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="summary-total-label">ប្រាក់នៅខ្វះ</td>
+                                        <td colspan="2" class="summary-amount red">${{ number_format($balanceAmount, 2) }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
-                <td colspan="2" class="summary-label">តម្លៃសរុប</td>
-                <td>$</td>
-                <td class="text-right">{{ number_format($productTotal, 2) }}</td>
-            </tr>
-            <tr class="summary-row">
-                <td colspan="2" class="summary-label">ប្រាក់ចូលរួមមុន</td>
-                <td>$</td>
-                <td class="text-right">{{ number_format($downPayment, 2) }}</td>
-            </tr>
-            <tr class="summary-row">
-                <td colspan="2" class="summary-label">ប្រាក់នៅខ្វះ</td>
-                <td colspan="2" class="red text-center">${{ number_format($balanceAmount, 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -457,24 +644,7 @@
                         ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('d-m-Y'))
                         ->unique()
                         ->values();
-                    $paymentLines = $rowPayments
-                        ->reduce(function ($carry, $p) {
-                            $amount = (float) ($p->_print_amount ?? $p->total_paid_base ?? $p->amount ?? 0);
-                            if ($amount <= 0) {
-                                return $carry;
-                            }
-
-                            $method = trim((string) ($p->payment_method_snapshot ?? $p->method ?? $p->channel ?? ''));
-                            if ($method === '') {
-                                $method = 'Payment';
-                            }
-
-                            $carry[$method] = ($carry[$method] ?? 0) + $amount;
-
-                            return $carry;
-                        }, collect())
-                        ->map(fn ($amount, $method) => e($method).'='.number_format($amount, 2))
-                        ->values();
+                    $paymentLines = $paymentLinesForPrint($rowPayments);
                     if ($paymentLines->isEmpty() && $paid > 0) {
                         $paymentLines = collect([number_format($paid, 2)]);
                     }

@@ -12,6 +12,7 @@ use Modules\LoanManagement\Http\Controllers\LoanChatController;
 use Modules\LoanManagement\Http\Controllers\LoanCollectionController;
 use Modules\LoanManagement\Http\Controllers\LoanInstallmentListController;
 use Modules\LoanManagement\Http\Controllers\LoanLocationController;
+use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
 use Modules\LoanManagement\Http\Controllers\LoanSellListController;
 use Modules\LoanManagement\Http\Controllers\SettingsController;
 
@@ -20,6 +21,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
     ->group(function () {
         $createLoanPermission = 'loan.permission:loan_management.create_from_sell|loan_management.loans.create|loan_management.create';
         $sellConvertPermission = 'loan.permission:loan_management.sell_convert|loan_management.create_from_sell|loan_management.loans.create|loan_management.create';
+        $managePaymentPermission = 'loan.permission:loan_management.payment|loan_management.payments.create|loan_management.edit';
 
         Route::get('/', function () {
             return redirect()->route('loan-management.dashboard');
@@ -120,9 +122,12 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/locations/{location}/assets', [LoanLocationController::class, 'update'])->name('loan-management.locations.assets.update')->middleware('can:loan_management.view');
         Route::get('/location-assets/{location}/{filename}', [LoanLocationController::class, 'asset'])->name('loan-management.locations.assets.show')->middleware('can:loan_management.view');
 
-        Route::get('/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments')->middleware('can:loan_management.view');
-        Route::get('/payments/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments')->name('loan-management.payments.index')->middleware('can:loan_management.view');
-        Route::get('/payment-history', [DashboardController::class, 'placeholder'])->defaults('page', 'Payment History')->name('loan-management.payment-history.index')->middleware('can:loan_management.view');
+        Route::get('/payments', [LoanPaymentController::class, 'index'])->name('loan-management.payments')->middleware('can:loan_management.view');
+        Route::get('/payments/index', [LoanPaymentController::class, 'index'])->name('loan-management.payments.index')->middleware('can:loan_management.view');
+        Route::get('/payments/{payment}/edit', [LoanPaymentController::class, 'edit'])->name('loan-management.payments.edit')->middleware($managePaymentPermission);
+        Route::put('/payments/{payment}', [LoanPaymentController::class, 'update'])->name('loan-management.payments.update')->middleware($managePaymentPermission);
+        Route::delete('/payments/{payment}', [LoanPaymentController::class, 'destroy'])->name('loan-management.payments.destroy')->middleware($managePaymentPermission);
+        Route::get('/payment-history', [LoanPaymentController::class, 'index'])->name('loan-management.payment-history.index')->middleware('can:loan_management.view');
         Route::get('/collection-visits', [DashboardController::class, 'placeholder'])->defaults('page', 'Collection Visits')->name('loan-management.collection-visits.index')->middleware('can:loan_management.view');
         Route::get('/gps', [AdminCustomerTrackingController::class, 'index'])->name('loan-management.gps.index')->middleware('can:loan_management.view');
         Route::get('/chat', [LoanChatController::class, 'webInbox'])->name('loan-management.chat.index')->middleware('can:loan_management.chat.view');

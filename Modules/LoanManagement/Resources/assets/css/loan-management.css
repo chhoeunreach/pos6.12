@@ -211,6 +211,8 @@
 .lm-header-left, .lm-header-right { display: flex; align-items: center; gap: 12px; }
 .lm-title { margin: 0; font-size: 18px; color: var(--lm-text); }
 .lm-subtitle { margin: 0; font-size: 12px; color: var(--lm-muted); }
+.lm-quick-menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lm-quick-link { white-space: nowrap; }
 .lm-user-meta { display: flex; flex-direction: column; text-align: right; font-size: 12px; color: var(--lm-muted); }
 .lm-user-name { font-weight: 700; color: var(--lm-text); }
 .lm-sidebar-toggle { border: 0; background: #eff6ff; color: var(--lm-primary); width: 36px; height: 36px; border-radius: 8px; }
@@ -247,4 +249,6 @@ body.lm-sidebar-collapsed .lm-main { width: 100%; }
     .lm-main { width: 100%; }
     body.lm-sidebar-open .lm-sidebar { transform: translateX(0); }
     .lm-header { flex-wrap: wrap; }
+    .lm-header-right { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
+    .lm-quick-menu { order: -1; width: 100%; justify-content: flex-end; }
 }

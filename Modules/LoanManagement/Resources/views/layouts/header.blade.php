@@ -11,6 +11,22 @@
     }
 
     $backToPosUrl = Route::has('home') ? route('home') : url('/');
+    $quickMenu = [
+        [
+            'label' => 'Create Loan',
+            'icon' => 'fa fa-plus',
+            'route' => 'loan-management.loans.create-from-sell',
+            'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create',
+            'class' => 'btn-success',
+        ],
+        [
+            'label' => 'All Loans',
+            'icon' => 'fa fa-list',
+            'route' => 'loan-management.loans',
+            'can' => 'loan_management.loans.view|loan_management.view',
+            'class' => 'btn-default',
+        ],
+    ];
 @endphp
 
 <header class="lm-header sticky-top" id="loanManagementHeader">
@@ -25,6 +41,16 @@
     </div>
 
     <div class="lm-header-right">
+        <div class="lm-quick-menu" aria-label="Loan quick menu">
+            @foreach($quickMenu as $item)
+                @if(Route::has($item['route']) && loan_user_can($item['can']))
+                    <a href="{{ route($item['route']) }}" class="btn btn-sm {{ $item['class'] }} lm-quick-link">
+                        <i class="{{ $item['icon'] }}"></i> {{ $item['label'] }}
+                    </a>
+                @endif
+            @endforeach
+        </div>
+
         <div class="lm-user-meta">
             <span class="lm-user-name">{{ $loanUser->username ?? $loanUser->first_name ?? 'Staff' }}</span>
             @if(!empty($locationName))
