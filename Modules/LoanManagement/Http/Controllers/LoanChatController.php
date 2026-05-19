@@ -30,34 +30,20 @@ class LoanChatController extends Controller
     protected function canViewThread(LoanChatThread $thread): bool
     {
         if ($this->isAdmin()) return true;
-        return (int) ($thread->staff_id ?? 0) === (int) auth()->id();
+        $userId = (int) auth()->id();
+        return (int) ($thread->staff_id ?? 0) === $userId
+            || (int) ($thread->assigned_staff_id ?? 0) === $userId
+            || empty($thread->staff_id)
+            || empty($thread->assigned_staff_id);
     }
 
     public function index(Request $request)
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
 
-        $q = LoanChatThread::query();
-        if (! $this->isAdmin()) {
-            $q->where('staff_id', auth()->id());
-        }
-        if ($request->filled('status')) $q->where('status', $request->input('status'));
-        if ($request->filled('priority')) $q->where('priority', $request->input('priority'));
-        if ($request->filled('customer_id')) $q->where('customer_id', $request->input('customer_id'));
-        if ($request->filled('staff_id') && $this->isAdmin()) $q->where('staff_id', $request->input('staff_id'));
-        $q->with(['customer', 'loan']);
-        if (LoanChatService::hasThreadColumn('is_pinned')) {
-            $q->orderByDesc('is_pinned');
-        }
-        if (LoanChatService::hasThreadColumn('last_message_at')) {
-            $q->orderByDesc('last_message_at');
-        }
-        $rows = $q->orderByDesc('id')->limit(200)->get();
+        $rows = $this->chatService->getStaffInbox((int) auth()->id(), $this->isAdmin(), $request->all())->take(200);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
-        foreach ($rows as $row) {
-            $this->chatService->markSeen($row, 'staff');
-        }
         return $this->ok('Chats loaded', ChatThreadResource::collection($rows)->resolve());
     }
 
@@ -71,6 +57,7 @@ class LoanChatController extends Controller
             'subject' => 'nullable|string|max:255',
             'type' => 'nullable|in:customer_staff,customer_collector,customer_admin,staff_admin',
             'priority' => 'nullable|in:low,normal,high,urgent',
+            'assigned_team' => 'nullable|string|max:80',
             'avatar_url' => 'nullable|string|max:2048',
             'is_pinned' => 'nullable|boolean',
             'is_muted' => 'nullable|boolean',
@@ -102,7 +89,9 @@ class LoanChatController extends Controller
                 $this->chatService->markDelivered($message);
             }
         }
-        return $this->ok('Thread loaded', (new ChatThreadResource($row))->resolve());
+        $data = (new ChatThreadResource($row))->resolve();
+        $data['sidebar'] = $this->chatService->getCustomerSidebarData($row);
+        return $this->ok('Thread loaded', $data);
     }
 
     public function sendMessage(SendChatMessageRequest $request, int $thread)
@@ -198,8 +187,21 @@ class LoanChatController extends Controller
         $data = $request->validate(['staff_id' => 'required|integer']);
         $row = LoanChatThread::query()->findOrFail($thread);
         if (! $this->isAdmin() && ! $this->canViewThread($row)) abort(403);
-        $this->chatService->assignStaff($row, (int) $data['staff_id']);
+        $this->chatService->assignChat($row, (int) $data['staff_id'], $request->input('assigned_team'));
         return $this->ok('Thread assigned', (new ChatThreadResource($row))->resolve());
+    }
+
+    public function transfer(Request $request, int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.transfer') || auth()->user()->can('loan_management.chat.assign'), 403);
+        $data = $request->validate([
+            'staff_id' => 'required|integer',
+            'assigned_team' => 'nullable|string|max:80',
+        ]);
+        $row = LoanChatThread::query()->findOrFail($thread);
+        if (! $this->isAdmin() && ! $this->canViewThread($row)) abort(403);
+        $this->chatService->transferChat($row, (int) $data['staff_id'], $data['assigned_team'] ?? null);
+        return $this->ok('Thread transferred', (new ChatThreadResource($row))->resolve());
     }
 
     public function read(MarkChatReadRequest $request, int $thread)
@@ -220,12 +222,12 @@ class LoanChatController extends Controller
         return $this->ok('Typing updated', (object) []);
     }
 
-    public function close(int $thread)
+    public function close(Request $request, int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.close'), 403);
         $row = LoanChatThread::query()->findOrFail($thread);
         if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
-        $this->chatService->closeThread($row, (int) auth()->id());
+        $this->chatService->closeThread($row, (int) auth()->id(), $request->input('reason'));
         return $this->ok('Thread closed', (object) []);
     }
 
@@ -236,6 +238,24 @@ class LoanChatController extends Controller
         if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
         $this->chatService->reopenThread($row);
         return $this->ok('Thread reopened', (object) []);
+    }
+
+    public function pin(Request $request, int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $row = LoanChatThread::query()->findOrFail($thread);
+        if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
+        $this->chatService->pinChat($row, $request->boolean('is_pinned', true));
+        return $this->ok('Thread pin updated', (new ChatThreadResource($row))->resolve());
+    }
+
+    public function mute(Request $request, int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $row = LoanChatThread::query()->findOrFail($thread);
+        if (! $this->canViewThread($row) && ! $this->isAdmin()) abort(403);
+        $this->chatService->muteChat($row, $request->boolean('is_muted', true));
+        return $this->ok('Thread mute updated', (new ChatThreadResource($row))->resolve());
     }
 
     public function destroy(int $thread)
@@ -260,11 +280,11 @@ class LoanChatController extends Controller
 
     public function webInbox()
     {
-        return view('loanmanagement::chat.inbox');
+        return view('loanmanagement::chat.inbox', ['initialThreadId' => null]);
     }
 
     public function webDetail(int $thread)
     {
-        return view('loanmanagement::chat.detail', ['threadId' => $thread]);
+        return view('loanmanagement::chat.inbox', ['initialThreadId' => $thread]);
     }
 }

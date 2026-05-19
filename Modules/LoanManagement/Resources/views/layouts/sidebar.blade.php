@@ -41,6 +41,7 @@
             ['label' => 'Live Chat', 'route' => 'loan-management.chat.index', 'can' => 'loan_management.chat.view', 'badge' => $badgeCounts['unread_chat'] ?? 0],
             ['label' => 'Voice Calls', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'voice-calls'], 'can' => 'loan_management.view'],
             ['label' => 'Notifications', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'notifications'], 'can' => 'loan_management.view'],
+            ['label' => 'SMS/Telegram Logs', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'sms-telegram-logs'], 'can' => 'loan_management.view'],
         ]],
         ['label' => 'Finance', 'icon' => 'fas fa-money-bill-alt', 'children' => [
             ['label' => 'Payments', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'can' => 'loan_management.view'],

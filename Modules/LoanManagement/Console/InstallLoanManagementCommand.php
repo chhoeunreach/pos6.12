@@ -127,6 +127,10 @@ class InstallLoanManagementCommand extends Command
             'loan_management.gps.view',
             'loan_management.chat.view',
             'loan_management.chat.reply',
+            'loan_management.chat.assign',
+            'loan_management.chat.transfer',
+            'loan_management.chat.close',
+            'loan_management.chat.admin',
             'loan_management.aba.view',
             'loan_management.reports.view',
             'loan_management.import.view',
@@ -143,6 +147,10 @@ class InstallLoanManagementCommand extends Command
             'loan_management.customers.create',
             'loan_management.chat.view',
             'loan_management.chat.reply',
+            'loan_management.chat.assign',
+            'loan_management.chat.transfer',
+            'loan_management.chat.close',
+            'loan_management.chat.admin',
             'loan_management.customer_gps.manage',
         ];
         $configured = (array) config('loanmanagement.permissions', []);

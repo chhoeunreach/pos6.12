@@ -51,6 +51,7 @@ class LoanCollectionService
             'contact-history' => ['title' => 'Contact History', 'where' => []],
             'voice-calls' => ['title' => 'Voice Calls', 'where' => []],
             'notifications' => ['title' => 'Notifications', 'where' => []],
+            'sms-telegram-logs' => ['title' => 'SMS/Telegram Logs', 'where' => []],
         ];
 
         return $map[$slug] ?? ['title' => str($slug)->replace('-', ' ')->title()->value(), 'where' => []];

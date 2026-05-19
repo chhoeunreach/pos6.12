@@ -43,7 +43,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             ->name('loan-management.risk.page')
             ->middleware('can:loan_management.view');
         Route::get('/communication/{page}', [LoanCollectionController::class, 'index'])
-            ->whereIn('page', ['voice-calls', 'notifications'])
+            ->whereIn('page', ['voice-calls', 'notifications', 'sms-telegram-logs'])
             ->name('loan-management.communication.page')
             ->middleware('can:loan_management.view');
         Route::get('/customers-workflow/{page}', [LoanCollectionController::class, 'index'])

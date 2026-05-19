@@ -67,6 +67,7 @@
                 <li><a href="{{ $lmUrl('loan-management.chat.index', [], '/loan-management/chat') }}"><i class="fa fa-comments"></i> Live Chat @if($badgeChat > 0)<span class="label label-warning pull-right">{{ $badgeChat }}</span>@endif</a></li>
                 <li><a href="{{ $lmUrl('loan-management.communication.page', ['page' => 'voice-calls'], '/loan-management/communication/voice-calls') }}"><i class="fa fa-phone"></i> Voice Calls</a></li>
                 <li><a href="{{ $lmUrl('loan-management.communication.page', ['page' => 'notifications'], '/loan-management/communication/notifications') }}"><i class="fa fa-bell"></i> Notifications</a></li>
+                <li><a href="{{ $lmUrl('loan-management.communication.page', ['page' => 'sms-telegram-logs'], '/loan-management/communication/sms-telegram-logs') }}"><i class="fa fa-paper-plane"></i> SMS/Telegram Logs</a></li>
             </ul>
         </li>
 

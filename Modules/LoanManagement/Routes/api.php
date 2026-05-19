@@ -74,9 +74,12 @@ Route::prefix('loan-management')->group(function () {
         Route::delete('/chats/{thread}', [LoanChatController::class, 'destroy']);
         Route::post('/chats/{thread}/messages', [LoanChatController::class, 'sendMessage']);
         Route::post('/chats/{thread}/assign', [LoanChatController::class, 'assign']);
+        Route::post('/chats/{thread}/transfer', [LoanChatController::class, 'transfer']);
         Route::post('/chats/{thread}/read', [LoanChatController::class, 'read']);
         Route::post('/chats/{thread}/typing', [LoanChatController::class, 'typing']);
         Route::post('/chats/{thread}/close', [LoanChatController::class, 'close']);
         Route::post('/chats/{thread}/reopen', [LoanChatController::class, 'reopen']);
+        Route::post('/chats/{thread}/pin', [LoanChatController::class, 'pin']);
+        Route::post('/chats/{thread}/mute', [LoanChatController::class, 'mute']);
     });
 });

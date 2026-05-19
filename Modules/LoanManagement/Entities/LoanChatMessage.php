@@ -11,7 +11,8 @@ class LoanChatMessage extends BaseLoanModel
     protected $table = 'loan_chat_messages';
 
     protected $fillable = [
-        'thread_id', 'sender_type', 'sender_id', 'sender_name_snapshot', 'message', 'message_type',
+        'thread_id', 'sender_type', 'sender_id', 'sender_name_snapshot', 'sender_avatar_snapshot',
+        'message', 'message_type',
         'file_id', 'file_url', 'file_name', 'file_mime', 'file_size',
         'audio_duration_seconds',
         'latitude', 'longitude', 'location_address',

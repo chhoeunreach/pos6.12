@@ -33,6 +33,11 @@ class LoanChatService
         return Schema::connection('mysql_loan')->hasColumn('loan_chat_messages', $column);
     }
 
+    public static function hasParticipantColumn($column): bool
+    {
+        return Schema::connection('mysql_loan')->hasColumn('loan_chat_participants', $column);
+    }
+
     public function listCustomerThreads(?int $customerId = null): Collection
     {
         $customerId = $customerId ?? (int) (auth(config('loanmanagement.customer_api_guard', 'customer_loan_api'))->id() ?? 0);
@@ -45,19 +50,35 @@ class LoanChatService
         return $query->get();
     }
 
-    public function listStaffThreads(?int $staffId = null, bool $admin = false): Collection
+    public function getCustomerChatList(?int $customerId = null): Collection
+    {
+        return $this->listCustomerThreads($customerId);
+    }
+
+    public function listStaffThreads(?int $staffId = null, bool $admin = false, array $filters = []): Collection
     {
         $staffId = $staffId ?? (int) (auth()->id() ?? 0);
 
         $q = LoanChatThread::query();
         if (! $admin) {
-            $q->where('staff_id', $staffId);
+            $q->where(function ($inner) use ($staffId) {
+                $inner->where('staff_id', $staffId)->orWhereNull('staff_id');
+                if (self::hasThreadColumn('assigned_staff_id')) {
+                    $inner->orWhere('assigned_staff_id', $staffId)->orWhereNull('assigned_staff_id');
+                }
+            });
         }
+        $this->applyInboxFilters($q, $filters, $staffId, $admin);
 
         $q->with(['customer', 'loan']);
         $this->applyThreadListOrdering($q);
 
         return $q->get();
+    }
+
+    public function getStaffInbox(?int $staffId = null, bool $admin = false, array $filters = []): Collection
+    {
+        return $this->listStaffThreads($staffId, $admin, $filters);
     }
 
     public function createThread(array $data): LoanChatThread
@@ -81,11 +102,29 @@ class LoanChatService
             if (self::hasThreadColumn('avatar_url')) {
                 $payload['avatar_url'] = $data['avatar_url'] ?? null;
             }
+            if (self::hasThreadColumn('assigned_staff_id')) {
+                $payload['assigned_staff_id'] = $data['assigned_staff_id'] ?? $data['staff_id'] ?? null;
+            }
+            if (self::hasThreadColumn('assigned_team')) {
+                $payload['assigned_team'] = $data['assigned_team'] ?? null;
+            }
+            if (self::hasThreadColumn('display_name')) {
+                $payload['display_name'] = $data['display_name'] ?? null;
+            }
+            if (self::hasThreadColumn('display_subtitle')) {
+                $payload['display_subtitle'] = $data['display_subtitle'] ?? null;
+            }
             if (self::hasThreadColumn('is_pinned')) {
                 $payload['is_pinned'] = (bool) ($data['is_pinned'] ?? false);
             }
             if (self::hasThreadColumn('is_muted')) {
                 $payload['is_muted'] = (bool) ($data['is_muted'] ?? false);
+            }
+            if (self::hasThreadColumn('is_group')) {
+                $payload['is_group'] = (bool) ($data['is_group'] ?? false);
+            }
+            if (self::hasThreadColumn('is_closed')) {
+                $payload['is_closed'] = false;
             }
 
             $thread = LoanChatThread::query()->create($payload);
@@ -116,9 +155,17 @@ class LoanChatService
 
     public function addParticipant($thread, $type, $id, ?string $name = null): LoanChatParticipant
     {
+        $payload = ['participant_name_snapshot' => $name, 'joined_at' => now()];
+        if (self::hasParticipantColumn('is_active')) {
+            $payload['is_active'] = true;
+        }
+        if (self::hasParticipantColumn('left_at')) {
+            $payload['left_at'] = null;
+        }
+
         return LoanChatParticipant::query()->updateOrCreate(
             ['thread_id' => $thread->id, 'participant_type' => $type, 'participant_id' => $id],
-            ['participant_name_snapshot' => $name, 'joined_at' => now()]
+            $payload
         );
     }
 
@@ -246,6 +293,11 @@ class LoanChatService
         return $thread;
     }
 
+    public function markOnline(LoanChatThread $thread, string $viewerType): LoanChatThread
+    {
+        return $this->markSeen($thread, $viewerType);
+    }
+
     public function markTyping(LoanChatThread $thread, string $viewerType): LoanChatThread
     {
         $column = $viewerType === 'customer' ? 'typing_customer_at' : 'typing_staff_at';
@@ -334,6 +386,12 @@ class LoanChatService
         $thread->last_message_at = $message->created_at ?? now();
         $thread->last_message = $this->threadLastMessageSnapshot($message);
         $thread->last_message_type = $message->message_type;
+        if (self::hasThreadColumn('last_sender_type')) {
+            $thread->last_sender_type = $message->sender_type;
+        }
+        if (self::hasThreadColumn('last_sender_name')) {
+            $thread->last_sender_name = $this->messageSenderName($message);
+        }
         $thread->save();
 
         return $thread;
@@ -343,8 +401,20 @@ class LoanChatService
     {
         if ($senderType === 'customer') {
             $thread->unread_staff_count = (int) ($thread->unread_staff_count ?? 0) + 1;
+            if (self::hasParticipantColumn('unread_count')) {
+                LoanChatParticipant::query()
+                    ->where('thread_id', $thread->id)
+                    ->whereIn('participant_type', self::STAFF_SIDE_TYPES)
+                    ->increment('unread_count');
+            }
         } else {
             $thread->unread_customer_count = (int) ($thread->unread_customer_count ?? 0) + 1;
+            if (self::hasParticipantColumn('unread_count')) {
+                LoanChatParticipant::query()
+                    ->where('thread_id', $thread->id)
+                    ->where('participant_type', 'customer')
+                    ->increment('unread_count');
+            }
         }
 
         $thread->save();
@@ -356,8 +426,20 @@ class LoanChatService
     {
         if ($readerType === 'customer') {
             $thread->unread_customer_count = 0;
+            if (self::hasParticipantColumn('unread_count')) {
+                LoanChatParticipant::query()
+                    ->where('thread_id', $thread->id)
+                    ->where('participant_type', 'customer')
+                    ->update(['unread_count' => 0, 'updated_at' => now()]);
+            }
         } else {
             $thread->unread_staff_count = 0;
+            if (self::hasParticipantColumn('unread_count')) {
+                LoanChatParticipant::query()
+                    ->where('thread_id', $thread->id)
+                    ->whereIn('participant_type', self::STAFF_SIDE_TYPES)
+                    ->update(['unread_count' => 0, 'updated_at' => now()]);
+            }
         }
 
         $thread->save();
@@ -368,28 +450,100 @@ class LoanChatService
     public function assignStaff($thread, $staffId): LoanChatThread
     {
         $thread->staff_id = $staffId;
+        if (self::hasThreadColumn('assigned_staff_id')) {
+            $thread->assigned_staff_id = $staffId;
+        }
         $thread->save();
         $this->addParticipant($thread, 'staff', (int) $staffId);
         $this->broadcastChatEvent(new LoanChatThreadAssigned($thread), 'Chat thread assignment broadcast failed');
         return $thread;
     }
 
-    public function closeThread($thread, $closedBy): LoanChatThread
+    public function assignChat($thread, $staffId, ?string $team = null): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        if (self::hasThreadColumn('assigned_team')) {
+            $thread->assigned_team = $team;
+        }
+
+        return $this->assignStaff($thread, (int) $staffId);
+    }
+
+    public function transferChat($thread, $staffId, ?string $team = null): LoanChatThread
+    {
+        return $this->assignChat($thread, $staffId, $team);
+    }
+
+    public function closeThread($thread, $closedBy, ?string $reason = null): LoanChatThread
     {
         $thread->status = 'closed';
-        $thread->closed_at = now();
-        $thread->closed_by = $closedBy;
+        if (self::hasThreadColumn('is_closed')) {
+            $thread->is_closed = true;
+        }
+        if (self::hasThreadColumn('closed_at')) {
+            $thread->closed_at = now();
+        }
+        if (self::hasThreadColumn('closed_by')) {
+            $thread->closed_by = $closedBy;
+        }
+        if (self::hasThreadColumn('closed_reason')) {
+            $thread->closed_reason = $reason;
+        }
         $thread->save();
         $this->broadcastChatEvent(new LoanChatThreadClosed($thread), 'Chat thread close broadcast failed');
         return $thread;
     }
 
+    public function closeChat($thread, $closedBy, ?string $reason = null): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        return $this->closeThread($thread, $closedBy, $reason);
+    }
+
     public function reopenThread($thread): LoanChatThread
     {
         $thread->status = 'open';
-        $thread->closed_at = null;
-        $thread->closed_by = null;
+        if (self::hasThreadColumn('is_closed')) {
+            $thread->is_closed = false;
+        }
+        if (self::hasThreadColumn('closed_at')) {
+            $thread->closed_at = null;
+        }
+        if (self::hasThreadColumn('closed_by')) {
+            $thread->closed_by = null;
+        }
+        if (self::hasThreadColumn('closed_reason')) {
+            $thread->closed_reason = null;
+        }
         $thread->save();
+        return $thread;
+    }
+
+    public function reopenChat($thread): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        return $this->reopenThread($thread);
+    }
+
+    public function pinChat($thread, bool $pinned = true): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        if (self::hasThreadColumn('is_pinned')) {
+            $thread->is_pinned = $pinned;
+            $thread->save();
+        }
+
+        return $thread;
+    }
+
+    public function muteChat($thread, bool $muted = true): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        if (self::hasThreadColumn('is_muted')) {
+            $thread->is_muted = $muted;
+            $thread->save();
+        }
+
         return $thread;
     }
 
@@ -427,13 +581,31 @@ class LoanChatService
         $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
 
         if ($viewerType === 'customer') {
+            if (! empty($thread->display_name)) {
+                return (string) $thread->display_name;
+            }
             $staff = $this->staffUser($thread);
             $name = $staff ? trim((string) (($staff->first_name ?? '').' '.($staff->last_name ?? ''))) : '';
-            return $name ?: (string) ($staff->username ?? $staff->name ?? $thread->subject ?? 'Support');
+            return $name ?: (string) ($staff->username ?? $staff->name ?? $thread->subject ?? $this->customerViewDisplayName($thread));
         }
 
         $customer = $this->threadCustomer($thread);
         return (string) ($customer->name ?? $thread->subject ?? $thread->thread_number ?? 'Customer');
+    }
+
+    public function getDisplaySubtitle($thread, $viewerType): string
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+
+        if ($viewerType === 'customer') {
+            return (string) ($thread->display_subtitle ?: $this->customerViewSubtitle($thread));
+        }
+
+        $customer = $this->threadCustomer($thread);
+        $loanNumber = (string) ($thread->loan->loan_number ?? $thread->loan_number ?? '');
+        $phone = (string) ($customer->phone ?? $customer->login_phone ?? '');
+
+        return trim($phone.($phone && $loanNumber ? ' - ' : '').$loanNumber);
     }
 
     public function getAvatarUrl($thread, $viewerType): string
@@ -476,23 +648,36 @@ class LoanChatService
             ? (self::hasThreadColumn('typing_staff_at') ? $thread->typing_staff_at : null)
             : (self::hasThreadColumn('typing_customer_at') ? $thread->typing_customer_at : null);
         $customer = $this->threadCustomer($thread);
-        $loanNumber = (string) ($thread->loan->loan_number ?? '');
-        $phone = (string) ($customer->phone ?? $customer->login_phone ?? '');
+        $staff = $this->staffUser($thread);
+        $assignedStaff = $this->assignedStaffUser($thread);
+        $staffName = $staff ? $this->formatUserName($staff) : '';
+        $assignedStaffName = $assignedStaff ? $this->formatUserName($assignedStaff) : $staffName;
 
         return [
             'id' => (int) $thread->id,
             'thread_number' => (string) ($thread->thread_number ?? ''),
             'display_name' => $this->getDisplayName($thread, $viewerType),
-            'display_subtitle' => trim($phone.($phone && $loanNumber ? ' • ' : '').$loanNumber),
+            'display_subtitle' => $this->getDisplaySubtitle($thread, $viewerType),
             'avatar_url' => $this->getAvatarUrl($thread, $viewerType),
+            'customer_name' => (string) ($customer->name ?? ''),
+            'customer_phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+            'staff_name' => $staffName,
+            'assigned_staff_name' => $assignedStaffName,
+            'assigned_staff_id' => $thread->assigned_staff_id === null ? null : (int) $thread->assigned_staff_id,
+            'assigned_team' => (string) ($thread->assigned_team ?? ''),
+            'type' => (string) ($thread->type ?? 'customer_staff'),
+            'priority' => (string) ($thread->priority ?? 'normal'),
             'status' => (string) ($thread->status ?? 'open'),
             'is_online' => $this->timestampWithin($oppositeSeenAt, 120),
             'is_pinned' => self::hasThreadColumn('is_pinned') ? (bool) ($thread->is_pinned ?? false) : false,
             'is_muted' => self::hasThreadColumn('is_muted') ? (bool) ($thread->is_muted ?? false) : false,
+            'is_closed' => self::hasThreadColumn('is_closed') ? (bool) ($thread->is_closed ?? false) : (($thread->status ?? '') === 'closed'),
+            'unread_count' => $this->getUnreadCount($thread, $viewerType),
             'last_message' => $thread->last_message === null ? '' : (string) $thread->last_message,
             'last_message_type' => (string) ($thread->last_message_type ?? 'text'),
             'last_message_at' => $this->formatDate($thread->last_message_at),
-            'unread_count' => $this->getUnreadCount($thread, $viewerType),
+            'last_message_time' => $this->formatDate($thread->last_message_at),
+            'last_sender_name' => (string) ($thread->last_sender_name ?? ''),
             'typing' => $this->timestampWithin($oppositeTypingAt, 10),
         ];
     }
@@ -557,6 +742,41 @@ class LoanChatService
         );
     }
 
+    public function updateUnreadCounters($thread): LoanChatThread
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        $this->recalculateUnreadCounters($thread);
+
+        return $thread->fresh() ?: $thread;
+    }
+
+    public function getCustomerSidebarData($thread): array
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        $thread->loadMissing(['customer', 'loan']);
+        $customer = $this->threadCustomer($thread);
+        $loan = $thread->loan;
+
+        return [
+            'customer_name' => (string) ($customer->name ?? ''),
+            'phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+            'loan_number' => (string) ($loan->loan_number ?? ''),
+            'overdue_days' => (int) ($loan->days_past_due ?? $loan->overdue_days ?? 0),
+            'balance' => (float) ($loan->balance ?? $loan->remaining_balance ?? $loan->outstanding_amount ?? 0),
+            'next_due_date' => $this->formatDate($loan->next_due_date ?? $loan->first_due_date ?? null),
+            'risk_level' => (string) ($loan->risk_level ?? $loan->collection_risk_level ?? 'normal'),
+            'guarantor' => (string) ($loan->guarantor_name ?? $loan->guarantor_name_snapshot ?? ''),
+            'gps_location' => [
+                'latitude' => $customer && $customer->latitude !== null ? (float) $customer->latitude : null,
+                'longitude' => $customer && $customer->longitude !== null ? (float) $customer->longitude : null,
+                'address' => (string) ($customer->address ?? ''),
+            ],
+            'collection_notes' => (string) ($loan->ptp_note ?? $loan->last_contact_result ?? $customer->note ?? ''),
+            'collection_status' => (string) ($loan->collection_status ?? ''),
+            'assigned_collector_id' => empty($loan) || $loan->assigned_collector_id === null ? null : (int) $loan->assigned_collector_id,
+        ];
+    }
+
     protected function broadcastChatEvent(object $event, string $warningMessage): void
     {
         if (! $this->chatBroadcastingEnabled()) {
@@ -612,6 +832,111 @@ class LoanChatService
         $query->orderByDesc('id');
     }
 
+    protected function applyInboxFilters($query, array $filters, int $staffId, bool $admin): void
+    {
+        $view = (string) ($filters['view'] ?? $filters['filter'] ?? 'all');
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['priority'])) {
+            $query->where('priority', $filters['priority']);
+        }
+        if (! empty($filters['customer_id'])) {
+            $query->where('customer_id', (int) $filters['customer_id']);
+        }
+        if (! empty($filters['staff_id']) && $admin) {
+            $query->where(function ($inner) use ($filters) {
+                $inner->where('staff_id', (int) $filters['staff_id']);
+                if (self::hasThreadColumn('assigned_staff_id')) {
+                    $inner->orWhere('assigned_staff_id', (int) $filters['staff_id']);
+                }
+            });
+        }
+
+        match ($view) {
+            'unread' => $query->where('unread_staff_count', '>', 0),
+            'assigned_to_me' => $query->where(function ($inner) use ($staffId) {
+                $inner->where('staff_id', $staffId);
+                if (self::hasThreadColumn('assigned_staff_id')) {
+                    $inner->orWhere('assigned_staff_id', $staffId);
+                }
+            }),
+            'closed' => $query->where('status', 'closed'),
+            'active_customers' => $query->whereIn('status', ['open', 'active', 'pending']),
+            'overdue_customers' => $query->where(function ($inner) {
+                $inner->where('priority', 'high')->orWhere('priority', 'urgent')->orWhere('type', 'overdue');
+            }),
+            'skip_customers' => $query->where(function ($inner) {
+                $inner->where('type', 'skip_customer');
+                if (self::hasThreadColumn('assigned_team')) {
+                    $inner->orWhere('assigned_team', 'skip');
+                }
+            }),
+            'recovery' => $query->where(function ($inner) {
+                $inner->where('type', 'recovery');
+                if (self::hasThreadColumn('assigned_team')) {
+                    $inner->orWhere('assigned_team', 'recovery');
+                }
+            }),
+            'legal' => $query->where(function ($inner) {
+                $inner->where('type', 'legal');
+                if (self::hasThreadColumn('assigned_team')) {
+                    $inner->orWhere('assigned_team', 'legal');
+                }
+            }),
+            default => null,
+        };
+    }
+
+    protected function customerViewSubtitle(LoanChatThread $thread): string
+    {
+        return match ((string) ($thread->assigned_team ?? $thread->type ?? '')) {
+            'recovery' => 'Recovery Team',
+            'legal' => 'Legal Support',
+            'collection', 'customer_collector' => 'Loan Collector',
+            default => 'Loan Support',
+        };
+    }
+
+    protected function customerViewDisplayName(LoanChatThread $thread): string
+    {
+        return match ((string) ($thread->assigned_team ?? $thread->type ?? '')) {
+            'recovery' => 'Recovery Team',
+            'legal' => 'Legal Support',
+            'collection', 'customer_collector' => 'Collector',
+            default => 'Support Team',
+        };
+    }
+
+    protected function assignedStaffUser(LoanChatThread $thread)
+    {
+        $id = (int) ($thread->assigned_staff_id ?? $thread->staff_id ?? 0);
+        return $id && class_exists(\App\User::class) ? \App\User::query()->find($id) : null;
+    }
+
+    protected function formatUserName($user): string
+    {
+        $name = trim((string) (($user->first_name ?? '').' '.($user->last_name ?? '')));
+        return $name ?: (string) ($user->username ?? $user->name ?? 'Support Team');
+    }
+
+    protected function resolveSenderName(string $senderType, int $senderId): string
+    {
+        if ($senderType === 'customer') {
+            $customer = LoanCustomer::query()->find($senderId);
+            return (string) ($customer->name ?? 'Customer');
+        }
+
+        if (class_exists(\App\User::class)) {
+            $user = \App\User::query()->find($senderId);
+            if ($user) {
+                return $this->formatUserName($user);
+            }
+        }
+
+        return $senderType === 'admin' ? 'Admin' : 'Staff';
+    }
+
     protected function generateThreadNumber(): string
     {
         $next = ((int) (LoanChatThread::query()->max('id') ?? 0)) + 1;
@@ -641,7 +966,7 @@ class LoanChatService
                 'thread_id' => $thread->id,
                 'sender_type' => $senderType,
                 'sender_id' => $senderId,
-                'sender_name_snapshot' => $data['sender_name_snapshot'] ?? null,
+                'sender_name_snapshot' => $data['sender_name_snapshot'] ?? $this->resolveSenderName($senderType, $senderId),
                 'message' => $data['message'] ?? null,
                 'message_type' => $data['message_type'] ?? 'text',
                 'file_id' => $data['file_id'] ?? null,
@@ -658,6 +983,9 @@ class LoanChatService
 
             if (self::hasMessageColumn('local_uuid')) {
                 $payload['local_uuid'] = $data['local_uuid'] ?? null;
+            }
+            if (self::hasMessageColumn('sender_avatar_snapshot')) {
+                $payload['sender_avatar_snapshot'] = $data['sender_avatar_snapshot'] ?? null;
             }
 
             if (self::hasMessageColumn('delivered_at')) {
@@ -733,7 +1061,12 @@ class LoanChatService
             return;
         }
 
-        if ($senderType === 'staff' && (int) ($thread->staff_id ?? 0) === $senderId) {
+        if ($senderType === 'staff' && (
+            (int) ($thread->staff_id ?? 0) === $senderId
+            || (int) ($thread->assigned_staff_id ?? 0) === $senderId
+            || empty($thread->staff_id)
+            || empty($thread->assigned_staff_id)
+        )) {
             return;
         }
 

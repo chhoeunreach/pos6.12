@@ -64,6 +64,7 @@ class DataController extends Controller
             ['value' => 'loan_management.chat.view', 'label' => 'Live Chat - View', 'default' => false],
             ['value' => 'loan_management.chat.reply', 'label' => 'Live Chat - Reply', 'default' => false],
             ['value' => 'loan_management.chat.assign', 'label' => 'Live Chat - Assign', 'default' => false],
+            ['value' => 'loan_management.chat.transfer', 'label' => 'Live Chat - Transfer', 'default' => false],
             ['value' => 'loan_management.chat.close', 'label' => 'Live Chat - Close', 'default' => false],
             ['value' => 'loan_management.chat.delete', 'label' => 'Live Chat - Delete Empty', 'default' => false],
             ['value' => 'loan_management.chat.admin', 'label' => 'Live Chat - Admin', 'default' => false],

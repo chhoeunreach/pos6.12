@@ -11,11 +11,13 @@ class LoanChatThread extends BaseLoanModel
     protected $table = 'loan_chat_threads';
 
     protected $fillable = [
-        'thread_number', 'customer_id', 'staff_id', 'loan_id', 'subject', 'type', 'status', 'priority',
-        'avatar_url', 'is_pinned', 'is_muted',
+        'thread_number', 'customer_id', 'staff_id', 'assigned_staff_id', 'assigned_team', 'loan_id',
+        'subject', 'display_name', 'display_subtitle', 'type', 'status', 'priority',
+        'avatar_url', 'is_group', 'is_closed', 'is_pinned', 'is_muted',
         'last_message', 'last_message_type', 'last_message_at', 'unread_customer_count', 'unread_staff_count',
         'last_seen_customer_at', 'last_seen_staff_at', 'typing_customer_at', 'typing_staff_at',
-        'closed_at', 'closed_by', 'created_by_type', 'created_by_id',
+        'last_sender_type', 'last_sender_name', 'closed_at', 'closed_by', 'closed_reason',
+        'created_by_type', 'created_by_id',
     ];
 
     protected $casts = [
@@ -25,6 +27,8 @@ class LoanChatThread extends BaseLoanModel
         'unread_staff_count' => 'integer',
         'is_pinned' => 'boolean',
         'is_muted' => 'boolean',
+        'is_group' => 'boolean',
+        'is_closed' => 'boolean',
         'last_seen_customer_at' => 'datetime',
         'last_seen_staff_at' => 'datetime',
         'typing_customer_at' => 'datetime',
