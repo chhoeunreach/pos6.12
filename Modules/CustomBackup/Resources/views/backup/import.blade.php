@@ -112,9 +112,12 @@
 
                 <div class="row">
                     <div class="col-sm-12">
-                        <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
+                        <button type="submit" id="custom_backup_import_btn" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
                             <i class="fa fa-upload"></i> Import SQL
                         </button>
+                        <span id="custom_backup_import_status" class="text-muted" style="display:none; margin-left:10px;">
+                            <i class="fa fa-spinner fa-spin"></i> Creating safety backup and importing...
+                        </span>
                     </div>
                 </div>
 
@@ -126,3 +129,13 @@
 
 @endsection
 
+@section('javascript')
+<script>
+    $(function () {
+        $('form[action$="/custom-backup/import"]').on('submit', function () {
+            $('#custom_backup_import_btn').prop('disabled', true);
+            $('#custom_backup_import_status').show();
+        });
+    });
+</script>
+@endsection

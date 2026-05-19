@@ -54,7 +54,7 @@ class CustomBackupController extends Controller
         try {
             $from = Carbon::parse($this->commonUtil->uf_date($validated['from_date']))->startOfDay();
             $to = Carbon::parse($this->commonUtil->uf_date($validated['to_date']))->endOfDay();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             throw ValidationException::withMessages([
                 'from_date' => 'Invalid date format. Please use the date picker.',
             ]);
@@ -157,7 +157,12 @@ class CustomBackupController extends Controller
 
             // 2) Store uploaded file for audit
             $stored_name = 'custom_import_' . now()->format('Ymd_His') . '_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $original_name);
-            $stored_path = $file->storeAs('backups/custom_imports', $stored_name);
+            $stored_dir = storage_path('app/backups/custom_imports');
+            if (! is_dir($stored_dir)) {
+                @mkdir($stored_dir, 0755, true);
+            }
+            $stored_path = $stored_dir . DIRECTORY_SEPARATOR . $stored_name;
+            $file->move($stored_dir, $stored_name);
 
             // 3) Log history (pending)
             $history_id = DB::table('custom_backup_import_histories')->insertGetId([
@@ -175,7 +180,10 @@ class CustomBackupController extends Controller
             ]);
 
             // 4) Read & validate SQL file
-            $sql = Storage::disk('local')->get($stored_path);
+            $sql = file_get_contents($stored_path);
+            if ($sql === false) {
+                throw new \Exception('Unable to read uploaded SQL file after storing it.');
+            }
             $statements = $this->splitSqlStatements($sql);
             $safe_statements = $this->validateStatementsAndTransform($statements, $conflict_mode);
 
@@ -555,39 +563,199 @@ class CustomBackupController extends Controller
             @mkdir($backup_dir, 0755, true);
         }
 
-        // Run spatie/laravel-backup database-only backup (doesn't modify existing backup system)
-        Artisan::call('backup:run', [
-            '--only-db' => true,
-            '--disable-notifications' => true,
-        ]);
+        $backup_error = null;
+        try {
+            $native_backup = $this->createNativeMysqlDumpPreImportBackup($backup_dir);
+            if (! empty($native_backup)) {
+                return $native_backup;
+            }
 
-        $disk_name = config('backup.backup.destination.disks')[0] ?? 'local';
-        $backup_name = config('backup.backup.name');
-        $disk = Storage::disk($disk_name);
+            $mysqldump_binary = $this->findMysqlDumpBinary();
+            if (! empty($mysqldump_binary)) {
+                config(['database.connections.mysql.dump.dump_binary_path' => dirname($mysqldump_binary)]);
+            }
 
-        $files = $disk->files($backup_name);
-        $zip_files = array_values(array_filter($files, fn ($f) => str_ends_with($f, '.zip')));
-        if (empty($zip_files)) {
-            throw new \Exception('Pre-import backup failed: could not find backup zip file.');
+            // Run spatie/laravel-backup database-only backup (doesn't modify existing backup system)
+            Artisan::call('backup:run', [
+                '--only-db' => true,
+                '--disable-notifications' => true,
+            ]);
+
+            $latest = $this->latestBackupZip();
+            if ($latest) {
+                return $this->copyBackupZipToPreImportFolder($latest, $backup_dir);
+            }
+        } catch (\Throwable $e) {
+            $backup_error = trim($e->getMessage() . "\n" . Artisan::output());
         }
 
-        // Pick latest zip by lastModified
+        // Fallback for local servers missing PHP extensions required by spatie/laravel-backup.
+        // This keeps the import protected by creating a plain SQL backup in storage/app/backups.
+        return $this->createManualSqlPreImportBackup($backup_dir, $backup_error);
+    }
+
+    private function createNativeMysqlDumpPreImportBackup(string $backup_dir): ?string
+    {
+        $binary = $this->findMysqlDumpBinary();
+        if (empty($binary)) {
+            return null;
+        }
+
+        $config = DB::connection()->getConfig();
+        $database = $config['database'] ?? null;
+        if (empty($database)) {
+            return null;
+        }
+
+        $target = $backup_dir . '/pre_import_' . now()->format('Ymd_His') . '_mysqldump.sql';
+        $command = [
+            $binary,
+            '--single-transaction',
+            '--quick',
+            '--skip-lock-tables',
+            '--default-character-set=utf8mb4',
+            '--result-file=' . $target,
+        ];
+
+        if (! empty($config['host'])) {
+            $command[] = '--host=' . $config['host'];
+        }
+        if (! empty($config['port'])) {
+            $command[] = '--port=' . $config['port'];
+        }
+        if (! empty($config['username'])) {
+            $command[] = '--user=' . $config['username'];
+        }
+        if (($config['password'] ?? '') !== '') {
+            $command[] = '--password=' . $config['password'];
+        }
+
+        $command[] = $database;
+
+        $process = new \Symfony\Component\Process\Process($command);
+        $process->setTimeout(300);
+        $process->run();
+
+        if ($process->isSuccessful() && is_file($target) && filesize($target) > 0) {
+            return $target;
+        }
+
+        @unlink($target);
+
+        return null;
+    }
+
+    private function findMysqlDumpBinary(): ?string
+    {
+        $candidates = [
+            env('MYSQLDUMP_BINARY_PATH'),
+            config('database.connections.mysql.dump.dump_binary_path'),
+            'C:\\xampp\\mysql\\bin',
+            'C:\\laragon\\bin\\mysql\\mysql-8.4.3-winx64\\bin',
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (empty($candidate)) {
+                continue;
+            }
+
+            $dir = rtrim((string) $candidate, "\\/");
+            if (is_file($dir)) {
+                return $dir;
+            }
+
+            foreach (['mysqldump.exe', 'mysqldump'] as $binaryName) {
+                $binary = $dir . DIRECTORY_SEPARATOR . $binaryName;
+                if (is_file($binary)) {
+                    return $binary;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function latestBackupZip(): ?array
+    {
+        $disk_name = config('backup.backup.destination.disks')[0] ?? 'local';
+        $backup_name = trim((string) config('backup.backup.name'), '/');
+        $disk = Storage::disk($disk_name);
+        $files = method_exists($disk, 'allFiles') ? $disk->allFiles($backup_name) : $disk->files($backup_name);
+        $zip_files = array_values(array_filter($files, fn ($f) => str_ends_with(strtolower((string) $f), '.zip')));
+
+        if (empty($zip_files)) {
+            return null;
+        }
+
         usort($zip_files, function ($a, $b) use ($disk) {
             return $disk->lastModified($b) <=> $disk->lastModified($a);
         });
-        $latest = $zip_files[0];
 
-        $target = $backup_dir . '/pre_import_' . now()->format('Ymd_His') . '_' . basename($latest);
-        $stream = $disk->readStream($latest);
+        return ['disk' => $disk, 'path' => $zip_files[0]];
+    }
+
+    private function copyBackupZipToPreImportFolder(array $latest, string $backup_dir): string
+    {
+        $disk = $latest['disk'];
+        $path = $latest['path'];
+        $target = $backup_dir . '/pre_import_' . now()->format('Ymd_His') . '_' . basename($path);
+        $stream = $disk->readStream($path);
         if (! $stream) {
             throw new \Exception('Pre-import backup failed: unable to read backup stream.');
         }
+
         $dest = fopen($target, 'w');
         stream_copy_to_stream($stream, $dest);
         fclose($dest);
         if (is_resource($stream)) {
             fclose($stream);
         }
+
+        return $target;
+    }
+
+    private function createManualSqlPreImportBackup(string $backup_dir, ?string $backup_error = null): string
+    {
+        $target = $backup_dir . '/pre_import_' . now()->format('Ymd_His') . '_manual.sql';
+        $out = fopen($target, 'w');
+        if (! $out) {
+            throw new \Exception('Pre-import backup failed: unable to create manual SQL backup. Original backup error: ' . ($backup_error ?: 'unknown'));
+        }
+
+        $this->writeLine($out, '-- Manual pre-import SQL backup');
+        $this->writeLine($out, '-- Created because backup zip was not available.');
+        if (! empty($backup_error)) {
+            $this->writeLine($out, '-- Backup command error: ' . str_replace(["\r", "\n"], ' | ', $backup_error));
+        }
+        $this->writeLine($out, 'SET FOREIGN_KEY_CHECKS=0;');
+
+        $tables = DB::select('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"');
+        foreach ($tables as $tableRow) {
+            $table = array_values((array) $tableRow)[0] ?? null;
+            if (empty($table)) {
+                continue;
+            }
+
+            $createRow = DB::selectOne('SHOW CREATE TABLE `' . str_replace('`', '``', $table) . '`');
+            $createSql = $createRow->{'Create Table'} ?? null;
+            if ($createSql) {
+                $this->writeLine($out, '');
+                $this->writeLine($out, 'DROP TABLE IF EXISTS `' . str_replace('`', '``', $table) . '`;');
+                $this->writeLine($out, $createSql . ';');
+            }
+
+            DB::table($table)->orderBy(DB::raw('1'))->chunk(500, function ($rows) use ($out, $table) {
+                foreach ($rows as $row) {
+                    $data = (array) $row;
+                    $columns = array_map(fn ($column) => '`' . str_replace('`', '``', $column) . '`', array_keys($data));
+                    $values = array_map(fn ($value) => $this->sqlValue($value), array_values($data));
+                    $this->writeLine($out, 'INSERT INTO `' . str_replace('`', '``', $table) . '` (' . implode(',', $columns) . ') VALUES (' . implode(',', $values) . ');');
+                }
+            });
+        }
+
+        $this->writeLine($out, 'SET FOREIGN_KEY_CHECKS=1;');
+        fclose($out);
 
         return $target;
     }

@@ -7,6 +7,7 @@ use Modules\LoanManagement\Http\Controllers\InstallController;
 use Modules\LoanManagement\Http\Controllers\LoanCustomerController;
 use Modules\LoanManagement\Http\Controllers\LoanDashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanFromSellController;
+use Modules\LoanManagement\Http\Controllers\LoanImportExportController;
 use Modules\LoanManagement\Http\Controllers\LoanUltimatePosSellController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
 use Modules\LoanManagement\Http\Controllers\LoanCollectionController;
@@ -150,10 +151,15 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/reports/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports.index')->middleware('can:loan_management.view');
         Route::get('/reports/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments Report')->name('loan-management.reports.payments')->middleware('can:loan_management.view');
 
-        Route::get('/tools/import', [DashboardController::class, 'placeholder'])->defaults('page', 'Import Excel')->name('loan-management.import.index')->middleware('can:loan_management.view');
-        Route::get('/import', [DashboardController::class, 'placeholder'])->defaults('page', 'Import Excel')->name('loan-management.import')->middleware('can:loan_management.view');
-        Route::get('/tools/monthly-import-export', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments Import/Export')->name('loan-management.tools.monthly-import-export')->middleware('can:loan_management.view');
-        Route::get('/tools/loan-import-export', [DashboardController::class, 'placeholder'])->defaults('page', 'Loan Import/Export')->name('loan-management.tools.loan-import-export')->middleware('can:loan_management.view');
+        Route::get('/tools/import', [LoanImportExportController::class, 'index'])->name('loan-management.import.index')->middleware('can:loan_management.import.view');
+        Route::get('/import', [LoanImportExportController::class, 'index'])->name('loan-management.import')->middleware('can:loan_management.import.view');
+        Route::post('/tools/import', [LoanImportExportController::class, 'import'])->name('loan-management.import.store')->middleware('can:loan_management.import.view');
+        Route::get('/tools/export', [LoanImportExportController::class, 'index'])->name('loan-management.export.index')->middleware('can:loan_management.export.view');
+        Route::get('/export', [LoanImportExportController::class, 'index'])->name('loan-management.export')->middleware('can:loan_management.export.view');
+        Route::get('/tools/export/download', [LoanImportExportController::class, 'export'])->name('loan-management.export.download')->middleware('can:loan_management.export.view');
+        Route::get('/tools/import-template/{type}', [LoanImportExportController::class, 'template'])->name('loan-management.import.template')->middleware('can:loan_management.import.view');
+        Route::get('/tools/monthly-import-export', [LoanImportExportController::class, 'payments'])->name('loan-management.tools.monthly-import-export')->middleware('loan.permission:loan_management.import.view|loan_management.export.view');
+        Route::get('/tools/loan-import-export', [LoanImportExportController::class, 'loans'])->name('loan-management.tools.loan-import-export')->middleware('loan.permission:loan_management.import.view|loan_management.export.view');
         Route::get('/tools/send-notification', [DashboardController::class, 'placeholder'])->defaults('page', 'Send Notification')->name('loan-management.tools.send-notification')->middleware('can:loan_management.view');
         Route::get('/settings', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings')->middleware('can:loan_management.view');
         Route::get('/settings/index', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings.index')->middleware('can:loan_management.view');

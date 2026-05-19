@@ -11,6 +11,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             ->name('manage-lot.index');
         Route::get('/list', [ManageLotController::class, 'indexData'])
             ->name('manage-lot.list');
+        Route::get('/data', [ManageLotController::class, 'indexData'])
+            ->name('manage-lot.data');
 
         Route::get('/lot-search', [ManageLotController::class, 'lotSearch'])
             ->name('manage-lot.lot-search');
@@ -23,6 +25,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/{lot_id}/history/list', [ManageLotController::class, 'historyData'])
             ->whereNumber('lot_id')
             ->name('manage-lot.history-list');
+        Route::get('/{lot_id}/history/data', [ManageLotController::class, 'historyData'])
+            ->whereNumber('lot_id')
+            ->name('manage-lot.history-data');
 
         // Module install/update/uninstall (used by Install > Modules page)
         Route::get('/install', [InstallController::class, 'index'])->middleware('superadmin');

@@ -51,6 +51,9 @@
         ]],
         ['label' => 'Tools', 'icon' => 'fa fa-wrench', 'children' => [
             ['label' => 'Import Excel', 'route' => 'loan-management.import.index', 'can' => 'loan_management.import.view'],
+            ['label' => 'Export', 'route' => 'loan-management.export.index', 'can' => 'loan_management.export.view'],
+            ['label' => 'Loan Import/Export', 'route' => 'loan-management.tools.loan-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
+            ['label' => 'Monthly Payments Import/Export', 'route' => 'loan-management.tools.monthly-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
             ['label' => 'GPS Tracking', 'route' => 'loan-management.gps.index', 'can' => 'loan_management.gps.view'],
         ]],
         ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [

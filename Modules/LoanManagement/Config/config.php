@@ -49,6 +49,7 @@ return [
         'loan_management.aba.view',
         'loan_management.reports.view',
         'loan_management.import.view',
+        'loan_management.export.view',
         'loan_management.settings.view',
 
         'loan_management.view',

@@ -85,6 +85,9 @@
             <a href="#"><i class="fa fa-cogs"></i> Tools <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 <li><a href="{{ $lmUrl('loan-management.import.index', [], '/loan-management/tools/import') }}"><i class="fa fa-upload"></i> Import Excel</a></li>
+                <li><a href="{{ $lmUrl('loan-management.export.index', [], '/loan-management/tools/export') }}"><i class="fa fa-download"></i> Export</a></li>
+                <li><a href="{{ $lmUrl('loan-management.tools.loan-import-export', [], '/loan-management/tools/loan-import-export') }}"><i class="fa fa-file-excel-o"></i> Loan Import/Export</a></li>
+                <li><a href="{{ $lmUrl('loan-management.tools.monthly-import-export', [], '/loan-management/tools/monthly-import-export') }}"><i class="fa fa-exchange"></i> Monthly Payments Import/Export</a></li>
                 <li><a href="{{ $lmUrl('loan-management.gps.index', [], '/loan-management/gps') }}"><i class="fa fa-map"></i> GPS Tracking</a></li>
             </ul>
         </li>

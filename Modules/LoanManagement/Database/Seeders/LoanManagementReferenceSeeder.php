@@ -64,10 +64,16 @@ class LoanManagementReferenceSeeder extends Seeder
         $hasCreatedAt = Schema::connection('mysql_loan')->hasColumn('loan_payment_methods', 'created_at');
         $now = now();
 
-        foreach (['Cash', 'ABA', 'ACLEDA', 'Wing', 'Bank Transfer'] as $name) {
+        foreach (['Cash', 'ABA', 'ACLEDA', 'Wing', 'Bank Transfer', 'QR', 'Credit Adjustment'] as $index => $name) {
             $updateData = [];
+            if (Schema::connection('mysql_loan')->hasColumn('loan_payment_methods', 'code')) {
+                $updateData['code'] = strtolower(str_replace(' ', '_', $name));
+            }
             if ($hasIsActive) {
                 $updateData['is_active'] = 1;
+            }
+            if (Schema::connection('mysql_loan')->hasColumn('loan_payment_methods', 'sort_order')) {
+                $updateData['sort_order'] = $index + 1;
             }
             if ($hasUpdatedAt) {
                 $updateData['updated_at'] = $now;

@@ -73,6 +73,7 @@ class DataController extends Controller
             ['value' => 'loan_management.reports.view', 'label' => 'Reports - View', 'default' => false],
             ['value' => 'loan_management.report', 'label' => 'Reports - Manage', 'default' => false],
             ['value' => 'loan_management.import.view', 'label' => 'Import Excel - View', 'default' => false],
+            ['value' => 'loan_management.export.view', 'label' => 'Export - View', 'default' => false],
             ['value' => 'loan_management.settings.view', 'label' => 'Settings - View', 'default' => false],
             ['value' => 'loan_management.setting', 'label' => 'Settings - Manage', 'default' => false],
         ];
