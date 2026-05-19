@@ -48,11 +48,14 @@ class ChatMessageResource extends JsonResource
             'location' => (new ChatLocationResource($this))->toArray($request),
             'is_read' => (bool) ($this->is_read ?? false),
             'is_own' => false,
-            'delivered_at' => $this->delivered_at ? $this->delivered_at->format('Y-m-d H:i:s') : null,
+            'delivered_at' => $this->delivered_at ? $this->delivered_at->timezone(config('app.timezone'))->format('Y-m-d H:i:s') : null,
+            'delivered_at_iso' => $this->delivered_at ? $this->delivered_at->timezone(config('app.timezone'))->toIso8601String() : null,
             'read_at' => $this->read_at ? $this->read_at->toISOString() : null,
             'metadata' => $this->metadata ?? (object) [],
             'local_uuid' => $this->local_uuid === null ? null : (string) $this->local_uuid,
-            'created_at' => $this->created_at ? $this->created_at->format('Y-m-d H:i:s') : null,
+            'created_at' => $this->created_at ? $this->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i:s') : null,
+            'created_at_iso' => $this->created_at ? $this->created_at->timezone(config('app.timezone'))->toIso8601String() : null,
+            'created_at_display' => $this->created_at ? $this->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i:s') : null,
         ];
     }
 }

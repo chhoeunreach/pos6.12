@@ -908,6 +908,7 @@ $(document).ready(function() {
                     dataType: 'json',
                     success: function(result) {
                         if (result.success == 1) {
+                            notify_loan_module_pos_saved(result);
                             if (result.whatsapp_link) {
                                 window.open(result.whatsapp_link);
                             }
@@ -2481,6 +2482,21 @@ function pos_print(receipt) {
             document.title = title;
         }, 1200);
     }
+}
+
+function notify_loan_module_pos_saved(result) {
+    if (!window.parent || window.parent === window || !result || result.success != 1) {
+        return;
+    }
+
+    try {
+        window.parent.postMessage({
+            type: 'loan-pos-sale-saved',
+            transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
+            invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
+            receipt: result.receipt || null
+        }, window.location.origin);
+    } catch (e) {}
 }
 
 function calculate_discounted_unit_price(row) {

@@ -651,9 +651,13 @@ class SellPosController extends Controller
 
                 if ($print_invoice) {
                     $receipt = $this->receiptContent($business_id, $input['location_id'], $transaction->id, null, false, true, $invoice_layout_id);
+                    if (is_array($receipt)) {
+                        $receipt['transaction_id'] = $transaction->id;
+                        $receipt['invoice_no'] = $transaction->invoice_no ?? null;
+                    }
                 }
 
-                $output = ['success' => 1, 'msg' => $msg, 'receipt' => $receipt];
+                $output = ['success' => 1, 'msg' => $msg, 'receipt' => $receipt, 'transaction_id' => $transaction->id, 'invoice_no' => $transaction->invoice_no ?? null];
 
                 if (!empty($whatsapp_link)) {
                     $output['whatsapp_link'] = $whatsapp_link;

@@ -5,75 +5,35 @@ namespace Modules\LoanManagement\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Modules\LoanManagement\Entities\Loan;
+use Modules\LoanManagement\Http\Resources\CustomerLoanSummaryResource;
+use Modules\LoanManagement\Services\CustomerLoanSummaryService;
 
 class CustomerAppLoanController extends Controller
 {
     use ApiResponseTrait;
 
-    public function loans()
+    public function loans(CustomerLoanSummaryService $summaryService)
     {
         $customer = auth('customer_loan_api')->user();
-        $rows = DB::connection('mysql_loan')->table('loans as l')
+        $rows = Loan::query()
             ->where('customer_id', $customer->id)
             ->orderByDesc('id')
             ->limit(100)
             ->get();
 
-        $loanIds = $rows->pluck('id')->all();
-        $nextDueMap = [];
-        $overdueMap = [];
-        if (! empty($loanIds) && Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
-            $next = DB::connection('mysql_loan')->table('loan_payment_schedules')
-                ->whereIn('loan_id', $loanIds)
-                ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
-                ->orderBy('due_date')
-                ->get()
-                ->groupBy('loan_id');
-            foreach ($next as $loanId => $list) {
-                $first = $list->first();
-                $nextDueMap[$loanId] = $first->due_date ?? null;
-                $overdueMap[$loanId] = (float) $list->where('due_date', '<', now()->toDateString())->sum('amount_balance');
-            }
-        }
-
-        $itemsMap = [];
-        if (! empty($loanIds) && Schema::connection('mysql_loan')->hasTable('loan_items')) {
-            $items = DB::connection('mysql_loan')->table('loan_items')
-                ->whereIn('loan_id', $loanIds)->get()->groupBy('loan_id');
-            foreach ($items as $loanId => $list) {
-                $itemsMap[$loanId] = $list->values()->all();
-            }
-        }
-
-        $data = $rows->map(function ($r) use ($nextDueMap, $overdueMap, $itemsMap) {
-            $total = (float) ($r->total_amount ?? 0);
-            $paid = (float) ($r->paid_amount ?? 0);
-            $progress = $total > 0 ? round(($paid / $total) * 100, 2) : 0.0;
-            return [
-                'id' => (int) $r->id,
-                'loan_number' => (string) ($r->loan_number ?? ''),
-                'status' => (string) ($r->status ?? 'draft'),
-                'loan_date' => ! empty($r->loan_date) ? date('Y-m-d', strtotime((string) $r->loan_date)) : null,
-                'principal_amount' => $this->money($r->principal_amount ?? 0),
-                'down_payment' => $this->money($r->down_payment ?? 0),
-                'total_payable' => $this->money($r->total_amount ?? 0),
-                'paid_amount' => $this->money($r->paid_amount ?? 0),
-                'balance_amount' => $this->money($r->balance_amount ?? 0),
-                'currency' => (string) ($r->currency ?? 'USD'),
-                'next_due_date' => ! empty($nextDueMap[$r->id]) ? date('Y-m-d', strtotime((string) $nextDueMap[$r->id])) : null,
-                'overdue_amount' => $this->money($overdueMap[$r->id] ?? 0),
-                'payment_progress' => $progress,
-                'items' => $itemsMap[$r->id] ?? [],
-            ];
-        })->values()->all();
+        $data = $rows
+            ->map(fn (Loan $loan) => (new CustomerLoanSummaryResource($summaryService->buildLoanSummary($loan)))->toArray(request()))
+            ->values()
+            ->all();
 
         return $this->ok('Loans loaded', $data);
     }
 
-    public function show(int $loanId)
+    public function show(int $loanId, CustomerLoanSummaryService $summaryService)
     {
         $customer = auth('customer_loan_api')->user();
-        $loan = DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->where('customer_id', $customer->id)->first();
+        $loan = Loan::query()->where('id', $loanId)->where('customer_id', $customer->id)->first();
         if (! $loan) {
             return $this->fail('Loan not found', 404, (object) []);
         }
@@ -92,7 +52,7 @@ class CustomerAppLoanController extends Controller
             : [];
 
         return $this->ok('Loan loaded', [
-            'loan_summary' => $loan,
+            'loan_summary' => (new CustomerLoanSummaryResource($summaryService->buildLoanSummary($loan)))->toArray(request()),
             'customer_snapshot' => [
                 'customer_name_snapshot' => $loan->customer_name_snapshot ?? null,
                 'customer_phone_snapshot' => $loan->customer_phone_snapshot ?? null,

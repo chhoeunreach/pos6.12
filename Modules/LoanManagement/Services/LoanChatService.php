@@ -679,6 +679,7 @@ class LoanChatService
             'last_message' => $thread->last_message === null ? '' : (string) $thread->last_message,
             'last_message_type' => (string) ($thread->last_message_type ?? 'text'),
             'last_message_at' => $this->formatDate($thread->last_message_at),
+            'last_message_at_iso' => $this->formatDateIso($thread->last_message_at),
             'last_message_time' => $this->formatDate($thread->last_message_at),
             'last_sender_name' => (string) ($thread->last_sender_name ?? ''),
             'typing' => $this->timestampWithin($oppositeTypingAt, 10),
@@ -729,11 +730,15 @@ class LoanChatService
             ],
             'audio_duration_seconds' => (int) ($message->audio_duration_seconds ?? 0),
             'delivered_at' => $this->formatDate(self::hasMessageColumn('delivered_at') ? $message->delivered_at : null),
+            'delivered_at_iso' => $this->formatDateIso(self::hasMessageColumn('delivered_at') ? $message->delivered_at : null),
             'read_at' => $this->formatDate($readAt),
+            'read_at_iso' => $this->formatDateIso($readAt),
             'reaction' => self::hasMessageColumn('reaction') && $message->reaction !== null ? (string) $message->reaction : null,
             'reply_to_message_id' => self::hasMessageColumn('reply_to_message_id') && $message->reply_to_message_id !== null ? (int) $message->reply_to_message_id : null,
             'is_own' => $isOwn,
             'created_at' => $this->formatDate($message->created_at),
+            'created_at_iso' => $this->formatDateIso($message->created_at),
+            'created_at_display' => $this->formatDate($message->created_at),
         ];
     }
 
@@ -1118,13 +1123,36 @@ class LoanChatService
         }
     }
 
-    protected function formatDate($value): ?string
+    protected function chatTimezone(): string
+    {
+        return config('app.timezone') ?: date_default_timezone_get() ?: 'UTC';
+    }
+
+    protected function normalizeDate($value): ?Carbon
     {
         if (empty($value)) {
             return null;
         }
 
-        return Carbon::parse($value)->format('Y-m-d H:i:s');
+        try {
+            return Carbon::parse($value)->timezone($this->chatTimezone());
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function formatDate($value): ?string
+    {
+        $date = $this->normalizeDate($value);
+
+        return $date ? $date->format('Y-m-d H:i:s') : null;
+    }
+
+    protected function formatDateIso($value): ?string
+    {
+        $date = $this->normalizeDate($value);
+
+        return $date ? $date->toIso8601String() : null;
     }
 
     protected function isOwnMessage(LoanChatMessage $message, string $viewerType, int $viewerId): bool

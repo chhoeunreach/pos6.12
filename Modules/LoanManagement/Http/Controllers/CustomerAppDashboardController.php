@@ -4,12 +4,15 @@ namespace Modules\LoanManagement\Http\Controllers;
 
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Modules\LoanManagement\Entities\Loan;
+use Modules\LoanManagement\Http\Resources\CustomerLoanSummaryResource;
+use Modules\LoanManagement\Services\CustomerLoanSummaryService;
 
 class CustomerAppDashboardController extends Controller
 {
     use ApiResponseTrait;
 
-    public function dashboard()
+    public function dashboard(CustomerLoanSummaryService $summaryService)
     {
         $customer = auth('customer_loan_api')->user();
         $loans = DB::connection('mysql_loan')->table('loans')->where('customer_id', $customer->id);
@@ -39,7 +42,17 @@ class CustomerAppDashboardController extends Controller
                 })->values()->all();
         }
 
-        $activeLoansRows = (clone $loans)->whereIn('status', ['active', 'approved', 'pending', 'late'])->orderByDesc('id')->limit(10)->get();
+        $activeLoanModels = Loan::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', ['active', 'approved', 'pending', 'late'])
+            ->orderByDesc('id')
+            ->get();
+
+        $loanSummaries = $activeLoanModels
+            ->map(fn (Loan $loan) => (new CustomerLoanSummaryResource($summaryService->buildLoanSummary($loan)))->toArray(request()))
+            ->values()
+            ->all();
+
         $recentPayments = DB::connection('mysql_loan')->table('loan_payments')
             ->where('customer_id', $customer->id)
             ->orderByDesc('id')
@@ -71,8 +84,8 @@ class CustomerAppDashboardController extends Controller
 
         $summary = [
             'active_loans' => (int) (clone $loans)->whereIn('status', ['active', 'approved', 'pending', 'late'])->count(),
-            'total_balance' => $this->money((clone $loans)->sum('balance_amount')),
-            'total_paid' => $this->money((clone $loans)->sum('paid_amount')),
+            'total_balance' => $this->money(collect($loanSummaries)->sum(fn ($loan) => (float) ($loan['remaining_balance'] ?? 0))),
+            'total_paid' => $this->money(collect($loanSummaries)->sum(fn ($loan) => (float) ($loan['total_paid_amount'] ?? 0))),
             'late_amount' => $this->money($lateAmount),
             'next_due_date' => $nextDue ? date('Y-m-d', strtotime((string) $nextDue)) : null,
             'last_payment_amount' => ! empty($recentPayments) ? (string) $recentPayments[0]['amount'] : $this->money(0),
@@ -81,7 +94,8 @@ class CustomerAppDashboardController extends Controller
 
         return $this->ok('Dashboard loaded', [
             'summary' => $summary,
-            'active_loans' => $activeLoansRows,
+            'loans' => $loanSummaries,
+            'active_loans' => $loanSummaries,
             'upcoming_payments' => $upcomingPayments,
             'recent_payments' => $recentPayments,
         ]);

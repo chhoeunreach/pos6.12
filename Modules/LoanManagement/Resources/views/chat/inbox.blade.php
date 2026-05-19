@@ -153,6 +153,18 @@
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function initials(name){ name = (name || 'Support Team').trim(); return esc(name.charAt(0).toUpperCase() || 'S'); }
     function money(v){ var n = parseFloat(v || 0); return '$ ' + n.toFixed(2); }
+    function pad2(v){ return String(v).padStart(2, '0'); }
+    function formatChatTime(value, fallback){
+        if (!value) return fallback || '';
+        var raw = String(value).trim();
+        var date = new Date(raw);
+        if (isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+            date = new Date(raw.replace(' ', 'T'));
+        }
+        if (isNaN(date.getTime())) return fallback || raw;
+        return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' +
+            pad2(date.getHours()) + ':' + pad2(date.getMinutes()) + ':' + pad2(date.getSeconds());
+    }
 
     function loadInbox(keepActive){
         $.get(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}, function(resp){
@@ -230,7 +242,7 @@
             if (m.message_type === 'file' && m.file && m.file.url) body += '<div><a href="'+esc(m.file.url)+'" target="_blank">'+esc(m.file.name || 'Download file')+'</a></div>';
             if (m.message_type === 'audio' && m.file && m.file.url) body += '<div><audio controls src="'+esc(m.file.url)+'" style="max-width:220px;margin-top:6px"></audio></div>';
             if (m.message_type === 'location' && m.location && m.location.latitude) body += '<div><a target="_blank" href="https://maps.google.com/?q='+esc(m.location.latitude)+','+esc(m.location.longitude)+'">Open location</a></div>';
-            box.append('<div class="lm-msg-row '+(m.is_own ? 'own' : '')+'"><div class="lm-msg"><div class="lm-msg-name">'+esc(m.sender_name || '')+'</div><div>'+body+'</div><div class="lm-msg-meta">'+esc(m.created_at || '')+'</div></div></div>');
+            box.append('<div class="lm-msg-row '+(m.is_own ? 'own' : '')+'"><div class="lm-msg"><div class="lm-msg-name">'+esc(m.sender_name || '')+'</div><div>'+body+'</div><div class="lm-msg-meta">'+esc(formatChatTime(m.created_at_iso || m.created_at, m.created_at_display || m.created_at || ''))+'</div></div></div>');
         });
         box.scrollTop(box[0].scrollHeight);
     }

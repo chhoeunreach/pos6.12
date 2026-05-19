@@ -647,6 +647,7 @@
         }
     });
     $('#duplicateLoanCancel').on('click', function(){ $('#duplicateLoanWarning').hide(); });
+    $(document).on('loan:sell-pos-saved', function(){ loadSells(); });
     $('#btnOpenAddSellModal').on('click', openAddSellModal);
     $('#btnRefreshSalesAfterPosSell').on('click', function(){
         $('#addSellModal').modal('hide');

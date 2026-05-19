@@ -11,6 +11,9 @@
     }
 
     $backToPosUrl = Route::has('home') ? route('home') : url('/');
+    $sellPosUrl = Route::has('pos.create') ? route('pos.create') : url('/pos/create');
+    $canOpenSellPos = Route::has('pos.create')
+        && ($loanUser?->can('superadmin') || $loanUser?->can('sell.create'));
     $quickMenu = [
         [
             'label' => 'Create Loan',
@@ -61,6 +64,12 @@
         <a href="{{ $backToPosUrl }}" class="btn btn-primary btn-sm lm-btn-back">
             <i class="fa fa-arrow-left"></i> Back to Ultimate POS
         </a>
+
+        @if($canOpenSellPos)
+            <button type="button" class="btn btn-success btn-sm" id="loanHeaderOpenSellPos" data-pos-url="{{ $sellPosUrl }}">
+                <i class="fa fa-shopping-cart"></i> Sell POS
+            </button>
+        @endif
 
         @if (Route::has('logout'))
             <a href="{{ route('logout') }}" class="btn btn-default btn-sm"
