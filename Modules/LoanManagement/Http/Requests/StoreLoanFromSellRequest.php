@@ -15,6 +15,7 @@ class StoreLoanFromSellRequest extends FormRequest
     {
         return [
             'transaction_id' => 'required|integer',
+            'loan_number' => 'nullable|string|max:191',
             'loan_date' => 'required|date',
             'principal_amount' => 'required|numeric|min:0.01',
             'down_payment' => 'nullable|numeric|min:0',

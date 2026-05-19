@@ -9,6 +9,7 @@ use Modules\LoanManagement\Http\Controllers\LoanDashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanFromSellController;
 use Modules\LoanManagement\Http\Controllers\LoanUltimatePosSellController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
+use Modules\LoanManagement\Http\Controllers\LoanCollectionController;
 use Modules\LoanManagement\Http\Controllers\LoanInstallmentListController;
 use Modules\LoanManagement\Http\Controllers\LoanLocationController;
 use Modules\LoanManagement\Http\Controllers\LoanSellListController;
@@ -23,6 +24,33 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/dashboard', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard')->middleware('can:loan_management.view');
         Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
+
+        Route::get('/operations/{page}', [LoanCollectionController::class, 'index'])
+            ->whereIn('page', ['new-loans', 'active-loans', 'due-today', 'partial-payments', 'closed-accounts'])
+            ->name('loan-management.operations.page')
+            ->middleware('can:loan_management.view');
+        Route::get('/collection/{page}', [LoanCollectionController::class, 'index'])
+            ->whereIn('page', ['overdue-accounts', 'promise-to-pay', 'broken-promise', 'field-visit-required', 'skip-customers', 'delinquent-accounts', 'recovery-management', 'debt-collection'])
+            ->name('loan-management.collection.page')
+            ->middleware('can:loan_management.view');
+        Route::get('/risk/{page}', [LoanCollectionController::class, 'index'])
+            ->whereIn('page', ['high-risk-customers', 'fraud-risk', 'legal-cases', 'blacklisted-customers', 'repossessions'])
+            ->name('loan-management.risk.page')
+            ->middleware('can:loan_management.view');
+        Route::get('/communication/{page}', [LoanCollectionController::class, 'index'])
+            ->whereIn('page', ['voice-calls', 'notifications'])
+            ->name('loan-management.communication.page')
+            ->middleware('can:loan_management.view');
+        Route::get('/customers-workflow/{page}', [LoanCollectionController::class, 'index'])
+            ->whereIn('page', ['contact-history'])
+            ->name('loan-management.customer-workflow.page')
+            ->middleware('can:loan_management.view');
+        Route::get('/collection-reports', [LoanCollectionController::class, 'reports'])
+            ->name('loan-management.collection.reports')
+            ->middleware('can:loan_management.view');
+        Route::get('/collection-reports/{report}', [LoanCollectionController::class, 'report'])
+            ->name('loan-management.collection.report')
+            ->middleware('can:loan_management.view');
 
         Route::get('/sell-list', function () {
             return redirect()->route('loan-management.loans.create-from-sell');

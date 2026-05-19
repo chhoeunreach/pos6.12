@@ -13,6 +13,8 @@
     $paymentTypes = $paymentTypes ?? ['cash' => 'Cash'];
     $defaultPaymentMethod = $defaultPaymentMethod ?? (array_key_exists('cash', $paymentTypes) ? 'cash' : array_key_first($paymentTypes));
     $suggestedPaymentTotal = number_format(max(0.01, (float) $defaultAmount), 2, '.', '');
+    $loanBalanceAmount = number_format(max(0.01, $loanBalance), 2, '.', '');
+    $payOffAmount = number_format(max(0.01, (float) ($payOffAmount ?? $loanBalance)), 2, '.', '');
     $paymentLineLabels = [
         'payment_method' => __('lang_v1.payment_method'),
         'amount' => __('sale.amount'),
@@ -44,6 +46,7 @@
                 <div class="col-md-4">
                     <div class="well">
                         <strong>Balance:</strong> {{ number_format($loanBalance, 2) }} {{ $loanCurrency }}<br>
+                        <strong>Pay off:</strong> {{ $payOffAmount }} {{ $loanCurrency }}<br>
                         <strong>Currency:</strong> {{ $loanCurrency }}
                     </div>
                 </div>
@@ -68,13 +71,13 @@
                                 <i class="fa fa-calendar-check-o"></i>
                             </span>
                         <select name="schedule_id" class="form-control select2" style="width:100%;">
-                            <option value="">Auto apply to oldest unpaid</option>
+                            <option value="" data-balance="{{ $loanBalanceAmount }}">Auto apply to oldest unpaid</option>
                             @foreach($schedules as $schedule)
                                 @php
                                     $dueDate = ! empty($schedule->due_date) ? \Carbon\Carbon::parse($schedule->due_date)->format('d-m-Y') : '-';
                                     $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? $schedule->schedule_amount ?? $schedule->amount_due ?? 0);
                                 @endphp
-                                <option value="{{ $schedule->id }}" {{ (int) ($selectedScheduleId ?? 0) === (int) $schedule->id ? 'selected' : '' }}>
+                                <option value="{{ $schedule->id }}" data-balance="{{ number_format(max(0.01, $balance), 2, '.', '') }}" {{ (int) ($selectedScheduleId ?? 0) === (int) $schedule->id ? 'selected' : '' }}>
                                     #{{ $schedule->installment_no ?? $loop->iteration }} - {{ $dueDate }} - Balance {{ number_format($balance, 2) }}
                                 </option>
                             @endforeach
@@ -95,7 +98,16 @@
                     </div>
                 </div>
 
-                <div class="col-md-8">
+                <div class="col-md-4">
+                    <div class="checkbox" style="margin-top:30px;">
+                        <label>
+                            <input type="checkbox" name="pay_off" value="1" class="loan-pay-off-option">
+                            Pay off loan
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
                     <div class="well well-sm" style="margin-top:25px;margin-bottom:10px;">
                         <strong>@lang('sale.total'):</strong>
                         <span class="display_currency loan-payment-total" data-currency_symbol="true">{{ number_format(max(0.01, (float) $defaultAmount), 2, '.', '') }}</span>
@@ -187,6 +199,9 @@ $(function () {
     var paymentTypes = @json($paymentTypes);
     var defaultPaymentMethod = @json($defaultPaymentMethod);
     var suggestedTotal = parseFloat(@json($suggestedPaymentTotal)) || 0;
+    var normalLoanBalance = parseFloat(@json($loanBalanceAmount)) || suggestedTotal;
+    var payOffBalance = parseFloat(@json($payOffAmount)) || normalLoanBalance;
+    var previousScheduleId = $form.find('[name="schedule_id"]').val();
     var labels = @json($paymentLineLabels);
 
     function optionsHtml(selected) {
@@ -212,6 +227,36 @@ $(function () {
         });
 
         return Math.max(suggestedTotal - total, 0);
+    }
+
+    function setSinglePaymentAmount(amount) {
+        $form.find('.loan-payment-line').slice(1).remove();
+        $form.find('.payment-line-amount').first().val(Math.max(amount, 0.01).toFixed(2));
+        refreshRemoveButtons();
+        updateLoanPaymentTotal();
+    }
+
+    function selectedScheduleBalance() {
+        var balance = parseFloat($form.find('[name="schedule_id"] option:selected').data('balance'));
+
+        return balance > 0 ? balance : normalLoanBalance;
+    }
+
+    function applyPayTarget() {
+        if ($form.find('.loan-pay-off-option').is(':checked')) {
+            previousScheduleId = $form.find('[name="schedule_id"]').val() || previousScheduleId;
+            suggestedTotal = payOffBalance;
+            $form.find('[name="schedule_id"]').val('').trigger('change');
+            setSinglePaymentAmount(payOffBalance);
+            return;
+        }
+
+        if (!$form.find('[name="schedule_id"]').val() && previousScheduleId) {
+            $form.find('[name="schedule_id"]').val(previousScheduleId).trigger('change.select2');
+        }
+
+        suggestedTotal = selectedScheduleBalance();
+        setSinglePaymentAmount(suggestedTotal);
     }
 
     function refreshRemoveButtons() {
@@ -259,6 +304,15 @@ $(function () {
     });
 
     $form.on('input change', '.payment-line-amount', updateLoanPaymentTotal);
+    $form.on('change', '.loan-pay-off-option', applyPayTarget);
+    $form.on('change', '[name="schedule_id"]', function () {
+        if ($form.find('.loan-pay-off-option').is(':checked')) {
+            return;
+        }
+
+        previousScheduleId = $(this).val();
+        applyPayTarget();
+    });
     refreshRemoveButtons();
     updateLoanPaymentTotal();
 });

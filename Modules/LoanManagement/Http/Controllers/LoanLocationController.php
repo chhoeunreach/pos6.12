@@ -18,6 +18,7 @@ class LoanLocationController extends Controller
     public function index()
     {
         abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
 
         $locations = DB::connection($this->connection)
@@ -40,6 +41,7 @@ class LoanLocationController extends Controller
     public function update(Request $request, int $location)
     {
         abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
 
         $row = DB::connection($this->connection)->table($this->table)->where('id', $location)->first();
@@ -49,6 +51,7 @@ class LoanLocationController extends Controller
             'logo' => 'nullable|image|max:4096',
             'payment_qr' => 'nullable|image|max:4096',
             'telegram_qr' => 'nullable|image|max:4096',
+            'loan_invoice_prefix' => 'nullable|string|max:50',
             'telegram_payment_chat_id' => 'nullable|string|max:191',
             'telegram_installment_chat_id' => 'nullable|string|max:191',
             'telegram_notify_payment' => 'nullable|boolean',
@@ -64,6 +67,9 @@ class LoanLocationController extends Controller
         }
         if ($request->hasFile('telegram_qr')) {
             $payload['telegram_qr_path'] = $this->storeLocationAsset($request, 'telegram_qr', $location);
+        }
+        if ($request->has('loan_invoice_prefix')) {
+            $payload['loan_invoice_prefix'] = $this->cleanLoanInvoicePrefix($data['loan_invoice_prefix'] ?? null);
         }
         if ($request->has('telegram_payment_chat_id')) {
             $payload['telegram_payment_chat_id'] = trim((string) ($data['telegram_payment_chat_id'] ?? '')) ?: null;
@@ -162,6 +168,23 @@ class LoanLocationController extends Controller
                 $table->string('telegram_installment_chat_id')->nullable()->after('telegram_payment_chat_id');
             });
         }
+    }
+
+    protected function ensureLoanInvoicePrefixColumn(): void
+    {
+        if (! Schema::connection($this->connection)->hasColumn($this->table, 'loan_invoice_prefix')) {
+            Schema::connection($this->connection)->table($this->table, function ($table) {
+                $table->string('loan_invoice_prefix', 50)->nullable()->after('location_code');
+            });
+        }
+    }
+
+    protected function cleanLoanInvoicePrefix($prefix): ?string
+    {
+        $prefix = trim((string) $prefix);
+        $prefix = preg_replace('/\s+/', '', $prefix) ?: '';
+
+        return $prefix !== '' ? mb_substr($prefix, 0, 50) : null;
     }
 
     protected function assetUrl(?string $path): ?string

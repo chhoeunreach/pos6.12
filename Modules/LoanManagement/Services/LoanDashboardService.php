@@ -214,7 +214,36 @@ class LoanDashboardService
                 ->count();
         }
 
-        return [
+        $collection = [
+            'due_today' => 0,
+            'overdue_accounts' => 0,
+            'skip_customers' => 0,
+            'broken_ptp' => 0,
+            'field_visits_today' => 0,
+            'collection_amount_today' => (float) ($summary['today_collection'] ?? 0),
+            'recovery_cases' => 0,
+            'legal_cases' => 0,
+            'high_risk_customers' => 0,
+            'repossessions' => 0,
+        ];
+        if ($this->tableExists('loans') && $this->columnExists('loans', 'collection_status')) {
+            $loanQ = DB::connection($this->connection)->table('loans');
+            $collection['due_today'] = (int) (clone $loanQ)->where('collection_status', 'due_today')->count();
+            $collection['overdue_accounts'] = (int) (clone $loanQ)->whereIn('collection_status', ['overdue', 'delinquent'])->count();
+            $collection['skip_customers'] = (int) (clone $loanQ)->where('collection_status', 'skip_customer')->count();
+            $collection['broken_ptp'] = (int) (clone $loanQ)->where('collection_status', 'broken_ptp')->count();
+            $collection['recovery_cases'] = (int) (clone $loanQ)->where('collection_status', 'recovery')->count();
+            $collection['legal_cases'] = (int) (clone $loanQ)->where('collection_status', 'legal')->count();
+            $collection['repossessions'] = (int) (clone $loanQ)->where('collection_status', 'repossession')->count();
+            if ($this->columnExists('loans', 'risk_level')) {
+                $collection['high_risk_customers'] = (int) (clone $loanQ)->whereIn('risk_level', ['high_risk', 'critical'])->count();
+            }
+            if ($this->columnExists('loans', 'field_visit_required') && $this->columnExists('loans', 'next_followup_at')) {
+                $collection['field_visits_today'] = (int) (clone $loanQ)->where('field_visit_required', 1)->whereDate('next_followup_at', '<=', now()->toDateString())->count();
+            }
+        }
+
+        return array_merge([
             'active_loans' => (int) ($summary['active_loans'] ?? 0),
             'today_collection' => (float) ($summary['today_collection'] ?? 0),
             'overdue_amount' => (float) ($summary['total_balance'] ?? 0),
@@ -223,7 +252,7 @@ class LoanDashboardService
             'pending_visits' => $pendingVisits,
             'unread_chats' => $unreadChats,
             'active_collectors' => (int) ($summary['staff_online'] ?? 0),
-        ];
+        ], $collection);
     }
 
     public function getMonthlyLoanChart($filters): array

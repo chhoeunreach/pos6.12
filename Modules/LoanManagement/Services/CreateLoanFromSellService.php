@@ -154,6 +154,13 @@ class CreateLoanFromSellService
                 return $line;
             });
 
+        $defaults = $this->calculateLoanDefaults((object) [
+            'final_total' => $transaction->final_total,
+            'paid_amount' => $paidAmount,
+            'due_amount' => $dueAmount,
+        ]);
+        $defaults['loan_number'] = $this->generateUniqueLoanNumber(null, $transaction->main_location_id ?? null);
+
         return [
             'transaction' => $transaction,
             'paid_amount' => $paidAmount,
@@ -161,7 +168,7 @@ class CreateLoanFromSellService
             'default_payment_method' => $defaultPaymentMethod,
             'payment_rows' => $paymentRows,
             'products' => $lines,
-            'defaults' => $this->calculateLoanDefaults((object) ['final_total' => $transaction->final_total, 'paid_amount' => $paidAmount, 'due_amount' => $dueAmount]),
+            'defaults' => $defaults,
         ];
     }
 
@@ -301,8 +308,13 @@ class CreateLoanFromSellService
             $customerId = $this->createLoanCustomerSnapshot($transaction, $resolvedCustomer, $data);
             $locationId = $this->upsertSnapshot('loan_business_locations', 'main_location_id', $transaction->main_location_id, $this->cloneLocationSnapshot($transaction));
 
+            $requestedLoanNumber = trim((string) ($data['loan_number'] ?? ''));
+            if ($requestedLoanNumber !== '' && $this->loanNumberExists($requestedLoanNumber)) {
+                throw new \RuntimeException('Loan invoice number already exists.');
+            }
+
             $loanPayload = $this->filterColumns('loans', array_merge([
-                'loan_number' => $this->generateUniqueLoanNumber(),
+                'loan_number' => $requestedLoanNumber !== '' ? $requestedLoanNumber : $this->generateUniqueLoanNumber($locationId, $transaction->main_location_id ?? null),
                 'customer_id' => $customerId,
                 'main_contact_id' => $resolvedCustomer['contact_id'],
                 'customer_name_snapshot' => $resolvedCustomer['name'],
@@ -348,8 +360,12 @@ class CreateLoanFromSellService
             try {
                 $loanId = (int) DB::connection('mysql_loan')->table('loans')->insertGetId($loanPayload);
             } catch (\Illuminate\Database\QueryException $e) {
+                if ($requestedLoanNumber !== '') {
+                    throw $e;
+                }
+
                 // Retry once with a fresh loan number if unique conflict happens.
-                $loanPayload['loan_number'] = $this->generateUniqueLoanNumber();
+                $loanPayload['loan_number'] = $this->generateUniqueLoanNumber($locationId, $transaction->main_location_id ?? null);
                 $loanId = (int) DB::connection('mysql_loan')->table('loans')->insertGetId($loanPayload);
             }
 
@@ -653,9 +669,10 @@ class CreateLoanFromSellService
         return $payload;
     }
 
-    protected function generateUniqueLoanNumber(): string
+    protected function generateUniqueLoanNumber($loanLocationId = null, $mainLocationId = null): string
     {
-        $prefix = 'LN-'.Carbon::now()->format('Ymd').'-';
+        $prefix = $this->normalizeLoanInvoicePrefix($this->loanInvoicePrefixForLocation($loanLocationId, $mainLocationId));
+        $prefix = $prefix.Carbon::now()->format('Ymd').'-';
         $attempt = 0;
 
         do {
@@ -670,6 +687,58 @@ class CreateLoanFromSellService
         }
 
         return $candidate;
+    }
+
+    protected function loanInvoicePrefixForLocation($loanLocationId = null, $mainLocationId = null): ?string
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'loan_invoice_prefix')) {
+            return null;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_business_locations')
+            ->whereNotNull('loan_invoice_prefix')
+            ->where('loan_invoice_prefix', '!=', '');
+
+        if (! empty($loanLocationId) || ! empty($mainLocationId)) {
+            $query->where(function ($q) use ($loanLocationId, $mainLocationId) {
+                if (! empty($loanLocationId)) {
+                    $q->orWhere('id', (int) $loanLocationId)
+                        ->orWhere('main_location_id', (int) $loanLocationId);
+                }
+
+                if (! empty($mainLocationId)) {
+                    $q->orWhere('main_location_id', (int) $mainLocationId)
+                        ->orWhere('id', (int) $mainLocationId);
+                }
+            });
+        }
+
+        return $query->value('loan_invoice_prefix');
+    }
+
+    protected function normalizeLoanInvoicePrefix(?string $prefix): string
+    {
+        $prefix = trim((string) $prefix);
+        $prefix = preg_replace('/\s+/', '', $prefix) ?: '';
+
+        if ($prefix === '') {
+            $prefix = 'LN';
+        }
+
+        return rtrim($prefix, '-/').'-';
+    }
+
+    protected function loanNumberExists(string $loanNumber): bool
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans')
+            || ! Schema::connection('mysql_loan')->hasColumn('loans', 'loan_number')) {
+            return false;
+        }
+
+        return DB::connection('mysql_loan')->table('loans')
+            ->where('loan_number', $loanNumber)
+            ->exists();
     }
 
     protected function storeInitialPaymentInfo(int $loanId, array $loanPayload, array $data): void

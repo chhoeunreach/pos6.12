@@ -7,6 +7,7 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use Modules\LoanManagement\Console\InstallLoanManagementCommand;
+use Modules\LoanManagement\Console\RunCollectionAutomationCommand;
 use Modules\LoanManagement\Console\TestChatSchemaCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
 use Modules\LoanManagement\Http\Middleware\LoanPermissionMiddleware;
@@ -20,12 +21,14 @@ class LoanManagementServiceProvider extends ServiceProvider
         $this->registerCustomerLoanAuth();
         $this->registerRouteMiddlewareAlias();
         $this->registerViews();
+        $this->loadTranslationsFrom(__DIR__ . '/../Resources/lang', 'loanmanagement');
         $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
         Transaction::observe(TransactionInvoicePrefixObserver::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallLoanManagementCommand::class,
+                RunCollectionAutomationCommand::class,
                 TestChatSchemaCommand::class,
                 UninstallLoanManagementCommand::class,
             ]);

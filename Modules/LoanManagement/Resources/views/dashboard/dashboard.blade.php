@@ -1,13 +1,15 @@
 @php
     $cards = [
-        ['key' => 'active_loans', 'label' => 'Active Loans', 'icon' => 'fa fa-credit-card'],
-        ['key' => 'today_collection', 'label' => 'Today Collection', 'icon' => 'fa fa-dollar'],
-        ['key' => 'overdue_amount', 'label' => 'Overdue Amount', 'icon' => 'fa fa-exclamation-triangle'],
-        ['key' => 'late_customers', 'label' => 'Late Customers', 'icon' => 'fa fa-user-times'],
-        ['key' => 'monthly_income', 'label' => 'Monthly Income', 'icon' => 'fa fa-line-chart'],
-        ['key' => 'pending_visits', 'label' => 'Pending Visits', 'icon' => 'fa fa-street-view'],
-        ['key' => 'unread_chats', 'label' => 'Unread Chats', 'icon' => 'fa fa-comments'],
-        ['key' => 'active_collectors', 'label' => 'Active Collectors', 'icon' => 'fa fa-users'],
+        ['key' => 'due_today', 'label' => 'Due Today', 'icon' => 'fa fa-calendar-check-o'],
+        ['key' => 'overdue_accounts', 'label' => 'Overdue Accounts', 'icon' => 'fa fa-exclamation-triangle'],
+        ['key' => 'skip_customers', 'label' => 'Skip Customers', 'icon' => 'fa fa-phone-square'],
+        ['key' => 'broken_ptp', 'label' => 'Broken PTP', 'icon' => 'fa fa-chain-broken'],
+        ['key' => 'field_visits_today', 'label' => 'Field Visits Today', 'icon' => 'fa fa-street-view'],
+        ['key' => 'collection_amount_today', 'label' => 'Collection Amount Today', 'icon' => 'fa fa-dollar'],
+        ['key' => 'recovery_cases', 'label' => 'Recovery Cases', 'icon' => 'fa fa-refresh'],
+        ['key' => 'legal_cases', 'label' => 'Legal Cases', 'icon' => 'fa fa-gavel'],
+        ['key' => 'high_risk_customers', 'label' => 'High Risk Customers', 'icon' => 'fa fa-user-times'],
+        ['key' => 'repossessions', 'label' => 'Repossessions', 'icon' => 'fa fa-truck'],
     ];
 @endphp
 
@@ -19,7 +21,7 @@
                 <span class="info-box-icon bg-blue"><i class="{{ $card['icon'] }}"></i></span>
                 <div class="info-box-content">
                     <span class="info-box-text">{{ $card['label'] }}</span>
-                    <span class="info-box-number">{{ in_array($card['key'], ['today_collection', 'overdue_amount', 'monthly_income']) ? number_format((float) $val, 2) : (int) $val }}</span>
+                    <span class="info-box-number">{{ in_array($card['key'], ['collection_amount_today']) ? number_format((float) $val, 2) : (int) $val }}</span>
                 </div>
             </div>
         </div>

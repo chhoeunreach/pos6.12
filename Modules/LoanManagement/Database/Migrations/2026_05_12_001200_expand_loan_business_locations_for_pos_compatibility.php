@@ -20,7 +20,8 @@ return new class extends Migration
             $this->addColumnIfMissing($table, 'main_location_id', fn () => $table->unsignedBigInteger('main_location_id')->nullable()->after('main_business_id'));
             $this->addColumnIfMissing($table, 'name', fn () => $table->string('name')->nullable()->after('main_location_id'));
             $this->addColumnIfMissing($table, 'location_code', fn () => $table->string('location_code')->nullable()->after('name'));
-            $this->addColumnIfMissing($table, 'address', fn () => $table->text('address')->nullable()->after('location_code'));
+            $this->addColumnIfMissing($table, 'loan_invoice_prefix', fn () => $table->string('loan_invoice_prefix', 50)->nullable()->after('location_code'));
+            $this->addColumnIfMissing($table, 'address', fn () => $table->text('address')->nullable()->after('loan_invoice_prefix'));
             $this->addColumnIfMissing($table, 'phone', fn () => $table->string('phone', 50)->nullable()->after('address'));
             $this->addColumnIfMissing($table, 'logo_path', fn () => $table->string('logo_path')->nullable()->after('phone'));
             $this->addColumnIfMissing($table, 'payment_qr_path', fn () => $table->string('payment_qr_path')->nullable()->after('logo_path'));

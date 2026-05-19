@@ -77,6 +77,7 @@ return new class extends Migration
             $table->unsignedBigInteger('main_location_id')->nullable()->index();
             $table->string('name');
             $table->string('location_code')->nullable()->index();
+            $table->string('loan_invoice_prefix', 50)->nullable();
             $table->string('logo_path')->nullable();
             $table->string('payment_qr_path')->nullable();
             $table->string('telegram_qr_path')->nullable();

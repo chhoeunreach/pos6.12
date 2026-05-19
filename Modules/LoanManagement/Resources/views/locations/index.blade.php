@@ -19,7 +19,7 @@
                         <th>Logo</th>
                         <th>Payment QR</th>
                         <th>Telegram QR</th>
-                        <th style="width:460px;">Images & Telegram</th>
+                        <th style="width:460px;">Invoice, Images & Telegram</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -56,6 +56,16 @@
                             </td>
                             <td>
                                 {!! Form::open(['url' => route('loan-management.locations.assets.update', $location->id), 'method' => 'post', 'files' => true]) !!}
+                                <div class="form-group">
+                                    <label>Loan Invoice Prefix</label>
+                                    <input type="text" name="loan_invoice_prefix" class="form-control input-sm" value="{{ $location->loan_invoice_prefix ?? '' }}" maxlength="50" placeholder="e.g. LN, PP, SR">
+                                    @php
+                                        $invoicePrefixExample = rtrim(trim((string) ($location->loan_invoice_prefix ?? '')), '-/');
+                                        $invoicePrefixExample = $invoicePrefixExample !== '' ? $invoicePrefixExample : 'LN';
+                                    @endphp
+                                    <small class="text-muted">Auto loan invoice example: {{ $invoicePrefixExample }}-{{ date('Ymd') }}-000001</small>
+                                </div>
+                                <hr style="margin:10px 0;">
                                 <div class="form-group">
                                     <label>Logo</label>
                                     <input type="file" name="logo" class="form-control input-sm" accept="image/*">

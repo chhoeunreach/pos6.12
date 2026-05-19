@@ -68,5 +68,11 @@ return [
         'loan_management.chat.close',
         'loan_management.chat.delete',
         'loan_management.chat.admin',
+        'loan_management.collection.view',
+        'loan_management.collection.assign',
+        'loan_management.collection.recovery',
+        'loan_management.collection.legal',
+        'loan_management.collection.repossess',
+        'loan_management.collection.writeoff',
     ],
 ];
