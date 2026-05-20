@@ -315,8 +315,7 @@
                         });
                     })->sortBy(function ($customerGroupRow) {
                         $name = trim((string) ($customerGroupRow['name'] ?? 'លក់'));
-                        $sort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
-                        return sprintf('%02d-%s', $sort, $customerGroupRow['display_location_name'] ?? '');
+                        return ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
                     })->values();
                 @endphp
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
