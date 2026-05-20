@@ -25,7 +25,7 @@ class CustomBackupController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('custombackup::backup.custom');
+        return view('custombackup::backup.custom', ['active_tab' => 'export']);
     }
 
     public function export(Request $request)
@@ -125,7 +125,7 @@ class CustomBackupController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('custombackup::backup.import');
+        return view('custombackup::backup.custom', ['active_tab' => 'import']);
     }
 
     public function import(Request $request)
@@ -237,7 +237,7 @@ class CustomBackupController extends Controller
             $output = ['success' => 0, 'msg' => $error_message];
         }
 
-        return redirect()->back()->with('status', $output);
+        return redirect()->action([self::class, 'showImportForm'])->with('status', $output);
     }
 
     private function authorizeAccess(): void

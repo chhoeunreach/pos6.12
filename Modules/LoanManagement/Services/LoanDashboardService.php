@@ -4,12 +4,14 @@ namespace Modules\LoanManagement\Services;
 
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class LoanDashboardService
 {
     protected string $connection = 'mysql_loan';
+    private array $schemaCache = [];
 
     public function getFilters($request): array
     {
@@ -33,29 +35,36 @@ class LoanDashboardService
     {
         $filters = $this->getFilters($request);
 
-        return [
-            'cards' => $this->getSummaryCards($filters),
-            'charts' => [
-                'monthly_loan' => $this->getMonthlyLoanChart($filters),
-                'monthly_collection' => $this->getMonthlyCollectionChart($filters),
-                'loan_status' => $this->getLoanStatusChart($filters),
-                'payment_method' => $this->getPaymentMethodChart($filters),
-                'overdue_aging' => $this->getOverdueAgingChart($filters),
-                'collector_performance' => $this->getCollectorPerformanceChart($filters),
-                'customer_status' => $this->getCustomerStatusChart($filters),
-                'daily_collection' => $this->getDailyCollectionChart($filters),
-            ],
-            'tables' => [
-                'latest_loans' => $this->getLatestLoans($filters),
-                'today_due_payments' => $this->getTodayDuePayments($filters),
-                'overdue_customers' => $this->getOverdueCustomers($filters),
-                'recent_payments' => $this->getRecentPayments($filters),
-                'aba_transactions' => $this->getAbaTransactions($filters),
-                'staff_latest_locations' => $this->getStaffLatestLocations($filters),
-                'follow_up_customers' => $this->getFollowUpCustomers($filters),
-                'blacklist_customers' => $this->getBlacklistCustomers($filters),
-            ],
-        ];
+        $isRealtime = $request->boolean('realtime');
+        $cacheKey = 'loan_dashboard_data_'.($isRealtime ? 'realtime_' : '').auth()->id().'_'.md5(json_encode($filters));
+        $ttl = $isRealtime ? 15 : 300;
+
+        return Cache::remember($cacheKey, $ttl, function () use ($filters) {
+            return [
+                'quick_cards' => $this->getQuickCards($filters),
+                'cards' => $this->getSummaryCards($filters),
+                'charts' => [
+                    'monthly_loan' => $this->getMonthlyLoanChart($filters),
+                    'monthly_collection' => $this->getMonthlyCollectionChart($filters),
+                    'loan_status' => $this->getLoanStatusChart($filters),
+                    'payment_method' => $this->getPaymentMethodChart($filters),
+                    'overdue_aging' => $this->getOverdueAgingChart($filters),
+                    'collector_performance' => $this->getCollectorPerformanceChart($filters),
+                    'customer_status' => $this->getCustomerStatusChart($filters),
+                    'daily_collection' => $this->getDailyCollectionChart($filters),
+                ],
+                'tables' => [
+                    'latest_loans' => $this->getLatestLoans($filters),
+                    'today_due_payments' => $this->getTodayDuePayments($filters),
+                    'overdue_customers' => $this->getOverdueCustomers($filters),
+                    'recent_payments' => $this->getRecentPayments($filters),
+                    'aba_transactions' => $this->getAbaTransactions($filters),
+                    'staff_latest_locations' => $this->getStaffLatestLocations($filters),
+                    'follow_up_customers' => $this->getFollowUpCustomers($filters),
+                    'blacklist_customers' => $this->getBlacklistCustomers($filters),
+                ],
+            ];
+        });
     }
 
     public function getSummaryCards($filters): array
@@ -303,7 +312,7 @@ class LoanDashboardService
         $rows = $this->applyScheduleFilters(DB::connection($this->connection)->table('loan_payment_schedules as s')->join('loans as l', 'l.id', '=', 's.loan_id'), $filters)
             ->whereDate('s.due_date', '<', Carbon::today()->toDateString())
             ->whereIn('s.status', ['unpaid', 'partial', 'late'])
-            ->selectRaw('DATEDIFF(CURDATE(), s.due_date) as overdue_days, COALESCE(s.balance_amount, s.schedule_amount, 0) as balance_amount')
+            ->selectRaw('DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->scheduleBalanceExpression('s').' as balance_amount')
             ->get();
 
         $buckets = ['1-7' => 0, '8-15' => 0, '16-30' => 0, '31-60' => 0, '60+' => 0];
@@ -404,7 +413,7 @@ class LoanDashboardService
                 $this->loanCustomerPhoneExpression('l').' as customer_phone_snapshot',
                 'l.principal_amount',
                 'l.paid_amount',
-                'l.balance_amount',
+                $this->loanBalanceExpression('l').' as balance_amount',
                 'l.currency',
                 'l.status',
                 'l.loan_date',
@@ -417,7 +426,7 @@ class LoanDashboardService
         if (! $this->tableExists('loan_payment_schedules') || ! $this->tableExists('loans')) return [];
         return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', Carbon::today()->toDateString())
-            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, s.due_date, COALESCE(s.schedule_amount,0) as schedule_amount, COALESCE(s.paid_amount,0) as paid_amount, COALESCE(s.balance_amount,0) as balance, '.$this->loanCollectorExpression('l').' as collector')
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, s.due_date, '.$this->scheduleAmountExpression('s').' as schedule_amount, '.$this->schedulePaidExpression('s').' as paid_amount, '.$this->scheduleBalanceExpression('s').' as balance, '.$this->loanCollectorExpression('l').' as collector')
             ->orderBy('s.due_date')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -427,7 +436,7 @@ class LoanDashboardService
         return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', '<', Carbon::today()->toDateString())
             ->whereIn('s.status', ['unpaid', 'partial', 'late'])
-            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, DATEDIFF(CURDATE(), s.due_date) as overdue_days, COALESCE(s.balance_amount,0) as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->scheduleBalanceExpression('s').' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
             ->orderByDesc('overdue_days')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -490,20 +499,80 @@ class LoanDashboardService
 
     public function tableExists(string $table): bool
     {
+        $key = 'table:'.$table;
+        if (array_key_exists($key, $this->schemaCache)) {
+            return $this->schemaCache[$key];
+        }
+
         try {
-            return Schema::connection($this->connection)->hasTable($table);
+            return $this->schemaCache[$key] = Schema::connection($this->connection)->hasTable($table);
         } catch (\Throwable $e) {
-            return false;
+            return $this->schemaCache[$key] = false;
         }
     }
 
     public function columnExists(string $table, string $column): bool
     {
-        try {
-            return Schema::connection($this->connection)->hasColumn($table, $column);
-        } catch (\Throwable $e) {
-            return false;
+        $key = 'column:'.$table.'.'.$column;
+        if (array_key_exists($key, $this->schemaCache)) {
+            return $this->schemaCache[$key];
         }
+
+        try {
+            return $this->schemaCache[$key] = Schema::connection($this->connection)->hasColumn($table, $column);
+        } catch (\Throwable $e) {
+            return $this->schemaCache[$key] = false;
+        }
+    }
+
+    protected function firstExistingColumn(string $table, array $columns): ?string
+    {
+        foreach ($columns as $column) {
+            if ($this->columnExists($table, $column)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    protected function qualifiedExistingColumn(string $table, string $alias, array $columns, string $default = '0'): string
+    {
+        $column = $this->firstExistingColumn($table, $columns);
+
+        return $column ? $alias.'.'.$column : $default;
+    }
+
+    protected function scheduleAmountExpression(string $alias): string
+    {
+        return 'COALESCE('.$this->qualifiedExistingColumn('loan_payment_schedules', $alias, ['schedule_amount', 'amount_due', 'total_amount', 'principal_amount']).', 0)';
+    }
+
+    protected function schedulePaidExpression(string $alias): string
+    {
+        return 'COALESCE('.$this->qualifiedExistingColumn('loan_payment_schedules', $alias, ['paid_amount', 'amount_paid']).', 0)';
+    }
+
+    protected function scheduleBalanceExpression(string $alias): string
+    {
+        $balanceColumn = $this->firstExistingColumn('loan_payment_schedules', ['balance_amount', 'amount_balance']);
+        $fallback = 'GREATEST(('.$this->scheduleAmountExpression($alias).') - ('.$this->schedulePaidExpression($alias).'), 0)';
+
+        return $balanceColumn
+            ? 'COALESCE('.$alias.'.'.$balanceColumn.', '.$fallback.')'
+            : $fallback;
+    }
+
+    protected function loanBalanceExpression(string $alias): string
+    {
+        $balanceColumn = $this->firstExistingColumn('loans', ['balance_amount', 'amount_balance']);
+        $total = 'COALESCE('.$this->qualifiedExistingColumn('loans', $alias, ['total_payable', 'total_payable_amount', 'total_amount', 'principal_amount']).', 0)';
+        $paid = 'COALESCE('.$this->qualifiedExistingColumn('loans', $alias, ['paid_amount', 'amount_paid']).', 0)';
+        $fallback = 'GREATEST(('.$total.') - ('.$paid.'), 0)';
+
+        return $balanceColumn
+            ? 'COALESCE('.$alias.'.'.$balanceColumn.', '.$fallback.')'
+            : $fallback;
     }
 
     protected function applyLoanFilters(Builder $query, array $filters, string $alias = 'loans'): Builder

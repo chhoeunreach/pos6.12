@@ -5,6 +5,7 @@ namespace Modules\LoanManagement\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -38,12 +39,23 @@ class LoanDashboardController extends Controller
                 ->all();
         }
 
-        $quickCards = $this->service->getQuickCards($filters);
-        $recentPayments = $this->service->getRecentPayments($filters);
-        $overdueCustomers = $this->service->getOverdueCustomers($filters);
-        $visitSchedule = $this->service->getFollowUpCustomers($filters);
-        $collectorPerformance = $this->service->getCollectorPerformanceChart($filters);
-        $loanStatusChart = $this->service->getLoanStatusChart($filters);
+        $dashboard = Cache::remember('loan_dashboard_index_'.auth()->id().'_'.md5(json_encode($filters)), 300, function () use ($filters) {
+            return [
+                'quickCards' => $this->service->getQuickCards($filters),
+                'recentPayments' => $this->service->getRecentPayments($filters),
+                'overdueCustomers' => $this->service->getOverdueCustomers($filters),
+                'visitSchedule' => $this->service->getFollowUpCustomers($filters),
+                'collectorPerformance' => $this->service->getCollectorPerformanceChart($filters),
+                'loanStatusChart' => $this->service->getLoanStatusChart($filters),
+            ];
+        });
+
+        $quickCards = $dashboard['quickCards'];
+        $recentPayments = $dashboard['recentPayments'];
+        $overdueCustomers = $dashboard['overdueCustomers'];
+        $visitSchedule = $dashboard['visitSchedule'];
+        $collectorPerformance = $dashboard['collectorPerformance'];
+        $loanStatusChart = $dashboard['loanStatusChart'];
 
         return view('loanmanagement::dashboard.index', compact(
             'filters',

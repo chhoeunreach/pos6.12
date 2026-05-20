@@ -148,6 +148,10 @@
     var csrf = '{{ csrf_token() }}';
     var chatBaseUrl = '{{ url('loan-management/chat-api/chats') }}';
     var pollMs = {{ (int) config('loanmanagement.chat_polling_seconds', 5) * 1000 }};
+    var inboxLoading = false;
+    var threadLoading = false;
+    var pollTimer = null;
+    var searchTimer = null;
 
     function apiData(resp){ return resp && resp.data && resp.data.data ? resp.data.data : (resp && resp.data ? resp.data : []); }
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
@@ -165,9 +169,65 @@
         return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' +
             pad2(date.getHours()) + ':' + pad2(date.getMinutes()) + ':' + pad2(date.getSeconds());
     }
+    function stopPolling(){
+        if (pollTimer) {
+            window.clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+    function buildUrl(url, params){
+        var query = [];
+        params = params || {};
+        Object.keys(params).forEach(function(key){
+            if (params[key] !== undefined && params[key] !== null) {
+                query.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
+            }
+        });
+        return url + (query.length ? (url.indexOf('?') >= 0 ? '&' : '?') + query.join('&') : '');
+    }
+    function parseJsonResponse(response){
+        var contentType = response.headers.get('content-type') || '';
+        if (!response.ok || contentType.indexOf('application/json') === -1) {
+            stopPolling();
+            throw new Error('Chat request did not return JSON.');
+        }
+        return response.json();
+    }
+    function apiGet(url, params){
+        return fetch(buildUrl(url, params), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(parseJsonResponse);
+    }
+    function apiPost(url, data){
+        var body = data instanceof FormData ? data : new FormData();
+        if (!(data instanceof FormData)) {
+            data = data || {};
+            Object.keys(data).forEach(function(key){ body.append(key, data[key]); });
+        }
+        if (!body.has('_token')) {
+            body.append('_token', csrf);
+        }
+
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body
+        }).then(parseJsonResponse);
+    }
 
     function loadInbox(keepActive){
-        $.get(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}, function(resp){
+        if (inboxLoading) return;
+        inboxLoading = true;
+        apiGet(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}).then(function(resp){
             threads = apiData(resp) || [];
             renderCards(threads);
             renderThreads();
@@ -175,7 +235,7 @@
                 var exists = threads.some(function(t){ return String(t.id) === String(activeThread); });
                 if (exists) loadThread(activeThread, false);
             }
-        });
+        }).catch(function(){}).finally(function(){ inboxLoading = false; });
     }
 
     function renderCards(rows){
@@ -213,10 +273,12 @@
     }
 
     function loadThread(id, markRead){
+        if (threadLoading) return;
         activeThread = id;
         $('.lm-chat-item').removeClass('active');
         $('.lm-chat-item[data-id="'+id+'"]').addClass('active');
-        $.get(chatBaseUrl + '/' + id, function(resp){
+        threadLoading = true;
+        apiGet(chatBaseUrl + '/' + id).then(function(resp){
             var row = apiData(resp);
             $('#activeTitle').text(row.display_name || 'Customer');
             $('#activeSubtitle').text((row.display_subtitle || '') + (row.status ? ' - ' + row.status : ''));
@@ -225,9 +287,9 @@
             renderMessages(row.messages || []);
             renderSidebar(row.sidebar || {});
             if (markRead !== false) {
-                $.post(chatBaseUrl + '/' + id + '/read', {_token: csrf});
+                apiPost(chatBaseUrl + '/' + id + '/read', {});
             }
-        });
+        }).catch(function(){}).finally(function(){ threadLoading = false; });
     }
 
     function renderMessages(messages){
@@ -270,8 +332,9 @@
         data.append('message_type', type);
         data.append('file', file);
         data.append('message', $('#messageText').val() || '');
-        $.ajax({url:chatBaseUrl + '/' + activeThread + '/messages', method:'POST', data:data, processData:false, contentType:false})
-            .done(function(){ $('#messageText').val(''); $('#chatFile').val(''); loadThread(activeThread); loadInbox(true); });
+        apiPost(chatBaseUrl + '/' + activeThread + '/messages', data)
+            .then(function(){ $('#messageText').val(''); $('#chatFile').val(''); loadThread(activeThread); loadInbox(true); })
+            .catch(function(){});
     }
 
     $('#chatTabs').on('click', '.lm-chat-tab', function(){
@@ -283,15 +346,15 @@
     function openCustomerTarget(customerId){
         $('#activeTitle').text('Opening customer chat...');
         $('#activeSubtitle').text('Preparing conversation');
-        $.post(chatBaseUrl, {_token: csrf, customer_id: customerId, type: 'customer_staff', priority: 'normal'}, function(resp){
+        apiPost(chatBaseUrl, {customer_id: customerId, type: 'customer_staff', priority: 'normal'}).then(function(resp){
             var row = apiData(resp);
             if (row && row.id) {
                 activeThread = row.id;
                 loadInbox(true);
                 loadThread(row.id);
             }
-        }).fail(function(xhr){
-            var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot open chat for this customer.';
+        }).catch(function(){
+            var message = 'Cannot open chat for this customer.';
             $('#messageList').html('<div class="lm-chat-empty">'+esc(message)+'</div>');
             $('#activeTitle').text('Chat not opened');
             $('#activeSubtitle').text('Please check Live Chat permission');
@@ -309,17 +372,21 @@
             openCustomerTarget(customerId);
         }
     });
-    $('#chatSearch').on('input', function(){ renderThreads(); loadInbox(false); });
-    $('#messageText').on('input', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/typing', {_token:csrf}); });
+    $('#chatSearch').on('input', function(){
+        renderThreads();
+        if (searchTimer) window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(function(){ loadInbox(false); }, 350);
+    });
+    $('#messageText').on('input', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/typing', {}); });
     $('#messageForm').on('submit', function(e){
         e.preventDefault();
         if (!activeThread || !$('#messageText').val().trim()) return;
-        $.post(chatBaseUrl + '/' + activeThread + '/messages', {_token:csrf, message_type:'text', message:$('#messageText').val()}, function(){
+        apiPost(chatBaseUrl + '/' + activeThread + '/messages', {message_type:'text', message:$('#messageText').val()}).then(function(){
             $('#messageText').val('');
             loadThread(activeThread);
             loadInbox(true);
-        }).fail(function(xhr){
-            var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot send reply.';
+        }).catch(function(){
+            var message = 'Cannot send reply.';
             $('#messageList').append('<div class="lm-chat-empty" style="height:auto;padding:10px">'+esc(message)+'</div>');
         });
     });
@@ -329,24 +396,28 @@
     $('#btnLocation').on('click', function(){
         if (!activeThread || !navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition(function(pos){
-            $.post(chatBaseUrl + '/' + activeThread + '/messages', {_token:csrf,message_type:'location',latitude:pos.coords.latitude,longitude:pos.coords.longitude}, function(){ loadThread(activeThread); });
+            apiPost(chatBaseUrl + '/' + activeThread + '/messages', {message_type:'location',latitude:pos.coords.latitude,longitude:pos.coords.longitude}).then(function(){ loadThread(activeThread); });
         });
     });
     $('#btnAssign').on('click', function(){
         if (!activeThread || !$('#assignStaffId').val()) return;
-        $.post(chatBaseUrl + '/' + activeThread + '/assign', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
+        apiPost(chatBaseUrl + '/' + activeThread + '/assign', {staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}).then(function(){ loadThread(activeThread); loadInbox(true); });
     });
     $('#btnTransfer').on('click', function(){
         if (!activeThread || !$('#assignStaffId').val()) return;
-        $.post(chatBaseUrl + '/' + activeThread + '/transfer', {_token:csrf, staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}, function(){ loadThread(activeThread); loadInbox(true); });
+        apiPost(chatBaseUrl + '/' + activeThread + '/transfer', {staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}).then(function(){ loadThread(activeThread); loadInbox(true); });
     });
-    $('#btnClose').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/close', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnReopen').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/reopen', {_token:csrf}, function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnPin').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/pin', {_token:csrf, is_pinned:1}, function(){ loadInbox(true); }); });
-    $('#btnMute').on('click', function(){ if(activeThread) $.post(chatBaseUrl + '/' + activeThread + '/mute', {_token:csrf, is_muted:1}, function(){ loadInbox(true); }); });
+    $('#btnClose').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/close', {}).then(function(){ loadThread(activeThread); loadInbox(true); }); });
+    $('#btnReopen').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/reopen', {}).then(function(){ loadThread(activeThread); loadInbox(true); }); });
+    $('#btnPin').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/pin', {is_pinned:1}).then(function(){ loadInbox(true); }); });
+    $('#btnMute').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/mute', {is_muted:1}).then(function(){ loadInbox(true); }); });
 
     loadInbox(false);
-    setInterval(function(){ loadInbox(true); }, pollMs);
+    if (window.loanChatPollTimer) {
+        window.clearInterval(window.loanChatPollTimer);
+    }
+    pollTimer = window.setInterval(function(){ loadInbox(true); }, pollMs);
+    window.loanChatPollTimer = pollTimer;
 })(jQuery);
 </script>
 @endsection

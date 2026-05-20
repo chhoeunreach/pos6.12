@@ -35,7 +35,7 @@ class LoanFromSellController extends Controller
             ->distinct()
             ->limit(500)
             ->pluck('mobile', 'mobile');
-        $customerGroups = collect(['រំលស់' => 'រំលស់']);
+        $customerGroups = collect(['រំលស់' => 'រំលស់'],['អ៊ីអន' => 'អ៊ីអន']);
         if (Schema::hasTable('customer_groups')) {
             $customerGroups = $customerGroups->merge(
                 DB::table('customer_groups')

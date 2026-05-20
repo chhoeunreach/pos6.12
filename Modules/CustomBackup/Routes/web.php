@@ -7,7 +7,9 @@ Route::middleware(['web', 'auth'])
     ->group(function () {
         Route::get('/custom-backup/install', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'index']);
         Route::post('/custom-backup/install', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'install']);
+        Route::get('/custom-backup/install/uninstall', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'uninstall']);
         Route::delete('/custom-backup/install/uninstall', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'uninstall']);
+        Route::get('/custom-backup/install/update', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'update']);
         Route::post('/custom-backup/install/update', [Modules\CustomBackup\Http\Controllers\InstallController::class, 'update']);
     });
 

@@ -1,15 +1,19 @@
 @extends('layouts.app')
-@section('title', 'Custom Backup')
+@section('title', 'Custom Backup & Import')
 
 @section('content')
 
 <section class="content-header">
-    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Custom Backup
-        <small class="tw-text-sm md:tw-text-base tw-text-gray-700 tw-font-semibold">Export selected data by date range</small>
+    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Custom Backup &amp; Import
+        <small class="tw-text-sm md:tw-text-base tw-text-gray-700 tw-font-semibold">Export selected data or import a custom backup file</small>
     </h1>
 </section>
 
 <section class="content">
+    @php
+        $active_tab = $active_tab ?? (request()->segment(2) == 'import' ? 'import' : 'export');
+    @endphp
+
     @if (session('status'))
         @php $status = session('status'); @endphp
         <div class="row">
@@ -36,6 +40,21 @@
         </div>
     @endif
 
+    <div class="nav-tabs-custom">
+        <ul class="nav nav-tabs">
+            <li class="{{ $active_tab == 'export' ? 'active' : '' }}">
+                <a href="{{ action([\Modules\CustomBackup\Http\Controllers\CustomBackupController::class, 'index']) }}">
+                    <i class="fa fa-download"></i> Custom Backup
+                </a>
+            </li>
+            <li class="{{ $active_tab == 'import' ? 'active' : '' }}">
+                <a href="{{ action([\Modules\CustomBackup\Http\Controllers\CustomBackupController::class, 'showImportForm']) }}">
+                    <i class="fa fa-upload"></i> Import Backup
+                </a>
+            </li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane {{ $active_tab == 'export' ? 'active' : '' }}" id="custom_backup_export_tab">
     <div class="row">
         <div class="col-sm-12">
             @component('components.widget', ['class' => 'box-primary'])
@@ -131,6 +150,101 @@
             @endcomponent
         </div>
     </div>
+            </div>
+
+            <div class="tab-pane {{ $active_tab == 'import' ? 'active' : '' }}" id="custom_backup_import_tab">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @component('components.widget', ['class' => 'box-primary'])
+                            {!! Form::open(['url' => action([\Modules\CustomBackup\Http\Controllers\CustomBackupController::class, 'import']), 'method' => 'post', 'enctype' => 'multipart/form-data']) !!}
+
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <div class="form-group">
+                                        {!! Form::label('backup_sql', 'SQL file (.sql/.txt):') !!}
+                                        {!! Form::file('backup_sql', ['accept'=> '.sql,.txt', 'required' => 'required']) !!}
+                                        <p class="help-block">Max size: {{ config('constants.custom_backup_import_max_kb') }} KB</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <label>Conflict handling:</label>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('conflict_mode', 'insert', old('conflict_mode', 'insert') == 'insert') !!}
+                                            Insert only
+                                        </label>
+                                    </div>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('conflict_mode', 'ignore', old('conflict_mode') == 'ignore') !!}
+                                            Insert ignore
+                                        </label>
+                                    </div>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('conflict_mode', 'replace', old('conflict_mode') == 'replace') !!}
+                                            Replace existing
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <label>Users &amp; Permissions conflicts (by email):</label>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('user_conflict', 'skip', old('user_conflict', 'skip') == 'skip') !!}
+                                            Skip existing users
+                                        </label>
+                                    </div>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('user_conflict', 'update', old('user_conflict') == 'update') !!}
+                                            Update existing users (except password)
+                                        </label>
+                                    </div>
+                                    <div class="radio">
+                                        <label>
+                                            {!! Form::radio('user_conflict', 'replace', old('user_conflict') == 'replace') !!}
+                                            Replace existing users (including hashed password)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12">
+                                    <div class="checkbox">
+                                        <label>
+                                            {!! Form::checkbox('confirm_risk', 1, old('confirm_risk')) !!}
+                                            I understand this may overwrite/duplicate data
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12">
+                                    <button type="submit" id="custom_backup_import_btn" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
+                                        <i class="fa fa-upload"></i> Import SQL
+                                    </button>
+                                    <span id="custom_backup_import_status" class="text-muted" style="display:none; margin-left:10px;">
+                                        <i class="fa fa-spinner fa-spin"></i> Creating safety backup and importing...
+                                    </span>
+                                </div>
+                            </div>
+
+                            {!! Form::close() !!}
+                        @endcomponent
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </section>
 
 @endsection
@@ -198,6 +312,11 @@
 
         $('#full_backup').on('change', toggleFullBackupUI);
         toggleFullBackupUI();
+
+        $('form[action$="/custom-backup/import"]').on('submit', function () {
+            $('#custom_backup_import_btn').prop('disabled', true);
+            $('#custom_backup_import_status').show();
+        });
     });
 </script>
 @endsection

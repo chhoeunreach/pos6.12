@@ -45,6 +45,10 @@
             return '$ ' . number_format($number, 2);
         };
     @endphp
+    <div class="local-filter-wrap">
+        <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-sm local-filter-reset">
+            <i class="fa fa-refresh"></i> Reset
+        </a>
     @component('components.filters', ['title' => __('report.filters')])
         <form method="get" action="{{ route('local-cashier-report.index') }}" class="row">
             <div class="col-md-3">
@@ -108,12 +112,12 @@
             </div>
             <div class="col-md-12">
                 <button type="submit" class="btn btn-primary">Search</button>
-                <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-default">Reset</a>
                 <a href="{{ route('local-cashier-report.export', request()->query()) }}" class="btn btn-success">Export Excel</a>
                 <a href="{{ route('local-cashier-report.print', request()->query()) }}" target="_blank" class="btn btn-info">Print</a>
             </div>
         </form>
     @endcomponent
+    </div>
 
     @if($filters['style_mode'] === 'view_report')
     <div class="table-responsive">
@@ -238,6 +242,19 @@
                         @endforeach
                         <td class="text-right @if(($row['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                     </tr>
+                    @foreach(($row['customer_groups'] ?? []) as $customerGroupRow)
+                        <tr class="customer-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
+                            <td class="name-main customer-group-breakdown-name">
+                                <span class="customer-group-breakdown-label">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
+                                <span class="qty-badge">(Qty: {{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
+                            </td>
+                            <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
+                            @foreach($report['payment_columns'] as $method)
+                                <td class="text-right">{{ $fmt($customerGroupRow['payments'][$method] ?? null) }}</td>
+                            @endforeach
+                            <td class="text-right @if(($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($customerGroupRow['due'] ?? null) }}</td>
+                        </tr>
+                    @endforeach
                 @empty
                     <tr>
                         <td colspan="{{ 3 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
@@ -277,8 +294,8 @@
         <table class="table sheet-table">
             <thead>
                 <tr>
-                    <th>Cashier/User</th>
                     <th>Business Location (Qty)</th>
+                    <th class="text-right">Total Price</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
@@ -294,30 +311,20 @@
                             'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
                         ]);
                     @endphp
-                    <tr class="row-sale">
-                        <td class="name-main">{{ $row['cashier_name'] }}</td>
-                        <td>
-                            <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardUserDetailQuery) . '#local_cashier_sales_detail_table' }}">
-                                {{ $row['location_qty_text'] }}
-                            </a>
-                        </td>
-                        @foreach($report['payment_columns'] as $method)
-                            @php
-                                $dashboardUserPaymentDetailQuery = array_merge(request()->query(), [
-                                    'style_mode' => 'classic_plain',
-                                    'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
-                                    'payment_methods' => [(string) $method],
-                                ]);
-                            @endphp
-                            <td class="text-right">
-                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardUserPaymentDetailQuery) . '#local_cashier_sales_detail_table' }}">
-                                    {{ $fmt($row['payments'][$method] ?? null) }}
-                                </a>
+                    @foreach(($row['customer_groups'] ?? []) as $customerGroupRow)
+                        <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
+                            <td class="name-main cashier-group-breakdown-name">
+                                <span class="customer-group-breakdown-location-badge">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
+                                <span class="customer-group-breakdown-location">{{ $customerGroupRow['location_qty_text'] ?? '-' }}</span>
                             </td>
-                        @endforeach
-                        <td class="text-right">{{ $fmt($row['total']) }}</td>
-                        <td class="text-right @if($row['due'] != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
-                    </tr>
+                            <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
+                            @foreach($report['payment_columns'] as $method)
+                                <td class="text-right">{{ $fmt($customerGroupRow['payments'][$method] ?? null) }}</td>
+                            @endforeach
+                            <td class="text-right">{{ $fmt($customerGroupRow['paid'] ?? null) }}</td>
+                            <td class="text-right @if(($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($customerGroupRow['due'] ?? null) }}</td>
+                        </tr>
+                    @endforeach
                 @empty
                     <tr>
                         <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
@@ -326,17 +333,18 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th></th>
                     <th class="text-right">Grand Total</th>
+                    <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
-                    <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
+                    <th class="text-right">{{ $fmt($report['grand_paid']) }}</th>
                     <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
                 </tr>
                 @if(($filters['style_mode'] ?? 'sheet') === 'classic_plain')
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Expenses</th>
+                        <th class="text-right">Expenses</th>
+                        <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
@@ -344,7 +352,8 @@
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Actual Income</th>
+                        <th class="text-right">Actual Income</th>
+                        <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
@@ -361,7 +370,7 @@
         <hr>
         <div class="row">
             <div class="col-md-3">
-                <h4>Summary by User/Cashier</h4>
+                <h4>User/Cashier</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_user">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
@@ -389,7 +398,7 @@
                 </table>
             </div>
             <div class="col-md-3">
-                <h4>Summary by Location</h4>
+                <h4>Location</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_location">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
@@ -417,7 +426,7 @@
                 </table>
             </div>
             <div class="col-md-3">
-                <h4>Summary by Brand</h4>
+                <h4>Brand</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_brand">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                     <tbody>
@@ -445,7 +454,7 @@
                 </table>
             </div>
             <div class="col-md-3">
-                <h4>Summary by Payment Method</h4>
+                <h4>Payment Method</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_payment">
                     <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
                     <tbody>
@@ -488,7 +497,7 @@
         <div class="row">
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Summary by User/Cashier</h4>
+                    <h4>User/Cashier</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_user_plain">
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
@@ -518,7 +527,7 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Summary by Location</h4>
+                    <h4>Location</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_location_plain">
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
@@ -548,7 +557,37 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Summary by Brand</h4>
+                    <h4>Customer Group</h4>
+                    <table class="table table-bordered table-condensed summary-table" id="sum_customer_group_plain">
+                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <tbody>
+                            @foreach($report['summary_customer_group'] ?? [] as $r)
+                                @php
+                                    $customerGroupDetailQuery = array_merge(request()->query(), [
+                                        'style_mode' => 'classic_plain',
+                                        'customer_group' => (string) ($r['name'] ?? ''),
+                                    ]);
+                                @endphp
+                                <tr>
+                                    <td><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $r['name'] }}</a></td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
+                                    <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total</th>
+                                <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.customer_group.amount', 0)) }}</th>
+                                <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.customer_group.qty', 0), 2), '0'), '.') }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="summary-panel">
+                    <h4>Brand</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_brand_plain">
                         <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
                         <tbody>
@@ -578,7 +617,7 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Summary by Payment Method</h4>
+                    <h4>Payment Method</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_payment_plain">
                         <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
                         <tbody>
@@ -613,8 +652,10 @@
                             <th>Action</th>
                             <th>Date</th>
                             <th>Invoice No</th>
-                            <th>Cashier/User</th>
+                            <th>I-T</th>
                             <th>Location</th>
+                            <th>Customer</th>
+                            <th>Group</th>
                             <th>SKU</th>
                             <th>Product Name</th>
                             <th class="text-right">Quantity</th>
@@ -630,40 +671,71 @@
                         </thead>
                         <tbody>
                         @foreach($report['detail_rows'] as $row)
-                            <tr>
+                            @if(($row['row_type'] ?? 'sale') === 'customer_group_separator')
+                                <tr class="customer-group-separator {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-separator' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-separator' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-separator' : 'normal-separator')) }}">
+                                    <td></td>
+                                    <td class="group-separator-label">{{ $row['customer_group_name'] ?? 'លក់' }}</td>
+                                    <td class="group-separator-note">{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'Installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'AEON' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'Monthly payment' : 'Sale')) }}</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    @foreach($report['payment_columns'] as $method)
+                                        <td></td>
+                                    @endforeach
+                                    <td></td>
+                                </tr>
+                                @continue
+                            @endif
+                            <tr class="{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-customer-row' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-customer-row' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-customer-row' : 'normal-customer-row')) }}">
                                 <td>
-                                    @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
-                                        <a class="btn btn-xs btn-default btn-modal action-icon-btn action-view"
-                                           href="#"
-                                           data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
-                                           data-container=".view_modal"
-                                           title="View">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    @endcanany
-                                    @can('sell.update')
-                                        <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit POS">
-                                            <i class="fas fa-pen"></i>
-                                        </a>
-                                    @endcan
-                                    @cannot('sell.update')
-                                        @can('direct_sell.update')
-                                            <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit">
+                                    @if(($row['row_source'] ?? 'sell') !== 'loan_payment')
+                                        @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
+                                            <a class="btn btn-xs btn-default btn-modal action-icon-btn action-view"
+                                               href="#"
+                                               data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
+                                               data-container=".view_modal"
+                                               title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        @endcanany
+                                        @can('sell.update')
+                                            <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit POS">
                                                 <i class="fas fa-pen"></i>
                                             </a>
                                         @endcan
-                                    @endcannot
+                                        @cannot('sell.update')
+                                            @can('direct_sell.update')
+                                                <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit">
+                                                    <i class="fas fa-pen"></i>
+                                                </a>
+                                            @endcan
+                                        @endcannot
+                                    @endif
                                 </td>
                                 <td>{{ $row['date'] }}</td>
                                 <td>{{ $row['invoice_no'] }}</td>
-                                <td>{{ $row['cashier_name'] }}</td>
+                                <td>{{ $row['i_t'] ?? '-' }}</td>
                                 <td>{{ $row['location_name'] }}</td>
+                                <td>{{ $row['customer_name'] ?? '-' }}</td>
+                                <td>
+                                    <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment' : 'normal')) }}">
+                                        {{ $row['customer_group_name'] ?? 'លក់' }}
+                                    </span>
+                                </td>
                                 <td>{{ $row['sku'] }}</td>
                                 <td>{{ $row['product_name'] }}</td>
-                                <td class="text-right">{{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
-                                <td class="text-right">{{ $fmt($row['unit_price']) }}</td>
-                                <td class="text-right">{{ $fmt($row['line_total']) }}</td>
-                                <td class="text-right">{{ $fmt($row['discount']) }}</td>
+                                <td class="text-right">{{ is_null($row['quantity'] ?? null) ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
+                                <td class="text-right">{{ is_null($row['unit_price'] ?? null) ? '' : $fmt($row['unit_price']) }}</td>
+                                <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
+                                <td class="text-right">{{ is_null($row['discount'] ?? null) ? '' : $fmt($row['discount']) }}</td>
                                 <td class="text-right">{{ $fmt($row['paid']) }}</td>
                                 @foreach($report['payment_columns'] as $method)
                                     <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
@@ -672,6 +744,30 @@
                             </tr>
                         @endforeach
                         </tbody>
+                        @php
+                            $detailTotalRows = collect($report['detail_rows'] ?? [])
+                                ->filter(fn ($detailRow) => ($detailRow['row_type'] ?? 'sale') === 'sale');
+                            $detailPaymentTotals = [];
+                            foreach ($report['payment_columns'] as $method) {
+                                $detailPaymentTotals[$method] = $detailTotalRows->sum(fn ($detailRow) => (float) data_get($detailRow, 'payments.' . $method, 0));
+                            }
+                        @endphp
+                        <tfoot>
+                            <tr class="detail-total-row">
+                                <th colspan="9" class="text-right">Total</th>
+                                <th class="text-right">{{ rtrim(rtrim(number_format($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['quantity'] ?? 0)), 2), '0'), '.') }}</th>
+                                <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['unit_price'] ?? 0))) }}</th>
+                                <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['line_total'] ?? 0))) }}</th>
+                                <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['discount'] ?? 0))) }}</th>
+                                <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['paid'] ?? 0))) }}</th>
+                                @foreach($report['payment_columns'] as $method)
+                                    <th class="text-right">{{ $fmt($detailPaymentTotals[$method] ?? 0) }}</th>
+                                @endforeach
+                                <th class="text-right @if($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['due'] ?? 0)) < 0) due-negative @endif">
+                                    {{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['due'] ?? 0))) }}
+                                </th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -827,7 +923,7 @@
             $('#local_cashier_sales_detail_table').DataTable({
                 paging: true,
                 searching: true,
-                ordering: true,
+                ordering: false,
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
@@ -962,6 +1058,32 @@
     font-size: 20px;
     font-weight: 700;
     color: #1f2937;
+}
+#local_cashier_report_app .local-filter-wrap {
+    position: relative;
+}
+#local_cashier_report_app .local-filter-reset {
+    position: absolute;
+    top: 7px;
+    left: 100px;
+    z-index: 2;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    font-weight: 700;
+    padding: 5px 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+}
+#local_cashier_report_app .local-filter-reset:hover,
+#local_cashier_report_app .local-filter-reset:focus {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+    color: #075985;
+    text-decoration: none;
+}
+#local_cashier_report_app .local-filter-reset i {
+    margin-right: 4px;
 }
 #local_cashier_report_app .summary-kpi-grid {
     display: grid;
@@ -1101,6 +1223,13 @@
     color: #fff;
     font-weight: 700;
 }
+#local_cashier_report_app #local_cashier_sales_detail_table tfoot th {
+    background: #e2e8f0;
+    border-top: 2px solid #0f172a;
+    color: #0f172a;
+    font-weight: 800;
+    white-space: nowrap;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table td .btn {
     margin-right: 4px;
 }
@@ -1109,6 +1238,84 @@
 }
 #local_cashier_report_app #local_cashier_sales_detail_table tbody tr:hover td {
     background: #eaf3ff;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator td {
+    background: #f1f5f9 !important;
+    border-top: 3px solid #0f172a !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    color: #334155;
+    font-weight: 700;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator.installment-separator td {
+    background: #fff7ed !important;
+    border-top-color: #f59e0b !important;
+    color: #92400e;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator.aeon-separator td {
+    background: #eff6ff !important;
+    border-top-color: #2563eb !important;
+    color: #1e40af;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator.loan-payment-separator td {
+    background: #ecfdf5 !important;
+    border-top-color: #059669 !important;
+    color: #065f46;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table .group-separator-label {
+    font-size: 14px;
+    white-space: nowrap;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table .group-separator-note {
+    font-size: 12px;
+    color: #64748b;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.installment-customer-row td {
+    background: #fffbeb;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.installment-customer-row:hover td {
+    background: #fef3c7;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.aeon-customer-row td {
+    background: #eff6ff;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.aeon-customer-row:hover td {
+    background: #dbeafe;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.loan-payment-customer-row td {
+    background: #ecfdf5;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table tbody tr.loan-payment-customer-row:hover td {
+    background: #d1fae5;
+}
+#local_cashier_report_app .customer-group-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+}
+#local_cashier_report_app .customer-group-pill.installment {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+#local_cashier_report_app .customer-group-pill.normal {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #075985;
+}
+#local_cashier_report_app .customer-group-pill.aeon {
+    background: #dbeafe;
+    border-color: #60a5fa;
+    color: #1d4ed8;
+}
+#local_cashier_report_app .customer-group-pill.loan-payment {
+    background: #d1fae5;
+    border-color: #34d399;
+    color: #047857;
 }
 #local_cashier_report_app .action-icon-btn {
     width: 28px;
@@ -1230,6 +1437,71 @@
 #local_cashier_report_app .business-location-table tbody tr.row-sale:hover {
     background: #dbeafe !important;
     transition: background-color .18s ease;
+}
+#local_cashier_report_app .business-location-table tbody tr.customer-group-breakdown-row td {
+    background: #f8fafc;
+    border-top: 1px solid #cbd5e1;
+    color: #334155;
+}
+#local_cashier_report_app .business-location-table tbody tr.installment-breakdown-row td {
+    background: #fff7ed;
+    border-top: 2px solid #f59e0b;
+    color: #92400e;
+}
+#local_cashier_report_app .business-location-table tbody tr.aeon-breakdown-row td {
+    background: #eff6ff;
+    border-top: 2px solid #2563eb;
+    color: #1e40af;
+}
+#local_cashier_report_app .business-location-table tbody tr.loan-payment-breakdown-row td {
+    background: #ecfdf5;
+    border-top: 2px solid #059669;
+    color: #065f46;
+}
+#local_cashier_report_app .business-location-table .customer-group-breakdown-name {
+    padding-left: 24px;
+}
+#local_cashier_report_app .business-location-table .customer-group-breakdown-label {
+    display: inline-block;
+    min-width: 120px;
+    font-weight: 700;
+}
+#local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row td {
+    background: #f8fafc;
+    border-top: 1px solid #cbd5e1;
+    color: #334155;
+}
+#local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.installment-breakdown-row td {
+    background: #fff7ed;
+    border-top: 2px solid #f59e0b;
+    color: #92400e;
+}
+#local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.aeon-breakdown-row td {
+    background: #eff6ff;
+    border-top: 2px solid #2563eb;
+    color: #1e40af;
+}
+#local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.loan-payment-breakdown-row td {
+    background: #ecfdf5;
+    border-top: 2px solid #059669;
+    color: #065f46;
+}
+#local_cashier_report_app .sheet-table .cashier-group-breakdown-name {
+    padding-left: 12px;
+}
+#local_cashier_report_app .sheet-table .customer-group-breakdown-location {
+    color: inherit;
+    font-weight: 600;
+}
+#local_cashier_report_app .sheet-table .customer-group-breakdown-location-badge {
+    display: inline-block;
+    margin-right: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .7);
+    border: 1px solid currentColor;
+    font-size: 12px;
+    font-weight: 700;
 }
 #local_cashier_report_app .business-location-table tbody .name-main {
     color: #0f172a;

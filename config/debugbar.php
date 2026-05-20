@@ -14,7 +14,8 @@ return [
      |
      */
 
-    'enabled' => false,
+    // 'enabled' => false,
+    'enabled' => env('DEBUGBAR_ENABLED', false),
     'except' => [
         //
     ],
