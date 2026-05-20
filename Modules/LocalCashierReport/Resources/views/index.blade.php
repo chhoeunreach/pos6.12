@@ -318,11 +318,20 @@
                         $groupSort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
                         return sprintf('%02d-%s', $groupSort, $customerGroupRow['display_location_name'] ?? '');
                     })->values();
+                    $lastDashboardCustomerGroup = null;
                 @endphp
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
+                    @php
+                        $dashboardCustomerGroup = (string) ($customerGroupRow['name'] ?? 'លក់');
+                    @endphp
+                    @if($lastDashboardCustomerGroup !== $dashboardCustomerGroup)
+                        <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'បង់ប្រាក់' ? 'loan-payment-separator' : 'normal-separator')) }}">
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
+                        </tr>
+                        @php $lastDashboardCustomerGroup = $dashboardCustomerGroup; @endphp
+                    @endif
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main cashier-group-breakdown-name">
-                                <span class="customer-group-breakdown-location-group">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
                                 <span class="customer-group-breakdown-location">{{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
                             </td>
                             <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
@@ -1491,6 +1500,26 @@
 #local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.loan-payment-breakdown-row td {
     background: #ecfdf5;
     border-top: 2px solid #059669;
+    color: #065f46;
+}
+#local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator td {
+    background: #f8fafc;
+    border-top: 2px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    color: #0f172a;
+    font-weight: 800;
+    padding: 10px 12px;
+}
+#local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator.installment-separator td {
+    background: #fff7ed;
+    color: #9a3412;
+}
+#local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator.aeon-separator td {
+    background: #eff6ff;
+    color: #1e40af;
+}
+#local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator.loan-payment-separator td {
+    background: #ecfdf5;
     color: #065f46;
 }
 #local_cashier_report_app .sheet-table .cashier-group-breakdown-name {
