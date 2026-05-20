@@ -290,6 +290,30 @@ class LocalCashierReportController extends Controller
 
         $rowsByCashier = [];
         $rowsByLocation = [];
+        foreach (array_values(array_unique($filters['location_ids'])) as $locationId) {
+            $locationId = (int) $locationId;
+            $rowsByLocation[$locationId] = [
+                'location_id' => $locationId,
+                'location_name' => (string) ($locationMap[$locationId] ?? 'N/A'),
+                'qty_total' => 0.0,
+                'payments' => [],
+                'customer_groups' => [
+                    'normal' => [
+                        'name' => 'លក់',
+                        'sort' => 1,
+                        'qty_total' => 0.0,
+                        'payments' => [],
+                        'total' => 0.0,
+                        'paid' => 0.0,
+                        'due' => 0.0,
+                    ],
+                ],
+                'total' => 0.0,
+                'paid' => 0.0,
+                'due' => 0.0,
+            ];
+        }
+
         foreach ($baseTransactions as $t) {
             $cashierId = (int) $t->created_by;
             $locationId = (int) $t->location_id;
