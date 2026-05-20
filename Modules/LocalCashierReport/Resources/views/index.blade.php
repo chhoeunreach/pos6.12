@@ -322,7 +322,7 @@
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main cashier-group-breakdown-name">
-                                <span class="customer-group-breakdown-location-badge">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
+                                <span class="customer-group-breakdown-location-group">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
                                 <span class="customer-group-breakdown-location">{{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
                             </td>
                             <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
@@ -1500,14 +1500,8 @@
     color: inherit;
     font-weight: 600;
 }
-#local_cashier_report_app .sheet-table .customer-group-breakdown-location-badge {
-    display: inline-block;
+#local_cashier_report_app .sheet-table .customer-group-breakdown-location-group {
     margin-right: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .7);
-    border: 1px solid currentColor;
-    font-size: 12px;
     font-weight: 700;
 }
 #local_cashier_report_app .business-location-table tbody .name-main {
