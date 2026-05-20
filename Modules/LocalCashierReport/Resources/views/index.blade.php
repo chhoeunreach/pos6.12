@@ -319,6 +319,9 @@
                         $groupSort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
                         return sprintf('%02d-%s', $groupSort, $customerGroupRow['display_location_name'] ?? '');
                     })->values();
+                    $dashboardDueTotal = $dashboardLocationGroupRows
+                        ->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
+                        ->sum(fn ($row) => (float) ($row['due'] ?? 0));
                     $lastDashboardCustomerGroup = null;
                 @endphp
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
@@ -360,7 +363,9 @@
                                 </td>
                             @endforeach
                             <td class="text-right">{{ $fmt($customerGroupRow['paid'] ?? null) }}</td>
-                            <td class="text-right @if(($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($customerGroupRow['due'] ?? null) }}</td>
+                            <td class="text-right @if(! in_array($dashboardCustomerGroup, ['រំលស់', 'អ៊ីអន'], true) && ($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">
+                                {{ in_array($dashboardCustomerGroup, ['រំលស់', 'អ៊ីអន'], true) ? '$ -' : $fmt($customerGroupRow['due'] ?? null) }}
+                            </td>
                         </tr>
                 @empty
                     <tr>
@@ -376,7 +381,7 @@
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
                     <th class="text-right">{{ $fmt($report['grand_paid']) }}</th>
-                    <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
+                    <th class="text-right @if($dashboardDueTotal != 0) due-negative @endif">{{ $fmt($dashboardDueTotal) }}</th>
                 </tr>
                 @if(($filters['style_mode'] ?? 'sheet') === 'classic_plain')
                     <tr class="row-summary">
@@ -395,7 +400,7 @@
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
                         <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
-                        <th class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                        <th class="text-right @if($dashboardDueTotal != 0) due-negative @endif">{{ $fmt($dashboardDueTotal) }}</th>
                     </tr>
                 @endif
             </tfoot>
