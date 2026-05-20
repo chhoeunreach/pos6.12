@@ -310,6 +310,7 @@
                 @php
                     $dashboardLocationGroupRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($row) {
                         return collect($row['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($row) {
+                            $customerGroupRow['display_location_id'] = (int) ($row['location_id'] ?? 0);
                             $customerGroupRow['display_location_name'] = $row['location_name'] ?? '-';
                             return $customerGroupRow;
                         });
@@ -323,6 +324,11 @@
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
                     @php
                         $dashboardCustomerGroup = (string) ($customerGroupRow['name'] ?? 'លក់');
+                        $dashboardDetailQuery = array_merge(request()->query(), [
+                            'style_mode' => 'classic_plain',
+                            'location_ids' => [(int) ($customerGroupRow['display_location_id'] ?? 0)],
+                            'customer_group' => $dashboardCustomerGroup,
+                        ]);
                     @endphp
                     @if($lastDashboardCustomerGroup !== $dashboardCustomerGroup)
                         <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'បង់ប្រាក់' ? 'loan-payment-separator' : 'normal-separator')) }}">
@@ -332,11 +338,26 @@
                     @endif
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main cashier-group-breakdown-name">
-                                <span class="customer-group-breakdown-location">{{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
+                                <a class="summary-link customer-group-breakdown-location" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})
+                                </a>
                             </td>
-                            <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
+                            <td class="text-right">
+                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $fmt($customerGroupRow['total'] ?? null) }}
+                                </a>
+                            </td>
                             @foreach($report['payment_columns'] as $method)
-                                <td class="text-right">{{ $fmt($customerGroupRow['payments'][$method] ?? null) }}</td>
+                                @php
+                                    $dashboardPaymentDetailQuery = array_merge($dashboardDetailQuery, [
+                                        'payment_methods' => [(string) $method],
+                                    ]);
+                                @endphp
+                                <td class="text-right">
+                                    <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardPaymentDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                        {{ $fmt($customerGroupRow['payments'][$method] ?? null) }}
+                                    </a>
+                                </td>
                             @endforeach
                             <td class="text-right">{{ $fmt($customerGroupRow['paid'] ?? null) }}</td>
                             <td class="text-right @if(($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($customerGroupRow['due'] ?? null) }}</td>
@@ -465,23 +486,6 @@
                             <th>Total</th>
                             <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
                             <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            <div class="col-md-3">
-                <h4>Payment Method</h4>
-                <table class="table table-bordered table-condensed summary-table" id="sum_payment">
-                    <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
-                    <tbody>
-                        @foreach($report['summary_payment'] as $r)
-                            <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td></tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <th>Total</th>
-                            <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.payment.amount', 0)) }}</th>
                         </tr>
                     </tfoot>
                 </table>
@@ -626,25 +630,6 @@
                                 <th>Total</th>
                                 <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="summary-panel">
-                    <h4>Payment Method</h4>
-                    <table class="table table-bordered table-condensed summary-table" id="sum_payment_plain">
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
-                        <tbody>
-                            @foreach($report['summary_payment'] as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td></tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <th>Total</th>
-                                <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.payment.amount', 0)) }}</th>
                             </tr>
                         </tfoot>
                     </table>
