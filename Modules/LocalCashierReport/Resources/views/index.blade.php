@@ -309,7 +309,7 @@
             <tbody>
                 @php
                     $dashboardLocationGroupRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($row) {
-                        return collect($row['customer_groups'] ?? [])->map(function ($customerGroupRow) use ($row) {
+                        return collect($row['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($row) {
                             $customerGroupRow['display_location_name'] = $row['location_name'] ?? '-';
                             return $customerGroupRow;
                         });
