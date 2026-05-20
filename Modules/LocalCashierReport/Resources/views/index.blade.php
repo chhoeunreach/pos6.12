@@ -242,7 +242,10 @@
                         @endforeach
                         <td class="text-right @if(($row['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                     </tr>
-                    @foreach(($row['customer_groups'] ?? []) as $customerGroupRow)
+                    @foreach(collect($row['customer_groups'] ?? [])->sortBy(function ($customerGroupRow) {
+                        $name = (string) ($customerGroupRow['name'] ?? 'លក់');
+                        return ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
+                    })->values() as $customerGroupRow)
                         <tr class="customer-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main customer-group-breakdown-name">
                                 <span class="customer-group-breakdown-label">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
@@ -311,7 +314,10 @@
                             'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
                         ]);
                     @endphp
-                    @foreach(($row['customer_groups'] ?? []) as $customerGroupRow)
+                    @foreach(collect($row['customer_groups'] ?? [])->sortBy(function ($customerGroupRow) {
+                        $name = (string) ($customerGroupRow['name'] ?? 'លក់');
+                        return ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
+                    })->values() as $customerGroupRow)
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main cashier-group-breakdown-name">
                                 <span class="customer-group-breakdown-location-badge">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
