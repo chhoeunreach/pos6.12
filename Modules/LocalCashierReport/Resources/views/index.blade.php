@@ -307,15 +307,23 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($report['rows_by_location'] as $row)
-                    @foreach(collect($row['customer_groups'] ?? [])->sortBy(function ($customerGroupRow) {
-                        $name = (string) ($customerGroupRow['name'] ?? 'លក់');
-                        return ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
-                    })->values() as $customerGroupRow)
+                @php
+                    $dashboardLocationGroupRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($row) {
+                        return collect($row['customer_groups'] ?? [])->map(function ($customerGroupRow) use ($row) {
+                            $customerGroupRow['display_location_name'] = $row['location_name'] ?? '-';
+                            return $customerGroupRow;
+                        });
+                    })->sortBy(function ($customerGroupRow) {
+                        $name = trim((string) ($customerGroupRow['name'] ?? 'លក់'));
+                        $sort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'បង់ប្រាក់' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
+                        return sprintf('%02d-%s', $sort, $customerGroupRow['display_location_name'] ?? '');
+                    })->values();
+                @endphp
+                @forelse($dashboardLocationGroupRows as $customerGroupRow)
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main cashier-group-breakdown-name">
                                 <span class="customer-group-breakdown-location-badge">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
-                                <span class="customer-group-breakdown-location">{{ $row['location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
+                                <span class="customer-group-breakdown-location">{{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
                             </td>
                             <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
                             @foreach($report['payment_columns'] as $method)
@@ -324,7 +332,6 @@
                             <td class="text-right">{{ $fmt($customerGroupRow['paid'] ?? null) }}</td>
                             <td class="text-right @if(($customerGroupRow['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($customerGroupRow['due'] ?? null) }}</td>
                         </tr>
-                    @endforeach
                 @empty
                     <tr>
                         <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
