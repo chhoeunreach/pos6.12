@@ -158,6 +158,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/tools/import', [LoanImportExportController::class, 'index'])->name('loan-management.import.index')->middleware('can:loan_management.import.view');
         Route::get('/import', [LoanImportExportController::class, 'index'])->name('loan-management.import')->middleware('can:loan_management.import.view');
         Route::post('/tools/import', [LoanImportExportController::class, 'import'])->name('loan-management.import.store')->middleware('can:loan_management.import.view');
+        Route::post('/tools/import/start', [LoanImportExportController::class, 'startImport'])->name('loan-management.import.start')->middleware('can:loan_management.import.view');
+        Route::post('/tools/import/process', [LoanImportExportController::class, 'processImport'])->name('loan-management.import.process')->middleware('can:loan_management.import.view');
+        Route::get('/tools/import/progress/{batch}', [LoanImportExportController::class, 'importProgress'])->name('loan-management.import.progress')->middleware('can:loan_management.import.view');
         Route::get('/tools/export', [LoanImportExportController::class, 'index'])->name('loan-management.export.index')->middleware('can:loan_management.export.view');
         Route::get('/export', [LoanImportExportController::class, 'index'])->name('loan-management.export')->middleware('can:loan_management.export.view');
         Route::get('/tools/export/download', [LoanImportExportController::class, 'export'])->name('loan-management.export.download')->middleware('can:loan_management.export.view');

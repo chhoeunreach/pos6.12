@@ -159,6 +159,168 @@ class LoanImportExportService
         ];
     }
 
+    public function startImport(string $type, UploadedFile $file, ?int $userId = null): array
+    {
+        $type = $this->normalizeType($type);
+        $this->ensurePaymentTypeColumn();
+        $rows = $this->readImportFile($file, $type);
+        $headers = array_shift($rows) ?: [];
+        $headers = array_map(fn ($header) => $this->normalizeHeader($header), $headers);
+
+        if (empty($headers)) {
+            throw new \RuntimeException('Import file does not contain a header row.');
+        }
+
+        $batchId = $this->createBatch($type, $file, $userId, count($rows), $headers);
+
+        return $this->batchProgress($batchId);
+    }
+
+    public function processImportBatch(int $batchId, string $duplicateMode = 'skip', int $limit = 50): array
+    {
+        $duplicateMode = in_array($duplicateMode, ['skip', 'replace'], true) ? $duplicateMode : 'skip';
+        $limit = max(1, min(200, $limit));
+
+        $batch = $this->importBatch($batchId);
+        if (! $batch) {
+            throw new \RuntimeException('Import batch was not found.');
+        }
+
+        if (in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors', 'failed'], true)) {
+            return $this->batchProgress($batchId);
+        }
+
+        $headers = json_decode((string) ($batch->column_mapping_json ?? '[]'), true) ?: [];
+        if (empty($headers)) {
+            throw new \RuntimeException('Import batch does not contain header mapping.');
+        }
+
+        $rows = $this->readStoredImportFile((string) $batch->file_path, (string) $batch->file_type);
+        array_shift($rows);
+
+        $lastRowNo = (int) DB::connection($this->connection)
+            ->table('loan_import_rows')
+            ->where('batch_id', $batchId)
+            ->max('row_no');
+        $startIndex = $lastRowNo > 1 ? $lastRowNo - 1 : 0;
+
+        $valid = 0;
+        $invalid = 0;
+        $imported = 0;
+        $skipped = 0;
+        $processed = 0;
+        $type = $this->normalizeType((string) $batch->file_type);
+
+        for ($index = $startIndex; $index < count($rows) && $processed < $limit; $index++, $processed++) {
+            $row = $rows[$index];
+            $raw = $this->combineRow($headers, $row);
+
+            if ($this->isEmptyRow($row)) {
+                $rowId = $this->createImportRow($batchId, $index + 2, $raw, [], []);
+                DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
+                    'status' => 'skipped',
+                    'error_message' => 'Skipped empty row.',
+                    'updated_at' => now(),
+                ]));
+                $skipped++;
+                continue;
+            }
+
+            $normalized = $this->normalizeImportRow($type, $raw);
+            $errors = $this->validateImportRow($type, $normalized, $duplicateMode);
+            $rowId = $this->createImportRow($batchId, $index + 2, $raw, $normalized, $errors);
+
+            if (! empty($errors)) {
+                $invalid++;
+                continue;
+            }
+
+            $duplicateId = $this->existingImportRowId($type, $normalized);
+            if ($duplicateId && $duplicateMode === 'skip') {
+                DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
+                    'status' => 'skipped',
+                    'loan_id' => in_array($type, ['loans', 'schedules', 'payments'], true) ? ($type === 'loans' ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
+                    'error_message' => 'Skipped duplicate existing record.',
+                    'updated_at' => now(),
+                ]));
+                $skipped++;
+                continue;
+            }
+
+            try {
+                $id = DB::connection($this->connection)->transaction(function () use ($type, $normalized, $duplicateMode, $duplicateId) {
+                    return $type === 'payments'
+                        ? $this->storePayment($normalized, $duplicateMode, $duplicateId)
+                        : ($type === 'loans' ? $this->storeLoan($normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId));
+                });
+
+                DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
+                    'status' => $duplicateId && $duplicateMode === 'replace' ? 'replaced' : 'imported',
+                    'loan_id' => $type === 'loans' ? $id : ($normalized['loan_id'] ?? null),
+                    'updated_at' => now(),
+                ]));
+                $valid++;
+                $imported++;
+            } catch (\Throwable $e) {
+                DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'updated_at' => now(),
+                ]));
+                $invalid++;
+            }
+        }
+
+        $progress = $this->batchProgress($batchId);
+        $finished = (int) $progress['processed_rows'] >= (int) $progress['total_rows'];
+        DB::connection($this->connection)->table('loan_import_batches')->where('id', $batchId)->update($this->safeColumns('loan_import_batches', [
+            'status' => $finished ? ((int) $progress['invalid_rows'] > 0 ? 'completed_with_errors' : 'completed') : 'processing',
+            'valid_rows' => (int) ($progress['valid_rows'] ?? 0),
+            'invalid_rows' => (int) ($progress['invalid_rows'] ?? 0),
+            'imported_rows' => (int) ($progress['imported_rows'] ?? 0),
+            'updated_at' => now(),
+        ]));
+
+        return $this->batchProgress($batchId);
+    }
+
+    public function batchProgress(int $batchId): array
+    {
+        $batch = $this->importBatch($batchId);
+        if (! $batch) {
+            throw new \RuntimeException('Import batch was not found.');
+        }
+
+        $counts = Schema::connection($this->connection)->hasTable('loan_import_rows')
+            ? DB::connection($this->connection)->table('loan_import_rows')
+                ->select('status', DB::raw('COUNT(*) as total'))
+                ->where('batch_id', $batchId)
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->all()
+            : [];
+
+        $total = max(0, (int) ($batch->total_rows ?? 0));
+        $processed = array_sum(array_map('intval', $counts));
+        $imported = (int) ($counts['imported'] ?? 0) + (int) ($counts['replaced'] ?? 0);
+        $invalid = (int) ($counts['invalid'] ?? 0) + (int) ($counts['failed'] ?? 0);
+        $skipped = (int) ($counts['skipped'] ?? 0);
+        $percent = $total > 0 ? min(100, (int) floor(($processed / $total) * 100)) : 100;
+
+        return [
+            'batch_id' => $batchId,
+            'status' => $batch->status ?? 'processing',
+            'total_rows' => $total,
+            'processed_rows' => $processed,
+            'valid_rows' => $imported,
+            'invalid_rows' => $invalid,
+            'imported_rows' => $imported,
+            'skipped_rows' => $skipped,
+            'percent' => $percent,
+            'done' => in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors', 'failed'], true) || ($total > 0 && $processed >= $total),
+        ];
+    }
+
     public function export(string $type, array $filters = [], ?int $userId = null): array
     {
         $type = $this->normalizeType($type);
@@ -1831,6 +1993,34 @@ class LoanImportExportService
             'created_at' => now(),
             'updated_at' => now(),
         ]));
+    }
+
+    protected function importBatch(int $batchId)
+    {
+        if (! Schema::connection($this->connection)->hasTable('loan_import_batches')) {
+            return null;
+        }
+
+        return DB::connection($this->connection)->table('loan_import_batches')->where('id', $batchId)->first();
+    }
+
+    protected function readStoredImportFile(string $path, string $type): array
+    {
+        $path = str_replace('\\', '/', trim($path));
+        $prefix = 'Modules/LoanManagement/storage/';
+        if (! Str::startsWith($path, $prefix) || Str::contains($path, ['..'])) {
+            throw new \RuntimeException('Invalid import file path.');
+        }
+
+        $relative = substr($path, strlen($prefix));
+        $absolute = base_path($prefix.$relative);
+        if (! is_file($absolute)) {
+            throw new \RuntimeException('Uploaded import file was not found.');
+        }
+
+        return strtolower(pathinfo($absolute, PATHINFO_EXTENSION)) === 'xlsx'
+            ? $this->readXlsx($absolute, $type)
+            : $this->readCsv($absolute);
     }
 
     protected function createImportRow(int $batchId, int $rowNo, array $raw, array $normalized, array $errors): int

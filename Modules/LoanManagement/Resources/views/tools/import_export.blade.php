@@ -42,7 +42,7 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">Import {{ $typeLabel }}</h3>
                 </div>
-                <form method="POST" action="{{ route('loan-management.import.store') }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('loan-management.import.store') }}" enctype="multipart/form-data" id="loan_import_form">
                     @csrf
                     <div class="box-body">
                         <div class="alert alert-info">
@@ -84,8 +84,16 @@
                             <p class="help-block">Duplicate loans match by loan number. Duplicate payments match by reference number when provided. Duplicate schedules match by loan and installment number.</p>
                         </div>
                     </div>
+                    <div class="box-body hide" id="loan_import_progress_wrap">
+                        <div class="progress" style="margin-bottom: 8px;">
+                            <div id="loan_import_progress_bar" class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width:0%;">
+                                0%
+                            </div>
+                        </div>
+                        <p class="help-block" id="loan_import_progress_text" style="margin-bottom:0;">Preparing import...</p>
+                    </div>
                     <div class="box-footer">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="loan_import_submit">
                             <i class="fa fa-upload"></i> Import
                         </button>
                         <a class="btn btn-default" href="{{ route('loan-management.import.template', ['type' => $type]) }}">
@@ -218,4 +226,117 @@
         </div>
     </div>
 </section>
+@endsection
+
+@section('loan_js')
+    <script>
+        (function($) {
+            var processing = false;
+
+            function setProgress(progress, message) {
+                var percent = progress && typeof progress.percent !== 'undefined' ? parseInt(progress.percent, 10) : 0;
+                percent = Math.max(0, Math.min(100, isNaN(percent) ? 0 : percent));
+                $('#loan_import_progress_bar')
+                    .css('width', percent + '%')
+                    .attr('aria-valuenow', percent)
+                    .text(percent + '%');
+
+                var processed = progress ? (progress.processed_rows || 0) : 0;
+                var total = progress ? (progress.total_rows || 0) : 0;
+                var imported = progress ? (progress.imported_rows || 0) : 0;
+                var invalid = progress ? (progress.invalid_rows || 0) : 0;
+                var skipped = progress ? (progress.skipped_rows || 0) : 0;
+                $('#loan_import_progress_text').text(message || ('Processing ' + processed + ' / ' + total + ' rows. Imported: ' + imported + ', skipped: ' + skipped + ', invalid: ' + invalid + '.'));
+            }
+
+            function finishProgress(progress) {
+                setProgress(progress, 'Import completed. Refreshing results...');
+                $('#loan_import_progress_bar').removeClass('active');
+                window.setTimeout(function() {
+                    window.location.reload();
+                }, 900);
+            }
+
+            function showImportError(message) {
+                processing = false;
+                $('#loan_import_submit').prop('disabled', false);
+                $('#loan_import_progress_bar').removeClass('active progress-bar-striped').addClass('progress-bar-danger');
+                $('#loan_import_progress_text').text(message || 'Import failed.');
+            }
+
+            function processBatch(batchId, duplicateMode) {
+                $.ajax({
+                    method: 'POST',
+                    url: "{{ route('loan-management.import.process') }}",
+                    dataType: 'json',
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        batch_id: batchId,
+                        duplicate_mode: duplicateMode
+                    },
+                    success: function(response) {
+                        if (!response.success) {
+                            showImportError(response.msg);
+                            return;
+                        }
+
+                        setProgress(response.progress);
+                        if (response.progress.done || response.progress.percent >= 100) {
+                            finishProgress(response.progress);
+                            return;
+                        }
+
+                        window.setTimeout(function() {
+                            processBatch(batchId, duplicateMode);
+                        }, 250);
+                    },
+                    error: function(xhr) {
+                        var message = xhr.responseJSON && xhr.responseJSON.msg ? xhr.responseJSON.msg : 'Server stopped responding while importing.';
+                        showImportError(message);
+                    }
+                });
+            }
+
+            $('#loan_import_form').on('submit', function(e) {
+                if (processing) {
+                    e.preventDefault();
+                    return false;
+                }
+
+                e.preventDefault();
+                processing = true;
+                var form = this;
+                var data = new FormData(form);
+
+                $('#loan_import_progress_wrap').removeClass('hide');
+                $('#loan_import_progress_bar').removeClass('progress-bar-danger').addClass('progress-bar-striped active');
+                $('#loan_import_submit').prop('disabled', true);
+                setProgress({percent: 0, processed_rows: 0, total_rows: 0, imported_rows: 0, invalid_rows: 0, skipped_rows: 0}, 'Uploading file and preparing rows...');
+
+                $.ajax({
+                    method: 'POST',
+                    url: "{{ route('loan-management.import.start') }}",
+                    data: data,
+                    dataType: 'json',
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (!response.success) {
+                            showImportError(response.msg);
+                            return;
+                        }
+
+                        setProgress(response.progress, 'Upload complete. Starting import...');
+                        processBatch(response.progress.batch_id, $(form).find('[name="duplicate_mode"]').val() || 'skip');
+                    },
+                    error: function(xhr) {
+                        var message = xhr.responseJSON && xhr.responseJSON.msg ? xhr.responseJSON.msg : 'Unable to start import.';
+                        showImportError(message);
+                    }
+                });
+
+                return false;
+            });
+        })(jQuery);
+    </script>
 @endsection

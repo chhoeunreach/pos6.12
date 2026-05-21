@@ -89,6 +89,68 @@ class LoanImportExportController extends Controller
         }
     }
 
+    public function startImport(Request $request, LoanImportExportService $service)
+    {
+        $data = $request->validate([
+            'type' => 'required|string|max:80',
+            'file' => 'required|file|max:20480|mimes:csv,txt,xlsx',
+        ]);
+
+        if (! array_key_exists($service->normalizeType($data['type']), $service->importTypes())) {
+            return response()->json([
+                'success' => 0,
+                'msg' => 'Import failed: unsupported import type.',
+            ], 422);
+        }
+
+        try {
+            return response()->json([
+                'success' => 1,
+                'progress' => $service->startImport($data['type'], $request->file('file'), auth()->id()),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'msg' => 'Import failed: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function processImport(Request $request, LoanImportExportService $service)
+    {
+        $data = $request->validate([
+            'batch_id' => 'required|integer',
+            'duplicate_mode' => 'nullable|in:skip,replace',
+        ]);
+
+        try {
+            return response()->json([
+                'success' => 1,
+                'progress' => $service->processImportBatch((int) $data['batch_id'], $data['duplicate_mode'] ?? 'skip'),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'msg' => 'Import failed: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function importProgress(int $batch, LoanImportExportService $service)
+    {
+        try {
+            return response()->json([
+                'success' => 1,
+                'progress' => $service->batchProgress($batch),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'msg' => $e->getMessage(),
+            ], 404);
+        }
+    }
+
     public function export(Request $request, LoanImportExportService $service)
     {
         $data = $request->validate([
