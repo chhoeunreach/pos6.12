@@ -1,7 +1,15 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\UserBackupRestore\Http\Controllers\InstallController;
 use Modules\UserBackupRestore\Http\Controllers\UserBackupRestoreController;
+
+Route::middleware(['web', 'auth'])->prefix('user-backup-restore')->group(function () {
+    Route::get('/install', [InstallController::class, 'index']);
+    Route::post('/install', [InstallController::class, 'install']);
+    Route::get('/install/uninstall', [InstallController::class, 'uninstall']);
+    Route::get('/install/update', [InstallController::class, 'update']);
+});
 
 Route::middleware([
     'web',

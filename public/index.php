@@ -5,6 +5,11 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
+// PHP 8.3 deprecation notices from older dependencies can be printed before
+// AJAX responses and break validators that expect an exact "true"/"false".
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+ini_set('display_errors', '0');
+
 /*
 |--------------------------------------------------------------------------
 | Check If The Application Is Under Maintenance

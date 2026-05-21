@@ -328,7 +328,7 @@ class CreateLoanFromSellService
                 'principal_amount' => $data['principal_amount'],
                 'down_payment' => $effectiveDownPayment,
                 'paid_amount' => $effectiveDownPayment,
-                'balance_amount' => max(0, (float) $data['principal_amount'] - $effectiveDownPayment),
+                'balance_amount' => max(0, (float) $data['principal_amount']),
                 'total_payable_amount' => $data['principal_amount'],
                 'interest_rate' => $data['interest_rate'] ?? 0,
                 'interest_type' => $data['interest_type'],
@@ -746,6 +746,7 @@ class CreateLoanFromSellService
         if (! Schema::connection('mysql_loan')->hasTable('loan_payments')) {
             return;
         }
+        $this->ensurePaymentTypeColumn();
 
         $payment = (array) ($data['payment'] ?? []);
         $downPayment = (float) ($data['down_payment'] ?? 0);
@@ -792,6 +793,7 @@ class CreateLoanFromSellService
 
         $paymentPayload = $this->filterColumns('loan_payments', [
             'loan_id' => $loanId,
+            'payment_type' => 'loan',
             'payment_number' => $this->generateUniquePaymentNumber($loanId),
             'receipt_number' => 'RCP-'.Carbon::now()->format('YmdHis').'-'.$loanId.'-'.random_int(10, 99),
             'loan_number_snapshot' => $loanPayload['loan_number'] ?? null,
@@ -878,6 +880,17 @@ class CreateLoanFromSellService
         }
 
         return $candidate;
+    }
+
+    protected function ensurePaymentTypeColumn(): void
+    {
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            return;
+        }
+
+        Schema::connection('mysql_loan')->table('loan_payments', function ($table) {
+            $table->string('payment_type', 20)->default('monthly')->after('loan_id');
+        });
     }
 
     protected function notifyLocationTelegram(int $loanId, string $event): void

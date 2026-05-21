@@ -20,9 +20,11 @@ class LoanLocationController extends Controller
         abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
 
         $locations = DB::connection($this->connection)
             ->table($this->table)
+            ->when(Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
             ->orderBy('name')
             ->get()
             ->map(function ($location) {
@@ -38,11 +40,76 @@ class LoanLocationController extends Controller
         return view('loanmanagement::locations.index', compact('locations'));
     }
 
+    public function store(Request $request)
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
+        $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
+
+        $data = $this->validateLocation($request);
+        $payload = $this->locationPayload($data);
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        DB::connection($this->connection)->table($this->table)->insert($this->safeColumns($payload));
+
+        return redirect()
+            ->route('loan-management.locations.index')
+            ->with('status', ['success' => 1, 'msg' => 'Location added successfully.']);
+    }
+
+    public function updateDetails(Request $request, int $location)
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
+        $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
+
+        $row = DB::connection($this->connection)->table($this->table)->where('id', $location)->first();
+        abort_if(! $row, 404);
+
+        $payload = $this->locationPayload($this->validateLocation($request));
+        $payload['updated_at'] = now();
+
+        DB::connection($this->connection)
+            ->table($this->table)
+            ->where('id', $location)
+            ->update($this->safeColumns($payload));
+
+        return redirect()
+            ->route('loan-management.locations.index')
+            ->with('status', ['success' => 1, 'msg' => 'Location updated successfully.']);
+    }
+
+    public function destroy(int $location)
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+
+        $query = DB::connection($this->connection)->table($this->table)->where('id', $location);
+        abort_if(! $query->first(), 404);
+
+        if (Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at')) {
+            $query->update($this->safeColumns([
+                'status' => 'inactive',
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]));
+        } else {
+            $query->delete();
+        }
+
+        return redirect()
+            ->route('loan-management.locations.index')
+            ->with('status', ['success' => 1, 'msg' => 'Location deleted successfully.']);
+    }
+
     public function update(Request $request, int $location)
     {
         abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
 
         $row = DB::connection($this->connection)->table($this->table)->where('id', $location)->first();
         abort_if(! $row, 404);
@@ -177,6 +244,47 @@ class LoanLocationController extends Controller
                 $table->string('loan_invoice_prefix', 50)->nullable()->after('location_code');
             });
         }
+    }
+
+    protected function ensureLocationCrudColumns(): void
+    {
+        $columns = [
+            'address' => fn ($table) => $table->text('address')->nullable()->after('loan_invoice_prefix'),
+            'phone' => fn ($table) => $table->string('phone', 50)->nullable()->after('address'),
+            'status' => fn ($table) => $table->string('status', 20)->default('active'),
+        ];
+
+        foreach ($columns as $column => $creator) {
+            if (! Schema::connection($this->connection)->hasColumn($this->table, $column)) {
+                Schema::connection($this->connection)->table($this->table, function ($table) use ($creator) {
+                    $creator($table);
+                });
+            }
+        }
+    }
+
+    protected function validateLocation(Request $request): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:191',
+            'location_code' => 'nullable|string|max:100',
+            'loan_invoice_prefix' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:2000',
+            'phone' => 'nullable|string|max:50',
+            'status' => 'nullable|in:active,inactive',
+        ]);
+    }
+
+    protected function locationPayload(array $data): array
+    {
+        return [
+            'name' => trim((string) ($data['name'] ?? '')),
+            'location_code' => trim((string) ($data['location_code'] ?? '')) ?: null,
+            'loan_invoice_prefix' => $this->cleanLoanInvoicePrefix($data['loan_invoice_prefix'] ?? null),
+            'address' => trim((string) ($data['address'] ?? '')) ?: null,
+            'phone' => trim((string) ($data['phone'] ?? '')) ?: null,
+            'status' => $data['status'] ?? 'active',
+        ];
     }
 
     protected function cleanLoanInvoicePrefix($prefix): ?string

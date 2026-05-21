@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\SmartStockInventory\Http\Controllers\DashboardController;
 use Modules\SmartStockInventory\Http\Controllers\ImeiController;
+use Modules\SmartStockInventory\Http\Controllers\InstallController;
 use Modules\SmartStockInventory\Http\Controllers\InventoryCountController;
 use Modules\SmartStockInventory\Http\Controllers\InventoryEnterpriseController;
 use Modules\SmartStockInventory\Http\Controllers\LotController;
@@ -10,6 +11,13 @@ use Modules\SmartStockInventory\Http\Controllers\MismatchController;
 use Modules\SmartStockInventory\Http\Controllers\MovementController;
 use Modules\SmartStockInventory\Http\Controllers\SettingsController;
 use Modules\SmartStockInventory\Http\Controllers\VerificationController;
+
+Route::middleware(['web', 'auth'])->prefix('smart-stock-inventory')->group(function () {
+    Route::get('/install', [InstallController::class, 'index']);
+    Route::post('/install', [InstallController::class, 'install']);
+    Route::get('/install/uninstall', [InstallController::class, 'uninstall']);
+    Route::get('/install/update', [InstallController::class, 'update']);
+});
 
 Route::middleware([
     'web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'ssi.access',

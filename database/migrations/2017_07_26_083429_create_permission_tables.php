@@ -70,9 +70,13 @@ return new class extends Migration
                 ->onDelete('cascade');
 
             $table->primary(['permission_id', 'role_id']);
-
-            Cache::forget('spatie.permission.cache');
         });
+
+        try {
+            Cache::forget('spatie.permission.cache');
+        } catch (\Throwable $e) {
+            // Cache storage may not exist yet during migrate:fresh.
+        }
     }
 
     /**

@@ -98,7 +98,8 @@ return new class extends Migration
             $hasChannel,
             $hasReceivedByNameSnapshot,
             $hasCustomerId,
-            $hasLoanId
+            $hasLoanId,
+            $hasAmount
         ) {
             if (! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'paid_date')) {
                 $column = $table->date('paid_date')->nullable();

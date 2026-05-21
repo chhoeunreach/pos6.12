@@ -3,7 +3,6 @@
 namespace Modules\SmartStockInventory\Providers;
 
 use Illuminate\Routing\Router;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Modules\SmartStockInventory\Http\Middleware\SmartStockAccessMiddleware;
 
@@ -15,7 +14,6 @@ class SmartStockInventoryServiceProvider extends ServiceProvider
         $this->registerConfig();
         $this->registerViews();
         $this->registerMigrations();
-        $this->ensureModuleMarkedInstalled();
     }
 
     public function register(): void
@@ -40,21 +38,6 @@ class SmartStockInventoryServiceProvider extends ServiceProvider
     private function registerMigrations(): void
     {
         $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
-    }
-
-    private function ensureModuleMarkedInstalled(): void
-    {
-        try {
-            if (! class_exists(\App\System::class) || ! Schema::hasTable('system')) {
-                return;
-            }
-
-            $key = 'smartstockinventory_version';
-            if (empty(\App\System::getProperty($key))) {
-                \App\System::addProperty($key, config('smartstockinventory.module_version', '1.0.0'));
-            }
-        } catch (\Throwable $e) {
-        }
     }
 
     private function registerRouteMiddlewareAlias(): void

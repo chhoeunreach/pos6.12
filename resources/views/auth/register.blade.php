@@ -13,7 +13,7 @@
                 <h3 class="box-title text-center">Register and Get Started in minutes</h3>
             </div>
 
-            {!! Form::open(['url' => {{ route('business.postRegister') }}]) !!}
+            {!! Form::open(['url' => route('business.postRegister'), 'method' => 'post']) !!}
             {!! Form::token(); !!}
 
                 <!-- /.box-header -->
@@ -259,7 +259,7 @@
                 <!-- /.box-body -->
                 
                 <div class="box-footer">
-                    <button type="button" class="btn btn-success pull-right">Register</button>
+                    <button type="submit" class="btn btn-success pull-right">Register</button>
                 </div>
 
             {!! Form::close() !!}

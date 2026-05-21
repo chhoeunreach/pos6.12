@@ -5,11 +5,16 @@ namespace Modules\LoanManagement\Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Modules\LoanManagement\Services\LoanSyncFromPosService;
 
 class LoanManagementReferenceSeeder extends Seeder
 {
     public function run(): void
     {
+        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            $this->seedLoanBusinessLocations();
+        }
+
         if (Schema::connection('mysql_loan')->hasTable('loan_currencies')) {
             $this->seedLoanCurrencies();
         }
@@ -17,6 +22,73 @@ class LoanManagementReferenceSeeder extends Seeder
         if (Schema::connection('mysql_loan')->hasTable('loan_payment_methods')) {
             $this->seedLoanPaymentMethods();
         }
+    }
+
+    private function seedLoanBusinessLocations(): void
+    {
+        if (Schema::hasTable('business_locations')) {
+            app(LoanSyncFromPosService::class)->syncBusinessLocations();
+        }
+
+        $count = (int) DB::connection('mysql_loan')->table('loan_business_locations')->count();
+        if ($count > 0) {
+            $this->ensureLocationDefaults();
+            return;
+        }
+
+        $now = now();
+        DB::connection('mysql_loan')->table('loan_business_locations')->insert($this->loanLocationColumns([
+            'main_business_id' => null,
+            'main_location_id' => null,
+            'name' => 'Main Location',
+            'location_code' => 'MAIN',
+            'loan_invoice_prefix' => 'KY-',
+            'address' => 'Phnom Penh',
+            'phone' => null,
+            'status' => 'active',
+            'telegram_notify_payment' => false,
+            'telegram_notify_installment' => false,
+            'synced_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]));
+    }
+
+    private function ensureLocationDefaults(): void
+    {
+        $rows = DB::connection('mysql_loan')->table('loan_business_locations')->get();
+
+        foreach ($rows as $row) {
+            $updates = [];
+            if ($this->loanLocationHasColumn('location_code') && empty($row->location_code)) {
+                $updates['location_code'] = 'LOC-'.str_pad((string) $row->id, 3, '0', STR_PAD_LEFT);
+            }
+            if ($this->loanLocationHasColumn('loan_invoice_prefix') && empty($row->loan_invoice_prefix)) {
+                $updates['loan_invoice_prefix'] = 'KY-';
+            }
+            if ($this->loanLocationHasColumn('status') && empty($row->status)) {
+                $updates['status'] = 'active';
+            }
+            if ($this->loanLocationHasColumn('updated_at')) {
+                $updates['updated_at'] = now();
+            }
+
+            if (! empty($updates)) {
+                DB::connection('mysql_loan')->table('loan_business_locations')->where('id', $row->id)->update($updates);
+            }
+        }
+    }
+
+    private function loanLocationColumns(array $payload): array
+    {
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loan_business_locations');
+
+        return array_intersect_key($payload, array_flip($columns));
+    }
+
+    private function loanLocationHasColumn(string $column): bool
+    {
+        return Schema::connection('mysql_loan')->hasColumn('loan_business_locations', $column);
     }
 
     private function seedLoanCurrencies(): void

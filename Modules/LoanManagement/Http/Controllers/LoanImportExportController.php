@@ -3,6 +3,7 @@
 namespace Modules\LoanManagement\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Routing\Controller;
 use Modules\LoanManagement\Services\LoanImportExportService;
 
@@ -10,12 +11,25 @@ class LoanImportExportController extends Controller
 {
     public function index(Request $request, LoanImportExportService $service)
     {
+        if ($request->filled('download_invalid')) {
+            $result = $service->invalidRowsCsv((int) $request->input('download_invalid'));
+
+            return Response::make($result['content'], 200, [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="'.$result['filename'].'"',
+            ]);
+        }
+
         $type = $request->input('type', 'loans');
+        $type = $service->normalizeType($type);
 
         return view('loanmanagement::tools.import_export', [
-            'type' => in_array($type, ['payments', 'payment', 'monthly_payments'], true) ? 'payments' : 'loans',
-            'recentBatches' => $service->recentBatches(),
-            'recentExports' => $service->recentExports(),
+            'type' => $type,
+            'importTypes' => $service->importTypes(),
+            'exportTypes' => $service->exportTypes(),
+            'templateDetails' => $service->templateDetails($type),
+            'recentBatches' => $service->recentBatches(20, $type),
+            'recentExports' => $service->recentExports(20, $type),
         ]);
     }
 
@@ -23,8 +37,11 @@ class LoanImportExportController extends Controller
     {
         return view('loanmanagement::tools.import_export', [
             'type' => 'loans',
-            'recentBatches' => $service->recentBatches(),
-            'recentExports' => $service->recentExports(),
+            'importTypes' => $service->importTypes(),
+            'exportTypes' => $service->exportTypes(),
+            'templateDetails' => $service->templateDetails('loans'),
+            'recentBatches' => $service->recentBatches(20, 'loans'),
+            'recentExports' => $service->recentExports(20, 'loans'),
         ]);
     }
 
@@ -32,24 +49,37 @@ class LoanImportExportController extends Controller
     {
         return view('loanmanagement::tools.import_export', [
             'type' => 'payments',
-            'recentBatches' => $service->recentBatches(),
-            'recentExports' => $service->recentExports(),
+            'importTypes' => $service->importTypes(),
+            'exportTypes' => $service->exportTypes(),
+            'templateDetails' => $service->templateDetails('payments'),
+            'recentBatches' => $service->recentBatches(20, 'payments'),
+            'recentExports' => $service->recentExports(20, 'payments'),
         ]);
     }
 
     public function import(Request $request, LoanImportExportService $service)
     {
         $data = $request->validate([
-            'type' => 'required|in:loans,payments',
-            'file' => 'required|file|max:10240|mimes:csv,txt',
+            'type' => 'required|string|max:80',
+            'duplicate_mode' => 'nullable|in:skip,replace',
+            'file' => 'required|file|max:20480|mimes:csv,txt,xlsx',
         ]);
 
+        if (! array_key_exists($service->normalizeType($data['type']), $service->importTypes())) {
+            return redirect()->back()->with('status', [
+                'success' => 0,
+                'msg' => 'Import failed: unsupported import type.',
+            ]);
+        }
+
         try {
-            $result = $service->import($data['type'], $request->file('file'), auth()->id());
+            $result = $service->import($data['type'], $request->file('file'), auth()->id(), $data['duplicate_mode'] ?? 'skip');
 
             return redirect()->back()->with('status', [
                 'success' => 1,
-                'msg' => 'Import completed. Imported: '.$result['imported_rows'].', Invalid: '.$result['invalid_rows'].'.',
+                'msg' => 'Import completed. Imported: '.$result['imported_rows'].', Skipped: '.$result['skipped_rows'].', Invalid: '.$result['invalid_rows'].'.',
+                'batch_id' => $result['batch_id'] ?? null,
+                'invalid_rows' => $result['invalid_rows'] ?? 0,
             ]);
         } catch (\Throwable $e) {
             return redirect()->back()->with('status', [
@@ -62,11 +92,15 @@ class LoanImportExportController extends Controller
     public function export(Request $request, LoanImportExportService $service)
     {
         $data = $request->validate([
-            'type' => 'required|in:loans,payments',
+            'type' => 'required|string|max:80',
             'status' => 'nullable|string|max:60',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
         ]);
+
+        if (! array_key_exists($service->normalizeType($data['type']), $service->exportTypes())) {
+            abort(422, 'Unsupported export type.');
+        }
 
         $result = $service->export($data['type'], $request->only(['status', 'date_from', 'date_to']), auth()->id());
 
@@ -80,6 +114,16 @@ class LoanImportExportController extends Controller
         return response($template['content'], 200, [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="'.$template['filename'].'"',
+        ]);
+    }
+
+    public function invalidRows(int $batch, LoanImportExportService $service)
+    {
+        $result = $service->invalidRowsCsv($batch);
+
+        return Response::make($result['content'], 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="'.$result['filename'].'"',
         ]);
     }
 }

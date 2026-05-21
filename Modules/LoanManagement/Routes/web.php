@@ -132,11 +132,15 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/monthly-payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments')->name('loan-management.monthly-payments.index')->middleware('can:loan_management.view');
         Route::get('/overdue', [DashboardController::class, 'overdue'])->name('loan-management.overdue.index')->middleware('can:loan_management.view');
         Route::get('/locations', [LoanLocationController::class, 'index'])->name('loan-management.locations.index')->middleware('can:loan_management.view');
+        Route::post('/locations', [LoanLocationController::class, 'store'])->name('loan-management.locations.store')->middleware('can:loan_management.view');
+        Route::put('/locations/{location}', [LoanLocationController::class, 'updateDetails'])->name('loan-management.locations.update')->middleware('can:loan_management.view');
+        Route::delete('/locations/{location}', [LoanLocationController::class, 'destroy'])->name('loan-management.locations.destroy')->middleware('can:loan_management.view');
         Route::post('/locations/{location}/assets', [LoanLocationController::class, 'update'])->name('loan-management.locations.assets.update')->middleware('can:loan_management.view');
         Route::get('/location-assets/{location}/{filename}', [LoanLocationController::class, 'asset'])->name('loan-management.locations.assets.show')->middleware('can:loan_management.view');
 
         Route::get('/payments', [LoanPaymentController::class, 'index'])->name('loan-management.payments')->middleware('can:loan_management.view');
         Route::get('/payments/index', [LoanPaymentController::class, 'index'])->name('loan-management.payments.index')->middleware('can:loan_management.view');
+        Route::get('/payments/{payment}', [LoanPaymentController::class, 'show'])->name('loan-management.payments.show')->middleware('can:loan_management.view');
         Route::get('/payments/{payment}/edit', [LoanPaymentController::class, 'edit'])->name('loan-management.payments.edit')->middleware($managePaymentPermission);
         Route::put('/payments/{payment}', [LoanPaymentController::class, 'update'])->name('loan-management.payments.update')->middleware($managePaymentPermission);
         Route::delete('/payments/{payment}', [LoanPaymentController::class, 'destroy'])->name('loan-management.payments.destroy')->middleware($managePaymentPermission);

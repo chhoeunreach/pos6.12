@@ -351,6 +351,12 @@
     @endif
 <div class="clearfix"></div>
 </fieldset>
+<div class="col-md-12 register-submit-fallback">
+    <button type="submit" class="btn btn-primary pull-right">
+        @lang('business.register')
+    </button>
+</div>
+<div class="clearfix"></div>
 @if(config('constants.enable_recaptcha') && !empty($is_register))
     <script>
         window.RECAPTCHA_SITE_KEY = "{{ config('constants.google_recaptcha_key') }}";

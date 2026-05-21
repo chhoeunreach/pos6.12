@@ -1,10 +1,14 @@
 @extends('loanmanagement::layouts.app')
 
-@section('title', 'Loan Import Export')
+@php
+    $typeLabel = data_get($importTypes, $type.'.label', ucfirst(str_replace('_', ' ', $type)));
+@endphp
+
+@section('title', $typeLabel.' Import Export')
 
 @section('content_body')
 <section class="content-header">
-    <h1>Import / Export</h1>
+    <h1>{{ $typeLabel }} Import / Export</h1>
 </section>
 
 <section class="content">
@@ -12,10 +16,17 @@
         @php $status = session('status'); @endphp
         <div class="alert alert-{{ !empty($status['success']) ? 'success' : 'danger' }}">
             {{ $status['msg'] ?? '' }}
+            @if(!empty($status['batch_id']) && (int) ($status['invalid_rows'] ?? 0) > 0)
+                <div style="margin-top: 8px;">
+                    <a class="btn btn-xs btn-warning" href="{{ route('loan-management.import.index', ['download_invalid' => $status['batch_id']]) }}">
+                        <i class="fa fa-download"></i> Download invalid rows with line numbers
+                    </a>
+                </div>
+            @endif
         </div>
     @endif
 
-    @if($errors->any())
+    @if(isset($errors) && $errors->any())
         <div class="alert alert-danger">
             <ul class="m-0">
                 @foreach($errors->all() as $error)
@@ -29,29 +40,48 @@
         <div class="col-md-6">
             <div class="box box-solid">
                 <div class="box-header with-border">
-                    <h3 class="box-title">Import {{ $type === 'payments' ? 'Payments' : 'Loans' }}</h3>
+                    <h3 class="box-title">Import {{ $typeLabel }}</h3>
                 </div>
                 <form method="POST" action="{{ route('loan-management.import.store') }}" enctype="multipart/form-data">
                     @csrf
                     <div class="box-body">
                         <div class="alert alert-info">
-                            @if($type === 'payments')
-                                <strong>Monthly Payment Import:</strong> use this for installment collections. Provide either <code>loan_number</code> or <code>loan_id</code>. If <code>schedule_id</code> is empty, payment goes to the oldest unpaid schedule.
-                            @else
-                                <strong>Loan Import:</strong> use this to create customer loan records, product snapshot, and monthly schedules. If <code>customer_id</code> is empty, the importer can create/find a customer by phone.
-                            @endif
+                            <strong>{{ $typeLabel }}:</strong>
+                            {{ data_get($importTypes, $type.'.description', '') }}
+                        </div>
+                        <input type="hidden" name="type" value="{{ $type }}">
+                        <div class="well well-sm">
+                            <strong>Required:</strong>
+                            @foreach(($templateDetails['required'] ?? []) as $column)
+                                <code>{{ $column }}</code>
+                            @endforeach
+                            <br>
+                            <strong>Optional:</strong>
+                            @foreach(($templateDetails['optional'] ?? []) as $column)
+                                <code>{{ $column }}</code>
+                            @endforeach
+                            <p class="help-block" style="margin-bottom: 0;">{{ $templateDetails['notes'] ?? '' }}</p>
                         </div>
                         <div class="form-group">
-                            <label>Import Type</label>
-                            <select name="type" class="form-control">
-                                <option value="loans" {{ $type === 'loans' ? 'selected' : '' }}>Loans</option>
-                                <option value="payments" {{ $type === 'payments' ? 'selected' : '' }}>Payments</option>
+                            <label>Template Columns</label>
+                            <div class="well well-sm" style="max-height: 140px; overflow:auto;">
+                                @foreach(($templateDetails['columns'] ?? []) as $column)
+                                    <code style="display:inline-block; margin: 2px 4px 2px 0;">{{ $column }}</code>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Import File</label>
+                            <input type="file" name="file" class="form-control" accept=".csv,.txt,.xlsx" required>
+                            <p class="help-block">Use CSV or XLSX format. The template includes a header row and one example row.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Duplicate Records</label>
+                            <select name="duplicate_mode" class="form-control">
+                                <option value="skip" {{ old('duplicate_mode', 'skip') === 'skip' ? 'selected' : '' }}>Skip duplicate</option>
+                                <option value="replace" {{ old('duplicate_mode') === 'replace' ? 'selected' : '' }}>Replace existing</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label>CSV File</label>
-                            <input type="file" name="file" class="form-control" accept=".csv,.txt" required>
-                            <p class="help-block">Use CSV format. The template includes a header row and one example row.</p>
+                            <p class="help-block">Duplicate loans match by loan number. Duplicate payments match by reference number when provided. Duplicate schedules match by loan and installment number.</p>
                         </div>
                     </div>
                     <div class="box-footer">
@@ -69,19 +99,13 @@
         <div class="col-md-6">
             <div class="box box-solid">
                 <div class="box-header with-border">
-                    <h3 class="box-title">Export {{ $type === 'payments' ? 'Payments' : 'Loans' }}</h3>
+                    <h3 class="box-title">Export {{ data_get($exportTypes, $type.'.label', $typeLabel) }}</h3>
                 </div>
                 <form method="GET" action="{{ route('loan-management.export.download') }}">
+                    <input type="hidden" name="type" value="{{ $type }}">
                     <div class="box-body">
                         <div class="alert alert-info">
-                            Export downloads the current loan or monthly payment data as CSV. Use date filters to export a month, week, or custom range.
-                        </div>
-                        <div class="form-group">
-                            <label>Export Type</label>
-                            <select name="type" class="form-control">
-                                <option value="loans" {{ $type === 'loans' ? 'selected' : '' }}>Loans</option>
-                                <option value="payments" {{ $type === 'payments' ? 'selected' : '' }}>Payments</option>
-                            </select>
+                            {{ data_get($exportTypes, $type.'.description', 'Export downloads CSV data for this page.') }}
                         </div>
                         <div class="row">
                             <div class="col-sm-6">
@@ -128,6 +152,7 @@
                                 <th>Status</th>
                                 <th>Imported</th>
                                 <th>Invalid</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -139,9 +164,18 @@
                                     <td>{{ $batch->status ?? '' }}</td>
                                     <td>{{ (int) ($batch->imported_rows ?? 0) }}</td>
                                     <td>{{ (int) ($batch->invalid_rows ?? 0) }}</td>
+                                    <td>
+                                        @if((int) ($batch->invalid_rows ?? 0) > 0)
+                                            <a class="btn btn-xs btn-warning" href="{{ route('loan-management.import.index', ['download_invalid' => $batch->id]) }}">
+                                                <i class="fa fa-download"></i> Invalid rows
+                                            </a>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted">No imports yet.</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted">No imports yet.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

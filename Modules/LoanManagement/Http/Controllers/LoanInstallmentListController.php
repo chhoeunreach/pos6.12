@@ -34,6 +34,18 @@ class LoanInstallmentListController extends Controller
         return array_intersect_key($payload, array_flip(Schema::connection('mysql_loan')->getColumnListing($table)));
     }
 
+    protected function ensureLoanPaymentTypeColumn(): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')
+            || Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            return;
+        }
+
+        Schema::connection('mysql_loan')->table('loan_payments', function ($table) {
+            $table->string('payment_type', 20)->default('monthly')->after('loan_id');
+        });
+    }
+
     protected function assetFromPublicPath(?string $path): ?string
     {
         $path = trim((string) $path);
@@ -138,7 +150,17 @@ class LoanInstallmentListController extends Controller
 
     protected function paymentsForPrintSchedules($payments, $installments)
     {
+        $downOrLoanPayments = $payments
+            ->filter(fn ($payment) => $this->isLoanPaymentRow($payment))
+            ->map(function ($payment) {
+                $payment->_print_schedule_id = null;
+                return $payment;
+            });
+
+        $monthlyPayments = $payments->reject(fn ($payment) => $this->isLoanPaymentRow($payment));
+
         $assigned = $payments
+            ->reject(fn ($payment) => $this->isLoanPaymentRow($payment))
             ->filter(fn ($payment) => ! empty($payment->schedule_id))
             ->map(function ($payment) {
                 $payment->_print_schedule_id = $payment->schedule_id;
@@ -147,13 +169,13 @@ class LoanInstallmentListController extends Controller
                 return $payment;
             });
 
-        $unassigned = $payments
+        $unassigned = $monthlyPayments
             ->filter(fn ($payment) => empty($payment->schedule_id))
             ->sortByDesc(fn ($payment) => $payment->paid_at ?? $payment->paid_date ?? $payment->id ?? 0)
             ->values();
 
         if ($unassigned->isEmpty()) {
-            return $assigned->values();
+            return $assigned->concat($downOrLoanPayments)->values();
         }
 
         $allocated = collect();
@@ -197,7 +219,43 @@ class LoanInstallmentListController extends Controller
             }
         }
 
-        return $assigned->concat($allocated)->values();
+        return $assigned->concat($allocated)->concat($downOrLoanPayments)->values();
+    }
+
+    protected function isLoanPaymentRow($payment): bool
+    {
+        $type = strtolower(trim((string) ($payment->payment_type ?? '')));
+        if (in_array($type, ['loan', 'initial', 'down_payment', 'downpayment', 'deposit'], true)) {
+            return true;
+        }
+
+        $reference = strtoupper(trim((string) (
+            $payment->receipt_number
+            ?? $payment->payment_ref_no
+            ?? $payment->reference_number
+            ?? $payment->payment_number
+            ?? ''
+        )));
+
+        return strpos($reference, 'IMP-DOWN-') === 0;
+    }
+
+    protected function applyMonthlyPaymentFilter($query, string $table = 'loan_payments'): void
+    {
+        if ($this->loanTableHasCol($table, 'payment_type')) {
+            $query->where('payment_type', 'monthly');
+            return;
+        }
+
+        if ($this->loanTableHasCol($table, 'schedule_id')) {
+            $query->whereNotNull('schedule_id');
+        }
+
+        foreach (['receipt_number', 'payment_ref_no', 'reference_number', 'payment_number'] as $column) {
+            if ($this->loanTableHasCol($table, $column)) {
+                $query->where($column, 'not like', 'IMP-DOWN-%');
+            }
+        }
     }
 
     protected function expandPaymentsWithDetailsForPrint($payments)
@@ -438,8 +496,10 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('collector_name_snapshot') ? 'l.collector_name_snapshot' : ($this->hasCol('collector_id') ? "CONCAT('Collector #', l.collector_id)" : 'NULL')).' as collector_name_snapshot'
             );
 
-        if ($request->filled('start_date')) $q->whereDate('l.loan_date', '>=', $request->start_date);
-        if ($request->filled('end_date')) $q->whereDate('l.loan_date', '<=', $request->end_date);
+        if ($this->hasCol('loan_date')) {
+            if ($request->filled('start_date')) $q->whereDate('l.loan_date', '>=', $request->start_date);
+            if ($request->filled('end_date')) $q->whereDate('l.loan_date', '<=', $request->end_date);
+        }
         if ($request->filled('status') && $this->hasCol('status')) $q->where('l.status', $request->status);
         if ($request->filled('location_name')) {
             $locationFilter = (string) $request->location_name;
@@ -664,6 +724,7 @@ class LoanInstallmentListController extends Controller
                         'status' => $row->status ?? '-',
                     ];
                 });
+            $installments = $this->normalizeSchedulePrincipalFromDue($installments, $loanRow, $sourceDueDisplay ?? null);
         }
 
         $payments = collect();
@@ -729,6 +790,7 @@ class LoanInstallmentListController extends Controller
     {
         abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
         abort_if(! Schema::connection('mysql_loan')->hasTable('loan_payments'), 404);
+        $this->ensureLoanPaymentTypeColumn();
 
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
@@ -832,6 +894,7 @@ class LoanInstallmentListController extends Controller
                     'payment_ref_no' => $paymentRef,
                     'receipt_number' => $receipt,
                     'loan_id' => $loan,
+                    'payment_type' => $isPayOff ? 'loan' : 'monthly',
                     'loan_number_snapshot' => $loanRow->loan_number ?? null,
                     'customer_id' => $loanRow->customer_id ?? 0,
                     'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
@@ -1391,13 +1454,16 @@ class LoanInstallmentListController extends Controller
                 ->where('loan_id', $loan)
                 ->orderBy('due_date')
                 ->get();
+            $schedules = $this->normalizeSchedulePrincipalFromDue($schedules, $loanRow, $sourceDueDisplay);
         }
 
         $payments = [];
         if (Schema::connection('mysql_loan')->hasTable('loan_payments')) {
-            $payments = DB::connection('mysql_loan')->table('loan_payments')
-                ->where('loan_id', $loan)
-                ->orderByDesc('paid_date')
+            $paymentsQuery = DB::connection('mysql_loan')->table('loan_payments')
+                ->where('loan_id', $loan);
+            $this->applyMonthlyPaymentFilter($paymentsQuery);
+            $payments = $paymentsQuery
+                ->orderByDesc($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at')
                 ->get();
         }
 
@@ -1410,6 +1476,65 @@ class LoanInstallmentListController extends Controller
         }
 
         return view('loanmanagement::loans.show', compact('loanRow', 'customerRow', 'customerDisplayName', 'customerPhoneDisplay', 'customerAddressDisplay', 'mainContactIdDisplay', 'locationRow', 'locationDisplayName', 'locationAddressDisplay', 'sourceTypeDisplay', 'sourceTransactionIdDisplay', 'sourceInvoiceDisplay', 'sourceFinalTotalDisplay', 'sourcePaidDisplay', 'sourceDueDisplay', 'createdByName', 'collectorDisplayName', 'items', 'productItems', 'schedules', 'payments', 'statusLogs'));
+    }
+
+    protected function normalizeSchedulePrincipalFromDue($schedules, object $loanRow, $sourceDue = null)
+    {
+        $schedules = collect($schedules);
+        $months = $schedules->count();
+        if ($months <= 0) {
+            return $schedules;
+        }
+
+        $duePrincipal = (float) ($sourceDue ?? 0);
+        if ($duePrincipal <= 0) {
+            $duePrincipal = (float) ($loanRow->sell_due_amount_snapshot ?? 0);
+        }
+        if ($duePrincipal <= 0) {
+            $duePrincipal = (float) ($loanRow->principal_amount ?? 0);
+        }
+        if ($duePrincipal <= 0) {
+            return $schedules;
+        }
+
+        $principalTotal = (float) $schedules->sum(function ($schedule) {
+            return (float) ($schedule->principal_amount ?? $schedule->principal_due ?? $schedule->installment_value ?? 0);
+        });
+
+        if (round($principalTotal, 2) === round($duePrincipal, 2)) {
+            return $schedules;
+        }
+
+        $principalPerMonth = round($duePrincipal / $months, 2);
+        $assignedPrincipal = 0.0;
+
+        return $schedules->values()->map(function ($schedule, $index) use ($months, $principalPerMonth, &$assignedPrincipal, $duePrincipal) {
+            $principal = $index === ($months - 1)
+                ? round($duePrincipal - $assignedPrincipal, 2)
+                : $principalPerMonth;
+            $assignedPrincipal = round($assignedPrincipal + $principal, 2);
+
+            $interest = (float) ($schedule->interest_amount ?? $schedule->interest_due ?? $schedule->benefit_value ?? 0);
+            $amountDue = round($principal + $interest, 2);
+            $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? $schedule->paid_value ?? 0);
+            $status = strtolower((string) ($schedule->status ?? ''));
+            if (in_array($status, ['paid', 'completed'], true)) {
+                $paid = $amountDue;
+            }
+
+            $schedule->principal_amount = $principal;
+            $schedule->principal_due = $principal;
+            $schedule->installment_value = $principal;
+            $schedule->schedule_amount = $amountDue;
+            $schedule->amount_due = $amountDue;
+            $schedule->paid_amount = $paid;
+            $schedule->amount_paid = $paid;
+            $schedule->paid_value = $paid;
+            $schedule->balance_amount = max(0, round($amountDue - $paid, 2));
+            $schedule->amount_balance = $schedule->balance_amount;
+
+            return $schedule;
+        });
     }
 
     public function edit(int $loan)

@@ -15,11 +15,13 @@ class LoanPaymentController extends Controller
     public function index(Request $request)
     {
         abort_if(! Schema::connection($this->connection)->hasTable('loan_payments'), 404);
+        $this->ensurePaymentTypeColumn();
 
         $filters = $request->only([
             'search',
             'loan_number',
             'customer',
+            'payment_type',
             'method',
             'status',
             'date_from',
@@ -35,6 +37,10 @@ class LoanPaymentController extends Controller
         $summary = [
             'count' => (int) (clone $summaryQuery)->count(),
             'amount' => (float) (clone $summaryQuery)->sum(DB::raw($amountExpr)),
+            'loan_amount' => $this->hasColumn('loan_payments', 'payment_type') ? (float) (clone $summaryQuery)->where('p.payment_type', 'loan')->sum(DB::raw($amountExpr)) : 0,
+            'monthly_amount' => $this->hasColumn('loan_payments', 'payment_type') ? (float) (clone $summaryQuery)->where('p.payment_type', 'monthly')->sum(DB::raw($amountExpr)) : (float) (clone $summaryQuery)->sum(DB::raw($amountExpr)),
+            'loan_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'loan')->count() : 0,
+            'monthly_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'monthly')->count() : (int) (clone $summaryQuery)->count(),
         ];
 
         $payments = $query
@@ -70,6 +76,29 @@ class LoanPaymentController extends Controller
             'loan' => $loan,
             'schedules' => $schedules,
             'methods' => $this->paymentMethodOptions($loan),
+        ]);
+    }
+
+    public function show(int $payment)
+    {
+        $row = $this->paymentRow($payment);
+        abort_if(! $row, 404);
+
+        $loan = DB::connection($this->connection)->table('loans')->where('id', $row->loan_id)->first();
+        $schedule = null;
+        if (! empty($row->schedule_id) && Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
+            $schedule = DB::connection($this->connection)->table('loan_payment_schedules')->where('id', $row->schedule_id)->first();
+        }
+
+        $details = Schema::connection($this->connection)->hasTable('loan_payment_details')
+            ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->get()
+            : collect();
+
+        return view('loanmanagement::payments.show', [
+            'payment' => $row,
+            'loan' => $loan,
+            'schedule' => $schedule,
+            'details' => $details,
         ]);
     }
 
@@ -196,12 +225,14 @@ class LoanPaymentController extends Controller
             ? 'p.customer_id'
             : ($this->hasColumn('loans', 'customer_id') ? 'l.customer_id' : 'NULL');
         $scheduleIdExpression = $this->hasColumn('loan_payments', 'schedule_id') ? 'p.schedule_id' : 'NULL';
+        $paymentTypeExpression = $this->hasColumn('loan_payments', 'payment_type') ? 'p.payment_type' : "'monthly'";
 
         $query = DB::connection($this->connection)->table('loan_payments as p')
             ->leftJoin('loans as l', 'l.id', '=', 'p.loan_id')
             ->selectRaw("
                 p.id,
                 p.loan_id,
+                {$paymentTypeExpression} as payment_type,
                 {$customerIdExpression} as customer_id,
                 {$scheduleIdExpression} as schedule_id,
                 {$receiptExpression} as receipt_number,
@@ -270,6 +301,9 @@ class LoanPaymentController extends Controller
         if (! empty($filters['method'])) {
             $methodColumn = $this->paymentMethodColumn();
             $query->whereRaw($methodColumn.' LIKE ?', ['%'.$filters['method'].'%']);
+        }
+        if (! empty($filters['payment_type']) && $this->hasColumn('loan_payments', 'payment_type')) {
+            $query->where('p.payment_type', $filters['payment_type']);
         }
         if (! empty($filters['status']) && $this->hasColumn('loan_payments', 'status')) {
             $query->where('p.status', $filters['status']);
@@ -400,6 +434,17 @@ class LoanPaymentController extends Controller
         } catch (\Throwable $e) {
             return ['cash' => 'Cash', 'aba' => 'ធនាគារអេប៊ីអេ (ABA)', 'wing' => 'វីងវេលុយ (Wing)'];
         }
+    }
+
+    protected function ensurePaymentTypeColumn(): void
+    {
+        if (Schema::connection($this->connection)->hasColumn('loan_payments', 'payment_type')) {
+            return;
+        }
+
+        Schema::connection($this->connection)->table('loan_payments', function ($table) {
+            $table->string('payment_type', 20)->default('monthly')->after('loan_id');
+        });
     }
 
     protected function paymentMethodName(string $method, array $paymentTypes): string

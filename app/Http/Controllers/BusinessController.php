@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use App\Rules\ReCaptcha;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class BusinessController extends Controller
 {
@@ -142,13 +143,14 @@ class BusinessController extends Controller
                     'email' => 'sometimes|nullable|email|unique:users|max:255',
                     'first_name' => 'required|max:255',
                     'username' => 'required|min:4|max:255|unique:users',
-                    'password' => 'required|min:4|max:255',
+                    'password' => 'required|min:4|max:255|same:confirm_password',
+                    'confirm_password' => 'required|min:4|max:255',
                     'fy_start_month' => 'required',
                     'accounting_method' => 'required',
                 ],
                 [
                     'name.required' => __('validation.required', ['attribute' => __('business.business_name')]),
-                    'name.currency_id' => __('validation.required', ['attribute' => __('business.currency')]),
+                    'currency_id.required' => __('validation.required', ['attribute' => __('business.currency')]),
                     'country.required' => __('validation.required', ['attribute' => __('business.country')]),
                     'state.required' => __('validation.required', ['attribute' => __('business.state')]),
                     'city.required' => __('validation.required', ['attribute' => __('business.city')]),
@@ -156,12 +158,14 @@ class BusinessController extends Controller
                     'landmark.required' => __('validation.required', ['attribute' => __('business.landmark')]),
                     'time_zone.required' => __('validation.required', ['attribute' => __('business.time_zone')]),
                     'email.email' => __('validation.email', ['attribute' => __('business.email')]),
-                    'email.email' => __('validation.unique', ['attribute' => __('business.email')]),
+                    'email.unique' => __('validation.unique', ['attribute' => __('business.email')]),
                     'first_name.required' => __('validation.required', ['attribute' => __('business.first_name')]),
                     'username.required' => __('validation.required', ['attribute' => __('business.username')]),
                     'username.min' => __('validation.min', ['attribute' => __('business.username')]),
-                    'password.required' => __('validation.required', ['attribute' => __('business.username')]),
-                    'password.min' => __('validation.min', ['attribute' => __('business.username')]),
+                    'password.required' => __('validation.required', ['attribute' => __('business.password')]),
+                    'password.min' => __('validation.min', ['attribute' => __('business.password')]),
+                    'password.same' => __('validation.same', ['attribute' => __('business.password'), 'other' => __('business.confirm_password')]),
+                    'confirm_password.required' => __('validation.required', ['attribute' => __('business.confirm_password')]),
                     'fy_start_month.required' => __('validation.required', ['attribute' => __('business.fy_start_month')]),
                     'accounting_method.required' => __('validation.required', ['attribute' => __('business.accounting_method')]),
                 ]
@@ -243,6 +247,8 @@ class BusinessController extends Controller
             ];
 
             return redirect('login')->with('status', $output);
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());

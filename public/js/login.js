@@ -30,45 +30,48 @@ $(document).ready(function() {
     // registration form steps start
     if ($('#business_register_form').length) {
         var form = $('#business_register_form').show();
-        form.steps({
-            headerTag: 'h3',
-            bodyTag: 'fieldset',
-            transitionEffect: 'slideLeft',
-            labels: {
-                finish: LANG.register,
-                next: LANG.next,
-                previous: LANG.previous,
-            },
-            onStepChanging: function(event, currentIndex, newIndex) {
-                // Allways allow previous action even if the current form is not valid!
-                if (currentIndex > newIndex) {
-                    return true;
-                }
-                // Needed in some cases if the user went back (clean up)
-                if (currentIndex < newIndex) {
-                    // To remove error styles
-                    form.find('.body:eq(' + newIndex + ') label.error').remove();
-                    form.find('.body:eq(' + newIndex + ') .error').removeClass('error');
-                }
-                form.validate().settings.ignore = ':disabled,:hidden';
-                return form.valid();
-            },
-            onStepChanged: function(event, currentIndex, priorIndex) {
-                renderRegisterRecaptcha(form);
-            },
-            onFinishing: function(event, currentIndex) {
-                renderRegisterRecaptcha(form);
-                form.validate().settings.ignore = ':disabled';
+        if ($.isFunction(form.steps)) {
+            form.find('.register-submit-fallback').hide();
+            form.steps({
+                headerTag: 'h3',
+                bodyTag: 'fieldset',
+                transitionEffect: 'slideLeft',
+                labels: {
+                    finish: LANG.register,
+                    next: LANG.next,
+                    previous: LANG.previous,
+                },
+                onStepChanging: function(event, currentIndex, newIndex) {
+                    // Always allow previous action even if the current form is not valid.
+                    if (currentIndex > newIndex) {
+                        return true;
+                    }
+                    // Needed in some cases if the user went back (clean up)
+                    if (currentIndex < newIndex) {
+                        // To remove error styles
+                        form.find('.body:eq(' + newIndex + ') label.error').remove();
+                        form.find('.body:eq(' + newIndex + ') .error').removeClass('error');
+                    }
+                    form.validate().settings.ignore = ':disabled,:hidden';
+                    return form.valid();
+                },
+                onStepChanged: function(event, currentIndex, priorIndex) {
+                    renderRegisterRecaptcha(form);
+                },
+                onFinishing: function(event, currentIndex) {
+                    renderRegisterRecaptcha(form);
+                    form.validate().settings.ignore = ':disabled';
 
-                return form.valid();
-            },
-            onFinished: function(event, currentIndex) {
-                form.submit();
-            },
-        });
-        form.find('a[href="#previous"]').addClass('tw-dw-btn');
-        form.find('a[href="#next"]').addClass('tw-dw-btn tw-dw-btn-primary');
-        form.find('a[href="#finish"]').addClass('tw-dw-btn tw-dw-btn-primary');
+                    return form.valid();
+                },
+                onFinished: function(event, currentIndex) {
+                    form.submit();
+                },
+            });
+            form.find('a[href="#previous"]').addClass('tw-dw-btn');
+            form.find('a[href="#next"]').addClass('tw-dw-btn tw-dw-btn-primary');
+            form.find('a[href="#finish"]').addClass('tw-dw-btn tw-dw-btn-primary');
+        }
     }
     // registration form steps end
 
@@ -103,9 +106,9 @@ $(document).ready(function() {
                     },
                     dataFilter: function(response) {
                         try {
-                            // jQuery Validate expects 'true' or a quoted string as the error message
+                            // jQuery Validate expects true success as the literal string 'true'.
                             if (response === 'true' || response === true) {
-                                return '"true"';
+                                return 'true';
                             }
                             var msg = (typeof response === 'string' && response.trim().length)
                                 ? response
@@ -120,7 +123,7 @@ $(document).ready(function() {
             },
             password: {
                 required: true,
-                minlength: 5,
+                minlength: 4,
             },
             confirm_password: {
                 equalTo: '#password',
@@ -157,12 +160,14 @@ $(document).ready(function() {
         },
     });
 
-    $('#business_logo').fileinput({
-        showUpload: false,
-        showPreview: false,
-        browseLabel: LANG.file_browse_label,
-        removeLabel: LANG.remove,
-    });
+    if ($('#business_logo').length && $.isFunction($('#business_logo').fileinput)) {
+        $('#business_logo').fileinput({
+            showUpload: false,
+            showPreview: false,
+            browseLabel: LANG.file_browse_label,
+            removeLabel: LANG.remove,
+        });
+    }
 
     renderRegisterRecaptcha($('#business_register_form'));
 });

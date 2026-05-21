@@ -3,6 +3,7 @@
 return [
     'name' => 'LoanManagement',
     'version' => '1.0.0',
+    'module_version' => '1.0.0',
     'db_connection' => 'mysql_loan',
     'loan_database_name' => env('DB_LOAN_DATABASE', 'loan'),
     'customer_api_guard' => 'customer_loan_api',

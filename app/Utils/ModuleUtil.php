@@ -538,11 +538,21 @@ class ModuleUtil extends Util
         if ($is_available) {
             //Check if installed by checking the system table {module_name}_version
             $module_version = System::getProperty(strtolower($module_name).'_version');
+            if (empty($module_version)) {
+                $module_version = System::getProperty(Str::snake($module_name).'_version');
+            }
+
+            $available_version = config(strtolower($module_name).'.module_version');
+            if (empty($available_version)) {
+                $available_version = config(Str::snake($module_name).'.module_version');
+            }
 
             $output['installed_version'] = $module_version;
-            $output['available_version'] = config(strtolower($module_name).'.module_version');
+            $output['available_version'] = $available_version;
 
-            $output['is_update_available'] = Comparator::greaterThan($output['available_version'], $output['installed_version']);
+            $output['is_update_available'] = ! empty($available_version)
+                && ! empty($module_version)
+                && Comparator::greaterThan($available_version, $module_version);
         }
 
         return $output;

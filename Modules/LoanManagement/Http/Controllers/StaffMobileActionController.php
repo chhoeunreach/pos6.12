@@ -16,6 +16,8 @@ class StaffMobileActionController extends Controller
 
     public function receivePayment(Request $request)
     {
+        $this->ensurePaymentTypeColumn();
+
         $data = $request->validate([
             'loan_id' => 'required|integer|min:1',
             'customer_id' => 'required|integer|min:1',
@@ -42,6 +44,7 @@ class StaffMobileActionController extends Controller
 
             $paymentPayload = [
                 'loan_id' => $data['loan_id'],
+                'payment_type' => 'monthly',
                 'customer_id' => $data['customer_id'],
                 'amount' => $amount,
                 'paid_at' => $payAt,
@@ -225,6 +228,18 @@ class StaffMobileActionController extends Controller
             ? Schema::connection($this->conn)->getColumnListing($table)
             : [];
         return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function ensurePaymentTypeColumn(): void
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_payments')
+            || Schema::connection($this->conn)->hasColumn('loan_payments', 'payment_type')) {
+            return;
+        }
+
+        Schema::connection($this->conn)->table('loan_payments', function ($table) {
+            $table->string('payment_type', 20)->default('monthly')->after('loan_id');
+        });
     }
 }
 

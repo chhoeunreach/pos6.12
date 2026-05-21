@@ -26,6 +26,26 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-3 col-sm-6 col-xs-12">
+            <div class="info-box">
+                <span class="info-box-icon bg-blue"><i class="fa fa-bank"></i></span>
+                <div class="info-box-content">
+                    <span class="info-box-text">Loan Payments</span>
+                    <span class="info-box-number">$ {{ number_format($summary['loan_amount'] ?? 0, 2) }}</span>
+                    <small>{{ number_format($summary['loan_count'] ?? 0) }} records</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 col-xs-12">
+            <div class="info-box">
+                <span class="info-box-icon bg-purple"><i class="fa fa-calendar"></i></span>
+                <div class="info-box-content">
+                    <span class="info-box-text">Monthly Payments</span>
+                    <span class="info-box-number">$ {{ number_format($summary['monthly_amount'] ?? 0, 2) }}</span>
+                    <small>{{ number_format($summary['monthly_count'] ?? 0) }} records</small>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="box box-primary">
@@ -64,7 +84,17 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select name="payment_type" class="form-control">
+                                <option value="">All</option>
+                                <option value="loan" {{ ($filters['payment_type'] ?? '') === 'loan' ? 'selected' : '' }}>Loan</option>
+                                <option value="monthly" {{ ($filters['payment_type'] ?? '') === 'monthly' ? 'selected' : '' }}>Monthly</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-1">
                         <div class="form-group">
                             <label>Location</label>
                             <select name="location_id" class="form-control">
@@ -121,6 +151,7 @@
                         <th>Paid Date</th>
                         <th>Loan #</th>
                         <th>Customer</th>
+                        <th>Type</th>
                         <th>Method</th>
                         <th class="text-right">Amount</th>
                         <th>Status</th>
@@ -132,7 +163,11 @@
                 <tbody>
                     @forelse($payments as $payment)
                         <tr>
-                            <td>{{ $payment->receipt_number ?? ('#'.$payment->id) }}</td>
+                            <td>
+                                <a href="{{ route('loan-management.payments.show', $payment->id) }}">
+                                    {{ $payment->receipt_number ?? ('#'.$payment->id) }}
+                                </a>
+                            </td>
                             <td>{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</td>
                             <td>
                                 @if(Route::has('loan-management.loans.view') && ! empty($payment->loan_id))
@@ -145,12 +180,18 @@
                                 <strong>{{ $payment->customer_name ?? '-' }}</strong><br>
                                 <small class="text-muted">{{ $payment->customer_phone ?? '' }}</small>
                             </td>
+                            <td>
+                                <span class="label label-{{ ($payment->payment_type ?? 'monthly') === 'loan' ? 'info' : 'primary' }}">
+                                    {{ ucfirst($payment->payment_type ?? 'monthly') }}
+                                </span>
+                            </td>
                             <td>{{ $payment->payment_method ?? '-' }}</td>
                             <td class="text-right">$ {{ number_format((float) ($payment->amount ?? 0), 2) }}</td>
                             <td><span class="label label-{{ in_array($payment->status, ['paid', 'confirmed', 'completed']) ? 'success' : 'default' }}">{{ ucfirst($payment->status ?? '-') }}</span></td>
                             <td>{{ $payment->reference_number ?? '-' }}</td>
                             <td>{{ $payment->received_by ?? '-' }}</td>
                             <td>
+                                <a href="{{ route('loan-management.payments.show', $payment->id) }}" class="btn btn-xs btn-info"><i class="fa fa-eye"></i> View</a>
                                 @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.payment|loan_management.payments.create|loan_management.edit'))
                                     <a href="{{ route('loan-management.payments.edit', $payment->id) }}" class="btn btn-xs btn-primary"><i class="fa fa-edit"></i> Edit</a>
                                     <form method="POST" action="{{ route('loan-management.payments.destroy', $payment->id) }}" style="display:inline;" onsubmit="return confirm('Delete this payment? This will update loan totals.');">
@@ -164,7 +205,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="text-center text-muted">No payments found.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted">No payments found.</td></tr>
                     @endforelse
                 </tbody>
             </table>

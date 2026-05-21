@@ -38,21 +38,16 @@
 <script>
 $(document).ready(function(){
     $('.select2').select2();
-    var start = moment().subtract(29, 'days');
-    var end = moment();
-
     function setRange(s, e){
         $('#start_date').val(s.format('YYYY-MM-DD'));
         $('#end_date').val(e.format('YYYY-MM-DD'));
         $('#sell_list_filter_date_range').val(s.format(moment_date_format) + ' ~ ' + e.format(moment_date_format));
     }
 
-    $('#sell_list_filter_date_range').daterangepicker($.extend(true, {}, dateRangeSettings, {startDate: start, endDate: end}), function(s, e){
+    $('#sell_list_filter_date_range').daterangepicker($.extend(true, {}, dateRangeSettings, {autoUpdateInput: false}), function(s, e){
         setRange(s, e);
         loanTable.ajax.reload();
     });
-
-    setRange(start, end);
 
     $('#sell_list_filter_date_range').on('cancel.daterangepicker', function(){
         $(this).val('');

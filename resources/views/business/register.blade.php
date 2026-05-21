@@ -28,6 +28,15 @@
                             @lang('business.register_and_get_started_in_minutes')
                       </h2>
                 </div>
+                @if ($errors->any())
+                    <div class="alert alert-danger">
+                        <ul class="tw-mb-0">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
             {!! Form::open([
                 'url' => route('business.postRegister'),
                 'method' => 'post',

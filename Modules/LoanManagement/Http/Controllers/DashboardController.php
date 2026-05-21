@@ -103,6 +103,20 @@ class DashboardController extends Controller
         if ($page === 'Blacklist' && in_array('blacklist_status', $available, true)) {
             $q->where('blacklist_status', 1);
         }
+        if ($page === 'Monthly Payments') {
+            if (in_array('payment_type', $available, true)) {
+                $q->where('payment_type', 'monthly');
+            } else {
+                if (in_array('schedule_id', $available, true)) {
+                    $q->whereNotNull('schedule_id');
+                }
+                foreach (['receipt_number', 'payment_ref_no', 'reference_number', 'payment_number'] as $column) {
+                    if (in_array($column, $available, true)) {
+                        $q->where($column, 'not like', 'IMP-DOWN-%');
+                    }
+                }
+            }
+        }
 
         $data['summary'] = ['table' => $table, 'total' => (int) (clone $q)->count()];
         $data['rows'] = $q->select($select)->orderByDesc('id')->limit(100)->get()->map(fn ($r) => (array) $r)->all();

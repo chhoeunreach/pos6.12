@@ -176,7 +176,13 @@
 <tbody>
 @forelse($payments as $p)
 <tr>
-<td>{{ $p->receipt_number ?? '-' }}</td>
+<td>
+@if(! empty($p->id))
+<a href="{{ route('loan-management.payments.show', $p->id) }}">{{ $p->receipt_number ?? ('Payment #'.$p->id) }}</a>
+@else
+{{ $p->receipt_number ?? '-' }}
+@endif
+</td>
 <td>{{ $p->paid_date ?? '-' }}</td>
 <td>{{ number_format((float)($p->total_paid_base ?? 0),2) }}</td>
 <td>{{ $p->payment_method_snapshot ?? '-' }}</td>

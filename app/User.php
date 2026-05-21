@@ -83,11 +83,11 @@ class User extends Authenticatable
     public static function create_user($details)
     {
         $user = User::create([
-            'surname' => $details['surname'],
+            'surname' => $details['surname'] ?? '',
             'first_name' => $details['first_name'],
-            'last_name' => $details['last_name'],
+            'last_name' => $details['last_name'] ?? null,
             'username' => $details['username'],
-            'email' => $details['email'],
+            'email' => $details['email'] ?? null,
             'password' => Hash::make($details['password']),
             'language' => ! empty($details['language']) ? $details['language'] : 'en',
         ]);
