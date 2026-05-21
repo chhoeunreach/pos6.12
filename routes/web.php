@@ -19,6 +19,7 @@ use App\Http\Controllers\DiscountController;
 use App\Http\Controllers\DocumentAndNoteController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\EnterpriseExportController;
 use App\Http\Controllers\GroupTaxController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ImportOpeningStockController;
@@ -120,6 +121,13 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/home/sales-payment-dues', [HomeController::class, 'getSalesPaymentDues']);
     Route::post('/attach-medias-to-model', [HomeController::class, 'attachMediasToGivenModel'])->name('attach.medias.to.model');
     Route::get('/calendar', [HomeController::class, 'getCalendar'])->name('calendar');
+
+    Route::prefix('enterprise-exports')->name('enterprise-exports.')->group(function () {
+        Route::get('/', [EnterpriseExportController::class, 'index'])->name('index');
+        Route::post('/', [EnterpriseExportController::class, 'store'])->name('store');
+        Route::get('/{export}', [EnterpriseExportController::class, 'show'])->name('show');
+        Route::get('/{export}/download', [EnterpriseExportController::class, 'download'])->name('download');
+    });
 
     Route::post('/test-email', [BusinessController::class, 'testEmailConfiguration']);
     Route::post('/test-sms', [BusinessController::class, 'testSmsConfiguration']);
