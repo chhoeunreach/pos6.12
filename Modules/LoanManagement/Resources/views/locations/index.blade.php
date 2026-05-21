@@ -13,6 +13,42 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .loan-asset-field { display: flex; gap: 6px; align-items: center; }
+        .loan-asset-field input[type="file"] { flex: 1; min-width: 0; }
+        .loan-asset-preview { margin-top: 8px; min-height: 48px; }
+        .loan-asset-preview img { max-width: 96px; max-height: 64px; border: 1px solid #ddd; border-radius: 4px; padding: 2px; background: #fff; }
+        .loan-asset-gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+            gap: 10px;
+            max-height: 60vh;
+            overflow: auto;
+        }
+        .loan-asset-gallery-item {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+            padding: 6px;
+            text-align: left;
+        }
+        .loan-asset-gallery-item:hover { border-color: #3c8dbc; }
+        .loan-asset-gallery-item img {
+            width: 100%;
+            height: 86px;
+            object-fit: contain;
+            background: #f7f7f7;
+            border-radius: 4px;
+        }
+        .loan-asset-gallery-name {
+            display: block;
+            margin-top: 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+        .loan-asset-gallery-date { display: block; color: #777; font-size: 11px; }
     </style>
 @endsection
 
@@ -189,19 +225,52 @@
                             <div class="col-sm-4">
                                 <div class="form-group">
                                     <label>Logo</label>
-                                    <input type="file" name="logo" class="form-control" accept="image/*">
+                                    <div class="loan-asset-field">
+                                        <input type="file" name="logo" class="form-control" accept="image/*">
+                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="logo_existing_{{ $location->id }}" data-preview="logo_preview_{{ $location->id }}">
+                                            <i class="fa fa-picture-o"></i>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" name="logo_existing" id="logo_existing_{{ $location->id }}">
+                                    <div class="loan-asset-preview" id="logo_preview_{{ $location->id }}">
+                                        @if(! empty($location->logo_asset_url))
+                                            <img src="{{ $location->logo_asset_url }}" alt="Logo">
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-sm-4">
                                 <div class="form-group">
                                     <label>Payment QR Code</label>
-                                    <input type="file" name="payment_qr" class="form-control" accept="image/*">
+                                    <div class="loan-asset-field">
+                                        <input type="file" name="payment_qr" class="form-control" accept="image/*">
+                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="payment_qr_existing_{{ $location->id }}" data-preview="payment_qr_preview_{{ $location->id }}">
+                                            <i class="fa fa-picture-o"></i>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" name="payment_qr_existing" id="payment_qr_existing_{{ $location->id }}">
+                                    <div class="loan-asset-preview" id="payment_qr_preview_{{ $location->id }}">
+                                        @if(! empty($location->payment_qr_asset_url))
+                                            <img src="{{ $location->payment_qr_asset_url }}" alt="Payment QR Code">
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-sm-4">
                                 <div class="form-group">
                                     <label>Telegram QR Code</label>
-                                    <input type="file" name="telegram_qr" class="form-control" accept="image/*">
+                                    <div class="loan-asset-field">
+                                        <input type="file" name="telegram_qr" class="form-control" accept="image/*">
+                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="telegram_qr_existing_{{ $location->id }}" data-preview="telegram_qr_preview_{{ $location->id }}">
+                                            <i class="fa fa-picture-o"></i>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" name="telegram_qr_existing" id="telegram_qr_existing_{{ $location->id }}">
+                                    <div class="loan-asset-preview" id="telegram_qr_preview_{{ $location->id }}">
+                                        @if(! empty($location->telegram_qr_asset_url))
+                                            <img src="{{ $location->telegram_qr_asset_url }}" alt="Telegram QR Code">
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                             <div class="clearfix"></div>
@@ -241,5 +310,69 @@
             </div>
         </div>
     @endforeach
+
+    <div class="modal fade" id="loan_asset_gallery_modal" tabindex="-1" role="dialog" aria-labelledby="loanAssetGalleryModalLabel">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="loanAssetGalleryModalLabel">Choose Existing Image</h4>
+                </div>
+                <div class="modal-body">
+                    @if(! empty($assetGallery))
+                        <div class="loan-asset-gallery-grid">
+                            @foreach($assetGallery as $asset)
+                                <button type="button" class="loan-asset-gallery-item" data-path="{{ $asset['path'] }}" data-url="{{ $asset['url'] }}">
+                                    <img src="{{ $asset['url'] }}" alt="{{ $asset['name'] }}" loading="lazy" onerror="this.style.display='none';">
+                                    <span class="loan-asset-gallery-name" title="{{ $asset['name'] }}">{{ $asset['name'] }}</span>
+                                    <span class="loan-asset-gallery-date">{{ $asset['modified'] }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="alert alert-info" style="margin-bottom:0;">No existing images found yet.</div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
 </section>
+@endsection
+
+@section('loan_js')
+    <script>
+        (function($) {
+            var galleryTargetInput = null;
+            var galleryPreview = null;
+            var galleryFileInput = null;
+
+            $(document).on('click', '.loan-asset-gallery-open', function() {
+                galleryTargetInput = $('#' + $(this).data('target-input'));
+                galleryPreview = $('#' + $(this).data('preview'));
+                galleryFileInput = $(this).closest('.loan-asset-field').find('input[type="file"]');
+                $('#loan_asset_gallery_modal').modal('show');
+            });
+
+            $(document).on('click', '.loan-asset-gallery-item', function() {
+                var path = $(this).data('path');
+                var url = $(this).data('url');
+
+                if (galleryTargetInput && galleryTargetInput.length) {
+                    galleryTargetInput.val(path);
+                }
+                if (galleryPreview && galleryPreview.length) {
+                    galleryPreview.html('<img src="' + url + '" alt="Selected image">');
+                }
+                if (galleryFileInput && galleryFileInput.length) {
+                    galleryFileInput.val('');
+                }
+
+                $('#loan_asset_gallery_modal').modal('hide');
+            });
+
+            $(document).on('change', '.loan-asset-field input[type="file"]', function() {
+                $(this).closest('.form-group').find('input[type="hidden"]').val('');
+            });
+        })(jQuery);
+    </script>
 @endsection

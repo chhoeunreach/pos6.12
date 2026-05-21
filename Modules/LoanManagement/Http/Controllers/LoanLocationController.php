@@ -37,7 +37,9 @@ class LoanLocationController extends Controller
                 return $location;
             });
 
-        return view('loanmanagement::locations.index', compact('locations'));
+        $assetGallery = $this->assetGallery();
+
+        return view('loanmanagement::locations.index', compact('locations', 'assetGallery'));
     }
 
     public function store(Request $request)
@@ -118,6 +120,9 @@ class LoanLocationController extends Controller
             'logo' => 'nullable|image|max:4096',
             'payment_qr' => 'nullable|image|max:4096',
             'telegram_qr' => 'nullable|image|max:4096',
+            'logo_existing' => 'nullable|string|max:500',
+            'payment_qr_existing' => 'nullable|string|max:500',
+            'telegram_qr_existing' => 'nullable|string|max:500',
             'loan_invoice_prefix' => 'nullable|string|max:50',
             'telegram_payment_chat_id' => 'nullable|string|max:191',
             'telegram_installment_chat_id' => 'nullable|string|max:191',
@@ -128,12 +133,18 @@ class LoanLocationController extends Controller
         $payload = [];
         if ($request->hasFile('logo')) {
             $payload['logo_path'] = $this->storeLocationAsset($request, 'logo', $location);
+        } elseif (! empty($data['logo_existing']) && $this->isAllowedGalleryAsset($data['logo_existing'])) {
+            $payload['logo_path'] = $this->normalizeAssetPath($data['logo_existing']);
         }
         if ($request->hasFile('payment_qr')) {
             $payload['payment_qr_path'] = $this->storeLocationAsset($request, 'payment_qr', $location);
+        } elseif (! empty($data['payment_qr_existing']) && $this->isAllowedGalleryAsset($data['payment_qr_existing'])) {
+            $payload['payment_qr_path'] = $this->normalizeAssetPath($data['payment_qr_existing']);
         }
         if ($request->hasFile('telegram_qr')) {
             $payload['telegram_qr_path'] = $this->storeLocationAsset($request, 'telegram_qr', $location);
+        } elseif (! empty($data['telegram_qr_existing']) && $this->isAllowedGalleryAsset($data['telegram_qr_existing'])) {
+            $payload['telegram_qr_path'] = $this->normalizeAssetPath($data['telegram_qr_existing']);
         }
         if ($request->has('loan_invoice_prefix')) {
             $payload['loan_invoice_prefix'] = $this->cleanLoanInvoicePrefix($data['loan_invoice_prefix'] ?? null);
@@ -325,6 +336,135 @@ class LoanLocationController extends Controller
         }
 
         return null;
+    }
+
+    protected function assetGallery(): array
+    {
+        $images = [];
+        $seen = [];
+
+        foreach ($this->galleryRoots() as $root) {
+            if (! File::isDirectory($root['directory'])) {
+                continue;
+            }
+
+            $files = collect(File::allFiles($root['directory']))
+                ->filter(fn ($file) => $this->isImageExtension($file->getExtension()))
+                ->sortByDesc(fn ($file) => $file->getMTime())
+                ->take(80);
+
+            foreach ($files as $file) {
+                $relative = str_replace('\\', '/', $file->getRelativePathname());
+                $path = trim($root['prefix'].'/'.$relative, '/');
+                if (isset($seen[$path])) {
+                    continue;
+                }
+
+                $url = $root['type'] === 'module'
+                    ? $this->fileDataUri($file->getPathname())
+                    : asset($path);
+
+                if (empty($url)) {
+                    continue;
+                }
+
+                $seen[$path] = true;
+                $images[] = [
+                    'path' => $path,
+                    'url' => $url,
+                    'name' => $file->getFilename(),
+                    'modified' => date('Y-m-d H:i', $file->getMTime()),
+                ];
+            }
+        }
+
+        usort($images, fn ($a, $b) => strcmp($b['modified'], $a['modified']));
+
+        return array_slice($images, 0, 120);
+    }
+
+    protected function galleryRoots(): array
+    {
+        return [
+            [
+                'type' => 'module',
+                'directory' => base_path('Modules/LoanManagement/'.$this->locationAssetRoot),
+                'prefix' => $this->locationAssetRoot,
+            ],
+            [
+                'type' => 'public',
+                'directory' => public_path('uploads/imgs'),
+                'prefix' => 'uploads/imgs',
+            ],
+            [
+                'type' => 'public',
+                'directory' => public_path('uploads/business_logos'),
+                'prefix' => 'uploads/business_logos',
+            ],
+            [
+                'type' => 'public',
+                'directory' => public_path('uploads1/business_logos'),
+                'prefix' => 'uploads1/business_logos',
+            ],
+            [
+                'type' => 'public',
+                'directory' => public_path('uploads1/img'),
+                'prefix' => 'uploads1/img',
+            ],
+            [
+                'type' => 'public',
+                'directory' => public_path('uploads1/carousel_images'),
+                'prefix' => 'uploads1/carousel_images',
+            ],
+        ];
+    }
+
+    protected function isAllowedGalleryAsset(string $path): bool
+    {
+        $path = $this->normalizeAssetPath($path);
+        if ($path === '' || Str::contains($path, ['..', '\\'])) {
+            return false;
+        }
+
+        if (preg_match('#^'.$this->locationAssetRoot.'/(\d+)/([^/]+)$#', $path, $matches)) {
+            return ! empty($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+        }
+
+        foreach ($this->galleryRoots() as $root) {
+            if ($root['type'] !== 'public') {
+                continue;
+            }
+
+            $prefix = trim($root['prefix'], '/').'/';
+            if (! Str::startsWith($path, $prefix)) {
+                continue;
+            }
+
+            $fullPath = public_path($path);
+            $rootPath = realpath($root['directory']);
+            $realPath = realpath($fullPath);
+
+            return $rootPath !== false
+                && $realPath !== false
+                && Str::startsWith(str_replace('\\', '/', $realPath), rtrim(str_replace('\\', '/', $rootPath), '/').'/')
+                && File::isFile($realPath)
+                && $this->isImageExtension(pathinfo($realPath, PATHINFO_EXTENSION));
+        }
+
+        return false;
+    }
+
+    protected function normalizeAssetPath(string $path): string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        $path = ltrim($path, '/');
+
+        return Str::startsWith($path, 'public/') ? substr($path, 7) : $path;
+    }
+
+    protected function isImageExtension(?string $extension): bool
+    {
+        return in_array(strtolower((string) $extension), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true);
     }
 
     protected function safeColumns(array $payload): array
