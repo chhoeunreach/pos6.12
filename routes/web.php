@@ -22,6 +22,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\EnterpriseExportController;
 use App\Http\Controllers\GroupTaxController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\EnterpriseImportController;
 use App\Http\Controllers\ImportOpeningStockController;
 use App\Http\Controllers\ImportProductsController;
 use App\Http\Controllers\ImportSalesController;
@@ -127,6 +128,12 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
         Route::post('/', [EnterpriseExportController::class, 'store'])->name('store');
         Route::get('/{export}', [EnterpriseExportController::class, 'show'])->name('show');
         Route::get('/{export}/download', [EnterpriseExportController::class, 'download'])->name('download');
+    });
+
+    Route::prefix('enterprise-imports')->name('enterprise-imports.')->group(function () {
+        Route::get('/', [EnterpriseImportController::class, 'index'])->name('index');
+        Route::post('/', [EnterpriseImportController::class, 'store'])->name('store');
+        Route::get('/{import}', [EnterpriseImportController::class, 'show'])->name('show');
     });
 
     Route::post('/test-email', [BusinessController::class, 'testEmailConfiguration']);

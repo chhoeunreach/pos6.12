@@ -974,12 +974,22 @@ class LoanInstallmentListController extends Controller
     {
         $prefix = 'PAY-'.now()->format('YmdHis').'-'.$loanId.'-';
         $attempt = 0;
+        $referenceColumn = null;
+
+        foreach (['payment_number', 'payment_ref_no', 'receipt_number', 'reference_number'] as $column) {
+            if ($this->loanTableHasCol('loan_payments', $column)) {
+                $referenceColumn = $column;
+                break;
+            }
+        }
 
         do {
             $candidate = $prefix.random_int(1000, 9999);
-            $exists = DB::connection('mysql_loan')->table('loan_payments')
-                ->where('payment_number', $candidate)
-                ->exists();
+            $exists = $referenceColumn
+                ? DB::connection('mysql_loan')->table('loan_payments')
+                    ->where($referenceColumn, $candidate)
+                    ->exists()
+                : false;
             $attempt++;
         } while ($exists && $attempt < 10);
 
