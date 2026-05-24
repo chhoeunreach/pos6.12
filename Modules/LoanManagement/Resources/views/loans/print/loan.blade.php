@@ -519,6 +519,7 @@
     <div class="info-grid">
         <table class="info-table">
             <tr><td class="label">លេខកិច្ចសន្យា</td><td class="value red">{{ $loanRow->loan_number ?? $loanRow->id }}</td></tr>
+            <tr><td class="label">Invoice No</td><td class="value">{{ $sourceInvoiceDisplay ?? '-' }}</td></tr>
             <tr><td class="label">កាលបរិច្ឆេទខ្ចីប្រាក់</td><td class="value">{{ $loanDate }}</td></tr>
             <tr><td class="label">កាលបរិច្ឆេទបញ្ចប់</td><td class="value">{{ $lastDueDate ? \Carbon\Carbon::parse($lastDueDate)->format('m-d-Y') : '-' }}</td></tr>
         </table>

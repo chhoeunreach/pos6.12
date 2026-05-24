@@ -644,6 +644,7 @@ class LoanInstallmentListController extends Controller
         abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
+        $sourceInvoiceDisplay = $loanRow->source_invoice_no ?? null;
         $sourceFinalTotalDisplay = $loanRow->sell_final_total_snapshot ?? null;
         $sourcePaidDisplay = $loanRow->sell_paid_amount_snapshot ?? null;
         $sourceDueDisplay = $loanRow->sell_due_amount_snapshot ?? null;
@@ -696,11 +697,14 @@ class LoanInstallmentListController extends Controller
 
         if (! empty($loanRow->source_transaction_id) && Schema::hasTable('transactions')) {
             $source = DB::table('transactions')
-                ->select('id', 'final_total')
+                ->select('id', 'invoice_no', 'final_total')
                 ->where('id', $loanRow->source_transaction_id)
                 ->first();
 
             if ($source) {
+                if (empty($sourceInvoiceDisplay)) {
+                    $sourceInvoiceDisplay = $source->invoice_no;
+                }
                 if ($sourceFinalTotalDisplay === null && isset($source->final_total)) {
                     $sourceFinalTotalDisplay = (float) $source->final_total;
                 }
@@ -838,6 +842,7 @@ class LoanInstallmentListController extends Controller
 
         return view('loanmanagement::loans.print.loan', compact(
             'loanRow',
+            'sourceInvoiceDisplay',
             'customer',
             'locationName',
             'products',
