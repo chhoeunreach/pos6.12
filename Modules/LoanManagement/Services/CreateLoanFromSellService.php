@@ -5,6 +5,7 @@ namespace Modules\LoanManagement\Services;
 use App\Services\TelegramBotService;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -526,12 +527,23 @@ class CreateLoanFromSellService
         $payload['created_by'] = auth()->id() ?? ($payload['created_by'] ?? null);
         $payload['status'] = $payload['status'] ?? 'active';
         $payload['blacklist_status'] = $payload['blacklist_status'] ?? 0;
+        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'customer_code')) {
+            $payload['customer_code'] = $this->normalizeCustomerCode($payload['customer_code'] ?? null) ?? $this->generateUniqueLoanCustomerCode();
+        }
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
 
-        return (int) DB::connection('mysql_loan')->table('loan_customers')->insertGetId(
-            $this->filterColumns('loan_customers', $payload)
-        );
+        $customerId = $this->findExistingLoanCustomerId($payload);
+        $filtered = $this->filterColumns('loan_customers', $payload);
+
+        if ($customerId) {
+            unset($filtered['created_at']);
+            DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update($filtered);
+
+            return $customerId;
+        }
+
+        return (int) DB::connection('mysql_loan')->table('loan_customers')->insertGetId($filtered);
     }
 
     protected function filterColumns(string $table, array $payload): array
@@ -667,6 +679,45 @@ class CreateLoanFromSellService
         }
 
         return $payload;
+    }
+
+    protected function findExistingLoanCustomerId(array $payload): ?int
+    {
+        $query = DB::connection('mysql_loan')->table('loan_customers');
+
+        if (! empty($payload['main_contact_id']) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'main_contact_id')) {
+            $id = (clone $query)->where('main_contact_id', $payload['main_contact_id'])->value('id');
+            if ($id) {
+                return (int) $id;
+            }
+        }
+
+        $phone = trim((string) ($payload['phone'] ?? ''));
+        if ($phone !== '' && $phone !== '-' && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'phone')) {
+            $id = (clone $query)->where('phone', $phone)->value('id');
+            if ($id) {
+                return (int) $id;
+            }
+        }
+
+        return null;
+    }
+
+    protected function normalizeCustomerCode($value): ?string
+    {
+        $code = trim((string) $value);
+
+        return $code !== '' ? $code : null;
+    }
+
+    protected function generateUniqueLoanCustomerCode(): string
+    {
+        do {
+            $code = 'LC-'.strtoupper(Str::random(8));
+            $exists = DB::connection('mysql_loan')->table('loan_customers')->where('customer_code', $code)->exists();
+        } while ($exists);
+
+        return $code;
     }
 
     protected function generateUniqueLoanNumber($loanLocationId = null, $mainLocationId = null): string

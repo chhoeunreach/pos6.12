@@ -1485,7 +1485,7 @@ class LoanImportExportService
         }
 
         $payload = $this->safeColumns('loan_customers', [
-            'customer_code' => $row['customer_code'] ?? ('IMP-CUS-'.now()->format('YmdHis').'-'.Str::random(4)),
+            'customer_code' => $this->normalizeCustomerCode($row['customer_code'] ?? null) ?? ('IMP-CUS-'.now()->format('YmdHis').'-'.Str::random(4)),
             'name' => $row['name'] ?? null,
             'phone' => $row['phone'] ?? null,
             'email' => $row['email'] ?? null,
@@ -1550,7 +1550,7 @@ class LoanImportExportService
         }
 
         return (int) DB::connection($this->connection)->table('loan_customers')->insertGetId($this->safeColumns('loan_customers', [
-            'customer_code' => $row['customer_code'] ?: 'IMP-CUS-'.now()->format('YmdHis').'-'.Str::random(4),
+            'customer_code' => $this->normalizeCustomerCode($row['customer_code'] ?? null) ?? 'IMP-CUS-'.now()->format('YmdHis').'-'.Str::random(4),
             'name' => $row['customer_name'],
             'khmer_name' => $row['khmer_name'],
             'phone' => $row['customer_phone'],
@@ -1628,6 +1628,13 @@ class LoanImportExportService
         if (! empty($payload)) {
             DB::connection($this->connection)->table('loan_customers')->where('id', $customerId)->update($payload);
         }
+    }
+
+    protected function normalizeCustomerCode($value): ?string
+    {
+        $code = trim((string) $value);
+
+        return $code !== '' ? $code : null;
     }
 
     protected function createImportedLoanItem(int $loanId, array $row): void

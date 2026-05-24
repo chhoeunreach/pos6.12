@@ -2,6 +2,7 @@
 
 namespace Modules\LoanManagement\Services;
 
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -157,6 +158,9 @@ class LoanSyncFromPosService
                 'synced_at' => now(),
                 'updated_at' => now(),
             ];
+            if (Schema::connection($this->loanConnection)->hasColumn('loan_customers', 'customer_code')) {
+                $payload['customer_code'] = $this->generateUniqueLoanCustomerCode();
+            }
             if ($userId !== null && Schema::connection($this->loanConnection)->hasColumn('loan_customers', 'created_by')) {
                 $payload['created_by'] = $userId;
             }
@@ -188,5 +192,15 @@ class LoanSyncFromPosService
     {
         $columns = Schema::connection($this->loanConnection)->getColumnListing($table);
         return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function generateUniqueLoanCustomerCode(): string
+    {
+        do {
+            $code = 'LC-'.strtoupper(Str::random(8));
+            $exists = DB::connection($this->loanConnection)->table('loan_customers')->where('customer_code', $code)->exists();
+        } while ($exists);
+
+        return $code;
     }
 }

@@ -5,6 +5,7 @@ namespace Modules\LoanManagement\Services;
 use App\Services\TelegramBotService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -282,7 +283,7 @@ class LoanSellConversionService
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) return null;
 
-        $payload = $this->filterColumns('loan_customers', [
+        $payload = [
             'main_contact_id' => $h->contact_id,
             'business_location_id' => $h->location_id ?? null,
             'name' => $h->customer_name ?: ('Customer #'.$h->contact_id),
@@ -298,9 +299,39 @@ class LoanSellConversionService
             'created_by' => auth()->id(),
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'customer_code')) {
+            $payload['customer_code'] = $this->generateUniqueLoanCustomerCode();
+        }
+
+        $existingId = null;
+        if (! empty($h->contact_id) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'main_contact_id')) {
+            $existingId = DB::connection('mysql_loan')->table('loan_customers')->where('main_contact_id', $h->contact_id)->value('id');
+        }
+        if (! $existingId && ! empty($h->customer_phone) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'phone')) {
+            $existingId = DB::connection('mysql_loan')->table('loan_customers')->where('phone', $h->customer_phone)->value('id');
+        }
+
+        $payload = $this->filterColumns('loan_customers', $payload);
+
+        if ($existingId) {
+            unset($payload['created_at']);
+            DB::connection('mysql_loan')->table('loan_customers')->where('id', $existingId)->update($payload);
+
+            return (int) $existingId;
+        }
 
         return (int) DB::connection('mysql_loan')->table('loan_customers')->insertGetId($payload);
+    }
+
+    protected function generateUniqueLoanCustomerCode(): string
+    {
+        do {
+            $code = 'LC-'.strtoupper(Str::random(8));
+            $exists = DB::connection('mysql_loan')->table('loan_customers')->where('customer_code', $code)->exists();
+        } while ($exists);
+
+        return $code;
     }
 
     protected function upsertLocationSnapshot($h): ?int
