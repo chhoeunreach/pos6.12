@@ -937,6 +937,8 @@ class LoanInstallmentListController extends Controller
             ->values();
 
         $totalAmount = round((float) $paymentLines->sum('amount'), 2);
+        $createdPaymentIds = [];
+        $returnTo = trim((string) $request->input('return_to', ''));
 
         if ($paymentLines->isEmpty() || $totalAmount <= 0) {
             return redirect()
@@ -944,7 +946,7 @@ class LoanInstallmentListController extends Controller
                 ->with('status', ['success' => 0, 'msg' => 'Please add at least one payment line.']);
         }
 
-        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $isPayOff, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt) {
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $isPayOff, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
             $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
             if ($userName === '') {
                 $userName = auth()->user()->username ?? null;
@@ -984,6 +986,7 @@ class LoanInstallmentListController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]));
+                $createdPaymentIds[] = (int) $paymentId;
 
                 if (Schema::connection('mysql_loan')->hasTable('loan_payment_details')) {
                     DB::connection('mysql_loan')->table('loan_payment_details')->insert($this->loanSafeColumns('loan_payment_details', [
@@ -1014,6 +1017,21 @@ class LoanInstallmentListController extends Controller
         });
 
         $this->notifyLocationTelegram($loan, 'payment', $totalAmount);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            $paymentId = $createdPaymentIds[0] ?? null;
+            $redirectUrl = $returnTo !== '' ? $returnTo : route('loan-management.dashboard');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment added successfully',
+                'data' => [
+                    'payment_id' => $paymentId,
+                    'print_url' => route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1, '_lm_direct_print' => 1]),
+                    'redirect_url' => $redirectUrl,
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('loan-management.loans.view', $loan)

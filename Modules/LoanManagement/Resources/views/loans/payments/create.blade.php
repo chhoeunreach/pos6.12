@@ -26,6 +26,7 @@
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
         {!! Form::open(['url' => route('loan-management.loans.payment.store', $loanRow->id), 'method' => 'post', 'id' => 'loan_payment_add_form']) !!}
+        <input type="hidden" name="return_to" value="{{ request('return_to', route('loan-management.dashboard')) }}">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
@@ -327,6 +328,49 @@ $(function () {
         previousScheduleId = $(this).val();
         updateScheduleDisplay();
         applyPayTarget();
+    });
+    $form.off('submit.loanPaymentModal').on('submit.loanPaymentModal', function (e) {
+        e.preventDefault();
+        var $submitButtons = $form.find('button[type="submit"], .remove-loan-payment-line, .add-loan-payment-line');
+        $submitButtons.prop('disabled', true);
+
+        $.ajax({
+            url: $form.attr('action'),
+            method: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function (res) {
+                if (window.toastr) {
+                    toastr.success(res.message || 'Payment added successfully');
+                }
+
+                $('.view_modal').modal('hide');
+                var printUrl = res.data && res.data.print_url ? res.data.print_url : '';
+                var redirectUrl = res.data && res.data.redirect_url ? res.data.redirect_url : "{{ route('loan-management.dashboard') }}";
+
+                if (typeof window.loanManagementDirectPrintUrl === 'function' && printUrl) {
+                    window.loanManagementDirectPrintUrl(printUrl, function () {
+                        window.location.href = redirectUrl;
+                    });
+                    return;
+                }
+
+                window.location.href = redirectUrl;
+            },
+            error: function (xhr) {
+                if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                    var firstKey = Object.keys(xhr.responseJSON.errors)[0];
+                    var message = xhr.responseJSON.errors[firstKey][0] || 'Validation failed';
+                    alert(message);
+                    return;
+                }
+
+                alert(xhr.responseJSON?.message || 'Failed to save payment');
+            },
+            complete: function () {
+                $submitButtons.prop('disabled', false);
+            }
+        });
     });
     refreshRemoveButtons();
     updateScheduleDisplay();

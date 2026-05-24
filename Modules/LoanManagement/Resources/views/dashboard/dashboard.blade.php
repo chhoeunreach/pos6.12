@@ -168,6 +168,12 @@
         box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
         overflow: hidden;
     }
+    .lm-dashboard-panel--feature {
+        position: relative;
+        background:
+            radial-gradient(circle at top right, rgba(37, 99, 235, 0.07), transparent 26%),
+            linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    }
     .lm-dashboard-panel__header {
         display: flex;
         align-items: center;
@@ -187,6 +193,20 @@
         color: #64748b;
         font-size: 12px;
     }
+    .lm-dashboard-panel__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid #dbe8ff;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #eff6ff, #f8fbff);
+        color: #1d4ed8;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+    }
     .lm-dashboard-panel__body {
         padding: 16px 18px 18px;
     }
@@ -196,12 +216,36 @@
         gap: 16px;
     }
     .lm-quick-box {
+        position: relative;
         padding: 16px;
         border: 1px solid #e8eef5;
         border-radius: 16px;
         background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+        overflow: hidden;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .lm-quick-box::before {
+        content: '';
+        position: absolute;
+        top: -44px;
+        right: -30px;
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        background: rgba(56, 189, 248, 0.12);
+        pointer-events: none;
+    }
+    .lm-quick-box:hover {
+        transform: translateY(-2px);
+        border-color: #cfe0f7;
+        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+    }
+    .lm-quick-box--sell::before {
+        background: rgba(34, 197, 94, 0.12);
     }
     .lm-quick-box__title {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -226,6 +270,37 @@
         color: #64748b;
         font-size: 12px;
         line-height: 1.5;
+    }
+    .lm-quick-box__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 12px;
+    }
+    .lm-quick-box__chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .lm-quick-box--sell .lm-quick-box__chip {
+        background: #ecfdf5;
+        color: #15803d;
+    }
+    .lm-quick-box__footer {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px dashed #dbe5ef;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
     }
     .lm-quick-input .input-group-addon {
         border-color: #d7e2ee;
@@ -280,6 +355,59 @@
         display: inline-flex;
         gap: 6px;
         flex-wrap: wrap;
+    }
+    .lm-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+    .lm-action-menu__toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border: 1px solid #d7e2ee;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        color: #0f172a;
+        font-size: 12px;
+        font-weight: 700;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+    .lm-action-menu__toggle:hover,
+    .lm-action-menu__toggle:focus {
+        background: #f8fafc;
+        color: #020617;
+    }
+    .lm-action-menu__list {
+        min-width: 190px;
+        padding: 6px;
+        border: 1px solid #dbe5ef;
+        border-radius: 14px;
+        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+    }
+    .lm-action-menu__list > li > a,
+    .lm-action-menu__list > li > button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 9px 10px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #0f172a;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+        white-space: nowrap;
+    }
+    .lm-action-menu__list > li > a:hover,
+    .lm-action-menu__list > li > a:focus,
+    .lm-action-menu__list > li > button:hover,
+    .lm-action-menu__list > li > button:focus {
+        background: #eff6ff;
+        color: #1d4ed8;
+        text-decoration: none;
     }
     .lm-action-btn {
         display: inline-flex;
@@ -340,12 +468,46 @@
         color: #0f172a;
         font-size: 16px;
     }
+    .lm-dashboard-frame-link {
+        cursor: pointer;
+        text-decoration: none !important;
+    }
+    .lm-dashboard-iframe-modal .modal-dialog {
+        width: 96%;
+        max-width: 1280px;
+    }
+    .lm-dashboard-iframe-modal .modal-body {
+        padding: 0;
+        height: 80vh;
+        background: #f8fafc;
+    }
+    .lm-dashboard-iframe-modal iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        background: #fff;
+    }
     .lm-chat-card {
+        position: relative;
         padding: 10px;
         border: 1px solid #e8eef5;
         border-radius: 28px;
-        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        background:
+            radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 28%),
+            linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
         box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+    }
+    .lm-chat-card::before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        right: 18px;
+        width: 66px;
+        height: 66px;
+        border-radius: 50%;
+        background: rgba(37, 99, 235, 0.07);
+        pointer-events: none;
     }
     .lm-chat-card__toolbar {
         display: flex;
@@ -398,6 +560,40 @@
         gap: 10px;
         overflow-x: auto;
         padding: 0 10px 12px;
+    }
+    .lm-chat-card__summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 0 10px 14px;
+    }
+    .lm-chat-card__summary-box {
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f8fbff, #eef4ff);
+        border: 1px solid #dce8fb;
+    }
+    .lm-chat-card__summary-label {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+    .lm-chat-card__summary-value {
+        display: block;
+        margin-top: 6px;
+        color: #0f172a;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .lm-chat-card__summary-note {
+        display: block;
+        margin-top: 5px;
+        color: #64748b;
+        font-size: 11px;
     }
     .lm-chat-card__tab {
         display: inline-flex;
@@ -560,6 +756,9 @@
         .lm-chat-card__title {
             font-size: 21px;
         }
+        .lm-chat-card__summary {
+            grid-template-columns: 1fr;
+        }
         .lm-chat-card__item {
             grid-template-columns: 64px minmax(0, 1fr) 16px;
         }
@@ -605,18 +804,24 @@
     </section>
 
     <section class="lm-dashboard-grid">
-        <div class="lm-dashboard-panel">
+        <div class="lm-dashboard-panel lm-dashboard-panel--feature">
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Installment Quick Actions</h3>
                     <p class="lm-dashboard-panel__hint">Fast search for loan operations and sell conversion in one place.</p>
                 </div>
+                <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 2 smart tools</span>
             </div>
             <div class="lm-dashboard-panel__body">
                 <div class="lm-quick-grid">
-                    <div class="lm-quick-box">
+                    <div class="lm-quick-box lm-quick-box--loan">
                         <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-search"></i></span> Loan Search</h4>
                         <p class="lm-quick-box__subtitle">Find installment loans by loan number, customer, or phone. Then print invoice or add monthly payment.</p>
+                        <div class="lm-quick-box__meta">
+                            <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Print</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-money"></i> Payment</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-user"></i> Customer lookup</span>
+                        </div>
                         <div class="form-group lm-quick-input" style="margin-bottom:12px;">
                             <div class="input-group">
                                 <span class="input-group-addon"><i class="fa fa-search"></i></span>
@@ -631,11 +836,17 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div class="lm-quick-box__footer">Use this for fast payment collection and loan document access.</div>
                     </div>
 
-                    <div class="lm-quick-box">
+                    <div class="lm-quick-box lm-quick-box--sell">
                         <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-plus-square"></i></span> Create Loan From Sell</h4>
                         <p class="lm-quick-box__subtitle">Search POS sell invoices and jump straight into the add-installment flow from the dashboard.</p>
+                        <div class="lm-quick-box__meta">
+                            <span class="lm-quick-box__chip"><i class="fa fa-shopping-cart"></i> Open POS</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-credit-card"></i> Convert sell</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Auto print</span>
+                        </div>
                         <div class="form-group lm-quick-input" style="margin-bottom:12px;">
                             <div class="input-group">
                                 <span class="input-group-addon lm-quick-trigger" id="loanDashboardOpenSellPos" title="Add POS Sell" role="button" tabindex="0"><i class="fa fa-plus-square"></i></span>
@@ -650,17 +861,19 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div class="lm-quick-box__footer">Best for creating installment loans directly from completed POS sales.</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="lm-dashboard-panel">
+        <div class="lm-dashboard-panel lm-dashboard-panel--feature">
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Customer Chat</h3>
                     <p class="lm-dashboard-panel__hint">Recent customer conversations before field collection follow-up.</p>
                 </div>
+                <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
             </div>
             <div class="lm-dashboard-panel__body">
                 <div class="lm-chat-card">
@@ -689,6 +902,19 @@
                         <span class="lm-chat-card__tab">មិនទាន់អាន</span>
                         <span class="lm-chat-card__tab">ក្រុម</span>
                         <span class="lm-chat-card__tab"><i class="fa fa-ellipsis-h"></i></span>
+                    </div>
+
+                    <div class="lm-chat-card__summary">
+                        <div class="lm-chat-card__summary-box">
+                            <span class="lm-chat-card__summary-label">Unread queue</span>
+                            <span class="lm-chat-card__summary-value">{{ $dashboardUnreadChats }}</span>
+                            <span class="lm-chat-card__summary-note">Messages waiting for staff reply</span>
+                        </div>
+                        <div class="lm-chat-card__summary-box">
+                            <span class="lm-chat-card__summary-label">Pending visits</span>
+                            <span class="lm-chat-card__summary-value">{{ $dashboardPendingVisits }}</span>
+                            <span class="lm-chat-card__summary-note">Field follow-up cases linked to chat</span>
+                        </div>
                     </div>
 
                     <div class="lm-chat-card__list">
@@ -880,6 +1106,31 @@
             return $('<div>').text(value == null ? '-' : value).html();
         }
 
+        function openDashboardIframeModal(title, url) {
+            if (!url || !$('.view_modal').length) {
+                return;
+            }
+
+            var html = '' +
+                '<div class="modal-dialog modal-xl lm-dashboard-iframe-modal" role="document">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header">' +
+                            '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                '<span aria-hidden="true">&times;</span>' +
+                            '</button>' +
+                            '<h4 class="modal-title">' + esc(title || 'Detail') + '</h4>' +
+                        '</div>' +
+                        '<div class="modal-body">' +
+                            '<iframe src="' + esc(url) + '" title="' + esc(title || 'Detail') + '"></iframe>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+            $('.view_modal')
+                .html(html)
+                .modal('show');
+        }
+
         function updateCards(cards) {
             $('[data-loan-card]').each(function () {
                 var key = $(this).data('loan-card');
@@ -907,16 +1158,22 @@
         function renderQuickSearch(rows) {
             var html = '';
             (rows || []).forEach(function (row) {
-                var printUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print";
-                var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create";
+                var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view";
+                var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
+                var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 html += '<tr>'
-                    + '<td><span class="lm-row-title">' + esc(row.loan_number) + '</span><span class="lm-row-subtitle">' + esc(row.status) + (row.next_due_date ? ' / Due ' + esc(row.next_due_date) : '') + '</span></td>'
-                    + '<td><span class="lm-row-title">' + esc(row.customer_name) + '</span><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
+                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.loan_number) + '</a><span class="lm-row-subtitle">' + esc(row.status) + (row.next_due_date ? ' / Due ' + esc(row.next_due_date) : '') + '</span></td>'
+                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
                     + '<td class="text-right">' + money(row.balance_amount) + '</td>'
-                    + '<td class="text-nowrap"><span class="lm-action-buttons">'
-                    + '<a class="lm-action-btn" href="' + printUrl + '" target="_blank"><i class="fa fa-print"></i> Print</a>'
-                    + '<button type="button" class="lm-action-btn lm-action-btn--success btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Payment</button>'
-                    + '</span>'
+                    + '<td class="text-nowrap">'
+                    + '<div class="btn-group lm-action-menu">'
+                    + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
+                    + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
+                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> Detail</button></li>'
+                    + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print Loan</button></li>'
+                    + '<li><button type="button" class="btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Add Payment</button></li>'
+                    + '</ul>'
+                    + '</div>'
                     + '</td>'
                     + '</tr>';
             });
@@ -952,20 +1209,26 @@
             var html = '';
             (rows || []).forEach(function (row) {
                 var addUrl = "{{ url('loan-management/loans/sell') }}/" + row.id + "/clone";
+                var detailUrl = "{{ url('loan-management/sell-list') }}/" + row.id + "/view";
                 var viewLoanUrl = row.linked_loan_id ? "{{ url('loan-management/loans') }}/" + row.linked_loan_id + "/view" : '';
                 html += '<tr>'
-                    + '<td><span class="lm-row-title">' + esc(row.invoice_no) + '</span><span class="lm-row-subtitle">Total ' + money(row.final_total) + '</span></td>'
-                    + '<td><span class="lm-row-title">' + esc(row.customer_name) + '</span><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
+                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-sell-detail-modal" data-title="Sell Detail" data-url="' + detailUrl + '">' + esc(row.invoice_no) + '</a><span class="lm-row-subtitle">Total ' + money(row.final_total) + '</span></td>'
+                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-sell-detail-modal" data-title="Sell Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
                     + '<td class="text-right">' + money(row.due_amount) + '</td>'
-                    + '<td class="text-nowrap"><span class="lm-action-buttons">';
+                    + '<td class="text-nowrap">'
+                    + '<div class="btn-group lm-action-menu">'
+                    + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
+                    + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">';
 
                 if (row.is_converted && viewLoanUrl) {
-                    html += '<a class="lm-action-btn" href="' + viewLoanUrl + '"><i class="fa fa-eye"></i> View Loan</a>';
+                    html += '<li><button type="button" class="js-sell-detail-modal" data-title="Sell Detail" data-url="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Sell Detail</button></li>';
+                    html += '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + viewLoanUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>';
                 } else {
-                    html += '<a class="lm-action-btn lm-action-btn--primary" href="' + addUrl + '"><i class="fa fa-plus"></i> Add Installment</a>';
+                    html += '<li><button type="button" class="js-sell-detail-modal" data-title="Sell Detail" data-url="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Detail</button></li>';
+                    html += '<li><button type="button" class="btn-select-sale" data-id="' + row.id + '"><i class="fa fa-plus"></i> Add Installment</button></li>';
                 }
 
-                html += '</span></td></tr>';
+                html += '</ul></div></td></tr>';
             });
             $('[data-loan-table="dashboard_sell_search"]').html(html || '<tr><td colspan="4" class="text-center">No sells found.</td></tr>');
         }
@@ -1089,6 +1352,17 @@
                 var sharedPosTrigger = $('#loanHeaderOpenSellPos');
                 if (sharedPosTrigger.length) {
                     sharedPosTrigger.trigger('click');
+                }
+            });
+            $(document).on('click', '.js-loan-detail-modal, .js-sell-detail-modal', function (event) {
+                event.preventDefault();
+                openDashboardIframeModal($(this).data('title') || 'Detail', $(this).data('url'));
+            });
+            $(document).on('click', '[data-loan-table="dashboard_sell_search"] .btn-select-sale', function (event) {
+                event.preventDefault();
+                var saleId = $(this).data('id');
+                if (saleId && typeof window.loanManagementOpenAutoInstallment === 'function') {
+                    window.loanManagementOpenAutoInstallment(saleId);
                 }
             });
 

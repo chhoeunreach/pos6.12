@@ -309,6 +309,52 @@
                     loanPosPrintFinalizeTimer = window.setTimeout(done, 30000);
                 }
 
+                function directLoanManagementPrintUrl(url, onComplete) {
+                    if (!url) {
+                        if (typeof onComplete === 'function') {
+                            onComplete();
+                        }
+                        return;
+                    }
+
+                    var frameId = 'loan_management_direct_print_' + Date.now();
+                    var iframe = document.createElement('iframe');
+                    iframe.id = frameId;
+                    iframe.src = url;
+                    iframe.style.position = 'fixed';
+                    iframe.style.width = '1px';
+                    iframe.style.height = '1px';
+                    iframe.style.opacity = '0';
+                    iframe.style.pointerEvents = 'none';
+                    iframe.style.border = '0';
+                    iframe.style.right = '0';
+                    iframe.style.bottom = '0';
+                    document.body.appendChild(iframe);
+
+                    iframe.onload = function() {
+                        try {
+                            var childWindow = iframe.contentWindow;
+                            waitForLoanPrintToFinish(childWindow, function() {
+                                if (iframe.parentNode) {
+                                    iframe.parentNode.removeChild(iframe);
+                                }
+                                if (typeof onComplete === 'function') {
+                                    onComplete();
+                                }
+                            });
+                            childWindow.focus();
+                            childWindow.print();
+                        } catch (error) {
+                            if (iframe.parentNode) {
+                                iframe.parentNode.removeChild(iframe);
+                            }
+                            if (typeof onComplete === 'function') {
+                                onComplete();
+                            }
+                        }
+                    };
+                }
+
                 function installPosPrintBridge(frameId) {
                     var frame = document.getElementById(frameId);
                     if (!frame || !frame.contentWindow) {
@@ -433,6 +479,8 @@
                     openAutoInstallment(transactionId || (receipt ? receipt.transaction_id : null));
                 });
 
+                window.loanManagementOpenAutoInstallment = openAutoInstallment;
+                window.loanManagementDirectPrintUrl = directLoanManagementPrintUrl;
                 window.loanManagementOpenSellPos = openLoanSellPosModal;
                 window.loanManagementOpenPrintModal = openLoanPrintModal;
 
