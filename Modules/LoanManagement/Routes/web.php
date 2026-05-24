@@ -132,6 +132,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/monthly-payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Monthly Payments')->name('loan-management.monthly-payments.index')->middleware('can:loan_management.view');
         Route::get('/overdue', [DashboardController::class, 'overdue'])->name('loan-management.overdue.index')->middleware('can:loan_management.view');
         Route::get('/locations', [LoanLocationController::class, 'index'])->name('loan-management.locations.index')->middleware('can:loan_management.view');
+        Route::get('/locations/export', [LoanLocationController::class, 'export'])->name('loan-management.locations.export')->middleware('can:loan_management.view');
+        Route::get('/locations/template', [LoanLocationController::class, 'template'])->name('loan-management.locations.template')->middleware('can:loan_management.view');
+        Route::post('/locations/import', [LoanLocationController::class, 'import'])->name('loan-management.locations.import')->middleware('can:loan_management.view');
         Route::post('/locations', [LoanLocationController::class, 'store'])->name('loan-management.locations.store')->middleware('can:loan_management.view');
         Route::put('/locations/{location}', [LoanLocationController::class, 'updateDetails'])->name('loan-management.locations.update')->middleware('can:loan_management.view');
         Route::delete('/locations/{location}', [LoanLocationController::class, 'destroy'])->name('loan-management.locations.destroy')->middleware('can:loan_management.view');

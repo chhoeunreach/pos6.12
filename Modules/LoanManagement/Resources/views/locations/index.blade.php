@@ -78,9 +78,63 @@
         </div>
     @endif
 
+    @component('components.filters', ['title' => __('report.filters')])
+        <form method="GET" action="{{ route('loan-management.locations.index') }}" id="loan_location_filter_form">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" name="name" class="form-control" value="{{ $filters['name'] ?? '' }}" placeholder="Location name">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Location ID</label>
+                        <input type="text" name="location_code" class="form-control" value="{{ $filters['location_code'] ?? '' }}" placeholder="Location ID">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" name="phone" class="form-control" value="{{ $filters['phone'] ?? '' }}" placeholder="Phone">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" class="form-control">
+                            <option value="">All</option>
+                            <option value="active" {{ ($filters['status'] ?? '') === 'active' ? 'selected' : '' }}>Active</option>
+                            <option value="inactive" {{ ($filters['status'] ?? '') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <button type="submit" class="btn btn-primary"><i class="fa fa-filter"></i> Apply</button>
+                    <a href="{{ route('loan-management.locations.index') }}" class="btn btn-default">Reset</a>
+                </div>
+            </div>
+        </form>
+    @endcomponent
+
     @component('components.widget', ['class' => 'box-primary', 'title' => 'All Loan Locations'])
         @slot('tool')
             <div class="box-tools">
+                <a href="{{ route('loan-management.locations.template') }}"
+                    class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-info pull-right tw-mb-2 tw-mr-2">
+                    <i class="fa fa-download"></i> Template
+                </a>
+                <a href="{{ route('loan-management.locations.export') }}"
+                    class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-success pull-right tw-mb-2 tw-mr-2">
+                    <i class="fa fa-file-excel-o"></i> Export
+                </a>
+                <button type="button"
+                    class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-warning pull-right tw-mb-2 tw-mr-2"
+                    data-toggle="modal" data-target="#loan_location_import_modal">
+                    <i class="fa fa-upload"></i> Import
+                </button>
                 <button type="button"
                     class="tw-dw-btn tw-bg-gradient-to-r tw-from-indigo-600 tw-to-blue-500 tw-font-bold tw-text-white tw-border-none tw-rounded-full pull-right tw-mb-2"
                     data-toggle="modal" data-target="#loan_location_add_modal">
@@ -182,6 +236,43 @@
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">Save</button>
+                        <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">Close</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="loan_location_import_modal" tabindex="-1" role="dialog" aria-labelledby="loanLocationImportModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('loan-management.locations.import') }}" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                        <h4 class="modal-title" id="loanLocationImportModalLabel">Import Loan Locations</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            Required column: <code>name</code><br>
+                            Optional columns: <code>location_code</code>, <code>loan_invoice_prefix</code>, <code>address</code>, <code>phone</code>, <code>status</code>
+                        </div>
+                        <div class="form-group">
+                            <label>Import File</label>
+                            <input type="file" name="file" class="form-control" accept=".csv,.txt,.xlsx" required>
+                            <p class="help-block">Use the template file for best results.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Duplicate Records</label>
+                            <select name="duplicate_mode" class="form-control">
+                                <option value="skip">Skip duplicate</option>
+                                <option value="replace">Replace existing</option>
+                            </select>
+                            <p class="help-block">Existing records match by <code>location_code</code> first, then by <code>name</code>.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">Import</button>
                         <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">Close</button>
                     </div>
                 </form>

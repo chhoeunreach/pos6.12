@@ -64,6 +64,7 @@ Required:
 Supported optional columns:
 
 - `schedule_id`
+- `payment_type`
 - `payment_method`
 - `currency`
 - `exchange_rate`
@@ -71,6 +72,7 @@ Supported optional columns:
 - `note`
 
 When `schedule_id` is empty, the importer applies the payment to the oldest open schedule for the loan.
+Duplicate monthly payments match by `reference_number` when provided; otherwise they match by `loan_id/loan_number + schedule_id + payment_type + paid_date + amount + payment_method`.
 
 Example:
 

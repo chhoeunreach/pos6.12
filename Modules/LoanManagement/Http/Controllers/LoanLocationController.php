@@ -6,8 +6,10 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use ZipArchive;
 
 class LoanLocationController extends Controller
 {
@@ -15,16 +17,35 @@ class LoanLocationController extends Controller
     protected string $table = 'loan_business_locations';
     protected string $locationAssetRoot = 'loan_location_assets';
 
-    public function index()
+    public function index(Request $request)
     {
         abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
 
+        $filters = [
+            'name' => trim((string) $request->input('name', '')),
+            'location_code' => trim((string) $request->input('location_code', '')),
+            'phone' => trim((string) $request->input('phone', '')),
+            'status' => trim((string) $request->input('status', '')),
+        ];
+
         $locations = DB::connection($this->connection)
             ->table($this->table)
             ->when(Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->when($filters['name'] !== '', function ($query) use ($filters) {
+                $query->where('name', 'like', '%'.$filters['name'].'%');
+            })
+            ->when($filters['location_code'] !== '', function ($query) use ($filters) {
+                $query->where('location_code', 'like', '%'.$filters['location_code'].'%');
+            })
+            ->when($filters['phone'] !== '', function ($query) use ($filters) {
+                $query->where('phone', 'like', '%'.$filters['phone'].'%');
+            })
+            ->when(in_array($filters['status'], ['active', 'inactive'], true), function ($query) use ($filters) {
+                $query->where('status', $filters['status']);
+            })
             ->orderBy('name')
             ->get()
             ->map(function ($location) {
@@ -39,7 +60,133 @@ class LoanLocationController extends Controller
 
         $assetGallery = $this->assetGallery();
 
-        return view('loanmanagement::locations.index', compact('locations', 'assetGallery'));
+        return view('loanmanagement::locations.index', compact('locations', 'assetGallery', 'filters'));
+    }
+
+    public function export()
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
+        $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
+
+        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'status'];
+        $rows = DB::connection($this->connection)
+            ->table($this->table)
+            ->when(Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->orderBy('name')
+            ->get($columns);
+
+        $handle = fopen('php://temp', 'r+');
+        fputcsv($handle, $columns);
+        foreach ($rows as $row) {
+            fputcsv($handle, array_map(fn ($column) => $row->{$column} ?? '', $columns));
+        }
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        fclose($handle);
+
+        return Response::make((string) $content, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="loan-locations-'.now()->format('Ymd-His').'.csv"',
+        ]);
+    }
+
+    public function template()
+    {
+        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'status'];
+        $example = ['Phnom Penh Branch', 'PP01', 'KY', 'Street 271, Phnom Penh', '012345678', 'active'];
+
+        $handle = fopen('php://temp', 'r+');
+        fputcsv($handle, $columns);
+        fputcsv($handle, $example);
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        fclose($handle);
+
+        return Response::make((string) $content, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="loan-location-import-template.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        $this->ensureLoanInvoicePrefixColumn();
+        $this->ensureTelegramChatColumns();
+        $this->ensureLocationCrudColumns();
+
+        $data = $request->validate([
+            'duplicate_mode' => 'nullable|in:skip,replace',
+            'file' => 'required|file|max:20480|mimes:csv,txt,xlsx',
+        ]);
+
+        try {
+            $duplicateMode = $data['duplicate_mode'] ?? 'skip';
+            $rows = $this->readLocationImportFile($request->file('file'));
+            $headers = array_shift($rows) ?: [];
+            $headers = array_map([$this, 'normalizeLocationHeader'], $headers);
+
+            if (empty($headers)) {
+                return redirect()->route('loan-management.locations.index')->with('status', [
+                    'success' => 0,
+                    'msg' => 'Import failed: file does not contain a header row.',
+                ]);
+            }
+
+            $imported = 0;
+            $skipped = 0;
+            $invalid = 0;
+
+            foreach ($rows as $row) {
+                if ($this->isEmptyImportRow($row)) {
+                    continue;
+                }
+
+                $mapped = $this->combineLocationRow($headers, $row);
+                $normalized = $this->normalizeLocationImportRow($mapped);
+                $errors = $this->validateImportedLocationRow($normalized);
+
+                if (! empty($errors)) {
+                    $invalid++;
+                    continue;
+                }
+
+                $existing = $this->findExistingLocation($normalized);
+                if ($existing && $duplicateMode === 'skip') {
+                    $skipped++;
+                    continue;
+                }
+
+                $payload = $this->safeColumns(array_merge(
+                    $this->locationPayload($normalized),
+                    ['updated_at' => now()]
+                ));
+
+                if ($existing && $duplicateMode === 'replace') {
+                    DB::connection($this->connection)
+                        ->table($this->table)
+                        ->where('id', $existing->id)
+                        ->update($payload);
+                } else {
+                    $payload['created_at'] = now();
+                    DB::connection($this->connection)->table($this->table)->insert($payload);
+                }
+
+                $imported++;
+            }
+
+            return redirect()->route('loan-management.locations.index')->with('status', [
+                'success' => 1,
+                'msg' => 'Location import completed. Imported: '.$imported.', Skipped: '.$skipped.', Invalid: '.$invalid.'.',
+            ]);
+        } catch (\Throwable $e) {
+            return redirect()->route('loan-management.locations.index')->with('status', [
+                'success' => 0,
+                'msg' => 'Import failed: '.$e->getMessage(),
+            ]);
+        }
     }
 
     public function store(Request $request)
@@ -473,5 +620,208 @@ class LoanLocationController extends Controller
             $payload,
             array_flip(Schema::connection($this->connection)->getColumnListing($this->table))
         );
+    }
+
+    protected function readLocationImportFile($file): array
+    {
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+
+        return $extension === 'xlsx'
+            ? $this->readLocationXlsx($file->getRealPath())
+            : $this->readLocationCsv($file->getRealPath());
+    }
+
+    protected function readLocationCsv(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if (! $handle) {
+            throw new \RuntimeException('Unable to read uploaded file.');
+        }
+
+        $rows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = $row;
+        }
+        fclose($handle);
+
+        return $rows;
+    }
+
+    protected function readLocationXlsx(string $path): array
+    {
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new \RuntimeException('Unable to read XLSX file.');
+        }
+
+        $sharedStrings = $this->xlsxSharedStrings($zip);
+        $sheetPath = $this->xlsxFirstWorksheetPath($zip);
+        $xml = $zip->getFromName($sheetPath);
+        $zip->close();
+
+        if ($xml === false) {
+            throw new \RuntimeException('Unable to locate worksheet.');
+        }
+
+        $reader = new \XMLReader();
+        $reader->XML($xml);
+        $rows = [];
+        $currentRow = [];
+        $currentCellRef = null;
+        $currentCellType = null;
+        $currentValue = '';
+
+        while ($reader->read()) {
+            if ($reader->nodeType === \XMLReader::ELEMENT && $reader->localName === 'row') {
+                $currentRow = [];
+            } elseif ($reader->nodeType === \XMLReader::ELEMENT && $reader->localName === 'c') {
+                $currentCellRef = $reader->getAttribute('r');
+                $currentCellType = $reader->getAttribute('t');
+                $currentValue = '';
+            } elseif ($reader->nodeType === \XMLReader::ELEMENT && in_array($reader->localName, ['v', 't'], true)) {
+                $currentValue .= $reader->readString();
+            } elseif ($reader->nodeType === \XMLReader::END_ELEMENT && $reader->localName === 'c') {
+                $columnIndex = $this->xlsxColumnIndex((string) $currentCellRef);
+                $value = $currentValue;
+                if ($currentCellType === 's' && $value !== '') {
+                    $value = $sharedStrings[(int) $value] ?? $value;
+                }
+                $currentRow[$columnIndex] = trim((string) $value);
+            } elseif ($reader->nodeType === \XMLReader::END_ELEMENT && $reader->localName === 'row') {
+                if (! empty($currentRow)) {
+                    ksort($currentRow);
+                    $maxColumn = max(array_keys($currentRow));
+                    $rows[] = array_map(
+                        fn ($index) => $currentRow[$index] ?? '',
+                        range(0, $maxColumn)
+                    );
+                }
+            }
+        }
+        $reader->close();
+
+        return $rows;
+    }
+
+    protected function xlsxSharedStrings(ZipArchive $zip): array
+    {
+        $xml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($xml === false) {
+            return [];
+        }
+
+        $reader = new \XMLReader();
+        $reader->XML($xml);
+        $strings = [];
+        $text = '';
+        $inside = false;
+
+        while ($reader->read()) {
+            if ($reader->nodeType === \XMLReader::ELEMENT && $reader->localName === 'si') {
+                $inside = true;
+                $text = '';
+            } elseif ($inside && $reader->nodeType === \XMLReader::TEXT) {
+                $text .= $reader->value;
+            } elseif ($reader->nodeType === \XMLReader::END_ELEMENT && $reader->localName === 'si') {
+                $strings[] = $text;
+                $inside = false;
+            }
+        }
+        $reader->close();
+
+        return $strings;
+    }
+
+    protected function xlsxFirstWorksheetPath(ZipArchive $zip): string
+    {
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (is_string($name) && preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name)) {
+                return $name;
+            }
+        }
+
+        return 'xl/worksheets/sheet1.xml';
+    }
+
+    protected function xlsxColumnIndex(string $cellRef): int
+    {
+        preg_match('/([A-Z]+)/', $cellRef, $matches);
+        $letters = $matches[1] ?? 'A';
+        $index = 0;
+        foreach (str_split($letters) as $letter) {
+            $index = ($index * 26) + (ord($letter) - 64);
+        }
+
+        return $index - 1;
+    }
+
+    protected function normalizeLocationHeader($header): string
+    {
+        $header = preg_replace('/^\xEF\xBB\xBF/', '', (string) $header);
+        $header = strtolower(trim($header));
+        $header = preg_replace('/[^a-z0-9]+/', '_', $header);
+
+        $aliases = [
+            'location_id' => 'location_code',
+            'branch_name' => 'name',
+            'invoice_prefix' => 'loan_invoice_prefix',
+        ];
+
+        return $aliases[$header] ?? trim((string) $header, '_');
+    }
+
+    protected function combineLocationRow(array $headers, array $row): array
+    {
+        $data = [];
+        foreach ($headers as $index => $header) {
+            $data[$header] = trim((string) ($row[$index] ?? ''));
+        }
+
+        return $data;
+    }
+
+    protected function isEmptyImportRow(array $row): bool
+    {
+        return trim(implode('', $row)) === '';
+    }
+
+    protected function normalizeLocationImportRow(array $row): array
+    {
+        return [
+            'name' => trim((string) ($row['name'] ?? '')),
+            'location_code' => trim((string) ($row['location_code'] ?? '')) ?: null,
+            'loan_invoice_prefix' => $this->cleanLoanInvoicePrefix($row['loan_invoice_prefix'] ?? null),
+            'address' => trim((string) ($row['address'] ?? '')) ?: null,
+            'phone' => trim((string) ($row['phone'] ?? '')) ?: null,
+            'status' => in_array(($row['status'] ?? 'active'), ['active', 'inactive'], true) ? $row['status'] : 'active',
+        ];
+    }
+
+    protected function validateImportedLocationRow(array $row): array
+    {
+        $errors = [];
+        if (empty($row['name'])) {
+            $errors[] = 'name is required';
+        }
+
+        return $errors;
+    }
+
+    protected function findExistingLocation(array $row)
+    {
+        $query = DB::connection($this->connection)->table($this->table);
+        if (Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        if (! empty($row['location_code'])) {
+            $existing = (clone $query)->where('location_code', $row['location_code'])->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        return (clone $query)->where('name', $row['name'])->first();
     }
 }

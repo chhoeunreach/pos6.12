@@ -536,6 +536,42 @@ class LoanInstallmentListController extends Controller
         if ($request->filled('customer') && $this->hasCol('customer_name_snapshot')) $q->where('l.customer_name_snapshot', 'like', '%'.$request->customer.'%');
 
         return DataTables::of($q)
+            ->filter(function ($query) use ($request) {
+                $search = trim((string) data_get($request->all(), 'search.value', ''));
+                if ($search === '') {
+                    return;
+                }
+
+                $like = '%'.$search.'%';
+                $query->where(function ($where) use ($like) {
+                    $hasCondition = false;
+
+                    foreach ([
+                        ['loan_number', 'l.loan_number'],
+                        ['loan_date', 'l.loan_date'],
+                        ['source_invoice_no', 'l.source_invoice_no'],
+                        ['customer_name_snapshot', 'l.customer_name_snapshot'],
+                        ['customer_phone_snapshot', 'l.customer_phone_snapshot'],
+                        ['business_location_name_snapshot', 'l.business_location_name_snapshot'],
+                        ['collector_name_snapshot', 'l.collector_name_snapshot'],
+                        ['principal_amount', 'l.principal_amount'],
+                        ['paid_amount', 'l.paid_amount'],
+                        ['balance_amount', 'l.balance_amount'],
+                        ['status', 'l.status'],
+                        ['currency', 'l.currency'],
+                    ] as [$column, $qualified]) {
+                        if (! $this->hasCol($column)) {
+                            continue;
+                        }
+
+                        $hasCondition
+                            ? $where->orWhere($qualified, 'like', $like)
+                            : $where->where($qualified, 'like', $like);
+
+                        $hasCondition = true;
+                    }
+                });
+            })
             ->editColumn('principal_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->principal_amount.'</span>')
             ->editColumn('paid_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->paid_amount.'</span>')
             ->editColumn('balance_amount', fn ($r) => '<span class="display_currency" data-currency_symbol="true">'.$r->balance_amount.'</span>')

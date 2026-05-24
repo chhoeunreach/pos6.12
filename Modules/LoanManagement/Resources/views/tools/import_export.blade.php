@@ -81,7 +81,7 @@
                                 <option value="skip" {{ old('duplicate_mode', 'skip') === 'skip' ? 'selected' : '' }}>Skip duplicate</option>
                                 <option value="replace" {{ old('duplicate_mode') === 'replace' ? 'selected' : '' }}>Replace existing</option>
                             </select>
-                            <p class="help-block">Duplicate loans match by loan number. Duplicate payments match by reference number when provided. Duplicate schedules match by loan and installment number.</p>
+                            <p class="help-block">Duplicate loans match by loan number. Duplicate payments match by <code>reference_number</code> when provided, otherwise by loan + schedule + payment type + paid date + amount + payment method. Duplicate schedules match by loan and installment number.</p>
                         </div>
                     </div>
                     <div class="box-body hide" id="loan_import_progress_wrap">
