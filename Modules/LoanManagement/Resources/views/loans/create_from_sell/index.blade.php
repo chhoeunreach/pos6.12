@@ -155,6 +155,7 @@
                 <div class="form-group">
                     <label>Customer Group Name</label>
                     <select name="customer_group_name" id="defaultCustomerGroupName" class="form-control select2" style="width:100%">
+                        <option value="" selected>រំលស់ / អ៊ីអន</option>
                         @foreach($customerGroups as $value => $label)
                             <option value="{{ $value }}" @selected($value === 'រំលស់')>{{ $label }}</option>
                         @endforeach
@@ -321,9 +322,10 @@
 
     function buildActionDropdown(row) {
         var rowId = esc(row.id);
+        var sellDetailUrl = "{{ action([\App\Http\Controllers\SellController::class, 'show'], ['__ROW_ID__']) }}".replace('__ROW_ID__', encodeURIComponent(row.id));
         var viewUrl = row.is_converted && row.loan_id
             ? urls.loanViewBase + '/' + encodeURIComponent(row.loan_id) + '/view'
-            : urls.sellViewBase + '/' + encodeURIComponent(row.id);
+            : sellDetailUrl;
         var viewAction = row.is_converted && row.loan_id
             ? '<li><a href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Loan</a></li>'
             : '<li><a href="#" class="btn-modal" data-container=".view_modal" data-href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Sale</a></li>';
@@ -668,7 +670,14 @@
             loadSells();
         }
     });
-    $(document).on('click', '.btn-select-sale', function(){ selectSale($(this).data('id')); });
+    $(document).on('click', '.btn-select-sale', function(){
+        var saleId = $(this).data('id');
+        if (saleId && typeof window.loanManagementOpenAutoInstallment === 'function') {
+            window.loanManagementOpenAutoInstallment(saleId);
+            return;
+        }
+        selectSale(saleId);
+    });
     $(document).on('click', '.btn-duplicate-sale', function(){ alert('This sale already has installment loan.'); });
     $(document).on('click', '.btn-delete-create-loan-sale', function(e){
         e.preventDefault();
@@ -718,6 +727,7 @@
         $('#addSellModal').modal('hide');
         loadSells();
     });
+    $('#defaultCustomerGroupName').val('').trigger('change.select2');
     loadSells();
 })(jQuery);
 </script>

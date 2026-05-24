@@ -14,6 +14,8 @@ use Modules\LoanManagement\Services\CreateLoanFromSellService;
 
 class LoanFromSellController extends Controller
 {
+    protected array $installmentCustomerGroups = ['រំលស់', 'អ៊ីអន'];
+
     public function __construct(protected CreateLoanFromSellService $service)
     {
     }
@@ -44,6 +46,15 @@ class LoanFromSellController extends Controller
                     ->orderBy('name')
                     ->pluck('name', 'name')
             );
+        }
+
+        $customerGroups = collect($this->installmentCustomerGroups)
+            ->filter(fn ($name) => $customerGroups->has($name))
+            ->mapWithKeys(fn ($name) => [$name => $name]);
+
+        if ($customerGroups->isEmpty()) {
+            $customerGroups = collect($this->installmentCustomerGroups)
+                ->mapWithKeys(fn ($name) => [$name => $name]);
         }
 
         return view('loanmanagement::loans.create_from_sell.index', [
@@ -81,6 +92,11 @@ class LoanFromSellController extends Controller
             'imei_or_lot' => $request->imei_or_lot,
             'product_name_sku' => $request->product_name_sku,
         ];
+
+        if (blank($request->input('customer_group_name'))) {
+            $filters['customer_group_name'] = null;
+        }
+        $filters['customer_group_names'] = $this->installmentCustomerGroups;
 
         $rows = $this->service->searchSales($filters);
 

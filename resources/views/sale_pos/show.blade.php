@@ -433,6 +433,82 @@
     var element = $('div.modal-xl');
     __currency_convert_recursively(element);
 
+    $('a.print-invoice').off('click.loanSellDetailPrint').on('click.loanSellDetailPrint', function(e){
+      if (!document.getElementById('loanManagementApp')) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      var href = $(this).data('href');
+      if (!href) {
+        return false;
+      }
+
+      $.ajax({
+        method: 'GET',
+        url: href,
+        dataType: 'json',
+        success: function(result) {
+          if (!(result.success == 1 && result.receipt && result.receipt.html_content)) {
+            toastr.error(result.msg || 'Unable to print invoice');
+            return;
+          }
+
+          var frameId = 'loan_sell_detail_print_frame_' + Date.now();
+          var iframe = document.createElement('iframe');
+          iframe.id = frameId;
+          iframe.style.position = 'fixed';
+          iframe.style.right = '0';
+          iframe.style.bottom = '0';
+          iframe.style.width = '1px';
+          iframe.style.height = '1px';
+          iframe.style.opacity = '0';
+          iframe.style.border = '0';
+          iframe.setAttribute('aria-hidden', 'true');
+          document.body.appendChild(iframe);
+
+          var frameWindow = iframe.contentWindow;
+          var frameDocument = frameWindow.document;
+          var headHtml = '';
+          $('link[rel="stylesheet"], style').each(function () {
+            headHtml += this.outerHTML || '';
+          });
+
+          frameDocument.open();
+          frameDocument.write(
+            '<!DOCTYPE html><html><head><title>' + $('<div>').text(result.receipt.print_title || document.title).html() + '</title>' +
+            headHtml +
+            '</head><body>' +
+            '<section id="receipt_section" class="invoice print_section">' + result.receipt.html_content + '</section>' +
+            '</body></html>'
+          );
+          frameDocument.close();
+
+          var triggerPrint = function() {
+            try {
+              frameWindow.focus();
+              frameWindow.print();
+            } finally {
+              window.setTimeout(function () {
+                if (iframe.parentNode) {
+                  iframe.parentNode.removeChild(iframe);
+                }
+              }, 60000);
+            }
+          };
+
+          window.setTimeout(triggerPrint, 700);
+        },
+        error: function(xhr) {
+          toastr.error(xhr.responseJSON?.msg || 'Unable to print invoice');
+        }
+      });
+
+      return false;
+    });
+
     $(document).on('click', 'a.convert-to-installment-detail', function(e){
       e.preventDefault();
       var checkUrl = $(this).data('check-url');

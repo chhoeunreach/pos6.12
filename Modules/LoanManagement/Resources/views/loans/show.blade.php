@@ -1,7 +1,5 @@
-@extends('loanmanagement::layouts.app')
-@section('title', 'Loan Detail')
-@section('content_body')
 @php
+    $isEmbeddedModal = request()->boolean('_lm_modal');
     $loanMeta = [];
     if (! empty($loanRow->meta_json)) {
         $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
@@ -42,6 +40,43 @@
         return (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
     });
 @endphp
+@extends('loanmanagement::layouts.app')
+@section('title', 'Loan Detail')
+@section('loan_css')
+@if($isEmbeddedModal)
+<style>
+    #loanManagementSidebar,
+    #loanManagementHeader,
+    .lm-breadcrumb-wrap,
+    .lm-footer {
+        display: none !important;
+    }
+
+    #loanManagementMain {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    #loanManagementMain .lm-content {
+        padding-top: 0 !important;
+    }
+
+    #loanManagementMain .lm-workspace {
+        padding: 12px 18px 24px !important;
+    }
+
+    .content-header {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    .content {
+        min-height: auto !important;
+    }
+</style>
+@endif
+@endsection
+@section('content_body')
 <section class="content-header">
     <h1>Loan Detail #{{ $loanRow->id }}</h1>
     <button type="button"
@@ -265,3 +300,37 @@
 
 </section>
 @endsection
+
+@if($isEmbeddedModal)
+@section('loan_js')
+<script>
+    (function () {
+        document.addEventListener('click', function (event) {
+            var trigger = event.target.closest('.btn-modal[data-container=".view_modal"]');
+            if (!trigger) {
+                return;
+            }
+
+            var parentWindow = window.parent;
+            if (!parentWindow || !parentWindow.jQuery || !trigger.getAttribute('data-href')) {
+                return;
+            }
+
+            event.preventDefault();
+            var parentModal = parentWindow.jQuery('.view_modal');
+            if (!parentModal.length) {
+                return;
+            }
+
+            parentWindow.jQuery.ajax({
+                url: trigger.getAttribute('data-href'),
+                dataType: 'html',
+                success: function (result) {
+                    parentModal.html(result).modal('show');
+                }
+            });
+        });
+    })();
+</script>
+@endsection
+@endif

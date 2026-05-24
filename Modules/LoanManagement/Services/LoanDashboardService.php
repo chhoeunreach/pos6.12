@@ -70,7 +70,7 @@ class LoanDashboardService
     public function searchLoansForDashboard(string $term, int $limit = 10): array
     {
         $term = trim($term);
-        if ($term === '' || ! $this->tableExists('loans')) {
+        if (! $this->tableExists('loans')) {
             return [];
         }
 
@@ -91,7 +91,6 @@ class LoanDashboardService
             }
         }
 
-        $like = '%'.$term.'%';
         $query->selectRaw("
                 l.id,
                 {$loanNumberExpr} as loan_number,
@@ -100,8 +99,11 @@ class LoanDashboardService
                 {$balanceExpr} as balance_amount,
                 ".($this->columnExists('loans', 'status') ? 'l.status' : "'-'")." as status,
                 {$nextDueDate} as next_due_date
-            ")
-            ->where(function ($q) use ($like, $term, $customerNameExpr, $customerPhoneExpr) {
+            ");
+
+        if ($term !== '') {
+            $like = '%'.$term.'%';
+            $query->where(function ($q) use ($like, $term, $customerNameExpr, $customerPhoneExpr) {
                 $q->whereRaw($customerNameExpr.' LIKE ?', [$like])
                     ->orWhereRaw($customerPhoneExpr.' LIKE ?', [$like]);
 
@@ -112,9 +114,12 @@ class LoanDashboardService
                 if (ctype_digit($term)) {
                     $q->orWhere('l.id', (int) $term);
                 }
-            })
-            ->orderByRaw('CASE WHEN '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)').' = ? THEN 0 ELSE 1 END', [$term])
-            ->orderByDesc('l.id')
+            });
+
+            $query->orderByRaw('CASE WHEN '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)').' = ? THEN 0 ELSE 1 END', [$term]);
+        }
+
+        $query->orderByDesc('l.id')
             ->limit(max(1, min($limit, 25)));
 
         return $query->get()->map(function ($row) {
@@ -133,10 +138,7 @@ class LoanDashboardService
     public function searchSellsForDashboard(string $term, int $limit = 10): array
     {
         $term = trim($term);
-        if ($term === '') {
-            return [];
-        }
-
+        $installmentCustomerGroups = ['រំលស់', 'អ៊ីអន'];
         $paidSub = DB::table('transaction_payments')
             ->selectRaw('transaction_id, COALESCE(SUM(amount),0) as paid_amount')
             ->groupBy('transaction_id');
@@ -146,10 +148,18 @@ class LoanDashboardService
                 $join->on('tp.transaction_id', '=', 't.id');
             })
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
             ->where('t.type', 'sell')
-            ->where('t.status', 'final');
+            ->where('t.status', 'final')
+            ->where(function ($q) use ($installmentCustomerGroups) {
+                $q->whereIn('tcg.name', $installmentCustomerGroups)
+                    ->orWhere(function ($fallback) use ($installmentCustomerGroups) {
+                        $fallback->whereNull('tcg.id')
+                            ->whereIn('ccg.name', $installmentCustomerGroups);
+                    });
+            });
 
-        $like = '%'.$term.'%';
         $query->selectRaw("
                 t.id,
                 t.invoice_no,
@@ -158,8 +168,11 @@ class LoanDashboardService
                 COALESCE(t.final_total, 0) as final_total,
                 COALESCE(tp.paid_amount, 0) as paid_amount,
                 (COALESCE(t.final_total, 0) - COALESCE(tp.paid_amount, 0)) as due_amount
-            ")
-            ->where(function ($q) use ($like, $term) {
+            ");
+
+        if ($term !== '') {
+            $like = '%'.$term.'%';
+            $query->where(function ($q) use ($like, $term) {
                 $q->where('t.invoice_no', 'like', $like)
                     ->orWhere('c.name', 'like', $like)
                     ->orWhere('c.mobile', 'like', $like);
@@ -167,9 +180,12 @@ class LoanDashboardService
                 if (ctype_digit($term)) {
                     $q->orWhere('t.id', (int) $term);
                 }
-            })
-            ->orderByRaw('CASE WHEN t.invoice_no = ? THEN 0 ELSE 1 END', [$term])
-            ->orderByDesc('t.id')
+            });
+
+            $query->orderByRaw('CASE WHEN t.invoice_no = ? THEN 0 ELSE 1 END', [$term]);
+        }
+
+        $query->orderByDesc('t.id')
             ->limit(max(1, min($limit, 25)));
 
         $rows = $query->get();

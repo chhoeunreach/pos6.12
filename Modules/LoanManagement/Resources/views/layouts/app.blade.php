@@ -71,6 +71,50 @@
                     return $('<div>').text(value == null ? '' : value).html();
                 }
 
+                function openLoanDetailFrameModal(url, title) {
+                    if (!url || !$('.view_modal').length) {
+                        return;
+                    }
+
+                    var modalUrl = url;
+                    if (modalUrl.indexOf('_lm_modal=1') === -1) {
+                        modalUrl += (modalUrl.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
+                    }
+
+                    var html = '' +
+                        '<div class="modal-dialog modal-xl lm-dashboard-iframe-modal" role="document">' +
+                            '<div class="modal-content">' +
+                                '<div class="modal-header">' +
+                                    '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                        '<span aria-hidden="true">&times;</span>' +
+                                    '</button>' +
+                                    '<h4 class="modal-title">' + escLoanModal(title || 'Loan Detail') + '</h4>' +
+                                '</div>' +
+                                '<div class="modal-body" style="padding:0;height:85vh;">' +
+                                    '<iframe src="' + escLoanModal(modalUrl) + '" style="width:100%;height:100%;border:0;" title="' + escLoanModal(title || 'Loan Detail') + '"></iframe>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>';
+
+                    $('.view_modal').html(html).modal('show');
+                }
+
+                function showExistingLoanWarning(body, message, loanUrl) {
+                    var actions = '<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>';
+                    if (loanUrl) {
+                        actions = '<button type="button" class="btn btn-primary js-open-existing-loan-detail" data-loan-url="' + escLoanModal(loanUrl) + '">' +
+                            '<i class="fa fa-eye"></i> View Loan' +
+                        '</button> ' + actions;
+                    }
+
+                    body.html(
+                        '<div class="alert alert-warning">' +
+                            '<strong>' + escLoanModal(message || 'This sale already has installment loan.') + '</strong>' +
+                            '<div class="m-t-15">' + actions + '</div>' +
+                        '</div>'
+                    );
+                }
+
                 function moneyLoanModal(value) {
                     var number = parseFloat(value || 0);
                     return Number.isFinite(number) ? number.toFixed(2) : '0.00';
@@ -212,7 +256,7 @@
                                     var firstKey = Object.keys(errors)[0];
                                     alert(errors[firstKey][0] || xhr.responseJSON?.message || 'Validation failed');
                                 } else if (xhr.responseJSON?.data?.loan_url) {
-                                    window.location = xhr.responseJSON.data.loan_url;
+                                    showExistingLoanWarning(container, xhr.responseJSON?.message || 'This sale already has installment loan.', xhr.responseJSON.data.loan_url);
                                 } else {
                                     alert(xhr.responseJSON?.message || 'Failed to create loan');
                                 }
@@ -238,7 +282,7 @@
                     $.get(loanPosRoutes.cloneBase + '/' + encodeURIComponent(transactionId) + '/clone-data', function(res){
                         if (!res.success) {
                             if (res.data && res.data.loan_url) {
-                                window.location = res.data.loan_url;
+                                showExistingLoanWarning(body, res.message || 'This sale already has installment loan.', res.data.loan_url);
                                 return;
                             }
                             body.html('<div class="alert alert-warning">'+escLoanModal(res.message || 'Unable to add this sale to installment.')+'</div>');
@@ -250,7 +294,7 @@
                     }).fail(function(xhr){
                         var data = xhr.responseJSON?.data || {};
                         if (data.loan_url) {
-                            window.location = data.loan_url;
+                            showExistingLoanWarning(body, xhr.responseJSON?.message || 'This sale already has installment loan.', data.loan_url);
                             return;
                         }
                         body.html('<div class="alert alert-danger">'+escLoanModal(xhr.responseJSON?.message || 'Failed to load sale data')+'</div>');
@@ -477,6 +521,11 @@
 
                 $(document).on('loan:sell-pos-saved', function(event, receipt, transactionId){
                     openAutoInstallment(transactionId || (receipt ? receipt.transaction_id : null));
+                });
+
+                $(document).on('click', '.js-open-existing-loan-detail', function(event){
+                    event.preventDefault();
+                    openLoanDetailFrameModal($(this).data('loan-url'), 'Loan Detail');
                 });
 
                 window.loanManagementOpenAutoInstallment = openAutoInstallment;

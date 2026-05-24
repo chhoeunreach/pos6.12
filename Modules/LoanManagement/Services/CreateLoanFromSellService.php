@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\Schema;
 
 class CreateLoanFromSellService
 {
+    protected function installmentCustomerGroups(array $filters = []): array
+    {
+        $groups = $filters['customer_group_names'] ?? ['រំលស់', 'អ៊ីអន'];
+        $groups = array_values(array_filter(array_map(fn ($value) => trim((string) $value), (array) $groups)));
+
+        return $groups ?: ['រំលស់', 'អ៊ីអន'];
+    }
+
     public function searchSales(array $filters)
     {
         return $this->searchSells($filters);
@@ -50,6 +58,16 @@ class CreateLoanFromSellService
                     ->orWhere(function ($fallback) use ($customerGroupName) {
                         $fallback->whereNull('tcg.id')
                             ->where('ccg.name', $customerGroupName);
+                    });
+            });
+        }
+        $allowedCustomerGroups = $this->installmentCustomerGroups($filters);
+        if (empty($filters['customer_group_name']) && ! empty($allowedCustomerGroups)) {
+            $query->where(function ($q) use ($allowedCustomerGroups) {
+                $q->whereIn('tcg.name', $allowedCustomerGroups)
+                    ->orWhere(function ($fallback) use ($allowedCustomerGroups) {
+                        $fallback->whereNull('tcg.id')
+                            ->whereIn('ccg.name', $allowedCustomerGroups);
                     });
             });
         }
