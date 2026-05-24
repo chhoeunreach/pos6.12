@@ -437,6 +437,18 @@
             var galleryPreview = null;
             var galleryFileInput = null;
 
+            $(function() {
+                if ($.fn.DataTable && !$.fn.DataTable.isDataTable('#loan_location_table')) {
+                    $('#loan_location_table').DataTable({
+                        pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
+                        order: [[0, 'asc']],
+                        columnDefs: [
+                            { targets: [5, 7], orderable: false }
+                        ]
+                    });
+                }
+            });
+
             $(document).on('click', '.loan-asset-gallery-open', function() {
                 galleryTargetInput = $('#' + $(this).data('target-input'));
                 galleryPreview = $('#' + $(this).data('preview'));
