@@ -36,6 +36,13 @@
             padding: 6px 12px;
             cursor: pointer;
         }
+        .no-print .copy-status {
+            display: inline-block;
+            margin-left: 10px;
+            color: #fff;
+            font-size: 12px;
+            vertical-align: middle;
+        }
         .page {
             width: 210mm;
             min-height: 297mm;
@@ -487,8 +494,10 @@
 @endphp
 
 <div class="no-print">
+    <button type="button" id="copy_loan_as_image_button">Copy as Image</button>
     <button type="button" onclick="window.print()">Print Loan</button>
     <button type="button" onclick="window.close()">Close</button>
+    <span class="copy-status" id="copy_loan_as_image_status"></span>
 </div>
 
 <div class="page">
@@ -735,6 +744,98 @@
 </div>
 
 <script>
+    function buildLoanImageSvg(target) {
+        var rect = target.getBoundingClientRect();
+        var width = Math.ceil(rect.width);
+        var height = Math.ceil(rect.height);
+        var serializer = new XMLSerializer();
+        var clone = target.cloneNode(true);
+        var styles = Array.from(document.querySelectorAll('style'))
+            .map(function(styleTag) { return styleTag.textContent || ''; })
+            .join('\n');
+        var html = serializer.serializeToString(clone);
+        var svg = ''
+            + '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
+            + '<foreignObject width="100%" height="100%">'
+            + '<div xmlns="http://www.w3.org/1999/xhtml">'
+            + '<style>' + styles + '</style>'
+            + html
+            + '</div>'
+            + '</foreignObject>'
+            + '</svg>';
+
+        return {
+            width: width,
+            height: height,
+            url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+        };
+    }
+
+    async function copyLoanAsImage() {
+        var button = document.getElementById('copy_loan_as_image_button');
+        var status = document.getElementById('copy_loan_as_image_status');
+        var target = document.querySelector('.page');
+        if (!button || !status || !target) {
+            return;
+        }
+
+        button.disabled = true;
+        status.textContent = 'Preparing image...';
+
+        try {
+            var payload = buildLoanImageSvg(target);
+            var image = new Image();
+            image.decoding = 'async';
+
+            await new Promise(function(resolve, reject) {
+                image.onload = resolve;
+                image.onerror = reject;
+                image.src = payload.url;
+            });
+
+            var canvas = document.createElement('canvas');
+            canvas.width = payload.width * 2;
+            canvas.height = payload.height * 2;
+            var context = canvas.getContext('2d');
+            context.scale(2, 2);
+            context.drawImage(image, 0, 0, payload.width, payload.height);
+
+            var blob = await new Promise(function(resolve) {
+                canvas.toBlob(resolve, 'image/png');
+            });
+
+            if (!blob) {
+                throw new Error('Unable to create image');
+            }
+
+            if (navigator.clipboard && window.ClipboardItem) {
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        'image/png': blob
+                    })
+                ]);
+                status.textContent = 'Copied. Paste it in Telegram.';
+            } else {
+                var fallbackLink = document.createElement('a');
+                fallbackLink.href = URL.createObjectURL(blob);
+                fallbackLink.download = 'loan-' + {{ \Illuminate\Support\Js::from((string) ($loanRow->loan_number ?? $loanRow->id)) }} + '.png';
+                fallbackLink.click();
+                status.textContent = 'Image downloaded. Send it in Telegram.';
+                setTimeout(function() {
+                    URL.revokeObjectURL(fallbackLink.href);
+                }, 1000);
+            }
+        } catch (error) {
+            status.textContent = 'Copy failed. Try Print or screenshot.';
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    document.getElementById('copy_loan_as_image_button')?.addEventListener('click', function () {
+        copyLoanAsImage();
+    });
+
     window.addEventListener('load', function () {
         if (new URLSearchParams(window.location.search).get('auto_print') === '1') {
             window.print();
