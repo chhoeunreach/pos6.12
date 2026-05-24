@@ -38,7 +38,7 @@
 
 </head>
 <body
-    class="tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100 @if ($pos_layout) hold-transition lockscreen @else hold-transition skin-@if (!empty(session('business.theme_color'))){{ session('business.theme_color') }}@else{{ 'blue-light' }} @endif sidebar-mini @endif" >
+    class="tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100 @if ($request->segment(1) == 'loan-management') loan-management-page @endif @if ($pos_layout) hold-transition lockscreen @else hold-transition skin-@if (!empty(session('business.theme_color'))){{ session('business.theme_color') }}@else{{ 'blue-light' }} @endif sidebar-mini @endif" >
     <div class="tw-flex thetop">
         <script type="text/javascript">
             if (localStorage.getItem("upos_sidebar_collapse") == 'true') {
@@ -74,11 +74,13 @@
                 data-msg="{{ session('status.msg') }}">
         @endif
         <main class="tw-flex tw-flex-col tw-flex-1 tw-h-full tw-min-w-0 tw-bg-gray-100">
-            @if($request->segment(1) != 'customer-display' && !$pos_layout)
-                @include('layouts.partials.header')
-            @elseif($request->segment(1) != 'customer-display')
-                @include('layouts.partials.header-pos')
-            @endif
+            <div id="main_app_header">
+                @if($request->segment(1) != 'customer-display' && !$pos_layout)
+                    @include('layouts.partials.header')
+                @elseif($request->segment(1) != 'customer-display')
+                    @include('layouts.partials.header-pos')
+                @endif
+            </div>
             <!-- empty div for vuejs -->
             <div id="app">
                 @yield('vue')
@@ -144,6 +146,10 @@
         </div>
 </body>
 <style>
+    .loan-management-page #main_app_header {
+        display: none !important;
+    }
+
     @media print {
         #scrollable-container {
             overflow: visible !important;

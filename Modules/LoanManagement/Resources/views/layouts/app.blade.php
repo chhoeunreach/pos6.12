@@ -62,10 +62,11 @@
                 var loanPosRoutes = {
                     cloneBase: "{{ url('/loan-management/loans/sales') }}",
                     previewSchedule: "{{ route('loan-management.loans.preview-schedule') }}",
-                    loanViewBase: "{{ url('/loan-management/loans') }}"
+                    loanViewBase: "{{ url('/loan-management/loans') }}",
+                    loanPrintModalBase: "{{ url('/loan-management/loans') }}"
                 };
                 var lastAutoInstallmentTransactionId = null;
-
+                var loanPosPrintFinalizeTimer = null;
                 function escLoanModal(value) {
                     return $('<div>').text(value == null ? '' : value).html();
                 }
@@ -73,6 +74,63 @@
                 function moneyLoanModal(value) {
                     var number = parseFloat(value || 0);
                     return Number.isFinite(number) ? number.toFixed(2) : '0.00';
+                }
+
+                function openLoanPrintModal(loanId, options) {
+                    if (!loanId || !$('.view_modal').length) {
+                        return;
+                    }
+
+                    var settings = $.extend({ autostart: false }, options || {});
+                    window.__loanPrintLaunchState = window.__loanPrintLaunchState || { loanId: null, ts: 0 };
+                    var now = Date.now();
+                    if (settings.autostart && String(window.__loanPrintLaunchState.loanId || '') === String(loanId) && (now - window.__loanPrintLaunchState.ts) < 2500) {
+                        return;
+                    }
+                    window.__loanPrintLaunchState = {
+                        loanId: loanId,
+                        ts: now
+                    };
+
+                    if (settings.autostart) {
+                        var iframeId = 'loan_direct_print_frame_' + String(loanId).replace(/[^a-zA-Z0-9_-]/g, '') + '_' + now;
+                        var iframe = document.createElement('iframe');
+                        iframe.id = iframeId;
+                        iframe.src = loanPosRoutes.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print?auto_print=1&_lm_direct_print=1&_lm_reload=' + now;
+                        iframe.style.position = 'fixed';
+                        iframe.style.width = '1px';
+                        iframe.style.height = '1px';
+                        iframe.style.opacity = '0';
+                        iframe.style.pointerEvents = 'none';
+                        iframe.style.border = '0';
+                        iframe.style.right = '0';
+                        iframe.style.bottom = '0';
+                        document.body.appendChild(iframe);
+
+                        window.setTimeout(function () {
+                            var mountedFrame = document.getElementById(iframeId);
+                            if (mountedFrame && mountedFrame.parentNode) {
+                                mountedFrame.parentNode.removeChild(mountedFrame);
+                            }
+                        }, 60000);
+                        return;
+                    }
+
+                    var modalUrl = loanPosRoutes.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print-modal';
+
+                    if (settings.autostart) {
+                        modalUrl += '?autostart=1';
+                    }
+
+                    $.ajax({
+                        url: modalUrl,
+                        dataType: 'html',
+                        success: function(result) {
+                            $('.view_modal')
+                                .html(result)
+                                .modal('show');
+                        }
+                    });
                 }
 
                 function bindAutoInstallmentForm(container) {
@@ -143,7 +201,9 @@
                                     alert(res.message || 'Installment loan created successfully');
                                 }
                                 if(res?.data?.loan_id){
-                                    window.location = loanPosRoutes.loanViewBase + '/' + res.data.loan_id + '/view';
+                                    $('#loanAutoInstallmentModal').modal('hide');
+                                    openLoanPrintModal(res.data.loan_id, {autostart: true});
+                                    return;
                                 }
                             },
                             error: function(xhr){
@@ -197,36 +257,60 @@
                     });
                 }
 
-                function printReceiptInLoanWindow(receipt) {
-                    if (!receipt || !receipt.is_enabled || !receipt.html_content) {
-                        return false;
-                    }
-
-                    var previousTitle = document.title;
-                    if (receipt.print_title) {
-                        document.title = receipt.print_title;
-                    }
-
-                    $('#receipt_section').html(receipt.html_content);
-                    if (typeof __currency_convert_recursively === 'function') {
-                        __currency_convert_recursively($('#receipt_section'));
-                    }
-
-                    if (typeof __print_receipt === 'function') {
-                        __print_receipt('receipt_section');
-                    } else {
-                        window.print();
-                    }
-
-                    window.setTimeout(function(){
-                        document.title = previousTitle;
-                    }, 1200);
-
-                    return true;
+                function finalizeLoanPosSaleSaved(receipt, transactionId) {
+                    $('#loanSellPosModal').modal('hide');
+                    $('#addSellModal').modal('hide');
+                    $(document).trigger('loan:sell-pos-saved', [receipt || null, transactionId || (receipt ? receipt.transaction_id : null) || null]);
                 }
 
-                function installPosPrintBridge() {
-                    var frame = document.getElementById('loanSellPosFrame');
+                function waitForLoanPrintToFinish(printWindow, onComplete) {
+                    var completed = false;
+
+                    function cleanup() {
+                        if (printWindow) {
+                            printWindow.removeEventListener('afterprint', afterPrintHandler);
+                            printWindow.removeEventListener('focus', focusHandler);
+                        }
+                        window.removeEventListener('focus', parentFocusHandler);
+                        if (loanPosPrintFinalizeTimer) {
+                            window.clearTimeout(loanPosPrintFinalizeTimer);
+                            loanPosPrintFinalizeTimer = null;
+                        }
+                    }
+
+                    function done() {
+                        if (completed) {
+                            return;
+                        }
+
+                        completed = true;
+                        cleanup();
+                        onComplete();
+                    }
+
+                    function afterPrintHandler() {
+                        done();
+                    }
+
+                    function focusHandler() {
+                        window.setTimeout(done, 150);
+                    }
+
+                    function parentFocusHandler() {
+                        window.setTimeout(done, 150);
+                    }
+
+                    cleanup();
+                    if (printWindow) {
+                        printWindow.addEventListener('afterprint', afterPrintHandler);
+                        printWindow.addEventListener('focus', focusHandler);
+                    }
+                    window.addEventListener('focus', parentFocusHandler);
+                    loanPosPrintFinalizeTimer = window.setTimeout(done, 30000);
+                }
+
+                function installPosPrintBridge(frameId) {
+                    var frame = document.getElementById(frameId);
                     if (!frame || !frame.contentWindow) {
                         return;
                     }
@@ -236,7 +320,7 @@
                         attempts++;
                         try {
                             var child = frame.contentWindow;
-                            if (!child || typeof child.pos_print !== 'function') {
+                            if (!child || typeof child.pos_print !== 'function' || typeof child.notify_loan_module_pos_saved !== 'function') {
                                 if (attempts > 40) {
                                     window.clearInterval(timer);
                                 }
@@ -249,17 +333,52 @@
                             }
 
                             var originalPrint = child.pos_print;
+                            var originalNotify = child.notify_loan_module_pos_saved;
                             child.__loanSellPosPrintBridgeInstalled = true;
-                            child.pos_print = function(receipt) {
-                                try {
-                                    $('#loanSellPosModal').modal('hide');
-                                    if (printReceiptInLoanWindow(receipt)) {
-                                        $(document).trigger('loan:sell-pos-saved', [receipt, receipt ? receipt.transaction_id : null]);
-                                        return;
-                                    }
-                                } catch (e) {}
+                            child.__loanSellPosPendingPayload = null;
+                            child.__loanSellPosFinalizePendingPayload = function() {
+                                var payload = child.__loanSellPosPendingPayload;
+                                child.__loanSellPosPendingPayload = null;
 
-                                return originalPrint.call(child, receipt);
+                                if (!payload) {
+                                    return;
+                                }
+
+                                finalizeLoanPosSaleSaved(payload.receipt || null, payload.transaction_id || null);
+                            };
+                            child.notify_loan_module_pos_saved = function(result) {
+                                var payload = {
+                                    type: 'loan-pos-sale-saved',
+                                    transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
+                                    invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
+                                    receipt: result.receipt || null
+                                };
+                                var receipt = payload.receipt || null;
+
+                                if (receipt && receipt.is_enabled && receipt.print_type !== 'printer' && receipt.html_content) {
+                                    child.__loanSellPosPendingPayload = payload;
+                                    return;
+                                }
+
+                                child.__loanSellPosPendingPayload = null;
+                                originalNotify.call(child, result);
+                            };
+                            child.pos_print = function(receipt) {
+                                var payload = child.__loanSellPosPendingPayload;
+
+                                if (receipt && receipt.print_type !== 'printer' && receipt.html_content) {
+                                    waitForLoanPrintToFinish(child, function(){
+                                        child.__loanSellPosFinalizePendingPayload();
+                                    });
+                                }
+
+                                var response = originalPrint.call(child, receipt);
+
+                                if (!receipt || receipt.print_type === 'printer' || !receipt.html_content) {
+                                    child.__loanSellPosFinalizePendingPayload();
+                                }
+
+                                return response;
                             };
                             window.clearInterval(timer);
                         } catch (e) {
@@ -268,32 +387,64 @@
                     }, 250);
                 }
 
-                $(document).on('click', '#loanHeaderOpenSellPos', function(){
-                    var frame = $('#loanSellPosFrame');
-                    var posUrl = $(this).data('pos-url') || frame.data('pos-url');
-
-                    if (frame.attr('src') !== posUrl) {
-                        frame.attr('src', posUrl);
+                function buildLoanPosModalUrl(baseUrl) {
+                    if (!baseUrl) {
+                        return '';
                     }
 
+                    var separator = baseUrl.indexOf('?') === -1 ? '?' : '&';
+                    return baseUrl + separator + '_lm_pos_modal=1&_lm_reload=' + Date.now();
+                }
+
+                function openLoanSellPosModal(posUrl) {
+                    var frame = $('#loanSellPosFrame');
+                    if (!frame.length || !$('#loanSellPosModal').length) {
+                        return false;
+                    }
+
+                    var targetUrl = posUrl || frame.data('pos-url');
+                    if (!targetUrl) {
+                        return false;
+                    }
+
+                    frame.attr('src', buildLoanPosModalUrl(targetUrl));
                     $('#loanSellPosModal').modal('show');
+                    return true;
+                }
+
+                $(document).on('click', '#loanHeaderOpenSellPos', function(){
+                    openLoanSellPosModal($(this).data('pos-url'));
                 });
 
-                $('#loanSellPosFrame').on('load', installPosPrintBridge);
-                $('#loanSellPosModal').on('shown.bs.modal', installPosPrintBridge);
+                $('#loanSellPosFrame').on('load', function(){
+                    installPosPrintBridge('loanSellPosFrame');
+                });
+                $('#ultimatePosSellFrame').on('load', function(){
+                    installPosPrintBridge('ultimatePosSellFrame');
+                });
+                $('#loanSellPosModal').on('shown.bs.modal', function(){
+                    installPosPrintBridge('loanSellPosFrame');
+                });
+                $('#addSellModal').on('shown.bs.modal', function(){
+                    installPosPrintBridge('ultimatePosSellFrame');
+                });
 
                 $(document).on('loan:sell-pos-saved', function(event, receipt, transactionId){
                     openAutoInstallment(transactionId || (receipt ? receipt.transaction_id : null));
                 });
+
+                window.loanManagementOpenSellPos = openLoanSellPosModal;
+                window.loanManagementOpenPrintModal = openLoanPrintModal;
 
                 window.addEventListener('message', function(event){
                     if (event.origin !== window.location.origin || !event.data || event.data.type !== 'loan-pos-sale-saved') {
                         return;
                     }
 
-                    $('#loanSellPosModal').modal('hide');
-                    $('#addSellModal').modal('hide');
-                    $(document).trigger('loan:sell-pos-saved', [event.data.receipt || null, event.data.transaction_id || null]);
+                    var receipt = event.data.receipt || null;
+                    var transactionId = event.data.transaction_id || (receipt ? receipt.transaction_id : null) || null;
+
+                    finalizeLoanPosSaleSaved(receipt, transactionId);
                 });
             })(jQuery);
         </script>

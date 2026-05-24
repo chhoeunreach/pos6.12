@@ -30,6 +30,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/dashboard', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard')->middleware('can:loan_management.view');
         Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
+        Route::get('/dashboard/quick-search', [LoanDashboardController::class, 'quickSearch'])->name('loan-management.dashboard.quick-search')->middleware('can:loan_management.view');
 
         Route::get('/operations/{page}', [LoanCollectionController::class, 'index'])
             ->whereIn('page', ['new-loans', 'active-loans', 'due-today', 'partial-payments', 'closed-accounts'])

@@ -644,6 +644,9 @@ class LoanInstallmentListController extends Controller
         abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
+        $sourceFinalTotalDisplay = $loanRow->sell_final_total_snapshot ?? null;
+        $sourcePaidDisplay = $loanRow->sell_paid_amount_snapshot ?? null;
+        $sourceDueDisplay = $loanRow->sell_due_amount_snapshot ?? null;
 
         $customerRow = null;
         if (Schema::connection('mysql_loan')->hasTable('loan_customers') && ! empty($loanRow->customer_id)) {
@@ -691,6 +694,30 @@ class LoanInstallmentListController extends Controller
             }
         }
 
+        if (! empty($loanRow->source_transaction_id) && Schema::hasTable('transactions')) {
+            $source = DB::table('transactions')
+                ->select('id', 'final_total')
+                ->where('id', $loanRow->source_transaction_id)
+                ->first();
+
+            if ($source) {
+                if ($sourceFinalTotalDisplay === null && isset($source->final_total)) {
+                    $sourceFinalTotalDisplay = (float) $source->final_total;
+                }
+
+                if ($sourcePaidDisplay === null || $sourceDueDisplay === null) {
+                    $paid = (float) DB::table('transaction_payments')->where('transaction_id', $source->id)->sum('amount');
+                    $due = max(0, (float) ($source->final_total ?? 0) - $paid);
+                    if ($sourcePaidDisplay === null) {
+                        $sourcePaidDisplay = $paid;
+                    }
+                    if ($sourceDueDisplay === null) {
+                        $sourceDueDisplay = $due;
+                    }
+                }
+            }
+        }
+
         $products = collect();
         if (Schema::connection('mysql_loan')->hasTable('loan_items')) {
             $products = DB::connection('mysql_loan')->table('loan_items')
@@ -725,12 +752,14 @@ class LoanInstallmentListController extends Controller
                         $principal = (float) ($row->principal_due ?? 0);
                     }
                     $interest = (float) ($row->interest_amount ?? 0);
-                    if ($interest <= 0) {
-                        $interest = (float) ($row->interest_due ?? 0);
+                    $interestDue = (float) ($row->interest_due ?? 0);
+                    if ($interest <= 0 && $interestDue > 0) {
+                        $interest = $interestDue;
                     }
                     $amountDue = (float) ($row->schedule_amount ?? 0);
-                    if ($amountDue <= 0) {
-                        $amountDue = (float) ($row->amount_due ?? 0);
+                    $amountDueAlt = (float) ($row->amount_due ?? 0);
+                    if (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
+                        $amountDue = $amountDueAlt;
                     }
                     if ($amountDue <= 0) {
                         $amountDue = round($principal + $interest, 2);
@@ -1560,8 +1589,19 @@ class LoanInstallmentListController extends Controller
                 : $principalPerMonth;
             $assignedPrincipal = round($assignedPrincipal + $principal, 2);
 
-            $interest = (float) ($schedule->interest_amount ?? $schedule->interest_due ?? $schedule->benefit_value ?? 0);
-            $amountDue = round($principal + $interest, 2);
+            $interest = (float) ($schedule->interest_amount ?? $schedule->benefit_value ?? 0);
+            $interestDue = (float) ($schedule->interest_due ?? $schedule->benefit_value ?? 0);
+            if ($interest <= 0 && $interestDue > 0) {
+                $interest = $interestDue;
+            }
+            $amountDue = (float) ($schedule->schedule_amount ?? 0);
+            $amountDueAlt = (float) ($schedule->amount_due ?? 0);
+            if (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
+                $amountDue = $amountDueAlt;
+            }
+            if ($amountDue <= 0) {
+                $amountDue = round($principal + $interest, 2);
+            }
             $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? $schedule->paid_value ?? 0);
             $status = strtolower((string) ($schedule->status ?? ''));
             if (in_array($status, ['paid', 'completed'], true)) {
@@ -1571,6 +1611,9 @@ class LoanInstallmentListController extends Controller
             $schedule->principal_amount = $principal;
             $schedule->principal_due = $principal;
             $schedule->installment_value = $principal;
+            $schedule->interest_amount = $interest;
+            $schedule->interest_due = $interest;
+            $schedule->benefit_value = $interest;
             $schedule->schedule_amount = $amountDue;
             $schedule->amount_due = $amountDue;
             $schedule->paid_amount = $paid;

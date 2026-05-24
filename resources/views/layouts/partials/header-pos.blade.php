@@ -4,6 +4,29 @@
     $transaction_sub_type = '';
     $view_suspended_sell_url = action([\App\Http\Controllers\SellController::class, 'index']) . '?suspended=1';
     $pos_redirect_url = action([\App\Http\Controllers\SellPosController::class, 'create']);
+    $business_locations = $business_locations ?? [];
+    $bl_attributes = $bl_attributes ?? [];
+    $default_location = $default_location ?? null;
+    $transaction = $transaction ?? null;
+    $pos_settings = array_merge([
+        'hide_product_suggestion' => 0,
+        'hide_recent_trans' => 0,
+        'inline_service_staff' => 0,
+        'customer_display_screen' => 0,
+        'disable_pay_checkout' => 0,
+        'disable_express_checkout' => 0,
+        'disable_draft' => 0,
+        'disable_suspend' => 0,
+        'disable_credit_sale_button' => 0,
+    ], $pos_settings ?? []);
+    $pos_module_data = $pos_module_data ?? [];
+    $enabled_modules = $enabled_modules ?? [];
+    $payment_types = $payment_types ?? [];
+@endphp
+
+@inject('request', 'Illuminate\Http\Request')
+@php
+    $isLoanPosModal = (bool) $request->boolean('_lm_pos_modal');
 @endphp
 
 @if (!empty($pos_module_data))
@@ -22,8 +45,7 @@
     @endforeach
 @endif
 <input type="hidden" name="transaction_sub_type" id="transaction_sub_type" value="{{ $transaction_sub_type }}">
-@inject('request', 'Illuminate\Http\Request')
-<div class="col-md-12 no-print pos-header">
+<div class="col-md-12 no-print pos-header{{ $isLoanPosModal ? ' loan-pos-modal-header' : '' }}">
     <input type="hidden" id="pos_redirect_url" value="{{ $pos_redirect_url }}">
     <div
         class="tw-flex tw-flex-col md:tw-flex-row tw-items-center tw-justify-between tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white tw-rounded-xl tw-mx-0 tw-mt-1 tw-mb-0 md:tw-mb-0 tw-p-3">
@@ -41,10 +63,10 @@
                                 $bl_attributes,
                             ) !!}
                         @else
-                            {{ $default_location->name }}
+                            {{ $default_location->name ?? '' }}
                         @endif
                     @else
-                    {{ $transaction->location->name }}
+                    {{ $transaction->location->name ?? '' }}
                     @endif
                 </div>
                 <div
@@ -263,5 +285,15 @@
     }
     .local-cashier-pos-link i {
         color: inherit !important;
+    }
+    .loan-pos-modal-header #pos_header_more_options,
+    .loan-pos-modal-header .hamburger {
+        display: none !important;
+    }
+    .loan-pos-modal-header .tw-w-full.md\:tw-w-1\/3 {
+        width: 100% !important;
+    }
+    .loan-pos-modal-header .tw-flex.tw-items-center.tw-gap-2 {
+        justify-content: space-between;
     }
 </style>

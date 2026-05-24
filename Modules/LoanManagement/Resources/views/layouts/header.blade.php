@@ -1,6 +1,11 @@
 @php
     $loanUser = auth()->user();
     $locationName = null;
+    $headerBadgeCounts = $loanBadgeCounts ?? \Modules\LoanManagement\Helpers\LoanMenuHelper::badgeCounts();
+    $unreadChatCount = (int) ($headerBadgeCounts['unread_chat'] ?? 0);
+    $pendingVisitCount = (int) ($headerBadgeCounts['pending_visits'] ?? 0);
+    $overdueCount = (int) ($headerBadgeCounts['overdue'] ?? 0);
+    $notificationCount = $unreadChatCount + $pendingVisitCount + $overdueCount;
 
     try {
         $locationName = session('user.business_location_name')
@@ -10,26 +15,7 @@
         $locationName = null;
     }
 
-    $backToPosUrl = Route::has('home') ? route('home') : url('/');
-    $sellPosUrl = Route::has('pos.create') ? route('pos.create') : url('/pos/create');
-    $canOpenSellPos = Route::has('pos.create')
-        && ($loanUser?->can('superadmin') || $loanUser?->can('sell.create'));
-    $quickMenu = [
-        [
-            'label' => 'Create Loan',
-            'icon' => 'fa fa-plus',
-            'route' => 'loan-management.loans.create-from-sell',
-            'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create',
-            'class' => 'btn-success',
-        ],
-        [
-            'label' => 'All Loans',
-            'icon' => 'fa fa-list',
-            'route' => 'loan-management.loans',
-            'can' => 'loan_management.loans.view|loan_management.view',
-            'class' => 'btn-default',
-        ],
-    ];
+    $backToPosUrl = Route::has('products.index') ? route('products.index') : url('/products');
 @endphp
 
 <header class="lm-header sticky-top" id="loanManagementHeader">
@@ -44,15 +30,23 @@
     </div>
 
     <div class="lm-header-right">
-        <div class="lm-quick-menu" aria-label="Loan quick menu">
-            @foreach($quickMenu as $item)
-                @if(Route::has($item['route']) && loan_user_can($item['can']))
-                    <a href="{{ route($item['route']) }}" class="btn btn-sm {{ $item['class'] }} lm-quick-link">
-                        <i class="{{ $item['icon'] }}"></i> {{ $item['label'] }}
-                    </a>
+        @if(Route::has('loan-management.chat.index') && loan_user_can('loan_management.chat.view'))
+            <a href="{{ route('loan-management.chat.index') }}" class="btn btn-default btn-sm lm-header-action">
+                <i class="fa fa-comments"></i> Chat
+                @if($unreadChatCount > 0)
+                    <span class="lm-badge lm-header-badge">{{ $unreadChatCount }}</span>
                 @endif
-            @endforeach
-        </div>
+            </a>
+        @endif
+
+        @if(Route::has('loan-management.communication.page') && loan_user_can('loan_management.view'))
+            <a href="{{ route('loan-management.communication.page', ['page' => 'notifications']) }}" class="btn btn-default btn-sm lm-header-action">
+                <i class="fa fa-bell"></i> Notifications
+                @if($notificationCount > 0)
+                    <span class="lm-badge lm-header-badge">{{ $notificationCount }}</span>
+                @endif
+            </a>
+        @endif
 
         <div class="lm-user-meta">
             <span class="lm-user-name">{{ $loanUser->username ?? $loanUser->first_name ?? 'Staff' }}</span>
@@ -64,12 +58,6 @@
         <a href="{{ $backToPosUrl }}" class="btn btn-primary btn-sm lm-btn-back">
             <i class="fa fa-arrow-left"></i> Back to Ultimate POS
         </a>
-
-        @if($canOpenSellPos)
-            <button type="button" class="btn btn-success btn-sm" id="loanHeaderOpenSellPos" data-pos-url="{{ $sellPosUrl }}">
-                <i class="fa fa-shopping-cart"></i> Sell POS
-            </button>
-        @endif
 
         @if (Route::has('logout'))
             <a href="{{ route('logout') }}" class="btn btn-default btn-sm"

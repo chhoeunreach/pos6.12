@@ -1,5 +1,10 @@
-<div class="modal-dialog modal-xl loan-print-preview-modal" role="document" style="width: 96%; max-width: 1180px;">
-    <div class="modal-content">
+@php
+    $isAutostart = request()->boolean('autostart');
+    $frameSrc = request()->boolean('autostart') ? $autoPrintUrl : $printUrl;
+@endphp
+<div class="modal-dialog modal-xl loan-print-preview-modal{{ $isAutostart ? ' loan-print-preview-modal--autostart' : '' }}" role="document" style="width: {{ $isAutostart ? '98%' : '96%' }}; max-width: {{ $isAutostart ? '1280px' : '1180px' }};">
+    <div class="modal-content{{ $isAutostart ? ' loan-print-preview-modal__content--autostart' : '' }}">
+        @if(! $isAutostart)
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
@@ -8,13 +13,15 @@
                 <i class="fa fa-print"></i> Print Loan #{{ $loanRow->loan_number ?? $loanRow->id }}
             </h4>
         </div>
-        <div class="modal-body" style="height: 78vh; padding: 0; background: #3f454b;">
+        @endif
+        <div class="modal-body loan-print-preview-modal__body{{ $isAutostart ? ' loan-print-preview-modal__body--autostart' : '' }}">
             <iframe
                 id="loan_print_preview_frame"
-                src="{{ $printUrl }}"
+                src="{{ $frameSrc }}"
                 style="width: 100%; height: 100%; border: 0; display: block;"
                 title="Loan print preview"></iframe>
         </div>
+        @if(! $isAutostart)
         <div class="modal-footer">
             <a href="{{ $printUrl }}" target="_blank" rel="noopener" class="btn btn-default">
                 <i class="fa fa-external-link"></i> Open Full Page
@@ -24,8 +31,27 @@
             </button>
             <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
         </div>
+        @endif
     </div>
 </div>
+
+<style>
+    .loan-print-preview-modal__body {
+        height: 78vh;
+        padding: 0;
+        background: #3f454b;
+    }
+    .loan-print-preview-modal--autostart .modal-content {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
+    }
+    .loan-print-preview-modal__body--autostart {
+        height: 88vh;
+        background: #ffffff;
+    }
+</style>
 
 <script>
 $(function () {

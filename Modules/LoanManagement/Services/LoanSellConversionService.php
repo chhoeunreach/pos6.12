@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Schema;
 
 class LoanSellConversionService
 {
+    public function __construct(protected CreateLoanFromSellService $createLoanFromSellService)
+    {
+    }
+
     public function getFilterData(): array
     {
         $businessLocations = DB::table('business_locations')
@@ -216,14 +220,22 @@ class LoanSellConversionService
             throw new \RuntimeException('Sell transaction not found.');
         }
 
-        $loanId = DB::connection('mysql_loan')->transaction(function () use ($sell, $transactionId, $userId, $data) {
+        $termMonths = max(1, (int) ($data['term_months'] ?? 6));
+        $interestRate = max(0, (float) ($data['interest_rate'] ?? 0));
+        $interestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
+        if (! in_array($interestType, ['flat', 'reducing'], true)) {
+            $interestType = 'flat';
+        }
+
+        $loanId = DB::connection('mysql_loan')->transaction(function () use ($sell, $transactionId, $userId, $data, $termMonths, $interestRate, $interestType) {
             $h = $sell['header'];
             $loanDate = ! empty($data['loan_date']) ? Carbon::parse($data['loan_date'])->toDateString() : Carbon::today()->toDateString();
+            $scheduleRows = $this->buildScheduleRows((float) ($sell['due_amount'] ?? 0), $loanDate, $termMonths, $interestRate, $interestType);
 
             $customerId = $this->upsertCustomerSnapshot($h);
             $locationId = $this->upsertLocationSnapshot($h);
 
-            $loanId = $this->insertLoan($h, $sell, $customerId, $locationId, $loanDate, $userId, $data);
+            $loanId = $this->insertLoan($h, $sell, $customerId, $locationId, $loanDate, $userId, $data, $termMonths, $interestRate, $interestType, $scheduleRows);
 
             foreach ($sell['lines'] as $line) {
                 $loanProductId = $this->upsertProductSnapshot($line);
@@ -231,7 +243,7 @@ class LoanSellConversionService
                 $this->insertLoanProductItem($loanId, $loanProductId, $line);
             }
 
-            $this->insertSchedule($loanId, $sell, $loanDate, (int) ($data['term_months'] ?? 6));
+            $this->insertSchedule($loanId, $scheduleRows);
             $this->insertLink($loanId, $h, $sell, $transactionId, $userId);
             $this->insertStatusLog($loanId, 'created_from_sell', $userId, 'Created from sell transaction #'.$transactionId);
 
@@ -243,8 +255,20 @@ class LoanSellConversionService
         return $loanId;
     }
 
-    protected function insertLoan($h, array $sell, ?int $customerId, ?int $locationId, string $loanDate, int $userId, array $data): int
+    protected function insertLoan($h, array $sell, ?int $customerId, ?int $locationId, string $loanDate, int $userId, array $data, int $termMonths, float $interestRate, string $interestType, array $scheduleRows): int
     {
+        $firstDueDate = Carbon::parse($loanDate)->addMonth()->toDateString();
+        $financedAmount = max(0, round((float) ($sell['due_amount'] ?? 0), 2));
+        $totalInterest = round(collect($scheduleRows)->sum('interest_due'), 2);
+        $scheduleTotal = round(collect($scheduleRows)->sum('amount_due'), 2);
+        $remainingBalance = round(collect($scheduleRows)->sum('amount_balance'), 2);
+        $meta = [
+            'interest_rate' => $interestRate,
+            'interest_type' => $interestType,
+            'duration_months' => $termMonths,
+            'payment_frequency' => 'monthly',
+            'first_due_date' => $firstDueDate,
+        ];
         $payload = [
             'customer_id' => $customerId,
             'customer_name_snapshot' => $h->customer_name,
@@ -253,14 +277,22 @@ class LoanSellConversionService
             'business_location_id' => $locationId,
             'location_name_snapshot' => $h->location_name,
             'main_location_id' => $h->location_id,
-            'principal_amount' => (float) $h->final_total,
+            'principal_amount' => $financedAmount,
+            'interest_amount' => $totalInterest,
+            'total_amount' => $scheduleTotal > 0 ? $scheduleTotal : (float) $sell['due_amount'],
             'total_payable_amount' => (float) $h->final_total,
             'down_payment' => (float) $sell['paid_amount'],
             'paid_amount' => (float) $sell['paid_amount'],
-            'balance_amount' => (float) $sell['due_amount'],
+            'balance_amount' => $remainingBalance > 0 ? $remainingBalance : (float) $sell['due_amount'],
             'currency' => 'USD',
             'status' => 'active',
             'loan_date' => $loanDate,
+            'interest_rate' => $interestRate,
+            'interest_type' => $interestType,
+            'duration_months' => $termMonths,
+            'installment_count' => $termMonths,
+            'payment_frequency' => 'monthly',
+            'first_due_date' => $firstDueDate,
             'created_by' => $userId,
             'created_by_name_snapshot' => auth()->user()->username ?? auth()->user()->first_name ?? 'User',
             'source_type' => 'sell_transaction',
@@ -270,6 +302,7 @@ class LoanSellConversionService
             'sell_final_total_snapshot' => (float) $h->final_total,
             'sell_paid_amount_snapshot' => (float) $sell['paid_amount'],
             'sell_due_amount_snapshot' => (float) $sell['due_amount'],
+            'meta_json' => json_encode($meta, JSON_UNESCAPED_UNICODE),
             'note' => $data['note'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -416,30 +449,54 @@ class LoanSellConversionService
         DB::connection('mysql_loan')->table('loan_product_items')->insert($payload);
     }
 
-    protected function insertSchedule(int $loanId, array $sell, string $loanDate, int $termMonths): void
+    protected function insertSchedule(int $loanId, array $scheduleRows): void
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) return;
-
-        $balance = (float) $sell['due_amount'];
-        if ($balance <= 0) return;
-
-        $monthly = round($balance / max(1, $termMonths), 2);
-
-        for ($i = 1; $i <= $termMonths; $i++) {
-            $dueDate = Carbon::parse($loanDate)->addMonths($i)->toDateString();
-            $amount = ($i === $termMonths) ? round($balance - ($monthly * ($termMonths - 1)), 2) : $monthly;
-            $payload = $this->filterColumns('loan_payment_schedules', [
+        foreach ($scheduleRows as $row) {
+            $payload = $this->filterColumns('loan_payment_schedules', array_merge($row, [
                 'loan_id' => $loanId,
-                'due_date' => $dueDate,
-                'schedule_amount' => $amount,
+                'schedule_amount' => $row['amount_due'],
                 'paid_amount' => 0,
-                'balance_amount' => $amount,
-                'status' => 'unpaid',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                'balance_amount' => $row['amount_balance'],
+            ]));
             DB::connection('mysql_loan')->table('loan_payment_schedules')->insert($payload);
         }
+    }
+
+    protected function buildScheduleRows(float $financedAmount, string $loanDate, int $termMonths, float $interestRate, string $interestType = 'flat'): array
+    {
+        $principal = max(0, round($financedAmount, 2));
+        if ($principal <= 0) {
+            return [];
+        }
+
+        $previewRows = $this->createLoanFromSellService->previewSchedule([
+            'principal_amount' => $principal,
+            'interest_rate' => max(0, $interestRate),
+            'interest_type' => in_array($interestType, ['flat', 'reducing'], true) ? $interestType : 'flat',
+            'duration_months' => max(1, $termMonths),
+            'payment_frequency' => 'monthly',
+            'first_due_date' => Carbon::parse($loanDate)->addMonth()->toDateString(),
+        ]);
+
+        return collect($previewRows)->values()->map(function ($row, $index) {
+            $amountDue = round((float) ($row['total'] ?? 0), 2);
+
+            return [
+                'installment_no' => $index + 1,
+                'due_date' => $row['due_date'] ?? null,
+                'principal_due' => round((float) ($row['principal'] ?? 0), 2),
+                'interest_due' => round((float) ($row['interest'] ?? 0), 2),
+                'penalty_due' => 0,
+                'amount_due' => $amountDue,
+                'amount_paid' => 0,
+                'amount_balance' => $amountDue,
+                'status' => 'unpaid',
+                'paid_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        })->all();
     }
 
     protected function insertLink(int $loanId, $h, array $sell, int $transactionId, int $userId): void

@@ -308,6 +308,22 @@ class CreateLoanFromSellService
             $resolvedCustomer = $this->resolveCustomerSnapshot($transaction);
             $customerId = $this->createLoanCustomerSnapshot($transaction, $resolvedCustomer, $data);
             $locationId = $this->upsertSnapshot('loan_business_locations', 'main_location_id', $transaction->main_location_id, $this->cloneLocationSnapshot($transaction));
+            $durationMonths = max(1, (int) ($data['duration_months'] ?? 1));
+            $interestRate = max(0, (float) ($data['interest_rate'] ?? 0));
+            $resolvedInterestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
+            if (! in_array($resolvedInterestType, ['flat', 'reducing'], true)) {
+                $resolvedInterestType = 'flat';
+            }
+            $loanMeta = [
+                'interest_rate' => $interestRate,
+                'interest_type' => $resolvedInterestType,
+                'duration_months' => $durationMonths,
+                'payment_frequency' => (string) ($data['payment_frequency'] ?? 'monthly'),
+                'first_due_date' => $data['first_due_date'] ?? null,
+            ];
+            $schedule = $this->previewSchedule($data);
+            $scheduleInterestTotal = round(collect($schedule)->sum('interest'), 2);
+            $scheduleAmountTotal = round(collect($schedule)->sum('total'), 2);
 
             $requestedLoanNumber = trim((string) ($data['loan_number'] ?? ''));
             if ($requestedLoanNumber !== '' && $this->loanNumberExists($requestedLoanNumber)) {
@@ -327,14 +343,17 @@ class CreateLoanFromSellService
                 'location_name_snapshot' => $transaction->location_name_snapshot,
                 'loan_date' => $data['loan_date'],
                 'principal_amount' => $data['principal_amount'],
+                'interest_amount' => $scheduleInterestTotal,
+                'total_amount' => $scheduleAmountTotal > 0 ? $scheduleAmountTotal : (float) $data['principal_amount'],
                 'down_payment' => $effectiveDownPayment,
                 'paid_amount' => $effectiveDownPayment,
-                'balance_amount' => max(0, (float) $data['principal_amount']),
-                'total_payable_amount' => $data['principal_amount'],
-                'interest_rate' => $data['interest_rate'] ?? 0,
-                'interest_type' => $data['interest_type'],
-                'duration_months' => $data['duration_months'],
-                'payment_frequency' => $data['payment_frequency'],
+                'balance_amount' => $scheduleAmountTotal > 0 ? $scheduleAmountTotal : max(0, (float) $data['principal_amount']),
+                'total_payable_amount' => $scheduleAmountTotal > 0 ? $scheduleAmountTotal : $data['principal_amount'],
+                'interest_rate' => $interestRate,
+                'interest_type' => $loanMeta['interest_type'],
+                'duration_months' => $durationMonths,
+                'installment_count' => $durationMonths,
+                'payment_frequency' => $loanMeta['payment_frequency'],
                 'first_due_date' => $data['first_due_date'],
                 'currency' => $data['currency'],
                 'exchange_rate' => $data['exchange_rate'] ?? 1,
@@ -353,6 +372,7 @@ class CreateLoanFromSellService
                 'status' => $data['action_type'] === 'create_approve' ? 'active' : ($data['action_type'] === 'draft' ? 'draft' : 'pending'),
                 'created_by' => auth()->id(),
                 'created_by_name_snapshot' => auth()->user()->first_name.' '.auth()->user()->last_name,
+                'meta_json' => json_encode($loanMeta, JSON_UNESCAPED_UNICODE),
                 'note' => $data['note'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -415,17 +435,25 @@ class CreateLoanFromSellService
                 }
             }
 
-            $schedule = $this->previewSchedule($data);
             if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
-                foreach ($schedule as $row) {
+                foreach ($schedule as $index => $row) {
+                    $amountDue = round((float) ($row['total'] ?? 0), 2);
                     DB::connection('mysql_loan')->table('loan_payment_schedules')->insert($this->filterColumns('loan_payment_schedules', [
                         'loan_id' => $loanId,
+                        'installment_no' => $index + 1,
                         'due_date' => $row['due_date'],
-                        'schedule_amount' => $row['total'],
+                        'schedule_amount' => $amountDue,
                         'principal_amount' => $row['principal'],
+                        'principal_due' => $row['principal'],
                         'interest_amount' => $row['interest'],
-                        'balance_amount' => $row['balance'],
+                        'interest_due' => $row['interest'],
+                        'amount_due' => $amountDue,
+                        'paid_amount' => 0,
+                        'amount_paid' => 0,
+                        'balance_amount' => $amountDue,
+                        'amount_balance' => $amountDue,
                         'status' => 'unpaid',
+                        'paid_at' => null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]));
@@ -478,7 +506,8 @@ class CreateLoanFromSellService
             }
 
             $principalPart = ($i === $months) ? round($remaining, 2) : $principalPer;
-            $interest = ($data['interest_type'] ?? 'flat') === 'reducing'
+            $interestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
+            $interest = $interestType === 'reducing'
                 ? round($remaining * $rate, 2)
                 : $flatInterestPer;
             $total = round($principalPart + $interest, 2);

@@ -5,7 +5,7 @@
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 <h4 class="modal-title" id="loanAutoInstallmentModalLabel">Add to Installment</h4>
             </div>
-            <div class="modal-body" id="loanAutoInstallmentModalBody">
+            <div class="modal-body" id="loanAutoInstallmentModalBody" style="max-height: calc(100vh - 180px); overflow-y: auto;">
                 <div class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading selected sale...</div>
             </div>
         </div>

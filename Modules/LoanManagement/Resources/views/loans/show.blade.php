@@ -2,12 +2,45 @@
 @section('title', 'Loan Detail')
 @section('content_body')
 @php
+    $loanMeta = [];
+    if (! empty($loanRow->meta_json)) {
+        $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
+    }
     $customerName = $customerDisplayName ?? ($loanRow->customer_name_snapshot ?? ($customerRow->name ?? ($customerRow->full_name ?? '-')));
     $customerPhone = $customerPhoneDisplay ?? ($loanRow->customer_phone_snapshot ?? ($customerRow->phone ?? ($customerRow->mobile ?? '-')));
     $customerAddress = $customerAddressDisplay ?? ($loanRow->customer_address_snapshot ?? ($customerRow->address ?? '-'));
     $locationName = $locationDisplayName ?? ($loanRow->location_name_snapshot ?? ($locationRow->name ?? '-'));
     $locationAddress = $locationAddressDisplay ?? ($locationRow->address ?? '-');
     $sourceInvoice = $sourceInvoiceDisplay ?? ($loanRow->source_invoice_no ?? '-');
+    $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
+    $displayInterestAmount = (float) ($loanRow->interest_amount ?? 0);
+    if ($displayInterestAmount <= 0 && isset($schedules)) {
+        $displayInterestAmount = (float) collect($schedules)->sum(function ($schedule) {
+            return (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
+        });
+    }
+    $displayDuration = max(
+        (int) ($loanRow->duration_months ?? 0),
+        (int) ($loanMeta['duration_months'] ?? 0),
+        (int) ($loanRow->installment_count ?? 0),
+        isset($installments) ? $installments->count() : 0,
+        1
+    );
+    $schedulePrincipalTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
+        return (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0);
+    });
+    $scheduleInterestTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
+        return (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
+    });
+    $scheduleAmountTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
+        return (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? 0);
+    });
+    $schedulePaidTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
+        return (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+    });
+    $scheduleBalanceTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
+        return (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
+    });
 @endphp
 <section class="content-header">
     <h1>Loan Detail #{{ $loanRow->id }}</h1>
@@ -39,9 +72,10 @@
 <div class="col-md-3"><strong>Down Payment:</strong> {{ number_format((float)($loanRow->down_payment ?? 0),2) }}</div>
 <div class="col-md-3"><strong>Paid Amount:</strong> {{ number_format((float)($loanRow->paid_amount ?? 0),2) }}</div>
 <div class="col-md-3"><strong>Balance:</strong> {{ number_format((float)($loanRow->balance_amount ?? 0),2) }}</div>
-<div class="col-md-3"><strong>Interest Rate:</strong> {{ $loanRow->interest_rate ?? 0 }}%</div>
+<div class="col-md-3"><strong>Interest Rate:</strong> {{ rtrim(rtrim(number_format($displayInterestRate, 2, '.', ''), '0'), '.') }}%</div>
+<div class="col-md-3"><strong>Interest Amount:</strong> {{ number_format($displayInterestAmount,2) }}</div>
 <div class="col-md-3"><strong>Interest Type:</strong> {{ ucfirst($loanRow->interest_type ?? 'flat') }}</div>
-<div class="col-md-3"><strong>Duration:</strong> {{ $loanRow->duration_months ?? 0 }} months</div>
+<div class="col-md-3"><strong>Duration:</strong> {{ $displayDuration }} months</div>
 <div class="col-md-3"><strong>Frequency:</strong> {{ ucfirst($loanRow->payment_frequency ?? 'monthly') }}</div>
 <div class="col-md-3"><strong>Assigned Collector:</strong> {{ $collectorDisplayName ?? '-' }}</div>
 <div class="col-md-3"><strong>Created By:</strong> {{ $createdByName ?? '-' }}</div>
@@ -164,6 +198,17 @@
 <tr><td colspan="9" class="text-center">No schedules</td></tr>
 @endforelse
 </tbody>
+<tfoot>
+<tr class="bg-gray">
+<th colspan="2" class="text-right">Total</th>
+<th>{{ number_format($schedulePrincipalTotal, 2) }}</th>
+<th>{{ number_format($scheduleInterestTotal, 2) }}</th>
+<th>{{ number_format($scheduleAmountTotal, 2) }}</th>
+<th>{{ number_format($schedulePaidTotal, 2) }}</th>
+<th>{{ number_format($scheduleBalanceTotal, 2) }}</th>
+<th colspan="2"></th>
+</tr>
+</tfoot>
 </table>
 </div>
 </div>

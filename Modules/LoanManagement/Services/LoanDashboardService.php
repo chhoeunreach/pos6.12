@@ -67,6 +67,138 @@ class LoanDashboardService
         });
     }
 
+    public function searchLoansForDashboard(string $term, int $limit = 10): array
+    {
+        $term = trim($term);
+        if ($term === '' || ! $this->tableExists('loans')) {
+            return [];
+        }
+
+        $query = DB::connection($this->connection)->table('loans as l');
+        $customerNameExpr = $this->loanCustomerNameExpression('l');
+        $customerPhoneExpr = $this->loanCustomerPhoneExpression('l');
+        $loanNumberExpr = $this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)';
+        $balanceExpr = $this->loanBalanceExpression('l');
+        $nextDueDate = 'NULL';
+
+        if ($this->tableExists('loan_payment_schedules')) {
+            $balanceColumn = $this->firstExistingColumn('loan_payment_schedules', ['balance_amount', 'amount_balance']);
+            $statusColumn = $this->firstExistingColumn('loan_payment_schedules', ['status']);
+            if ($balanceColumn && $statusColumn) {
+                $nextDueDate = "(SELECT s.due_date FROM loan_payment_schedules s WHERE s.loan_id = l.id AND COALESCE(s.{$balanceColumn}, 0) > 0 AND s.{$statusColumn} IN ('pending','unpaid','partial','late') ORDER BY s.due_date ASC, s.id ASC LIMIT 1)";
+            } elseif ($balanceColumn) {
+                $nextDueDate = "(SELECT s.due_date FROM loan_payment_schedules s WHERE s.loan_id = l.id AND COALESCE(s.{$balanceColumn}, 0) > 0 ORDER BY s.due_date ASC, s.id ASC LIMIT 1)";
+            }
+        }
+
+        $like = '%'.$term.'%';
+        $query->selectRaw("
+                l.id,
+                {$loanNumberExpr} as loan_number,
+                {$customerNameExpr} as customer_name,
+                {$customerPhoneExpr} as customer_phone,
+                {$balanceExpr} as balance_amount,
+                ".($this->columnExists('loans', 'status') ? 'l.status' : "'-'")." as status,
+                {$nextDueDate} as next_due_date
+            ")
+            ->where(function ($q) use ($like, $term, $customerNameExpr, $customerPhoneExpr) {
+                $q->whereRaw($customerNameExpr.' LIKE ?', [$like])
+                    ->orWhereRaw($customerPhoneExpr.' LIKE ?', [$like]);
+
+                if ($this->columnExists('loans', 'loan_number')) {
+                    $q->orWhere('l.loan_number', 'like', $like);
+                }
+
+                if (ctype_digit($term)) {
+                    $q->orWhere('l.id', (int) $term);
+                }
+            })
+            ->orderByRaw('CASE WHEN '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)').' = ? THEN 0 ELSE 1 END', [$term])
+            ->orderByDesc('l.id')
+            ->limit(max(1, min($limit, 25)));
+
+        return $query->get()->map(function ($row) {
+            return [
+                'id' => (int) $row->id,
+                'loan_number' => $row->loan_number ?: ('#'.$row->id),
+                'customer_name' => $row->customer_name ?: '-',
+                'customer_phone' => $row->customer_phone ?: '-',
+                'balance_amount' => round((float) ($row->balance_amount ?? 0), 2),
+                'status' => $row->status ?: '-',
+                'next_due_date' => $row->next_due_date,
+            ];
+        })->all();
+    }
+
+    public function searchSellsForDashboard(string $term, int $limit = 10): array
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return [];
+        }
+
+        $paidSub = DB::table('transaction_payments')
+            ->selectRaw('transaction_id, COALESCE(SUM(amount),0) as paid_amount')
+            ->groupBy('transaction_id');
+
+        $query = DB::table('transactions as t')
+            ->leftJoinSub($paidSub, 'tp', function ($join) {
+                $join->on('tp.transaction_id', '=', 't.id');
+            })
+            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final');
+
+        $like = '%'.$term.'%';
+        $query->selectRaw("
+                t.id,
+                t.invoice_no,
+                COALESCE(c.name, '-') as customer_name,
+                COALESCE(c.mobile, '-') as customer_phone,
+                COALESCE(t.final_total, 0) as final_total,
+                COALESCE(tp.paid_amount, 0) as paid_amount,
+                (COALESCE(t.final_total, 0) - COALESCE(tp.paid_amount, 0)) as due_amount
+            ")
+            ->where(function ($q) use ($like, $term) {
+                $q->where('t.invoice_no', 'like', $like)
+                    ->orWhere('c.name', 'like', $like)
+                    ->orWhere('c.mobile', 'like', $like);
+
+                if (ctype_digit($term)) {
+                    $q->orWhere('t.id', (int) $term);
+                }
+            })
+            ->orderByRaw('CASE WHEN t.invoice_no = ? THEN 0 ELSE 1 END', [$term])
+            ->orderByDesc('t.id')
+            ->limit(max(1, min($limit, 25)));
+
+        $rows = $query->get();
+        $linkedLoanIds = [];
+        if ($this->tableExists('loan_sell_transaction_links') && $rows->isNotEmpty()) {
+            $linkedLoanIds = DB::connection($this->connection)->table('loan_sell_transaction_links')
+                ->whereIn('transaction_id', $rows->pluck('id')->all())
+                ->pluck('loan_id', 'transaction_id')
+                ->map(fn ($value) => (int) $value)
+                ->all();
+        }
+
+        return $rows->map(function ($row) use ($linkedLoanIds) {
+            $linkedLoanId = $linkedLoanIds[$row->id] ?? null;
+
+            return [
+                'id' => (int) $row->id,
+                'invoice_no' => $row->invoice_no ?: ('Sell #'.$row->id),
+                'customer_name' => $row->customer_name ?: '-',
+                'customer_phone' => $row->customer_phone ?: '-',
+                'final_total' => round((float) ($row->final_total ?? 0), 2),
+                'paid_amount' => round((float) ($row->paid_amount ?? 0), 2),
+                'due_amount' => round(max(0, (float) ($row->due_amount ?? 0)), 2),
+                'linked_loan_id' => $linkedLoanId,
+                'is_converted' => $linkedLoanId !== null && $linkedLoanId > 0,
+            ];
+        })->all();
+    }
+
     public function getSummaryCards($filters): array
     {
         $cards = [

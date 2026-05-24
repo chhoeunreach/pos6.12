@@ -53,11 +53,13 @@
                 <div class="col-md-4">
                     <div class="well">
                         <strong>Schedule:</strong>
-                        @if(! empty($scheduleLabel))
-                            {{ $scheduleLabel }}
-                        @else
-                            Auto apply to oldest unpaid
-                        @endif
+                        <span class="loan-schedule-display">
+                            @if(! empty($scheduleLabel))
+                                {{ $scheduleLabel }}
+                            @else
+                                Auto apply to oldest unpaid
+                            @endif
+                        </span>
                     </div>
                 </div>
             </div>
@@ -242,6 +244,15 @@ $(function () {
         return balance > 0 ? balance : normalLoanBalance;
     }
 
+    function updateScheduleDisplay() {
+        var $selected = $form.find('[name="schedule_id"] option:selected');
+        var text = $.trim($selected.text());
+        if (!text) {
+            text = 'Auto apply to oldest unpaid';
+        }
+        $form.find('.loan-schedule-display').text(text);
+    }
+
     function applyPayTarget() {
         if ($form.find('.loan-pay-off-option').is(':checked')) {
             previousScheduleId = $form.find('[name="schedule_id"]').val() || previousScheduleId;
@@ -252,7 +263,9 @@ $(function () {
         }
 
         if (!$form.find('[name="schedule_id"]').val() && previousScheduleId) {
-            $form.find('[name="schedule_id"]').val(previousScheduleId).trigger('change.select2');
+            $form.find('[name="schedule_id"]').val(previousScheduleId).trigger('change');
+        } else if (!$form.find('[name="schedule_id"]').val()) {
+            $form.find('[name="schedule_id"]').val('').trigger('change');
         }
 
         suggestedTotal = selectedScheduleBalance();
@@ -307,13 +320,16 @@ $(function () {
     $form.on('change', '.loan-pay-off-option', applyPayTarget);
     $form.on('change', '[name="schedule_id"]', function () {
         if ($form.find('.loan-pay-off-option').is(':checked')) {
+            updateScheduleDisplay();
             return;
         }
 
         previousScheduleId = $(this).val();
+        updateScheduleDisplay();
         applyPayTarget();
     });
     refreshRemoveButtons();
+    updateScheduleDisplay();
     updateLoanPaymentTotal();
 });
 </script>

@@ -56,6 +56,7 @@ class LoanDashboardController extends Controller
         $visitSchedule = $dashboard['visitSchedule'];
         $collectorPerformance = $dashboard['collectorPerformance'];
         $loanStatusChart = $dashboard['loanStatusChart'];
+        $recentChats = $this->getRecentChats();
 
         return view('loanmanagement::dashboard.index', compact(
             'filters',
@@ -69,7 +70,8 @@ class LoanDashboardController extends Controller
             'overdueCustomers',
             'visitSchedule',
             'collectorPerformance',
-            'loanStatusChart'
+            'loanStatusChart',
+            'recentChats'
         ));
     }
 
@@ -104,6 +106,20 @@ class LoanDashboardController extends Controller
         ]);
     }
 
+    public function quickSearch(Request $request): JsonResponse
+    {
+        $scope = trim((string) $request->input('scope', 'loan'));
+        $term = trim((string) $request->input('q', ''));
+        $rows = $scope === 'sell'
+            ? $this->service->searchSellsForDashboard($term)
+            : $this->service->searchLoansForDashboard($term);
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows,
+        ]);
+    }
+
     protected function simpleOptions(string $table, string $column, bool $stringLabel = false): array
     {
         if (! $this->service->tableExists($table) || ! $this->service->columnExists($table, $column)) {
@@ -126,5 +142,48 @@ class LoanDashboardController extends Controller
                 'name' => $stringLabel ? (string) $value : 'ID #'.$value,
             ];
         })->values()->all();
+    }
+
+    protected function getRecentChats(): array
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_chat_threads')) {
+            return [];
+        }
+
+        try {
+            $query = DB::connection('mysql_loan')
+                ->table('loan_chat_threads')
+                ->select([
+                    'id',
+                    'display_name',
+                    'display_subtitle',
+                    'status',
+                    'priority',
+                    'assigned_team',
+                    'last_message',
+                    'last_message_at',
+                    'unread_staff_count',
+                ])
+                ->orderByRaw('CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END')
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->limit(10);
+
+            return $query->get()->map(function ($row) {
+                return [
+                    'id' => (int) $row->id,
+                    'display_name' => (string) ($row->display_name ?: 'Customer Chat'),
+                    'display_subtitle' => (string) ($row->display_subtitle ?: ''),
+                    'status' => (string) ($row->status ?: 'open'),
+                    'priority' => (string) ($row->priority ?: 'normal'),
+                    'assigned_team' => (string) ($row->assigned_team ?: ''),
+                    'last_message' => (string) ($row->last_message ?: ''),
+                    'last_message_at' => ! empty($row->last_message_at) ? (string) $row->last_message_at : null,
+                    'unread_count' => (int) ($row->unread_staff_count ?? 0),
+                ];
+            })->all();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 }

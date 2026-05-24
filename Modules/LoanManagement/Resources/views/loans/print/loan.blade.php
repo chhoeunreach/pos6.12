@@ -178,6 +178,10 @@
         .summary-row td {
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
         }
+        .money-cell {
+            text-align: right !important;
+            white-space: nowrap;
+        }
         .summary-label {
             font-family: 'Khmer OS Battambang', Arial, sans-serif;
             text-align: left !important;
@@ -369,26 +373,29 @@
 @php
     $productTotal = $products->sum(fn ($p) => (float) ($p->subtotal ?? ((float) ($p->quantity ?? 1) * (float) ($p->unit_price_inc_tax ?? 0))));
     $schedulePrincipalTotal = $installments->sum(fn ($row) => (float) ($row->installment_value ?? 0));
+    $scheduleInterestTotal = $installments->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
+    $scheduleTotalAmount = $installments->sum(fn ($row) => (float) ($row->amount_due ?? ((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0))));
     $downPayment = (float) ($loanRow->down_payment ?? 0);
     $loanAmount = (float) ($loanRow->principal_amount ?? max(0, $productTotal - $downPayment));
     if ($productTotal <= 0 && ($loanAmount > 0 || $downPayment > 0)) {
         $productTotal = $loanAmount + $downPayment;
     }
     $paidAmount = (float) ($loanRow->paid_amount ?? $downPayment);
-    $balanceAmount = $productTotal > 0
-        ? max(0, $productTotal - $downPayment)
-        : max(0, $loanAmount - $paidAmount);
-    if ($balanceAmount <= 0 && $schedulePrincipalTotal > 0) {
-        $balanceAmount = $schedulePrincipalTotal;
-    }
+    $balanceAmount = max(0, round($productTotal - $downPayment, 2));
     $currency = $loanRow->currency ?? 'USD';
     $loanDate = ! empty($loanRow->loan_date) ? \Carbon\Carbon::parse($loanRow->loan_date)->format('m-d-Y') : '-';
     $loanDateTitle = ! empty($loanRow->loan_date) ? \Carbon\Carbon::parse($loanRow->loan_date)->format('d-M-Y') : \Carbon\Carbon::now()->format('d-M-Y');
     $firstDueDate = $installments->first()?->installmentdate;
     $lastDueDate = $installments->last()?->installmentdate;
     $createdBy = $createdByName ?? ($loanRow->created_by_name_snapshot ?? '-');
-    $duration = (int) ($loanRow->duration_months ?? max(1, $installments->count()));
-    $interestRate = (float) ($loanRow->interest_rate ?? 0);
+    $loanMeta = !empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
+    $duration = max(
+        (int) ($loanRow->duration_months ?? 0),
+        (int) ($loanMeta['duration_months'] ?? 0),
+        (int) ($loanRow->installment_count ?? 0),
+        max(1, $installments->count())
+    );
+    $interestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
     $downPercent = $productTotal > 0 ? ($downPayment / max($productTotal, 1) * 100) : 0;
     $paymentsBySchedule = $payments->groupBy(fn ($payment) => $payment->_print_schedule_id ?? $payment->schedule_id ?? null);
     $paymentTypes = [];
@@ -542,7 +549,7 @@
                 @php
                     $qty = (float) ($p->quantity ?? 1);
                     $price = (float) ($p->unit_price_inc_tax ?? 0);
-                    $subtotal = (float) ($p->subtotal ?? ($qty * $price));
+                    $subtotal = round($qty * $price, 2);
                     $imei = trim((string) ($p->imei ?? ''));
                     $serial = trim((string) ($p->serial ?? ''));
                     $showImei = $imei !== '' && $imei !== '-';
@@ -557,10 +564,8 @@
                         @if($showSerial) / Serial: {{ $serial }} @endif
                     </td>
                     <td class="bold">{{ number_format($qty, 0) }}</td>
-                    <td class="bold">$</td>
-                    <td class="text-right bold">{{ number_format($price, 2) }}</td>
-                    <td class="bold">$</td>
-                    <td class="text-right bold">{{ number_format($subtotal, 2) }}</td>
+                    <td colspan="2" class="money-cell bold">${{ number_format($price, 2) }}</td>
+                    <td colspan="2" class="money-cell bold">${{ number_format($subtotal, 2) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="8">No products</td></tr>
@@ -667,9 +672,11 @@
                 <tr><td colspan="9">No schedule</td></tr>
             @endforelse
             <tr class="solid">
-                <td colspan="2"></td>
-                <td class="text-right bold">$ {{ number_format($installments->sum(fn ($row) => (float) $row->installment_value), 2) }}</td>
-                <td colspan="6" class="contact-line">សម្រាប់បង់លុយទំនាក់ទំនងតាម Telegram លេខ 0717221349</td>
+                <td colspan="2" class="text-right bold">សរុប</td>
+                <td class="text-right bold">$ {{ number_format($schedulePrincipalTotal, 2) }}</td>
+                <td class="text-right bold">$ {{ number_format($scheduleInterestTotal, 2) }}</td>
+                <td class="text-right bold">$ {{ number_format($scheduleTotalAmount, 2) }}</td>
+                <td colspan="4" class="contact-line">សម្រាប់បង់លុយទំនាក់ទំនងតាម Telegram លេខ 0717221349</td>
             </tr>
         </tbody>
     </table>

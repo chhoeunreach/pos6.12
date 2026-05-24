@@ -221,7 +221,7 @@
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                     <h4 class="modal-title" id="addInstallmentModalLabel">Add to Installment</h4>
                 </div>
-                <div class="modal-body" id="addInstallmentModalBody">
+                <div class="modal-body" id="addInstallmentModalBody" style="max-height: calc(100vh - 180px); overflow-y: auto;">
                     <div class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
                 </div>
             </div>
@@ -238,6 +238,7 @@
         cloneBase: "{{ url('/loan-management/loans/sales') }}",
         previewSchedule: "{{ route('loan-management.loans.preview-schedule') }}",
         loanViewBase: "{{ url('/loan-management/loans') }}",
+        loanPrintModalBase: "{{ url('/loan-management/loans') }}",
         sellViewBase: "{{ url('/sells') }}",
         sellEditBase: "{{ url('/sells') }}",
         sellDeleteBase: "{{ url('/pos') }}",
@@ -264,6 +265,43 @@
 
     function esc(value) {
         return $('<div>').text(value == null ? '' : value).html();
+    }
+
+    function openLoanPrintModal(loanId) {
+        if (!loanId || !$('.view_modal').length) {
+            return;
+        }
+
+        window.__loanPrintLaunchState = window.__loanPrintLaunchState || { loanId: null, ts: 0 };
+        var now = Date.now();
+        if (String(window.__loanPrintLaunchState.loanId || '') === String(loanId) && (now - window.__loanPrintLaunchState.ts) < 2500) {
+            return;
+        }
+        window.__loanPrintLaunchState = {
+            loanId: loanId,
+            ts: now
+        };
+
+        var iframeId = 'loan_direct_print_frame_' + String(loanId).replace(/[^a-zA-Z0-9_-]/g, '') + '_' + now;
+        var iframe = document.createElement('iframe');
+        iframe.id = iframeId;
+        iframe.src = urls.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print?auto_print=1&_lm_direct_print=1&_lm_reload=' + now;
+        iframe.style.position = 'fixed';
+        iframe.style.width = '1px';
+        iframe.style.height = '1px';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.border = '0';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        document.body.appendChild(iframe);
+
+        window.setTimeout(function () {
+            var mountedFrame = document.getElementById(iframeId);
+            if (mountedFrame && mountedFrame.parentNode) {
+                mountedFrame.parentNode.removeChild(mountedFrame);
+            }
+        }, 60000);
     }
 
     function renderJoinedValue(value) {
@@ -510,9 +548,19 @@
                 method: 'POST',
                 data: form.serialize(),
                 success: function(res){
-                    alert(res.message || 'Installment loan created successfully');
+                    if (window.toastr) {
+                        toastr.success(res.message || 'Installment loan created successfully');
+                    } else {
+                        alert(res.message || 'Installment loan created successfully');
+                    }
                     if(res?.data?.loan_id){
-                        window.location = urls.loanViewBase + '/' + res.data.loan_id + '/view';
+                        $('#addInstallmentModal').modal('hide');
+                        loadSells();
+                        if (window.loanManagementOpenPrintModal) {
+                            window.loanManagementOpenPrintModal(res.data.loan_id, {autostart: true});
+                        } else {
+                            openLoanPrintModal(res.data.loan_id);
+                        }
                     }
                 },
                 error: function(xhr){
@@ -560,11 +608,28 @@
         });
     }
 
-    function openAddSellModal(){
-        var frame = $('#ultimatePosSellFrame');
-        if (frame.attr('src') !== urls.posCreate) {
-            frame.attr('src', urls.posCreate);
+    function buildLoanModalPosUrl(baseUrl) {
+        if (!baseUrl) {
+            return '';
         }
+
+        var separator = baseUrl.indexOf('?') === -1 ? '?' : '&';
+        return baseUrl + separator + '_lm_pos_modal=1&_lm_reload=' + Date.now();
+    }
+
+    function openAddSellModal(){
+        if (typeof window.loanManagementOpenSellPos === 'function' && window.loanManagementOpenSellPos()) {
+            return;
+        }
+
+        var sharedPosTrigger = $('#loanHeaderOpenSellPos');
+        if (sharedPosTrigger.length && $('#loanSellPosModal').length) {
+            sharedPosTrigger.trigger('click');
+            return;
+        }
+
+        var frame = $('#ultimatePosSellFrame');
+        frame.attr('src', buildLoanModalPosUrl(urls.posCreate));
         $('#addSellModal').modal('show');
     }
 
