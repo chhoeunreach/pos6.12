@@ -1321,6 +1321,154 @@ class LoanInstallmentListController extends Controller
         ]));
     }
 
+    protected function countLoanRelatedRows(string $table, int $loan, string $loanColumn = 'loan_id'): int
+    {
+        if (! $this->loanTableExists($table) || ! $this->loanTableHasCol($table, $loanColumn)) {
+            return 0;
+        }
+
+        return (int) DB::connection('mysql_loan')->table($table)->where($loanColumn, $loan)->count();
+    }
+
+    protected function countLoanPayments(int $loan): int
+    {
+        if (! $this->loanTableExists('loan_payments')) {
+            return 0;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan);
+        $this->applyMonthlyPaymentFilter($query);
+
+        return (int) $query->count();
+    }
+
+    protected function scheduleSummaryForLoan(int $loan): array
+    {
+        if (! $this->loanTableExists('loan_payment_schedules')) {
+            return [
+                'count' => 0,
+                'principal_total' => 0.0,
+                'interest_total' => 0.0,
+                'amount_total' => 0.0,
+                'paid_total' => 0.0,
+                'balance_total' => 0.0,
+            ];
+        }
+
+        $principalColumn = $this->loanTableHasCol('loan_payment_schedules', 'principal_amount')
+            ? 'principal_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'principal_due') ? 'principal_due' : null);
+        $interestColumn = $this->loanTableHasCol('loan_payment_schedules', 'interest_amount')
+            ? 'interest_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'interest_due')
+                ? 'interest_due'
+                : ($this->loanTableHasCol('loan_payment_schedules', 'benefit_value') ? 'benefit_value' : null));
+        $amountColumn = $this->loanTableHasCol('loan_payment_schedules', 'schedule_amount')
+            ? 'schedule_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'amount_due') ? 'amount_due' : null);
+        $paidColumn = $this->loanTableHasCol('loan_payment_schedules', 'paid_amount')
+            ? 'paid_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'amount_paid')
+                ? 'amount_paid'
+                : ($this->loanTableHasCol('loan_payment_schedules', 'paid_value') ? 'paid_value' : null));
+        $balanceColumn = $this->loanTableHasCol('loan_payment_schedules', 'balance_amount')
+            ? 'balance_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'amount_balance') ? 'amount_balance' : null);
+
+        $summary = DB::connection('mysql_loan')
+            ->table('loan_payment_schedules')
+            ->where('loan_id', $loan)
+            ->selectRaw('COUNT(*) as aggregate_count')
+            ->selectRaw(($principalColumn ? 'COALESCE(SUM('.$principalColumn.'), 0)' : '0').' as principal_total')
+            ->selectRaw(($interestColumn ? 'COALESCE(SUM('.$interestColumn.'), 0)' : '0').' as interest_total')
+            ->selectRaw(($amountColumn ? 'COALESCE(SUM('.$amountColumn.'), 0)' : '0').' as amount_total')
+            ->selectRaw(($paidColumn ? 'COALESCE(SUM('.$paidColumn.'), 0)' : '0').' as paid_total')
+            ->selectRaw(($balanceColumn ? 'COALESCE(SUM('.$balanceColumn.'), 0)' : '0').' as balance_total')
+            ->first();
+
+        return [
+            'count' => (int) ($summary->aggregate_count ?? 0),
+            'principal_total' => (float) ($summary->principal_total ?? 0),
+            'interest_total' => (float) ($summary->interest_total ?? 0),
+            'amount_total' => (float) ($summary->amount_total ?? 0),
+            'paid_total' => (float) ($summary->paid_total ?? 0),
+            'balance_total' => (float) ($summary->balance_total ?? 0),
+        ];
+    }
+
+    protected function buildScheduleTotals($schedules): array
+    {
+        return [
+            'principal_total' => (float) collect($schedules)->sum(fn ($schedule) => (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0)),
+            'interest_total' => (float) collect($schedules)->sum(fn ($schedule) => (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0)),
+            'amount_total' => (float) collect($schedules)->sum(fn ($schedule) => (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? 0)),
+            'paid_total' => (float) collect($schedules)->sum(fn ($schedule) => (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0)),
+            'balance_total' => (float) collect($schedules)->sum(fn ($schedule) => (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)),
+        ];
+    }
+
+    protected function loadLoanShowSectionData(int $loan, object $loanRow, $sourceDue = null): array
+    {
+        $items = $this->loanTableExists('loan_items')
+            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->get()
+            : collect();
+
+        $productItems = collect();
+        if ($this->loanTableExists('loan_product_items')) {
+            $productItemsQuery = DB::connection('mysql_loan')->table('loan_product_items');
+            if ($this->loanTableHasCol('loan_product_items', 'loan_id')) {
+                $productItems = $productItemsQuery->where('loan_id', $loan)->get();
+            } elseif ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $items->count() > 0) {
+                $itemIds = $items->pluck('id')->filter()->values();
+                $productItems = $itemIds->isEmpty() ? collect() : $productItemsQuery->whereIn('loan_item_id', $itemIds)->get();
+            }
+        }
+
+        $schedules = $this->loanTableExists('loan_payment_schedules')
+            ? DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->orderBy('due_date')->get()
+            : collect();
+        $schedules = $this->normalizeSchedulePrincipalFromDue($schedules, $loanRow, $sourceDue);
+
+        $payments = collect();
+        if ($this->loanTableExists('loan_payments')) {
+            $paymentsQuery = DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan);
+            $this->applyMonthlyPaymentFilter($paymentsQuery);
+            $payments = $paymentsQuery
+                ->orderByDesc($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at')
+                ->get();
+        }
+
+        $statusLogs = $this->loanTableExists('loan_status_logs')
+            ? DB::connection('mysql_loan')->table('loan_status_logs')->where('loan_id', $loan)->orderByDesc('created_at')->get()
+            : collect();
+
+        return [
+            'items' => $items,
+            'productItems' => $productItems,
+            'schedules' => $schedules,
+            'payments' => $payments,
+            'statusLogs' => $statusLogs,
+            'scheduleTotals' => $this->buildScheduleTotals($schedules),
+        ];
+    }
+
+    protected function loadLoanEditSectionData(int $loan): array
+    {
+        $loanItems = $this->loanTableExists('loan_items')
+            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id')->get()
+            : collect();
+
+        $schedules = $this->loanTableExists('loan_payment_schedules')
+            ? DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->orderBy('installment_no')->orderBy('id')->get()
+            : collect();
+
+        $payments = $this->loanTableExists('loan_payments')
+            ? DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan)->orderByDesc('paid_date')->orderByDesc('id')->limit(20)->get()
+            : collect();
+
+        return compact('loanItems', 'schedules', 'payments');
+    }
+
     public function show(int $loan)
     {
         abort_if(! $this->loanTableExists('loans'), 404);
@@ -1550,54 +1698,50 @@ class LoanInstallmentListController extends Controller
         }
         $collectorDisplayName = Str::of((string) $collectorDisplayName)->squish()->value();
 
-        $items = [];
-        if ($this->loanTableExists('loan_items')) {
-            $items = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->get();
-        }
+        $scheduleSummary = $this->scheduleSummaryForLoan($loan);
+        $scheduleCount = $scheduleSummary['count'];
+        $loanItemsCount = $this->countLoanRelatedRows('loan_items', $loan);
+        $productItemsCount = $this->countLoanRelatedRows('loan_product_items', $loan);
+        $paymentsCount = $this->countLoanPayments($loan);
+        $statusLogsCount = $this->countLoanRelatedRows('loan_status_logs', $loan);
 
-        $productItems = [];
-        if ($this->loanTableExists('loan_product_items')) {
-            $productItemsQuery = DB::connection('mysql_loan')->table('loan_product_items');
-            if ($this->loanTableHasCol('loan_product_items', 'loan_id')) {
-                $productItems = $productItemsQuery->where('loan_id', $loan)->get();
-            } elseif ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $items->count() > 0) {
-                $itemIds = $items->pluck('id')->filter()->values();
-                $productItems = $itemIds->isEmpty()
-                    ? collect([])
-                    : $productItemsQuery->whereIn('loan_item_id', $itemIds)->get();
-            } else {
-                $productItems = collect([]);
-            }
-        }
+        return view('loanmanagement::loans.show', compact(
+            'loanRow',
+            'customerRow',
+            'customerDisplayName',
+            'customerPhoneDisplay',
+            'customerAddressDisplay',
+            'mainContactIdDisplay',
+            'locationRow',
+            'locationDisplayName',
+            'locationAddressDisplay',
+            'sourceTypeDisplay',
+            'sourceTransactionIdDisplay',
+            'sourceInvoiceDisplay',
+            'sourceFinalTotalDisplay',
+            'sourcePaidDisplay',
+            'sourceDueDisplay',
+            'createdByName',
+            'collectorDisplayName',
+            'scheduleSummary',
+            'scheduleCount',
+            'loanItemsCount',
+            'productItemsCount',
+            'paymentsCount',
+            'statusLogsCount'
+        ));
+    }
 
-        $schedules = [];
-        if ($this->loanTableExists('loan_payment_schedules')) {
-            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
-                ->where('loan_id', $loan)
-                ->orderBy('due_date')
-                ->get();
-            $schedules = $this->normalizeSchedulePrincipalFromDue($schedules, $loanRow, $sourceDueDisplay);
-        }
+    public function showSections(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
 
-        $payments = [];
-        if ($this->loanTableExists('loan_payments')) {
-            $paymentsQuery = DB::connection('mysql_loan')->table('loan_payments')
-                ->where('loan_id', $loan);
-            $this->applyMonthlyPaymentFilter($paymentsQuery);
-            $payments = $paymentsQuery
-                ->orderByDesc($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at')
-                ->get();
-        }
-
-        $statusLogs = [];
-        if ($this->loanTableExists('loan_status_logs')) {
-            $statusLogs = DB::connection('mysql_loan')->table('loan_status_logs')
-                ->where('loan_id', $loan)
-                ->orderByDesc('created_at')
-                ->get();
-        }
-
-        return view('loanmanagement::loans.show', compact('loanRow', 'customerRow', 'customerDisplayName', 'customerPhoneDisplay', 'customerAddressDisplay', 'mainContactIdDisplay', 'locationRow', 'locationDisplayName', 'locationAddressDisplay', 'sourceTypeDisplay', 'sourceTransactionIdDisplay', 'sourceInvoiceDisplay', 'sourceFinalTotalDisplay', 'sourcePaidDisplay', 'sourceDueDisplay', 'createdByName', 'collectorDisplayName', 'items', 'productItems', 'schedules', 'payments', 'statusLogs'));
+        return view(
+            'loanmanagement::loans.partials.show_sections',
+            array_merge(['loanRow' => $loanRow], $this->loadLoanShowSectionData($loan, $loanRow, $loanRow->sell_due_amount_snapshot ?? null))
+        );
     }
 
     protected function normalizeSchedulePrincipalFromDue($schedules, object $loanRow, $sourceDue = null)
@@ -1792,17 +1936,9 @@ class LoanInstallmentListController extends Controller
         $locationName = $locationName !== '' ? $locationName : '-';
         $locationAddress = $locationAddress !== '' ? $locationAddress : '-';
 
-        $loanItems = $this->loanTableExists('loan_items')
-            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id')->get()
-            : collect();
-
-        $schedules = $this->loanTableExists('loan_payment_schedules')
-            ? DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->orderBy('installment_no')->orderBy('id')->get()
-            : collect();
-
-        $payments = $this->loanTableExists('loan_payments')
-            ? DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan)->orderByDesc('paid_date')->orderByDesc('id')->limit(20)->get()
-            : collect();
+        $loanItemsCount = $this->countLoanRelatedRows('loan_items', $loan);
+        $schedulesCount = $this->countLoanRelatedRows('loan_payment_schedules', $loan);
+        $paymentsCount = $this->countLoanPayments($loan);
 
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
@@ -1821,10 +1957,25 @@ class LoanInstallmentListController extends Controller
             'sourceFinalTotal',
             'sourcePaid',
             'sourceDue',
-            'loanItems',
-            'schedules',
-            'payments'
+            'loanItemsCount',
+            'schedulesCount',
+            'paymentsCount'
         ));
+    }
+
+    public function editSections(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        return view(
+            'loanmanagement::loans.partials.edit_sections',
+            array_merge([
+                'loanRow' => $loanRow,
+                'backCustomerId' => request('customer_id') ?: ($loanRow->customer_id ?? null),
+            ], $this->loadLoanEditSectionData($loan))
+        );
     }
 
     public function update(Request $request, int $loan)

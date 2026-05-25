@@ -19,33 +19,16 @@
     $sourceInvoice = $sourceInvoiceDisplay ?? ($loanRow->source_invoice_no ?? '-');
     $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
     $displayInterestAmount = (float) ($loanRow->interest_amount ?? 0);
-    if ($displayInterestAmount <= 0 && isset($schedules)) {
-        $displayInterestAmount = (float) collect($schedules)->sum(function ($schedule) {
-            return (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
-        });
+    if ($displayInterestAmount <= 0) {
+        $displayInterestAmount = (float) ($scheduleSummary['interest_total'] ?? 0);
     }
     $displayDuration = max(
         (int) ($loanRow->duration_months ?? 0),
         (int) ($loanMeta['duration_months'] ?? 0),
         (int) ($loanRow->installment_count ?? 0),
-        isset($installments) ? $installments->count() : 0,
+        (int) ($scheduleCount ?? 0),
         1
     );
-    $schedulePrincipalTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
-        return (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0);
-    });
-    $scheduleInterestTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
-        return (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
-    });
-    $scheduleAmountTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
-        return (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? 0);
-    });
-    $schedulePaidTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
-        return (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
-    });
-    $scheduleBalanceTotal = (float) collect($schedules ?? [])->sum(function ($schedule) {
-        return (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
-    });
 @endphp
 @extends('loanmanagement::layouts.app')
 @section('title', 'Loan Detail')
@@ -166,158 +149,51 @@
 </div>
 </div>
 
-<div class="box box-solid">
-<div class="box-header"><h3 class="box-title">Loan Items Snapshot</h3></div>
-<div class="box-body table-responsive">
-<table class="table table-bordered">
-<thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>IMEI</th><th>Serial</th><th>Lot</th></tr></thead>
-<tbody>
-@forelse($items as $i)
-<tr>
-<td>{{ $i->product_name_snapshot ?? '-' }}</td>
-<td>{{ $i->sku_snapshot ?? '-' }}</td>
-<td>{{ $i->qty ?? 0 }}</td>
-<td>{{ number_format((float)($i->unit_price ?? 0),2) }}</td>
-<td>{{ number_format((float)($i->total_price ?? 0),2) }}</td>
-<td>{{ $i->imei_snapshot ?? '-' }}</td>
-<td>{{ $i->serial_number_snapshot ?? '-' }}</td>
-<td>{{ $i->lot_number_snapshot ?? '-' }}</td>
-</tr>
-@empty
-<tr><td colspan="8" class="text-center">No loan items</td></tr>
-@endforelse
-</tbody>
-</table>
-</div>
-</div>
-
-<div class="box box-solid">
-<div class="box-header"><h3 class="box-title">Loan Product Items Snapshot</h3></div>
-<div class="box-body table-responsive">
-<table class="table table-bordered">
-<thead><tr><th>Product ID</th><th>Variation ID</th><th>IMEI</th><th>Serial</th><th>Location Snapshot</th><th>Unit Price</th><th>Total Price</th></tr></thead>
-<tbody>
-@forelse($productItems as $pi)
-<tr>
-<td>{{ $pi->main_product_id ?? '-' }}</td>
-<td>{{ $pi->main_variation_id ?? '-' }}</td>
-<td>{{ $pi->imei_no ?? '-' }}</td>
-<td>{{ $pi->serial_no ?? '-' }}</td>
-<td>{{ $pi->location_name_snapshot ?? '-' }}</td>
-<td>{{ number_format((float)($pi->unit_price ?? 0),2) }}</td>
-<td>{{ number_format((float)($pi->total_price ?? 0),2) }}</td>
-</tr>
-@empty
-<tr><td colspan="7" class="text-center">No product item snapshots</td></tr>
-@endforelse
-</tbody>
-</table>
-</div>
-</div>
-
-<div class="box box-info">
-<div class="box-header"><h3 class="box-title">Payment Schedule</h3></div>
-<div class="box-body table-responsive">
-<table class="table table-bordered">
-<thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Schedule Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Action</th></tr></thead>
-<tbody>
-@forelse($schedules as $s)
-<tr>
-<td>{{ $loop->iteration }}</td>
-<td>{{ $s->due_date ?? '-' }}</td>
-<td>{{ number_format((float)($s->principal_amount ?? $s->principal_due ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->interest_amount ?? $s->interest_due ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->schedule_amount ?? $s->amount_due ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->paid_amount ?? $s->amount_paid ?? 0),2) }}</td>
-<td>{{ number_format((float)($s->balance_amount ?? $s->amount_balance ?? 0),2) }}</td>
-<td>{{ $s->status ?? '-' }}</td>
-<td>
-    @if(! in_array($s->status ?? '', ['paid', 'completed'], true))
-        <button type="button"
-                class="btn btn-xs btn-success btn-modal"
-                data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loanRow->id, 'schedule_id' => $s->id]) }}"
-                data-container=".view_modal">
-            <i class="fa fa-money"></i> Pay
-        </button>
-    @endif
-</td>
-</tr>
-@empty
-<tr><td colspan="9" class="text-center">No schedules</td></tr>
-@endforelse
-</tbody>
-<tfoot>
-<tr class="bg-gray">
-<th colspan="2" class="text-right">Total</th>
-<th>{{ number_format($schedulePrincipalTotal, 2) }}</th>
-<th>{{ number_format($scheduleInterestTotal, 2) }}</th>
-<th>{{ number_format($scheduleAmountTotal, 2) }}</th>
-<th>{{ number_format($schedulePaidTotal, 2) }}</th>
-<th>{{ number_format($scheduleBalanceTotal, 2) }}</th>
-<th colspan="2"></th>
-</tr>
-</tfoot>
-</table>
-</div>
-</div>
-
-<div class="box box-success">
-<div class="box-header"><h3 class="box-title">Payments</h3></div>
-<div class="box-body table-responsive">
-<table class="table table-bordered">
-<thead><tr><th>Receipt #</th><th>Paid Date</th><th>Amount</th><th>Method</th><th>Status</th><th>Received By</th></tr></thead>
-<tbody>
-@forelse($payments as $p)
-<tr>
-<td>
-@if(! empty($p->id))
-<a href="{{ route('loan-management.payments.show', $p->id) }}">{{ $p->receipt_number ?? ('Payment #'.$p->id) }}</a>
-@else
-{{ $p->receipt_number ?? '-' }}
-@endif
-</td>
-<td>{{ $p->paid_date ?? '-' }}</td>
-<td>{{ number_format((float)($p->total_paid_base ?? 0),2) }}</td>
-<td>{{ $p->payment_method_snapshot ?? '-' }}</td>
-<td>{{ $p->status ?? '-' }}</td>
-<td>{{ $p->received_by_name_snapshot ?? '-' }}</td>
-</tr>
-@empty
-<tr><td colspan="6" class="text-center">No payments</td></tr>
-@endforelse
-</tbody>
-</table>
-</div>
-</div>
-
-<div class="box box-warning">
-<div class="box-header"><h3 class="box-title">Status Logs</h3></div>
-<div class="box-body table-responsive">
-<table class="table table-bordered">
-<thead><tr><th>Date</th><th>Status</th><th>Changed By</th><th>Note</th></tr></thead>
-<tbody>
-@forelse($statusLogs as $l)
-<tr>
-<td>{{ $l->created_at ?? '-' }}</td>
-<td>{{ $l->status ?? '-' }}</td>
-<td>{{ $l->changed_by ?? '-' }}</td>
-<td>{{ $l->note ?? '-' }}</td>
-</tr>
-@empty
-<tr><td colspan="4" class="text-center">No status logs</td></tr>
-@endforelse
-</tbody>
-</table>
+<div class="box box-default">
+<div class="box-header"><h3 class="box-title">Related Loan Data</h3></div>
+<div class="box-body">
+    <div class="row" style="margin-bottom: 12px;">
+        <div class="col-md-3"><strong>Loan Items:</strong> {{ $loanItemsCount ?? 0 }}</div>
+        <div class="col-md-3"><strong>Product Items:</strong> {{ $productItemsCount ?? 0 }}</div>
+        <div class="col-md-3"><strong>Schedules:</strong> {{ $scheduleCount ?? 0 }}</div>
+        <div class="col-md-3"><strong>Payments:</strong> {{ $paymentsCount ?? 0 }}</div>
+    </div>
+    <div class="row" style="margin-bottom: 12px;">
+        <div class="col-md-3"><strong>Status Logs:</strong> {{ $statusLogsCount ?? 0 }}</div>
+        <div class="col-md-3"><strong>Schedule Principal:</strong> {{ number_format((float) ($scheduleSummary['principal_total'] ?? 0), 2) }}</div>
+        <div class="col-md-3"><strong>Schedule Interest:</strong> {{ number_format((float) ($scheduleSummary['interest_total'] ?? 0), 2) }}</div>
+        <div class="col-md-3"><strong>Schedule Balance:</strong> {{ number_format((float) ($scheduleSummary['balance_total'] ?? 0), 2) }}</div>
+    </div>
+    <div id="loanShowSections"
+         data-url="{{ route('loan-management.loans.sections.show', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}">
+        <div class="text-center text-muted" style="padding: 24px 0;">
+            <i class="fa fa-spinner fa-spin"></i> Loading related sections...
+        </div>
+    </div>
 </div>
 </div>
 
 </section>
 @endsection
 
-@if($isEmbeddedModal)
 @section('loan_js')
 <script>
     (function () {
+        var sectionsContainer = document.getElementById('loanShowSections');
+        if (sectionsContainer && sectionsContainer.getAttribute('data-url') && window.jQuery) {
+            window.jQuery.ajax({
+                url: sectionsContainer.getAttribute('data-url'),
+                dataType: 'html',
+                success: function (result) {
+                    sectionsContainer.innerHTML = result;
+                },
+                error: function () {
+                    sectionsContainer.innerHTML = '<div class="alert alert-warning" style="margin-bottom:0;">Unable to load related sections right now.</div>';
+                }
+            });
+        }
+
+        @if($isEmbeddedModal)
         document.addEventListener('click', function (event) {
             var trigger = event.target.closest('.btn-modal[data-container=".view_modal"]');
             if (!trigger) {
@@ -343,7 +219,7 @@
                 }
             });
         });
+        @endif
     })();
 </script>
 @endsection
-@endif

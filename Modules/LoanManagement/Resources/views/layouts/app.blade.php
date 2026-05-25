@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@inject('request', 'Illuminate\Http\Request')
 
 @php
     use Modules\LoanManagement\Helpers\LoanMenuHelper;
@@ -9,53 +9,125 @@
         }
     }
 
+    $whitelist = ['127.0.0.1', '::1'];
     $moduleCssPath = base_path('Modules/LoanManagement/Resources/assets/css/loan-management.css');
     $moduleJsPath = base_path('Modules/LoanManagement/Resources/assets/js/loan-management.js');
     $loanBadgeCounts = LoanMenuHelper::badgeCounts();
+    $pageTitle = trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title').' - LoanManagement' : 'LoanManagement';
+    $businessName = Session::get('business.name');
 @endphp
 
-@section('title', trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title') . ' - LoanManagement' : 'LoanManagement')
+<!DOCTYPE html>
+<html class="tw-bg-white tw-scroll-smooth" lang="{{ app()->getLocale() }}"
+    dir="{{ in_array(session()->get('user.language', config('app.locale')), config('constants.langs_rtl')) ? 'rtl' : 'ltr' }}">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ $pageTitle }}@if(!empty($businessName)) - {{ $businessName }}@endif</title>
 
-@section('css')
-    @parent
+    @include('layouts.partials.css')
+    @include('layouts.partials.extracss')
+
     @if (file_exists($moduleCssPath))
         <style>{!! file_get_contents($moduleCssPath) !!}</style>
     @endif
     @yield('loan_css')
-@endsection
+</head>
+<body class="hold-transition skin-blue-light sidebar-mini loan-management-page tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
+    @if (in_array($request->ip(), $whitelist, true))
+        <input type="hidden" id="__is_localhost" value="true">
+    @endif
 
-@section('content')
-<div class="lm-app" id="loanManagementApp">
-    @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
+    <input type="hidden" id="__code" value="{{ session('currency.code') }}">
+    <input type="hidden" id="__symbol" value="{{ session('currency.symbol') }}">
+    <input type="hidden" id="__thousand" value="{{ session('currency.thousand_separator') }}">
+    <input type="hidden" id="__decimal" value="{{ session('currency.decimal_separator') }}">
+    <input type="hidden" id="__symbol_placement" value="{{ session('business.currency_symbol_placement') }}">
+    <input type="hidden" id="__precision" value="{{ session('business.currency_precision', 2) }}">
+    <input type="hidden" id="__quantity_precision" value="{{ session('business.quantity_precision', 2) }}">
 
-    <div class="lm-main" id="loanManagementMain">
-        @include('loanmanagement::layouts.header')
+    @can('view_export_buttons')
+        <input type="hidden" id="view_export_buttons">
+    @endcan
+    @if (isMobile())
+        <input type="hidden" id="__is_mobile">
+    @endif
+    @if (session('status'))
+        <input type="hidden" id="status_span" data-status="{{ session('status.success') }}"
+            data-msg="{{ session('status.msg') }}">
+    @endif
+    @if (config('constants.iraqi_selling_price_adjustment'))
+        <input type="hidden" id="iraqi_selling_price_adjustment">
+    @endif
 
-        <main class="lm-content">
-            @include('loanmanagement::layouts.breadcrumb')
-            <div class="container-fluid lm-workspace">
-                @yield('content_body')
+    <div class="tw-flex thetop">
+        <main class="tw-flex tw-flex-col tw-flex-1 tw-h-full tw-min-w-0 tw-bg-gray-100">
+            <div id="main_app_header"></div>
+            <div id="app"></div>
+            <div class="tw-flex-1 tw-overflow-y-auto tw-h-screen" id="scrollable-container">
+                <div class="lm-app" id="loanManagementApp">
+                    @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
+
+                    <div class="lm-main" id="loanManagementMain">
+                        @include('loanmanagement::layouts.header')
+
+                        <main class="lm-content">
+                            @include('loanmanagement::layouts.breadcrumb')
+                            <div class="container-fluid lm-workspace">
+                                @yield('content_body')
+                            </div>
+                        </main>
+
+                        @if(auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create'))
+                            @include('loanmanagement::layouts.partials.sell_pos_modal')
+                        @endif
+
+                        @if(loan_user_can('loan_management.create_from_sell|loan_management.loans.create|loan_management.create'))
+                            @include('loanmanagement::layouts.partials.auto_installment_modal')
+                        @endif
+
+                        @include('loanmanagement::layouts.footer')
+                    </div>
+                </div>
             </div>
-        </main>
-
-        @if(auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create'))
-            @include('loanmanagement::layouts.partials.sell_pos_modal')
-        @endif
-
-        @if(loan_user_can('loan_management.create_from_sell|loan_management.loans.create|loan_management.create'))
-            @include('loanmanagement::layouts.partials.auto_installment_modal')
-        @endif
-
-        @include('loanmanagement::layouts.footer')
+        </div>
     </div>
-</div>
-@endsection
 
-@section('javascript')
-    @parent
+    <section class="invoice print_section" id="receipt_section"></section>
+    <div class="modal fade view_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel"></div>
+    <div class="overlay tw-hidden"></div>
+
+    <audio id="success-audio">
+        <source src="{{ asset('/audio/success.ogg?v=' . $asset_v) }}" type="audio/ogg">
+        <source src="{{ asset('/audio/success.mp3?v=' . $asset_v) }}" type="audio/mpeg">
+    </audio>
+    <audio id="error-audio">
+        <source src="{{ asset('/audio/error.ogg?v=' . $asset_v) }}" type="audio/ogg">
+        <source src="{{ asset('/audio/error.mp3?v=' . $asset_v) }}" type="audio/mpeg">
+    </audio>
+    <audio id="warning-audio">
+        <source src="{{ asset('/audio/warning.ogg?v=' . $asset_v) }}" type="audio/ogg">
+        <source src="{{ asset('/audio/warning.mp3?v=' . $asset_v) }}" type="audio/mpeg">
+    </audio>
+
+    @if (!empty($__additional_html))
+        {!! $__additional_html !!}
+    @endif
+
+    @include('layouts.partials.javascripts')
+    @include('layouts.module-assets')
     @if (file_exists($moduleJsPath))
         <script>{!! file_get_contents($moduleJsPath) !!}</script>
     @endif
+
+    @if (!empty($__additional_views) && is_array($__additional_views))
+        @foreach ($__additional_views as $additional_view)
+            @includeIf($additional_view)
+        @endforeach
+    @endif
+
     @if(auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create'))
         <script>
             (function($){
@@ -67,6 +139,7 @@
                 };
                 var lastAutoInstallmentTransactionId = null;
                 var loanPosPrintFinalizeTimer = null;
+
                 function escLoanModal(value) {
                     return $('<div>').text(value == null ? '' : value).html();
                 }
@@ -160,19 +233,11 @@
                         return;
                     }
 
-                    var modalUrl = loanPosRoutes.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print-modal';
-
-                    if (settings.autostart) {
-                        modalUrl += '?autostart=1';
-                    }
-
                     $.ajax({
-                        url: modalUrl,
+                        url: loanPosRoutes.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print-modal',
                         dataType: 'html',
                         success: function(result) {
-                            $('.view_modal')
-                                .html(result)
-                                .modal('show');
+                            $('.view_modal').html(result).modal('show');
                         }
                     });
                 }
@@ -258,150 +323,76 @@
                                 } else if (xhr.responseJSON?.data?.loan_url) {
                                     showExistingLoanWarning(container, xhr.responseJSON?.message || 'This sale already has installment loan.', xhr.responseJSON.data.loan_url);
                                 } else {
-                                    alert(xhr.responseJSON?.message || 'Failed to create loan');
+                                    alert(xhr.responseJSON?.message || 'Failed to create installment loan');
                                 }
                             },
-                            complete: function(){ buttons.prop('disabled', false); }
+                            complete: function(){
+                                buttons.prop('disabled', false);
+                            }
                         });
                     });
                 }
 
+                function directLoanManagementPrintUrl(loanId) {
+                    return loanPosRoutes.loanPrintModalBase + '/' + encodeURIComponent(loanId) + '/print?auto_print=1&_lm_direct_print=1&_lm_reload=' + Date.now();
+                }
+
                 function openAutoInstallment(transactionId) {
-                    if (!transactionId || !$('#loanAutoInstallmentModal').length) {
+                    if (!transactionId || transactionId === lastAutoInstallmentTransactionId) {
                         return;
                     }
-                    if (String(lastAutoInstallmentTransactionId || '') === String(transactionId)) {
-                        return;
-                    }
+
                     lastAutoInstallmentTransactionId = transactionId;
 
-                    var body = $('#loanAutoInstallmentModalBody');
-                    body.html('<div class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading selected sale...</div>');
-                    $('#loanAutoInstallmentModal').modal('show');
-
-                    $.get(loanPosRoutes.cloneBase + '/' + encodeURIComponent(transactionId) + '/clone-data', function(res){
-                        if (!res.success) {
-                            if (res.data && res.data.loan_url) {
-                                showExistingLoanWarning(body, res.message || 'This sale already has installment loan.', res.data.loan_url);
-                                return;
-                            }
-                            body.html('<div class="alert alert-warning">'+escLoanModal(res.message || 'Unable to add this sale to installment.')+'</div>');
-                            return;
-                        }
-
-                        body.html(res.data.form_html);
-                        bindAutoInstallmentForm(body);
+                    $.get(loanPosRoutes.cloneBase + '/' + encodeURIComponent(transactionId) + '/clone', function(result){
+                        var container = $('#loanAutoInstallmentModal');
+                        container.find('.modal-content').html(result);
+                        container.modal('show');
+                        bindAutoInstallmentForm(container);
                     }).fail(function(xhr){
-                        var data = xhr.responseJSON?.data || {};
-                        if (data.loan_url) {
-                            showExistingLoanWarning(body, xhr.responseJSON?.message || 'This sale already has installment loan.', data.loan_url);
-                            return;
-                        }
-                        body.html('<div class="alert alert-danger">'+escLoanModal(xhr.responseJSON?.message || 'Failed to load sale data')+'</div>');
+                        lastAutoInstallmentTransactionId = null;
+                        alert(xhr.responseJSON?.message || 'Unable to open installment loan form');
                     });
                 }
 
                 function finalizeLoanPosSaleSaved(receipt, transactionId) {
-                    $('#loanSellPosModal').modal('hide');
-                    $('#addSellModal').modal('hide');
-                    $(document).trigger('loan:sell-pos-saved', [receipt || null, transactionId || (receipt ? receipt.transaction_id : null) || null]);
-                }
-
-                function waitForLoanPrintToFinish(printWindow, onComplete) {
-                    var completed = false;
-
-                    function cleanup() {
-                        if (printWindow) {
-                            printWindow.removeEventListener('afterprint', afterPrintHandler);
-                            printWindow.removeEventListener('focus', focusHandler);
-                        }
-                        window.removeEventListener('focus', parentFocusHandler);
-                        if (loanPosPrintFinalizeTimer) {
-                            window.clearTimeout(loanPosPrintFinalizeTimer);
-                            loanPosPrintFinalizeTimer = null;
-                        }
+                    if (loanPosPrintFinalizeTimer) {
+                        window.clearTimeout(loanPosPrintFinalizeTimer);
                     }
 
-                    function done() {
-                        if (completed) {
+                    loanPosPrintFinalizeTimer = window.setTimeout(function(){
+                        $(document).trigger('loan:sell-pos-saved', [receipt || null, transactionId || null]);
+                    }, 400);
+                }
+
+                function waitForLoanPrintToFinish(frameWindow, callback) {
+                    var attempts = 0;
+                    var timer = window.setInterval(function(){
+                        attempts++;
+                        try {
+                            if (frameWindow.document.readyState !== 'complete') {
+                                if (attempts > 40) {
+                                    window.clearInterval(timer);
+                                }
+                                return;
+                            }
+                        } catch (e) {
+                            if (attempts > 40) {
+                                window.clearInterval(timer);
+                            }
                             return;
                         }
 
-                        completed = true;
-                        cleanup();
-                        onComplete();
-                    }
-
-                    function afterPrintHandler() {
-                        done();
-                    }
-
-                    function focusHandler() {
-                        window.setTimeout(done, 150);
-                    }
-
-                    function parentFocusHandler() {
-                        window.setTimeout(done, 150);
-                    }
-
-                    cleanup();
-                    if (printWindow) {
-                        printWindow.addEventListener('afterprint', afterPrintHandler);
-                        printWindow.addEventListener('focus', focusHandler);
-                    }
-                    window.addEventListener('focus', parentFocusHandler);
-                    loanPosPrintFinalizeTimer = window.setTimeout(done, 30000);
-                }
-
-                function directLoanManagementPrintUrl(url, onComplete) {
-                    if (!url) {
-                        if (typeof onComplete === 'function') {
-                            onComplete();
+                        window.clearInterval(timer);
+                        if (typeof callback === 'function') {
+                            callback();
                         }
-                        return;
-                    }
-
-                    var frameId = 'loan_management_direct_print_' + Date.now();
-                    var iframe = document.createElement('iframe');
-                    iframe.id = frameId;
-                    iframe.src = url;
-                    iframe.style.position = 'fixed';
-                    iframe.style.width = '1px';
-                    iframe.style.height = '1px';
-                    iframe.style.opacity = '0';
-                    iframe.style.pointerEvents = 'none';
-                    iframe.style.border = '0';
-                    iframe.style.right = '0';
-                    iframe.style.bottom = '0';
-                    document.body.appendChild(iframe);
-
-                    iframe.onload = function() {
-                        try {
-                            var childWindow = iframe.contentWindow;
-                            waitForLoanPrintToFinish(childWindow, function() {
-                                if (iframe.parentNode) {
-                                    iframe.parentNode.removeChild(iframe);
-                                }
-                                if (typeof onComplete === 'function') {
-                                    onComplete();
-                                }
-                            });
-                            childWindow.focus();
-                            childWindow.print();
-                        } catch (error) {
-                            if (iframe.parentNode) {
-                                iframe.parentNode.removeChild(iframe);
-                            }
-                            if (typeof onComplete === 'function') {
-                                onComplete();
-                            }
-                        }
-                    };
+                    }, 250);
                 }
 
                 function installPosPrintBridge(frameId) {
                     var frame = document.getElementById(frameId);
-                    if (!frame || !frame.contentWindow) {
+                    if (!frame) {
                         return;
                     }
 
@@ -454,8 +445,6 @@
                                 originalNotify.call(child, result);
                             };
                             child.pos_print = function(receipt) {
-                                var payload = child.__loanSellPosPendingPayload;
-
                                 if (receipt && receipt.print_type !== 'printer' && receipt.html_content) {
                                     waitForLoanPrintToFinish(child, function(){
                                         child.__loanSellPosFinalizePendingPayload();
@@ -547,4 +536,22 @@
         </script>
     @endif
     @yield('loan_js')
-@endsection
+
+    <style>
+        @media print {
+            body,
+            .lm-main,
+            .lm-content {
+                overflow: visible !important;
+            }
+
+            .lm-sidebar,
+            #loanManagementHeader,
+            .lm-breadcrumb-wrap,
+            .lm-footer {
+                display: none !important;
+            }
+        }
+    </style>
+</body>
+</html>
