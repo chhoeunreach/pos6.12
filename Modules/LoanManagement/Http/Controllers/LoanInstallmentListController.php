@@ -1823,6 +1823,12 @@ class LoanInstallmentListController extends Controller
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
+        $loanMeta = [];
+        if (! empty($loanRow->meta_json)) {
+            $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
+        }
+        $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
+
         $customerName = trim((string) ($loanRow->customer_name_snapshot ?? ''));
         $customerPhone = trim((string) ($loanRow->customer_phone_snapshot ?? ''));
         $customerAddress = trim((string) ($loanRow->customer_address_snapshot ?? ''));
@@ -1859,8 +1865,41 @@ class LoanInstallmentListController extends Controller
 
         $locationName = trim((string) ($loanRow->business_location_name_snapshot ?? ($loanRow->location_name_snapshot ?? '')));
         $locationAddress = '';
-        $locationId = $loanRow->main_location_id ?? ($loanRow->business_location_id ?? null);
+        $locationId = $loanRow->main_location_id ?? null;
         $selectedBusinessLocationId = $loanRow->business_location_id ?? null;
+        $selectedLoanLocation = null;
+
+        if ($this->loanTableExists('loan_business_locations')) {
+            if (! empty($selectedBusinessLocationId)) {
+                $selectedLoanLocation = DB::connection('mysql_loan')
+                    ->table('loan_business_locations')
+                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->where('id', $selectedBusinessLocationId)
+                    ->first();
+            }
+
+            if (! $selectedLoanLocation && ! empty($locationId)) {
+                $selectedLoanLocation = DB::connection('mysql_loan')
+                    ->table('loan_business_locations')
+                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->where('main_location_id', $locationId)
+                    ->orderBy('id')
+                    ->first();
+            }
+
+            if ($selectedLoanLocation) {
+                $selectedBusinessLocationId = $selectedLoanLocation->id;
+                if (empty($locationName)) {
+                    $locationName = trim((string) ($selectedLoanLocation->name ?? ''));
+                }
+                if (empty($locationAddress)) {
+                    $locationAddress = trim((string) ($selectedLoanLocation->address ?? ''));
+                }
+                if (empty($locationId) && ! empty($selectedLoanLocation->main_location_id)) {
+                    $locationId = $selectedLoanLocation->main_location_id;
+                }
+            }
+        }
 
         $locationOptions = collect();
         if ($this->loanTableExists('loan_business_locations')) {
@@ -1960,6 +1999,7 @@ class LoanInstallmentListController extends Controller
 
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
+            'displayInterestRate',
             'customerName',
             'customerPhone',
             'customerAddress',

@@ -186,13 +186,13 @@
                     <div class="col-md-3">
                         <div class="form-group">
                             <label>Main Location ID</label>
-                            <input type="number" min="0" name="main_location_id" id="loanMainLocationIdInput" class="form-control" value="{{ old('main_location_id', $loanRow->main_location_id ?? $locationId ?? '') }}">
+                            <input type="number" min="0" name="main_location_id" id="loanMainLocationIdInput" class="form-control" value="{{ old('main_location_id', $locationId ?? $loanRow->main_location_id ?? '') }}">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
                             <label>Business Location ID</label>
-                            <input type="number" min="0" id="loanBusinessLocationIdDisplay" class="form-control" value="{{ old('business_location_id', $loanRow->business_location_id ?? '') }}" readonly>
+                            <input type="number" min="0" id="loanBusinessLocationIdDisplay" class="form-control" value="{{ old('business_location_id', $selectedBusinessLocationId ?? $loanRow->business_location_id ?? '') }}" readonly>
                         </div>
                     </div>
                     <div class="col-md-12">
@@ -276,7 +276,7 @@
                     <div class="col-md-3">
                         <div class="form-group">
                             <label>Interest Rate (%)</label>
-                            <input type="number" step="0.01" min="0" name="interest_rate" class="form-control" value="{{ old('interest_rate', $loanRow->interest_rate ?? 0) }}">
+                            <input type="number" step="0.01" min="0" name="interest_rate" class="form-control" value="{{ old('interest_rate', $displayInterestRate ?? 0) }}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -485,8 +485,10 @@
                 idDisplay.value = hasValue ? option.value : '';
             }
 
-            if (mainLocationInput && hasValue && option.getAttribute('data-main-location-id')) {
-                mainLocationInput.value = option.getAttribute('data-main-location-id') || '';
+            if (mainLocationInput) {
+                mainLocationInput.value = hasValue
+                    ? (option.getAttribute('data-main-location-id') || '')
+                    : '';
             }
 
             if (locationAddressText) {
