@@ -1,9 +1,9 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Business Setting')
+@section('title', 'Invoice Prefix')
 
 @section('content_body')
 <section class="content-header">
-    <h1>Business Setting</h1>
+    <h1>Invoice Prefix</h1>
 </section>
 
 <section class="content">

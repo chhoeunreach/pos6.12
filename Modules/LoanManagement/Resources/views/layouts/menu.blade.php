@@ -93,7 +93,6 @@
         <li class="treeview">
             <a href="#"><i class="fa fa-cog"></i> Settings <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
-                <li><a href="{{ $lmUrl('loan-management.settings.index', [], '/loan-management/settings/index') }}"><i class="fa fa-building"></i> Business Setting</a></li>
                 <li><a href="{{ $lmUrl('loan-management.locations.index', [], '/loan-management/locations') }}"><i class="fa fa-map-marker"></i> Locations</a></li>
                 <li><a href="{{ $lmUrl('loan-management.settings.payment-methods', [], '/loan-management/settings/payment-methods') }}"><i class="fa fa-credit-card"></i> Payment Methods</a></li>
                 <li><a href="{{ $lmUrl('loan-management.settings.currencies', [], '/loan-management/settings/currencies') }}"><i class="fa fa-money"></i> Currencies</a></li>

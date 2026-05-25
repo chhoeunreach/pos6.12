@@ -6,6 +6,7 @@ use App\Services\TelegramBotService;
 use App\Utils\TransactionUtil;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -14,30 +15,53 @@ use Yajra\DataTables\Facades\DataTables;
 
 class LoanInstallmentListController extends Controller
 {
+    protected static array $loanTableExistsCache = [];
+    protected static array $loanColumnCache = [];
+
     protected function hasCol(string $col): bool
     {
-        return Schema::connection('mysql_loan')->hasColumn('loans', $col);
+        return in_array($col, $this->loanTableColumns('loans'), true);
     }
 
     protected function loanTableHasCol(string $table, string $col): bool
     {
-        return Schema::connection('mysql_loan')->hasTable($table)
-            && Schema::connection('mysql_loan')->hasColumn($table, $col);
+        return in_array($col, $this->loanTableColumns($table), true);
     }
 
     protected function loanSafeColumns(string $table, array $payload): array
     {
-        if (! Schema::connection('mysql_loan')->hasTable($table)) {
+        $columns = $this->loanTableColumns($table);
+        if (empty($columns)) {
             return [];
         }
 
-        return array_intersect_key($payload, array_flip(Schema::connection('mysql_loan')->getColumnListing($table)));
+        return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function loanTableExists(string $table): bool
+    {
+        if (! array_key_exists($table, self::$loanTableExistsCache)) {
+            self::$loanTableExistsCache[$table] = Schema::connection('mysql_loan')->hasTable($table);
+        }
+
+        return self::$loanTableExistsCache[$table];
+    }
+
+    protected function loanTableColumns(string $table): array
+    {
+        if (! array_key_exists($table, self::$loanColumnCache)) {
+            self::$loanColumnCache[$table] = $this->loanTableExists($table)
+                ? Schema::connection('mysql_loan')->getColumnListing($table)
+                : [];
+        }
+
+        return self::$loanColumnCache[$table];
     }
 
     protected function ensureLoanPaymentTypeColumn(): void
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')
-            || Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+        if (! $this->loanTableExists('loan_payments')
+            || $this->loanTableHasCol('loan_payments', 'payment_type')) {
             return;
         }
 
@@ -261,11 +285,11 @@ class LoanInstallmentListController extends Controller
     protected function expandPaymentsWithDetailsForPrint($payments)
     {
         $paymentIds = $payments->pluck('id')->filter()->unique()->values();
-        if ($paymentIds->isEmpty() || ! Schema::connection('mysql_loan')->hasTable('loan_payment_details')) {
+        if ($paymentIds->isEmpty() || ! $this->loanTableExists('loan_payment_details')) {
             return $payments;
         }
 
-        $detailColumns = Schema::connection('mysql_loan')->getColumnListing('loan_payment_details');
+        $detailColumns = $this->loanTableColumns('loan_payment_details');
         $selectColumns = array_values(array_intersect([
             'id',
             'payment_id',
@@ -333,7 +357,7 @@ class LoanInstallmentListController extends Controller
     protected function loanLocationNames($ids): array
     {
         $ids = collect($ids)->filter()->unique()->values();
-        if ($ids->isEmpty() || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+        if ($ids->isEmpty() || ! $this->loanTableExists('loan_business_locations')) {
             return [];
         }
 
@@ -358,7 +382,7 @@ class LoanInstallmentListController extends Controller
 
     protected function loanLocationIdsByName(string $name): array
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+        if (! $this->loanTableExists('loan_business_locations')) {
             return [];
         }
 
@@ -410,7 +434,7 @@ class LoanInstallmentListController extends Controller
         $locations = [];
         $collectors = [];
 
-        if (Schema::connection('mysql_loan')->hasTable('loans')) {
+        if ($this->loanTableExists('loans')) {
             $collectorIdCol = $this->hasCol('collector_id')
                 ? 'collector_id'
                 : ($this->hasCol('assigned_to') ? 'assigned_to' : null);
@@ -471,7 +495,7 @@ class LoanInstallmentListController extends Controller
 
     public function data(Request $request)
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loans')) {
+        if (! $this->loanTableExists('loans')) {
             return DataTables::of(collect([]))->make(true);
         }
 
@@ -629,7 +653,7 @@ class LoanInstallmentListController extends Controller
 
     public function printModal(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
@@ -641,7 +665,7 @@ class LoanInstallmentListController extends Controller
 
     public function print(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
         $sourceInvoiceDisplay = $loanRow->source_invoice_no ?? null;
@@ -650,7 +674,7 @@ class LoanInstallmentListController extends Controller
         $sourceDueDisplay = $loanRow->sell_due_amount_snapshot ?? null;
 
         $customerRow = null;
-        if (Schema::connection('mysql_loan')->hasTable('loan_customers') && ! empty($loanRow->customer_id)) {
+        if ($this->loanTableExists('loan_customers') && ! empty($loanRow->customer_id)) {
             $customerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanRow->customer_id)->first();
         }
 
@@ -672,7 +696,7 @@ class LoanInstallmentListController extends Controller
         ];
 
         $locationRow = null;
-        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+        if ($this->loanTableExists('loan_business_locations')) {
             if (! empty($loanRow->business_location_id)) {
                 $locationRow = DB::connection('mysql_loan')->table('loan_business_locations')
                     ->where('id', $loanRow->business_location_id)
@@ -723,7 +747,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $products = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_items')) {
+        if ($this->loanTableExists('loan_items')) {
             $products = DB::connection('mysql_loan')->table('loan_items')
                 ->where('loan_id', $loan)
                 ->get()
@@ -745,7 +769,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $installments = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if ($this->loanTableExists('loan_payment_schedules')) {
             $installments = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
                 ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'installment_no') ? 'installment_no' : 'due_date')
@@ -797,7 +821,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $payments = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_payments')) {
+        if ($this->loanTableExists('loan_payments')) {
             $payments = DB::connection('mysql_loan')->table('loan_payments')
                 ->where('loan_id', $loan)
                 ->orderByDesc($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at')
@@ -858,15 +882,15 @@ class LoanInstallmentListController extends Controller
 
     public function createPayment(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loan_payments'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_payments'), 404);
         $this->ensureLoanPaymentTypeColumn();
 
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
         $schedules = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if ($this->loanTableExists('loan_payment_schedules')) {
             $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
                 ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
@@ -899,8 +923,8 @@ class LoanInstallmentListController extends Controller
 
     public function storePayment(Request $request, int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loan_payments'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_payments'), 404);
 
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
@@ -993,7 +1017,7 @@ class LoanInstallmentListController extends Controller
                 ]));
                 $createdPaymentIds[] = (int) $paymentId;
 
-                if (Schema::connection('mysql_loan')->hasTable('loan_payment_details')) {
+                if ($this->loanTableExists('loan_payment_details')) {
                     DB::connection('mysql_loan')->table('loan_payment_details')->insert($this->loanSafeColumns('loan_payment_details', [
                         'payment_id' => $paymentId,
                         'payment_method_id' => null,
@@ -1105,7 +1129,7 @@ class LoanInstallmentListController extends Controller
 
     protected function applyLoanPayOffToSchedules(int $loan, float $amount, string $paidAt): void
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if (! $this->loanTableExists('loan_payment_schedules')) {
             return;
         }
 
@@ -1140,7 +1164,7 @@ class LoanInstallmentListController extends Controller
 
     protected function applyLoanPaymentToSchedules(int $loan, float $amount, string $paidAt, ?int $selectedScheduleId = null): void
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if (! $this->loanTableExists('loan_payment_schedules')) {
             return;
         }
 
@@ -1197,7 +1221,7 @@ class LoanInstallmentListController extends Controller
         $newPaidAmount = (float) ($loanRow->paid_amount ?? 0) + $amount;
         $scheduleBalance = 0.0;
         $hasScheduleBalance = false;
-        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if ($this->loanTableExists('loan_payment_schedules')) {
             if ($this->loanTableHasCol('loan_payment_schedules', 'balance_amount')) {
                 $scheduleBalance = (float) DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->sum('balance_amount');
                 $hasScheduleBalance = true;
@@ -1219,7 +1243,7 @@ class LoanInstallmentListController extends Controller
 
     protected function notifyLocationTelegram(int $loan, string $event, ?float $amount = null): void
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loans') || ! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+        if (! $this->loanTableExists('loans') || ! $this->loanTableExists('loan_business_locations')) {
             return;
         }
 
@@ -1280,7 +1304,7 @@ class LoanInstallmentListController extends Controller
 
     protected function logTelegramNotification(object $loanRow, object $location, string $event, string $message, string $status, ?string $error = null, ?string $chatId = null): void
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_telegram_notifications')) {
+        if (! $this->loanTableExists('loan_telegram_notifications')) {
             return;
         }
 
@@ -1299,12 +1323,12 @@ class LoanInstallmentListController extends Controller
 
     public function show(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
         $customerRow = null;
-        if (Schema::connection('mysql_loan')->hasTable('loan_customers') && isset($loanRow->customer_id) && $loanRow->customer_id) {
+        if ($this->loanTableExists('loan_customers') && isset($loanRow->customer_id) && $loanRow->customer_id) {
             $customerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanRow->customer_id)->first();
         }
         $customerDisplayName = $loanRow->customer_name_snapshot ?? null;
@@ -1389,7 +1413,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $locationRow = null;
-        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations') && isset($loanRow->business_location_id) && $loanRow->business_location_id) {
+        if ($this->loanTableExists('loan_business_locations') && isset($loanRow->business_location_id) && $loanRow->business_location_id) {
             $locationRow = DB::connection('mysql_loan')->table('loan_business_locations')->where('id', $loanRow->business_location_id)->first();
         }
         $locationDisplayName = $loanRow->location_name_snapshot ?? ($locationRow->name ?? null);
@@ -1527,16 +1551,16 @@ class LoanInstallmentListController extends Controller
         $collectorDisplayName = Str::of((string) $collectorDisplayName)->squish()->value();
 
         $items = [];
-        if (Schema::connection('mysql_loan')->hasTable('loan_items')) {
+        if ($this->loanTableExists('loan_items')) {
             $items = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->get();
         }
 
         $productItems = [];
-        if (Schema::connection('mysql_loan')->hasTable('loan_product_items')) {
+        if ($this->loanTableExists('loan_product_items')) {
             $productItemsQuery = DB::connection('mysql_loan')->table('loan_product_items');
-            if (Schema::connection('mysql_loan')->hasColumn('loan_product_items', 'loan_id')) {
+            if ($this->loanTableHasCol('loan_product_items', 'loan_id')) {
                 $productItems = $productItemsQuery->where('loan_id', $loan)->get();
-            } elseif (Schema::connection('mysql_loan')->hasColumn('loan_product_items', 'loan_item_id') && $items->count() > 0) {
+            } elseif ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $items->count() > 0) {
                 $itemIds = $items->pluck('id')->filter()->values();
                 $productItems = $itemIds->isEmpty()
                     ? collect([])
@@ -1547,7 +1571,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $schedules = [];
-        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')) {
+        if ($this->loanTableExists('loan_payment_schedules')) {
             $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
                 ->orderBy('due_date')
@@ -1556,7 +1580,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $payments = [];
-        if (Schema::connection('mysql_loan')->hasTable('loan_payments')) {
+        if ($this->loanTableExists('loan_payments')) {
             $paymentsQuery = DB::connection('mysql_loan')->table('loan_payments')
                 ->where('loan_id', $loan);
             $this->applyMonthlyPaymentFilter($paymentsQuery);
@@ -1566,7 +1590,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $statusLogs = [];
-        if (Schema::connection('mysql_loan')->hasTable('loan_status_logs')) {
+        if ($this->loanTableExists('loan_status_logs')) {
             $statusLogs = DB::connection('mysql_loan')->table('loan_status_logs')
                 ->where('loan_id', $loan)
                 ->orderByDesc('created_at')
@@ -1651,7 +1675,7 @@ class LoanInstallmentListController extends Controller
 
     public function edit(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
@@ -1695,22 +1719,20 @@ class LoanInstallmentListController extends Controller
         $selectedBusinessLocationId = $loanRow->business_location_id ?? null;
 
         $locationOptions = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loans')) {
-            $loanColumns = Schema::connection('mysql_loan')->getColumnListing('loans');
+        if ($this->loanTableExists('loans')) {
+            $loanColumns = $this->loanTableColumns('loans');
             if (in_array('business_location_name_snapshot', $loanColumns, true) && in_array('business_location_id', $loanColumns, true)) {
-                $locationOptions = DB::connection('mysql_loan')
-                    ->table('loans')
-                    ->select('business_location_id', 'business_location_name_snapshot')
-                    ->whereNotNull('business_location_id')
-                    ->whereNotNull('business_location_name_snapshot')
-                    ->where('business_location_name_snapshot', '!=', '')
-                    ->orderBy('business_location_name_snapshot')
-                    ->get()
-                    ->groupBy('business_location_id')
-                    ->map(function ($group) {
-                        return $group->first();
-                    })
-                    ->values();
+                $locationOptions = Cache::remember('loan_management.edit_location_options', now()->addMinutes(5), function () {
+                    return DB::connection('mysql_loan')
+                        ->table('loans')
+                        ->select('business_location_id', 'business_location_name_snapshot')
+                        ->whereNotNull('business_location_id')
+                        ->whereNotNull('business_location_name_snapshot')
+                        ->where('business_location_name_snapshot', '!=', '')
+                        ->groupBy('business_location_id', 'business_location_name_snapshot')
+                        ->orderBy('business_location_name_snapshot')
+                        ->get();
+                });
             }
         }
 
@@ -1770,15 +1792,15 @@ class LoanInstallmentListController extends Controller
         $locationName = $locationName !== '' ? $locationName : '-';
         $locationAddress = $locationAddress !== '' ? $locationAddress : '-';
 
-        $loanItems = Schema::connection('mysql_loan')->hasTable('loan_items')
+        $loanItems = $this->loanTableExists('loan_items')
             ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id')->get()
             : collect();
 
-        $schedules = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+        $schedules = $this->loanTableExists('loan_payment_schedules')
             ? DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->orderBy('installment_no')->orderBy('id')->get()
             : collect();
 
-        $payments = Schema::connection('mysql_loan')->hasTable('loan_payments')
+        $payments = $this->loanTableExists('loan_payments')
             ? DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan)->orderByDesc('paid_date')->orderByDesc('id')->limit(20)->get()
             : collect();
 
@@ -1864,8 +1886,8 @@ class LoanInstallmentListController extends Controller
             'recovery_score' => 'nullable|integer|min:0|max:65535',
         ]);
 
-        if (! empty($data['business_location_id']) && Schema::connection('mysql_loan')->hasTable('loans')) {
-            $loanColumns = Schema::connection('mysql_loan')->getColumnListing('loans');
+        if (! empty($data['business_location_id']) && $this->loanTableExists('loans')) {
+            $loanColumns = $this->loanTableColumns('loans');
             if (in_array('business_location_name_snapshot', $loanColumns, true)) {
                 $selectedLocation = DB::connection('mysql_loan')
                     ->table('loans')
@@ -1882,7 +1904,7 @@ class LoanInstallmentListController extends Controller
             }
         }
 
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', array_merge($data, [
             'stock_already_deducted' => (int) $request->boolean('stock_already_deducted'),
             'field_visit_required' => (int) $request->boolean('field_visit_required'),
@@ -1898,14 +1920,14 @@ class LoanInstallmentListController extends Controller
             'status' => 'required|in:draft,pending,approved,active,completed,rejected,cancelled,defaulted',
         ]);
 
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update([
             'status' => $payload['status'],
             'updated_at' => now(),
         ]);
 
-        if (Schema::connection('mysql_loan')->hasTable('loan_status_logs')) {
-            $cols = Schema::connection('mysql_loan')->getColumnListing('loan_status_logs');
+        if ($this->loanTableExists('loan_status_logs')) {
+            $cols = $this->loanTableColumns('loan_status_logs');
             $row = [
                 'loan_id' => $loan,
                 'status' => $payload['status'],
@@ -1922,7 +1944,7 @@ class LoanInstallmentListController extends Controller
 
     public function destroy(int $loan)
     {
-        abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
+        abort_if(! $this->loanTableExists('loans'), 404);
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->delete();
         return response()->json(['success' => true, 'message' => 'Loan deleted']);
     }

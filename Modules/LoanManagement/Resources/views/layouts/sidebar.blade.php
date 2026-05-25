@@ -55,7 +55,6 @@
             ['label' => 'GPS Tracking', 'route' => 'loan-management.gps.index', 'can' => 'loan_management.gps.view'],
         ]],
         ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [
-            ['label' => 'Business Setting', 'icon' => 'fa fa-building', 'route' => 'loan-management.settings', 'can' => 'loan_management.settings.view', 'active_routes' => ['loan-management.settings', 'loan-management.settings.index']],
             ['label' => 'Locations', 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view'],
             ['label' => 'Payment Methods', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
             ['label' => 'Currencies', 'icon' => 'fa fa-money', 'route' => 'loan-management.settings.currencies', 'can' => 'loan_management.view'],

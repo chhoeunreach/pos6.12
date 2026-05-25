@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', function () {
         toolsMonthlyImport: "{{ route('loan-management.tools.monthly-import-export') }}",
         toolsLoanImport: "{{ route('loan-management.tools.loan-import-export') }}",
         toolsNotify: "{{ route('loan-management.tools.send-notification') }}",
-        settingsGeneral: "{{ route('loan-management.settings.index') }}",
         settingsLocations: "{{ route('loan-management.locations.index') }}",
         settingsPaymentMethods: "{{ route('loan-management.settings.payment-methods') }}",
         settingsCurrencies: "{{ route('loan-management.settings.currencies') }}"
@@ -96,7 +95,6 @@ document.addEventListener('DOMContentLoaded', function () {
         <li class="treeview installment-section section-settings ${treeOpenClass([links.settingsGeneral, links.settingsLocations, links.settingsPaymentMethods, links.settingsCurrencies])}" data-section="settings">
             <a href="#"><i class="fa fa-wrench"></i> <span>Settings</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.settingsGeneral, links.settingsLocations, links.settingsPaymentMethods, links.settingsCurrencies])}>
-                <li class="${activeClass(links.settingsGeneral)}"><a href="${links.settingsGeneral}"><i class="fa fa-building"></i> Business Setting</a></li>
                 <li class="${activeClass(links.settingsLocations)}"><a href="${links.settingsLocations}"><i class="fa fa-map-marker"></i> Locations</a></li>
                 <li class="${activeClass(links.settingsPaymentMethods)}"><a href="${links.settingsPaymentMethods}"><i class="fa fa-credit-card"></i> Payment Methods</a></li>
                 <li class="${activeClass(links.settingsCurrencies)}"><a href="${links.settingsCurrencies}"><i class="fa fa-money"></i> Currencies</a></li>
