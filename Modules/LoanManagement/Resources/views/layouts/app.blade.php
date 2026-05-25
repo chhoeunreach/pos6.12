@@ -132,7 +132,7 @@
         <script>
             (function($){
                 var loanPosRoutes = {
-                    cloneBase: "{{ url('/loan-management/loans/sales') }}",
+                    cloneSellBase: "{{ url('/loan-management/loans/sell') }}",
                     previewSchedule: "{{ route('loan-management.loans.preview-schedule') }}",
                     loanViewBase: "{{ url('/loan-management/loans') }}",
                     loanPrintModalBase: "{{ url('/loan-management/loans') }}"
@@ -344,14 +344,36 @@
 
                     lastAutoInstallmentTransactionId = transactionId;
 
-                    $.get(loanPosRoutes.cloneBase + '/' + encodeURIComponent(transactionId) + '/clone', function(result){
-                        var container = $('#loanAutoInstallmentModal');
-                        container.find('.modal-content').html(result);
-                        container.modal('show');
-                        bindAutoInstallmentForm(container);
-                    }).fail(function(xhr){
-                        lastAutoInstallmentTransactionId = null;
-                        alert(xhr.responseJSON?.message || 'Unable to open installment loan form');
+                    var container = $('#loanAutoInstallmentModal');
+                    var modalBody = container.find('#loanAutoInstallmentModalBody');
+
+                    modalBody.html('<div class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading selected sale...</div>');
+                    container.modal('show');
+
+                    $.ajax({
+                        url: loanPosRoutes.cloneSellBase + '/' + encodeURIComponent(transactionId) + '/clone',
+                        dataType: 'json',
+                        success: function(result){
+                            var formHtml = result && result.data ? result.data.form_html : '';
+
+                            if (!formHtml) {
+                                modalBody.html('<div class="alert alert-warning" style="margin-bottom:0;">Unable to load installment form.</div>');
+                                lastAutoInstallmentTransactionId = null;
+                                return;
+                            }
+
+                            modalBody.html(formHtml);
+                            bindAutoInstallmentForm(container);
+                        },
+                        error: function(xhr){
+                            lastAutoInstallmentTransactionId = null;
+                            if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.loan_url) {
+                                showExistingLoanWarning(modalBody, xhr.responseJSON.message || 'This sale already has installment loan.', xhr.responseJSON.data.loan_url);
+                                return;
+                            }
+
+                            modalBody.html('<div class="alert alert-danger" style="margin-bottom:0;">' + escLoanModal(xhr.responseJSON?.message || 'Unable to open installment loan form') + '</div>');
+                        }
                     });
                 }
 
@@ -535,6 +557,60 @@
             })(jQuery);
         </script>
     @endif
+
+    <script>
+        (function ($) {
+            $(document).on('click', '.lm-btn-modal', function (e) {
+                e.preventDefault();
+
+                var $trigger = $(this);
+                var container = $trigger.data('container') || '.view_modal';
+                var url = $trigger.data('href') || $trigger.attr('href');
+
+                if (!url || !$(container).length) {
+                    return;
+                }
+
+                $.ajax({
+                    url: url,
+                    dataType: 'html',
+                    beforeSend: function () {
+                        $(container).html(
+                            '<div class="modal-dialog modal-lg" role="document">' +
+                                '<div class="modal-content">' +
+                                    '<div class="modal-body text-center" style="padding:32px 16px;">' +
+                                        '<i class="fa fa-spinner fa-spin fa-2x"></i>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>'
+                        ).modal('show');
+                    },
+                    success: function (result) {
+                        $(container).html(result).modal('show');
+                    },
+                    error: function (xhr) {
+                        var message = 'Unable to load this window.';
+
+                        if (xhr && xhr.responseText) {
+                            message = xhr.responseText;
+                        }
+
+                        $(container).html(
+                            '<div class="modal-dialog modal-lg" role="document">' +
+                                '<div class="modal-content">' +
+                                    '<div class="modal-header">' +
+                                        '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                                        '<h4 class="modal-title">Load Error</h4>' +
+                                    '</div>' +
+                                    '<div class="modal-body"><div class="alert alert-danger" style="margin-bottom:0;">' + $('<div>').text(message).html() + '</div></div>' +
+                                '</div>' +
+                            '</div>'
+                        ).modal('show');
+                    }
+                });
+            });
+        })(jQuery);
+    </script>
     @yield('loan_js')
 
     <style>

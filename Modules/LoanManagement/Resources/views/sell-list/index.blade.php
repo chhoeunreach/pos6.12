@@ -41,11 +41,11 @@
 <td>{{ $row->sale_date }}</td><td>{{ $row->created_by_name }}</td><td><span class="label label-info">{{ $row->payment_status }}</span></td>
 <td>{!! $row->installment_status === 'Already Added' ? '<span class="label label-success">Already Added</span>' : '<span class="label label-warning">Pending</span>' !!}</td>
 <td>
-<a href="{{ route('loan-management.sell-list.view', $row->id) }}" class="btn btn-xs btn-default">View</a>
+<a href="{{ route('loan-management.sell-list.view', ['transaction' => $row->id, '_lm_modal' => 1]) }}" class="btn btn-xs btn-default lm-btn-modal" data-container=".view_modal" data-href="{{ route('loan-management.sell-list.view', ['transaction' => $row->id, '_lm_modal' => 1]) }}">View</a>
 @if($row->installment_status === 'Already Added')
 <button class="btn btn-xs btn-success" disabled>Already Added</button>
 @else
-<a href="{{ route('loan-management.sell-list.add', $row->id) }}" class="btn btn-xs btn-primary">Add to Installment</a>
+<a href="{{ route('loan-management.sell-list.add', ['transaction' => $row->id, '_lm_modal' => 1]) }}" class="btn btn-xs btn-primary lm-btn-modal" data-container=".view_modal" data-href="{{ route('loan-management.sell-list.add', ['transaction' => $row->id, '_lm_modal' => 1]) }}">Add to Installment</a>
 @endif
 </td>
 </tr>

@@ -292,6 +292,8 @@
             grid-template-columns: 1fr 1fr;
             margin-top: 4mm;
             min-height: 23mm;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
         .signature-box {
             text-align: center;
@@ -315,6 +317,8 @@
             font-family: 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 11px;
             line-height: 1.7;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
         .notice .title {
             color: red;
@@ -328,6 +332,8 @@
             gap: 12mm;
             padding-top: 5mm;
             align-items: end;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
         .payment-card {
             min-height: 41mm;
@@ -351,6 +357,8 @@
             color: #999;
             font-size: 9px;
             text-align: center;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
         .footer-bold {
             margin-top: 4mm;
@@ -369,10 +377,75 @@
                 width: auto;
                 min-height: auto;
                 margin: 0;
-                padding: 6mm 10mm 5mm;
+                padding: 5mm 8mm 4mm;
             }
             .print-table th,
             .print-table td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .info-grid {
+                gap: 5mm;
+                margin-top: 1.2mm;
+                margin-bottom: 1mm;
+            }
+            .address-row {
+                padding: 1mm 0 2mm;
+            }
+            .schedule-table th,
+            .schedule-table td {
+                padding: 0.8mm 0.8mm;
+                font-size: 9px;
+            }
+            .contact-line {
+                font-size: 12px;
+            }
+            .signature-row {
+                margin-top: 2mm;
+                min-height: 18mm;
+            }
+            .signature-name {
+                margin-top: 5mm;
+            }
+            .signature-line {
+                margin-top: 2.5mm;
+            }
+            .notice {
+                padding: 2.5mm 0;
+                font-size: 10px;
+                line-height: 1.45;
+            }
+            .notice .title {
+                font-size: 12px;
+            }
+            .warranty-line {
+                font-size: 9px;
+                line-height: 1.45;
+            }
+            .payment-area {
+                gap: 8mm;
+                padding-top: 2.5mm;
+            }
+            .payment-card {
+                min-height: 30mm;
+            }
+            .payment-card .caption {
+                font-size: 9px;
+                margin-bottom: 1mm;
+            }
+            .qr-large {
+                max-width: 30mm;
+                max-height: 30mm;
+            }
+            .qr-small {
+                max-width: 24mm;
+                max-height: 24mm;
+            }
+            .transfer-number {
+                margin: 2mm 0 1mm;
+                font-size: 11px;
+            }
+            .printed-date {
+                margin-top: 1.5mm;
+                font-size: 8px;
+            }
         }
     </style>
 </head>
@@ -837,9 +910,40 @@
         copyLoanAsImage();
     });
 
+    function waitForLoanPrintAssets() {
+        var imagePromises = Array.prototype.map.call(document.images || [], function (image) {
+            if (image.complete) {
+                return Promise.resolve();
+            }
+
+            return new Promise(function (resolve) {
+                image.addEventListener('load', resolve, { once: true });
+                image.addEventListener('error', resolve, { once: true });
+            });
+        });
+
+        var fontPromise = Promise.resolve();
+        if (document.fonts && typeof document.fonts.ready !== 'undefined') {
+            fontPromise = document.fonts.ready.catch(function () {
+                return null;
+            });
+        }
+
+        return Promise.all([fontPromise].concat(imagePromises));
+    }
+
+    function triggerAutoPrint() {
+        waitForLoanPrintAssets().finally(function () {
+            window.setTimeout(function () {
+                window.focus();
+                window.print();
+            }, 350);
+        });
+    }
+
     window.addEventListener('load', function () {
         if (new URLSearchParams(window.location.search).get('auto_print') === '1') {
-            window.print();
+            triggerAutoPrint();
         }
     });
 </script>
