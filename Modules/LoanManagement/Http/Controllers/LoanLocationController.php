@@ -514,10 +514,10 @@ class LoanLocationController extends Controller
                 }
 
                 $url = $root['type'] === 'module'
-                    ? route('loan-management.locations.assets.show', [
+                    ? ($this->fileDataUri($file->getPathname()) ?: route('loan-management.locations.assets.show', [
                         'location' => basename($file->getPath()),
                         'filename' => $file->getFilename(),
-                    ])
+                    ]))
                     : asset($path);
 
                 if (empty($url)) {
