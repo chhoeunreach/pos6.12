@@ -2,6 +2,7 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +17,12 @@ class LoanLocationController extends Controller
     protected string $connection = 'mysql_loan';
     protected string $table = 'loan_business_locations';
     protected string $locationAssetRoot = 'loan_location_assets';
+    protected static array $tableExistsCache = [];
+    protected static array $columnListingCache = [];
 
     public function index(Request $request)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -33,7 +36,7 @@ class LoanLocationController extends Controller
 
         $locations = DB::connection($this->connection)
             ->table($this->table)
-            ->when(Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->when($this->hasColumnCached($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
             ->when($filters['name'] !== '', function ($query) use ($filters) {
                 $query->where('name', 'like', '%'.$filters['name'].'%');
             })
@@ -58,14 +61,19 @@ class LoanLocationController extends Controller
                 return $location;
             });
 
-        $assetGallery = $this->assetGallery();
+        return view('loanmanagement::locations.index', compact('locations', 'filters'));
+    }
 
-        return view('loanmanagement::locations.index', compact('locations', 'assetGallery', 'filters'));
+    public function assetGalleryModal()
+    {
+        $assetGallery = Cache::remember('loan_management.location_asset_gallery', now()->addMinutes(5), fn () => $this->assetGallery());
+
+        return view('loanmanagement::locations.partials.asset_gallery', compact('assetGallery'));
     }
 
     public function export()
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -73,7 +81,7 @@ class LoanLocationController extends Controller
         $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'status'];
         $rows = DB::connection($this->connection)
             ->table($this->table)
-            ->when(Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->when($this->hasColumnCached($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
             ->orderBy('name')
             ->get($columns);
 
@@ -112,7 +120,7 @@ class LoanLocationController extends Controller
 
     public function import(Request $request)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -191,7 +199,7 @@ class LoanLocationController extends Controller
 
     public function store(Request $request)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -210,7 +218,7 @@ class LoanLocationController extends Controller
 
     public function updateDetails(Request $request, int $location)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -233,12 +241,12 @@ class LoanLocationController extends Controller
 
     public function destroy(int $location)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
 
         $query = DB::connection($this->connection)->table($this->table)->where('id', $location);
         abort_if(! $query->first(), 404);
 
-        if (Schema::connection($this->connection)->hasColumn($this->table, 'deleted_at')) {
+        if ($this->hasColumnCached($this->table, 'deleted_at')) {
             $query->update($this->safeColumns([
                 'status' => 'inactive',
                 'deleted_at' => now(),
@@ -255,7 +263,7 @@ class LoanLocationController extends Controller
 
     public function update(Request $request, int $location)
     {
-        abort_if(! Schema::connection($this->connection)->hasTable($this->table), 404);
+        abort_if(! $this->tableExists($this->table), 404);
         $this->ensureLoanInvoicePrefixColumn();
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
@@ -380,27 +388,55 @@ class LoanLocationController extends Controller
         return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
     }
 
+    protected function tableExists(string $table): bool
+    {
+        if (! array_key_exists($table, self::$tableExistsCache)) {
+            self::$tableExistsCache[$table] = Schema::connection($this->connection)->hasTable($table);
+        }
+
+        return self::$tableExistsCache[$table];
+    }
+
+    protected function columnListing(string $table): array
+    {
+        if (! array_key_exists($table, self::$columnListingCache)) {
+            self::$columnListingCache[$table] = $this->tableExists($table)
+                ? Schema::connection($this->connection)->getColumnListing($table)
+                : [];
+        }
+
+        return self::$columnListingCache[$table];
+    }
+
+    protected function hasColumnCached(string $table, string $column): bool
+    {
+        return in_array($column, $this->columnListing($table), true);
+    }
+
     protected function ensureTelegramChatColumns(): void
     {
-        if (! Schema::connection($this->connection)->hasColumn($this->table, 'telegram_payment_chat_id')) {
+        if (! $this->hasColumnCached($this->table, 'telegram_payment_chat_id')) {
             Schema::connection($this->connection)->table($this->table, function ($table) {
                 $table->string('telegram_payment_chat_id')->nullable()->after('telegram_chat_id');
             });
+            self::$columnListingCache[$this->table] = [];
         }
 
-        if (! Schema::connection($this->connection)->hasColumn($this->table, 'telegram_installment_chat_id')) {
+        if (! $this->hasColumnCached($this->table, 'telegram_installment_chat_id')) {
             Schema::connection($this->connection)->table($this->table, function ($table) {
                 $table->string('telegram_installment_chat_id')->nullable()->after('telegram_payment_chat_id');
             });
+            self::$columnListingCache[$this->table] = [];
         }
     }
 
     protected function ensureLoanInvoicePrefixColumn(): void
     {
-        if (! Schema::connection($this->connection)->hasColumn($this->table, 'loan_invoice_prefix')) {
+        if (! $this->hasColumnCached($this->table, 'loan_invoice_prefix')) {
             Schema::connection($this->connection)->table($this->table, function ($table) {
                 $table->string('loan_invoice_prefix', 50)->nullable()->after('location_code');
             });
+            self::$columnListingCache[$this->table] = [];
         }
     }
 
@@ -413,10 +449,11 @@ class LoanLocationController extends Controller
         ];
 
         foreach ($columns as $column => $creator) {
-            if (! Schema::connection($this->connection)->hasColumn($this->table, $column)) {
+            if (! $this->hasColumnCached($this->table, $column)) {
                 Schema::connection($this->connection)->table($this->table, function ($table) use ($creator) {
                     $creator($table);
                 });
+                self::$columnListingCache[$this->table] = [];
             }
         }
     }
@@ -627,7 +664,7 @@ class LoanLocationController extends Controller
     {
         return array_intersect_key(
             $payload,
-            array_flip(Schema::connection($this->connection)->getColumnListing($this->table))
+            array_flip($this->columnListing($this->table))
         );
     }
 

@@ -420,20 +420,10 @@
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                     <h4 class="modal-title" id="loanAssetGalleryModalLabel">Choose Existing Image</h4>
                 </div>
-                <div class="modal-body">
-                    @if(! empty($assetGallery))
-                        <div class="loan-asset-gallery-grid">
-                            @foreach($assetGallery as $asset)
-                                <button type="button" class="loan-asset-gallery-item" data-path="{{ $asset['path'] }}" data-url="{{ $asset['url'] }}">
-                                    <img src="{{ $asset['url'] }}" alt="{{ $asset['name'] }}" loading="lazy" onerror="this.style.display='none';">
-                                    <span class="loan-asset-gallery-name" title="{{ $asset['name'] }}">{{ $asset['name'] }}</span>
-                                    <span class="loan-asset-gallery-date">{{ $asset['modified'] }}</span>
-                                </button>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="alert alert-info" style="margin-bottom:0;">No existing images found yet.</div>
-                    @endif
+                <div class="modal-body" id="loanAssetGalleryModalBody">
+                    <div class="text-center text-muted" style="padding: 24px 0;">
+                        <i class="fa fa-spinner fa-spin"></i> Loading image gallery...
+                    </div>
                 </div>
             </div>
         </div>
@@ -448,6 +438,8 @@
             var galleryPreview = null;
             var galleryFileInput = null;
             var locationBaseUrl = "{{ url('loan-management/locations') }}";
+            var galleryUrl = "{{ route('loan-management.locations.asset-gallery') }}";
+            var galleryLoaded = false;
 
             function setPreview(container, url, altText) {
                 if (!container || !container.length) {
@@ -507,6 +499,15 @@
                 galleryTargetInput = $('#' + $(this).data('target-input'));
                 galleryPreview = $('#' + $(this).data('preview'));
                 galleryFileInput = $(this).closest('.loan-asset-field').find('input[type="file"]');
+                if (!galleryLoaded) {
+                    $('#loanAssetGalleryModalBody').html('<div class="text-center text-muted" style="padding: 24px 0;"><i class="fa fa-spinner fa-spin"></i> Loading image gallery...</div>');
+                    $.get(galleryUrl, function(result) {
+                        $('#loanAssetGalleryModalBody').html(result);
+                        galleryLoaded = true;
+                    }).fail(function() {
+                        $('#loanAssetGalleryModalBody').html('<div class="alert alert-warning" style="margin-bottom:0;">Unable to load the image gallery right now.</div>');
+                    });
+                }
                 $('#loan_asset_gallery_modal').modal('show');
             });
 
