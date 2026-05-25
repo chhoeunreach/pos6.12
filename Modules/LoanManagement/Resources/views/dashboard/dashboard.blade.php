@@ -30,6 +30,44 @@
         flex-direction: column;
         gap: 18px;
     }
+    .lm-dashboard-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px;
+        border: 1px solid #dbe5f0;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+        align-self: flex-start;
+    }
+    .lm-dashboard-tab {
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 10px 18px;
+        transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+    .lm-dashboard-tab:hover {
+        color: #0f172a;
+        transform: translateY(-1px);
+    }
+    .lm-dashboard-tab.is-active {
+        background: linear-gradient(135deg, #15314b 0%, #1c5d77 52%, #20a083 100%);
+        color: #fff;
+        box-shadow: 0 10px 22px rgba(21, 49, 75, 0.2);
+    }
+    .lm-dashboard-pane {
+        display: none;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .lm-dashboard-pane.is-active {
+        display: flex;
+    }
     .lm-dashboard-hero {
         position: relative;
         overflow: hidden;
@@ -468,6 +506,381 @@
         color: #0f172a;
         font-size: 16px;
     }
+    .lm-live-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+    .lm-live-panel {
+        min-height: 360px;
+    }
+    .lm-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #ecfeff;
+        color: #0f766e;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid #bae6fd;
+    }
+    .lm-live-badge__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #14b8a6;
+        box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.55);
+        animation: lm-live-pulse 1.8s infinite;
+    }
+    .lm-live-chart {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 250px;
+    }
+    .lm-live-chart__canvas {
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+        min-height: 220px;
+        padding: 18px 18px 14px;
+        border-radius: 18px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.92)),
+            repeating-linear-gradient(to top, rgba(148, 163, 184, 0.12) 0, rgba(148, 163, 184, 0.12) 1px, transparent 1px, transparent 44px);
+        border: 1px solid #e2e8f0;
+        overflow-x: auto;
+    }
+    .lm-live-chart__bar-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-width: 56px;
+        flex: 1 1 0;
+    }
+    .lm-live-chart__bar-stack {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        min-height: 170px;
+    }
+    .lm-live-chart__bar {
+        width: 18px;
+        min-height: 8px;
+        border-radius: 10px 10px 4px 4px;
+        background: linear-gradient(180deg, #38bdf8 0%, #2563eb 100%);
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+    }
+    .lm-live-chart__bar--accent {
+        background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+        box-shadow: 0 10px 18px rgba(5, 150, 105, 0.18);
+    }
+    .lm-live-chart__bar--warn {
+        background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+        box-shadow: 0 10px 18px rgba(225, 29, 72, 0.18);
+    }
+    .lm-live-chart__label {
+        max-width: 100%;
+        color: #475569;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+    .lm-live-chart__value {
+        color: #0f172a;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+    }
+    .lm-live-chart__legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        color: #64748b;
+        font-size: 12px;
+    }
+    .lm-live-chart__legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .lm-live-chart__legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #2563eb;
+    }
+    .lm-live-chart__legend-swatch--accent {
+        background: #059669;
+    }
+    .lm-live-chart__legend-swatch--warn {
+        background: #e11d48;
+    }
+    .lm-live-chart__empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 220px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 18px;
+        color: #64748b;
+        text-align: center;
+        padding: 20px;
+        background: #f8fafc;
+    }
+    .lm-live-chat-shell {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr) 300px;
+        min-height: 76vh;
+        border: 1px solid #dbe5f0;
+        border-radius: 22px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+    .lm-live-chat-inbox {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-right: 1px solid #e5edf5;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+    .lm-live-chat-toolbar {
+        padding: 18px 18px 14px;
+        border-bottom: 1px solid #e5edf5;
+    }
+    .lm-live-chat-toolbar h4 {
+        margin: 0 0 12px;
+        color: #0f172a;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+    .lm-live-chat-search {
+        width: 100%;
+        height: 42px;
+        border: 1px solid #dbe5f0;
+        border-radius: 999px;
+        padding: 0 16px;
+        outline: none;
+        background: #f8fafc;
+    }
+    .lm-live-chat-list {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 8px;
+    }
+    .lm-live-chat-item {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+        padding: 12px;
+        border: 0;
+        border-radius: 20px;
+        background: transparent;
+        text-align: left;
+        transition: background .18s ease, transform .18s ease;
+    }
+    .lm-live-chat-item:hover,
+    .lm-live-chat-item.is-active {
+        background: #eef5ff;
+        transform: translateX(2px);
+    }
+    .lm-live-chat-avatar {
+        position: relative;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e0f2fe, #dbeafe);
+        color: #1e3a8a;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 800;
+    }
+    .lm-live-chat-avatar::after {
+        content: '';
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #22c55e;
+        border: 2px solid #fff;
+    }
+    .lm-live-chat-name {
+        display: block;
+        color: #111827;
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .lm-live-chat-preview {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .lm-live-chat-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        min-width: 48px;
+    }
+    .lm-live-chat-time {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .lm-live-chat-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .lm-live-chat-main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: #f8fafc;
+        border-right: 1px solid #e5edf5;
+    }
+    .lm-live-chat-mainbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid #e5edf5;
+        background: #fff;
+    }
+    .lm-live-chat-main-title {
+        margin: 0;
+        color: #111827;
+        font-size: 18px;
+        font-weight: 800;
+    }
+    .lm-live-chat-main-subtitle {
+        margin: 4px 0 0;
+        color: #64748b;
+        font-size: 12px;
+    }
+    .lm-live-chat-main-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .lm-live-chat-frame {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        border: 0;
+        background: #fff;
+    }
+    .lm-live-chat-side {
+        padding: 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        overflow-y: auto;
+    }
+    .lm-live-chat-profile {
+        text-align: center;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #e5edf5;
+    }
+    .lm-live-chat-profile-avatar {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        margin: 0 auto 14px;
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        color: #1d4ed8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 800;
+    }
+    .lm-live-chat-profile-name {
+        margin: 0;
+        color: #111827;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+    .lm-live-chat-profile-subtitle,
+    .lm-live-chat-profile-time {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: 13px;
+    }
+    .lm-live-chat-side-section {
+        padding: 18px 0;
+        border-bottom: 1px solid #e5edf5;
+    }
+    .lm-live-chat-side-title {
+        margin: 0 0 12px;
+        color: #0f172a;
+        font-size: 15px;
+        font-weight: 800;
+    }
+    .lm-live-chat-side-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 0;
+        font-size: 13px;
+        border-bottom: 1px dashed #eef2f7;
+    }
+    .lm-live-chat-side-row:last-child {
+        border-bottom: 0;
+    }
+    .lm-live-chat-side-row span:first-child {
+        color: #64748b;
+    }
+    .lm-live-chat-side-row span:last-child {
+        color: #111827;
+        font-weight: 700;
+        text-align: right;
+    }
+    .lm-live-chat-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 220px;
+        color: #64748b;
+        text-align: center;
+        padding: 20px;
+    }
+    @keyframes lm-live-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.55); }
+        70% { box-shadow: 0 0 0 9px rgba(20, 184, 166, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0); }
+    }
     .lm-dashboard-frame-link {
         cursor: pointer;
         text-decoration: none !important;
@@ -731,8 +1144,15 @@
     @media (max-width: 1199px) {
         .lm-dashboard-grid,
         .lm-dashboard-hero-grid,
-        .lm-quick-grid {
+        .lm-quick-grid,
+        .lm-live-grid {
             grid-template-columns: 1fr;
+        }
+        .lm-live-chat-shell {
+            grid-template-columns: 280px minmax(0, 1fr);
+        }
+        .lm-live-chat-side {
+            display: none;
         }
     }
     @media (max-width: 767px) {
@@ -767,11 +1187,29 @@
             width: 64px;
             height: 64px;
         }
+        .lm-live-chat-shell {
+            grid-template-columns: 1fr;
+            min-height: 860px;
+        }
+        .lm-live-chat-inbox {
+            min-height: 320px;
+            border-right: 0;
+            border-bottom: 1px solid #e5edf5;
+        }
+        .lm-live-chat-main {
+            border-right: 0;
+        }
     }
 </style>
 @endsection
 
 <div class="lm-dashboard">
+    <div class="lm-dashboard-tabs" role="tablist" aria-label="Loan dashboard tabs">
+        <button type="button" class="lm-dashboard-tab is-active" data-dashboard-tab="overview" aria-pressed="true">Overview</button>
+        <button type="button" class="lm-dashboard-tab" data-dashboard-tab="live" aria-pressed="false">Live Chat</button>
+    </div>
+
+    <div class="lm-dashboard-pane is-active" data-dashboard-pane="overview">
     <section class="lm-dashboard-hero">
         <div class="lm-dashboard-hero-grid">
             <div>
@@ -1077,6 +1515,91 @@
     </section>
 </div>
 
+    <div class="lm-dashboard-pane" data-dashboard-pane="live">
+        @php
+            $initialLiveChat = collect($recentChats ?? [])->first();
+        @endphp
+        <section class="lm-dashboard-panel lm-dashboard-panel--feature">
+            <div class="lm-dashboard-panel__header">
+                <div>
+                    <h3 class="lm-dashboard-panel__title">Live Chat Dashboard</h3>
+                    <p class="lm-dashboard-panel__hint">Focus on customer conversations, unread queues, collector handoff, and real-time support activity from one dashboard tab.</p>
+                </div>
+                <span class="lm-live-badge"><span class="lm-live-badge__dot"></span> Auto refresh 30s</span>
+            </div>
+            <div class="lm-dashboard-panel__body">
+                <div class="lm-live-chat-shell">
+                    <aside class="lm-live-chat-inbox">
+                        <div class="lm-live-chat-toolbar">
+                            <h4>Chats</h4>
+                            <input type="text" class="lm-live-chat-search" id="loanDashboardLiveChatSearch" placeholder="Search Messenger style inbox">
+                        </div>
+                        <div class="lm-live-chat-list" id="loanDashboardLiveChatList">
+                            <div class="lm-live-chat-empty">Loading live chats...</div>
+                        </div>
+                    </aside>
+
+                    <main class="lm-live-chat-main">
+                        <div class="lm-live-chat-mainbar">
+                            <div>
+                                <h4 class="lm-live-chat-main-title" id="loanDashboardLiveChatTitle">{{ $initialLiveChat['display_name'] ?? 'Select a chat' }}</h4>
+                                <p class="lm-live-chat-main-subtitle" id="loanDashboardLiveChatSubtitle">{{ $initialLiveChat['display_subtitle'] ?? 'Open a customer conversation from the inbox list.' }}</p>
+                            </div>
+                            <div class="lm-live-chat-main-actions">
+                            <a href="{{ route('loan-management.live-chat') }}" class="btn btn-default btn-sm">
+                                <i class="fa fa-external-link"></i> Open Full Inbox
+                            </a>
+                            @if(!empty($initialLiveChat['id']))
+                                <a href="{{ route('loan-management.live-chat.detail', $initialLiveChat['id']) }}" class="btn btn-primary btn-sm" id="loanDashboardLiveChatOpenBtn">
+                                    <i class="fa fa-comments"></i> Open Conversation
+                                    </a>
+                                @else
+                                    <a href="{{ route('loan-management.live-chat') }}" class="btn btn-primary btn-sm" id="loanDashboardLiveChatOpenBtn">
+                                        <i class="fa fa-comments"></i> Open Conversation
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                        <iframe
+                            id="loanDashboardLiveChatFrame"
+                            class="lm-live-chat-frame"
+                            src="{{ !empty($initialLiveChat['id']) ? route('loan-management.live-chat.detail', ['thread' => $initialLiveChat['id'], '_lm_embed' => 1]) : route('loan-management.live-chat', ['_lm_embed' => 1]) }}"
+                            title="Loan live chat dashboard"></iframe>
+                    </main>
+
+                    <aside class="lm-live-chat-side">
+                        <div class="lm-live-chat-profile">
+                            <div class="lm-live-chat-profile-avatar" id="loanDashboardLiveChatProfileAvatar">
+                                {{ strtoupper(substr((string) ($initialLiveChat['display_name'] ?? 'C'), 0, 1)) }}
+                            </div>
+                            <h4 class="lm-live-chat-profile-name" id="loanDashboardLiveChatProfileName">{{ $initialLiveChat['display_name'] ?? 'Customer Chat' }}</h4>
+                            <p class="lm-live-chat-profile-subtitle" id="loanDashboardLiveChatProfileSubtitle">{{ $initialLiveChat['display_subtitle'] ?? 'Loan support inbox' }}</p>
+                            <p class="lm-live-chat-profile-time" id="loanDashboardLiveChatProfileTime">
+                                {{ !empty($initialLiveChat['last_message_at']) ? \Carbon\Carbon::parse($initialLiveChat['last_message_at'])->diffForHumans() : 'Waiting for live activity' }}
+                            </p>
+                        </div>
+
+                        <div class="lm-live-chat-side-section">
+                            <h5 class="lm-live-chat-side-title">Conversation Summary</h5>
+                            <div class="lm-live-chat-side-row"><span>Status</span><span id="loanDashboardLiveChatStatus">{{ ucfirst((string) ($initialLiveChat['status'] ?? 'open')) }}</span></div>
+                            <div class="lm-live-chat-side-row"><span>Priority</span><span id="loanDashboardLiveChatPriority">{{ ucfirst((string) ($initialLiveChat['priority'] ?? 'normal')) }}</span></div>
+                            <div class="lm-live-chat-side-row"><span>Assigned Team</span><span id="loanDashboardLiveChatTeam">{{ $initialLiveChat['assigned_team'] ?? 'Support' }}</span></div>
+                            <div class="lm-live-chat-side-row"><span>Unread</span><span id="loanDashboardLiveChatUnread">{{ (int) ($initialLiveChat['unread_count'] ?? 0) }}</span></div>
+                        </div>
+
+                        <div class="lm-live-chat-side-section">
+                            <h5 class="lm-live-chat-side-title">Last Message</h5>
+                            <div id="loanDashboardLiveChatLastMessage" style="color:#334155; font-size:13px; line-height:1.6;">
+                                {{ $initialLiveChat['last_message'] ?? 'No recent message yet.' }}
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
 @section('loan_js')
 @parent
 <script>
@@ -1092,6 +1615,12 @@
         var timer = null;
         var quickSearchTimer = null;
         var sellSearchTimer = null;
+        var liveTabLoaded = false;
+        var liveChatSearchTimer = null;
+        var liveChatThreads = [];
+        var activeLiveChatId = {{ (int) ($initialLiveChat['id'] ?? 0) }};
+        var liveChatApiUrl = "{{ route('loan-management.chat-api.index') }}";
+        var liveChatFrameBaseUrl = "{{ url('loan-management/live-chat') }}";
 
         function money(value) {
             var number = parseFloat(value || 0);
@@ -1274,6 +1803,237 @@
             $('#loanStatusChartText').text('Status labels: ' + chart.labels.join(', '));
         }
 
+        function compactLabel(value) {
+            var raw = String(value == null ? '' : value);
+            return raw.length > 10 ? raw.slice(2) : raw;
+        }
+
+        function renderLiveBarChart(containerSelector, config) {
+            var container = $(containerSelector);
+            if (!container.length) {
+                return;
+            }
+
+            var labels = (config && config.labels) ? config.labels : [];
+            var series = (config && config.series) ? config.series : [];
+            var legends = (config && config.legends) ? config.legends : [];
+            var maxValue = 0;
+
+            series.forEach(function (row) {
+                (row && row.values ? row.values : []).forEach(function (value) {
+                    maxValue = Math.max(maxValue, Number(value || 0));
+                });
+            });
+
+            if (!labels.length || !series.length || maxValue <= 0) {
+                container.html('<div class="lm-live-chart__empty">No live chart data for this filter range.</div>');
+                return;
+            }
+
+            var canvas = '<div class="lm-live-chart__canvas">';
+            labels.forEach(function (label, index) {
+                canvas += '<div class="lm-live-chart__bar-group">';
+                canvas += '<div class="lm-live-chart__value">';
+                series.forEach(function (row, rowIndex) {
+                    var rawValue = Number((row.values || [])[index] || 0);
+                    canvas += (rowIndex > 0 ? '<br>' : '') + esc(row.format === 'money' ? money(rawValue) : intValue(rawValue));
+                });
+                canvas += '</div>';
+                canvas += '<div class="lm-live-chart__bar-stack">';
+                series.forEach(function (row) {
+                    var rawValue = Number((row.values || [])[index] || 0);
+                    var percent = maxValue > 0 ? Math.max(4, (rawValue / maxValue) * 100) : 4;
+                    canvas += '<span class="lm-live-chart__bar ' + esc(row.className || '') + '" style="height:' + percent + '%"></span>';
+                });
+                canvas += '</div>';
+                canvas += '<div class="lm-live-chart__label">' + esc(compactLabel(label)) + '</div>';
+                canvas += '</div>';
+            });
+            canvas += '</div>';
+
+            var legendHtml = '';
+            if (legends.length) {
+                legendHtml += '<div class="lm-live-chart__legend">';
+                legends.forEach(function (legend) {
+                    legendHtml += '<span class="lm-live-chart__legend-item"><span class="lm-live-chart__legend-swatch ' + esc(legend.className || '') + '"></span>' + esc(legend.label || '') + '</span>';
+                });
+                legendHtml += '</div>';
+            }
+
+            container.html(canvas + legendHtml);
+        }
+
+        function renderLiveCharts(charts) {
+            charts = charts || {};
+
+            renderLiveBarChart('#loanLiveMonthlyLoanChart', {
+                labels: charts.monthly_loan ? charts.monthly_loan.labels : [],
+                series: [
+                    { values: charts.monthly_loan ? charts.monthly_loan.count : [], format: 'int', className: '' },
+                    { values: charts.monthly_loan ? charts.monthly_loan.principal : [], format: 'money', className: 'lm-live-chart__bar--accent' }
+                ],
+                legends: [
+                    { label: 'Loan Count', className: '' },
+                    { label: 'Principal', className: 'lm-live-chart__legend-swatch--accent' }
+                ]
+            });
+
+            renderLiveBarChart('#loanLiveDailyCollectionChart', {
+                labels: charts.daily_collection ? charts.daily_collection.labels : [],
+                series: [
+                    { values: charts.daily_collection ? charts.daily_collection.amount : [], format: 'money', className: 'lm-live-chart__bar--accent' }
+                ],
+                legends: [
+                    { label: 'Collected Amount', className: 'lm-live-chart__legend-swatch--accent' }
+                ]
+            });
+
+            renderLiveBarChart('#loanLiveStatusChart', {
+                labels: charts.loan_status ? charts.loan_status.labels : [],
+                series: [
+                    { values: charts.loan_status ? charts.loan_status.series : [], format: 'int', className: 'lm-live-chart__bar--warn' }
+                ],
+                legends: [
+                    { label: 'Loans', className: 'lm-live-chart__legend-swatch--warn' }
+                ]
+            });
+
+            renderLiveBarChart('#loanLivePaymentMethodChart', {
+                labels: charts.payment_method ? charts.payment_method.labels : [],
+                series: [
+                    { values: charts.payment_method ? charts.payment_method.amount : [], format: 'money', className: '' }
+                ],
+                legends: [
+                    { label: 'Payment Total', className: '' }
+                ]
+            });
+        }
+
+        function activateDashboardTab(tabKey) {
+            $('[data-dashboard-tab]').removeClass('is-active').attr('aria-pressed', 'false');
+            $('[data-dashboard-pane]').removeClass('is-active');
+            $('[data-dashboard-tab="' + tabKey + '"]').addClass('is-active').attr('aria-pressed', 'true');
+            $('[data-dashboard-pane="' + tabKey + '"]').addClass('is-active');
+
+            if (tabKey === 'live' && !liveTabLoaded) {
+                liveTabLoaded = true;
+                loadLiveChatThreads();
+                refreshLoanDashboard();
+            }
+        }
+
+        function formatLiveChatTime(value) {
+            if (!value) {
+                return '';
+            }
+
+            var date = new Date(value);
+            if (isNaN(date.getTime())) {
+                return String(value);
+            }
+
+            return date.toLocaleString();
+        }
+
+        function setLiveChatProfile(thread) {
+            thread = thread || {};
+            var name = thread.display_name || 'Customer Chat';
+            $('#loanDashboardLiveChatTitle, #loanDashboardLiveChatProfileName').text(name);
+            $('#loanDashboardLiveChatSubtitle, #loanDashboardLiveChatProfileSubtitle').text(thread.display_subtitle || 'Loan support inbox');
+            $('#loanDashboardLiveChatProfileAvatar').text((name.charAt(0) || 'C').toUpperCase());
+            $('#loanDashboardLiveChatProfileTime').text(thread.last_message_at ? formatLiveChatTime(thread.last_message_at) : 'Waiting for live activity');
+            $('#loanDashboardLiveChatStatus').text(thread.status ? String(thread.status).replace(/_/g, ' ') : 'open');
+            $('#loanDashboardLiveChatPriority').text(thread.priority ? String(thread.priority).replace(/_/g, ' ') : 'normal');
+            $('#loanDashboardLiveChatTeam').text(thread.assigned_team || 'Support');
+            $('#loanDashboardLiveChatUnread').text(intValue(thread.unread_count || 0));
+            $('#loanDashboardLiveChatLastMessage').text(thread.last_message || 'No recent message yet.');
+
+            var openUrl = thread.id ? (liveChatFrameBaseUrl + '/' + encodeURIComponent(thread.id)) : liveChatFrameBaseUrl;
+            var embedUrl = openUrl + (openUrl.indexOf('?') === -1 ? '?' : '&') + '_lm_embed=1';
+            $('#loanDashboardLiveChatOpenBtn').attr('href', openUrl);
+            $('#loanDashboardLiveChatFrame').attr('src', embedUrl);
+        }
+
+        function renderLiveChatThreads() {
+            var list = $('#loanDashboardLiveChatList');
+            if (!list.length) {
+                return;
+            }
+
+            var term = $.trim($('#loanDashboardLiveChatSearch').val() || '').toLowerCase();
+            var rows = liveChatThreads.filter(function (thread) {
+                if (!term) {
+                    return true;
+                }
+
+                var hay = [
+                    thread.display_name,
+                    thread.display_subtitle,
+                    thread.last_message,
+                    thread.assigned_team,
+                    thread.priority
+                ].join(' ').toLowerCase();
+
+                return hay.indexOf(term) !== -1;
+            });
+
+            if (!rows.length) {
+                list.html('<div class="lm-live-chat-empty">No live chats found.</div>');
+                return;
+            }
+
+            var html = '';
+            rows.forEach(function (thread) {
+                var activeClass = String(activeLiveChatId || '') === String(thread.id || '') ? ' is-active' : '';
+                var unread = Number(thread.unread_count || 0);
+                html += '<button type="button" class="lm-live-chat-item' + activeClass + '" data-live-chat-id="' + esc(thread.id || '') + '">'
+                    + '<span class="lm-live-chat-avatar">' + esc((thread.display_name || 'C').charAt(0).toUpperCase()) + '</span>'
+                    + '<span>'
+                    + '<span class="lm-live-chat-name">' + esc(thread.display_name || 'Customer Chat') + '</span>'
+                    + '<span class="lm-live-chat-preview">' + esc(thread.last_message || thread.display_subtitle || 'Open conversation') + '</span>'
+                    + '</span>'
+                    + '<span class="lm-live-chat-meta">'
+                    + '<span class="lm-live-chat-time">' + esc(thread.last_message_time || '') + '</span>'
+                    + (unread > 0 ? '<span class="lm-live-chat-badge">' + esc(intValue(unread)) + '</span>' : '')
+                    + '</span>'
+                    + '</button>';
+            });
+
+            list.html(html);
+        }
+
+        function loadLiveChatThreads() {
+            fetch(liveChatApiUrl + '?view=all', {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (res) {
+                    liveChatThreads = res && res.data ? res.data : [];
+                    renderLiveChatThreads();
+
+                    if (!liveChatThreads.length) {
+                        setLiveChatProfile({});
+                        return;
+                    }
+
+                    var selected = liveChatThreads.find(function (thread) {
+                        return String(thread.id || '') === String(activeLiveChatId || '');
+                    }) || liveChatThreads[0];
+
+                    activeLiveChatId = selected.id || 0;
+                    setLiveChatProfile(selected);
+                    renderLiveChatThreads();
+                })
+                .catch(function () {
+                    $('#loanDashboardLiveChatList').html('<div class="lm-live-chat-empty">Unable to load live chats right now.</div>');
+                });
+        }
+
         function refreshLoanDashboard() {
             if (loading || document.hidden) {
                 return;
@@ -1311,6 +2071,10 @@
                     renderFollowUps(data.tables ? data.tables.follow_up_customers : []);
                     renderCollectorPerformance(data.charts ? data.charts.collector_performance : []);
                     updateChartText(data.charts ? data.charts.loan_status : null);
+                    renderLiveCharts(data.charts || {});
+                    if ($('[data-dashboard-pane="live"]').hasClass('is-active')) {
+                        loadLiveChatThreads();
+                    }
                 })
                 .catch(function () {})
                 .finally(function () {
@@ -1335,8 +2099,29 @@
                 window.clearTimeout(sellSearchTimer);
                 sellSearchTimer = window.setTimeout(runSellSearch, 250);
             });
+            $('#loanDashboardLiveChatSearch').on('input', function () {
+                window.clearTimeout(liveChatSearchTimer);
+                liveChatSearchTimer = window.setTimeout(renderLiveChatThreads, 160);
+            });
+            $(document).on('click', '[data-dashboard-tab]', function () {
+                activateDashboardTab($(this).data('dashboard-tab'));
+            });
+            $(document).on('click', '[data-live-chat-id]', function () {
+                var threadId = $(this).data('live-chat-id');
+                var selected = liveChatThreads.find(function (thread) {
+                    return String(thread.id || '') === String(threadId || '');
+                });
+                if (!selected) {
+                    return;
+                }
+
+                activeLiveChatId = selected.id || 0;
+                setLiveChatProfile(selected);
+                renderLiveChatThreads();
+            });
             runQuickSearch();
             runSellSearch();
+            renderLiveCharts({});
             $('#loanDashboardOpenSellPos').on('click keydown', function (event) {
                 if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') {
                     return;

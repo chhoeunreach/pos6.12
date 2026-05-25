@@ -1863,17 +1863,29 @@ class LoanInstallmentListController extends Controller
         $selectedBusinessLocationId = $loanRow->business_location_id ?? null;
 
         $locationOptions = collect();
-        if ($this->loanTableExists('loans')) {
+        if ($this->loanTableExists('loan_business_locations')) {
+            $locationOptions = Cache::remember('loan_management.edit_location_options', now()->addMinutes(5), function () {
+                return DB::connection('mysql_loan')
+                    ->table('loan_business_locations')
+                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->where(function ($query) {
+                        $query->whereNull('deleted_at')
+                            ->orWhere('deleted_at', 0);
+                    })
+                    ->orderBy('name')
+                    ->get();
+            });
+        } elseif ($this->loanTableExists('loans')) {
             $loanColumns = $this->loanTableColumns('loans');
             if (in_array('business_location_name_snapshot', $loanColumns, true) && in_array('business_location_id', $loanColumns, true)) {
-                $locationOptions = Cache::remember('loan_management.edit_location_options', now()->addMinutes(5), function () {
+                $locationOptions = Cache::remember('loan_management.edit_location_options_fallback', now()->addMinutes(5), function () {
                     return DB::connection('mysql_loan')
                         ->table('loans')
-                        ->select('business_location_id', 'business_location_name_snapshot')
+                        ->selectRaw('business_location_id as id, business_location_name_snapshot as name, main_location_id, NULL as address')
                         ->whereNotNull('business_location_id')
                         ->whereNotNull('business_location_name_snapshot')
                         ->where('business_location_name_snapshot', '!=', '')
-                        ->groupBy('business_location_id', 'business_location_name_snapshot')
+                        ->groupBy('business_location_id', 'business_location_name_snapshot', 'main_location_id')
                         ->orderBy('business_location_name_snapshot')
                         ->get();
                 });
@@ -1892,9 +1904,15 @@ class LoanInstallmentListController extends Controller
         }
 
         if (empty($locationName) && ! empty($selectedBusinessLocationId) && $locationOptions->isNotEmpty()) {
-            $selectedLocation = $locationOptions->firstWhere('business_location_id', $selectedBusinessLocationId);
+            $selectedLocation = $locationOptions->firstWhere('id', $selectedBusinessLocationId);
             if ($selectedLocation) {
-                $locationName = trim((string) ($selectedLocation->business_location_name_snapshot ?? ''));
+                $locationName = trim((string) ($selectedLocation->name ?? ''));
+                if (empty($locationAddress)) {
+                    $locationAddress = trim((string) ($selectedLocation->address ?? ''));
+                }
+                if (empty($locationId) && ! empty($selectedLocation->main_location_id)) {
+                    $locationId = $selectedLocation->main_location_id;
+                }
             }
         }
 
@@ -2002,6 +2020,8 @@ class LoanInstallmentListController extends Controller
             'balance_amount' => 'nullable|numeric|min:0',
             'down_payment' => 'nullable|numeric|min:0',
             'installment_count' => 'nullable|integer|min:0|max:1000',
+            'interest_rate' => 'nullable|numeric|min:0',
+            'interest_type' => 'nullable|string|max:30',
             'payment_frequency' => 'nullable|string|max:30',
             'currency' => 'nullable|string|max:10',
             'loan_date' => 'nullable|date',
@@ -2037,12 +2057,25 @@ class LoanInstallmentListController extends Controller
             'recovery_score' => 'nullable|integer|min:0|max:65535',
         ]);
 
-        if (! empty($data['business_location_id']) && $this->loanTableExists('loans')) {
+        if (! empty($data['business_location_id']) && $this->loanTableExists('loan_business_locations')) {
+            $selectedLocation = DB::connection('mysql_loan')
+                ->table('loan_business_locations')
+                ->select('id', 'name', 'main_location_id')
+                ->where('id', $data['business_location_id'])
+                ->first();
+
+            if ($selectedLocation) {
+                $data['business_location_name_snapshot'] = $selectedLocation->name;
+                if (empty($data['main_location_id']) && ! empty($selectedLocation->main_location_id)) {
+                    $data['main_location_id'] = $selectedLocation->main_location_id;
+                }
+            }
+        } elseif (! empty($data['business_location_id']) && $this->loanTableExists('loans')) {
             $loanColumns = $this->loanTableColumns('loans');
             if (in_array('business_location_name_snapshot', $loanColumns, true)) {
                 $selectedLocation = DB::connection('mysql_loan')
                     ->table('loans')
-                    ->select('business_location_id', 'business_location_name_snapshot')
+                    ->select('business_location_id', 'business_location_name_snapshot', 'main_location_id')
                     ->where('business_location_id', $data['business_location_id'])
                     ->whereNotNull('business_location_name_snapshot')
                     ->where('business_location_name_snapshot', '!=', '')
@@ -2051,6 +2084,9 @@ class LoanInstallmentListController extends Controller
 
                 if ($selectedLocation) {
                     $data['business_location_name_snapshot'] = $selectedLocation->business_location_name_snapshot;
+                    if (empty($data['main_location_id']) && ! empty($selectedLocation->main_location_id)) {
+                        $data['main_location_id'] = $selectedLocation->main_location_id;
+                    }
                 }
             }
         }

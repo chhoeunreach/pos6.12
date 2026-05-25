@@ -41,6 +41,7 @@
     $backCustomerId = request('customer_id') ?: ($loanRow->customer_id ?? null);
     $loanStatuses = ['draft', 'pending', 'approved', 'active', 'completed', 'rejected', 'cancelled', 'defaulted', 'closed'];
     $paymentFrequencies = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+    $interestTypes = ['flat', 'reducing'];
     $collectionStatuses = ['new', 'active', 'follow_up', 'ptp', 'overdue', 'escalated', 'recovery', 'closed'];
     $riskLevels = ['low', 'medium', 'high', 'critical'];
     $ptpStatuses = ['open', 'kept', 'broken', 'cancelled'];
@@ -48,10 +49,30 @@
 @endphp
 
 <section class="content-header">
-    <h1><i class="fa fa-pencil-square-o"></i> Edit Loan #{{ $loanRow->loan_number ?? $loanRow->id }}</h1>
+    <h1><i class="fa fa-pencil-square-o"></i> Edit Loan</h1>
+    <p class="text-muted" style="margin: 6px 0 0 30px;">
+        Loan #{{ $loanRow->loan_number ?? $loanRow->id }}
+    </p>
 </section>
 
 <section class="content">
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            <strong>Unable to save this loan.</strong>
+            <ul style="margin:8px 0 0 18px; padding:0;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @if (session('status'))
+        <div class="alert alert-success">
+            {{ is_array(session('status')) ? (session('status.msg') ?? 'Saved successfully.') : session('status') }}
+        </div>
+    @endif
+
     <div class="row">
         <div class="col-md-3">
             <div class="small-box bg-aqua">
@@ -150,10 +171,12 @@
                             <select name="business_location_id" id="loanBusinessLocationSelect" class="form-control">
                                 <option value="">Select location</option>
                                 @foreach($locationOptions as $locationOption)
-                                    <option value="{{ $locationOption->business_location_id }}"
-                                        data-name="{{ $locationOption->business_location_name_snapshot }}"
-                                        {{ (string) old('business_location_id', $selectedBusinessLocationId ?? '') === (string) $locationOption->business_location_id ? 'selected' : '' }}>
-                                        {{ $locationOption->business_location_name_snapshot }}
+                                    <option value="{{ $locationOption->id }}"
+                                        data-name="{{ $locationOption->name }}"
+                                        data-main-location-id="{{ $locationOption->main_location_id ?? '' }}"
+                                        data-address="{{ $locationOption->address ?? '' }}"
+                                        {{ (string) old('business_location_id', $selectedBusinessLocationId ?? '') === (string) $locationOption->id ? 'selected' : '' }}>
+                                        {{ $locationOption->name }}
                                     </option>
                                 @endforeach
                             </select>
@@ -163,7 +186,7 @@
                     <div class="col-md-3">
                         <div class="form-group">
                             <label>Main Location ID</label>
-                            <input type="number" min="0" name="main_location_id" class="form-control" value="{{ old('main_location_id', $loanRow->main_location_id ?? $locationId ?? '') }}">
+                            <input type="number" min="0" name="main_location_id" id="loanMainLocationIdInput" class="form-control" value="{{ old('main_location_id', $loanRow->main_location_id ?? $locationId ?? '') }}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -179,7 +202,7 @@
                         </div>
                     </div>
                     <div class="col-md-12" style="margin-top: -8px;">
-                        <p><strong>Location Address:</strong> {{ $locationAddress }}</p>
+                        <p><strong>Location Address:</strong> <span id="loanLocationAddressText">{{ $locationAddress }}</span></p>
                     </div>
                 </div>
             </div>
@@ -248,6 +271,23 @@
                         <div class="form-group">
                             <label>Installment Count</label>
                             <input type="number" name="installment_count" class="form-control" min="0" value="{{ old('installment_count', $loanRow->installment_count ?? 0) }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Interest Rate (%)</label>
+                            <input type="number" step="0.01" min="0" name="interest_rate" class="form-control" value="{{ old('interest_rate', $loanRow->interest_rate ?? 0) }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Interest Type</label>
+                            <select name="interest_type" class="form-control">
+                                <option value="">Select</option>
+                                @foreach($interestTypes as $interestType)
+                                    <option value="{{ $interestType }}" {{ old('interest_type', $loanRow->interest_type ?? '') === $interestType ? 'selected' : '' }}>{{ ucfirst($interestType) }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -425,6 +465,8 @@
         var select = document.getElementById('loanBusinessLocationSelect');
         var nameInput = document.getElementById('loanBusinessLocationName');
         var idDisplay = document.getElementById('loanBusinessLocationIdDisplay');
+        var mainLocationInput = document.getElementById('loanMainLocationIdInput');
+        var locationAddressText = document.getElementById('loanLocationAddressText');
         var sectionsContainer = document.getElementById('loanEditSections');
 
         function syncLocationFields() {
@@ -441,6 +483,16 @@
 
             if (idDisplay) {
                 idDisplay.value = hasValue ? option.value : '';
+            }
+
+            if (mainLocationInput && hasValue && option.getAttribute('data-main-location-id')) {
+                mainLocationInput.value = option.getAttribute('data-main-location-id') || '';
+            }
+
+            if (locationAddressText) {
+                locationAddressText.textContent = hasValue
+                    ? (option.getAttribute('data-address') || '-')
+                    : '-';
             }
         }
 

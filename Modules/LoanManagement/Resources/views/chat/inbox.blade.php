@@ -1,8 +1,33 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Live Chat')
 
+@php($isEmbedded = request()->boolean('_lm_embed'))
+
 @section('loan_css')
 <style>
+    @if($isEmbedded)
+    #loanManagementSidebar,
+    #loanManagementHeader,
+    .lm-breadcrumb-wrap,
+    .lm-footer,
+    .content-header {
+        display: none !important;
+    }
+    #loanManagementMain {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    #loanManagementMain .lm-content {
+        padding-top: 0 !important;
+    }
+    #loanManagementMain .lm-workspace {
+        padding: 0 !important;
+    }
+    .content {
+        min-height: 100% !important;
+        margin: 0 !important;
+    }
+    @endif
     .lm-chat-shell{height:calc(100dvh - 190px);min-height:620px;display:grid;grid-template-columns:320px minmax(420px,1fr) 300px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;font-family:"Khmer OS Battambang","Noto Sans Khmer","Khmer UI","Segoe UI",Arial,sans-serif}
     .lm-chat-inbox{border-right:1px solid #e5e7eb;background:#f8fafc;display:flex;flex-direction:column;min-width:0;min-height:0}
     .lm-chat-toolbar{padding:14px;border-bottom:1px solid #e5e7eb;background:#fff}
@@ -45,12 +70,18 @@
     .lm-priority{font-size:11px;border-radius:10px;padding:2px 7px;background:#e2e8f0;color:#334155;text-transform:capitalize}
     .lm-priority.new{background:#dcfce7;color:#166534}
     .lm-priority.high,.lm-priority.urgent{background:#fee2e2;color:#991b1b}
+    .lm-chat-shell--embedded{height:100dvh;min-height:100dvh;grid-template-columns:minmax(0,1fr);border:0;border-radius:0}
+    .lm-chat-shell--embedded .lm-chat-main{background:#fff}
+    .lm-chat-shell--embedded .lm-chat-header{padding:12px 18px}
+    .lm-chat-shell--embedded .lm-chat-messages{padding:16px}
+    .lm-chat-shell--embedded .lm-chat-composer{padding:10px 12px}
     @media(max-width:1100px){.lm-chat-shell{grid-template-columns:280px 1fr}.lm-chat-side{display:none}}
     @media(max-width:760px){.lm-chat-shell{height:auto;min-height:700px;grid-template-columns:1fr}.lm-chat-inbox{height:260px}.lm-chat-main{min-height:520px}.lm-chat-composer{position:sticky;bottom:0}}
 </style>
 @endsection
 
 @section('content_body')
+@if(! $isEmbedded)
 <section class="content-header">
     <h1>Live Chat <small>Support inbox</small></h1>
 </section>
@@ -63,8 +94,10 @@
         <div class="col-sm-2"><div class="small-box bg-red"><div class="inner"><h3 id="card_legal">0</h3><p>Legal Chats</p></div></div></div>
         <div class="col-sm-2"><div class="small-box bg-green"><div class="inner"><h3 id="card_closed">0</h3><p>Closed Today</p></div></div></div>
     </div>
+@endif
 
-    <div class="lm-chat-shell" id="lmChatApp">
+    <div class="lm-chat-shell{{ $isEmbedded ? ' lm-chat-shell--embedded' : '' }}" id="lmChatApp">
+        @if(! $isEmbedded)
         <aside class="lm-chat-inbox">
             <div class="lm-chat-toolbar">
                 <h3>Staff Support Inbox</h3>
@@ -83,6 +116,7 @@
             </div>
             <div class="lm-chat-list" id="chatList"></div>
         </aside>
+        @endif
 
         <main class="lm-chat-main">
             <div class="lm-chat-header">
@@ -112,6 +146,7 @@
             </form>
         </main>
 
+        @if(! $isEmbedded)
         <aside class="lm-chat-side">
             <div class="lm-chat-side-section">
                 <h4>Customer Info</h4>
@@ -135,8 +170,11 @@
                 </div>
             </div>
         </aside>
+        @endif
     </div>
+@if(! $isEmbedded)
 </section>
+@endif
 @endsection
 
 @section('loan_js')
@@ -144,6 +182,7 @@
 (function($){
     var activeThread = @json($initialThreadId ?? null);
     var activeView = 'all';
+    var isEmbedded = @json($isEmbedded);
     var threads = [];
     var csrf = '{{ csrf_token() }}';
     var chatBaseUrl = '{{ url('loan-management/chat-api/chats') }}';
@@ -225,6 +264,12 @@
     }
 
     function loadInbox(keepActive){
+        if (isEmbedded) {
+            if (activeThread) {
+                loadThread(activeThread, false);
+            }
+            return;
+        }
         if (inboxLoading) return;
         inboxLoading = true;
         apiGet(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}).then(function(resp){
@@ -239,6 +284,7 @@
     }
 
     function renderCards(rows){
+        if (isEmbedded) return;
         $('#card_active').text(rows.filter(function(r){ return ['open','active','pending'].indexOf(r.status) >= 0; }).length);
         $('#card_unread').text(rows.filter(function(r){ return Number(r.unread_count || 0) > 0; }).length);
         $('#card_overdue').text(rows.filter(function(r){ return ['high','urgent'].indexOf(r.priority) >= 0 || r.type === 'overdue'; }).length);
@@ -248,6 +294,7 @@
     }
 
     function renderThreads(){
+        if (isEmbedded) return;
         var q = ($('#chatSearch').val() || '').toLowerCase();
         var list = $('#chatList').empty();
         var filtered = threads.filter(function(r){
@@ -310,6 +357,7 @@
     }
 
     function renderSidebar(info){
+        if (isEmbedded) return;
         var rows = [
             ['Customer', info.customer_name],
             ['Phone', info.phone],
@@ -412,11 +460,21 @@
     $('#btnPin').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/pin', {is_pinned:1}).then(function(){ loadInbox(true); }); });
     $('#btnMute').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/mute', {is_muted:1}).then(function(){ loadInbox(true); }); });
 
-    loadInbox(false);
+    if (isEmbedded && activeThread) {
+        loadThread(activeThread, false);
+    } else {
+        loadInbox(false);
+    }
     if (window.loanChatPollTimer) {
         window.clearInterval(window.loanChatPollTimer);
     }
-    pollTimer = window.setInterval(function(){ loadInbox(true); }, pollMs);
+    pollTimer = window.setInterval(function(){
+        if (isEmbedded && activeThread) {
+            loadThread(activeThread, false);
+            return;
+        }
+        loadInbox(true);
+    }, pollMs);
     window.loanChatPollTimer = pollTimer;
 })(jQuery);
 </script>
