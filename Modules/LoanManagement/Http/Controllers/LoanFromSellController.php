@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use App\Utils\TransactionUtil;
 use Modules\LoanManagement\Http\Requests\StoreLoanFromSellRequest;
 use Modules\LoanManagement\Services\CreateLoanFromSellService;
@@ -132,13 +133,14 @@ class LoanFromSellController extends Controller
         }
 
         $sell = $this->service->getSellFullData((int) $transaction_id);
+        $loanLocation = $this->resolveLoanLocationForSell($sell['transaction']);
         $collectors = DB::table('users')->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")->orderBy('first_name')->get();
         $paymentTypes = $this->ultimatePosPaymentTypes($sell);
         $defaultPaymentMethod = $this->defaultPaymentMethod($sell, $paymentTypes);
-        $html = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'collectors', 'paymentTypes', 'defaultPaymentMethod'))->render();
+        $html = view('loanmanagement::loans.create_from_sell.form', compact('sell', 'loanLocation', 'collectors', 'paymentTypes', 'defaultPaymentMethod'))->render();
 
         if (! $request->ajax() && ! $request->wantsJson()) {
-            return view('loanmanagement::loans.create_from_sell.clone', compact('sell', 'collectors', 'paymentTypes', 'defaultPaymentMethod'));
+            return view('loanmanagement::loans.create_from_sell.clone', compact('sell', 'loanLocation', 'collectors', 'paymentTypes', 'defaultPaymentMethod'));
         }
 
         return response()->json([
@@ -170,6 +172,93 @@ class LoanFromSellController extends Controller
         }
 
         return array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
+    }
+
+    protected function resolveLoanLocationForSell(object $transaction): ?object
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return null;
+        }
+
+        $candidates = DB::connection('mysql_loan')->table('loan_business_locations')
+            ->when(! empty($transaction->main_location_id) || ! empty($transaction->location_name_snapshot), function ($query) use ($transaction) {
+                $query->where(function ($q) use ($transaction) {
+                    if (! empty($transaction->main_location_id)) {
+                        $q->orWhere('main_location_id', $transaction->main_location_id);
+                    }
+                    if (! empty($transaction->location_name_snapshot)) {
+                        $q->orWhere('name', $transaction->location_name_snapshot);
+                    }
+                });
+            })
+            ->get();
+
+        $location = collect($candidates)
+            ->sortByDesc(function ($row) use ($transaction) {
+                $score = 0;
+                if (! empty($transaction->location_name_snapshot) && (string) $row->name === (string) $transaction->location_name_snapshot) {
+                    $score += 8;
+                }
+                if (! empty($transaction->main_location_id) && (int) ($row->main_location_id ?? 0) === (int) $transaction->main_location_id) {
+                    $score += 4;
+                }
+                if (! empty($row->payment_qr_path)) {
+                    $score += 2;
+                }
+                if (! empty($row->telegram_qr_path)) {
+                    $score += 1;
+                }
+
+                return $score;
+            })
+            ->first();
+
+        if (! $location) {
+            return null;
+        }
+
+        $location->payment_qr_asset_url = $this->loanLocationAssetUrl($location->payment_qr_path ?? null);
+        $location->telegram_qr_asset_url = $this->loanLocationAssetUrl($location->telegram_qr_path ?? null);
+        $location->logo_asset_url = $this->loanLocationAssetUrl($location->logo_path ?? null);
+
+        return $location;
+    }
+
+    protected function loanLocationAssetUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', ltrim($path, '/'));
+        if (Str::startsWith($path, ['http://', 'https://', '//'])) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'public/')) {
+            $path = substr($path, 7);
+        }
+
+        if (preg_match('#^(?:uploads/)?loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            return route('loan-management.locations.assets.show', [
+                'location' => (int) $matches[1],
+                'filename' => $matches[2],
+            ]);
+        }
+
+        if (preg_match('#^loan-management/location-assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            return route('loan-management.locations.assets.show', [
+                'location' => (int) $matches[1],
+                'filename' => $matches[2],
+            ]);
+        }
+
+        if (file_exists(public_path($path))) {
+            return asset($path);
+        }
+
+        return null;
     }
 
     public function cloneData(Request $request, $transaction_id): JsonResponse

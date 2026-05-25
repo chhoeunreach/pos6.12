@@ -91,6 +91,11 @@
                             </div>
                         </div>
                         <p class="help-block" id="loan_import_progress_text" style="margin-bottom:0;">Preparing import...</p>
+                        <div id="loan_import_retry_wrap" class="hide" style="margin-top: 10px;">
+                            <button type="button" class="btn btn-warning btn-sm" id="loan_import_continue_btn">
+                                <i class="fa fa-refresh"></i> Continue Import
+                            </button>
+                        </div>
                     </div>
                     <div class="box-footer">
                         <button type="submit" class="btn btn-primary" id="loan_import_submit">
@@ -171,17 +176,25 @@
                                     <td>{{ $batch->file_type ?? '' }}</td>
                                     <td>{{ $batch->status ?? '' }}</td>
                                     <td>{{ (int) ($batch->imported_rows ?? 0) }}</td>
-                                    <td>{{ (int) ($batch->invalid_rows ?? 0) }}</td>
-                                    <td>
-                                        @if((int) ($batch->invalid_rows ?? 0) > 0)
-                                            <a class="btn btn-xs btn-warning" href="{{ route('loan-management.import.index', ['download_invalid' => $batch->id]) }}">
-                                                <i class="fa fa-download"></i> Invalid rows
-                                            </a>
-                                        @else
-                                            <span class="text-muted">-</span>
-                                        @endif
-                                    </td>
-                                </tr>
+                                     <td>{{ (int) ($batch->invalid_rows ?? 0) }}</td>
+                                     <td>
+                                         @if(in_array((string) ($batch->status ?? ''), ['pending', 'processing', 'failed'], true))
+                                             <button type="button"
+                                                 class="btn btn-xs btn-primary js-continue-import"
+                                                 data-batch-id="{{ $batch->id }}"
+                                                 data-duplicate-mode="skip">
+                                                 <i class="fa fa-refresh"></i> Continue
+                                             </button>
+                                         @endif
+                                         @if((int) ($batch->invalid_rows ?? 0) > 0)
+                                             <a class="btn btn-xs btn-warning" href="{{ route('loan-management.import.index', ['download_invalid' => $batch->id]) }}">
+                                                 <i class="fa fa-download"></i> Invalid rows
+                                             </a>
+                                         @elseif(!in_array((string) ($batch->status ?? ''), ['pending', 'processing', 'failed'], true))
+                                             <span class="text-muted">-</span>
+                                         @endif
+                                     </td>
+                                 </tr>
                             @empty
                                 <tr><td colspan="7" class="text-center text-muted">No imports yet.</td></tr>
                             @endforelse
@@ -232,6 +245,8 @@
     <script>
         (function($) {
             var processing = false;
+            var currentBatchId = null;
+            var currentDuplicateMode = 'skip';
 
             function setProgress(progress, message) {
                 var percent = progress && typeof progress.percent !== 'undefined' ? parseInt(progress.percent, 10) : 0;
@@ -250,6 +265,7 @@
             }
 
             function finishProgress(progress) {
+                $('#loan_import_retry_wrap').addClass('hide');
                 setProgress(progress, 'Import completed. Refreshing results...');
                 $('#loan_import_progress_bar').removeClass('active');
                 window.setTimeout(function() {
@@ -262,6 +278,38 @@
                 $('#loan_import_submit').prop('disabled', false);
                 $('#loan_import_progress_bar').removeClass('active progress-bar-striped').addClass('progress-bar-danger');
                 $('#loan_import_progress_text').text(message || 'Import failed.');
+                if (currentBatchId) {
+                    $('#loan_import_retry_wrap').removeClass('hide');
+                }
+            }
+
+            function beginContinue(batchId, duplicateMode, progressMessage) {
+                currentBatchId = batchId;
+                currentDuplicateMode = duplicateMode || 'skip';
+                processing = true;
+                $('#loan_import_progress_wrap').removeClass('hide');
+                $('#loan_import_retry_wrap').addClass('hide');
+                $('#loan_import_progress_bar').removeClass('progress-bar-danger').addClass('progress-bar-striped active');
+                $('#loan_import_submit').prop('disabled', true);
+
+                $.ajax({
+                    method: 'GET',
+                    url: "{{ url('/loan-management/tools/import/progress') }}/" + batchId,
+                    dataType: 'json',
+                    success: function(response) {
+                        if (!response.success) {
+                            showImportError(response.msg || 'Unable to resume import.');
+                            return;
+                        }
+
+                        setProgress(response.progress, progressMessage || 'Continuing saved import batch...');
+                        processBatch(batchId, currentDuplicateMode);
+                    },
+                    error: function(xhr) {
+                        var message = xhr.responseJSON && xhr.responseJSON.msg ? xhr.responseJSON.msg : 'Unable to load saved import progress.';
+                        showImportError(message);
+                    }
+                });
             }
 
             function processBatch(batchId, duplicateMode) {
@@ -305,10 +353,13 @@
 
                 e.preventDefault();
                 processing = true;
+                 currentBatchId = null;
+                 currentDuplicateMode = $(this).find('[name="duplicate_mode"]').val() || 'skip';
                 var form = this;
                 var data = new FormData(form);
 
                 $('#loan_import_progress_wrap').removeClass('hide');
+                $('#loan_import_retry_wrap').addClass('hide');
                 $('#loan_import_progress_bar').removeClass('progress-bar-danger').addClass('progress-bar-striped active');
                 $('#loan_import_submit').prop('disabled', true);
                 setProgress({percent: 0, processed_rows: 0, total_rows: 0, imported_rows: 0, invalid_rows: 0, skipped_rows: 0}, 'Uploading file and preparing rows...');
@@ -326,8 +377,9 @@
                             return;
                         }
 
+                        currentBatchId = response.progress.batch_id;
                         setProgress(response.progress, 'Upload complete. Starting import...');
-                        processBatch(response.progress.batch_id, $(form).find('[name="duplicate_mode"]').val() || 'skip');
+                        processBatch(response.progress.batch_id, currentDuplicateMode);
                     },
                     error: function(xhr) {
                         var message = xhr.responseJSON && xhr.responseJSON.msg ? xhr.responseJSON.msg : 'Unable to start import.';
@@ -336,6 +388,24 @@
                 });
 
                 return false;
+            });
+
+            $('#loan_import_continue_btn').on('click', function() {
+                if (!currentBatchId || processing) {
+                    return;
+                }
+
+                beginContinue(currentBatchId, currentDuplicateMode, 'Retrying saved import batch...');
+            });
+
+            $('.js-continue-import').on('click', function() {
+                if (processing) {
+                    return;
+                }
+
+                var batchId = $(this).data('batch-id');
+                var duplicateMode = $(this).data('duplicate-mode') || 'skip';
+                beginContinue(batchId, duplicateMode, 'Loading saved import batch...');
             });
         })(jQuery);
     </script>

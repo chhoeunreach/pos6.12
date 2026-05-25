@@ -18,7 +18,6 @@
     <input type="hidden" name="transaction_id" value="{{ $sell['transaction']->id }}">
     <input type="hidden" name="source_type" value="ultimate_pos_sell">
     <input type="hidden" name="source_transaction_id" value="{{ $sell['transaction']->id }}">
-    <input type="hidden" name="source_invoice_no" value="{{ $sell['transaction']->invoice_no }}">
     <input type="hidden" name="stock_already_deducted" value="1">
     <input type="hidden" name="action_type" value="create">
 
@@ -26,7 +25,7 @@
     @include('loanmanagement::loans.create_from_sell.partials.customer_snapshot', ['sell' => $sell])
     @include('loanmanagement::loans.create_from_sell.partials.product_items', ['sell' => $sell])
     @include('loanmanagement::loans.create_from_sell.partials.loan_terms', ['sell' => $sell, 'collectors' => $collectors])
-    @include('loanmanagement::loans.create_from_sell.partials.payment_information', ['sell' => $sell, 'paymentTypes' => $paymentTypes ?? [], 'defaultPaymentMethod' => $defaultPaymentMethod ?? 'cash'])
+    @include('loanmanagement::loans.create_from_sell.partials.payment_information', ['sell' => $sell, 'loanLocation' => $loanLocation ?? null, 'paymentTypes' => $paymentTypes ?? [], 'defaultPaymentMethod' => $defaultPaymentMethod ?? 'cash'])
     @include('loanmanagement::loans.create_from_sell.partials.schedule_preview')
 
     <div class="box box-solid">

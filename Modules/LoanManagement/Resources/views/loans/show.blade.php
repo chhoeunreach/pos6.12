@@ -1,5 +1,12 @@
 @php
     $isEmbeddedModal = request()->boolean('_lm_modal');
+    $loanEditRouteParams = ['loan' => $loanRow->id];
+    if ($isEmbeddedModal) {
+        $loanEditRouteParams['_lm_modal'] = 1;
+    }
+    if (request()->filled('customer_id')) {
+        $loanEditRouteParams['customer_id'] = request('customer_id');
+    }
     $loanMeta = [];
     if (! empty($loanRow->meta_json)) {
         $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
@@ -79,6 +86,12 @@
 @section('content_body')
 <section class="content-header">
     <h1>Loan Detail #{{ $loanRow->id }}</h1>
+    @can('loan_management.edit')
+    <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
+       class="btn btn-primary">
+        <i class="fa fa-pencil"></i> Edit Loan
+    </a>
+    @endcan
     <button type="button"
             class="btn btn-success btn-modal"
             data-href="{{ route('loan-management.loans.payment.create', $loanRow->id) }}"

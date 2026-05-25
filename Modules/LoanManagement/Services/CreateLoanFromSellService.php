@@ -247,6 +247,50 @@ class CreateLoanFromSellService
         ];
     }
 
+    protected function applySelectedSaleOverrides(object $transaction, array $data): object
+    {
+        $transaction = clone $transaction;
+
+        if (array_key_exists('source_invoice_no', $data)) {
+            $invoiceNo = trim((string) ($data['source_invoice_no'] ?? ''));
+            if ($invoiceNo !== '') {
+                $transaction->invoice_no = $invoiceNo;
+            }
+        }
+
+        if (! empty($data['source_created_at'])) {
+            $transaction->transaction_date = $data['source_created_at'];
+        }
+
+        if (array_key_exists('customer_name_snapshot', $data)) {
+            $customerName = trim((string) ($data['customer_name_snapshot'] ?? ''));
+            if ($customerName !== '') {
+                $transaction->customer_name = $customerName;
+            }
+        }
+
+        if (array_key_exists('customer_phone_snapshot', $data)) {
+            $transaction->customer_phone = trim((string) ($data['customer_phone_snapshot'] ?? ''));
+        }
+
+        if (array_key_exists('location_name_snapshot', $data)) {
+            $locationName = trim((string) ($data['location_name_snapshot'] ?? ''));
+            if ($locationName !== '') {
+                $transaction->location_name_snapshot = $locationName;
+            }
+        }
+
+        if (array_key_exists('main_location_id', $data) && $data['main_location_id'] !== null && $data['main_location_id'] !== '') {
+            $transaction->main_location_id = (int) $data['main_location_id'];
+        }
+
+        if (isset($data['sell_final_total_snapshot'])) {
+            $transaction->final_total = (float) $data['sell_final_total_snapshot'];
+        }
+
+        return $transaction;
+    }
+
     public function cloneProductSnapshots($transaction): array
     {
         return $transaction['products']->map(function ($line) {
@@ -319,7 +363,14 @@ class CreateLoanFromSellService
         }
 
         $full = $this->getSellFullData($transactionId);
-        $transaction = $full['transaction'];
+        $transaction = $this->applySelectedSaleOverrides($full['transaction'], $data);
+        $full['transaction'] = $transaction;
+        if (isset($data['sell_paid_amount_snapshot'])) {
+            $full['paid_amount'] = (float) $data['sell_paid_amount_snapshot'];
+        }
+        if (isset($data['sell_due_amount_snapshot'])) {
+            $full['due_amount'] = (float) $data['sell_due_amount_snapshot'];
+        }
 
         $loanId = DB::connection('mysql_loan')->transaction(function () use ($data, $full, $transaction, $transactionId) {
             $effectiveDownPayment = (float) ($data['payment']['amount'] ?? ($data['down_payment'] ?? 0));
@@ -381,12 +432,12 @@ class CreateLoanFromSellService
                 'collector_id' => $data['assigned_collector_id'] ?? null,
                 'source_type' => 'ultimate_pos_sell',
                 'source_transaction_id' => $transactionId,
-                'source_invoice_no' => $transaction->invoice_no,
-                'source_created_at' => $transaction->transaction_date ?? null,
+                'source_invoice_no' => $data['source_invoice_no'] ?? $transaction->invoice_no,
+                'source_created_at' => $data['source_created_at'] ?? ($transaction->transaction_date ?? null),
                 'stock_already_deducted' => 1,
-                'sell_final_total_snapshot' => $transaction->final_total,
-                'sell_paid_amount_snapshot' => $full['paid_amount'],
-                'sell_due_amount_snapshot' => $full['due_amount'],
+                'sell_final_total_snapshot' => $data['sell_final_total_snapshot'] ?? $transaction->final_total,
+                'sell_paid_amount_snapshot' => $data['sell_paid_amount_snapshot'] ?? $full['paid_amount'],
+                'sell_due_amount_snapshot' => $data['sell_due_amount_snapshot'] ?? $full['due_amount'],
                 'status' => $data['action_type'] === 'create_approve' ? 'active' : ($data['action_type'] === 'draft' ? 'draft' : 'pending'),
                 'created_by' => auth()->id(),
                 'created_by_name_snapshot' => auth()->user()->first_name.' '.auth()->user()->last_name,

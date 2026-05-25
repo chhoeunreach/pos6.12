@@ -2,6 +2,9 @@
 @section('title', 'Edit Payment')
 
 @section('content_body')
+@php
+    $backCustomerId = request('customer_id') ?: ($loan->customer_id ?? $payment->customer_id ?? null);
+@endphp
 <section class="content-header">
     <h1>Edit Payment</h1>
 </section>
@@ -11,6 +14,9 @@
         <div class="box-header with-border">
             <h3 class="box-title">{{ $payment->receipt_number ?? $payment->payment_ref_no ?? ('Payment #'.$payment->id) }}</h3>
             <div class="box-tools pull-right">
+                @if(!empty($backCustomerId))
+                    <a href="{{ route('loan-management.customers.edit', $backCustomerId) }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back to Customer</a>
+                @endif
                 <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
             </div>
         </div>
@@ -97,7 +103,11 @@
                 </div>
             </div>
             <div class="box-footer text-right">
-                <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default">Cancel</a>
+                @if(!empty($backCustomerId))
+                    <a href="{{ route('loan-management.customers.edit', $backCustomerId) }}" class="btn btn-default">Back to Customer</a>
+                @else
+                    <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default">Cancel</a>
+                @endif
                 <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Update Payment</button>
             </div>
         </form>

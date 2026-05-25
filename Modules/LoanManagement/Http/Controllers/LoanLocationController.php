@@ -471,11 +471,17 @@ class LoanLocationController extends Controller
         }
 
         if (preg_match('#^(?:uploads/)?loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
-            return $this->fileDataUri($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+            return route('loan-management.locations.assets.show', [
+                'location' => (int) $matches[1],
+                'filename' => $matches[2],
+            ]);
         }
 
         if (preg_match('#^loan-management/location-assets/(\d+)/([^/]+)$#', $path, $matches)) {
-            return $this->fileDataUri($this->moduleLocationAssetPath((int) $matches[1], $matches[2]));
+            return route('loan-management.locations.assets.show', [
+                'location' => (int) $matches[1],
+                'filename' => $matches[2],
+            ]);
         }
 
         if (file_exists(public_path($path))) {
@@ -508,7 +514,10 @@ class LoanLocationController extends Controller
                 }
 
                 $url = $root['type'] === 'module'
-                    ? $this->fileDataUri($file->getPathname())
+                    ? route('loan-management.locations.assets.show', [
+                        'location' => basename($file->getPath()),
+                        'filename' => $file->getFilename(),
+                    ])
                     : asset($path);
 
                 if (empty($url)) {

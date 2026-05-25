@@ -808,16 +808,17 @@
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Installment Quick Actions</h3>
-                    <p class="lm-dashboard-panel__hint">Fast search for loan operations and sell conversion in one place.</p>
+                    <p class="lm-dashboard-panel__hint">Fast search for loan operations, quick edits, and sell conversion in one place.</p>
                 </div>
-                <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 2 smart tools</span>
+                <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 3 smart tools</span>
             </div>
             <div class="lm-dashboard-panel__body">
                 <div class="lm-quick-grid">
                     <div class="lm-quick-box lm-quick-box--loan">
                         <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-search"></i></span> Loan Search</h4>
-                        <p class="lm-quick-box__subtitle">Find installment loans by loan number, customer, or phone. Then print invoice or add monthly payment.</p>
+                        <p class="lm-quick-box__subtitle">Find installment loans by loan number, customer, or phone. Then open detail, edit the loan, print invoice, or add monthly payment.</p>
                         <div class="lm-quick-box__meta">
+                            <span class="lm-quick-box__chip"><i class="fa fa-pencil"></i> Edit</span>
                             <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Print</span>
                             <span class="lm-quick-box__chip"><i class="fa fa-money"></i> Payment</span>
                             <span class="lm-quick-box__chip"><i class="fa fa-user"></i> Customer lookup</span>
@@ -1159,6 +1160,7 @@
             var html = '';
             (rows || []).forEach(function (row) {
                 var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view?_lm_modal=1";
+                var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 html += '<tr>'
@@ -1170,6 +1172,7 @@
                     + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
                     + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> Detail</button></li>'
+                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit Loan</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print Loan</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Add Payment</button></li>'
                     + '</ul>'

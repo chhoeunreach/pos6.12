@@ -1,6 +1,33 @@
 <div class="box box-success">
     <div class="box-header"><h3 class="box-title">Payment Summary</h3></div>
     <div class="box-body row">
+        @if(!empty($loanLocation) && (!empty($loanLocation->payment_qr_asset_url) || !empty($loanLocation->telegram_qr_asset_url)))
+            <div class="col-md-12">
+                <div class="alert alert-info" style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">
+                    <div style="flex:1 1 220px;min-width:220px;">
+                        <strong>Loan Location:</strong> {{ $loanLocation->name ?? ($sell['transaction']->location_name_snapshot ?? '-') }}<br>
+                        @if(!empty($loanLocation->phone))
+                            <strong>Phone:</strong> {{ $loanLocation->phone }}<br>
+                        @endif
+                        @if(!empty($loanLocation->address))
+                            <strong>Address:</strong> {{ $loanLocation->address }}
+                        @endif
+                    </div>
+                    @if(!empty($loanLocation->payment_qr_asset_url))
+                        <div style="text-align:center;min-width:140px;">
+                            <div style="font-weight:600;margin-bottom:6px;">Payment QR Code</div>
+                            <img src="{{ $loanLocation->payment_qr_asset_url }}" alt="Payment QR" style="max-width:140px;max-height:140px;border:1px solid #d9edf7;border-radius:6px;padding:6px;background:#fff;" onerror="this.style.display='none';">
+                        </div>
+                    @endif
+                    @if(!empty($loanLocation->telegram_qr_asset_url))
+                        <div style="text-align:center;min-width:140px;">
+                            <div style="font-weight:600;margin-bottom:6px;">Telegram QR Code</div>
+                            <img src="{{ $loanLocation->telegram_qr_asset_url }}" alt="Telegram QR" style="max-width:140px;max-height:140px;border:1px solid #d9edf7;border-radius:6px;padding:6px;background:#fff;" onerror="this.style.display='none';">
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
         <div class="col-md-12">
             <h4 class="m-0">Payment info:</h4>
             <div class="table-responsive">

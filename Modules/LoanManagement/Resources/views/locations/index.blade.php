@@ -197,10 +197,35 @@
                                 </span>
                             </td>
                             <td class="loan-location-actions">
-                                <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-primary" data-toggle="modal" data-target="#loan_location_edit_modal_{{ $location->id }}">
+                                <button type="button"
+                                    class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-primary loan-location-edit-btn"
+                                    data-toggle="modal"
+                                    data-target="#loan_location_edit_modal"
+                                    data-id="{{ $location->id }}"
+                                    data-name="{{ $location->name ?? '' }}"
+                                    data-location_code="{{ $location->location_code ?? '' }}"
+                                    data-loan_invoice_prefix="{{ $location->loan_invoice_prefix ?? '' }}"
+                                    data-phone="{{ $location->phone ?? '' }}"
+                                    data-status="{{ $location->status ?? 'active' }}"
+                                    data-address="{{ $location->address ?? '' }}">
                                     <i class="glyphicon glyphicon-edit"></i> Edit
                                 </button>
-                                <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-info" data-toggle="modal" data-target="#loan_location_assets_modal_{{ $location->id }}">
+                                <button type="button"
+                                    class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-info loan-location-assets-btn"
+                                    data-toggle="modal"
+                                    data-target="#loan_location_assets_modal"
+                                    data-id="{{ $location->id }}"
+                                    data-name="{{ $location->name ?? '' }}"
+                                    data-logo_path="{{ $location->logo_path ?? '' }}"
+                                    data-logo_url="{{ $location->logo_asset_url ?? '' }}"
+                                    data-payment_qr_path="{{ $location->payment_qr_path ?? '' }}"
+                                    data-payment_qr_url="{{ $location->payment_qr_asset_url ?? '' }}"
+                                    data-telegram_qr_path="{{ $location->telegram_qr_path ?? '' }}"
+                                    data-telegram_qr_url="{{ $location->telegram_qr_asset_url ?? '' }}"
+                                    data-telegram_payment_chat_id="{{ $location->telegram_payment_chat_id ?? '' }}"
+                                    data-telegram_installment_chat_id="{{ $location->telegram_installment_chat_id ?? '' }}"
+                                    data-telegram_notify_payment="{{ ! empty($location->telegram_notify_payment) ? 1 : 0 }}"
+                                    data-telegram_notify_installment="{{ ! empty($location->telegram_notify_installment) ? 1 : 0 }}">
                                     <i class="fa fa-image"></i> Assets
                                 </button>
                                 <form method="POST" action="{{ route('loan-management.locations.destroy', $location->id) }}" onsubmit="return confirm('Delete this location?');" style="display:inline-block;">
@@ -280,127 +305,113 @@
         </div>
     </div>
 
-    @foreach($locations as $location)
-        <div class="modal fade" id="loan_location_edit_modal_{{ $location->id }}" tabindex="-1" role="dialog" aria-labelledby="loanLocationEditModalLabel{{ $location->id }}">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content">
-                    <form method="POST" action="{{ route('loan-management.locations.update', $location->id) }}">
-                        @csrf
-                        @method('PUT')
-                        <div class="modal-header">
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                            <h4 class="modal-title" id="loanLocationEditModalLabel{{ $location->id }}">Edit Loan Location</h4>
-                        </div>
-                        <div class="modal-body">
-                            @include('loanmanagement::locations.partials.form', ['location' => $location])
-                        </div>
-                        <div class="modal-footer">
-                            <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">Save</button>
-                            <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">Close</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal fade" id="loan_location_assets_modal_{{ $location->id }}" tabindex="-1" role="dialog" aria-labelledby="loanLocationAssetsModalLabel{{ $location->id }}">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content">
-                    {!! Form::open(['url' => route('loan-management.locations.assets.update', $location->id), 'method' => 'post', 'files' => true]) !!}
+    <div class="modal fade" id="loan_location_edit_modal" tabindex="-1" role="dialog" aria-labelledby="loanLocationEditModalLabel">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <form method="POST" action="" id="loan_location_edit_form">
+                    @csrf
+                    @method('PUT')
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                        <h4 class="modal-title" id="loanLocationAssetsModalLabel{{ $location->id }}">Location Assets & Telegram</h4>
+                        <h4 class="modal-title" id="loanLocationEditModalLabel">Edit Loan Location</h4>
                     </div>
                     <div class="modal-body">
-                        <div class="row">
-                            <div class="col-sm-4">
-                                <div class="form-group">
-                                    <label>Logo</label>
-                                    <div class="loan-asset-field">
-                                        <input type="file" name="logo" class="form-control" accept="image/*">
-                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="logo_existing_{{ $location->id }}" data-preview="logo_preview_{{ $location->id }}">
-                                            <i class="fa fa-picture-o"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" name="logo_existing" id="logo_existing_{{ $location->id }}">
-                                    <div class="loan-asset-preview" id="logo_preview_{{ $location->id }}">
-                                        @if(! empty($location->logo_asset_url))
-                                            <img src="{{ $location->logo_asset_url }}" alt="Logo">
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-4">
-                                <div class="form-group">
-                                    <label>Payment QR Code</label>
-                                    <div class="loan-asset-field">
-                                        <input type="file" name="payment_qr" class="form-control" accept="image/*">
-                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="payment_qr_existing_{{ $location->id }}" data-preview="payment_qr_preview_{{ $location->id }}">
-                                            <i class="fa fa-picture-o"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" name="payment_qr_existing" id="payment_qr_existing_{{ $location->id }}">
-                                    <div class="loan-asset-preview" id="payment_qr_preview_{{ $location->id }}">
-                                        @if(! empty($location->payment_qr_asset_url))
-                                            <img src="{{ $location->payment_qr_asset_url }}" alt="Payment QR Code">
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-4">
-                                <div class="form-group">
-                                    <label>Telegram QR Code</label>
-                                    <div class="loan-asset-field">
-                                        <input type="file" name="telegram_qr" class="form-control" accept="image/*">
-                                        <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="telegram_qr_existing_{{ $location->id }}" data-preview="telegram_qr_preview_{{ $location->id }}">
-                                            <i class="fa fa-picture-o"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" name="telegram_qr_existing" id="telegram_qr_existing_{{ $location->id }}">
-                                    <div class="loan-asset-preview" id="telegram_qr_preview_{{ $location->id }}">
-                                        @if(! empty($location->telegram_qr_asset_url))
-                                            <img src="{{ $location->telegram_qr_asset_url }}" alt="Telegram QR Code">
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="clearfix"></div>
-                            <hr>
-                            <div class="col-sm-6">
-                                <div class="form-group">
-                                    <label>Payment Telegram Chat ID</label>
-                                    <input type="text" name="telegram_payment_chat_id" class="form-control" value="{{ $location->telegram_payment_chat_id ?? '' }}" placeholder="-100xxxxxxxxxx">
-                                    <div class="checkbox">
-                                        <label>
-                                            <input type="checkbox" name="telegram_notify_payment" value="1" {{ ! empty($location->telegram_notify_payment) ? 'checked' : '' }}>
-                                            Send Telegram when payment is received
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6">
-                                <div class="form-group">
-                                    <label>Installment Telegram Chat ID</label>
-                                    <input type="text" name="telegram_installment_chat_id" class="form-control" value="{{ $location->telegram_installment_chat_id ?? '' }}" placeholder="-100xxxxxxxxxx">
-                                    <div class="checkbox">
-                                        <label>
-                                            <input type="checkbox" name="telegram_notify_installment" value="1" {{ ! empty($location->telegram_notify_installment) ? 'checked' : '' }}>
-                                            Send Telegram when installment loan is created
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        @include('loanmanagement::locations.partials.form', ['location' => null])
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">Save</button>
                         <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">Close</button>
                     </div>
-                    {!! Form::close() !!}
-                </div>
+                </form>
             </div>
         </div>
-    @endforeach
+    </div>
+
+    <div class="modal fade" id="loan_location_assets_modal" tabindex="-1" role="dialog" aria-labelledby="loanLocationAssetsModalLabel">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                {!! Form::open(['url' => '', 'method' => 'post', 'files' => true, 'id' => 'loan_location_assets_form']) !!}
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="loanLocationAssetsModalLabel">Location Assets & Telegram</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <div class="form-group">
+                                <label>Logo</label>
+                                <div class="loan-asset-field">
+                                    <input type="file" name="logo" class="form-control" accept="image/*">
+                                    <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="logo_existing_shared" data-preview="logo_preview_shared">
+                                        <i class="fa fa-picture-o"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="logo_existing" id="logo_existing_shared">
+                                <div class="loan-asset-preview" id="logo_preview_shared"></div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="form-group">
+                                <label>Payment QR Code</label>
+                                <div class="loan-asset-field">
+                                    <input type="file" name="payment_qr" class="form-control" accept="image/*">
+                                    <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="payment_qr_existing_shared" data-preview="payment_qr_preview_shared">
+                                        <i class="fa fa-picture-o"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="payment_qr_existing" id="payment_qr_existing_shared">
+                                <div class="loan-asset-preview" id="payment_qr_preview_shared"></div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="form-group">
+                                <label>Telegram QR Code</label>
+                                <div class="loan-asset-field">
+                                    <input type="file" name="telegram_qr" class="form-control" accept="image/*">
+                                    <button type="button" class="btn btn-default loan-asset-gallery-open" title="Choose from gallery" data-target-input="telegram_qr_existing_shared" data-preview="telegram_qr_preview_shared">
+                                        <i class="fa fa-picture-o"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="telegram_qr_existing" id="telegram_qr_existing_shared">
+                                <div class="loan-asset-preview" id="telegram_qr_preview_shared"></div>
+                            </div>
+                        </div>
+                        <div class="clearfix"></div>
+                        <hr>
+                        <div class="col-sm-6">
+                            <div class="form-group">
+                                <label>Payment Telegram Chat ID</label>
+                                <input type="text" name="telegram_payment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" name="telegram_notify_payment" value="1">
+                                        Send Telegram when payment is received
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="form-group">
+                                <label>Installment Telegram Chat ID</label>
+                                <input type="text" name="telegram_installment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" name="telegram_notify_installment" value="1">
+                                        Send Telegram when installment loan is created
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">Save</button>
+                    <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">Close</button>
+                </div>
+                {!! Form::close() !!}
+            </div>
+        </div>
+    </div>
 
     <div class="modal fade" id="loan_asset_gallery_modal" tabindex="-1" role="dialog" aria-labelledby="loanAssetGalleryModalLabel">
         <div class="modal-dialog modal-lg" role="document">
@@ -436,6 +447,15 @@
             var galleryTargetInput = null;
             var galleryPreview = null;
             var galleryFileInput = null;
+            var locationBaseUrl = "{{ url('loan-management/locations') }}";
+
+            function setPreview(container, url, altText) {
+                if (!container || !container.length) {
+                    return;
+                }
+
+                container.html(url ? '<img src="' + url + '" alt="' + (altText || 'Preview') + '">' : '');
+            }
 
             $(function() {
                 if ($.fn.DataTable && !$.fn.DataTable.isDataTable('#loan_location_table')) {
@@ -447,6 +467,40 @@
                         ]
                     });
                 }
+            });
+
+            $(document).on('click', '.loan-location-edit-btn', function() {
+                var button = $(this);
+                var form = $('#loan_location_edit_form');
+
+                form.attr('action', locationBaseUrl + '/' + button.data('id'));
+                form.find('input[name="name"]').val(button.data('name') || '');
+                form.find('input[name="location_code"]').val(button.data('location_code') || '');
+                form.find('input[name="loan_invoice_prefix"]').val(button.data('loan_invoice_prefix') || '');
+                form.find('input[name="phone"]').val(button.data('phone') || '');
+                form.find('select[name="status"]').val(button.data('status') || 'active');
+                form.find('textarea[name="address"]').val(button.data('address') || '');
+                $('#loanLocationEditModalLabel').text('Edit Loan Location: ' + (button.data('name') || ''));
+            });
+
+            $(document).on('click', '.loan-location-assets-btn', function() {
+                var button = $(this);
+                var form = $('#loan_location_assets_form');
+
+                form.attr('action', locationBaseUrl + '/' + button.data('id') + '/assets');
+                form.find('input[type="file"]').val('');
+                form.find('input[name="logo_existing"]').val(button.data('logo_path') || '');
+                form.find('input[name="payment_qr_existing"]').val(button.data('payment_qr_path') || '');
+                form.find('input[name="telegram_qr_existing"]').val(button.data('telegram_qr_path') || '');
+                form.find('input[name="telegram_payment_chat_id"]').val(button.data('telegram_payment_chat_id') || '');
+                form.find('input[name="telegram_installment_chat_id"]').val(button.data('telegram_installment_chat_id') || '');
+                form.find('input[name="telegram_notify_payment"]').prop('checked', Number(button.data('telegram_notify_payment')) === 1);
+                form.find('input[name="telegram_notify_installment"]').prop('checked', Number(button.data('telegram_notify_installment')) === 1);
+
+                setPreview($('#logo_preview_shared'), button.data('logo_url') || '', 'Logo');
+                setPreview($('#payment_qr_preview_shared'), button.data('payment_qr_url') || '', 'Payment QR Code');
+                setPreview($('#telegram_qr_preview_shared'), button.data('telegram_qr_url') || '', 'Telegram QR Code');
+                $('#loanLocationAssetsModalLabel').text('Location Assets & Telegram: ' + (button.data('name') || ''));
             });
 
             $(document).on('click', '.loan-asset-gallery-open', function() {

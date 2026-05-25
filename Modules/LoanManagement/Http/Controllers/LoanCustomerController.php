@@ -68,13 +68,11 @@ class LoanCustomerController extends Controller
         $latestLocation = Schema::connection($this->connection)->hasTable('loan_customer_location_latest')
             ? DB::connection($this->connection)->table('loan_customer_location_latest')->where('customer_id', $customer)->first()
             : null;
-        $loans = Schema::connection($this->connection)->hasTable('loans')
-            ? DB::connection($this->connection)->table('loans')->where('customer_id', $customer)->orderByDesc('id')->limit(20)->get()
-            : collect();
-        $payments = Schema::connection($this->connection)->hasTable('loan_payments')
-            ? DB::connection($this->connection)->table('loan_payments')->where('customer_id', $customer)->orderByDesc('id')->limit(20)->get()
-            : collect();
-        return view('loanmanagement::customers.show', compact('customerRow', 'latestLocation', 'loans', 'payments'));
+        $relatedData = $this->getCustomerRelatedData($customer);
+        return view('loanmanagement::customers.show', array_merge([
+            'customerRow' => $customerRow,
+            'latestLocation' => $latestLocation,
+        ], $relatedData));
     }
 
     public function edit(int $customer)
@@ -84,7 +82,12 @@ class LoanCustomerController extends Controller
         $latestLocation = Schema::connection($this->connection)->hasTable('loan_customer_location_latest')
             ? DB::connection($this->connection)->table('loan_customer_location_latest')->where('customer_id', $customer)->first()
             : null;
-        return view('loanmanagement::customers.edit', compact('customerRow', 'latestLocation'));
+        $relatedData = $this->getCustomerRelatedData($customer);
+
+        return view('loanmanagement::customers.edit', array_merge([
+            'customerRow' => $customerRow,
+            'latestLocation' => $latestLocation,
+        ], $relatedData));
     }
 
     public function update(UpdateLoanCustomerRequest $request, int $customer)
@@ -251,5 +254,60 @@ class LoanCustomerController extends Controller
         $columns = Schema::connection($this->connection)->getColumnListing($this->table);
         return array_intersect_key($payload, array_flip($columns));
     }
-}
 
+    protected function getCustomerRelatedData(int $customer): array
+    {
+        $loans = collect();
+        $payments = collect();
+
+        if (Schema::connection($this->connection)->hasTable('loans')) {
+            $loans = DB::connection($this->connection)
+                ->table('loans')
+                ->where('customer_id', $customer)
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get();
+        }
+
+        if (Schema::connection($this->connection)->hasTable('loan_payments')) {
+            $paymentsQuery = DB::connection($this->connection)
+                ->table('loan_payments as p')
+                ->leftJoin('loans as l', 'l.id', '=', 'p.loan_id')
+                ->where(function ($query) use ($customer) {
+                    $query->where('p.customer_id', $customer)
+                        ->orWhere('l.customer_id', $customer);
+                })
+                ->select([
+                    'p.*',
+                    'l.loan_number',
+                    'l.customer_id as loan_customer_id',
+                ])
+                ->orderByDesc('p.id')
+                ->limit(20);
+
+            if (Schema::connection($this->connection)->hasColumn('loan_payments', 'paid_date')) {
+                $paymentsQuery->orderByDesc('p.paid_date');
+            } elseif (Schema::connection($this->connection)->hasColumn('loan_payments', 'paid_at')) {
+                $paymentsQuery->orderByDesc('p.paid_at');
+            }
+
+            $payments = $paymentsQuery->get();
+        }
+
+        return [
+            'loans' => $loans,
+            'payments' => $payments,
+            'loanSummary' => [
+                'count' => $loans->count(),
+                'principal' => (float) $loans->sum(fn ($loan) => (float) ($loan->principal_amount ?? 0)),
+                'balance' => (float) $loans->sum(fn ($loan) => (float) ($loan->balance_amount ?? 0)),
+            ],
+            'paymentSummary' => [
+                'count' => $payments->count(),
+                'amount' => (float) $payments->sum(function ($payment) {
+                    return (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                }),
+            ],
+        ];
+    }
+}

@@ -7,40 +7,199 @@
 </section>
 
 <section class="content">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="small-box bg-aqua">
+                <div class="inner">
+                    <h3>{{ $loanSummary['count'] ?? 0 }}</h3>
+                    <p>Related Loans</p>
+                </div>
+                <div class="icon"><i class="fa fa-file-text-o"></i></div>
+                <span class="small-box-footer">Balance {{ number_format((float) ($loanSummary['balance'] ?? 0), 2) }}</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="small-box bg-green">
+                <div class="inner">
+                    <h3>{{ $paymentSummary['count'] ?? 0 }}</h3>
+                    <p>Related Payments</p>
+                </div>
+                <div class="icon"><i class="fa fa-money"></i></div>
+                <span class="small-box-footer">Collected {{ number_format((float) ($paymentSummary['amount'] ?? 0), 2) }}</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="small-box bg-yellow">
+                <div class="inner">
+                    <h3>{{ $customerRow->customer_code ?? '-' }}</h3>
+                    <p>{{ $customerRow->phone ?? '-' }}</p>
+                </div>
+                <div class="icon"><i class="fa fa-user"></i></div>
+                <span class="small-box-footer">Status {{ ucfirst($customerRow->status ?? 'active') }}</span>
+            </div>
+        </div>
+    </div>
+
     <div class="box box-primary">
+        <div class="box-header with-border">
+            <h3 class="box-title">Customer Information</h3>
+            <div class="box-tools pull-right">
+                <a href="{{ route('loan-management.customers.show', $customerRow->id) }}" class="btn btn-default btn-sm">
+                    <i class="fa fa-eye"></i> View Detail
+                </a>
+            </div>
+        </div>
         <div class="box-body">
             <form method="POST" action="{{ route('loan-management.customers.update', $customerRow->id) }}">
                 @csrf
                 @method('PUT')
                 <input type="hidden" name="create_mode" id="create_mode" value="new">
                 @include('loanmanagement::customers.partials.form')
-                <button type="submit" class="btn btn-primary">Update</button>
-                <a href="{{ route('loan-management.customers') }}" class="btn btn-default">Cancel</a>
+                <button type="submit" class="btn btn-primary">Update Customer</button>
+                <a href="{{ route('loan-management.customers') }}" class="btn btn-default">Back to List</a>
             </form>
-            <hr>
-            <form method="POST" action="{{ route('loan-management.customers.reset-password', $customerRow->id) }}" class="form-inline">
-                @csrf
-                <div class="form-group">
-                    <label style="margin-right:8px;">Reset App Password</label>
-                    <input type="password" class="form-control" name="new_password" placeholder="New password (min 8)" required>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="box box-warning">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Security & App Access</h3>
                 </div>
-                <button type="submit" class="btn btn-warning">Reset Password</button>
-            </form>
-            <hr>
-            <form method="POST" action="{{ route('loan-management.customer-tracking.toggle', $customerRow->id) }}" class="form-inline">
-                @csrf
-                <div class="form-group">
-                    <label style="margin-right:8px;">GPS Tracking</label>
-                    <select class="form-control" name="allow_gps_tracking">
-                        <option value="0" {{ !empty($customerRow->allow_gps_tracking) ? '' : 'selected' }}>Disable</option>
-                        <option value="1" {{ !empty($customerRow->allow_gps_tracking) ? 'selected' : '' }}>Enable</option>
-                    </select>
+                <div class="box-body">
+                    <form method="POST" action="{{ route('loan-management.customers.reset-password', $customerRow->id) }}" class="form-inline">
+                        @csrf
+                        <div class="form-group">
+                            <label style="margin-right:8px;">Reset App Password</label>
+                            <input type="password" class="form-control" name="new_password" placeholder="New password (min 8)" required>
+                        </div>
+                        <button type="submit" class="btn btn-warning">Reset Password</button>
+                    </form>
                 </div>
-                <div class="form-group" style="margin-left:8px;">
-                    <input type="text" class="form-control" name="note" placeholder="Note">
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="box box-info">
+                <div class="box-header with-border">
+                    <h3 class="box-title">GPS Tracking</h3>
                 </div>
-                <button type="submit" class="btn btn-info">Save GPS Setting</button>
-            </form>
+                <div class="box-body">
+                    <form method="POST" action="{{ route('loan-management.customer-tracking.toggle', $customerRow->id) }}" class="form-inline">
+                        @csrf
+                        <div class="form-group">
+                            <label style="margin-right:8px;">GPS Tracking</label>
+                            <select class="form-control" name="allow_gps_tracking">
+                                <option value="0" {{ !empty($customerRow->allow_gps_tracking) ? '' : 'selected' }}>Disable</option>
+                                <option value="1" {{ !empty($customerRow->allow_gps_tracking) ? 'selected' : '' }}>Enable</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-left:8px;">
+                            <input type="text" class="form-control" name="note" placeholder="Note">
+                        </div>
+                        <button type="submit" class="btn btn-info">Save GPS Setting</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box box-default">
+        <div class="box-header with-border">
+            <h3 class="box-title">Related Loans</h3>
+        </div>
+        <div class="box-body table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Loan #</th>
+                        <th>Status</th>
+                        <th>Loan Date</th>
+                        <th>Principal</th>
+                        <th>Balance</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($loans as $loan)
+                        <tr>
+                            <td>{{ $loan->id }}</td>
+                            <td>{{ $loan->loan_number ?? '-' }}</td>
+                            <td><span class="label label-info">{{ ucfirst($loan->status ?? 'pending') }}</span></td>
+                            <td>{{ !empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
+                            <td>{{ number_format((float) ($loan->principal_amount ?? 0), 2) }}</td>
+                            <td>{{ number_format((float) ($loan->balance_amount ?? 0), 2) }}</td>
+                            <td class="text-nowrap">
+                                <a href="{{ route('loan-management.loans.view', $loan->id) }}" class="btn btn-xs btn-default">
+                                    <i class="fa fa-eye"></i> View
+                                </a>
+                                <a href="{{ route('loan-management.loans.edit', ['loan' => $loan->id, 'customer_id' => $customerRow->id]) }}" class="btn btn-xs btn-primary">
+                                    <i class="fa fa-pencil"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="text-center">No related loans found.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="box box-default">
+        <div class="box-header with-border">
+            <h3 class="box-title">Related Payments</h3>
+        </div>
+        <div class="box-body table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Receipt</th>
+                        <th>Loan #</th>
+                        <th>Paid Date</th>
+                        <th>Method</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($payments as $payment)
+                        @php
+                            $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #' . $payment->id);
+                            $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
+                            $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                            $method = $payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? '-';
+                        @endphp
+                        <tr>
+                            <td>{{ $payment->id }}</td>
+                            <td>{{ $receipt }}</td>
+                            <td>{{ $payment->loan_number ?? '-' }}</td>
+                            <td>{{ !empty($paidDate) ? \Carbon\Carbon::parse($paidDate)->format('d-m-Y') : '-' }}</td>
+                            <td>{{ $method }}</td>
+                            <td>{{ number_format($amount, 2) }}</td>
+                            <td>{{ ucfirst($payment->status ?? 'confirmed') }}</td>
+                            <td class="text-nowrap">
+                                <a href="{{ route('loan-management.payments.show', $payment->id) }}" class="btn btn-xs btn-default">
+                                    <i class="fa fa-eye"></i> View
+                                </a>
+                                <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id, 'customer_id' => $customerRow->id]) }}" class="btn btn-xs btn-primary">
+                                    <i class="fa fa-pencil"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="text-center">No related payments found.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 </section>

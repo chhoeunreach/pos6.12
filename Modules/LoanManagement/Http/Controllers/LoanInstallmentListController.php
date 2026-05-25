@@ -1689,9 +1689,31 @@ class LoanInstallmentListController extends Controller
             }
         }
 
-        $locationName = trim((string) ($loanRow->location_name_snapshot ?? ''));
+        $locationName = trim((string) ($loanRow->business_location_name_snapshot ?? ($loanRow->location_name_snapshot ?? '')));
         $locationAddress = '';
         $locationId = $loanRow->main_location_id ?? ($loanRow->business_location_id ?? null);
+        $selectedBusinessLocationId = $loanRow->business_location_id ?? null;
+
+        $locationOptions = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loans')) {
+            $loanColumns = Schema::connection('mysql_loan')->getColumnListing('loans');
+            if (in_array('business_location_name_snapshot', $loanColumns, true) && in_array('business_location_id', $loanColumns, true)) {
+                $locationOptions = DB::connection('mysql_loan')
+                    ->table('loans')
+                    ->select('business_location_id', 'business_location_name_snapshot')
+                    ->whereNotNull('business_location_id')
+                    ->whereNotNull('business_location_name_snapshot')
+                    ->where('business_location_name_snapshot', '!=', '')
+                    ->orderBy('business_location_name_snapshot')
+                    ->get()
+                    ->groupBy('business_location_id')
+                    ->map(function ($group) {
+                        return $group->first();
+                    })
+                    ->values();
+            }
+        }
+
         if (!empty($locationId) && Schema::hasTable('business_locations')) {
             $loc = DB::table('business_locations')
                 ->select('id', 'name', 'landmark')
@@ -1700,6 +1722,13 @@ class LoanInstallmentListController extends Controller
             if ($loc) {
                 if (empty($locationName)) $locationName = trim((string) ($loc->name ?? ''));
                 $locationAddress = trim((string) ($loc->landmark ?? ''));
+            }
+        }
+
+        if (empty($locationName) && ! empty($selectedBusinessLocationId) && $locationOptions->isNotEmpty()) {
+            $selectedLocation = $locationOptions->firstWhere('business_location_id', $selectedBusinessLocationId);
+            if ($selectedLocation) {
+                $locationName = trim((string) ($selectedLocation->business_location_name_snapshot ?? ''));
             }
         }
 
@@ -1741,6 +1770,18 @@ class LoanInstallmentListController extends Controller
         $locationName = $locationName !== '' ? $locationName : '-';
         $locationAddress = $locationAddress !== '' ? $locationAddress : '-';
 
+        $loanItems = Schema::connection('mysql_loan')->hasTable('loan_items')
+            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id')->get()
+            : collect();
+
+        $schedules = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+            ? DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->orderBy('installment_no')->orderBy('id')->get()
+            : collect();
+
+        $payments = Schema::connection('mysql_loan')->hasTable('loan_payments')
+            ? DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan)->orderByDesc('paid_date')->orderByDesc('id')->limit(20)->get()
+            : collect();
+
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
             'customerName',
@@ -1749,29 +1790,104 @@ class LoanInstallmentListController extends Controller
             'mainContactId',
             'locationName',
             'locationAddress',
+            'locationOptions',
+            'selectedBusinessLocationId',
             'locationId',
             'sourceType',
             'sourceTransactionId',
             'sourceInvoice',
             'sourceFinalTotal',
             'sourcePaid',
-            'sourceDue'
+            'sourceDue',
+            'loanItems',
+            'schedules',
+            'payments'
         ));
     }
 
     public function update(Request $request, int $loan)
     {
         $data = $request->validate([
-            'loan_date' => 'nullable|date',
+            'customer_id' => 'nullable|integer|min:0',
+            'customer_name_snapshot' => 'nullable|string|max:191',
+            'customer_phone_snapshot' => 'nullable|string|max:191',
+            'customer_address_snapshot' => 'nullable|string|max:1000',
+            'main_contact_id' => 'nullable|integer|min:0',
+            'business_location_name_snapshot' => 'nullable|string|max:191',
+            'main_location_id' => 'nullable|integer|min:0',
+            'business_location_id' => 'nullable|integer|min:0',
+            'source_type' => 'nullable|string|max:30',
+            'source_invoice_no' => 'nullable|string|max:191',
+            'source_created_at' => 'nullable|date',
+            'stock_already_deducted' => 'nullable|boolean',
             'principal_amount' => 'nullable|numeric|min:0',
+            'interest_amount' => 'nullable|numeric|min:0',
+            'total_amount' => 'nullable|numeric|min:0',
+            'paid_amount' => 'nullable|numeric|min:0',
+            'penalty_amount' => 'nullable|numeric|min:0',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'balance_amount' => 'nullable|numeric|min:0',
             'down_payment' => 'nullable|numeric|min:0',
-            'interest_rate' => 'nullable|numeric|min:0',
-            'duration_months' => 'nullable|integer|min:1|max:360',
-            'note' => 'nullable|string|max:1000',
+            'installment_count' => 'nullable|integer|min:0|max:1000',
+            'payment_frequency' => 'nullable|string|max:30',
+            'currency' => 'nullable|string|max:10',
+            'loan_date' => 'nullable|date',
+            'first_due_date' => 'nullable|date',
+            'maturity_date' => 'nullable|date',
+            'status' => 'nullable|string|max:30',
+            'approved_at' => 'nullable|date',
+            'note' => 'nullable|string|max:5000',
+            'collection_status' => 'nullable|string|max:50',
+            'risk_level' => 'nullable|string|max:50',
+            'collection_priority' => 'nullable|integer|min:0|max:255',
+            'ptp_date' => 'nullable|date',
+            'ptp_amount' => 'nullable|numeric|min:0',
+            'ptp_note' => 'nullable|string|max:5000',
+            'ptp_status' => 'nullable|string|max:30',
+            'broken_ptp_count' => 'nullable|integer|min:0',
+            'last_contact_at' => 'nullable|date',
+            'last_contact_result' => 'nullable|string|max:100',
+            'next_followup_at' => 'nullable|date',
+            'field_visit_required' => 'nullable|boolean',
+            'skip_level' => 'nullable|string|max:30',
+            'legal_stage' => 'nullable|string|max:100',
+            'recovery_stage' => 'nullable|string|max:100',
+            'repossession_status' => 'nullable|string|max:100',
+            'blacklisted_at' => 'nullable|date',
+            'written_off_at' => 'nullable|date',
+            'assigned_collection_team' => 'nullable|string|max:100',
+            'days_past_due' => 'nullable|integer|min:0',
+            'overdue_bucket' => 'nullable|string|max:30',
+            'contact_attempt_count' => 'nullable|integer|min:0',
+            'last_payment_date' => 'nullable|date',
+            'last_payment_amount' => 'nullable|numeric|min:0',
+            'recovery_score' => 'nullable|integer|min:0|max:65535',
         ]);
 
+        if (! empty($data['business_location_id']) && Schema::connection('mysql_loan')->hasTable('loans')) {
+            $loanColumns = Schema::connection('mysql_loan')->getColumnListing('loans');
+            if (in_array('business_location_name_snapshot', $loanColumns, true)) {
+                $selectedLocation = DB::connection('mysql_loan')
+                    ->table('loans')
+                    ->select('business_location_id', 'business_location_name_snapshot')
+                    ->where('business_location_id', $data['business_location_id'])
+                    ->whereNotNull('business_location_name_snapshot')
+                    ->where('business_location_name_snapshot', '!=', '')
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($selectedLocation) {
+                    $data['business_location_name_snapshot'] = $selectedLocation->business_location_name_snapshot;
+                }
+            }
+        }
+
         abort_if(! Schema::connection('mysql_loan')->hasTable('loans'), 404);
-        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update(array_merge($data, ['updated_at' => now()]));
+        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', array_merge($data, [
+            'stock_already_deducted' => (int) $request->boolean('stock_already_deducted'),
+            'field_visit_required' => (int) $request->boolean('field_visit_required'),
+            'updated_at' => now(),
+        ])));
 
         return redirect()->route('loan-management.loans.view', $loan)->with('status', 'Loan updated successfully.');
     }

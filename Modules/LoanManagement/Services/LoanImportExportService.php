@@ -186,7 +186,7 @@ class LoanImportExportService
             throw new \RuntimeException('Import batch was not found.');
         }
 
-        if (in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors', 'failed'], true)) {
+        if (in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors'], true)) {
             return $this->batchProgress($batchId);
         }
 
@@ -317,7 +317,7 @@ class LoanImportExportService
             'imported_rows' => $imported,
             'skipped_rows' => $skipped,
             'percent' => $percent,
-            'done' => in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors', 'failed'], true) || ($total > 0 && $processed >= $total),
+            'done' => in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors'], true) || ($total > 0 && $processed >= $total),
         ];
     }
 
