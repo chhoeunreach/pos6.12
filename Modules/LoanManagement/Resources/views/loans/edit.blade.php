@@ -57,10 +57,24 @@
 
 <section class="content">
     @if ($errors->any())
+        @php
+            $fullSaveError = $errors->first('save_error');
+        @endphp
         <div class="alert alert-danger">
             <strong>Unable to save this loan.</strong>
+            @if ($fullSaveError)
+                <div style="margin-top: 8px;">
+                    <a href="#" id="loanViewErrorLink">View error details</a>
+                </div>
+                <div id="loanErrorDetailsBox" style="display:none; margin-top:10px;">
+                    <pre style="white-space:pre-wrap; word-break:break-word; margin:0; padding:10px; background:#fff; border:1px solid #f1b0b7; color:#a94442;">{{ $fullSaveError }}</pre>
+                </div>
+            @endif
             <ul style="margin:8px 0 0 18px; padding:0;">
                 @foreach ($errors->all() as $error)
+                    @if ($error === $fullSaveError)
+                        @continue
+                    @endif
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
@@ -271,6 +285,7 @@
                         <div class="form-group">
                             <label>Installment Count</label>
                             <input type="number" name="installment_count" class="form-control" min="0" value="{{ old('installment_count', $loanRow->installment_count ?? 0) }}">
+                            <input type="hidden" name="duration_months" id="loanDurationMonthsInput" value="{{ old('duration_months', $loanRow->duration_months ?? $loanRow->installment_count ?? 0) }}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -315,6 +330,45 @@
                         </div>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-md-12 text-right">
+                        <button type="button" class="btn btn-info" id="btnGenerateLoanPreview">
+                            <i class="fa fa-refresh"></i> Generate Preview
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="box box-info">
+            <div class="box-header with-border"><h3 class="box-title">Schedule Preview</h3></div>
+            <div class="box-body table-responsive">
+                <table class="table table-bordered table-striped" id="loanSchedulePreviewTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Due Date</th>
+                            <th>Principal</th>
+                            <th>Interest</th>
+                            <th>Total</th>
+                            <th>Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Click Generate Preview to recalculate the schedule.</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="2" class="text-right">Totals</th>
+                            <th>0.00</th>
+                            <th>0.00</th>
+                            <th>0.00</th>
+                            <th>0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
 
@@ -468,6 +522,34 @@
         var mainLocationInput = document.getElementById('loanMainLocationIdInput');
         var locationAddressText = document.getElementById('loanLocationAddressText');
         var sectionsContainer = document.getElementById('loanEditSections');
+        var installmentCountInput = document.querySelector('input[name="installment_count"]');
+        var durationMonthsInput = document.getElementById('loanDurationMonthsInput');
+        var previewButton = document.getElementById('btnGenerateLoanPreview');
+        var previewTable = document.getElementById('loanSchedulePreviewTable');
+        var viewErrorLink = document.getElementById('loanViewErrorLink');
+        var errorDetailsBox = document.getElementById('loanErrorDetailsBox');
+
+        function formatMoney(value) {
+            var amount = Number(value || 0);
+
+            return amount.toFixed(2);
+        }
+
+        function syncDurationMonths() {
+            if (durationMonthsInput && installmentCountInput) {
+                durationMonthsInput.value = installmentCountInput.value || '';
+            }
+        }
+
+        if (viewErrorLink && errorDetailsBox) {
+            viewErrorLink.addEventListener('click', function (event) {
+                event.preventDefault();
+
+                var isHidden = errorDetailsBox.style.display === 'none';
+                errorDetailsBox.style.display = isHidden ? 'block' : 'none';
+                viewErrorLink.textContent = isHidden ? 'Hide error details' : 'View error details';
+            });
+        }
 
         function syncLocationFields() {
             if (!select) {
@@ -501,6 +583,73 @@
         if (select) {
             select.addEventListener('change', syncLocationFields);
             syncLocationFields();
+        }
+
+        if (installmentCountInput) {
+            installmentCountInput.addEventListener('input', syncDurationMonths);
+            installmentCountInput.addEventListener('change', syncDurationMonths);
+            syncDurationMonths();
+        }
+
+        if (previewButton && previewTable && window.jQuery) {
+            window.jQuery(previewButton).on('click', function () {
+                syncDurationMonths();
+
+                var form = window.jQuery(previewButton).closest('form');
+                var tbody = window.jQuery(previewTable).find('tbody').first();
+                var footerCells = window.jQuery(previewTable).find('tfoot tr th');
+
+                window.jQuery(previewButton)
+                    .prop('disabled', true)
+                    .html('<i class="fa fa-spinner fa-spin"></i> Generating...');
+
+                window.jQuery.post("{{ route('loan-management.loans.preview-schedule') }}", form.serialize(), function (res) {
+                    var rows = res.data || [];
+                    var totalPrincipal = 0;
+                    var totalInterest = 0;
+                    var totalAmount = 0;
+                    var totalBalance = 0;
+
+                    tbody.empty();
+
+                    if (!rows.length) {
+                        tbody.append('<tr><td colspan="6" class="text-center text-muted">No preview rows generated.</td></tr>');
+                    }
+
+                    rows.forEach(function (row) {
+                        totalPrincipal += Number(row.principal || 0);
+                        totalInterest += Number(row.interest || 0);
+                        totalAmount += Number(row.total || 0);
+                        totalBalance += Number(row.balance || 0);
+
+                        tbody.append(
+                            '<tr>' +
+                                '<td>' + (row.schedule_no || '') + '</td>' +
+                                '<td>' + (row.due_date || '') + '</td>' +
+                                '<td>' + formatMoney(row.principal) + '</td>' +
+                                '<td>' + formatMoney(row.interest) + '</td>' +
+                                '<td>' + formatMoney(row.total) + '</td>' +
+                                '<td>' + formatMoney(row.balance) + '</td>' +
+                            '</tr>'
+                        );
+                    });
+
+                    footerCells.eq(1).text(formatMoney(totalPrincipal));
+                    footerCells.eq(2).text(formatMoney(totalInterest));
+                    footerCells.eq(3).text(formatMoney(totalAmount));
+                    footerCells.eq(4).text(formatMoney(totalBalance));
+                }).fail(function (xhr) {
+                    var message = (xhr.responseJSON && xhr.responseJSON.message)
+                        ? xhr.responseJSON.message
+                        : 'Failed to preview schedule';
+
+                    window.alert(message);
+                }).always(function () {
+                    window.jQuery(previewButton)
+                        .prop('disabled', false)
+                        .html('<i class="fa fa-refresh"></i> Generate Preview');
+                });
+            });
         }
 
         if (sectionsContainer && sectionsContainer.getAttribute('data-url') && window.jQuery) {
