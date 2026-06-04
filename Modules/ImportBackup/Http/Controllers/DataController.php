@@ -7,6 +7,17 @@ use Menu;
 
 class DataController extends Controller
 {
+    public function user_permissions(): array
+    {
+        return [
+            [
+                'value' => 'backup',
+                'label' => 'Import Backup (access)',
+                'default' => false,
+            ],
+        ];
+    }
+
     public function modifyAdminMenu()
     {
         $is_admin_for_backup_menu = auth()->user()->hasRole('Admin#' . session('business.id')) ? true : false;

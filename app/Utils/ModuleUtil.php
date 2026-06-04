@@ -88,6 +88,22 @@ class ModuleUtil extends Util
             }
         }
 
+        if ($function_name === 'user_permissions') {
+            foreach ($modules as $module => $details) {
+                $already_loaded = false;
+                foreach ($installed_modules as $installed_module) {
+                    if ($installed_module['name'] === $details['name']) {
+                        $already_loaded = true;
+                        break;
+                    }
+                }
+
+                if (! $already_loaded) {
+                    $installed_modules[] = $details;
+                }
+            }
+        }
+
          // If specific module names are provided, filter the installed modules
         if (!empty($get_data_from_modules) && is_array($get_data_from_modules)) {
             $installed_modules = array_filter($installed_modules, function ($module) use ($get_data_from_modules) {
