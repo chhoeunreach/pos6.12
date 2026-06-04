@@ -68,6 +68,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
 
         Route::get('/loans/create-from-sell', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create-from-sell')->middleware($createLoanPermission);
         Route::get('/loans/create', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create')->middleware($createLoanPermission);
+        Route::get('/loans/calculator', [LoanFromSellController::class, 'calculator'])->name('loan-management.loans.calculator')->middleware($createLoanPermission);
+        Route::get('/loans/calculator/print', [LoanFromSellController::class, 'calculatorPrint'])->name('loan-management.loans.calculator.print')->middleware($createLoanPermission);
         Route::get('/loans/search-sales', [LoanFromSellController::class, 'searchSales'])->name('loan-management.loans.search-sales')->middleware($createLoanPermission);
         Route::get('/loans/search-sells', [LoanFromSellController::class, 'search'])->name('loan-management.loans.search-sells')->middleware($createLoanPermission);
         Route::get('/loans/sales/{transaction}/clone-data', [LoanFromSellController::class, 'cloneData'])->name('loan-management.loans.sales.clone-data')->middleware($createLoanPermission);

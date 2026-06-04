@@ -30,6 +30,14 @@
     </div>
 
     <div class="lm-header-right">
+        @if(Route::has('loan-management.loans.calculator') && loan_user_can('loan_management.create_from_sell|loan_management.loans.create|loan_management.create'))
+            <a href="{{ route('loan-management.loans.calculator', ['_lm_modal' => 1]) }}"
+               class="btn btn-default btn-sm lm-header-action js-loan-calculator-modal"
+               data-title="Loan Calculator">
+                <i class="fa fa-calculator"></i> Loan Calculator
+            </a>
+        @endif
+
         @if(Route::has('loan-management.chat.index') && loan_user_can('loan_management.chat.view'))
             <a href="{{ route('loan-management.chat.index') }}" class="btn btn-default btn-sm lm-header-action">
                 <i class="fa fa-comments"></i> Chat

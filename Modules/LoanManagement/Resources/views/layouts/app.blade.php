@@ -609,6 +609,37 @@
                     }
                 });
             });
+
+            $(document).on('click', '.js-loan-calculator-modal', function (e) {
+                e.preventDefault();
+
+                var $trigger = $(this);
+                var url = $trigger.data('href') || $trigger.attr('href');
+                var title = $trigger.data('title') || 'Loan Calculator';
+
+                if (!url || !$('.view_modal').length) {
+                    window.location.href = url;
+                    return;
+                }
+
+                if (url.indexOf('_lm_modal=1') === -1) {
+                    url += (url.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
+                }
+
+                $('.view_modal').html(
+                    '<div class="modal-dialog modal-xl lm-dashboard-iframe-modal" role="document" style="width:96%;max-width:1180px;">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                                '<h4 class="modal-title">' + $('<div>').text(title).html() + '</h4>' +
+                            '</div>' +
+                            '<div class="modal-body" style="padding:0;height:86vh;">' +
+                                '<iframe src="' + $('<div>').text(url).html() + '" style="width:100%;height:100%;border:0;" title="' + $('<div>').text(title).html() + '"></iframe>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>'
+                ).modal('show');
+            });
         })(jQuery);
     </script>
     @yield('loan_js')
