@@ -379,10 +379,7 @@ class CreateLoanFromSellService
             $locationId = $this->upsertSnapshot('loan_business_locations', 'main_location_id', $transaction->main_location_id, $this->cloneLocationSnapshot($transaction));
             $durationMonths = max(1, (int) ($data['duration_months'] ?? 1));
             $interestRate = max(0, (float) ($data['interest_rate'] ?? 0));
-            $resolvedInterestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
-            if (! in_array($resolvedInterestType, ['flat', 'reducing'], true)) {
-                $resolvedInterestType = 'flat';
-            }
+            $resolvedInterestType = 'flat';
             $loanMeta = [
                 'interest_rate' => $interestRate,
                 'interest_type' => $resolvedInterestType,
@@ -575,10 +572,7 @@ class CreateLoanFromSellService
             }
 
             $principalPart = ($i === $months) ? round($remaining, 2) : $principalPer;
-            $interestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
-            $interest = $interestType === 'reducing'
-                ? round($remaining * $rate, 2)
-                : $flatInterestPer;
+            $interest = $flatInterestPer;
             $total = round($principalPart + $interest, 2);
             $remaining = max(0, round($remaining - $principalPart, 2));
 

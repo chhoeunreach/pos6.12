@@ -17,7 +17,7 @@
     $locationName = $locationDisplayName ?? ($loanRow->location_name_snapshot ?? ($locationRow->name ?? '-'));
     $locationAddress = $locationAddressDisplay ?? ($locationRow->address ?? '-');
     $sourceInvoice = $sourceInvoiceDisplay ?? ($loanRow->source_invoice_no ?? '-');
-    $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
+    $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
     $displayInterestAmount = (float) ($loanRow->interest_amount ?? 0);
     if ($displayInterestAmount <= 0) {
         $displayInterestAmount = (float) ($scheduleSummary['interest_total'] ?? 0);

@@ -1,0 +1,14 @@
+{
+    "name": "Accessory",
+    "alias": "accessory",
+    "description": "POS 7 converted into an Accessory module.",
+    "keywords": ["accessory", "pos7", "pos"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\Accessory\\Providers\\AccessoryServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

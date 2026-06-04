@@ -620,19 +620,25 @@ class LoanInstallmentListController extends Controller
             })
             ->addColumn('action', function ($r) {
                 $user = auth()->user();
-                $view = '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info">View</a>';
-                $print = ' <button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-modal"><i class="fa fa-print"></i> Print Loan</button>';
-                $edit = ($user && $user->can('loan_management.edit') && in_array(strtolower((string) $r->status), ['draft', 'pending']))
-                    ? ' <a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary">Edit</a>'
-                    : '';
-                $delete = ($user && $user->can('loan_management.delete') && in_array(strtolower((string) $r->status), ['draft', 'pending']))
-                    ? ' <button type="button" class="btn btn-xs btn-danger btn-delete-loan" data-url="'.route('loan-management.loans.destroy', $r->id).'">Delete</button>'
-                    : '';
+                $canEdit = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
+                    && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.edit');
+                $canDelete = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
+                    && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.delete');
+                $canApprove = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
+                    && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.approve');
 
-                $statusBtn = '';
-                if ($user && $user->can('loan_management.approve')) {
-                    $statusBtn = ' <div class="btn-group">
-                        <button type="button" class="btn btn-xs btn-warning dropdown-toggle" data-toggle="dropdown">Status <span class="caret"></span></button>
+                $actions = '<div class="btn-group btn-group-xs" role="group" style="display:flex; flex-wrap:wrap; gap:4px;">';
+                $actions .= '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info btn-flat" title="View loan details"><i class="fa fa-eye"></i> View</a>';
+                $actions .= '<button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-flat btn-modal" title="Print loan"><i class="fa fa-print"></i> Print</button>';
+                if ($canEdit) {
+                    $actions .= '<a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary btn-flat" title="Edit this loan"><i class="fa fa-pencil"></i> Edit</a>';
+                }
+                if ($canDelete && in_array(strtolower((string) $r->status), ['draft', 'pending'])) {
+                    $actions .= '<button type="button" class="btn btn-xs btn-danger btn-flat btn-delete-loan" data-url="'.route('loan-management.loans.destroy', $r->id).'" title="Delete this loan"><i class="fa fa-trash"></i> Delete</button>';
+                }
+                if ($canApprove) {
+                    $actions .= '<div class="btn-group btn-group-xs" role="group">
+                        <button type="button" class="btn btn-xs btn-warning btn-flat dropdown-toggle" data-toggle="dropdown" aria-expanded="false" title="Change status"><i class="fa fa-refresh"></i> Status <span class="caret"></span></button>
                         <ul class="dropdown-menu dropdown-menu-right">
                             <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="pending">Pending</a></li>
                             <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="approved">Approved</a></li>
@@ -644,8 +650,9 @@ class LoanInstallmentListController extends Controller
                         </ul>
                     </div>';
                 }
+                $actions .= '</div>';
 
-                return $view.$print.$edit.$delete.$statusBtn;
+                return $actions;
             })
             ->rawColumns(['status', 'principal_amount', 'paid_amount', 'balance_amount', 'action'])
             ->make(true);
@@ -1067,6 +1074,108 @@ class LoanInstallmentListController extends Controller
             ->with('status', ['success' => 1, 'msg' => 'Payment added successfully']);
     }
 
+    public function editSchedule(int $loan, int $schedule)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_payment_schedules'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $scheduleRow = DB::connection('mysql_loan')
+            ->table('loan_payment_schedules')
+            ->where('id', $schedule)
+            ->where('loan_id', $loan)
+            ->first();
+        abort_if(! $scheduleRow, 404);
+
+        return view('loanmanagement::loans.partials.edit_schedule_modal', compact('loanRow', 'scheduleRow'));
+    }
+
+    public function updateSchedule(Request $request, int $loan, int $schedule)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_payment_schedules'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $scheduleRow = DB::connection('mysql_loan')
+            ->table('loan_payment_schedules')
+            ->where('id', $schedule)
+            ->where('loan_id', $loan)
+            ->first();
+        abort_if(! $scheduleRow, 404);
+
+        $payload = $request->validate([
+            'installment_no' => 'nullable|integer|min:1',
+            'due_date' => 'nullable|date',
+            'principal_amount' => 'nullable|numeric|min:0',
+            'interest_amount' => 'nullable|numeric|min:0',
+            'schedule_amount' => 'nullable|numeric|min:0',
+            'paid_amount' => 'nullable|numeric|min:0',
+            'balance_amount' => 'nullable|numeric|min:0',
+            'status' => 'nullable|string|in:auto,pending,unpaid,partial,paid,late,completed',
+        ]);
+
+        $principal = round((float) ($payload['principal_amount'] ?? $scheduleRow->principal_amount ?? $scheduleRow->principal_due ?? 0), 2);
+        $interest = round((float) ($payload['interest_amount'] ?? $scheduleRow->interest_amount ?? $scheduleRow->interest_due ?? 0), 2);
+        $amountDue = round((float) ($payload['schedule_amount'] ?? $scheduleRow->schedule_amount ?? $scheduleRow->amount_due ?? ($principal + $interest)), 2);
+        $paid = round((float) ($payload['paid_amount'] ?? $scheduleRow->paid_amount ?? $scheduleRow->amount_paid ?? 0), 2);
+        $balance = array_key_exists('balance_amount', $payload) && $payload['balance_amount'] !== null
+            ? round((float) $payload['balance_amount'], 2)
+            : round(max(0, $amountDue - $paid), 2);
+
+        $status = strtolower(trim((string) ($payload['status'] ?? 'auto')));
+        if ($status === '' || $status === 'auto') {
+            if ($amountDue > 0 && $balance <= 0) {
+                $status = 'paid';
+            } elseif ($paid > 0) {
+                $status = 'partial';
+            } else {
+                $status = 'unpaid';
+            }
+        }
+
+        DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+            'installment_no' => $payload['installment_no'] ?? $scheduleRow->installment_no ?? null,
+            'due_date' => $payload['due_date'] ?? $scheduleRow->due_date ?? null,
+            'principal_amount' => $principal,
+            'principal_due' => $principal,
+            'interest_amount' => $interest,
+            'interest_due' => $interest,
+            'benefit_value' => $interest,
+            'schedule_amount' => $amountDue,
+            'amount_due' => $amountDue,
+            'paid_amount' => $paid,
+            'amount_paid' => $paid,
+            'paid_value' => $paid,
+            'balance_amount' => $balance,
+            'amount_balance' => $balance,
+            'status' => $status,
+            'paid_at' => in_array($status, ['paid', 'completed'], true)
+                ? ($scheduleRow->paid_at ?? now())
+                : ($paid > 0 ? ($scheduleRow->paid_at ?? null) : null),
+            'updated_at' => now(),
+        ]));
+
+        $this->refreshLoanBalanceFromSchedules($loan);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment schedule updated successfully',
+                'data' => [
+                    'redirect_url' => $request->input('return_to') ?: route('loan-management.loans.view', $loan),
+                ],
+            ]);
+        }
+
+        return redirect()
+            ->route('loan-management.loans.view', $loan)
+            ->with('status', ['success' => 1, 'msg' => 'Payment schedule updated successfully']);
+    }
+
     protected function ultimatePosPaymentTypes(object $loanRow): array
     {
         $businessId = (int) (session('user.business_id') ?? 0);
@@ -1237,6 +1346,37 @@ class LoanInstallmentListController extends Controller
             'paid_amount' => $newPaidAmount,
             'balance_amount' => $newBalanceAmount,
             'status' => $newBalanceAmount <= 0 ? 'completed' : ($loanRow->status ?? 'active'),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function refreshLoanBalanceFromSchedules(int $loan): void
+    {
+        if (! $this->loanTableExists('loans') || ! $this->loanTableExists('loan_payment_schedules')) {
+            return;
+        }
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        if (! $loanRow) {
+            return;
+        }
+
+        $balanceColumn = $this->loanTableHasCol('loan_payment_schedules', 'balance_amount')
+            ? 'balance_amount'
+            : ($this->loanTableHasCol('loan_payment_schedules', 'amount_balance') ? 'amount_balance' : null);
+
+        if (! $balanceColumn) {
+            return;
+        }
+
+        $scheduleBalance = (float) DB::connection('mysql_loan')
+            ->table('loan_payment_schedules')
+            ->where('loan_id', $loan)
+            ->sum($balanceColumn);
+
+        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+            'balance_amount' => $scheduleBalance,
+            'status' => $scheduleBalance <= 0 ? 'completed' : (($loanRow->status ?? null) === 'completed' ? 'active' : ($loanRow->status ?? 'active')),
             'updated_at' => now(),
         ]));
     }
@@ -1752,12 +1892,12 @@ class LoanInstallmentListController extends Controller
             return $schedules;
         }
 
-        $duePrincipal = (float) ($sourceDue ?? 0);
+        $duePrincipal = (float) ($loanRow->principal_amount ?? 0);
         if ($duePrincipal <= 0) {
-            $duePrincipal = (float) ($loanRow->sell_due_amount_snapshot ?? 0);
+            $duePrincipal = (float) ($sourceDue ?? 0);
         }
         if ($duePrincipal <= 0) {
-            $duePrincipal = (float) ($loanRow->principal_amount ?? 0);
+            $duePrincipal = (float) ($loanRow->sell_due_amount_snapshot ?? 0);
         }
         if ($duePrincipal <= 0) {
             return $schedules;
@@ -1827,7 +1967,7 @@ class LoanInstallmentListController extends Controller
         if (! empty($loanRow->meta_json)) {
             $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
         }
-        $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
+        $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
 
         $customerName = trim((string) ($loanRow->customer_name_snapshot ?? ''));
         $customerPhone = trim((string) ($loanRow->customer_phone_snapshot ?? ''));
@@ -2133,6 +2273,18 @@ class LoanInstallmentListController extends Controller
             }
 
             abort_if(! $this->loanTableExists('loans'), 404);
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+            abort_if(! $loanRow, 404);
+
+            $loanMeta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
+            if (array_key_exists('interest_rate', $data)) {
+                $loanMeta['interest_rate'] = (float) $data['interest_rate'];
+            }
+            if (array_key_exists('interest_type', $data)) {
+                $loanMeta['interest_type'] = $data['interest_type'];
+            }
+            $data['meta_json'] = json_encode($loanMeta, JSON_UNESCAPED_UNICODE);
+
             DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', array_merge($data, [
                 'stock_already_deducted' => (int) $request->boolean('stock_already_deducted'),
                 'field_visit_required' => (int) $request->boolean('field_visit_required'),

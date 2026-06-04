@@ -46,6 +46,7 @@
                     <th>Paid</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -64,9 +65,17 @@
                         <td>{{ number_format($paid, 2) }}</td>
                         <td>{{ number_format($balance, 2) }}</td>
                         <td>{{ ucfirst($schedule->status ?? 'pending') }}</td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-xs btn-primary btn-modal"
+                                    data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $schedule->id]) }}"
+                                    data-container=".view_modal">
+                                <i class="fa fa-pencil"></i> Edit
+                            </button>
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center">No schedules found.</td></tr>
+                    <tr><td colspan="9" class="text-center">No schedules found.</td></tr>
                 @endforelse
             </tbody>
         </table>

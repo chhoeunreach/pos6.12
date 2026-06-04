@@ -172,10 +172,33 @@ class LoanImportExportController extends Controller
     public function template(string $type, LoanImportExportService $service)
     {
         $template = $service->template($type);
+        $content = (string) $template['content'];
+        $filename = (string) $template['filename'];
+        $mime = $template['mime'] ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-        return response($template['content'], 200, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="'.$template['filename'].'"',
+        while (ob_get_level() > 0) {
+            $status = ob_get_status();
+            if (empty($status['del']) && empty($status['flags'])) {
+                break;
+            }
+
+            if (isset($status['flags']) && ! ($status['flags'] & PHP_OUTPUT_HANDLER_REMOVABLE)) {
+                break;
+            }
+
+            ob_end_clean();
+        }
+
+        return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, $filename, [
+            'Content-Type' => $mime,
+            'Content-Length' => strlen($content),
+            'Content-Transfer-Encoding' => 'binary',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 

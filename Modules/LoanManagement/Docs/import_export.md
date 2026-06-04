@@ -65,6 +65,9 @@ Supported optional columns:
 
 - `schedule_id`
 - `payment_type`
+- `cash_amount`
+- `bank_amount`
+- `payoff_amount` (or `payoff` / `បង់ផ្ដាច់`)
 - `payment_method`
 - `currency`
 - `exchange_rate`

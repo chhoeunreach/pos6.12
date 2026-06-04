@@ -68,6 +68,26 @@
 </style>
 <section class="content-header no-print">
     <h1>Create Loan</h1>
+    <div class="pull-right">
+        @if(Route::has('loan-management.import.template'))
+            <a href="{{ route('loan-management.import.template', ['type' => 'loans']) }}" class="btn btn-sm btn-default">
+                <i class="fa fa-download"></i> Loan Template
+            </a>
+            <a href="{{ route('loan-management.import.template', ['type' => 'payments']) }}" class="btn btn-sm btn-default">
+                <i class="fa fa-download"></i> Monthly Payment Template
+            </a>
+        @endif
+        @if(Route::has('loan-management.tools.loan-import-export'))
+            <a href="{{ route('loan-management.tools.loan-import-export') }}" class="btn btn-sm btn-primary">
+                <i class="fa fa-file-excel-o"></i> Loan Import / Export
+            </a>
+        @endif
+        @if(Route::has('loan-management.tools.monthly-import-export'))
+            <a href="{{ route('loan-management.tools.monthly-import-export') }}" class="btn btn-sm btn-success">
+                <i class="fa fa-exchange"></i> Monthly Payment Import / Export
+            </a>
+        @endif
+    </div>
 </section>
 
 <section class="content loan-create-workspace no-print">

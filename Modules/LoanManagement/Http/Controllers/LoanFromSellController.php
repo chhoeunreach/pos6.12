@@ -288,7 +288,7 @@ class LoanFromSellController extends Controller
         $payload = $request->validate([
             'principal_amount' => 'required|numeric|min:0.01',
             'interest_rate' => 'nullable|numeric|min:0',
-            'interest_type' => 'required|in:flat,reducing',
+            'interest_type' => 'required|in:flat',
             'duration_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:monthly,weekly,daily',
             'first_due_date' => 'required|date',

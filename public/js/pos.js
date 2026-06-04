@@ -1,7 +1,21 @@
 var global_brand_id = null;
 var global_p_category_id = null;
 var global_is_clear_local_storage = false;
+
+function pos_play_success_sound() {
+    var audio = document.getElementById('success-audio');
+    if (audio) {
+        try { audio.currentTime = 0; audio.play(); } catch (e) {}
+    }
+}
+
+function pos_sync_empty_state() {
+    var hasRows = $('#pos_table tbody .product_row').length > 0;
+    $('#pos_table').toggleClass('pos-has-rows', hasRows);
+    $('#add_pos_sell_form, #edit_pos_sell_form').toggleClass('pos-has-rows', hasRows);
+}
 $(document).ready(function() {
+    pos_sync_empty_state();
     customer_set = false;
     //Prevent enter key function except texarea
     $('form').on('keyup keypress', function(e) {
@@ -153,6 +167,7 @@ $(document).ready(function() {
             // store on customer change
             saveFormDataToLocalStorage();
         }
+
     });
 
     set_default_customer();
@@ -233,6 +248,12 @@ $(document).ready(function() {
                                 // Automatically add the product row
                                 if (data.row_data.success) {
                                     $('#search_product').val('');
+                                    // Clear autocomplete cache to prevent stale data issues to avoid same product getting added again and again if search term is same as previous one 
+                                    var ac = $('#search_product').data('ui-autocomplete');
+                                    if (ac) {
+                                        ac.cache = {};
+                                        ac.term = '';
+                                    }
                                     pos_add_product_row_from_data(data.row_data);
                                 } else {
                                     toastr.error(data.row_data.msg);
@@ -378,6 +399,7 @@ $(document).ready(function() {
 
     //Update line total and check for quantity not greater than max quantity
     $('table#pos_table tbody').on('change', 'input.pos_quantity', function() {
+        pos_play_success_sound();
         // comment line becouse it validate form at increment and decrement item
         // if (sell_form_validator) {
         //     sell_form.valid();
@@ -572,15 +594,16 @@ $(document).ready(function() {
     );
 
     //Remove row on click on remove row
-    $('table#pos_table tbody').on('click', 'i.pos_remove_row', function() {
+    $('table#pos_table tbody').on('click', '.pos_remove_row', function() {
         $(this)
             .parents('tr')
             .remove();
         pos_total_row();
+        pos_sync_empty_state();
     });
 
-    //Cancel the invoice
-    $('button#pos-cancel').click(function() {
+    //Cancel the invoice (delegated so both mobile + desktop Cancel buttons fire the same handler)
+    $(document).on('click', 'button.js-pos-cancel', function() {
         swal({
             title: LANG.sure,
             icon: 'warning',
@@ -669,7 +692,7 @@ $(document).ready(function() {
     });
 
     //Finalize invoice, open payment modal
-    $('button#pos-finalize').click(function() {
+    $(document).on('click', 'button.pos-finalize', function() {
         //Check if product is present or not.
         if ($('table#pos_table tbody').find('.product_row').length <= 0) {
             toastr.warning(LANG.no_products_added);
@@ -1304,9 +1327,59 @@ $(document).ready(function() {
         get_featured_products();
     });
 
+// Active filter is shown as a second line INSIDE the matching Category / Brand
+    // button. The blade template already renders the row markup (hidden); this
+    // function just toggles `.is-active` on it and writes the selected name in.
+    function pos_set_filter_chip(kind, name) {
+        var cls = (kind === 'category') ? '.pos-filter-badge-cat'
+                : (kind === 'brand')    ? '.pos-filter-badge-brand'
+                : null;
+        if (!cls) return;
+        var $rows = $(cls);
+        if (!$rows.length) return;
+        var $names = $rows.find('.pos-active-filter-name');
+        if (!name) {
+            $rows.removeClass('is-active');
+            $names.text('');
+            return;
+        }
+        $names.text(name);
+        $rows.addClass('is-active');
+    }
+
+    // Re-trigger the staggered card entrance each time a drawer opens.
+    // Using class toggle + forced reflow because CSS @keyframes only fire once per element.
+    function pos_animate_drawer_cards($drawerSide) {
+        var $grid = $drawerSide.find('.pos-card-grid').filter(':visible');
+        $grid.each(function() {
+            var $g = $(this);
+            $g.removeClass('is-animating');
+            void this.offsetWidth;
+            $g.addClass('is-animating');
+        });
+    }
+
+    $(document).on('click', '.pos-filter-chip-clear', function(e) {
+        // Pill wraps the × in a <label for="...">; without these the click would
+        // also toggle the drawer checkbox.
+        e.preventDefault();
+        e.stopPropagation();
+        var kind = $(this).data('clear');
+        if (kind === 'category') {
+            global_p_category_id = null;
+        } else if (kind === 'brand') {
+            global_brand_id = null;
+        }
+        pos_set_filter_chip(kind, null);
+        $('input#suggestion_page').val(1);
+        get_product_suggestion_list(global_p_category_id, global_brand_id, $('input#location_id').val(), null);
+        get_featured_products();
+    });
+
 // on click sub category in category drawer
     $('.product_category').on('click', function(e) {
         global_p_category_id = $(this).data('value');
+        pos_set_filter_chip('category', $(this).data('name'));
         $('input#suggestion_page').val(1);
         var location_id = $('input#location_id').val();
         if (location_id != '' || location_id != undefined) {
@@ -1321,45 +1394,103 @@ $(document).ready(function() {
         $('.overlay-category').trigger('click');
     });
 
-    //  function for show sub category 
-    $('.main-category').on('click', function(){
+    // Category card tap:
+    //   "All"              → clear filter, close drawer
+    //   No subcategories   → filter directly, close drawer
+    //   Has subcategories  → inject pill strip below the card's row (toggle)
+    $('.main-category').on('click', function(e) {
+        e.stopPropagation();
 
-        global_p_category_id = $(this).data('value');
-        parent = $(this).data('parent');
+        var value = $(this).data('value');
+        var name  = $(this).data('name');
+        var $grid = $('.pos-card-grid-categories');
 
-        if (parent == 0) {
-            get_product_suggestion_list(
-                global_p_category_id,
-                global_brand_id,
-                $('input#location_id').val(),
-                null
-            );
+        // "All Categories" — clear filter and any open strip
+        if (value === 'all') {
+            global_p_category_id = null;
+            pos_set_filter_chip('category', null);
+            $grid.find('.pos-subcat-strip').remove();
+            $grid.removeData('open-cat');
+            $grid.find('.pos-card.cat').removeClass('is-active');
+            get_product_suggestion_list(null, global_brand_id, $('input#location_id').val(), null);
             get_featured_products();
             $('.overlay-category').trigger('click');
+            return;
         }
-        else {
-            var main_category = $(this).data('value');
 
-            $('.main-category-div').hide();
-            $('.all-sub-category').hide();
-            $('.all-sub-category[data-category-id="' + main_category + '"]').fadeIn();
-            $('.category_heading').text('Sub Category ' + $(this).data('name'));
-            $('.category-back').fadeIn();
+        // Check for subcategory data stored in the hidden divs
+        var $subcatSource = $('.all-sub-category[data-category-id="' + value + '"]');
+
+        if (!$subcatSource.length) {
+            // No subcategories — filter immediately and close
+            global_p_category_id = value;
+            pos_set_filter_chip('category', name);
+            $grid.find('.pos-subcat-strip').remove();
+            $grid.removeData('open-cat');
+            $grid.find('.pos-card.cat').removeClass('is-active');
+            $('input#suggestion_page').val(1);
+            get_product_suggestion_list(global_p_category_id, global_brand_id, $('input#location_id').val(), null);
+            get_featured_products();
+            $('.overlay-category').trigger('click');
+            return;
         }
-    })
 
-    // function for back button in category 
-    $('.category-back').on('click', function(){
-        $('.main-category-div').fadeIn();
-        $('.main-category-all').fadeIn();
-        $('.all-sub-category').hide();
-        $('.category-back').hide();
-        $('.category_heading').text('Category');
+        // Has subcategories — tapping same card again collapses the strip
+        if ($grid.data('open-cat') == value) {
+            $grid.find('.pos-subcat-strip').remove();
+            $grid.removeData('open-cat');
+            $grid.find('.pos-card.cat').removeClass('is-active');
+            return;
+        }
+
+        // Mark active parent card
+        $grid.data('open-cat', value);
+        $grid.find('.pos-card.cat').removeClass('is-active');
+        $(this).closest('.main-category-div').find('.pos-card.cat').addClass('is-active');
+
+        // Find the last col in the same visual row (3 cols per row at md breakpoint)
+        var $cols     = $grid.children('[class*="col-"]').not('.pos-subcat-strip');
+        var idx       = $cols.index($(this).closest('[class*="col-"]'));
+        var $lastInRow = $cols.eq(Math.min(Math.ceil((idx + 1) / 3) * 3 - 1, $cols.length - 1));
+
+        // Build pills: first pill = "All [Name]" (selects parent), rest = subcategories
+        var allLabel = $grid.data('label-all') || 'All';
+        var pills = '<button type="button" class="pos-subcat-pill pos-subcat-pill--all" data-value="' + value + '" data-name="' + name + '">' + allLabel + ' ' + name + '</button>';
+        $subcatSource.find('.product_category').each(function() {
+            var scId   = $(this).data('value');
+            var scName = $(this).data('name');
+            if (scId && scName) {
+                pills += '<button type="button" class="pos-subcat-pill" data-value="' + scId + '" data-name="' + scName + '">' + scName + '</button>';
+            }
+        });
+
+        $grid.find('.pos-subcat-strip').remove();
+        $('<div class="pos-subcat-strip"></div>').html(pills).insertAfter($lastInRow);
     });
 
-    // on click brand in brand drawer 
+    // Subcategory pill tap — delegated because pills are dynamically injected
+    $(document).on('click', '.pos-subcat-pill', function(e) {
+        e.stopPropagation();
+        var value = $(this).data('value');
+        var name  = $(this).data('name');
+
+        global_p_category_id = value;
+        pos_set_filter_chip('category', name);
+        $('input#suggestion_page').val(1);
+        get_product_suggestion_list(global_p_category_id, global_brand_id, $('input#location_id').val(), null);
+        get_featured_products();
+
+        var $grid = $('.pos-card-grid-categories');
+        $grid.find('.pos-subcat-strip').remove();
+        $grid.removeData('open-cat');
+        $grid.find('.pos-card.cat').removeClass('is-active');
+        $('.overlay-category').trigger('click');
+    });
+
+    // on click brand in brand drawer
     $('.product_brand').on('click', function(e) {
         global_brand_id = $(this).data('value');
+        pos_set_filter_chip('brand', $(this).data('name'));
         $('input#suggestion_page').val(1);
         var location_id = $('input#location_id').val();
 
@@ -1375,7 +1506,7 @@ $(document).ready(function() {
         $('.overlay-brand').trigger('click');
     });
 
-    // close side bar 
+    // close side bar
 
     $('.close-side-bar-category').on('click', function() {
         $('.overlay-category').trigger('click');
@@ -1385,8 +1516,40 @@ $(document).ready(function() {
         $('.overlay-brand').trigger('click');
     });
 
+    // Each drawer opens → re-run card entrance stagger.
+    // Category drawer also resets to the main view when it closes (so next open is clean).
+    $('#my-drawer-4').on('change', function() {
+        var $side = $(this).siblings('.tw-dw-drawer-side');
+        if (this.checked) {
+            pos_animate_drawer_cards($side);
+        } else {
+            // Drawer closed — collapse any open subcategory strip
+            var $grid = $('.pos-card-grid-categories');
+            $grid.find('.pos-subcat-strip').remove();
+            $grid.removeData('open-cat');
+            $grid.find('.pos-card.cat').removeClass('is-active');
+        }
+    });
+    $('#my-drawer-brand').on('change', function() {
+        if (this.checked) {
+            pos_animate_drawer_cards($(this).siblings('.tw-dw-drawer-side'));
+        }
+    });
 
-    
+    // When the mobile product-suggestion Bootstrap modal closes, uncheck any DaisyUI
+    // drawer toggles that may have been activated inside it (duplicate IDs mean the
+    // label inside the modal targets the main-page drawer, leaving its overlay open).
+    $(document).on('hidden.bs.modal', '#mobile_product_suggestion_modal', function() {
+        // Uncheck both the main-sidebar drawers and the modal-sidebar drawers (suffix _modal)
+        $('#my-drawer-4, #my-drawer-4_modal, #my-drawer-brand, #my-drawer-brand_modal').prop('checked', false);
+        var $grid = $('.pos-card-grid-categories');
+        $grid.find('.pos-subcat-strip').remove();
+        $grid.removeData('open-cat');
+        $grid.find('.pos-card.cat').removeClass('is-active');
+    });
+
+
+
 
     $(document).on('click', 'div.product_box', function() {
         //Check if location is not set then show error message.
@@ -1607,11 +1770,17 @@ $(document).ready(function() {
         }
     });
 
-    $('#show_featured_products').click( function(){
-        if (!$('#featured_products_box').is(':visible')) {
-            $('#featured_products_box').fadeIn();
+    $(document).on('click', '#show_featured_products', function(){
+        var $root = $(this).closest('.pos-sidebar-root');
+        var $box = $root.length ? $root.find('#featured_products_box') : $('#featured_products_box');
+        var emptyHtml = ($root.length ? $root.find('#featured_empty_state_template') : $('#featured_empty_state_template')).html() || '';
+        if ($.trim($box.html()) === '') {
+            $box.html(emptyHtml);
+        }
+        if (!$box.is(':visible')) {
+            $box.css('display', 'flex').hide().fadeIn();
         } else {
-            $('#featured_products_box').fadeOut();
+            $box.fadeOut();
         }
     });
     validate_discount_field();
@@ -1653,25 +1822,28 @@ function set_payment_type_dropdown() {
 }
 
 function get_featured_products() {
+    // The Featured Products button is always visible; when there are no featured products
+    // the box is populated with the empty-state template so the click still shows a message.
+    var $box = $('#featured_products_box');
+    if ($box.length === 0) {
+        return;
+    }
+    var emptyHtml = $('#featured_empty_state_template').html() || '';
     var location_id = $('#location_id').val();
-    if (location_id && $('#featured_products_box').length > 0) {
+    if (location_id) {
         $.ajax({
             method: 'GET',
             url: '/sells/pos/get-featured-products/' + location_id,
             dataType: 'html',
             success: function(result) {
-                if (result) {
-                    $('#feature_product_div').removeClass('hide');
-                    $('#featured_products_box').html(result);
-                } else {
-                    $('#feature_product_div').addClass('hide');
-                    $('#featured_products_box').html('');
-                }
+                $box.html(result ? result : emptyHtml);
+            },
+            error: function() {
+                $box.html(emptyHtml);
             },
         });
     } else {
-        $('#feature_product_div').addClass('hide');
-        $('#featured_products_box').html('');
+        $box.html(emptyHtml);
     }
 }
 
@@ -1680,15 +1852,17 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
         return false;
     }
 
+    var $items_container = $('div#product_list_items').length ? $('div#product_list_items') : $('div#product_list_body');
+
     if (url == null) {
         url = '/sells/pos/get-product-suggestion';
     }
     $('#suggestion_page_loader').fadeIn(700);
     var page = $('input#suggestion_page').val();
     if (page == 1) {
-        $('div#product_list_body').html('');
+        $items_container.html('');
     }
-    if ($('div#product_list_body').find('input#no_products_found').length > 0) {
+    if ($items_container.find('input#no_products_found').length > 0) {
         $('#suggestion_page_loader').fadeOut(700);
         return false;
     }
@@ -1705,7 +1879,7 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
         },
         dataType: 'html',
         success: function(result) {
-            $('div#product_list_body').append(result);
+            $items_container.append(result);
             $('#suggestion_page_loader').fadeOut(700);
         },
     });
@@ -1736,10 +1910,12 @@ function get_recent_transactions(status, element_obj) {
  * @param {object} result - The result object containing html_content and other data
  */
 function pos_insert_product_row(result) {
+    pos_play_success_sound();
     var product_row = $('input#product_row_count').val();
     $('table#pos_table tbody')
         .append(result.html_content)
         .find('input.pos_quantity');
+    pos_sync_empty_state();
     //increment row count
     $('input#product_row_count').val(parseInt(product_row) + 1);
     var this_row = $('table#pos_table tbody')
@@ -2078,8 +2254,9 @@ function calculate_billing_details(price_total) {
         total_customer_reward = $('#rp_redeemed_amount').val();
         discount = parseFloat(discount) + parseFloat(total_customer_reward);
 
+        // Discount cell shows pure discount (set by pos_discount()); loyalty cell shows reward amount separately
         if ($('input[name="is_direct_sale"]').length <= 0) {
-            $('span#total_discount').text(__currency_trans_from_en(discount, false));
+            $('span#loyalty_amount_display').text(__currency_trans_from_en(total_customer_reward, false));
         }
     }
 
@@ -2263,7 +2440,7 @@ function reset_pos_form(){
 	set_location();
 
 	$('tr.product_row').remove();
-	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount').text(0);
+	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount, span#loyalty_amount_display').text(0);
 	$('span.total_payable_span', 'span.total_paying', 'span.balance_due').text(0);
 
 	$('#modal_payment').find('.remove_payment_row').each( function(){
@@ -2484,21 +2661,6 @@ function pos_print(receipt) {
     }
 }
 
-function notify_loan_module_pos_saved(result) {
-    if (!window.parent || window.parent === window || !result || result.success != 1) {
-        return;
-    }
-
-    try {
-        window.parent.postMessage({
-            type: 'loan-pos-sale-saved',
-            transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
-            invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
-            receipt: result.receipt || null
-        }, window.location.origin);
-    } catch (e) {}
-}
-
 function calculate_discounted_unit_price(row) {
     var this_unit_price = __read_number(row.find('input.pos_unit_price'));
     var row_discounted_unit_price = this_unit_price;
@@ -2650,7 +2812,7 @@ function updateRedeemedAmount(argument) {
     points = points == '' ? 0 : parseInt(points);
     var amount_per_unit_point = parseFloat($('#rp_redeemed_modal').data('amount_per_unit_point'));
     var redeemed_amount = points * amount_per_unit_point;
-    $('#rp_redeemed_amount_text').text(__currency_trans_from_en(redeemed_amount, true));
+    $('#rp_redeemed_amount_text, #loyalty_amount_display').text(__currency_trans_from_en(redeemed_amount, true));
     $('#rp_redeemed').val(points);
     $('#rp_redeemed_amount').val(redeemed_amount);
 }
@@ -2682,7 +2844,7 @@ $(document).on('change', '#rp_redeemed_modal', function(){
     points = points == '' ? 0 : parseInt(points);
     var amount_per_unit_point = parseFloat($(this).data('amount_per_unit_point'));
     var redeemed_amount = points * amount_per_unit_point;
-    $('#rp_redeemed_amount_text').text(__currency_trans_from_en(redeemed_amount, true));
+    $('#rp_redeemed_amount_text, #loyalty_amount_display').text(__currency_trans_from_en(redeemed_amount, true));
     var reward_validation = isValidatRewardPoint();
     if (!reward_validation['is_valid']) {
         toastr.error(reward_validation['msg']);
@@ -3200,6 +3362,85 @@ $(document).on('submit', 'form#add_expense_modal_form', function(e) {
     });
 });
 
+// Receive Customer Payment from POS
+$(document).on('click', '#pos-receive-customer-payment', function() {
+    var customer_id = $('select#customer_id').val();
+    if (!customer_id) {
+        return;
+    }
+    $.ajax({
+        url: '/payments/pay-contact-due/' + customer_id + '?type=sell',
+        dataType: 'html',
+        success: function(result) {
+            $('#pos_pay_contact_due_modal').html(result);
+            var $modal = $('#pos_pay_contact_due_modal');
+            var $form = $modal.find('#pay_contact_due_form');
+
+            // Inject from_pos flag
+            $form.append('<input type="hidden" name="from_pos" value="1">');
+
+            // Init UI same as app.js
+            __currency_convert_recursively($modal);
+            $modal.find('.select2').select2();
+            $modal.find('[name="paid_on"]').datetimepicker({
+                format: moment_date_format + ' ' + moment_time_format,
+                ignoreReadonly: true
+            });
+            $form.validate();
+
+            // Direct handler fires before app.js document-delegated handler.
+            // stopPropagation prevents app.js from doing a normal form POST.
+            $form.on('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Cash denomination validation (same as app.js)
+                var $denomInput = $form.find('.enable_cash_denomination_for_payment_methods');
+                if ($denomInput.length && $denomInput.val()) {
+                    var payment_type = $form.find('.payment_types_dropdown').val();
+                    var denomination_for_payment_types = JSON.parse($denomInput.val());
+                    if (denomination_for_payment_types.includes(payment_type) && $form.find('.is_strict').length && $form.find('.is_strict').val() === '1') {
+                        var payment_amount = __read_number($form.find('.payment_amount'));
+                        var total_denomination = $form.find('input.denomination_total_amount').val();
+                        if (payment_amount != total_denomination) {
+                            $form.find('.cash_denomination_error').removeClass('hide');
+                            return false;
+                        }
+                    }
+                }
+                $form.find('.cash_denomination_error').addClass('hide');
+
+                // Use FormData to support file upload (document attachment)
+                var formData = new FormData($form[0]);
+
+                $.ajax({
+                    method: 'POST',
+                    url: $form.attr('action'),
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    dataType: 'json',
+                    success: function(result) {
+                        if (result.success) {
+                            $modal.modal('hide');
+                            toastr.success(result.msg);
+                            get_contact_due($('select#customer_id').val());
+                        } else {
+                            toastr.error(result.msg);
+                        }
+                    }
+                });
+            });
+
+            $modal.modal('show');
+        }
+    });
+});
+
+$(document).on('hidden.bs.modal', '#pos_pay_contact_due_modal', function() {
+    $(this).html('');
+});
+
 function get_contact_due(id) {
     $.ajax({
         method: 'get',
@@ -3325,6 +3566,23 @@ $(document).on('ifChanged', 'input[name="search_fields[]"]', function(event) {
 
     localStorage.setItem('pos_search_fields', search_fields);
 });
+
+function notify_loan_module_pos_saved(result) {
+    if (!window.parent || window.parent === window || !result || result.success != 1) {
+        return;
+    }
+
+    try {
+        window.parent.postMessage({
+            type: 'loan-pos-sale-saved',
+            transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
+            invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
+            receipt: result.receipt || null
+        }, window.location.origin);
+    } catch (e) {
+        // Keep POS save flow alive even if the parent frame blocks the message.
+    }
+}
 
 function set_search_fields() {
     if ($('input[name="search_fields[]"]').length == 0) {

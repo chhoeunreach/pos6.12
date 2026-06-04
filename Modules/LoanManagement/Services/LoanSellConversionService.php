@@ -222,10 +222,7 @@ class LoanSellConversionService
 
         $termMonths = max(1, (int) ($data['term_months'] ?? 6));
         $interestRate = max(0, (float) ($data['interest_rate'] ?? 0));
-        $interestType = strtolower((string) ($data['interest_type'] ?? 'flat'));
-        if (! in_array($interestType, ['flat', 'reducing'], true)) {
-            $interestType = 'flat';
-        }
+        $interestType = 'flat';
 
         $loanId = DB::connection('mysql_loan')->transaction(function () use ($sell, $transactionId, $userId, $data, $termMonths, $interestRate, $interestType) {
             $h = $sell['header'];
@@ -473,7 +470,7 @@ class LoanSellConversionService
         $previewRows = $this->createLoanFromSellService->previewSchedule([
             'principal_amount' => $principal,
             'interest_rate' => max(0, $interestRate),
-            'interest_type' => in_array($interestType, ['flat', 'reducing'], true) ? $interestType : 'flat',
+            'interest_type' => 'flat',
             'duration_months' => max(1, $termMonths),
             'payment_frequency' => 'monthly',
             'first_due_date' => Carbon::parse($loanDate)->addMonth()->toDateString(),

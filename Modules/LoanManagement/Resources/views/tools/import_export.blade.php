@@ -42,6 +42,21 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">Import {{ $typeLabel }}</h3>
                 </div>
+                <div class="box-body" style="border-bottom:1px solid #f4f4f4;">
+                    <div class="btn-group">
+                        <a class="btn btn-sm {{ $type === 'loans' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.loan-import-export') }}">
+                            Full Loan Information
+                        </a>
+                        <a class="btn btn-sm {{ $type === 'payments' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.monthly-import-export') }}">
+                            Monthly Payments
+                        </a>
+                    </div>
+                    @if($type !== 'loans')
+                        <a class="btn btn-sm btn-info pull-right" href="{{ route('loan-management.import.template', ['type' => 'loans']) }}">
+                            <i class="fa fa-download"></i> Download Loan Template
+                        </a>
+                    @endif
+                </div>
                 <form method="POST" action="{{ route('loan-management.import.store') }}" enctype="multipart/form-data" id="loan_import_form">
                     @csrf
                     <div class="box-body">
@@ -102,7 +117,7 @@
                             <i class="fa fa-upload"></i> Import
                         </button>
                         <a class="btn btn-default" href="{{ route('loan-management.import.template', ['type' => $type]) }}">
-                            <i class="fa fa-download"></i> Download Template
+                            <i class="fa fa-download"></i> Download {{ $typeLabel }} Template
                         </a>
                     </div>
                 </form>

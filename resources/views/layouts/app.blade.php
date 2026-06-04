@@ -146,6 +146,10 @@
         </div>
 </body>
 <style>
+    body.sidebar-collapse .side-bar:not(.small-view-side-active) {
+        display: none !important;
+    }
+
     .loan-management-page #main_app_header {
         display: none !important;
     }
@@ -165,9 +169,13 @@
 </style>
 <style>
     .small-view-side-active {
-        display: grid !important;
+        display: flex !important;
+        flex-direction: column;
         z-index: 1000;
-        position: absolute;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
     }
     .overlay {
         width: 100vw;

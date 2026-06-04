@@ -30,8 +30,15 @@ $(document).ready(function() {
     // registration form steps start
     if ($('#business_register_form').length) {
         var form = $('#business_register_form').show();
-        if ($.isFunction(form.steps)) {
+        var showRegisterFallback = function() {
+            form.find('.register-submit-fallback').show();
+        };
+        var hideRegisterFallback = function() {
             form.find('.register-submit-fallback').hide();
+        };
+
+        if ($.isFunction(form.steps)) {
+            hideRegisterFallback();
             form.steps({
                 headerTag: 'h3',
                 bodyTag: 'fieldset',
@@ -65,12 +72,25 @@ $(document).ready(function() {
                     return form.valid();
                 },
                 onFinished: function(event, currentIndex) {
-                    form.submit();
+                    renderRegisterRecaptcha(form);
+                    form.validate().settings.ignore = ':disabled';
+
+                    if (form.valid()) {
+                        form.get(0).submit();
+                    } else {
+                        showRegisterFallback();
+                    }
                 },
             });
             form.find('a[href="#previous"]').addClass('tw-dw-btn');
             form.find('a[href="#next"]').addClass('tw-dw-btn tw-dw-btn-primary');
             form.find('a[href="#finish"]').addClass('tw-dw-btn tw-dw-btn-primary');
+
+            if (!form.find('a[href="#finish"]').length) {
+                showRegisterFallback();
+            }
+        } else {
+            showRegisterFallback();
         }
     }
     // registration form steps end

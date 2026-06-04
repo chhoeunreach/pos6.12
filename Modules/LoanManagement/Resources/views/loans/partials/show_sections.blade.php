@@ -74,6 +74,12 @@
                     <td>{{ number_format((float)($s->balance_amount ?? $s->amount_balance ?? 0),2) }}</td>
                     <td>{{ $s->status ?? '-' }}</td>
                     <td>
+                        <button type="button"
+                                class="btn btn-xs btn-primary btn-modal"
+                                data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $s->id]) }}"
+                                data-container=".view_modal">
+                            <i class="fa fa-pencil"></i> Edit
+                        </button>
                         @if(! in_array($s->status ?? '', ['paid', 'completed'], true))
                             <button type="button"
                                     class="btn btn-xs btn-success btn-modal"

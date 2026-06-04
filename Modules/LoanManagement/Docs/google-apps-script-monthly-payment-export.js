@@ -1,21 +1,23 @@
 /**
  * =====================================================
- * MONTHLY PAYMENT EXPORT TO EXCEL - Google Apps Script
- * Reads: sheet "បង់ប្រាក់" or "តារាងសងប្រាក់-"
- * Writes: sheet "payment" and downloads Excel (.xlsx)
+ * MONTHLY PAYMENT EXPORT TO LOAN MANAGEMENT TEMPLATE
  *
- * Output columns are aligned with LoanManagement payment import:
- * loan_number, loan_id, schedule_id, payment_type, amount, paid_date,
- * payment_method, currency, exchange_rate, reference_number, note
+ * Reads: source payment sheet
+ * Writes: sheet "Monthly Payments"
+ * Downloads: Excel (.xlsx)
+ *
+ * Output columns match Laravel payment import template:
+ * loan_invoice, payment_date, amount, cash_amount,
+ * bank_amount, payoff_amount, payment_method,
+ * reference_no, received_by, note
  * =====================================================
  */
 
-var SOURCE_SHEET_CANDIDATES = ['បង់ប្រាក់', 'តារាងសងប្រាក់-'];
-var OUTPUT_SHEET = 'payment';
+var SOURCE_SHEET_CANDIDATES = ['បង់ប្រាក់', 'តារាងសងប្រាក់-', 'Bong Prak', 'Payments Source'];
+var OUTPUT_SHEET = 'Monthly Payments';
+
 var LOAN_PREFIX = 'KY-';
 var LOAN_DIGITS = 6;
-var DEFAULT_CURRENCY = 'USD';
-var DEFAULT_EXCHANGE_RATE = 1;
 
 var COL = {
   DATE: 1,
@@ -39,38 +41,38 @@ var COL = {
 };
 
 var OUTPUT_HEADERS = [
-  'loan_number',
-  'loan_id',
-  'schedule_id',
-  'payment_type',
+  'loan_invoice',
+  'payment_date',
   'amount',
-  'paid_date',
+  'cash_amount',
+  'bank_amount',
+  'payoff_amount',
   'payment_method',
-  'currency',
-  'exchange_rate',
-  'reference_number',
+  'reference_no',
+  'received_by',
   'note'
 ];
 
 var CHANNEL_MAP = {
-  'CASH': 'cash',
-  'ABA': 'custom_pay_2',
-  'ACLEDA': 'custom_pay_3',
-  'ACELEDA': 'custom_pay_3',
-  'WING': 'custom_pay_1',
-  'E&T': 'custom_pay_6',
-  'ET': 'custom_pay_6',
-  'TRUE MONEY': 'custom_pay_4',
-  'TRUEMONEY': 'custom_pay_4',
-  'AEON': 'custom_pay_5',
-  'CARD': 'card',
-  'BANK': 'bank_transfer',
-  'OTHER': 'other'
+  'CASH': 'Cash',
+  'ABA': 'ABA',
+  'ACLEDA': 'ACLEDA',
+  'ACELEDA': 'ACLEDA',
+  'WING': 'Wing',
+  'E&T': 'E&T',
+  'ET': 'E&T',
+  'TRUE MONEY': 'True Money',
+  'TRUEMONEY': 'True Money',
+  'AEON': 'AEON',
+  'CARD': 'Card',
+  'BANK': 'Bank',
+  'OTHER': 'Other'
 };
 
 function processBongPrakToPayment() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var srcSheet = findSourceSheet_(ss);
+
   if (!srcSheet) {
     SpreadsheetApp.getUi().alert(
       'Source sheet not found.\n\nUse one of these sheet names:\n- ' +
@@ -102,37 +104,42 @@ function processBongPrakToPayment() {
       continue;
     }
 
-    var paidDate = formatDate_(row[COL.DATE - 1]);
-    if (!paidDate) {
+    var paymentDate = formatDate_(row[COL.DATE - 1]);
+    if (!paymentDate) {
       stats.skippedInvalidDate++;
       continue;
     }
 
     var cashAmt = round2_(toNumber_(row[COL.CASH_AMT - 1]));
     var bankAmt = round2_(toNumber_(row[COL.BANK_AMT - 1]));
-    if (cashAmt <= 0 && bankAmt <= 0) {
+    var payoffAmt = round2_(toNumber_(row[COL.PAY_OFF - 1]));
+    var totalAmt = round2_(cashAmt + bankAmt + payoffAmt);
+    if (totalAmt <= 0) {
       stats.skippedZeroAmount++;
       continue;
     }
 
-    var loanNumber = normalizeLoanNumber_(invoice);
+    var loanInvoice = normalizeLoanNumber_(invoice);
     var monthNo = normalizeMonthNo_(row[COL.MONTH_NO - 1], row[COL.MONTHS_TO_PAY - 1]);
     var sourceRef = cleanRef_(row[COL.REF - 1]);
-    var paymentType = resolvePaymentType_(row);
+    var receivedBy = trim_(row[COL.STAFF - 1]) || 'Admin';
     var note = buildNote_(row, sourceRowNo, monthNo);
     var channel = normalizeChannel_(row[COL.CHANNEL - 1]);
-    var bankMethod = CHANNEL_MAP[channel] || 'bank_transfer';
+    var bankMethod = CHANNEL_MAP[channel] || 'Bank';
 
     if (bankAmt > 0) {
       if (pushPaymentRow_(
         outRows,
         seenKeys,
-        loanNumber,
-        paymentType,
+        loanInvoice,
+        paymentDate,
+        totalAmt,
+        cashAmt,
         bankAmt,
-        paidDate,
+        payoffAmt,
         bankMethod,
-        buildReference_(loanNumber, paidDate, monthNo, sourceRowNo, 'BANK', sourceRef),
+        buildReference_(loanInvoice, paymentDate, monthNo, sourceRowNo, 'BANK', sourceRef),
+        receivedBy,
         note
       )) {
         stats.exportedRows++;
@@ -145,12 +152,15 @@ function processBongPrakToPayment() {
       if (pushPaymentRow_(
         outRows,
         seenKeys,
-        loanNumber,
-        paymentType,
+        loanInvoice,
+        paymentDate,
+        totalAmt,
         cashAmt,
-        paidDate,
-        'cash',
-        buildReference_(loanNumber, paidDate, monthNo, sourceRowNo, 'CASH', sourceRef),
+        bankAmt,
+        payoffAmt,
+        'Cash',
+        buildReference_(loanInvoice, paymentDate, monthNo, sourceRowNo, 'CASH', sourceRef),
+        receivedBy,
         note
       )) {
         stats.exportedRows++;
@@ -162,6 +172,8 @@ function processBongPrakToPayment() {
 
   if (outRows.length > 0) {
     outSheet.getRange(2, 1, outRows.length, OUTPUT_HEADERS.length).setValues(outRows);
+    outSheet.getRange(2, 2, outRows.length, 1).setNumberFormat('yyyy-mm-dd');
+    outSheet.getRange(2, 3, outRows.length, 1).setNumberFormat('0.00');
     autoResizeColumns_(outSheet, OUTPUT_HEADERS.length);
   }
 
@@ -181,6 +193,54 @@ function processBongPrakToPayment() {
   if (outRows.length > 0) {
     exportPaymentSheetToExcel();
   }
+}
+
+function prepareOutputSheet_(ss) {
+  var sheet = ss.getSheetByName(OUTPUT_SHEET);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(OUTPUT_SHEET);
+  } else {
+    sheet.clearContents();
+    sheet.clearFormats();
+  }
+
+  sheet.getRange(1, 1, 1, OUTPUT_HEADERS.length).setValues([OUTPUT_HEADERS]);
+  sheet.getRange(1, 1, 1, OUTPUT_HEADERS.length)
+    .setFontWeight('bold')
+    .setBackground('#1f4e78')
+    .setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+
+  return sheet;
+}
+
+function pushPaymentRow_(outRows, seenKeys, loanInvoice, paymentDate, amount, cashAmount, bankAmount, payoffAmount, paymentMethod, referenceNo, receivedBy, note) {
+  var key = [
+    referenceNo || '',
+    loanInvoice,
+    paymentDate,
+    round2_(amount),
+    paymentMethod
+  ].join('|');
+
+  if (seenKeys[key]) return false;
+  seenKeys[key] = true;
+
+  outRows.push([
+    loanInvoice,
+    paymentDate,
+    round2_(amount),
+    round2_(cashAmount),
+    round2_(bankAmount),
+    round2_(payoffAmount),
+    paymentMethod,
+    referenceNo,
+    receivedBy,
+    note
+  ]);
+
+  return true;
 }
 
 function exportPaymentSheetToExcel() {
@@ -206,7 +266,7 @@ function exportPaymentSheetToExcel() {
 
   var blob = response.getBlob();
   var base64Data = Utilities.base64Encode(blob.getBytes());
-  var fileName = 'Payment_Import_' + formatToday_() + '.xlsx';
+  var fileName = 'loan-management-payments-import-' + formatToday_() + '.xlsx';
 
   var htmlOutput = HtmlService.createHtmlOutput(
     '<div style="font-family: Arial, sans-serif; text-align: center; padding: 15px;">' +
@@ -219,96 +279,17 @@ function exportPaymentSheetToExcel() {
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Export Payment Data');
 }
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('LOAN EXPORT')
-    .addItem('1. Process Payment To Template', 'processBongPrakToPayment')
-    .addItem('2. Download Payment As Excel', 'exportPaymentSheetToExcel')
-    .addToUi();
-}
-
-function findSourceSheet_(ss) {
-  for (var i = 0; i < SOURCE_SHEET_CANDIDATES.length; i++) {
-    var sheet = ss.getSheetByName(SOURCE_SHEET_CANDIDATES[i]);
-    if (sheet) return sheet;
-  }
-  return null;
-}
-
-function prepareOutputSheet_(ss) {
-  var sheet = ss.getSheetByName(OUTPUT_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(OUTPUT_SHEET);
-  } else {
-    sheet.clearContents();
-    sheet.clearFormats();
-  }
-
-  sheet.getRange(1, 1, 1, OUTPUT_HEADERS.length).setValues([OUTPUT_HEADERS]);
-  sheet.getRange(1, 1, 1, OUTPUT_HEADERS.length)
-    .setFontWeight('bold')
-    .setBackground('#1f4e78')
-    .setFontColor('#ffffff');
-  sheet.setFrozenRows(1);
-
-  return sheet;
-}
-
-function pushPaymentRow_(outRows, seenKeys, loanNumber, paymentType, amount, paidDate, paymentMethod, referenceNumber, note) {
-  var uniqueKey = [
-    referenceNumber || '',
-    loanNumber,
-    paymentType,
-    paidDate,
-    round2_(amount),
-    paymentMethod
-  ].join('|');
-
-  if (seenKeys[uniqueKey]) {
-    return false;
-  }
-
-  seenKeys[uniqueKey] = true;
-  outRows.push([
-    loanNumber,
-    '',
-    '',
-    paymentType,
-    round2_(amount),
-    paidDate,
-    paymentMethod,
-    DEFAULT_CURRENCY,
-    DEFAULT_EXCHANGE_RATE,
-    referenceNumber,
-    note
-  ]);
-
-  return true;
-}
-
-function resolvePaymentType_(row) {
-  if (isTruthy_(row[COL.PAY_OFF - 1])) {
-    return 'loan';
-  }
-  return 'monthly';
-}
-
-function buildReference_(loanNumber, paidDate, monthNo, sourceRowNo, kind, sourceRef) {
-  var safeMonthNo = normalizeMonthToken_(monthNo);
-  var safeSourceRef = cleanRef_(sourceRef);
+function buildReference_(loanInvoice, paymentDate, monthNo, sourceRowNo, kind, sourceRef) {
   var parts = [
-    'IMP',
-    loanNumber,
-    paidDate,
-    'M' + (safeMonthNo || '0'),
+    'PAY',
+    loanInvoice,
+    paymentDate,
+    'M' + (monthNo || '0'),
     'R' + sourceRowNo,
     kind
   ];
 
-  if (safeSourceRef) {
-    parts.push(safeSourceRef);
-  }
-
+  if (sourceRef) parts.push(sourceRef);
   return parts.join('-');
 }
 
@@ -316,18 +297,18 @@ function buildNote_(row, sourceRowNo, monthNo) {
   var parts = [];
 
   pushNotePart_(parts, 'source_row', sourceRowNo);
-  pushNotePart_(parts, 'source_invoice', trim_(row[COL.INVOICE - 1]));
-  pushNotePart_(parts, 'customer', trim_(row[COL.CUST_NAME - 1]));
-  pushNotePart_(parts, 'phone', trim_(row[COL.PHONE - 1]));
-  pushNotePart_(parts, 'months_to_pay', trim_(row[COL.MONTHS_TO_PAY - 1]));
+  pushNotePart_(parts, 'source_invoice', row[COL.INVOICE - 1]);
+  pushNotePart_(parts, 'customer', row[COL.CUST_NAME - 1]);
+  pushNotePart_(parts, 'phone', row[COL.PHONE - 1]);
+  pushNotePart_(parts, 'months_to_pay', row[COL.MONTHS_TO_PAY - 1]);
   pushNotePart_(parts, 'month_no', monthNo);
   pushNotePart_(parts, 'total', numberText_(row[COL.TOTAL - 1]));
   pushNotePart_(parts, 'principal', numberText_(row[COL.PRINCIPAL - 1]));
   pushNotePart_(parts, 'interest', numberText_(row[COL.INTEREST - 1]));
   pushNotePart_(parts, 'penalty', numberText_(row[COL.PENALTY - 1]));
   pushNotePart_(parts, 'misc', numberText_(row[COL.MISC - 1]));
-  pushNotePart_(parts, 'staff', trim_(row[COL.STAFF - 1]));
-  pushNotePart_(parts, 'email', trim_(row[COL.EMAIL - 1]));
+  pushNotePart_(parts, 'staff', row[COL.STAFF - 1]);
+  pushNotePart_(parts, 'email', row[COL.EMAIL - 1]);
   pushNotePart_(parts, 'channel', normalizeChannel_(row[COL.CHANNEL - 1]));
   pushNotePart_(parts, 'source_ref', cleanRef_(row[COL.REF - 1]));
 
@@ -339,6 +320,35 @@ function pushNotePart_(parts, label, value) {
   if (text !== '') {
     parts.push(label + ': ' + text);
   }
+}
+
+function findSourceSheet_(ss) {
+  for (var i = 0; i < SOURCE_SHEET_CANDIDATES.length; i++) {
+    var sheet = ss.getSheetByName(SOURCE_SHEET_CANDIDATES[i]);
+    if (sheet) return sheet;
+  }
+  return null;
+}
+
+function normalizeLoanNumber_(value) {
+  var text = trim_(value).replace(/\.0+$/, '');
+  if (text === '') return '';
+
+  if (text.toUpperCase().indexOf(LOAN_PREFIX) === 0) {
+    return LOAN_PREFIX + normalizeLoanSuffix_(text.substring(LOAN_PREFIX.length));
+  }
+
+  return LOAN_PREFIX + normalizeLoanSuffix_(text);
+}
+
+function normalizeLoanSuffix_(value) {
+  var text = trim_(value).replace(/\.0+$/, '');
+
+  if (/^\d+$/.test(text)) {
+    return padLeft_(String(parseInt(text, 10)), LOAN_DIGITS);
+  }
+
+  return text.replace(/[^A-Za-z0-9_-]/g, '');
 }
 
 function normalizeMonthNo_(monthNoValue, monthsToPayValue) {
@@ -376,44 +386,9 @@ function normalizeChannel_(value) {
   return trim_(value).toUpperCase().replace(/\s+/g, ' ');
 }
 
-function autoResizeColumns_(sheet, totalColumns) {
-  for (var c = 1; c <= totalColumns; c++) {
-    sheet.autoResizeColumn(c);
-  }
-}
-
-function normalizeLoanNumber_(value) {
-  var text = trim_(value).replace(/\.0+$/, '');
-  if (text === '') return '';
-
-  var upperText = text.toUpperCase();
-  if (upperText.indexOf(LOAN_PREFIX) === 0) {
-    return LOAN_PREFIX + normalizeLoanSuffix_(text.substring(LOAN_PREFIX.length));
-  }
-
-  return LOAN_PREFIX + normalizeLoanSuffix_(text);
-}
-
-function normalizeLoanSuffix_(value) {
-  var text = trim_(value).replace(/\.0+$/, '');
-  if (/^\d+$/.test(text)) {
-    return padLeft_(String(parseInt(text, 10)), LOAN_DIGITS);
-  }
-
-  return text.replace(/[^A-Za-z0-9_-]/g, '');
-}
-
-function padLeft_(value, width) {
-  var text = String(value);
-  while (text.length < width) {
-    text = '0' + text;
-  }
-  return text;
-}
-
 function formatDate_(value) {
   var d = value instanceof Date ? value : new Date(value);
-  if (isNaN(d.getTime())) return null;
+  if (isNaN(d.getTime())) return '';
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
@@ -439,19 +414,28 @@ function numberText_(value) {
   return number > 0 ? String(round2_(number)) : '';
 }
 
-function isTruthy_(value) {
-  var normalized = trim_(value).toLowerCase();
-  return normalized === '1' ||
-    normalized === 'true' ||
-    normalized === 'yes' ||
-    normalized === 'y' ||
-    normalized === 'paid off' ||
-    normalized === 'payoff' ||
-    normalized === 'full' ||
-    normalized === 'បង់ផ្តាច់' ||
-    normalized === 'បង់ផ្ដាច់';
+function padLeft_(value, width) {
+  var text = String(value);
+  while (text.length < width) {
+    text = '0' + text;
+  }
+  return text;
+}
+
+function autoResizeColumns_(sheet, totalColumns) {
+  for (var c = 1; c <= totalColumns; c++) {
+    sheet.autoResizeColumn(c);
+  }
 }
 
 function formatToday_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('LOAN EXPORT')
+    .addItem('1. Process Payment To Template', 'processBongPrakToPayment')
+    .addItem('2. Download Payment As Excel', 'exportPaymentSheetToExcel')
+    .addToUi();
 }

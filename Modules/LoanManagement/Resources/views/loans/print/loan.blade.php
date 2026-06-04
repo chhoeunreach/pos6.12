@@ -475,7 +475,7 @@
         (int) ($loanRow->installment_count ?? 0),
         max(1, $installments->count())
     );
-    $interestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? 0));
+    $interestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
     $downPercent = $productTotal > 0 ? ($downPayment / max($productTotal, 1) * 100) : 0;
     $paymentsBySchedule = $payments->groupBy(fn ($payment) => $payment->_print_schedule_id ?? $payment->schedule_id ?? null);
     $paymentTypes = [];

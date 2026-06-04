@@ -194,6 +194,11 @@ $(document).ready(function () {
                 }
             },
             footer: true,
+            // Tables marked `hide-footer` (e.g. product list) skip the footer in CSV.
+            action: function(e, dt, button, config) {
+                if ($(dt.table().node()).hasClass('hide-footer')) config.footer = false;
+                $.fn.dataTable.ext.buttons.csvHtml5.action.call(this, e, dt, button, config);
+            },
         },
         {
             extend: 'excel',
@@ -219,6 +224,11 @@ $(document).ready(function () {
                 }
             },
             footer: true,
+            // Tables marked `hide-footer` (e.g. product list) skip the footer in Excel.
+            action: function(e, dt, button, config) {
+                if ($(dt.table().node()).hasClass('hide-footer')) config.footer = false;
+                $.fn.dataTable.ext.buttons.excelHtml5.action.call(this, e, dt, button, config);
+            },
         },
         {
             extend: 'print',
@@ -248,18 +258,107 @@ $(document).ready(function () {
         },
     ];
 
+    // PDF export button (portrait). To show images in PDF, add `data-pdf-include` to the column's <th>.
     var pdf_btn = {
         extend: 'pdf',
         text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> ' + LANG.export_to_pdf,
         className: 'tw-dw-btn-xs  tw-dw-btn tw-dw-btn-outline tw-my-2',
         exportOptions: {
-            columns: ':visible',
+            // Skip hidden columns. Skip "not-export" columns unless they have data-pdf-include.
+            columns: function (idx, data, node) {
+                return $(node).is(':visible') && (!$(node).hasClass('not-export') || $(node).data('pdfInclude'));
+            },
+            format: {
+                // Use the cached image for image cells, plain text for everything else.
+                body: function(data, row, column, node) {
+                    var img = $(node).find('img')[0];
+                    var cached = img && window._pdfImageCache && window._pdfImageCache[img.src];
+                    return cached || $(node).text().trim();
+                }
+            }
         },
         footer: true,
+        // Tables marked `hide-footer` (e.g. product list) skip the footer in PDF.
+        action: function(e, dt, button, config) {
+            if ($(dt.table().node()).hasClass('hide-footer')) config.footer = false;
+            $.fn.dataTable.ext.buttons.pdfHtml5.action.call(this, e, dt, button, config);
+        },
+        // Turn the image data into real images in the PDF.
+        customize: function(doc) {
+            // Smaller font + tighter margins so wide tables fit on the page.
+            doc.defaultStyle.fontSize = 8;
+            doc.pageMargins = [20, 20, 20, 20];
+            doc.content.forEach(function(b) {
+                if (!b.table) return;
+                b.table.widths = b.table.body[0].map(function() { return '*'; });
+                b.table.body.forEach(function(row) {
+                    row.forEach(function(c, j) {
+                        var v = typeof c === 'string' ? c : (c && c.text);
+                        if (v && v.indexOf('data:image') === 0) row[j] = { image: v, width: 40, height: 40 };
+                    });
+                });
+            });
+        }
+    };
+
+    // PDF dropdown — Portrait / Landscape choices, styled to match the toolbar's outline button.
+    if (!document.getElementById('pdf-dropdown-style')) {
+        var pdfDropdownStyle = document.createElement('style');
+        pdfDropdownStyle.id = 'pdf-dropdown-style';
+        pdfDropdownStyle.textContent =
+            // Panel — vertical stack, white background (kills AdminLTE's #00c0ef cyan).
+            '.dt-button-collection.pdf-orient-collection{' +
+            'display:flex !important;flex-direction:column !important;gap:6px !important;padding:6px !important;' +
+            'background:#fff !important;border:1px solid rgba(0,0,0,.15) !important;border-radius:.375rem !important;' +
+            'box-shadow:0 4px 6px -1px rgba(0,0,0,.1) !important;min-width:160px !important;' +
+            'margin:0 !important;list-style:none !important;column-count:1 !important}' +
+            '.pdf-orient-collection,.pdf-orient-collection *{outline:0 !important}' +
+            '.pdf-orient-collection>li{all:unset !important;display:block !important}' +
+            // Items — only direct <a>/<button> of <li>, never the <li> itself.
+            '.pdf-orient-collection>li>a,.pdf-orient-collection>li>button{' +
+            'all:unset !important;box-sizing:border-box !important;display:flex !important;align-items:center !important;' +
+            'width:100% !important;height:1.5rem !important;padding:0 .5rem !important;' +
+            'font-size:.75rem !important;font-weight:600 !important;color:#000 !important;' +
+            'background:#fff !important;border:1px solid #000 !important;border-radius:.375rem !important;' +
+            'cursor:pointer !important;text-align:left !important}' +
+            '.pdf-orient-collection>li>a:hover,.pdf-orient-collection>li>a:focus,' +
+            '.pdf-orient-collection>li>a:active,.pdf-orient-collection>li>a.active,' +
+            '.pdf-orient-collection>li>button:hover,.pdf-orient-collection>li>button:focus,' +
+            '.pdf-orient-collection>li>button:active,.pdf-orient-collection>li>button.active{' +
+            'background:#1f2937 !important;color:#fff !important;border-color:#1f2937 !important;' +
+            'box-shadow:none !important;text-shadow:none !important}' +
+            '.pdf-orient-collection>li>a>*,.pdf-orient-collection>li>button>*{' +
+            'background:transparent !important;color:inherit !important;box-shadow:none !important}';
+        document.head.appendChild(pdfDropdownStyle);
+    }
+
+    var pdf_item_class = 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline';
+
+    var pdf_portrait_label = LANG.portrait || 'Portrait';
+    var pdf_landscape_label = LANG.landscape || 'Landscape';
+
+    var pdf_dropdown = {
+        extend: 'collection',
+        text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> ' + LANG.export_to_pdf + ' <i class="fa fa-caret-down" aria-hidden="true"></i>',
+        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+        collectionLayout: 'pdf-orient-collection',
+        autoClose: true,
+        buttons: [
+            $.extend(true, {}, pdf_btn, {
+                text: pdf_portrait_label,
+                className: pdf_item_class
+            }),
+            $.extend(true, {}, pdf_btn, {
+                text: pdf_landscape_label,
+                className: pdf_item_class,
+                orientation: 'landscape',
+                pageSize: 'A4',
+            })
+        ]
     };
 
     if (non_utf8_languages.indexOf(app_locale) == -1) {
-        buttons.push(pdf_btn);
+        buttons.push(pdf_dropdown);
     }
 
     if ($('#view_export_buttons').length < 1) {
@@ -704,3 +803,87 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+// Sidebar interactions (search, dropdowns, mobile toggle, collapse)
+$(function () {
+    // --- Sidebar menu search filter ---
+    function filterSidebar(q) {
+        q = q.trim().toLowerCase();
+        var anyVisible = false;
+
+        $('#side-bar').children().each(function () {
+            if (!q) {
+                $(this).show();
+                anyVisible = true;
+            } else {
+                var match = $(this).text().toLowerCase().indexOf(q) !== -1;
+                $(this).toggle(match);
+                if (match) anyVisible = true;
+            }
+        });
+
+        $('#sidebar-no-results').toggleClass('tw-hidden', anyVisible || !q);
+        $('#sidebar-search-clear').toggleClass('tw-hidden', !q);
+    }
+
+    $('#sidebar-search').on('input', function () {
+        filterSidebar($(this).val());
+    });
+
+    $('#sidebar-search-clear').on('click', function () {
+        $('#sidebar-search').val('').focus();
+        filterSidebar('');
+    });
+
+    // --- Sidebar dropdown toggle ---
+    $(document).on('click', '.drop_down', function (event) {
+        event.preventDefault();
+        var $chiled = $(this).next('.chiled');
+        $('.chiled').not($chiled).slideUp();
+        $chiled.slideToggle(function () {
+            $('.svg').each(function () {
+                var $currentSvgElement = $(this);
+                if ($currentSvgElement.closest('.drop_down').next('.chiled').is(':visible')) {
+                    $currentSvgElement.html(
+                        '<path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M6 9l6 6l6 -6" />'
+                    );
+                } else {
+                    $currentSvgElement.html(
+                        '<path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 6l-6 6l6 6" />'
+                    );
+                }
+            });
+        });
+    });
+
+    // --- Sidebar mobile open / overlay close ---
+    $(document).on('click', '.small-view-button', function () {
+        $('.side-bar').removeAttr('style').addClass('small-view-side-active');
+        $('.overlay').fadeIn('slow');
+    });
+
+    $(document).on('click', '.overlay', function () {
+        $('.overlay').fadeOut('slow');
+        $('.side-bar').removeClass('small-view-side-active').removeAttr('style');
+    });
+
+    // --- Sidebar responsive resize ---
+    $(window).on('resize', function () {
+        if ($(window).width() >= 992) {
+            $('.overlay').fadeOut('slow');
+            $('.side-bar').removeClass('small-view-side-active').removeAttr('style');
+        }
+        if ($('.side-bar').hasClass('small-view-side-active')) {
+            $('.overlay').fadeIn('slow');
+        }
+    });
+
+    // --- Sidebar collapse toggle ---
+    $(document).on('click', '.side-bar-collapse', function () {
+        var isCollapsed = !$('body').hasClass('sidebar-collapse');
+        $('body').toggleClass('sidebar-collapse', isCollapsed);
+        localStorage.setItem('upos_sidebar_collapse', isCollapsed ? 'true' : 'false');
+        $('.side-bar').removeClass('small-view-side-active').removeAttr('style');
+        $('.overlay').fadeOut('fast');
+    });
+});
