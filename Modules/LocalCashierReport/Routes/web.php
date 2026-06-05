@@ -17,6 +17,7 @@ Route::middleware([
     'SetSessionData',
     'language',
     'timezone',
+    'can:local_cashier_report.view',
     'AdminSidebarMenu',
     'CheckUserLogin',
 ])->prefix('local-cashier-report')->group(function () {

@@ -3,6 +3,7 @@
 namespace Modules\Accessory\Http\Middleware;
 
 use App\Http\Controllers\SellPosController;
+use App\System;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,7 @@ class InjectAccessoryTopNav
         if (
             $request->ajax() ||
             ! auth()->check() ||
+            empty(System::getProperty('accessory_version')) ||
             ! Route::has('accessory.home') ||
             ! method_exists($response, 'getContent') ||
             ! method_exists($response, 'setContent')

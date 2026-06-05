@@ -25,6 +25,7 @@ use Modules\Accessory\Http\Controllers\ImportOpeningStockController;
 use Modules\Accessory\Http\Controllers\ImportProductsController;
 use Modules\Accessory\Http\Controllers\ImportSalesController;
 use Modules\Accessory\Http\Controllers\Install;
+use Modules\Accessory\Http\Controllers\InstallController as AccessoryInstallController;
 use Modules\Accessory\Http\Controllers\InvoiceLayoutController;
 use Modules\Accessory\Http\Controllers\InvoiceSchemeController;
 use Modules\Accessory\Http\Controllers\LabelsController;
@@ -72,6 +73,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+Route::get('/install', [AccessoryInstallController::class, 'index']);
+Route::post('/install', [AccessoryInstallController::class, 'install']);
+Route::get('/install/uninstall', [AccessoryInstallController::class, 'uninstall']);
+Route::get('/install/update', [AccessoryInstallController::class, 'update']);
 
 Route::middleware(['setData'])->group(function () {
     Route::get('/', function () {

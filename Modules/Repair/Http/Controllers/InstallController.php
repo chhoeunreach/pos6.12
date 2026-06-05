@@ -93,6 +93,7 @@ class InstallController extends Controller
             DB::statement('SET default_storage_engine=INNODB;');
             Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
             System::addProperty($this->module_name.'_version', $this->appVersion);
+            $this->clearCaches();
 
             DB::commit();
 
@@ -127,6 +128,7 @@ class InstallController extends Controller
 
         try {
             System::removeProperty($this->module_name.'_version');
+            $this->clearCaches();
 
             $output = ['success' => true,
                 'msg' => __('lang_v1.success'),
@@ -169,6 +171,7 @@ class InstallController extends Controller
                 DB::statement('SET default_storage_engine=INNODB;');
                 Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
                 System::setProperty($this->module_name.'_version', $this->appVersion);
+                $this->clearCaches();
             } else {
                 abort(404);
             }
@@ -183,6 +186,13 @@ class InstallController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
             exit($e->getMessage());
+        }
+    }
+
+    private function clearCaches(): void
+    {
+        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
+            Artisan::call($cmd);
         }
     }
 }

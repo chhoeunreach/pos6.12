@@ -2,6 +2,7 @@
 
 namespace Modules\SmartStockInventory\Http\Middleware;
 
+use App\System;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,10 @@ class SmartStockAccessMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
+        if (empty(System::getProperty('smartstockinventory_version'))) {
+            abort(404);
+        }
+
         $user = $request->user();
         if (! $user) {
             abort(403, 'Unauthorized action.');
@@ -180,4 +185,3 @@ class SmartStockAccessMiddleware
         ]);
     }
 }
-

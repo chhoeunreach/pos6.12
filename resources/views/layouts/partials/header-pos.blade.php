@@ -23,6 +23,9 @@
 @endif
 <input type="hidden" name="transaction_sub_type" id="transaction_sub_type" value="{{ $transaction_sub_type }}">
 @inject('request', 'Illuminate\Http\Request')
+@php
+    $__is_repair_installed = app(\App\Utils\ModuleUtil::class)->isModuleInstalled('Repair');
+@endphp
 <div class="col-md-12 no-print pos-header">
     <input type="hidden" id="pos_redirect_url" value="{{ $pos_redirect_url }}">
     <div
@@ -236,12 +239,12 @@
             @endif
 
 
-            @if ((Module::has('Repair') && $transaction_sub_type != 'repair') || (in_array('pos_sale', $enabled_modules) && !empty($transaction_sub_type) && auth()->user()->can('sell.create')) || auth()->user()->can('expense.add'))
+            @if (($__is_repair_installed && $transaction_sub_type != 'repair') || (in_array('pos_sale', $enabled_modules) && !empty($transaction_sub_type) && auth()->user()->can('sell.create')) || auth()->user()->can('expense.add'))
                 <span class="pos-nav-divider tw-inline-block tw-w-px tw-h-[18px] tw-bg-[#e2e8f0] tw-flex-shrink-0 tw-self-center tw-rounded-[1px] tw-mx-[3px]"></span>
             @endif
 
             {{-- ===== Actions ===== --}}
-            @if (Module::has('Repair') && $transaction_sub_type != 'repair')
+            @if ($__is_repair_installed && $transaction_sub_type != 'repair')
                 @include('repair::layouts.partials.pos_header')
             @endif
 

@@ -5,6 +5,9 @@ namespace Modules\LocalCashierReport\Http\Controllers;
 use App\Http\Controllers\Install\ModulesController as ModulesIndexController;
 use App\System;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Artisan;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class InstallController extends Controller
 {
@@ -13,6 +16,7 @@ class InstallController extends Controller
         $this->module_name = 'localcashierreport';
         $this->appVersion = config('localcashierreport.module_version', '1.0.0');
         $this->module_display_name = 'LocalCashierReport';
+        $this->permission = 'local_cashier_report.view';
     }
 
     public function index()
@@ -44,7 +48,9 @@ class InstallController extends Controller
                 ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
         }
 
+        $this->ensurePermissionsExist();
         System::addProperty($this->module_name . '_version', $this->appVersion);
+        $this->clearCaches();
 
         return redirect()
             ->action([ModulesIndexController::class, 'index'])
@@ -56,7 +62,10 @@ class InstallController extends Controller
         $this->authorizeModuleManagement();
 
         try {
+            Permission::where('name', $this->permission)->where('guard_name', 'web')->delete();
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
             System::removeProperty($this->module_name . '_version');
+            $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];
@@ -74,7 +83,9 @@ class InstallController extends Controller
                 abort(404);
             }
 
+            $this->ensurePermissionsExist();
             System::setProperty($this->module_name . '_version', $this->appVersion);
+            $this->clearCaches();
             $output = ['success' => 1, 'msg' => $this->module_display_name . ' module updated successfully to version ' . $this->appVersion];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];
@@ -87,6 +98,23 @@ class InstallController extends Controller
     {
         if (! auth()->user()->can('manage_modules')) {
             abort(403, 'Unauthorized action.');
+        }
+    }
+
+    private function ensurePermissionsExist(): void
+    {
+        Permission::firstOrCreate([
+            'name' => $this->permission,
+            'guard_name' => 'web',
+        ]);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function clearCaches(): void
+    {
+        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
+            Artisan::call($cmd);
         }
     }
 }

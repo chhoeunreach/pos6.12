@@ -67,9 +67,18 @@ class ModuleUtil extends Util
         $module_name_map = [];
         foreach ($modules as $module => $details) {
             if (Module::has($details['name'])) {
-                $version_key = strtolower($details['name']).'_version';
-                $version_keys[] = $version_key;
-                $module_name_map[$version_key] = $details;
+                $lower_version_key = strtolower($details['name']).'_version';
+                $snake_version_key = Str::snake($details['name']).'_version';
+
+                $version_keys[] = $lower_version_key;
+                $module_name_map[$details['name']] = [
+                    'details' => $details,
+                    'version_keys' => array_values(array_unique([$lower_version_key, $snake_version_key])),
+                ];
+
+                if ($snake_version_key !== $lower_version_key) {
+                    $version_keys[] = $snake_version_key;
+                }
             }
         }
 
@@ -81,10 +90,13 @@ class ModuleUtil extends Util
 
         // Check which modules are installed using the batch-loaded data
         $installed_modules = [];
-        foreach ($module_name_map as $version_key => $details) {
-            $module_version = isset($module_versions[$version_key]) ? $module_versions[$version_key] : null;
-            if (!empty($module_version)) {
-                $installed_modules[] = $details;
+        foreach ($module_name_map as $module_name => $module_info) {
+            foreach ($module_info['version_keys'] as $version_key) {
+                $module_version = isset($module_versions[$version_key]) ? $module_versions[$version_key] : null;
+                if (!empty($module_version)) {
+                    $installed_modules[] = $module_info['details'];
+                    break;
+                }
             }
         }
 

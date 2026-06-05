@@ -20,7 +20,6 @@ class AccessoryServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->registerAssetRoutes();
         $this->registerTopNavigation();
-        $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
     }
 
     public function register(): void

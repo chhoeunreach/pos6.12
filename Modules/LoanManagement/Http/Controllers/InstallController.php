@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class InstallController extends Controller
 {
@@ -84,6 +85,7 @@ class InstallController extends Controller
         try {
             $this->runUninstallSteps();
             System::removeProperty($this->module_name . '_version');
+            $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];
@@ -134,12 +136,11 @@ class InstallController extends Controller
         foreach ((array) config('loanmanagement.permissions', []) as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->enableModuleInStatuses();
 
-        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
-            Artisan::call($cmd);
-        }
+        $this->clearCaches();
     }
 
     private function runUninstallSteps(): void
@@ -147,10 +148,9 @@ class InstallController extends Controller
         foreach ((array) config('loanmanagement.permissions', []) as $perm) {
             Permission::where('name', $perm)->where('guard_name', 'web')->delete();
         }
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
-            Artisan::call($cmd);
-        }
+        $this->clearCaches();
     }
 
     private function ensureLoanDatabaseExists(): void
@@ -195,5 +195,12 @@ class InstallController extends Controller
 
         $json['LoanManagement'] = true;
         file_put_contents($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function clearCaches(): void
+    {
+        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
+            Artisan::call($cmd);
+        }
     }
 }

@@ -3,6 +3,7 @@
 namespace Modules\LocalCashierReport\Http\Controllers;
 
 use App\Exports\ArrayExport;
+use App\System;
 use App\Utils\Util;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -19,6 +20,7 @@ class LocalCashierReportController extends Controller
 
     public function index(Request $request)
     {
+        $this->abortIfUninstalled();
         abort_unless($request->user()->can('local_cashier_report.view'), 403);
 
         $businessId = (int) session('user.business_id');
@@ -42,6 +44,7 @@ class LocalCashierReportController extends Controller
 
     public function export(Request $request)
     {
+        $this->abortIfUninstalled();
         abort_unless($request->user()->can('local_cashier_report.view'), 403);
 
         $businessId = (int) session('user.business_id');
@@ -70,6 +73,7 @@ class LocalCashierReportController extends Controller
 
     public function print(Request $request)
     {
+        $this->abortIfUninstalled();
         abort_unless($request->user()->can('local_cashier_report.view'), 403);
 
         $businessId = (int) session('user.business_id');
@@ -1190,5 +1194,10 @@ class LocalCashierReportController extends Controller
     private function currencySymbol(): string
     {
         return (string) data_get(session('currency'), 'symbol', '$');
+    }
+
+    private function abortIfUninstalled(): void
+    {
+        abort_if(empty(System::getProperty('localcashierreport_version')), 404);
     }
 }

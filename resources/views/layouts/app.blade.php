@@ -34,8 +34,6 @@
 
     @include('layouts.partials.extracss')
 
-    @yield('css')
-
 </head>
 <body
     class="tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100 @if ($request->segment(1) == 'loan-management') loan-management-page @endif @if ($pos_layout) hold-transition lockscreen @else hold-transition skin-@if (!empty(session('business.theme_color'))){{ session('business.theme_color') }}@else{{ 'blue-light' }} @endif sidebar-mini @endif" >

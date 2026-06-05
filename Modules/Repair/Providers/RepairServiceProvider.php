@@ -30,11 +30,14 @@ class RepairServiceProvider extends ServiceProvider
             'repair::layouts.partials.pos_header',
             'repair::layouts.partials.header',
         ], function ($view) {
-            if (auth()->user()->can('superadmin')) {
+            $module_util = new ModuleUtil();
+
+            if (! $module_util->isModuleInstalled('Repair')) {
+                $__is_repair_enabled = false;
+            } elseif (auth()->user()->can('superadmin')) {
                 $__is_repair_enabled = true;
             } else {
                 $business_id = session()->get('user.business_id');
-                $module_util = new ModuleUtil();
                 $__is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
             }
 

@@ -1,4 +1,10 @@
 @inject('request', 'Illuminate\Http\Request')
+@php
+    $__module_util = app(\App\Utils\ModuleUtil::class);
+    $__is_local_cashier_report_installed = $__module_util->isModuleInstalled('LocalCashierReport');
+    $__is_loan_management_installed = $__module_util->isModuleInstalled('LoanManagement');
+    $__is_repair_installed = $__module_util->isModuleInstalled('Repair');
+@endphp
 <!-- Main Header -->
 
 <div
@@ -162,7 +168,7 @@
                         </a>
                     @endcan
                 @endif
-                @if (Module::has('LocalCashierReport'))
+                @if ($__is_local_cashier_report_installed)
                     @can('local_cashier_report.view')
                         <a href="{{ route('local-cashier-report.index') }}"
                             class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 theme-btn-bg tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
@@ -178,7 +184,7 @@
                         </a>
                     @endcan
                 @endif
-                @if (Module::has('LoanManagement') && Route::has('loan-management.dashboard'))
+                @if ($__is_loan_management_installed && Route::has('loan-management.dashboard'))
                     @can('loan_management.view')
                         <a href="{{ route('loan-management.dashboard') }}"
                             class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 theme-btn-bg tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
@@ -194,7 +200,7 @@
                         </a>
                     @endcan
                 @endif
-                @if (Module::has('Repair'))
+                @if ($__is_repair_installed)
                     @includeIf('repair::layouts.partials.header')
                 @endif
                 @can('profit_loss_report.view')

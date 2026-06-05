@@ -7,6 +7,8 @@ use App\System;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class InstallController extends Controller
 {
@@ -51,7 +53,9 @@ class InstallController extends Controller
             }
 
             Artisan::call('module:migrate', ['module' => 'SmartStockInventory', '--force' => true]);
+            $this->ensurePermissionsExist();
             System::addProperty($this->module_name . '_version', $this->appVersion);
+            $this->clearCaches();
 
             DB::commit();
             $output = ['success' => 1, 'msg' => $this->module_display_name . ' module installed successfully'];
@@ -70,7 +74,9 @@ class InstallController extends Controller
         $this->authorizeModuleManagement();
 
         try {
+            $this->deletePermissions();
             System::removeProperty($this->module_name . '_version');
+            $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];
@@ -89,7 +95,9 @@ class InstallController extends Controller
             }
 
             Artisan::call('module:migrate', ['module' => 'SmartStockInventory', '--force' => true]);
+            $this->ensurePermissionsExist();
             System::setProperty($this->module_name . '_version', $this->appVersion);
+            $this->clearCaches();
             $output = ['success' => 1, 'msg' => $this->module_display_name . ' module updated successfully to version ' . $this->appVersion];
         } catch (\Exception $e) {
             $output = ['success' => false, 'msg' => $e->getMessage()];
@@ -102,6 +110,39 @@ class InstallController extends Controller
     {
         if (! auth()->user()->can('manage_modules')) {
             abort(403, 'Unauthorized action.');
+        }
+    }
+
+    private function permissions(): array
+    {
+        return array_column((new DataController())->user_permissions(), 'value');
+    }
+
+    private function ensurePermissionsExist(): void
+    {
+        foreach ($this->permissions() as $permission) {
+            Permission::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function deletePermissions(): void
+    {
+        Permission::whereIn('name', $this->permissions())
+            ->where('guard_name', 'web')
+            ->delete();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function clearCaches(): void
+    {
+        foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
+            Artisan::call($cmd);
         }
     }
 }

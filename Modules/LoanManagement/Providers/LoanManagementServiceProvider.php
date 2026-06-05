@@ -22,7 +22,6 @@ class LoanManagementServiceProvider extends ServiceProvider
         $this->registerRouteMiddlewareAlias();
         $this->registerViews();
         $this->loadTranslationsFrom(__DIR__ . '/../Resources/lang', 'loanmanagement');
-        $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
         Transaction::observe(TransactionInvoicePrefixObserver::class);
 
         if ($this->app->runningInConsole()) {

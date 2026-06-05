@@ -100,13 +100,6 @@
     var __new_notification_count_interval = "{{ config('constants.new_notification_count_interval', 60) }}000";
 </script>
 
-@if (file_exists(public_path('js/lang/' . session()->get('user.language', config('app.locale')) . '.js')))
-    <script src="{{ asset('js/lang/' . session()->get('user.language', config('app.locale')) . '.js?v=' . $asset_v) }}">
-    </script>
-@else
-    <script src="{{ asset('js/lang/en.js?v=' . $asset_v) }}"></script>
-@endif
-
 <script src="{{ asset('js/functions.js?v=' . $asset_v) }}"></script>
 <script src="{{ asset('js/common.js?v=' . $asset_v) }}"></script>
 <script src="{{ asset('js/app.js?v=' . $asset_v) }}"></script>
