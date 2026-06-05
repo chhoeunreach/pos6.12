@@ -1,18 +1,16 @@
 <!-- default value -->
 @php
-    $go_back_url = route('accessory.pos.index');
+    $main_products_url = request()->getSchemeAndHttpHost() . '/products';
+    $go_back_url = $main_products_url;
     $transaction_sub_type = '';
     $view_suspended_sell_url = route('accessory.sells.index') . '?suspended=1';
     $pos_redirect_url = '/' . trim(config('accessory.route_prefix', 'accessory-pos'), '/') . '/pos/create';
+    $main_project_name = config('app.name', 'ultimatePOS');
 @endphp
 
 @if (!empty($pos_module_data))
     @foreach ($pos_module_data as $key => $value)
         @php
-            if (!empty($value['go_back_url'])) {
-                $go_back_url = $value['go_back_url'];
-            }
-
             if (!empty($value['transaction_sub_type'])) {
                 $transaction_sub_type = $value['transaction_sub_type'];
                 $view_suspended_sell_url .= '&transaction_sub_type=' . $transaction_sub_type;
@@ -102,6 +100,21 @@
                     <span class="tw-inline md:tw-hidden">{{ __('lang_v1.go_back') }}</span>
                 </strong>
             </a>
+            <span class="pos-nav-divider tw-inline-block tw-w-px tw-h-[18px] tw-bg-[#e2e8f0] tw-flex-shrink-0 tw-self-center tw-rounded-[1px] tw-mx-[3px]"></span>
+
+            <a href="{{ $main_products_url }}" title="Back to {{ $main_project_name }}" data-accessory-skip-rewrite="true"
+                class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-flex tw-items-center tw-justify-center tw-rounded-md tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-text-gray-600 active:tw-scale-95 tw-transition-transform pull-right">
+                <strong class="tw-inline-flex tw-items-center tw-gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-arrow-left tw-text-[#009EE4]" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M5 12l14 0"/>
+                        <path d="M5 12l6 6"/>
+                        <path d="M5 12l6 -6"/>
+                    </svg>
+                    Back to {{ $main_project_name }}
+                </strong>
+            </a>
+
             <span class="pos-nav-divider tw-inline-block tw-w-px tw-h-[18px] tw-bg-[#e2e8f0] tw-flex-shrink-0 tw-self-center tw-rounded-[1px] tw-mx-[3px]"></span>
 
             {{-- ===== Sale Operations ===== --}}

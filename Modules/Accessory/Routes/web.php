@@ -78,7 +78,7 @@ Route::middleware(['setData'])->group(function () {
         return redirect()->route('accessory.home');
     });
 
-    Auth::routes();
+    Auth::routes(['logout' => false]);
 
     Route::get('/business/register', [BusinessController::class, 'getRegister'])->name('business.getRegister');
     Route::post('/business/register', [BusinessController::class, 'postRegister'])->name('business.postRegister');

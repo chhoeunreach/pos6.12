@@ -1,6 +1,8 @@
 <script type="text/javascript">
     accessory_base_path = "{{ url(config('accessory.route_prefix', 'accessory-pos')) }}";
     base_path = accessory_base_path;
+    window.Laravel = window.Laravel || {};
+    window.Laravel.csrfToken = "{{ csrf_token() }}";
     //used for push notification
     APP = {};
     APP.PUSHER_APP_KEY = '{{ config('broadcasting.connections.pusher.key') }}';
@@ -132,6 +134,10 @@
         $context.find('a[href], form[action], [data-href]').addBack('a[href], form[action], [data-href]').each(function() {
             var $element = $(this);
 
+            if ($element.is('[data-accessory-skip-rewrite]')) {
+                return;
+            }
+
             $.each(['href', 'action', 'data-href'], function(index, attribute) {
                 var value = $element.attr(attribute);
 
@@ -149,11 +155,15 @@
     $(document).ready(function() {
         rewriteAccessoryUrls(document);
 
-        $.ajaxSetup({
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            }
-        });
+        var csrfToken = $('meta[name="csrf-token"]').attr('content') || window.Laravel.csrfToken;
+
+        if (csrfToken) {
+            $.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+        }
 
         @if (config('app.debug') == false)
             $.fn.dataTable.ext.errMode = 'throw';

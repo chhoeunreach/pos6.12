@@ -3,6 +3,7 @@
 namespace Modules\WarrantyCardPrint\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -37,6 +38,10 @@ class DataController extends Controller
     public function get_additional_script(): array
     {
         if (! auth()->check()) {
+            return [];
+        }
+
+        if (! Route::has('warranty-card-print.create')) {
             return [];
         }
 
@@ -258,17 +263,29 @@ CSS;
 
     private function ensurePermissionsExist(): void
     {
+        static $checked = false;
+
+        if ($checked) {
+            return;
+        }
+
         try {
             if (! Schema::hasTable('permissions')) {
+                $checked = true;
+
                 return;
             }
 
-            Permission::firstOrCreate([
+            $permission = Permission::firstOrCreate([
                 'name' => 'warranty_card_print.view',
                 'guard_name' => 'web',
             ]);
 
-            app(PermissionRegistrar::class)->forgetCachedPermissions();
+            if ($permission->wasRecentlyCreated) {
+                app(PermissionRegistrar::class)->forgetCachedPermissions();
+            }
+
+            $checked = true;
         } catch (\Throwable $e) {
         }
     }

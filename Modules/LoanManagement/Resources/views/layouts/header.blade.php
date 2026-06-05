@@ -64,7 +64,7 @@
         </div>
 
         <a href="{{ $backToPosUrl }}" class="btn btn-primary btn-sm lm-btn-back">
-            <i class="fa fa-arrow-left"></i> Back to Ultimate POS
+            <i class="fa fa-arrow-left"></i> Back to Main
         </a>
 
         @if (Route::has('logout'))

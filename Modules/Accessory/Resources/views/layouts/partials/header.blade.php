@@ -1,4 +1,8 @@
 @inject('request', 'Illuminate\Http\Request')
+@php
+    $main_project_name = config('app.name', 'គ្នាយើង|KNEAYERNG');
+    $main_products_url = request()->getSchemeAndHttpHost() . '/products';
+@endphp
 <!-- Main Header -->
 
 <div
@@ -50,6 +54,10 @@
 
 
             <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-3">
+                <a href="{{ $main_products_url }}" class="btn btn-primary btn-sm lm-btn-back" data-accessory-skip-rewrite="true">
+                    <i class="fa fa-arrow-left"></i> Back to Main
+                </a>
+
                 @if (Module::has('Essentials'))
                     @includeIf('essentials::layouts.partials.header_part')
                 @endif
@@ -254,4 +262,3 @@
         </div>
     </div>
 </div>
-

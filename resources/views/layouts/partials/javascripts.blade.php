@@ -1,5 +1,7 @@
 <script type="text/javascript">
     base_path = "{{ url('/') }}";
+    window.Laravel = window.Laravel || {};
+    window.Laravel.csrfToken = "{{ csrf_token() }}";
     //used for push notification
     APP = {};
     APP.PUSHER_APP_KEY = '{{ config('broadcasting.connections.pusher.key') }}';
@@ -57,11 +59,15 @@
     Dropzone.autoDiscover = false;
     moment.tz.setDefault('{{ Session::get('business.time_zone') }}');
     $(document).ready(function() {
-        $.ajaxSetup({
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            }
-        });
+        var csrfToken = $('meta[name="csrf-token"]').attr('content') || window.Laravel.csrfToken;
+
+        if (csrfToken) {
+            $.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+        }
 
         @if (config('app.debug') == false)
             $.fn.dataTable.ext.errMode = 'throw';
