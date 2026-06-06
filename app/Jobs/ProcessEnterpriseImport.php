@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Modules\LoanManagement\Services\LoanImportExportService;
 use Throwable;
@@ -55,6 +56,13 @@ class ProcessEnterpriseImport implements ShouldQueue
             );
         } catch (Throwable $e) {
             $imports->markFailed($import->fresh(), $e->getMessage());
+            Log::error('Enterprise import failed', [
+                'import_id' => $import->id,
+                'type' => $import->type,
+                'filename' => $import->filename,
+                'stored_path' => $import->stored_path,
+                'message' => $e->getMessage(),
+            ]);
 
             throw $e;
         }

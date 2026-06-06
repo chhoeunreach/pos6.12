@@ -8,10 +8,6 @@ return [
     'cleanup_after_days' => (int) env('IMPORT_CLEANUP_AFTER_DAYS', 14),
 
     'types' => [
-        'customers' => ['label' => 'Customer Import', 'permission' => 'customer.create'],
-        'suppliers' => ['label' => 'Supplier Import', 'permission' => 'supplier.create'],
-        'products' => ['label' => 'Product Import', 'permission' => 'product.create'],
-        'stock' => ['label' => 'Stock Import', 'permission' => 'stock_adjustment.create'],
         'imei' => ['label' => 'IMEI Import', 'permission' => 'loan_management.import.view'],
         'loans' => ['label' => 'Loan Import', 'permission' => 'loan_management.import.view'],
         'repayments' => ['label' => 'Repayment Import', 'permission' => 'loan_management.import.view'],

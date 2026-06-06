@@ -30,6 +30,12 @@ class EnterpriseImportController extends Controller
 
         $typeConfig = config('async_import.types.'.$validated['type']);
         abort_unless($typeConfig, Response::HTTP_UNPROCESSABLE_ENTITY, 'Unsupported import type.');
+        abort_unless(
+            in_array($validated['type'], $manager->supportedTypes(), true),
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            'This import type is not supported by the async importer.'
+        );
+
         $this->authorizeImport($typeConfig['permission'] ?? null);
 
         $file = $request->file('file');
