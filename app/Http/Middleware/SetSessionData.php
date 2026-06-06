@@ -18,7 +18,7 @@ class SetSessionData
      */
     public function handle($request, Closure $next)
     {
-        if (! $request->session()->has('user')) {
+        if ($this->shouldSetSessionData($request)) {
             $business_util = new BusinessUtil;
 
             $user = Auth::user();
@@ -43,6 +43,7 @@ class SetSessionData
             $request->session()->put('user', $session_data);
             $request->session()->put('business', $business);
             $request->session()->put('currency', $currency_data);
+            $request->session()->put('_session_database_connection', config('database.default'));
 
             //set current financial year to session
             $financial_year = $business_util->getCurrentFinancialYear($business->id);
@@ -50,5 +51,21 @@ class SetSessionData
         }
 
         return $next($request);
+    }
+
+    private function shouldSetSessionData($request): bool
+    {
+        if (! $request->session()->has('user')) {
+            return true;
+        }
+
+        $user = Auth::user();
+        if (empty($user)) {
+            return true;
+        }
+
+        return $request->session()->get('_session_database_connection') !== config('database.default') ||
+            $request->session()->get('user.business_id') != $user->business_id ||
+            $request->session()->get('business.id') != $user->business_id;
     }
 }

@@ -18,6 +18,7 @@ class UseAccessoryDatabase
         $connection = config('accessory.database_connection', 'accessory');
         $original = config('database.default');
         $mainUser = auth()->user();
+        $mainSessionData = $this->captureMainSessionData($request);
 
         if ($mainUser) {
             $this->syncAuthenticatedUserToAccessory($mainUser, $original, $connection);
@@ -38,8 +39,43 @@ class UseAccessoryDatabase
         try {
             return $next($request);
         } finally {
+            $this->restoreMainSessionData($request, $mainSessionData);
             config(['database.default' => $original]);
             DB::setDefaultConnection($original);
+        }
+    }
+
+    private function captureMainSessionData($request): array
+    {
+        if (! $request->hasSession()) {
+            return [];
+        }
+
+        return $request->session()->only([
+            'user',
+            'business',
+            'currency',
+            'financial_year',
+            '_session_database_connection',
+        ]);
+    }
+
+    private function restoreMainSessionData($request, array $mainSessionData): void
+    {
+        if (! $request->hasSession()) {
+            return;
+        }
+
+        $request->session()->forget([
+            'user',
+            'business',
+            'currency',
+            'financial_year',
+            '_session_database_connection',
+        ]);
+
+        foreach ($mainSessionData as $key => $value) {
+            $request->session()->put($key, $value);
         }
     }
 

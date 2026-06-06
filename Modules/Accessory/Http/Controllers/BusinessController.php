@@ -512,7 +512,7 @@ class BusinessController extends Controller
             ];
         }
 
-        return redirect('business/settings')->with('status', $output);
+        return redirect()->route('accessory.business.getBusinessSettings')->with('status', $output);
     }
 
     /**
