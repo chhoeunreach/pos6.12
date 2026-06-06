@@ -13,7 +13,7 @@ return new class extends Migration
     public function up()
     {
         $now = \Carbon::now()->toDateTimeString();
-        Permission::insert([
+        $permissions = [
             [
                 'name' => 'profit_loss_report.view',
                 'guard_name' => 'web',
@@ -24,7 +24,19 @@ return new class extends Migration
                 'guard_name' => 'web',
                 'created_at' => $now,
             ],
-        ]);
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(
+                [
+                    'name' => $permission['name'],
+                    'guard_name' => $permission['guard_name'],
+                ],
+                [
+                    'created_at' => $permission['created_at'],
+                ]
+            );
+        }
     }
 
     /**

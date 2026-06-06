@@ -403,7 +403,10 @@ class OldDummyBusinessSeeder extends Seeder
         $admin->assignRole('Admin#1');
         $cashier->assignRole('Cashier#1');
         $demo_user->assignRole('Admin#1');
-        Permission::insert(['name' => 'location.1', 'guard_name' => 'web', 'created_at' => \Carbon::now()->toDateTimeString()]);
+        Permission::firstOrCreate(
+            ['name' => 'location.1', 'guard_name' => 'web'],
+            ['created_at' => \Carbon::now()->toDateTimeString()]
+        );
 
         DB::statement('SET FOREIGN_KEY_CHECKS = 1');
 

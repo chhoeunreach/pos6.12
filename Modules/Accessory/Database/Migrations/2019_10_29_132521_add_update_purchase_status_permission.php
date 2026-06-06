@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up()
     {
-        Permission::create(['name' => 'purchase.update_status']);
+        Permission::firstOrCreate(['name' => 'purchase.update_status', 'guard_name' => 'web']);
     }
 
     /**

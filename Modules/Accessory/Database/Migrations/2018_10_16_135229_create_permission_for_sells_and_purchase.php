@@ -12,8 +12,8 @@ return new class extends Migration
      */
     public function up()
     {
-        Permission::create(['name' => 'purchase.payments']);
-        Permission::create(['name' => 'sell.payments']);
+        Permission::firstOrCreate(['name' => 'purchase.payments', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'sell.payments', 'guard_name' => 'web']);
     }
 
     /**

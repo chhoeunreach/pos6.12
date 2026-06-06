@@ -1592,7 +1592,7 @@ class DummyBusinessSeeder extends Seeder
         $cashier1->assignRole('Cashier#1');
         $demo_user1->assignRole('Admin#1');
         $woocommerce1->assignRole('Admin#1');
-        Permission::create(['name' => 'location.1']);
+        Permission::firstOrCreate(['name' => 'location.1', 'guard_name' => 'web']);
 
         //give location.1 permissions
         $cashier1->givePermissionTo('location.1');
@@ -1613,7 +1613,7 @@ class DummyBusinessSeeder extends Seeder
         $admin2 = User::findOrFail(4);
 
         $admin2->assignRole('Admin#2');
-        Permission::create(['name' => 'location.2']);
+        Permission::firstOrCreate(['name' => 'location.2', 'guard_name' => 'web']);
 
         //Roles and permissions for business 3
         $admin_role3 = Role::create(['name' => 'Admin#3',
@@ -1630,7 +1630,7 @@ class DummyBusinessSeeder extends Seeder
         $admin3 = User::findOrFail(5);
 
         $admin3->assignRole('Admin#3');
-        Permission::create(['name' => 'location.3']);
+        Permission::firstOrCreate(['name' => 'location.3', 'guard_name' => 'web']);
 
         //Roles and permissions for business 4
         $admin_role4 = Role::create(['name' => 'Admin#4',
@@ -1648,7 +1648,7 @@ class DummyBusinessSeeder extends Seeder
         $admin4 = User::findOrFail(6);
 
         $admin4->assignRole('Admin#4');
-        Permission::create(['name' => 'location.4']);
+        Permission::firstOrCreate(['name' => 'location.4', 'guard_name' => 'web']);
 
         //Roles and permissions for business 5
         $admin_role5 = Role::create(['name' => 'Admin#5',
@@ -1666,7 +1666,7 @@ class DummyBusinessSeeder extends Seeder
         $admin5 = User::findOrFail(7);
 
         $admin5->assignRole('Admin#5');
-        Permission::create(['name' => 'location.5']);
+        Permission::firstOrCreate(['name' => 'location.5', 'guard_name' => 'web']);
 
         $waiter_role5 = Role::create(['name' => 'Waiter#5',
             'business_id' => 5,
