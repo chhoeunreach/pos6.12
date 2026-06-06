@@ -306,7 +306,10 @@ class BusinessController extends BaseController
             $new_location = $this->businessUtil->addLocation($business->id, $business_location);
 
             //create new permission with the new location
-            Permission::create(['name' => 'location.'.$new_location->id]);
+            Permission::firstOrCreate([
+                'name' => 'location.'.$new_location->id,
+                'guard_name' => 'web',
+            ]);
 
             $subscription_details = $request->only(['package_id', 'paid_via', 'payment_transaction_id']);
 

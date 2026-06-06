@@ -188,7 +188,10 @@ class BusinessLocationController extends Controller
             $location = BusinessLocation::create($input);
 
             //Create a new permission related to the created location
-            Permission::create(['name' => 'location.'.$location->id]);
+            Permission::firstOrCreate([
+                'name' => 'location.'.$location->id,
+                'guard_name' => 'web',
+            ]);
 
             $output = ['success' => true,
                 'msg' => __('business.business_location_added_success'),
@@ -802,7 +805,10 @@ class BusinessLocationController extends Controller
                             continue;
                         }
                         $created = BusinessLocation::create($input);
-                        Permission::create(['name' => 'location.' . $created->id]);
+                        Permission::firstOrCreate([
+                            'name' => 'location.' . $created->id,
+                            'guard_name' => 'web',
+                        ]);
                         $inserted++;
                     }
                 }

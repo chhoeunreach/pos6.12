@@ -197,7 +197,7 @@ class BusinessController extends Controller
             //Create the business
             $business_details['owner_id'] = $user->id;
             if (! empty($business_details['start_date'])) {
-                $business_details['start_date'] = Carbon::createFromFormat(config('constants.default_date_format'), $business_details['start_date'])->toDateString();
+                $business_details['start_date'] = $this->parseRegistrationStartDate($business_details['start_date']);
             }
 
             //upload logo
@@ -219,7 +219,10 @@ class BusinessController extends Controller
             $new_location = $this->businessUtil->addLocation($business->id, $business_location);
 
             //create new permission with the new location
-            Permission::create(['name' => 'location.'.$new_location->id]);
+            Permission::firstOrCreate([
+                'name' => 'location.'.$new_location->id,
+                'guard_name' => 'web',
+            ]);
 
             DB::commit();
 
@@ -655,6 +658,27 @@ class BusinessController extends Controller
         }
 
         return $output;
+    }
+
+    private function parseRegistrationStartDate($date)
+    {
+        $date = trim($date);
+        $formats = array_unique(array_filter([
+            config('constants.default_date_format'),
+            'm/d/Y',
+            'Y-m-d',
+            'd/m/Y',
+        ]));
+
+        foreach ($formats as $format) {
+            try {
+                return Carbon::createFromFormat($format, $date)->toDateString();
+            } catch (\Exception $e) {
+                //
+            }
+        }
+
+        return Carbon::parse($date)->toDateString();
     }
 }
 
