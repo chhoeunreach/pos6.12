@@ -1,8 +1,8 @@
 /node_modules
 /public/hot
-/public/storage
-/storage/*.key
-/storage/
+# /public/storage
+# /storage/*.key
+# /storage/
 /vendor
 /.idea
 /.vagrant
@@ -21,6 +21,6 @@ npm-debug.log
 /public/mix-manifest.json
 .scribe
 /public/docs
-/config/database.php
+# /config/database.php
 
 
