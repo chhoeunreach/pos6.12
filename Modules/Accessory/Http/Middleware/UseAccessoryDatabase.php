@@ -3,6 +3,8 @@
 namespace Modules\Accessory\Http\Middleware;
 
 use Closure;
+use App\Business;
+use App\Utils\BusinessUtil;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -27,7 +29,7 @@ class UseAccessoryDatabase
 
         config(['database.default' => $connection]);
         DB::setDefaultConnection($connection);
-        $this->useAccessoryAuthenticatedUser($mainUser, $mainUserId, $connection);
+        $accessoryUser = $this->useAccessoryAuthenticatedUser($mainUser, $mainUserId, $connection);
 
         if ($request->hasSession()) {
             $request->session()->forget([
@@ -36,6 +38,10 @@ class UseAccessoryDatabase
                 'currency',
                 'financial_year',
             ]);
+
+            if ($accessoryUser) {
+                $this->setAccessorySessionData($request, $accessoryUser);
+            }
         }
 
         try {
@@ -110,10 +116,10 @@ class UseAccessoryDatabase
         }
     }
 
-    private function useAccessoryAuthenticatedUser($mainUser, ?int $mainUserId, string $accessoryConnection): void
+    private function useAccessoryAuthenticatedUser($mainUser, ?int $mainUserId, string $accessoryConnection)
     {
         if (! $mainUser || ! $mainUserId || ! Schema::connection($accessoryConnection)->hasTable('users')) {
-            return;
+            return null;
         }
 
         $userClass = get_class($mainUser);
@@ -125,6 +131,42 @@ class UseAccessoryDatabase
         if ($accessoryUser) {
             Auth::setUser($accessoryUser);
         }
+
+        return $accessoryUser;
+    }
+
+    private function setAccessorySessionData($request, $user): void
+    {
+        $business = Business::find($user->business_id);
+
+        if (! $business) {
+            return;
+        }
+
+        $sessionData = [
+            'id' => $user->id,
+            'surname' => $user->surname,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'business_id' => $user->business_id,
+            'language' => $user->language,
+        ];
+
+        $currency = $business->currency;
+        $currencyData = [
+            'id' => $currency->id,
+            'code' => $currency->code,
+            'symbol' => $currency->symbol,
+            'thousand_separator' => $currency->thousand_separator,
+            'decimal_separator' => $currency->decimal_separator,
+        ];
+
+        $request->session()->put('user', $sessionData);
+        $request->session()->put('business', $business);
+        $request->session()->put('currency', $currencyData);
+        $request->session()->put('_session_database_connection', config('database.default'));
+        $request->session()->put('financial_year', (new BusinessUtil)->getCurrentFinancialYear($business->id));
     }
 
     private function ensureDefaultPosData($accessory, int $businessId, int $userId): void
