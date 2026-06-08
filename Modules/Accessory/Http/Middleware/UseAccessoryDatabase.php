@@ -17,7 +17,10 @@ class UseAccessoryDatabase
 
         $connection = config('accessory.database_connection', 'accessory');
         $original = config('database.default');
-        $mainUser = auth()->user();
+        $mainUser = null;
+        if (Schema::connection($original)->hasTable('users')) {
+            $mainUser = auth()->user();
+        }
         $mainSessionData = $this->captureMainSessionData($request);
 
         if ($mainUser) {

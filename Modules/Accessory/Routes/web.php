@@ -78,7 +78,7 @@ Route::post('/install', [AccessoryInstallController::class, 'install']);
 Route::get('/install/uninstall', [AccessoryInstallController::class, 'uninstall']);
 Route::get('/install/update', [AccessoryInstallController::class, 'update']);
 
-Route::middleware(['setData'])->group(function () {
+Route::middleware(['setData', 'accessory.database'])->group(function () {
     Route::get('/', function () {
         return redirect()->route('accessory.home');
     });
@@ -102,7 +102,7 @@ Route::middleware(['setData'])->group(function () {
 });
 
 //Routes for authenticated users only
-Route::middleware(['setData', 'auth', 'accessory.database', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])->group(function () {
+Route::middleware(['setData', 'accessory.database', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])->group(function () {
     Route::get('pos/payment/{id}', [SellPosController::class, 'edit'])->name('edit-pos-payment');
     Route::get('service-staff-availability', [SellPosController::class, 'showServiceStaffAvailibility']);
     Route::get('pause-resume-service-staff-timer/{user_id}', [SellPosController::class, 'pauseResumeServiceStaffTimer']);
@@ -509,11 +509,11 @@ Route::middleware(['setData', 'auth', 'accessory.database', 'SetSessionData', 'l
 // });
 
 //common route
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['accessory.database', 'auth'])->group(function () {
     Route::get('/logout', [Modules\Accessory\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout');
 });
 
-Route::middleware(['setData', 'auth', 'accessory.database', 'SetSessionData', 'language', 'timezone'])->group(function () {
+Route::middleware(['setData', 'accessory.database', 'auth', 'SetSessionData', 'language', 'timezone'])->group(function () {
     Route::get('/load-more-notifications', [HomeController::class, 'loadMoreNotifications']);
     Route::get('/get-total-unread', [HomeController::class, 'getTotalUnreadNotifications']);
     Route::get('/purchases/print/{id}', [PurchaseController::class, 'printInvoice']);
