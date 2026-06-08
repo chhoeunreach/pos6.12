@@ -115,7 +115,7 @@ Route::middleware(['setData', 'auth', 'accessory.database', 'language', 'timezon
 
     Route::get('/sign-in-as-user/{id}', [ManageUserController::class, 'signInAsUser'])->name('sign-in-as-user');
 
-    Route::get('/home', [HomeController::class, 'index'])->name('accessory.home');
+    Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/home/get-totals', [HomeController::class, 'getTotals']);
     Route::get('/home/product-stock-alert', [HomeController::class, 'getProductStockAlert']);
     Route::get('/home/purchase-payment-dues', [HomeController::class, 'getPurchasePaymentDues']);

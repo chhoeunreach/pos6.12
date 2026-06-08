@@ -23,7 +23,7 @@ class RouteServiceProvider extends ServiceProvider
     protected function mapWebRoutes(): void
     {
         Route::middleware(config('accessory.middleware', ['web']))
-            ->prefix(config('accessory.route_prefix', 'accessory-pos'))
+            ->prefix(config('accessory.route_prefix', 'accessory'))
             ->as(config('accessory.route_name_prefix', 'accessory.'))
             ->namespace($this->moduleNamespace)
             ->group(module_path('Accessory', 'Routes/web.php'));
@@ -31,7 +31,7 @@ class RouteServiceProvider extends ServiceProvider
 
     protected function mapApiRoutes(): void
     {
-        Route::prefix('api/' . config('accessory.route_prefix', 'accessory-pos'))
+        Route::prefix('api/' . config('accessory.route_prefix', 'accessory'))
             ->middleware(['api', 'auth:api', 'accessory.database'])
             ->as('accessory.api.')
             ->namespace($this->moduleNamespace)
