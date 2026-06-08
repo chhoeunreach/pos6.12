@@ -63,9 +63,9 @@
             @endif
         </div>
 
-        <!-- <a href="{{ $backToPosUrl }}" class="btn btn-primary btn-sm lm-btn-back">
+        <a href="{{ $backToPosUrl }}" class="btn btn-primary btn-sm lm-btn-back">
             <i class="fa fa-arrow-left"></i> Back to Main
-        </a> -->
+        </a>
 
         @if (Route::has('logout'))
             <a href="{{ route('logout') }}" class="btn btn-default btn-sm"

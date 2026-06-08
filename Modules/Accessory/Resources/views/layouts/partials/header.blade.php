@@ -54,9 +54,9 @@
 
 
             <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-3">
-                <!-- <a href="{{ $main_products_url }}" class="btn btn-primary btn-sm lm-btn-back" data-accessory-skip-rewrite="true">
+                <a href="{{ $main_products_url }}" class="btn btn-primary btn-sm lm-btn-back" data-accessory-skip-rewrite="true">
                     <i class="fa fa-arrow-left"></i> Back to Main
-                </a> -->
+                </a>
 
                 @if (Module::has('Essentials'))
                     @includeIf('essentials::layouts.partials.header_part')

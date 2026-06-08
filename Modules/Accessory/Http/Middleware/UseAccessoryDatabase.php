@@ -2,7 +2,6 @@
 
 namespace Modules\Accessory\Http\Middleware;
 
-use App\System;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -11,10 +10,6 @@ class UseAccessoryDatabase
 {
     public function handle($request, Closure $next)
     {
-        if (empty(System::getProperty('accessory_version'))) {
-            abort(404);
-        }
-
         $connection = config('accessory.database_connection', 'accessory');
         $original = config('database.default');
         $mainUser = null;
@@ -350,7 +345,8 @@ class UseAccessoryDatabase
             'job_sheet.',
         ];
     }
-private function hasTable($connection, string $table): bool
+
+    private function hasTable($connection, string $table): bool
     {
         return Schema::connection($connection->getName())->hasTable($table);
     }
