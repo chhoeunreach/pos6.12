@@ -4,6 +4,7 @@ namespace Modules\Accessory\Http\Middleware;
 
 use Closure;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
 class UseAccessoryDatabase
@@ -13,8 +14,10 @@ class UseAccessoryDatabase
         $connection = config('accessory.database_connection', 'accessory');
         $original = config('database.default');
         $mainUser = null;
+        $mainUserId = null;
         if (Schema::connection($original)->hasTable('users')) {
-            $mainUser = auth()->user();
+            $mainUser = Auth::user();
+            $mainUserId = $mainUser?->id;
         }
         $mainSessionData = $this->captureMainSessionData($request);
 
@@ -24,6 +27,7 @@ class UseAccessoryDatabase
 
         config(['database.default' => $connection]);
         DB::setDefaultConnection($connection);
+        $this->useAccessoryAuthenticatedUser($mainUser, $mainUserId, $connection);
 
         if ($request->hasSession()) {
             $request->session()->forget([
@@ -37,6 +41,9 @@ class UseAccessoryDatabase
         try {
             return $next($request);
         } finally {
+            if ($mainUser) {
+                Auth::setUser($mainUser);
+            }
             $this->restoreMainSessionData($request, $mainSessionData);
             config(['database.default' => $original]);
             DB::setDefaultConnection($original);
@@ -100,6 +107,23 @@ class UseAccessoryDatabase
             $this->copyUserAuthorizationData($main, $accessory, $mainUser);
         } finally {
             $accessory->statement('SET FOREIGN_KEY_CHECKS=1');
+        }
+    }
+
+    private function useAccessoryAuthenticatedUser($mainUser, ?int $mainUserId, string $accessoryConnection): void
+    {
+        if (! $mainUser || ! $mainUserId || ! Schema::connection($accessoryConnection)->hasTable('users')) {
+            return;
+        }
+
+        $userClass = get_class($mainUser);
+        $accessoryUser = (new $userClass)
+            ->setConnection($accessoryConnection)
+            ->newQuery()
+            ->find($mainUserId);
+
+        if ($accessoryUser) {
+            Auth::setUser($accessoryUser);
         }
     }
 
