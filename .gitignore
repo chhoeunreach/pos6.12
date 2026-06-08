@@ -24,3 +24,5 @@ npm-debug.log
 # /config/database.php
 
 
+
+vendor/
