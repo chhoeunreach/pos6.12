@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <title>Print Calculate Loan</title>
     <style>
-        @font-face { font-family: 'Roboto'; src: url('{{ asset("fonts/english/Roboto-Regular.ttf") }}') format('truetype'); }
-        @font-face { font-family: 'RobotoBold'; src: url('{{ asset("fonts/english/Roboto-Bold.ttf") }}') format('truetype'); }
-        @font-face { font-family: 'Khmer OS Battambang'; src: url('{{ asset("fonts/khmer/Battambang-Regular.ttf") }}') format('truetype'); }
+        @font-face { font-family: 'Roboto'; src: url('<?php echo e(asset("fonts/english/Roboto-Regular.ttf"), false); ?>') format('truetype'); }
+        @font-face { font-family: 'RobotoBold'; src: url('<?php echo e(asset("fonts/english/Roboto-Bold.ttf"), false); ?>') format('truetype'); }
+        @font-face { font-family: 'Khmer OS Battambang'; src: url('<?php echo e(asset("fonts/khmer/Battambang-Regular.ttf"), false); ?>') format('truetype'); }
 
         :root {
             --orange: #ff8a00;
@@ -228,7 +228,7 @@
     <div class="header">
         <div class="brand-row">
             <div></div>
-            <div class="brand-title">{{ $businessName }}</div>
+            <div class="brand-title"><?php echo e($businessName, false); ?></div>
             <div></div>
         </div>
         <div class="tagline">
@@ -238,10 +238,10 @@
 
     <div class="info-grid">
         <table class="info-table">
-            <tr><td class="label">Contract No</td><td class="value red">CALC-{{ now()->format('Ymd') }}</td></tr>
+            <tr><td class="label">Contract No</td><td class="value red">CALC-<?php echo e(now()->format('Ymd'), false); ?></td></tr>
             <tr><td class="label">Invoice No</td><td class="value">-</td></tr>
-            <tr><td class="label">Loan Date</td><td class="value">{{ $loanDate }}</td></tr>
-            <tr><td class="label">End Date</td><td class="value">{{ $lastDueDate ? \Carbon\Carbon::parse($lastDueDate)->format('m-d-Y') : '-' }}</td></tr>
+            <tr><td class="label">Loan Date</td><td class="value"><?php echo e($loanDate, false); ?></td></tr>
+            <tr><td class="label">End Date</td><td class="value"><?php echo e($lastDueDate ? \Carbon\Carbon::parse($lastDueDate)->format('m-d-Y') : '-', false); ?></td></tr>
         </table>
         <table class="info-table">
             <tr><td class="label">Customer</td><td class="value">Calculator Preview</td></tr>
@@ -249,7 +249,7 @@
             <tr><td class="label">ID No</td><td class="value">-</td></tr>
         </table>
         <table class="info-table">
-            <tr><td class="label">First Due Date</td><td class="value">{{ \Carbon\Carbon::parse($firstDueDate)->format('m-d-Y') }}</td></tr>
+            <tr><td class="label">First Due Date</td><td class="value"><?php echo e(\Carbon\Carbon::parse($firstDueDate)->format('m-d-Y'), false); ?></td></tr>
             <tr><td class="label">Co-borrower</td><td class="value">-</td></tr>
             <tr><td class="label">Co-phone</td><td class="value">-</td></tr>
         </table>
@@ -261,7 +261,7 @@
 
     <div class="product-title">
         Loan Calculator Form
-        <span class="date-bar">{{ $loanDateTitle }}</span>
+        <span class="date-bar"><?php echo e($loanDateTitle, false); ?></span>
     </div>
     <table class="print-table product-table">
         <thead>
@@ -280,8 +280,8 @@
                 <td class="bold">CALC</td>
                 <td class="text-left bold">Calculate Loan</td>
                 <td class="bold">1</td>
-                <td colspan="2" class="money-cell bold">${{ number_format($totalPrice, 2) }}</td>
-                <td colspan="2" class="money-cell bold">${{ number_format($totalPrice, 2) }}</td>
+                <td colspan="2" class="money-cell bold">$<?php echo e(number_format($totalPrice, 2), false); ?></td>
+                <td colspan="2" class="money-cell bold">$<?php echo e(number_format($totalPrice, 2), false); ?></td>
             </tr>
             <tr class="summary-row">
                 <td colspan="8" class="product-summary-cell">
@@ -291,19 +291,19 @@
                                 <table class="summary-terms">
                                     <tr>
                                         <td>Duration Months</td>
-                                        <td class="summary-amount">{{ $durationMonths }}</td>
+                                        <td class="summary-amount"><?php echo e($durationMonths, false); ?></td>
                                     </tr>
                                     <tr>
                                         <td>Deposit Percent</td>
-                                        <td class="summary-amount">{{ number_format($downPercent, 2) }}%</td>
+                                        <td class="summary-amount"><?php echo e(number_format($downPercent, 2), false); ?>%</td>
                                     </tr>
                                     <tr>
                                         <td>Interest Rate</td>
-                                        <td class="summary-amount red">{{ number_format($interestRate, 2) }}%</td>
+                                        <td class="summary-amount red"><?php echo e(number_format($interestRate, 2), false); ?>%</td>
                                     </tr>
                                     <tr>
                                         <td>Interest Type</td>
-                                        <td class="summary-amount">{{ ($interestType ?? 'flat') === 'reducing_balance' ? 'បង់ថយ' : 'បង់ថេរ' }}</td>
+                                        <td class="summary-amount"><?php echo e(($interestType ?? 'flat') === 'reducing_balance' ? 'បង់ថយ' : 'បង់ថេរ', false); ?></td>
                                     </tr>
                                 </table>
                             </td>
@@ -311,15 +311,15 @@
                                 <table class="summary-totals">
                                     <tr>
                                         <td>Total Price</td>
-                                        <td class="summary-amount">${{ number_format($totalPrice, 2) }}</td>
+                                        <td class="summary-amount">$<?php echo e(number_format($totalPrice, 2), false); ?></td>
                                     </tr>
                                     <tr>
                                         <td>Join Payment / Deposit</td>
-                                        <td class="summary-amount">${{ number_format($downPayment, 2) }}</td>
+                                        <td class="summary-amount">$<?php echo e(number_format($downPayment, 2), false); ?></td>
                                     </tr>
                                     <tr>
                                         <td>Balance / Principal</td>
-                                        <td class="summary-amount red">${{ number_format($principal, 2) }}</td>
+                                        <td class="summary-amount red">$<?php echo e(number_format($principal, 2), false); ?></td>
                                     </tr>
                                 </table>
                             </td>
@@ -345,24 +345,24 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($installments as $row)
+            <?php $__currentLoopData = $installments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <tr>
-                    <td class="bold">{{ $row->installment_number }}</td>
-                    <td class="bold nowrap">{{ \Carbon\Carbon::parse($row->installmentdate)->format('d-m-Y') }}</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->installment_value, 2) }}</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->benefit_value, 2) }}</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->amount_due, 2) }}</td>
+                    <td class="bold"><?php echo e($row->installment_number, false); ?></td>
+                    <td class="bold nowrap"><?php echo e(\Carbon\Carbon::parse($row->installmentdate)->format('d-m-Y'), false); ?></td>
+                    <td class="text-right bold">$ <?php echo e(number_format((float) $row->installment_value, 2), false); ?></td>
+                    <td class="text-right bold">$ <?php echo e(number_format((float) $row->benefit_value, 2), false); ?></td>
+                    <td class="text-right bold">$ <?php echo e(number_format((float) $row->amount_due, 2), false); ?></td>
                     <td>-</td>
                     <td>-</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->balance, 2) }}</td>
+                    <td class="text-right bold">$ <?php echo e(number_format((float) $row->balance, 2), false); ?></td>
                     <td></td>
                 </tr>
-            @endforeach
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             <tr>
                 <td colspan="2" class="text-right bold">Total</td>
-                <td class="text-right bold">$ {{ number_format($schedulePrincipalTotal, 2) }}</td>
-                <td class="text-right bold">$ {{ number_format($scheduleInterestTotal, 2) }}</td>
-                <td class="text-right bold">$ {{ number_format($scheduleTotalAmount, 2) }}</td>
+                <td class="text-right bold">$ <?php echo e(number_format($schedulePrincipalTotal, 2), false); ?></td>
+                <td class="text-right bold">$ <?php echo e(number_format($scheduleInterestTotal, 2), false); ?></td>
+                <td class="text-right bold">$ <?php echo e(number_format($scheduleTotalAmount, 2), false); ?></td>
                 <td colspan="4" class="muted">Calculator preview only</td>
             </tr>
         </tbody>
@@ -384,7 +384,7 @@
         This document is a loan calculation preview. Confirm customer, product, payment, and loan terms before creating an official loan.
     </div>
 
-    <div class="printed-date">Printed date&nbsp;&nbsp;&nbsp;&nbsp;{{ $printedAt }}</div>
+    <div class="printed-date">Printed date&nbsp;&nbsp;&nbsp;&nbsp;<?php echo e($printedAt, false); ?></div>
 </div>
 
 <script>
@@ -434,3 +434,4 @@
 </script>
 </body>
 </html>
+<?php /**PATH C:\xampp\htdocs\apply like facebook\pos6.12\Modules\LoanManagement\Providers/../Resources/views/loans/print/calculator.blade.php ENDPATH**/ ?>

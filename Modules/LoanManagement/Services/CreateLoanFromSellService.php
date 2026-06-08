@@ -379,7 +379,9 @@ class CreateLoanFromSellService
             $locationId = $this->upsertSnapshot('loan_business_locations', 'main_location_id', $transaction->main_location_id, $this->cloneLocationSnapshot($transaction));
             $durationMonths = max(1, (int) ($data['duration_months'] ?? 1));
             $interestRate = max(0, (float) ($data['interest_rate'] ?? 0));
-            $resolvedInterestType = 'flat';
+            $resolvedInterestType = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
+                ? $data['interest_type']
+                : 'flat';
             $loanMeta = [
                 'interest_rate' => $interestRate,
                 'interest_type' => $resolvedInterestType,
@@ -554,6 +556,9 @@ class CreateLoanFromSellService
         $principal = (float) ($data['principal_amount'] ?? 0);
         $months = max(1, (int) ($data['duration_months'] ?? 1));
         $rate = (float) ($data['interest_rate'] ?? 0) / 100;
+        $interestType = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
+            ? $data['interest_type']
+            : 'flat';
         $firstDue = Carbon::parse($data['first_due_date'] ?? Carbon::today()->addMonth()->toDateString());
         $frequency = $data['payment_frequency'] ?? 'monthly';
 
@@ -572,7 +577,9 @@ class CreateLoanFromSellService
             }
 
             $principalPart = ($i === $months) ? round($remaining, 2) : $principalPer;
-            $interest = $flatInterestPer;
+            $interest = $interestType === 'reducing_balance'
+                ? round($remaining * $rate, 2)
+                : $flatInterestPer;
             $total = round($principalPart + $interest, 2);
             $remaining = max(0, round($remaining - $principalPart, 2));
 

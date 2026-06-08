@@ -1,7 +1,6 @@
-@extends('loanmanagement::layouts.app')
-@section('title', 'Loan Calculator')
+<?php $__env->startSection('title', 'Loan Calculator'); ?>
 
-@section('content_body')
+<?php $__env->startSection('content_body'); ?>
 <style>
     .lm-calculator .box { border-top: 0; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08); }
     .lm-calculator .box-header { padding: 14px 16px; }
@@ -199,7 +198,7 @@
     @media (max-width: 575px) {
         .lm-calculator-summary { grid-template-columns: 1fr; }
     }
-    @if(request()->boolean('_lm_modal'))
+    <?php if(request()->boolean('_lm_modal')): ?>
         html,
         body {
             background: #f8fafc !important;
@@ -231,7 +230,7 @@
         .lm-calculator .box {
             margin-bottom: 14px;
         }
-    @endif
+    <?php endif; ?>
 </style>
 
 <section class="content-header no-print">
@@ -248,40 +247,40 @@
                 <div class="col-sm-6 col-md-3">
                     <div class="form-group">
                         <label>Total Price</label>
-                        <input type="number" step="0.01" min="0" id="calc_total_price" class="form-control" value="{{ $defaults['total_price'] }}">
+                        <input type="number" step="0.01" min="0" id="calc_total_price" class="form-control" value="<?php echo e($defaults['total_price'], false); ?>">
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-3">
                     <div class="form-group">
                         <label>Join Payment / កក់ខ្លះ</label>
-                        <input type="number" step="0.01" min="0" id="calc_down_payment" class="form-control" value="{{ $defaults['down_payment'] }}">
+                        <input type="number" step="0.01" min="0" id="calc_down_payment" class="form-control" value="<?php echo e($defaults['down_payment'], false); ?>">
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-2">
                     <div class="form-group">
                         <label>Interest Rate (%)</label>
-                        <input type="number" step="0.01" min="0" id="calc_interest_rate" class="form-control" value="{{ $defaults['interest_rate'] }}">
+                        <input type="number" step="0.01" min="0" id="calc_interest_rate" class="form-control" value="<?php echo e($defaults['interest_rate'], false); ?>">
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-2">
                     <div class="form-group">
                         <label>Interest Type</label>
                         <select id="calc_interest_type" class="form-control">
-                            <option value="flat" {{ ($defaults['interest_type'] ?? 'flat') === 'flat' ? 'selected' : '' }}>បង់ថេរ</option>
-                            <option value="reducing_balance" {{ ($defaults['interest_type'] ?? 'flat') === 'reducing_balance' ? 'selected' : '' }}>បង់ថយ</option>
+                            <option value="flat" <?php echo e(($defaults['interest_type'] ?? 'flat') === 'flat' ? 'selected' : '', false); ?>>បង់ថេរ</option>
+                            <option value="reducing_balance" <?php echo e(($defaults['interest_type'] ?? 'flat') === 'reducing_balance' ? 'selected' : '', false); ?>>បង់ថយ</option>
                         </select>
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-2">
                     <div class="form-group">
                         <label>Amount Month</label>
-                        <input type="number" step="1" min="1" max="360" id="calc_duration_months" class="form-control" value="{{ $defaults['duration_months'] }}">
+                        <input type="number" step="1" min="1" max="360" id="calc_duration_months" class="form-control" value="<?php echo e($defaults['duration_months'], false); ?>">
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-2">
                     <div class="form-group">
                         <label>First Due Date</label>
-                        <input type="date" id="calc_first_due_date" class="form-control" value="{{ $defaults['first_due_date'] }}">
+                        <input type="date" id="calc_first_due_date" class="form-control" value="<?php echo e($defaults['first_due_date'], false); ?>">
                     </div>
                 </div>
                 <div class="col-sm-12">
@@ -347,7 +346,7 @@
 
 <section id="loanCalculatorPrint">
     <div class="lm-print-page">
-        <div class="lm-print-brand">{{ Session::get('business.name', 'Loan Management') }}</div>
+        <div class="lm-print-brand"><?php echo e(Session::get('business.name', 'Loan Management'), false); ?></div>
         <div class="lm-print-tagline">Loan calculation preview | Generated from Loan Calculator</div>
 
         <div class="lm-print-info-grid">
@@ -359,7 +358,7 @@
             <table class="lm-print-info-table">
                 <tr><td class="label">Customer</td><td class="value">Calculator Preview</td></tr>
                 <tr><td class="label">Phone</td><td class="value">-</td></tr>
-                <tr><td class="label">Created By</td><td class="value">{{ auth()->user()->username ?? auth()->user()->first_name ?? '-' }}</td></tr>
+                <tr><td class="label">Created By</td><td class="value"><?php echo e(auth()->user()->username ?? auth()->user()->first_name ?? '-', false); ?></td></tr>
             </table>
             <table class="lm-print-info-table">
                 <tr><td class="label">Duration</td><td class="value"><span id="print_calc_duration">0</span> months</td></tr>
@@ -462,9 +461,9 @@
         </table>
     </div>
 </section>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('javascript')
+<?php $__env->startSection('javascript'); ?>
 <script>
     (function($) {
         function numberValue(selector) {
@@ -617,7 +616,7 @@
                 first_due_date: $('#calc_first_due_date').val(),
                 auto_print: 1
             });
-            var url = "{{ route('loan-management.loans.calculator.print') }}" + '?' + params;
+            var url = "<?php echo e(route('loan-management.loans.calculator.print'), false); ?>" + '?' + params;
             window.open(url, '_blank', 'noopener,width=1024,height=768');
 
             window.setTimeout(function() {
@@ -629,4 +628,6 @@
         });
     })(jQuery);
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('loanmanagement::layouts.app', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?><?php /**PATH C:\xampp\htdocs\apply like facebook\pos6.12\Modules\LoanManagement\Providers/../Resources/views/loans/calculator.blade.php ENDPATH**/ ?>

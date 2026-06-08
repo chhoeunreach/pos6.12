@@ -1968,6 +1968,7 @@ class LoanInstallmentListController extends Controller
             $loanMeta = json_decode((string) $loanRow->meta_json, true) ?: [];
         }
         $displayInterestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
+        $displayInterestType = (string) ($loanRow->interest_type ?? ($loanMeta['interest_type'] ?? 'flat'));
 
         $customerName = trim((string) ($loanRow->customer_name_snapshot ?? ''));
         $customerPhone = trim((string) ($loanRow->customer_phone_snapshot ?? ''));
@@ -2140,6 +2141,7 @@ class LoanInstallmentListController extends Controller
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
             'displayInterestRate',
+            'displayInterestType',
             'customerName',
             'customerPhone',
             'customerAddress',
@@ -2202,7 +2204,7 @@ class LoanInstallmentListController extends Controller
                 'down_payment' => 'nullable|numeric|min:0',
                 'installment_count' => 'nullable|integer|min:0|max:1000',
                 'interest_rate' => 'nullable|numeric|min:0',
-                'interest_type' => 'nullable|string|max:30',
+                'interest_type' => 'nullable|in:flat,reducing_balance',
                 'payment_frequency' => 'nullable|string|max:30',
                 'currency' => 'nullable|string|max:10',
                 'loan_date' => 'nullable|date',
@@ -2281,7 +2283,9 @@ class LoanInstallmentListController extends Controller
                 $loanMeta['interest_rate'] = (float) $data['interest_rate'];
             }
             if (array_key_exists('interest_type', $data)) {
-                $loanMeta['interest_type'] = $data['interest_type'];
+                $loanMeta['interest_type'] = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
+                    ? $data['interest_type']
+                    : 'flat';
             }
             $data['meta_json'] = json_encode($loanMeta, JSON_UNESCAPED_UNICODE);
 

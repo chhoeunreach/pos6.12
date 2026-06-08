@@ -41,7 +41,10 @@
     $backCustomerId = request('customer_id') ?: ($loanRow->customer_id ?? null);
     $loanStatuses = ['draft', 'pending', 'approved', 'active', 'completed', 'rejected', 'cancelled', 'defaulted', 'closed'];
     $paymentFrequencies = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
-    $interestTypes = ['flat'];
+    $interestTypes = [
+        'flat' => 'បង់ថេរ',
+        'reducing_balance' => 'បង់ថយ',
+    ];
     $collectionStatuses = ['new', 'active', 'follow_up', 'ptp', 'overdue', 'escalated', 'recovery', 'closed'];
     $riskLevels = ['low', 'medium', 'high', 'critical'];
     $ptpStatuses = ['open', 'kept', 'broken', 'cancelled'];
@@ -298,8 +301,8 @@
                         <div class="form-group">
                             <label>Interest Type</label>
                             <select name="interest_type" class="form-control">
-                                @foreach($interestTypes as $interestType)
-                                    <option value="{{ $interestType }}" {{ old('interest_type', $loanRow->interest_type ?? '') === $interestType ? 'selected' : '' }}>{{ ucfirst($interestType) }}</option>
+                                @foreach($interestTypes as $interestType => $interestTypeLabel)
+                                    <option value="{{ $interestType }}" {{ old('interest_type', $displayInterestType ?? 'flat') === $interestType ? 'selected' : '' }}>{{ $interestTypeLabel }}</option>
                                 @endforeach
                             </select>
                         </div>

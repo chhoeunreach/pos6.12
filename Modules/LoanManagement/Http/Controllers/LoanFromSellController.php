@@ -74,6 +74,7 @@ class LoanFromSellController extends Controller
                 'total_price' => 0,
                 'down_payment' => 0,
                 'interest_rate' => 4,
+                'interest_type' => 'flat',
                 'duration_months' => 12,
                 'first_due_date' => Carbon::today()->addMonth()->toDateString(),
                 'currency' => session('currency.code', 'USD'),
@@ -87,6 +88,7 @@ class LoanFromSellController extends Controller
             'total_price' => 'nullable|numeric|min:0',
             'down_payment' => 'nullable|numeric|min:0',
             'interest_rate' => 'nullable|numeric|min:0',
+            'interest_type' => 'nullable|in:flat,reducing_balance',
             'duration_months' => 'nullable|integer|min:1|max:360',
             'first_due_date' => 'nullable|date',
         ]);
@@ -96,13 +98,14 @@ class LoanFromSellController extends Controller
         $principal = max(0, round($totalPrice - $downPayment, 2));
         $durationMonths = max(1, (int) ($data['duration_months'] ?? 12));
         $interestRate = (float) ($data['interest_rate'] ?? 4);
+        $interestType = $data['interest_type'] ?? 'flat';
         $firstDueDate = $data['first_due_date'] ?? Carbon::today()->addMonth()->toDateString();
 
         $scheduleRows = $principal > 0
             ? $this->service->previewSchedule([
                 'principal_amount' => $principal,
                 'interest_rate' => $interestRate,
-                'interest_type' => 'flat',
+                'interest_type' => $interestType,
                 'duration_months' => $durationMonths,
                 'payment_frequency' => 'monthly',
                 'first_due_date' => $firstDueDate,
@@ -146,6 +149,7 @@ class LoanFromSellController extends Controller
             'principal',
             'durationMonths',
             'interestRate',
+            'interestType',
             'firstDueDate',
             'lastDueDate',
             'installments',
@@ -380,7 +384,7 @@ class LoanFromSellController extends Controller
         $payload = $request->validate([
             'principal_amount' => 'required|numeric|min:0.01',
             'interest_rate' => 'nullable|numeric|min:0',
-            'interest_type' => 'required|in:flat',
+            'interest_type' => 'required|in:flat,reducing_balance',
             'duration_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:monthly,weekly,daily',
             'first_due_date' => 'required|date',
