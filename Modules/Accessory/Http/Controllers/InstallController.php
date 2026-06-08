@@ -19,6 +19,8 @@ class InstallController extends Controller
 
     private string $permission = 'accessory.access';
 
+    private string $appVersion;
+
     public function __construct()
     {
         $this->appVersion = config('accessory.module_version', '1.0.0');
@@ -95,6 +97,8 @@ class InstallController extends Controller
             app(PermissionRegistrar::class)->forgetCachedPermissions();
 
             System::removeProperty($this->moduleName . '_version');
+            $this->disableModuleInStatuses();
+            $this->removeModuleBootstrapCache();
             $this->clearCaches();
 
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
@@ -255,6 +259,32 @@ class InstallController extends Controller
 
         $json[$this->moduleDisplayName] = true;
         file_put_contents($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function disableModuleInStatuses(): void
+    {
+        $path = base_path('modules_statuses.json');
+
+        if (! file_exists($path)) {
+            return;
+        }
+
+        $json = json_decode((string) file_get_contents($path), true);
+        if (! is_array($json)) {
+            return;
+        }
+
+        $json[$this->moduleDisplayName] = false;
+        file_put_contents($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function removeModuleBootstrapCache(): void
+    {
+        $path = base_path('bootstrap/cache/accessory_module.php');
+
+        if (file_exists($path)) {
+            @unlink($path);
+        }
     }
 
     private function clearCaches(): void

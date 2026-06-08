@@ -111,6 +111,7 @@ class UseAccessoryDatabase
             $this->ensureDefaultPosData($accessory, $businessId, $mainUser->id);
 
             $this->copyUserAuthorizationData($main, $accessory, $mainUser);
+            $this->forgetPermissionCache();
         } finally {
             $accessory->statement('SET FOREIGN_KEY_CHECKS=1');
         }
@@ -324,15 +325,23 @@ class UseAccessoryDatabase
 
         $permissionIds = $this->filterAllowedPermissionIds($main, $permissionIds);
 
+        $accessoryRoleIds = [];
         foreach ($roleIds as $roleId) {
-            $this->copyRowById($main, $accessory, 'roles', $roleId);
+            $accessoryRoleId = $this->copyRoleForAccessory($main, $accessory, $roleId);
+            if (! $accessoryRoleId) {
+                continue;
+            }
+
+            $accessoryRoleIds[$roleId] = $accessoryRoleId;
 
             $accessory->table('model_has_roles')->insertOrIgnore([
-                'role_id' => $roleId,
+                'role_id' => $accessoryRoleId,
                 'model_type' => 'App\\User',
                 'model_id' => $mainUser->id,
             ]);
         }
+
+        $this->grantAllAllowedPermissionsToAccessoryAdmins($main, $accessory, $accessoryRoleIds);
 
         foreach ($permissionIds as $permissionId) {
             $this->copyRowById($main, $accessory, 'permissions', $permissionId);
@@ -359,12 +368,88 @@ class UseAccessoryDatabase
             ->get();
 
         foreach ($rolePermissionRows as $row) {
+            if (empty($accessoryRoleIds[$row->role_id])) {
+                continue;
+            }
+
             $this->copyRowById($main, $accessory, 'permissions', $row->permission_id);
 
             $accessory->table('role_has_permissions')->insertOrIgnore([
                 'permission_id' => $row->permission_id,
-                'role_id' => $row->role_id,
+                'role_id' => $accessoryRoleIds[$row->role_id],
             ]);
+        }
+    }
+
+    private function copyRoleForAccessory($main, $accessory, $roleId): ?int
+    {
+        if (! $this->hasTable($main, 'roles') || ! $this->hasTable($accessory, 'roles')) {
+            return null;
+        }
+
+        $role = $main->table('roles')->where('id', $roleId)->first();
+        if (! $role) {
+            return null;
+        }
+
+        $roleData = (array) $role;
+        $roleData['business_id'] = 1;
+
+        if (! empty($roleData['name']) && str_contains($roleData['name'], '#')) {
+            $roleData['name'] = preg_replace('/#\d+$/', '#1', $roleData['name']);
+        }
+
+        $existingRoleId = $accessory->table('roles')
+            ->where('name', $roleData['name'])
+            ->where('guard_name', $roleData['guard_name'] ?? 'web')
+            ->where('business_id', 1)
+            ->value('id');
+
+        if ($existingRoleId) {
+            $roleData['id'] = $existingRoleId;
+        }
+
+        $this->copyRow($accessory, 'roles', $roleData);
+
+        return (int) $roleData['id'];
+    }
+
+    private function grantAllAllowedPermissionsToAccessoryAdmins($main, $accessory, array $accessoryRoleIds): void
+    {
+        if (empty($accessoryRoleIds)) {
+            return;
+        }
+
+        $adminRoleIds = $accessory->table('roles')
+            ->whereIn('id', array_values($accessoryRoleIds))
+            ->where('name', 'like', 'Admin#%')
+            ->pluck('id');
+
+        if ($adminRoleIds->isEmpty()) {
+            return;
+        }
+
+        $permissionIds = $this->filterAllowedPermissionIds(
+            $main,
+            $main->table('permissions')->pluck('id')->unique()->values()
+        );
+
+        foreach ($permissionIds as $permissionId) {
+            $this->copyRowById($main, $accessory, 'permissions', $permissionId);
+
+            foreach ($adminRoleIds as $adminRoleId) {
+                $accessory->table('role_has_permissions')->insertOrIgnore([
+                    'permission_id' => $permissionId,
+                    'role_id' => $adminRoleId,
+                ]);
+            }
+        }
+    }
+
+    private function forgetPermissionCache(): void
+    {
+        if (class_exists(\Spatie\Permission\PermissionRegistrar::class)) {
+            app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
         }
     }
 
@@ -417,5 +502,3 @@ class UseAccessoryDatabase
         return Schema::connection($connection->getName())->hasTable($table);
     }
 }
-
-

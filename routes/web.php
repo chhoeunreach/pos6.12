@@ -76,6 +76,20 @@ use Illuminate\Support\Facades\Route;
 
 include_once 'install_r.php';
 
+if (
+    class_exists(\Modules\Accessory\Http\Controllers\InstallController::class) &&
+    (! \Module::has('Accessory') || ! \Module::find('Accessory')->isEnabled())
+) {
+    Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone'])
+        ->prefix(config('accessory.route_prefix', 'accessory'))
+        ->group(function () {
+            Route::get('/install', [\Modules\Accessory\Http\Controllers\InstallController::class, 'index']);
+            Route::post('/install', [\Modules\Accessory\Http\Controllers\InstallController::class, 'install']);
+            Route::get('/install/uninstall', [\Modules\Accessory\Http\Controllers\InstallController::class, 'uninstall']);
+            Route::get('/install/update', [\Modules\Accessory\Http\Controllers\InstallController::class, 'update']);
+        });
+}
+
 Route::middleware(['setData'])->group(function () {
     Route::get('/', function () {
         return view('welcome');
