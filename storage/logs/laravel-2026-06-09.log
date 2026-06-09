@@ -439,3 +439,14 @@ Did you mean one of these?
 #4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
 #5 {main}
 "} 
+[2026-06-09 19:44:20] local.INFO: Users import template downloaded {"business_id":1,"user_id":1} 
+[2026-06-09 19:55:34] local.INFO: Business location import template downloaded {"business_id":1,"user_id":1} 
+[2026-06-09 19:56:58] local.INFO: Business location export {"business_id":1,"user_id":1,"format":"xlsx","include_inactive":false,"count":1} 
+[2026-06-09 20:32:53] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"update","total_rows":27,"error_rows":27} 
+[2026-06-09 20:32:57] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"update","total_rows":27,"error_rows":27} 
+[2026-06-09 20:33:25] local.INFO: Business location import template downloaded {"business_id":1,"user_id":1} 
+[2026-06-09 20:33:55] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"update","total_rows":25,"error_rows":0} 
+[2026-06-09 20:34:02] local.INFO: Business location import confirm {"business_id":1,"user_id":1,"mode":"update","result":{"inserted":0,"updated":1,"skipped":24}} 
+[2026-06-09 20:34:27] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"update","total_rows":25,"error_rows":0} 
+[2026-06-09 20:40:17] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"upsert","total_rows":25,"error_rows":0} 
+[2026-06-09 20:40:23] local.INFO: Business location import confirm {"business_id":1,"user_id":1,"mode":"upsert","result":{"inserted":24,"updated":1,"skipped":0}} 

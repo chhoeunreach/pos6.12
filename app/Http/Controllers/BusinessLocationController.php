@@ -706,15 +706,25 @@ class BusinessLocationController extends Controller
         $this->ensureAdminOrSuperadmin($business_id);
         $user_id = $request->session()->get('user.id');
         $token = $request->input('token');
-        $mode = $request->input('mode');
+        $requestedMode = $request->input('mode');
 
         $payload = Cache::get('bl_import_preview:' . $token);
         if (empty($payload) || ($payload['business_id'] ?? null) !== $business_id || ($payload['user_id'] ?? null) !== $user_id) {
             return ['success' => false, 'msg' => 'Import preview expired. Please preview again.'];
         }
 
-        if (($payload['mode'] ?? null) !== $mode) {
-            return ['success' => false, 'msg' => 'Import mode mismatch. Please preview again.'];
+        $mode = $payload['mode'] ?? null;
+        if (! in_array($mode, ['insert', 'update', 'upsert'], true)) {
+            return ['success' => false, 'msg' => 'Import preview expired. Please preview again.'];
+        }
+
+        if ($requestedMode !== $mode) {
+            Log::warning('Business location import confirm mode changed after preview; using preview mode', [
+                'business_id' => $business_id,
+                'user_id' => $user_id,
+                'preview_mode' => $mode,
+                'requested_mode' => $requestedMode,
+            ]);
         }
 
         $rows = $payload['rows'] ?? [];

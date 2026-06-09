@@ -198,6 +198,7 @@
             $('#bl_preview_table_wrap').hide();
             $('#bl_preview_table tbody').empty();
             $('#bl_import_token').val('');
+            $('#bl_import_token').data('mode', '');
             $('#bl_confirm_import_btn').prop('disabled', true);
         }
 
@@ -207,6 +208,10 @@
 
         $('#bl_import_modal').on('hidden.bs.modal', function() {
             $('#bl_import_file').val('');
+            resetImportPreview();
+        });
+
+        $('#bl_import_file, #bl_import_mode').on('change', function() {
             resetImportPreview();
         });
 
@@ -222,7 +227,8 @@
             var formData = new FormData();
             formData.append('_token', '{{ csrf_token() }}');
             formData.append('file', fileInput.files[0]);
-            formData.append('mode', $('#bl_import_mode').val());
+            var previewMode = $('#bl_import_mode').val();
+            formData.append('mode', previewMode);
 
             $.ajax({
                 method: 'POST',
@@ -242,10 +248,11 @@
                         return;
                     }
 
-                    $('#bl_import_token').val(result.token || '');
+                    $('#bl_import_token').val(result.token || '').data('mode', previewMode);
 
                     var s = result.summary || {};
                     var summaryHtml = '<b>Total:</b> ' + (s.total_rows || 0)
+                        + ' | <b>Mode:</b> ' + $('#bl_import_mode option:selected').text()
                         + ' | <b>New:</b> ' + (s.new_rows || 0)
                         + ' | <b>Existing:</b> ' + (s.existing_rows || 0)
                         + ' | <b>Skipped:</b> ' + (s.skipped_rows || 0)
@@ -295,7 +302,7 @@
                 data: {
                     _token: '{{ csrf_token() }}',
                     token: token,
-                    mode: $('#bl_import_mode').val()
+                    mode: $('#bl_import_token').data('mode') || $('#bl_import_mode').val()
                 },
                 beforeSend: function() {
                     $('#bl_confirm_import_btn').prop('disabled', true);
