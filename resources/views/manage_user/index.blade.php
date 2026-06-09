@@ -17,26 +17,32 @@
 <!-- Main content -->
 <section class="content">
     @component('components.widget', ['class' => 'box-primary', 'title' => __( 'user.all_users' )])
-        @can('user.create')
+        @if(!empty($can_user_import_export) || auth()->user()->can('user.create'))
             @slot('tool')
                 <div class="box-tools">
                     @if(!empty($can_user_import_export))
-                        <a class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" href="{{ action([\App\Http\Controllers\ManageUserController::class, 'downloadTemplate']) }}">
-                            <i class="fa fa-download"></i> @lang('lang_v1.download_template')
-                        </a>
-                        <button type="button" class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" data-toggle="modal" data-target="#users_import_modal">
-                            <i class="fa fa-upload"></i> @lang('lang_v1.import')
-                        </button>
-                        <button type="button" class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" data-toggle="modal" data-target="#users_export_modal">
-                            <i class="fa fa-file-excel-o"></i> @lang('lang_v1.export')
-                        </button>
+                        @if(!empty($can_user_import))
+                            <a class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" href="{{ action([\App\Http\Controllers\ManageUserController::class, 'downloadTemplate']) }}">
+                                <i class="fa fa-download"></i> @lang('lang_v1.download_template')
+                            </a>
+                            <button type="button" class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" data-toggle="modal" data-target="#users_import_modal">
+                                <i class="fa fa-upload"></i> @lang('lang_v1.import')
+                            </button>
+                        @endif
+                        @if(!empty($can_user_export))
+                            <button type="button" class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary tw-mr-2" data-toggle="modal" data-target="#users_export_modal">
+                                <i class="fa fa-file-excel-o"></i> @lang('lang_v1.export')
+                            </button>
+                        @endif
                     @endif
-                    <a class="tw-dw-btn tw-bg-gradient-to-r tw-from-indigo-600 tw-to-blue-500 tw-font-bold tw-text-white tw-border-none tw-rounded-full" href="{{action([\App\Http\Controllers\ManageUserController::class, 'create'])}}">
-                        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>                        @lang( 'messages.add' )
-                    </a>
+                    @can('user.create')
+                        <a class="tw-dw-btn tw-bg-gradient-to-r tw-from-indigo-600 tw-to-blue-500 tw-font-bold tw-text-white tw-border-none tw-rounded-full" href="{{action([\App\Http\Controllers\ManageUserController::class, 'create'])}}">
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>                        @lang( 'messages.add' )
+                        </a>
+                    @endcan
                  </div>
             @endslot
-        @endcan
+        @endif
         @can('user.view')
             <div class="table-responsive">
                 <table class="table table-bordered table-striped" id="users_table">
@@ -58,7 +64,7 @@
     	aria-labelledby="gridSystemModalLabel">
     </div>
 
-    @if(!empty($can_user_import_export))
+    @if(!empty($can_user_import))
         <div class="modal fade" id="users_import_modal" tabindex="-1" role="dialog" aria-labelledby="usersImportModalLabel">
             <div class="modal-dialog modal-lg" role="document">
                 <div class="modal-content">
@@ -121,7 +127,9 @@
                 </div>
             </div>
         </div>
+    @endif
 
+    @if(!empty($can_user_export))
         <div class="modal fade" id="users_export_modal" tabindex="-1" role="dialog" aria-labelledby="usersExportModalLabel">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
@@ -219,7 +227,7 @@
              });
         });
 
-        @if(!empty($can_user_import_export))
+        @if(!empty($can_user_import))
             function resetUsersImportPreview() {
                 $('#users_import_summary').hide().html('');
                 $('#users_import_preview_wrap').hide();
@@ -344,7 +352,9 @@
                     }
                 });
             });
+        @endif
 
+        @if(!empty($can_user_export))
             $('#users_export_btn').click(function() {
                 var url = '{{ action([\App\Http\Controllers\ManageUserController::class, 'exportUsers']) }}'
                     + '?format=' + encodeURIComponent($('#users_export_format').val())

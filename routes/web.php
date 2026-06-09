@@ -90,6 +90,20 @@ if (
         });
 }
 
+if (
+    class_exists(\Modules\Service\Http\Controllers\InstallController::class) &&
+    (! \Module::has('Service') || ! \Module::find('Service')->isEnabled())
+) {
+    Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone'])
+        ->prefix(config('service.route_prefix', 'service'))
+        ->group(function () {
+            Route::get('/install', [\Modules\Service\Http\Controllers\InstallController::class, 'index']);
+            Route::post('/install', [\Modules\Service\Http\Controllers\InstallController::class, 'install']);
+            Route::get('/install/uninstall', [\Modules\Service\Http\Controllers\InstallController::class, 'uninstall']);
+            Route::get('/install/update', [\Modules\Service\Http\Controllers\InstallController::class, 'update']);
+        });
+}
+
 Route::middleware(['setData'])->group(function () {
     Route::get('/', function () {
         return view('welcome');

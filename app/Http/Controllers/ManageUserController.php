@@ -46,7 +46,11 @@ class ManageUserController extends Controller
      */
     public function index()
     {
-        if (! auth()->user()->can('user.view') && ! auth()->user()->can('user.create')) {
+        $can_user_import = $this->canManageUserImport();
+        $can_user_export = $this->canManageUserExport();
+        $can_user_import_export = $can_user_import || $can_user_export;
+
+        if (! auth()->user()->can('user.view') && ! auth()->user()->can('user.create') && ! $can_user_import_export) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -92,9 +96,7 @@ class ManageUserController extends Controller
                 ->make(true);
         }
 
-        $can_user_import_export = $this->canManageUserImportExport();
-
-        return view('manage_user.index')->with(compact('can_user_import_export'));
+        return view('manage_user.index')->with(compact('can_user_import', 'can_user_export', 'can_user_import_export'));
     }
 
     /**
@@ -787,21 +789,40 @@ class ManageUserController extends Controller
         $business_id = (int) request()->session()->get('user.business_id');
         $is_admin = $this->moduleUtil->is_admin(auth()->user(), $business_id);
         $is_superadmin = auth()->user()->can('superadmin');
+        $permission = $action === 'export' ? 'user.export' : 'user.import';
 
-        if (! ($is_admin || $is_superadmin)) {
+        if (! ($is_admin || $is_superadmin || auth()->user()->can($permission))) {
             abort(403, 'Unauthorized action.');
         }
     }
 
     private function canManageUserImportExport(): bool
     {
+        return $this->canUserImportExportAction('import') || $this->canUserImportExportAction('export');
+    }
+
+    private function canManageUserImport(): bool
+    {
+        return $this->canUserImportExportAction('import');
+    }
+
+    private function canManageUserExport(): bool
+    {
+        return $this->canUserImportExportAction('export');
+    }
+
+    private function canUserImportExportAction(string $action): bool
+    {
         if (! auth()->check()) {
             return false;
         }
 
         $business_id = (int) request()->session()->get('user.business_id');
+        $permission = $action === 'export' ? 'user.export' : 'user.import';
 
-        return $this->moduleUtil->is_admin(auth()->user(), $business_id) || auth()->user()->can('superadmin');
+        return $this->moduleUtil->is_admin(auth()->user(), $business_id)
+            || auth()->user()->can('superadmin')
+            || auth()->user()->can($permission);
     }
 
     private function readUserImportRows($file): array

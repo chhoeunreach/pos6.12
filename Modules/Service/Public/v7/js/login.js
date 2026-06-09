@@ -1,0 +1,193 @@
+var recaptchaRendered = false;
+
+function renderRegisterRecaptcha(form) {
+    var recaptchaContainer = form.find('#recaptcha-container').get(0);
+    var recaptchaSiteKey = window.RECAPTCHA_SITE_KEY;
+
+    if (!recaptchaContainer || !recaptchaSiteKey) {
+        return;
+    }
+
+    if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function') {
+        return;
+    }
+
+    if (recaptchaRendered || recaptchaContainer.childNodes.length > 0) {
+        recaptchaRendered = true;
+
+        return;
+    }
+
+    grecaptcha.render(recaptchaContainer, {
+        sitekey: recaptchaSiteKey,
+    });
+    recaptchaRendered = true;
+}
+
+$(document).ready(function() {
+    $('[data-toggle="tooltip"]').tooltip();
+
+    // registration form steps start
+    if ($('#business_register_form').length) {
+        var form = $('#business_register_form').show();
+        var showRegisterFallback = function() {
+            form.find('.register-submit-fallback').show();
+        };
+        var hideRegisterFallback = function() {
+            form.find('.register-submit-fallback').hide();
+        };
+
+        if ($.isFunction(form.steps)) {
+            hideRegisterFallback();
+            form.steps({
+                headerTag: 'h3',
+                bodyTag: 'fieldset',
+                transitionEffect: 'slideLeft',
+                labels: {
+                    finish: LANG.register,
+                    next: LANG.next,
+                    previous: LANG.previous,
+                },
+                onStepChanging: function(event, currentIndex, newIndex) {
+                    // Always allow previous action even if the current form is not valid.
+                    if (currentIndex > newIndex) {
+                        return true;
+                    }
+                    // Needed in some cases if the user went back (clean up)
+                    if (currentIndex < newIndex) {
+                        // To remove error styles
+                        form.find('.body:eq(' + newIndex + ') label.error').remove();
+                        form.find('.body:eq(' + newIndex + ') .error').removeClass('error');
+                    }
+                    form.validate().settings.ignore = ':disabled,:hidden';
+                    return form.valid();
+                },
+                onStepChanged: function(event, currentIndex, priorIndex) {
+                    renderRegisterRecaptcha(form);
+                },
+                onFinishing: function(event, currentIndex) {
+                    renderRegisterRecaptcha(form);
+                    form.validate().settings.ignore = ':disabled';
+
+                    return form.valid();
+                },
+                onFinished: function(event, currentIndex) {
+                    renderRegisterRecaptcha(form);
+                    form.validate().settings.ignore = ':disabled';
+
+                    if (form.valid()) {
+                        form.get(0).submit();
+                    } else {
+                        showRegisterFallback();
+                    }
+                },
+            });
+            form.find('a[href="#previous"]').addClass('tw-dw-btn');
+            form.find('a[href="#next"]').addClass('tw-dw-btn tw-dw-btn-primary');
+            form.find('a[href="#finish"]').addClass('tw-dw-btn tw-dw-btn-primary');
+
+            if (!form.find('a[href="#finish"]').length) {
+                showRegisterFallback();
+            }
+        } else {
+            showRegisterFallback();
+        }
+    }
+    // registration form steps end
+
+    //Date picker
+    $('.start-date-picker').datepicker({
+        autoclose: true,
+        endDate: 'today',
+    });
+
+    $('form#business_register_form').validate({
+        errorPlacement: function(error, element) {
+            if (element.parent('.input-group').length) {
+                error.insertAfter(element.parent());
+            } else if (element.hasClass('input-icheck') && element.parent().hasClass('icheckbox_square-blue')) {
+                error.insertAfter(element.parent().parent().parent());
+            } else {
+                error.insertAfter(element);
+            }
+        },
+        rules: {
+            name: 'required',
+            email: {
+                email: true,
+                remote: {
+                    url: '/business/register/check-email',
+                    type: 'post',
+                    data: {
+                        email: function() {
+                            return $('#email').val();
+                        },
+                        is_disposable_email: true,
+                    },
+                    dataFilter: function(response) {
+                        try {
+                            // jQuery Validate expects true success as the literal string 'true'.
+                            if (response === 'true' || response === true) {
+                                return 'true';
+                            }
+                            var msg = (typeof response === 'string' && response.trim().length)
+                                ? response
+                                : ((typeof LANG !== 'undefined' && LANG.email_taken) ? LANG.email_taken : 'This email has already been taken.');
+                            // Escape quotes in message
+                            return '"' + msg.replace(/"/g, '\\"') + '"';
+                        } catch (e) {
+                            return '"' + ((typeof LANG !== 'undefined' && LANG.email_taken) ? LANG.email_taken : 'This email has already been taken.') + '"';
+                        }
+                    }
+                },
+            },
+            password: {
+                required: true,
+                minlength: 4,
+            },
+            confirm_password: {
+                equalTo: '#password',
+            },
+            username: {
+                required: true,
+                minlength: 4,
+                remote: {
+                    url: '/business/register/check-username',
+                    type: 'post',
+                    data: {
+                        username: function() {
+                            return $('#username').val();
+                        },
+                    },
+                },
+            },
+            website: {
+                url: true,
+            },
+        },
+        messages: {
+            name: LANG.specify_business_name,
+            password: {
+                minlength: LANG.password_min_length,
+            },
+            confirm_password: {
+                equalTo: LANG.password_mismatch,
+            },
+            username: {
+                remote: LANG.invalid_username,
+            },
+            // Do not override email.remote; we use server response via dataFilter
+        },
+    });
+
+    if ($('#business_logo').length && $.isFunction($('#business_logo').fileinput)) {
+        $('#business_logo').fileinput({
+            showUpload: false,
+            showPreview: false,
+            browseLabel: LANG.file_browse_label,
+            removeLabel: LANG.remove,
+        });
+    }
+
+    renderRegisterRecaptcha($('#business_register_form'));
+});

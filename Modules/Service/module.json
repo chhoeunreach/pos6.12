@@ -1,0 +1,14 @@
+{
+    "name": "Service",
+    "alias": "service",
+    "description": "POS 7 converted into an Service module.",
+    "keywords": ["service", "pos7", "pos"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\Service\\Providers\\ServiceServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

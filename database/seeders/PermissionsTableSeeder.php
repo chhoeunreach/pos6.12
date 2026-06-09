@@ -19,6 +19,8 @@ class PermissionsTableSeeder extends Seeder
             ['name' => 'user.create'],
             ['name' => 'user.update'],
             ['name' => 'user.delete'],
+            ['name' => 'user.import'],
+            ['name' => 'user.export'],
 
             ['name' => 'supplier.view'],
             ['name' => 'supplier.create'],

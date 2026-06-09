@@ -125,6 +125,22 @@
               </label>
             </div>
           </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'user.import', in_array('user.import', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} {{ __('lang_v1.import') }} {{ __('user.users') }}
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'user.export', in_array('user.export', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} {{ __('lang_v1.export') }} {{ __('user.users') }}
+              </label>
+            </div>
+          </div>
         </div>
         </div>
         <hr>
