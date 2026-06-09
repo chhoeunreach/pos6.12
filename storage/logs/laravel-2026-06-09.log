@@ -234,3 +234,208 @@
 #19 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
 #20 {main}
 "} 
+[2026-06-09 17:42:59] local.ERROR: PHP Parse error: Syntax error, unexpected ')' on line 1 {"exception":"[object] (Psy\\Exception\\ParseErrorException(code: 0): PHP Parse error: Syntax error, unexpected ')' on line 1 at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Exception\\ParseErrorException.php:44)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(657): Psy\\Exception\\ParseErrorException::fromParseError(Object(PhpParser\\Error))
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(273): Psy\\CodeCleaner->parse('<?php foreach (...', false)
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1358): Psy\\CodeCleaner->clean(Array, false)
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1465): Psy\\Shell->appendCode('foreach (['mysq...', true, false)
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach (['mysq...', true)
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach (['mysq...')
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#17 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#18 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#19 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#20 {main}
+"} 
+[2026-06-09 17:42:59] local.ERROR: PHP Parse error: Syntax error, unexpected ')' on line 1 {"exception":"[object] (Psy\\Exception\\ParseErrorException(code: 0): PHP Parse error: Syntax error, unexpected ')' on line 1 at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Exception\\ParseErrorException.php:44)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(657): Psy\\Exception\\ParseErrorException::fromParseError(Object(PhpParser\\Error))
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(273): Psy\\CodeCleaner->parse('<?php foreach (...', false)
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1358): Psy\\CodeCleaner->clean(Array, false)
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1465): Psy\\Shell->appendCode('foreach (['mysq...', true, false)
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach (['mysq...', true)
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach (['mysq...')
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#17 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#18 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#19 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#20 {main}
+"} 
+[2026-06-09 17:43:14] local.ERROR: PHP Parse error: Syntax error, unexpected '=' on line 1 {"exception":"[object] (Psy\\Exception\\ParseErrorException(code: 0): PHP Parse error: Syntax error, unexpected '=' on line 1 at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Exception\\ParseErrorException.php:44)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(657): Psy\\Exception\\ParseErrorException::fromParseError(Object(PhpParser\\Error))
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(273): Psy\\CodeCleaner->parse('<?php foreach (...', false)
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1358): Psy\\CodeCleaner->clean(Array, false)
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1465): Psy\\Shell->appendCode('foreach ([mysql...', true, false)
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach ([mysql...', true)
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach ([mysql...')
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#17 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#18 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#19 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#20 {main}
+"} 
+[2026-06-09 17:43:36] local.ERROR: Unexpected end of input {"exception":"[object] (InvalidArgumentException(code: 0): Unexpected end of input at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php:1475)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach ([mysql...', true)
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach ([mysql...')
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 {main}
+"} 
+[2026-06-09 17:43:53] local.ERROR: PHP Parse error: Syntax error, unexpected '=' on line 1 {"exception":"[object] (Psy\\Exception\\ParseErrorException(code: 0): PHP Parse error: Syntax error, unexpected '=' on line 1 at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Exception\\ParseErrorException.php:44)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(657): Psy\\Exception\\ParseErrorException::fromParseError(Object(PhpParser\\Error))
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\CodeCleaner.php(273): Psy\\CodeCleaner->parse('<?php foreach (...', false)
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1358): Psy\\CodeCleaner->clean(Array, false)
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(1465): Psy\\Shell->appendCode('foreach ([mysql...', true, false)
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach ([mysql...', true)
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach ([mysql...')
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#17 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#18 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#19 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#20 {main}
+"} 
+[2026-06-09 17:43:54] local.ERROR: Unexpected end of input {"exception":"[object] (InvalidArgumentException(code: 0): Unexpected end of input at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php:1475)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\psy\\psysh\\src\\Shell.php(2173): Psy\\Shell->setCode('foreach ([mysql...', true)
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(77): Psy\\Shell->execute('foreach ([mysql...')
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(41): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(93): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#5 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#6 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(661): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#7 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(183): Illuminate\\Container\\Container->call(Array)
+#8 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Command\\Command.php(326): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#9 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(152): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#10 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(1098): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#11 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(324): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#12 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#13 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#14 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#15 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#16 {main}
+"} 
+[2026-06-09 17:44:15] local.ERROR: Command "config:show" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show {"exception":"[object] (Symfony\\Component\\Console\\Exception\\CommandNotFoundException(code: 0): Command \"config:show\" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php:745)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(266): Symfony\\Component\\Console\\Application->find('config:show')
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#5 {main}
+"} 
+[2026-06-09 17:44:15] local.ERROR: Command "config:show" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show {"exception":"[object] (Symfony\\Component\\Console\\Exception\\CommandNotFoundException(code: 0): Command \"config:show\" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php:745)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(266): Symfony\\Component\\Console\\Application->find('config:show')
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#5 {main}
+"} 
+[2026-06-09 17:44:16] local.ERROR: Command "config:show" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show {"exception":"[object] (Symfony\\Component\\Console\\Exception\\CommandNotFoundException(code: 0): Command \"config:show\" is not defined.
+
+Did you mean one of these?
+    config:cache
+    config:clear
+    db:show
+    model:show
+    permission:show at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php:745)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(266): Symfony\\Component\\Console\\Application->find('config:show')
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#5 {main}
+"} 

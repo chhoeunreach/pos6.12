@@ -21,7 +21,6 @@ npm-debug.log
 /public/mix-manifest.json
 .scribe
 /public/docs
-/config/database.php
 /storage/framework/cache/data/*
 /storage/logs/*.log
 /storage/framework/sessions/*
