@@ -957,6 +957,8 @@ class PurchaseController extends Controller
                     $query->where('products.name', 'like', '%'.$term.'%');
                     $query->orWhere('sku', 'like', '%'.$term.'%');
                     $query->orWhere('sub_sku', 'like', '%'.$term.'%');
+                    $query->orWhere('variations.product_keywords', 'like', '%'.$term.'%');
+                    $query->orWhere('product_custom_field1', 'like', '%'.$term.'%');
                 })
                 ->active()
                 ->where('business_id', $business_id)
@@ -968,6 +970,7 @@ class PurchaseController extends Controller
                     // 'products.sku as sku',
                     'variations.id as variation_id',
                     'variations.name as variation',
+                    'variations.product_keywords',
                     'variations.sub_sku as sub_sku'
                 )
                 ->groupBy('variation_id');

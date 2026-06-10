@@ -457,6 +457,7 @@ class ImportProductsController extends Controller
                         $dpp_exc_tax_string = trim($value[18]);
                         $selling_price_string = trim($value[20]);
                         $profit_margin_string = trim($value[19]);
+                        $product_keywords_string = isset($value[37]) ? trim($value[37]) : '';
 
                         if (empty($dpp_inc_tax_string) && empty($dpp_exc_tax_string)) {
                             $is_valid = false;
@@ -529,11 +530,22 @@ class ImportProductsController extends Controller
                             }
                         }
 
+                        $product_keywords = [];
+                        if (! empty($product_keywords_string)) {
+                            $product_keywords = array_map('trim', explode('|', $product_keywords_string));
+                            if (count($product_keywords) == 1 && count($variation_values) > 1) {
+                                $product_keywords = array_fill(0, count($variation_values), $product_keywords[0]);
+                            }
+                        }
+
                         //Check if length of prices array is equal to variation values array length
                         $array_lengths_count = [count($variation_values), count($dpp_inc_tax), count($dpp_exc_tax), count($selling_price), count($profit_margin)];
 
                         if (! empty($variation_skus)) {
                             $array_lengths_count[] = count($variation_skus);
+                        }
+                        if (! empty($product_keywords)) {
+                            $array_lengths_count[] = count($product_keywords);
                         }
                         $same = array_count_values($array_lengths_count);
 
@@ -573,6 +585,7 @@ class ImportProductsController extends Controller
                                 'default_sell_price' => $variation_prices['dsp_exc_tax'],
                                 'sell_price_inc_tax' => $variation_prices['dsp_inc_tax'],
                                 'sub_sku' => ! empty($variation_skus[$k]) ? $variation_skus[$k] : '',
+                                'product_keywords' => ! empty($product_keywords[$k]) ? $product_keywords[$k] : null,
                             ];
                         }
 
@@ -681,7 +694,9 @@ class ImportProductsController extends Controller
                                 $variation_data['dpp_inc_tax'],
                                 $variation_data['profit_percent'],
                                 $variation_data['dsp_exc_tax'],
-                                $variation_data['dsp_inc_tax']
+                                $variation_data['dsp_inc_tax'],
+                                [],
+                                isset($imported_data[$index][37]) ? trim($imported_data[$index][37]) : null
                             );
                             if (! empty($opening_stock)) {
                                 $this->addOpeningStock($opening_stock, $product, $business_id);

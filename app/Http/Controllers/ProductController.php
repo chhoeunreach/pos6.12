@@ -294,9 +294,11 @@ class ProductController extends Controller
                 )
                 ->filterColumn('products.sku', function ($query, $keyword) {
                     $query->whereHas('variations', function ($q) use ($keyword) {
-                        $q->where('sub_sku', 'like', "%{$keyword}%");
+                        $q->where('sub_sku', 'like', "%{$keyword}%")
+                            ->orWhere('product_keywords', 'like', "%{$keyword}%");
                     })
-                    ->orWhere('products.sku', 'like', "%{$keyword}%");
+                    ->orWhere('products.sku', 'like', "%{$keyword}%")
+                    ->orWhere('products.product_custom_field1', 'like', "%{$keyword}%");
                 })
                 ->setRowAttr([
                     'data-href' => function ($row) {
@@ -511,7 +513,7 @@ class ProductController extends Controller
             }
 
             if ($product->type == 'single') {
-                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('single_dpp'), $request->input('single_dpp_inc_tax'), $request->input('profit_percent'), $request->input('single_dsp'), $request->input('single_dsp_inc_tax'));
+                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('single_dpp'), $request->input('single_dpp_inc_tax'), $request->input('profit_percent'), $request->input('single_dsp'), $request->input('single_dsp_inc_tax'), [], $request->input('product_keywords'));
             } elseif ($product->type == 'variable') {
                 if (! empty($request->input('product_variation'))) {
                     $input_variations = $request->input('product_variation');
@@ -536,7 +538,7 @@ class ProductController extends Controller
                     }
                 }
 
-                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('item_level_purchase_price_total'), $request->input('purchase_price_inc_tax'), $request->input('profit_percent'), $request->input('selling_price'), $request->input('selling_price_inc_tax'), $combo_variations);
+                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('item_level_purchase_price_total'), $request->input('purchase_price_inc_tax'), $request->input('profit_percent'), $request->input('selling_price'), $request->input('selling_price_inc_tax'), $combo_variations, $request->input('product_keywords'));
             }
 
             //Add product racks details.
@@ -802,7 +804,7 @@ class ProductController extends Controller
             $product->product_locations()->sync($product_locations);
 
             if ($product->type == 'single') {
-                $single_data = $request->only(['single_variation_id', 'single_dpp', 'single_dpp_inc_tax', 'single_dsp_inc_tax', 'profit_percent', 'single_dsp']);
+                $single_data = $request->only(['single_variation_id', 'single_dpp', 'single_dpp_inc_tax', 'single_dsp_inc_tax', 'profit_percent', 'single_dsp', 'product_keywords']);
                 $variation = Variation::find($single_data['single_variation_id']);
 
                 $variation->sub_sku = $product->sku;
@@ -811,6 +813,7 @@ class ProductController extends Controller
                 $variation->profit_percent = $this->productUtil->num_uf($single_data['profit_percent']);
                 $variation->default_sell_price = $this->productUtil->num_uf($single_data['single_dsp']);
                 $variation->sell_price_inc_tax = $this->productUtil->num_uf($single_data['single_dsp_inc_tax']);
+                $variation->product_keywords = $single_data['product_keywords'] ?? null;
                 $variation->save();
 
                 Media::uploadMedia($product->business_id, $variation, $request, 'variation_images');
@@ -852,6 +855,7 @@ class ProductController extends Controller
                 $variation->default_sell_price = $this->productUtil->num_uf($request->input('selling_price'));
                 $variation->sell_price_inc_tax = $this->productUtil->num_uf($request->input('selling_price_inc_tax'));
                 $variation->combo_variations = $combo_variations;
+                $variation->product_keywords = $request->input('product_keywords');
                 $variation->save();
             }
 
@@ -1119,9 +1123,10 @@ class ProductController extends Controller
 
                 $variation_id = $product_deatails['variations'][0]->id;
                 $profit_percent = $product_deatails['variations'][0]->profit_percent;
+                $product_keywords = $product_deatails['variations'][0]->product_keywords ?? null;
 
                 return view('product.partials.combo_product_form_part')
-                ->with(compact('combo_variations', 'profit_percent', 'action', 'variation_id'));
+                ->with(compact('combo_variations', 'profit_percent', 'action', 'variation_id', 'product_keywords'));
             }
         }
     }
@@ -1255,10 +1260,13 @@ class ProductController extends Controller
             $price_group_id = request()->input('price_group', '');
             $product_types = request()->get('product_types', []);
 
-            $search_fields = request()->get('search_fields', ['name', 'sku']);
+            $search_fields = request()->get('search_fields', ['name', 'sku', 'product_custom_field1']);
             if (in_array('sku', $search_fields)) {
                 $search_fields[] = 'sub_sku';
+                $search_fields[] = 'product_keywords';
+                $search_fields[] = 'product_custom_field1';
             }
+            $search_fields = array_unique($search_fields);
 
             $result = $this->productUtil->filterProduct($business_id, $search_term, $location_id, $not_for_selling, $price_group_id, $product_types, $search_fields, $check_qty);
 
@@ -1399,6 +1407,7 @@ class ProductController extends Controller
                     $query->where('products.name', 'like', '%'.$term.'%');
                     $query->orWhere('sku', 'like', '%'.$term.'%');
                     $query->orWhere('sub_sku', 'like', '%'.$term.'%');
+                    $query->orWhere('product_custom_field1', 'like', '%'.$term.'%');
                 });
             }
 
@@ -1668,7 +1677,9 @@ class ProductController extends Controller
                 $request->input('single_dpp_inc_tax'),
                 $request->input('profit_percent'),
                 $request->input('single_dsp'),
-                $request->input('single_dsp_inc_tax')
+                $request->input('single_dsp_inc_tax'),
+                [],
+                $request->input('product_keywords')
             );
 
             if ($product->enable_stock == 1 && ! empty($request->input('opening_stock'))) {

@@ -46,6 +46,7 @@ class ImportProductsTemplateExport implements FromArray
             'CUSTOM FIELD 4',
             'NOT FOR SELLING(1=yes 0=No)',
             'PRODUCT LOCATIONS',
+            'PRODUCT KEYWORDS',
         ]];
     }
 }

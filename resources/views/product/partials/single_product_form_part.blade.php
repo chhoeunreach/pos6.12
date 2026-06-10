@@ -16,6 +16,7 @@
           <th>@lang('product.default_purchase_price')</th>
           <th>@lang('product.profit_percent') @show_tooltip(__('tooltip.profit_percent'))</th>
           <th>@lang('product.default_selling_price')</th>
+          <th>Product Keywords</th>
           @if(empty($quick_add))
             <th>@lang('lang_v1.product_image')</th>
           @endif
@@ -45,6 +46,10 @@
             {!! Form::text('single_dsp', $default, ['class' => 'form-control input-sm dsp input_number', 'placeholder' => __('product.exc_of_tax'), 'id' => 'single_dsp', 'required']); !!}
 
             {!! Form::text('single_dsp_inc_tax', $default, ['class' => 'form-control input-sm hide input_number', 'placeholder' => __('product.inc_of_tax'), 'id' => 'single_dsp_inc_tax', 'required']); !!}
+          </td>
+          <td>
+            {!! Form::label('product_keywords', 'Product Keywords:') !!}
+            {!! Form::text('product_keywords', null, ['class' => 'form-control input-sm', 'placeholder' => 'Enter keywords (comma separated)']); !!}
           </td>
           @if(empty($quick_add))
           <td>

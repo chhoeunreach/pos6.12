@@ -7,7 +7,11 @@ $(document).ready(function() {
                 source: function(request, response) {
                     $.getJSON(
                         '/products/list',
-                        { location_id: $('#location_id').val(), term: request.term },
+                        {
+                            location_id: $('#location_id').val(),
+                            term: request.term,
+                            search_fields: ['name', 'sku', 'sub_sku', 'product_keywords', 'product_custom_field1', 'lot'],
+                        },
                         response
                     );
                 },

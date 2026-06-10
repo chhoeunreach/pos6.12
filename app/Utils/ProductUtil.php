@@ -36,7 +36,7 @@ class ProductUtil extends Util
      * @param $combo_variations = []
      * @return bool
      */
-    public function createSingleProductVariation($product, $sku, $purchase_price, $dpp_inc_tax, $profit_percent, $selling_price, $selling_price_inc_tax, $combo_variations = [])
+    public function createSingleProductVariation($product, $sku, $purchase_price, $dpp_inc_tax, $profit_percent, $selling_price, $selling_price_inc_tax, $combo_variations = [], $product_keywords = null)
     {
         if (! is_object($product)) {
             $product = Product::find($product);
@@ -60,6 +60,7 @@ class ProductUtil extends Util
             'default_sell_price' => $this->num_uf($selling_price),
             'sell_price_inc_tax' => $this->num_uf($selling_price_inc_tax),
             'combo_variations' => $combo_variations,
+            'product_keywords' => $product_keywords,
         ];
         $variation = $product_variation->variations()->create($variation_data);
 
@@ -170,6 +171,7 @@ class ProductUtil extends Util
                         'profit_percent' => $this->num_uf($v['profit_percent']),
                         'default_sell_price' => $this->num_uf($v['default_sell_price']),
                         'sell_price_inc_tax' => $this->num_uf($v['sell_price_inc_tax']),
+                        'product_keywords' => $v['product_keywords'] ?? null,
                     ];
                     $c++;
                     $images[] = 'variation_images_'.$key.'_'.$k;
@@ -217,6 +219,7 @@ class ProductUtil extends Util
                         'profit_percent' => $this->num_uf($v['profit_percent']),
                         'default_sell_price' => $this->num_uf($v['default_sell_price']),
                         'sell_price_inc_tax' => $this->num_uf($v['sell_price_inc_tax']),
+                        'product_keywords' => $v['product_keywords'] ?? null,
                     ];
                     if (! empty($v['sub_sku'])) {
                         $data['sub_sku'] = $v['sub_sku'];
@@ -270,6 +273,7 @@ class ProductUtil extends Util
                         'profit_percent' => $this->num_uf($v['profit_percent']),
                         'default_sell_price' => $this->num_uf($v['default_sell_price']),
                         'sell_price_inc_tax' => $this->num_uf($v['sell_price_inc_tax']),
+                        'product_keywords' => $v['product_keywords'] ?? null,
                     ];
                     $c++;
                     $media[] = 'variation_images_'.$key.'_'.$k;
@@ -1672,7 +1676,11 @@ class ProductUtil extends Util
                         $query->orWhere('pl.lot_number', 'like', '%'.$search_term.'%');
                     }
 
-                    if (in_array('product_custom_field1', $search_fields)) {
+                    if (in_array('product_keywords', $search_fields)) {
+                        $query->orWhere('variations.product_keywords', 'like', '%'.$search_term.'%');
+                    }
+
+                    if (in_array('product_custom_field1', $search_fields) || in_array('product_keywords', $search_fields)) {
                         $query->orWhere('product_custom_field1', 'like', '%'.$search_term.'%');
                     }
                     if (in_array('product_custom_field2', $search_fields)) {
@@ -1705,6 +1713,14 @@ class ProductUtil extends Util
                     if (in_array('lot', $search_fields)) {
                         $query->orWhere('pl.lot_number', $search_term);
                     }
+
+                    if (in_array('product_keywords', $search_fields)) {
+                        $query->orWhere('variations.product_keywords', $search_term);
+                    }
+
+                    if (in_array('product_custom_field1', $search_fields) || in_array('product_keywords', $search_fields)) {
+                        $query->orWhere('product_custom_field1', $search_term);
+                    }
                 });
             }
         }
@@ -1728,6 +1744,7 @@ class ProductUtil extends Util
                 'VLD.qty_available',
                 'variations.sell_price_inc_tax as selling_price',
                 'variations.sub_sku',
+                'variations.product_keywords',
                 'U.short_name as unit'
             );
 

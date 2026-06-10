@@ -17,7 +17,7 @@ class ProductsExport implements FromArray
                     ->get();
 
         //set headers
-        $products_array = [['NAME', 'BRAND', 'UNIT', 'CATEGORY', 'SUB-CATEGORY', 'SKU (Leave blank to auto generate sku)', 'BARCODE TYPE', 'MANAGE STOCK (1=yes 0=No)', 'ALERT QUANTITY', 'EXPIRES IN', 'EXPIRY PERIOD UNIT (months/days)', 'APPLICABLE TAX', 'Selling Price Tax Type (inclusive or exclusive)', 'PRODUCT TYPE (single or variable)', 'VARIATION NAME (Keep blank if product type is single)', 'VARIATION VALUES (| seperated values & blank if product type if single)', 'VARIATION SKUs (| seperated values & blank if product type if single)', 'PURCHASE PRICE (Including tax)', 'PURCHASE PRICE (Excluding tax)', 'PROFIT MARGIN', 'SELLING PRICE', 'OPENING STOCK', 'OPENING STOCK LOCATION', 'EXPIRY DATE', 'ENABLE IMEI OR SERIAL NUMBER(1=yes 0=No)', 'WEIGHT', 'RACK', 'ROW', 'POSITION', 'IMAGE', 'PRODUCT DESCRIPTION', 'PRODUCT KEYWORD', 'CUSTOM FIELD 2', 'CUSTOM FIELD 3', 'CUSTOM FIELD 4', 'NOT FOR SELLING(1=yes 0=No)', 'PRODUCT LOCATIONS']];
+        $products_array = [['NAME', 'BRAND', 'UNIT', 'CATEGORY', 'SUB-CATEGORY', 'SKU (Leave blank to auto generate sku)', 'BARCODE TYPE', 'MANAGE STOCK (1=yes 0=No)', 'ALERT QUANTITY', 'EXPIRES IN', 'EXPIRY PERIOD UNIT (months/days)', 'APPLICABLE TAX', 'Selling Price Tax Type (inclusive or exclusive)', 'PRODUCT TYPE (single or variable)', 'VARIATION NAME (Keep blank if product type is single)', 'VARIATION VALUES (| seperated values & blank if product type if single)', 'VARIATION SKUs (| seperated values & blank if product type if single)', 'PURCHASE PRICE (Including tax)', 'PURCHASE PRICE (Excluding tax)', 'PROFIT MARGIN', 'SELLING PRICE', 'OPENING STOCK', 'OPENING STOCK LOCATION', 'EXPIRY DATE', 'ENABLE IMEI OR SERIAL NUMBER(1=yes 0=No)', 'WEIGHT', 'RACK', 'ROW', 'POSITION', 'IMAGE', 'PRODUCT DESCRIPTION', 'PRODUCT KEYWORD', 'CUSTOM FIELD 2', 'CUSTOM FIELD 3', 'CUSTOM FIELD 4', 'NOT FOR SELLING(1=yes 0=No)', 'PRODUCT LOCATIONS', 'PRODUCT KEYWORDS']];
         foreach ($products as $product) {
             $product_variation = $product->product_variations->first();
 
@@ -29,6 +29,7 @@ class ProductsExport implements FromArray
             $profit_percents = implode('|', $product_variation->variations->pluck('profit_percent')->toArray());
             $selling_prices = $product->tax_type == 'inclusive' ? implode('|', $product_variation->variations->pluck('sell_price_inc_tax')->toArray()) : implode('|', $product_variation->variations->pluck('default_sell_price')->toArray());
             $locations = implode(',', $product->product_locations->pluck('name')->toArray());
+            $product_keywords = implode('|', $product_variation->variations->pluck('product_keywords')->toArray());
 
             $rack_details = [];
             $row_details = [];
@@ -81,6 +82,7 @@ class ProductsExport implements FromArray
                 $product->product_custom_field4,
                 $product->not_for_selling,
                 $locations,
+                $product_keywords,
             ];
 
             $products_array[] = $product_arr;

@@ -18,7 +18,7 @@ $(document).ready(function() {
                         {
                             location_id: $('#location_id').val(),
                             term: request.term,
-                            search_fields: ['name', 'sku', 'lot'],
+                            search_fields: ['name', 'sku', 'sub_sku', 'product_keywords', 'product_custom_field1', 'lot'],
                             group_by_purchase_line: 1
                         },
                         response

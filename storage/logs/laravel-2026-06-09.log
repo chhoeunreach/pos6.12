@@ -450,3 +450,17 @@ Did you mean one of these?
 [2026-06-09 20:34:27] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"update","total_rows":25,"error_rows":0} 
 [2026-06-09 20:40:17] local.INFO: Business location import preview {"business_id":1,"user_id":1,"mode":"upsert","total_rows":25,"error_rows":0} 
 [2026-06-09 20:40:23] local.INFO: Business location import confirm {"business_id":1,"user_id":1,"mode":"upsert","result":{"inserted":24,"updated":1,"skipped":0}} 
+[2026-06-09 21:02:25] local.EMERGENCY: File:C:\xampp\htdocs\apply like facebook\pos6.12\app\Http\Controllers\ImportProductsController.phpLine:624Message:PURCHASE PRICE is required in row no. 1261  
+[2026-06-09 21:02:53] local.EMERGENCY: File:C:\xampp\htdocs\apply like facebook\pos6.12\app\Http\Controllers\ImportProductsController.phpLine:624Message:PURCHASE PRICE is required in row no. 1261  
+[2026-06-09 22:05:08] local.ERROR: Command "php" is not defined. {"exception":"[object] (Symfony\\Component\\Console\\Exception\\CommandNotFoundException(code: 0): Command \"php\" is not defined. at C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php:745)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(266): Symfony\\Component\\Console\\Application->find('php')
+#1 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\symfony\\console\\Application.php(175): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#2 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Application.php(102): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#3 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(155): Illuminate\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#4 C:\\xampp\\htdocs\\apply like facebook\\pos6.12\\artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#5 {main}
+"} 
+[2026-06-09 22:20:08] local.EMERGENCY: File:C:\xampp\htdocs\apply like facebook\pos6.12\app\Http\Controllers\ImportProductsController.phpLine:624Message:Invalid value for MANAGE STOCK in row no. 1  
+[2026-06-09 22:33:35] local.EMERGENCY: File:C:\xampp\htdocs\apply like facebook\pos6.12\app\Http\Controllers\ImportProductsController.phpLine:624Message:Invalid value for MANAGE STOCK in row no. 1  
+[2026-06-09 23:38:19] local.EMERGENCY: File:C:\xampp\htdocs\apply like facebook\pos6.12\app\Http\Controllers\ImportProductsController.phpLine:624Message:10100001 SKU already exist in row no. 1  

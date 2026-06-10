@@ -278,11 +278,17 @@
         <div class="clearfix"></div>
 
         @foreach($product_custom_fields as $index => $cf)
+            @php
+                $field_number = $loop->iteration;
+                if (preg_match('/custom_field_(\d+)/', $index, $matches)) {
+                    $field_number = (int) $matches[1];
+                }
+            @endphp
             @if(!empty($cf))
                 @php
-                    $db_field_name = 'product_custom_field' . $loop->iteration;
-                    $cf_type = !empty($product_cf_details[$loop->iteration]['type']) ? $product_cf_details[$loop->iteration]['type'] : 'text';
-                    $dropdown = !empty($product_cf_details[$loop->iteration]['dropdown_options']) ? explode(PHP_EOL, $product_cf_details[$loop->iteration]['dropdown_options']) : [];
+                    $db_field_name = 'product_custom_field' . $field_number;
+                    $cf_type = !empty($product_cf_details[$field_number]['type']) ? $product_cf_details[$field_number]['type'] : 'text';
+                    $dropdown = !empty($product_cf_details[$field_number]['dropdown_options']) ? explode(PHP_EOL, $product_cf_details[$field_number]['dropdown_options']) : [];
                 @endphp
 
                 <div class="col-sm-3">

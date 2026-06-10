@@ -3592,7 +3592,7 @@ function set_search_fields() {
     var pos_search_fields = localStorage.getItem('pos_search_fields');
 
     if (pos_search_fields === null) {
-        pos_search_fields = ['name', 'sku', 'lot'];
+        pos_search_fields = ['name', 'sku', 'lot', 'product_custom_field1'];
     }
 
     $('input[name="search_fields[]"]').each(function() {
