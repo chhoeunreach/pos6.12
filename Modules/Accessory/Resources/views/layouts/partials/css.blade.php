@@ -76,6 +76,19 @@
 </style>
 
 <link rel="stylesheet" href="{{ asset('modules/accessory/v7/css/vendor.css?v='.$asset_v) }}">
+<style>
+    .icheckbox_square-blue,
+    .iradio_square-blue {
+        background-image: url("{{ asset('images/vendor/icheck/skins/square/blue.png') }}");
+    }
+
+    @media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+        .icheckbox_square-blue,
+        .iradio_square-blue {
+            background-image: url("{{ asset('images/vendor/icheck/skins/square/blue@2x.png') }}");
+        }
+    }
+</style>
 
 @if( in_array(session()->get('user.language', config('app.locale')), config('constants.langs_rtl')) )
 	<link rel="stylesheet" href="{{ asset('modules/accessory/v7/css/rtl.css?v='.$asset_v) }}">

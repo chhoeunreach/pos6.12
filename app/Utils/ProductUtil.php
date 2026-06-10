@@ -1820,6 +1820,17 @@ class ProductUtil extends Util
             $query->where('p.unit_id', $filters['unit_id']);
         }
 
+        $product_keywords = trim((string) ($filters['product_keywords'] ?? ''));
+        if ($product_keywords !== '') {
+            $query->where(function ($q) use ($product_keywords) {
+                $q->where('p.name', 'like', "%{$product_keywords}%")
+                    ->orWhere('p.sku', 'like', "%{$product_keywords}%")
+                    ->orWhere('p.product_custom_field1', 'like', "%{$product_keywords}%")
+                    ->orWhere('variations.sub_sku', 'like', "%{$product_keywords}%")
+                    ->orWhere('variations.product_keywords', 'like', "%{$product_keywords}%");
+            });
+        }
+
         if (! empty($filters['tax_id'])) {
             $query->where('p.tax', $filters['tax_id']);
         }

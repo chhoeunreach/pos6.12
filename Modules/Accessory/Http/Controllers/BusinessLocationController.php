@@ -10,6 +10,12 @@ use App\SellingPriceGroup;
 use App\Utils\ModuleUtil;
 use App\Utils\Util;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Permission\Models\Permission;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -374,5 +380,556 @@ class BusinessLocationController extends Controller
         }
 
         return $output;
+    }
+
+    public function downloadTemplate(Request $request)
+    {
+        if (! auth()->user()->can('business_settings.access')) {
+            abort(403, 'Unauthorized action.');
+        }
+        $business_id = $request->session()->get('user.business_id');
+        $this->ensureAdminOrSuperadmin($business_id);
+
+        $columns = [
+            'name',
+            'location_id',
+            'landmark',
+            'country',
+            'state',
+            'city',
+            'zip_code',
+            'invoice_scheme',
+            'invoice_layout',
+            'selling_price_group',
+            'mobile',
+            'alternate_number',
+            'email',
+            'website',
+            'custom_field1',
+            'custom_field2',
+            'custom_field3',
+            'custom_field4',
+            'is_active',
+        ];
+
+        $filename = 'business_locations_template_' . date('Ymd_His') . '.csv';
+
+        $callback = function () use ($columns) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $columns);
+            fclose($out);
+        };
+
+        Log::info('Accessory business location import template downloaded', [
+            'business_id' => $business_id,
+            'user_id' => $request->session()->get('user.id'),
+        ]);
+
+        return response()->streamDownload($callback, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function export(Request $request)
+    {
+        if (! auth()->user()->can('business_settings.access')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+        $this->ensureAdminOrSuperadmin($business_id);
+        $include_inactive = $request->boolean('include_inactive', false);
+        $format = strtolower((string) $request->input('format', 'csv'));
+        $format = in_array($format, ['csv', 'xlsx'], true) ? $format : 'csv';
+
+        $locations = BusinessLocation::where('business_id', $business_id)
+            ->when(! $include_inactive, fn ($q) => $q->where('is_active', 1))
+            ->orderBy('name')
+            ->get();
+
+        $invoiceSchemes = DB::table('invoice_schemes')->where('business_id', $business_id)->pluck('name', 'id');
+        $invoiceLayouts = DB::table('invoice_layouts')->where('business_id', $business_id)->pluck('name', 'id');
+        $priceGroups = DB::table('selling_price_groups')->where('business_id', $business_id)->pluck('name', 'id');
+
+        $rows = [];
+        foreach ($locations as $loc) {
+            $rows[] = [
+                'name' => $loc->name,
+                'location_id' => $loc->location_id,
+                'landmark' => $loc->landmark,
+                'country' => $loc->country,
+                'state' => $loc->state,
+                'city' => $loc->city,
+                'zip_code' => $loc->zip_code,
+                'invoice_scheme' => $invoiceSchemes[$loc->invoice_scheme_id] ?? null,
+                'invoice_layout' => $invoiceLayouts[$loc->invoice_layout_id] ?? null,
+                'selling_price_group' => $priceGroups[$loc->selling_price_group_id] ?? null,
+                'mobile' => $loc->mobile,
+                'alternate_number' => $loc->alternate_number,
+                'email' => $loc->email,
+                'website' => $loc->website,
+                'custom_field1' => $loc->custom_field1,
+                'custom_field2' => $loc->custom_field2,
+                'custom_field3' => $loc->custom_field3,
+                'custom_field4' => $loc->custom_field4,
+                'is_active' => (int) ($loc->is_active ?? 0),
+            ];
+        }
+
+        $filename = 'business_locations_' . date('Ymd_His') . '.' . $format;
+
+        Log::info('Accessory business location export', [
+            'business_id' => $business_id,
+            'user_id' => $request->session()->get('user.id'),
+            'format' => $format,
+            'include_inactive' => $include_inactive,
+            'count' => count($rows),
+        ]);
+
+        if ($format === 'xlsx') {
+            return Excel::download(new \App\Exports\ArrayExport($rows), $filename);
+        }
+
+        $callback = function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, array_keys($rows[0] ?? [
+                'name' => null,
+                'location_id' => null,
+                'landmark' => null,
+                'country' => null,
+                'state' => null,
+                'city' => null,
+                'zip_code' => null,
+                'invoice_scheme' => null,
+                'invoice_layout' => null,
+                'selling_price_group' => null,
+                'mobile' => null,
+                'alternate_number' => null,
+                'email' => null,
+                'website' => null,
+                'custom_field1' => null,
+                'custom_field2' => null,
+                'custom_field3' => null,
+                'custom_field4' => null,
+                'is_active' => null,
+            ]));
+            foreach ($rows as $row) {
+                fputcsv($out, $row);
+            }
+            fclose($out);
+        };
+
+        return response()->streamDownload($callback, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    public function importPreview(Request $request)
+    {
+        if (! auth()->user()->can('business_settings.access')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:5120',
+            'mode' => 'required|in:insert,update,upsert',
+        ]);
+
+        $business_id = $request->session()->get('user.business_id');
+        $this->ensureAdminOrSuperadmin($business_id);
+        $user_id = $request->session()->get('user.id');
+        $mode = $request->input('mode', 'insert');
+
+        try {
+            $file = $request->file('file');
+            $sheets = Excel::toArray(new \App\Imports\BusinessLocationsImportPreview, $file);
+            $rawRows = $sheets[0] ?? [];
+
+            $normalizedRows = [];
+            $names = [];
+            $locationIds = [];
+            $rowNumber = 1;
+            foreach ($rawRows as $row) {
+                $rowNumber++;
+                $row = array_change_key_case(array_map(fn ($v) => is_string($v) ? trim($v) : $v, $row), CASE_LOWER);
+                if (empty(array_filter($row, fn ($v) => $v !== null && $v !== ''))) {
+                    continue;
+                }
+                $name = trim((string) ($row['name'] ?? ''));
+                $locationId = trim((string) ($row['location_id'] ?? ''));
+                $names[] = $name;
+                if ($locationId !== '') {
+                    $locationIds[] = $locationId;
+                }
+                $normalizedRows[] = [
+                    'row_number' => $rowNumber,
+                    'data' => $row,
+                ];
+            }
+
+            $existingByName = BusinessLocation::where('business_id', $business_id)
+                ->whereIn('name', array_values(array_unique(array_filter($names))))
+                ->get()
+                ->keyBy('name');
+
+            $existingByLocationId = BusinessLocation::where('business_id', $business_id)
+                ->whereIn('location_id', array_values(array_unique(array_filter($locationIds))))
+                ->get()
+                ->keyBy('location_id');
+
+            $locationIdCounts = [];
+            foreach (array_filter($locationIds) as $locationId) {
+                $locationIdCounts[$locationId] = ($locationIdCounts[$locationId] ?? 0) + 1;
+            }
+
+            $summary = [
+                'total_rows' => count($normalizedRows),
+                'new_rows' => 0,
+                'existing_rows' => 0,
+                'skipped_rows' => 0,
+                'error_rows' => 0,
+            ];
+
+            $previewRows = [];
+            foreach ($normalizedRows as $rowInfo) {
+                $row = $rowInfo['data'];
+                $row_no = $rowInfo['row_number'];
+                $errors = [];
+
+                $name = trim((string) ($row['name'] ?? ''));
+                $locationId = trim((string) ($row['location_id'] ?? ''));
+                if ($name === '') {
+                    $errors[] = 'name is required';
+                }
+                if ($locationId !== '' && ($locationIdCounts[$locationId] ?? 0) > 1) {
+                    $errors[] = 'duplicate location_id in file';
+                }
+                if (! empty($row['email']) && ! filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+                    $errors[] = 'invalid email';
+                }
+
+                $parsed_active = $this->parseIsActive($row['is_active'] ?? null, $errors);
+
+                $existing = $this->findExistingLocationForImport(
+                    $name,
+                    $locationId,
+                    $existingByName,
+                    $existingByLocationId,
+                    $errors
+                );
+                $exists = ! empty($existing);
+                $status = $exists ? 'existing' : 'new';
+                $action = $exists ? 'update' : 'insert';
+
+                if ($mode === 'insert' && $exists) {
+                    $action = 'skip';
+                } elseif ($mode === 'update' && ! $exists) {
+                    $action = 'skip';
+                }
+
+                if (! empty($errors)) {
+                    $status = 'error';
+                    $action = 'skip';
+                }
+
+                if ($status === 'error') {
+                    $summary['error_rows']++;
+                } elseif ($exists) {
+                    $summary['existing_rows']++;
+                } else {
+                    $summary['new_rows']++;
+                }
+                if ($action === 'skip') {
+                    $summary['skipped_rows']++;
+                }
+
+                $previewRows[] = [
+                    'row_number' => $row_no,
+                    'name' => $name,
+                    'location_id' => $locationId,
+                    'status' => $status,
+                    'action' => $action,
+                    'errors' => $errors,
+                    'parsed' => [
+                        'is_active' => $parsed_active,
+                    ],
+                    'data' => $row,
+                ];
+            }
+
+            $token = Str::random(40);
+            Cache::put('accessory_bl_import_preview:' . $token, [
+                'business_id' => $business_id,
+                'user_id' => $user_id,
+                'mode' => $mode,
+                'rows' => $previewRows,
+                'created_at' => now()->toDateTimeString(),
+            ], now()->addMinutes(30));
+
+            Log::info('Accessory business location import preview', [
+                'business_id' => $business_id,
+                'user_id' => $user_id,
+                'mode' => $mode,
+                'total_rows' => $summary['total_rows'],
+                'error_rows' => $summary['error_rows'],
+            ]);
+
+            return [
+                'success' => true,
+                'token' => $token,
+                'summary' => $summary,
+                'rows' => $previewRows,
+            ];
+        } catch (\Exception $e) {
+            Log::emergency('Accessory BL import preview error File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'msg' => __('messages.something_went_wrong'),
+            ];
+        }
+    }
+
+    public function importConfirm(Request $request)
+    {
+        if (! auth()->user()->can('business_settings.access')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'token' => 'required|string',
+            'mode' => 'required|in:insert,update,upsert',
+        ]);
+
+        $business_id = $request->session()->get('user.business_id');
+        $this->ensureAdminOrSuperadmin($business_id);
+        $user_id = $request->session()->get('user.id');
+        $token = $request->input('token');
+        $requestedMode = $request->input('mode');
+
+        $payload = Cache::get('accessory_bl_import_preview:' . $token);
+        if (empty($payload) || ($payload['business_id'] ?? null) !== $business_id || ($payload['user_id'] ?? null) !== $user_id) {
+            return ['success' => false, 'msg' => 'Import preview expired. Please preview again.'];
+        }
+
+        $mode = $payload['mode'] ?? null;
+        if (! in_array($mode, ['insert', 'update', 'upsert'], true)) {
+            return ['success' => false, 'msg' => 'Import preview expired. Please preview again.'];
+        }
+
+        if ($requestedMode !== $mode) {
+            Log::warning('Accessory business location import confirm mode changed after preview; using preview mode', [
+                'business_id' => $business_id,
+                'user_id' => $user_id,
+                'preview_mode' => $mode,
+                'requested_mode' => $requestedMode,
+            ]);
+        }
+
+        $rows = $payload['rows'] ?? [];
+        $errorRows = array_filter($rows, fn ($r) => ($r['status'] ?? '') === 'error');
+        if (! empty($errorRows)) {
+            return ['success' => false, 'msg' => 'Fix import errors in preview before confirming.'];
+        }
+
+        try {
+            $result = DB::transaction(function () use ($rows, $business_id, $mode) {
+                $updated = 0;
+                $inserted = 0;
+                $skipped = 0;
+
+                $invoiceSchemes = DB::table('invoice_schemes')->where('business_id', $business_id)->pluck('id', 'name');
+                $invoiceSchemesById = DB::table('invoice_schemes')->where('business_id', $business_id)->pluck('id', 'id');
+                $invoiceLayouts = DB::table('invoice_layouts')->where('business_id', $business_id)->pluck('id', 'name');
+                $invoiceLayoutsById = DB::table('invoice_layouts')->where('business_id', $business_id)->pluck('id', 'id');
+                $priceGroups = DB::table('selling_price_groups')->where('business_id', $business_id)->pluck('id', 'name');
+                $priceGroupsById = DB::table('selling_price_groups')->where('business_id', $business_id)->pluck('id', 'id');
+                $existingLocations = BusinessLocation::where('business_id', $business_id)->get();
+                $existingByName = $existingLocations->keyBy('name');
+                $existingByLocationId = $existingLocations->filter(function ($location) {
+                    return ! empty($location->location_id);
+                })->keyBy('location_id');
+
+                $hasIsActive = Schema::hasColumn('business_locations', 'is_active');
+
+                foreach ($rows as $row) {
+                    $action = $row['action'] ?? 'skip';
+                    if ($action === 'skip') {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $data = $row['data'] ?? [];
+                    $name = trim((string) ($data['name'] ?? ''));
+                    if ($name === '') {
+                        throw new \Exception('Invalid row: name is required.');
+                    }
+
+                    $input = [
+                        'business_id' => $business_id,
+                        'name' => $name,
+                        'location_id' => $this->nullableTrimmedString($data['location_id'] ?? null),
+                        'landmark' => $data['landmark'] ?? null,
+                        'country' => $data['country'] ?? null,
+                        'state' => $data['state'] ?? null,
+                        'city' => $data['city'] ?? null,
+                        'zip_code' => $data['zip_code'] ?? null,
+                        'mobile' => $data['mobile'] ?? null,
+                        'alternate_number' => $data['alternate_number'] ?? null,
+                        'email' => $data['email'] ?? null,
+                        'website' => $data['website'] ?? null,
+                        'custom_field1' => $data['custom_field1'] ?? null,
+                        'custom_field2' => $data['custom_field2'] ?? null,
+                        'custom_field3' => $data['custom_field3'] ?? null,
+                        'custom_field4' => $data['custom_field4'] ?? null,
+                    ];
+
+                    if ($hasIsActive) {
+                        $errors = [];
+                        $input['is_active'] = $this->parseIsActive($data['is_active'] ?? null, $errors);
+                    }
+
+                    $input['invoice_scheme_id'] = $this->resolveLookupId($data['invoice_scheme'] ?? null, $invoiceSchemes, $invoiceSchemesById);
+                    $input['invoice_layout_id'] = $this->resolveLookupId($data['invoice_layout'] ?? null, $invoiceLayouts, $invoiceLayoutsById);
+                    $input['selling_price_group_id'] = $this->resolveLookupId($data['selling_price_group'] ?? null, $priceGroups, $priceGroupsById);
+
+                    $existing = $this->findExistingLocationForImport(
+                        $name,
+                        trim((string) ($data['location_id'] ?? '')),
+                        $existingByName,
+                        $existingByLocationId
+                    );
+
+                    if ($existing) {
+                        if ($mode === 'insert') {
+                            $skipped++;
+                            continue;
+                        }
+                        $existing->fill($input);
+                        $existing->save();
+                        $updated++;
+                    } else {
+                        if ($mode === 'update') {
+                            $skipped++;
+                            continue;
+                        }
+                        $created = BusinessLocation::create($input);
+                        Permission::firstOrCreate([
+                            'name' => 'location.' . $created->id,
+                            'guard_name' => 'web',
+                        ]);
+                        $inserted++;
+                    }
+                }
+
+                return compact('inserted', 'updated', 'skipped');
+            });
+
+            Cache::forget('accessory_bl_import_preview:' . $token);
+
+            Log::info('Accessory business location import confirm', [
+                'business_id' => $business_id,
+                'user_id' => $user_id,
+                'mode' => $mode,
+                'result' => $result,
+            ]);
+
+            return [
+                'success' => true,
+                'msg' => "Import completed. Inserted: {$result['inserted']}, Updated: {$result['updated']}, Skipped: {$result['skipped']}",
+                'data' => $result,
+            ];
+        } catch (\Exception $e) {
+            Log::emergency('Accessory BL import confirm error File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'msg' => $e->getMessage() ?: __('messages.something_went_wrong'),
+            ];
+        }
+    }
+
+    private function parseIsActive($value, array &$errors = [])
+    {
+        if ($value === null || $value === '') {
+            return 1;
+        }
+
+        if (is_numeric($value)) {
+            $v = (int) $value;
+            if ($v === 0 || $v === 1) {
+                return $v;
+            }
+        }
+
+        $v = strtolower(trim((string) $value));
+        $map = [
+            '1' => 1,
+            '0' => 0,
+            'yes' => 1,
+            'no' => 0,
+            'active' => 1,
+            'inactive' => 0,
+            'true' => 1,
+            'false' => 0,
+        ];
+        if (array_key_exists($v, $map)) {
+            return $map[$v];
+        }
+
+        $errors[] = 'invalid is_active (use 1/0, yes/no, active/inactive)';
+
+        return 1;
+    }
+
+    private function resolveLookupId($value, $nameToIdMap, $idToIdMap)
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $valueStr = trim((string) $value);
+        if ($valueStr === '') {
+            return null;
+        }
+
+        if (is_numeric($valueStr) && isset($idToIdMap[(int) $valueStr])) {
+            return (int) $valueStr;
+        }
+
+        return $nameToIdMap[$valueStr] ?? null;
+    }
+
+    private function ensureAdminOrSuperadmin($business_id): void
+    {
+        if (! $this->commonUtil->is_admin(auth()->user(), $business_id)) {
+            abort(403, 'Unauthorized action.');
+        }
+    }
+
+    private function findExistingLocationForImport(
+        string $name,
+        string $locationId,
+        $existingByName,
+        $existingByLocationId,
+        array &$errors = []
+    ) {
+        $existingByNameMatch = $name !== '' ? ($existingByName[$name] ?? null) : null;
+        $existingByLocationIdMatch = $locationId !== '' ? ($existingByLocationId[$locationId] ?? null) : null;
+
+        if (! empty($existingByNameMatch) && ! empty($existingByLocationIdMatch) && (int) $existingByNameMatch->id !== (int) $existingByLocationIdMatch->id) {
+            $errors[] = 'name and location_id match different existing locations';
+
+            return null;
+        }
+
+        return $existingByLocationIdMatch ?? $existingByNameMatch;
+    }
+
+    private function nullableTrimmedString($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 }

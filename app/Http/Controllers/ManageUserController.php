@@ -1074,7 +1074,7 @@ class ManageUserController extends Controller
     private function getImportRoleMap(int $business_id): array
     {
         $roles = [];
-        foreach (Role::where('business_id', $business_id)->get(['id', 'name']) as $role) {
+        foreach (Role::where('business_id', $business_id)->get(['id', 'name', 'guard_name']) as $role) {
             $display_name = str_replace('#' . $business_id, '', (string) $role->name);
             $roles[strtolower($display_name)] = $role;
             $roles[strtolower((string) $role->name)] = $role;
@@ -1220,9 +1220,15 @@ class ManageUserController extends Controller
 
     private function applyImportedRoleAndLocations(User $user, array $data, int $business_id, array &$warnings = []): void
     {
+        $this->normalizeImportedUserGuard($user);
         $this->syncImportedRole($user, (string) ($data['role'] ?? ''), $business_id, $warnings);
         $resolved_locations = $data['_resolved_locations'] ?? $this->resolveImportedLocations((string) ($data['location_names'] ?? ''), $this->getImportLocationMap($business_id), $warnings);
         $this->syncImportedLocations($user, (array) $resolved_locations, $business_id);
+    }
+
+    private function normalizeImportedUserGuard(User $user): void
+    {
+        $user->setAttribute('guard_name', 'web');
     }
 
     private function syncImportedRole(User $user, string $role_name, int $business_id, array &$warnings = []): void

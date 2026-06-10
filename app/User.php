@@ -38,6 +38,11 @@ class User extends Authenticatable
     // change api guard to web
     protected $guard_name = 'web';
 
+    public function guardName(): string
+    {
+        return 'web';
+    }
+
     /**
      * The attributes that should be mutated to dates.
      *

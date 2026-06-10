@@ -40,7 +40,9 @@ class InstallController extends Controller
             abort(404);
         }
 
-        $action_url = action([\Modules\Repair\Http\Controllers\InstallController::class, 'install']);
+        $action_url = $this->isServiceRepairRequest()
+            ? url(config('service.route_prefix', 'service').'/repair/install')
+            : action([\Modules\Repair\Http\Controllers\InstallController::class, 'install']);
         $intruction_type = 'uf';
         $action_type = 'install';
         $module_display_name = $this->module_display_name;
@@ -108,6 +110,12 @@ class InstallController extends Controller
                 'success' => false,
                 'msg' => $e->getMessage(),
             ];
+        }
+
+        if ($this->isServiceRepairRequest()) {
+            return redirect()
+                ->to(url(config('service.route_prefix', 'service').'/home'))
+                ->with('status', $output);
         }
 
         return redirect()
@@ -194,5 +202,10 @@ class InstallController extends Controller
         foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
             Artisan::call($cmd);
         }
+    }
+
+    private function isServiceRepairRequest(): bool
+    {
+        return request()->is(trim(config('service.route_prefix', 'service'), '/').'/repair/install*');
     }
 }

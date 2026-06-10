@@ -45,6 +45,12 @@ class InstallController extends Controller
             'msg' => 'Superadmin module installed succesfully',
         ];
 
+        if ($this->isServiceSuperadminRequest()) {
+            return redirect()
+                ->to(url(config('service.route_prefix', 'service').'/home'))
+                ->with('status', $output);
+        }
+
         return redirect()
             ->action([\App\Http\Controllers\Install\ModulesController::class, 'index'])
             ->with('status', $output);
@@ -97,9 +103,15 @@ class InstallController extends Controller
                 'msg' => 'Superadmin module updated Succesfully to version '.$this->appVersion.' !!',
             ];
 
+            if ($this->isServiceSuperadminRequest()) {
+                return redirect()
+                    ->to(url(config('service.route_prefix', 'service').'/home'))
+                    ->with('status', $output);
+            }
+
             return redirect()
-            ->action([\App\Http\Controllers\Install\ModulesController::class, 'index'])
-            ->with('status', $output);
+                ->action([\App\Http\Controllers\Install\ModulesController::class, 'index'])
+                ->with('status', $output);
         } catch (Exception $e) {
             //DB::rollBack();
             exit($e->getMessage());
@@ -130,5 +142,10 @@ class InstallController extends Controller
         }
 
         return redirect()->back()->with(['status' => $output]);
+    }
+
+    private function isServiceSuperadminRequest(): bool
+    {
+        return request()->is(trim(config('service.route_prefix', 'service'), '/').'/superadmin/install*');
     }
 }

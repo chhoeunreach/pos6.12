@@ -24,12 +24,15 @@ class InstallController extends Controller
         $this->authorizeModuleManagement();
 
         if (! empty(System::getProperty($this->module_name . '_version'))) {
-            return redirect()
-                ->action([ModulesIndexController::class, 'index'])
-                ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
+            return $this->redirectAfterInstall([
+                    'success' => 1,
+                    'msg' => $this->module_display_name . ' module is already installed.',
+                ]);
         }
 
-        $action_url = action([self::class, 'install']);
+        $action_url = $this->isAccessorySmartStockRequest()
+            ? url(config('accessory.route_prefix', 'accessory') . '/smart-stock-inventory/install')
+            : action([self::class, 'install']);
         $intruction_type = 'uf';
         $action_type = 'install';
         $module_display_name = $this->module_display_name;
@@ -47,9 +50,10 @@ class InstallController extends Controller
 
             if (! empty(System::getProperty($this->module_name . '_version'))) {
                 DB::rollBack();
-                return redirect()
-                    ->action([ModulesIndexController::class, 'index'])
-                    ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
+                return $this->redirectAfterInstall([
+                    'success' => 1,
+                    'msg' => $this->module_display_name . ' module is already installed.',
+                ]);
             }
 
             Artisan::call('module:migrate', ['module' => 'SmartStockInventory', '--force' => true]);
@@ -64,9 +68,7 @@ class InstallController extends Controller
             $output = ['success' => false, 'msg' => $e->getMessage()];
         }
 
-        return redirect()
-            ->action([ModulesIndexController::class, 'index'])
-            ->with('status', $output);
+        return $this->redirectAfterInstall($output);
     }
 
     public function uninstall()
@@ -144,5 +146,23 @@ class InstallController extends Controller
         foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
             Artisan::call($cmd);
         }
+    }
+
+    private function redirectAfterInstall(array $status)
+    {
+        if ($this->isAccessorySmartStockRequest()) {
+            return redirect()
+                ->to(url(config('accessory.route_prefix', 'accessory') . '/home'))
+                ->with('status', $status);
+        }
+
+        return redirect()
+            ->action([ModulesIndexController::class, 'index'])
+            ->with('status', $status);
+    }
+
+    private function isAccessorySmartStockRequest(): bool
+    {
+        return request()->is(trim(config('accessory.route_prefix', 'accessory'), '/') . '/smart-stock-inventory/install*');
     }
 }

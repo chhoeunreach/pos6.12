@@ -78,6 +78,14 @@ Route::post('/install', [ServiceInstallController::class, 'install']);
 Route::get('/install/uninstall', [ServiceInstallController::class, 'uninstall']);
 Route::get('/install/update', [ServiceInstallController::class, 'update']);
 
+if (class_exists(\Modules\Repair\Http\Controllers\RepairController::class)) {
+    Route::middleware(['service.database'])->group(module_path('Repair', 'Routes/web.php'));
+}
+
+if (class_exists(\Modules\Superadmin\Http\Controllers\SuperadminController::class)) {
+    Route::middleware(['service.database'])->group(module_path('Superadmin', 'Routes/web.php'));
+}
+
 Route::middleware(['setData', 'service.database'])->group(function () {
     Route::get('/', function () {
         return redirect()->route('service.home');
@@ -314,6 +322,10 @@ Route::middleware(['setData', 'auth', 'service.database', 'language', 'timezone'
     });
 
     //Business Locations...
+    Route::get('business-location/import-template', [BusinessLocationController::class, 'downloadTemplate']);
+    Route::get('business-location/export', [BusinessLocationController::class, 'export']);
+    Route::post('business-location/import-preview', [BusinessLocationController::class, 'importPreview']);
+    Route::post('business-location/import-confirm', [BusinessLocationController::class, 'importConfirm']);
     Route::post('business-location/check-location-id', [BusinessLocationController::class, 'checkLocationId']);
     Route::resource('business-location', BusinessLocationController::class);
 

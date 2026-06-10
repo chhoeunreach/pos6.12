@@ -108,6 +108,16 @@
                             ]) !!}
                         </div>
                     </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            {!! Form::label('product_list_filter_product_keywords', 'Product keywords:') !!}
+                            {!! Form::text('product_keywords', null, [
+                                'class' => 'form-control',
+                                'id' => 'product_list_filter_product_keywords',
+                                'placeholder' => 'Search',
+                            ]) !!}
+                        </div>
+                    </div>
                     <div class="col-md-3" id="location_filter">
                         <div class="form-group">
                             {!! Form::label('location_id', __('purchase.business_location') . ':') !!}
@@ -322,6 +332,7 @@
                         d.active_state = $('#active_state').val();
                         d.not_for_selling = $('#not_for_selling').is(':checked');
                         d.location_id = $('#location_id').val();
+                        d.product_keywords = $('#product_list_filter_product_keywords').val();
                         if ($('#repair_model_id').length == 1) {
                             d.repair_model_id = $('#repair_model_id').val();
                         }
@@ -681,6 +692,16 @@
                     }
                 });
 
+            $(document).on('keyup change', '#product_list_filter_product_keywords', function() {
+                if ($("#product_list_tab").hasClass('active')) {
+                    product_table.ajax.reload();
+                }
+
+                if ($("#product_stock_report").hasClass('active')) {
+                    stock_report_table.ajax.reload();
+                }
+            });
+
             $(document).on('ifChanged', '#not_for_selling, #woocommerce_enabled', function() {
                 if ($("#product_list_tab").hasClass('active')) {
                     product_table.ajax.reload();
@@ -872,6 +893,7 @@
                                 d.type = $('#product_list_filter_type').val();
                                 d.active_state = $('#active_state').val();
                                 d.not_for_selling = $('#not_for_selling').is(':checked');
+                                d.product_keywords = $('#product_list_filter_product_keywords').val();
                                 if ($('#repair_model_id').length == 1) {
                                     d.repair_model_id = $('#repair_model_id').val();
                                 }

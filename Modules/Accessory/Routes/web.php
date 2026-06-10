@@ -78,6 +78,10 @@ Route::post('/install', [AccessoryInstallController::class, 'install']);
 Route::get('/install/uninstall', [AccessoryInstallController::class, 'uninstall']);
 Route::get('/install/update', [AccessoryInstallController::class, 'update']);
 
+if (class_exists(\Modules\SmartStockInventory\Http\Controllers\DashboardController::class)) {
+    Route::middleware(['accessory.database'])->group(module_path('SmartStockInventory', 'Routes/web.php'));
+}
+
 Route::middleware(['setData', 'accessory.database'])->group(function () {
     Route::get('/', function () {
         return redirect()->route('accessory.home');
@@ -314,6 +318,10 @@ Route::middleware(['setData', 'auth', 'accessory.database', 'language', 'timezon
     });
 
     //Business Locations...
+    Route::get('business-location/import-template', [BusinessLocationController::class, 'downloadTemplate']);
+    Route::get('business-location/export', [BusinessLocationController::class, 'export']);
+    Route::post('business-location/import-preview', [BusinessLocationController::class, 'importPreview']);
+    Route::post('business-location/import-confirm', [BusinessLocationController::class, 'importConfirm']);
     Route::post('business-location/check-location-id', [BusinessLocationController::class, 'checkLocationId']);
     Route::resource('business-location', BusinessLocationController::class);
 

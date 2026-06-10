@@ -164,6 +164,17 @@ class ProductController extends Controller
                 $products->where('products.unit_id', $unit_id);
             }
 
+            $product_keywords = trim((string) request()->get('product_keywords', ''));
+            if ($product_keywords !== '') {
+                $products->where(function ($query) use ($product_keywords) {
+                    $query->where('products.name', 'like', "%{$product_keywords}%")
+                        ->orWhere('products.sku', 'like', "%{$product_keywords}%")
+                        ->orWhere('products.product_custom_field1', 'like', "%{$product_keywords}%")
+                        ->orWhere('v.sub_sku', 'like', "%{$product_keywords}%")
+                        ->orWhere('v.product_keywords', 'like', "%{$product_keywords}%");
+                });
+            }
+
             $tax_id = request()->get('tax_id', null);
             if (! empty($tax_id)) {
                 $products->where('products.tax', $tax_id);
