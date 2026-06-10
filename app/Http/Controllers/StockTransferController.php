@@ -615,14 +615,14 @@ class StockTransferController extends Controller
                         }
                     }
 
-                    if (! empty($file_path) && File::exists($file_path) && ! config('app.debug')) {
+                    if (! empty($file_path) && File::exists($file_path)) {
                         File::delete($file_path);
                     }
                 }
             } catch (\Exception $e) {
                 Log::error('Telegram error: ' . $e->getMessage());
             } finally {
-                if (! empty($file_path ?? null) && File::exists($file_path) && ! config('app.debug')) {
+                if (! empty($file_path ?? null) && File::exists($file_path)) {
                     File::delete($file_path);
                 }
             }
