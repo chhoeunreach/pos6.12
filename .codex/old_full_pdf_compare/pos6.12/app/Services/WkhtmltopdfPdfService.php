@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
 class WkhtmltopdfPdfService
@@ -35,9 +36,6 @@ class WkhtmltopdfPdfService
         $candidates[] = '/usr/bin/wkhtmltopdf';
         $candidates[] = '/usr/local/bin/wkhtmltopdf';
         $candidates[] = '/opt/homebrew/bin/wkhtmltopdf';
-        $candidates[] = 'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe';
-        $candidates[] = 'C:\Program Files (x86)\wkhtmltopdf\bin\wkhtmltopdf.exe';
-        $candidates[] = 'C:\wkhtmltopdf\bin\wkhtmltopdf.exe';
 
         foreach (array_unique($candidates) as $path) {
             if (is_file($path) && is_executable($path)) {
@@ -66,24 +64,21 @@ class WkhtmltopdfPdfService
      */
     public function saveViewToPdf(string $view, array $data, string $outputPath, array $options = []): void
     {
+        if (! $this->isEnabled()) {
+            throw new \RuntimeException('wkhtmltopdf is disabled (WKHTMLTOPDF_ENABLED=false).');
+        }
+
+        $binary = $this->resolveBinaryPath();
+        if (! is_file($binary) || ! is_executable($binary)) {
+            throw new \RuntimeException("wkhtmltopdf binary not executable at: {$binary}");
+        }
+
         $dir = dirname($outputPath);
         if (! File::exists($dir)) {
             File::makeDirectory($dir, 0755, true);
         }
 
         $html = view($view, $data)->render();
-        if (! $this->isEnabled()) {
-            $this->saveHtmlWithMpdf($html, $outputPath);
-
-            return;
-        }
-
-        $binary = $this->resolveBinaryPath();
-        if (! is_file($binary) || ! is_executable($binary)) {
-            $this->saveHtmlWithMpdf($html, $outputPath);
-
-            return;
-        }
 
         // wkhtmltopdf is most reliable when reading from a local HTML file with local assets available
         // in the same folder (fonts/images/css). We'll create a per-render working dir.
@@ -101,7 +96,11 @@ class WkhtmltopdfPdfService
         // Copy Khmer fonts to workdir so templates can reference them via relative paths (fonts/*.ttf).
         $fontDir = $workDir . DIRECTORY_SEPARATOR . 'fonts';
         File::makeDirectory($fontDir, 0755, true);
-        foreach ($this->fontSourcePaths() as $src) {
+        $fontSources = [
+            storage_path('fonts/KhmerOSbattambang.ttf'),
+            storage_path('fonts/NotoSansKhmer-Regular.ttf'),
+        ];
+        foreach ($fontSources as $src) {
             if (File::exists($src)) {
                 File::copy($src, $fontDir . DIRECTORY_SEPARATOR . basename($src));
             }
@@ -116,86 +115,16 @@ class WkhtmltopdfPdfService
             $process->run();
 
             if (! $process->isSuccessful()) {
-                $this->saveHtmlWithMpdf($html, $outputPath);
-
-                return;
+                throw new ProcessFailedException($process);
             }
 
             if (! File::exists($outputPath) || File::size($outputPath) === 0) {
-                $this->saveHtmlWithMpdf($html, $outputPath);
+                throw new \RuntimeException('wkhtmltopdf generated an empty PDF file.');
             }
         } finally {
             if (File::exists($workDir)) {
                 File::deleteDirectory($workDir);
             }
-        }
-    }
-
-    /**
-     * Fallback PDF renderer used when wkhtmltopdf is not available.
-     */
-    private function saveHtmlWithMpdf(string $html, string $outputPath): void
-    {
-        $tempDir = public_path('uploads/temp');
-        if (! File::exists($tempDir)) {
-            File::makeDirectory($tempDir, 0755, true);
-        }
-
-        $config = [
-            'tempDir' => $tempDir,
-            'mode' => 'utf-8',
-            'autoScriptToLang' => true,
-            'autoLangToFont' => true,
-            'autoVietnamese' => true,
-            'autoArabic' => true,
-            'margin_top' => 8,
-            'margin_right' => 8,
-            'margin_bottom' => 8,
-            'margin_left' => 8,
-            'format' => 'A4',
-        ];
-
-        $fontDirs = $this->existingFontDirectories();
-        if (! empty($fontDirs)) {
-            $defaultConfig = (new \Mpdf\Config\ConfigVariables())->getDefaults();
-            $fontDirs = array_values(array_unique(array_merge($defaultConfig['fontDir'], $fontDirs)));
-
-            $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
-            $fontData = $defaultFontConfig['fontdata'];
-
-            if ($this->fontFileExists('KhmerOSbattambang.ttf')) {
-                $fontData['khmerosbattambang'] = [
-                    'R' => 'KhmerOSbattambang.ttf',
-                    'useOTL' => 0xFF,
-                ];
-                $config['default_font'] = 'khmerosbattambang';
-            } elseif ($this->fontFileExists('NotoSansKhmer-Regular.ttf')) {
-                $fontData['notosanskhmer'] = [
-                    'R' => 'NotoSansKhmer-Regular.ttf',
-                    'useOTL' => 0xFF,
-                ];
-                $config['default_font'] = 'notosanskhmer';
-            }
-
-            $config['fontDir'] = $fontDirs;
-            $config['fontdata'] = $fontData;
-        }
-
-        $mpdf = new \Mpdf\Mpdf($config);
-        $mpdf->useSubstitutions = true;
-        if (! empty($config['default_font'])) {
-            $fontCss = '<style>html, body, * { font-family: ' . $config['default_font'] . ', sans-serif !important; }</style>';
-            if (stripos($html, '</head>') !== false) {
-                $html = preg_replace('/<\/head>/i', $fontCss . '</head>', $html, 1);
-            } else {
-                $html = $fontCss . $html;
-            }
-        }
-        $mpdf->WriteHTML($html);
-        $mpdf->Output($outputPath, \Mpdf\Output\Destination::FILE);
-
-        if (! File::exists($outputPath) || File::size($outputPath) === 0) {
-            throw new \RuntimeException('mPDF generated an empty PDF file.');
         }
     }
 
@@ -244,43 +173,5 @@ class WkhtmltopdfPdfService
         $args[] = $outputPdfPath;
 
         return $args;
-    }
-
-    private function fontSourcePaths(): array
-    {
-        $paths = [];
-        foreach ($this->existingFontDirectories() as $dir) {
-            foreach (['KhmerOSbattambang.ttf', 'NotoSansKhmer-Regular.ttf'] as $file) {
-                $path = $dir . DIRECTORY_SEPARATOR . $file;
-                if (File::exists($path)) {
-                    $paths[] = $path;
-                }
-            }
-        }
-
-        return array_values(array_unique($paths));
-    }
-
-    private function existingFontDirectories(): array
-    {
-        $dirs = [
-            storage_path('fonts'),
-            'C:' . DIRECTORY_SEPARATOR . 'Windows' . DIRECTORY_SEPARATOR . 'Fonts',
-        ];
-
-        return array_values(array_filter($dirs, function ($dir) {
-            return File::exists($dir) && is_dir($dir);
-        }));
-    }
-
-    private function fontFileExists(string $file): bool
-    {
-        foreach ($this->existingFontDirectories() as $dir) {
-            if (File::exists($dir . DIRECTORY_SEPARATOR . $file)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

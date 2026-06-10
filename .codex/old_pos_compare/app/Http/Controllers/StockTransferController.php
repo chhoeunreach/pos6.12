@@ -560,14 +560,7 @@ class StockTransferController extends Controller
                             'font_noto_khmer_exists' => File::exists(storage_path('fonts/NotoSansKhmer-Regular.ttf')),
                         ]);
                     } catch (\Exception $e) {
-                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage(), [
-                            'exception' => get_class($e),
-                            'file_path' => $file_path,
-                            'temp_dir_writable' => is_writable(dirname($file_path)),
-                            'storage_app_writable' => is_writable(storage_path('app')),
-                            'wkhtmltopdf_binary_config' => (string) config('pdf.wkhtmltopdf.binary'),
-                            'wkhtmltopdf_binary_resolved' => method_exists($wk ?? null, 'resolveBinaryPath') ? $wk->resolveBinaryPath() : null,
-                        ]);
+                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage());
                     }
 
                     $document_name = 'transfer_' . $sell_transfer->ref_no . '.pdf';
@@ -649,20 +642,9 @@ class StockTransferController extends Controller
         if (array_key_exists($location_name, $mapping)) {
             $value = $mapping[$location_name];
         } else {
-            $normalized_location_name = $this->normalizeTelegramLocationName($location_name);
-
-            // Case-insensitive + normalized match for location names.
-            // This catches saved locations like "Shop-Name" when Telegram config uses "Shop-BranchName".
+            // Case-insensitive + trim match for location names
             foreach ($mapping as $key => $mappedValue) {
-                $normalized_key = $this->normalizeTelegramLocationName((string) $key);
-
-                if (
-                    trim((string) $key) !== ''
-                    && (
-                        mb_strtolower(trim((string) $key)) === mb_strtolower($location_name)
-                        || ($normalized_key !== '' && $normalized_key === $normalized_location_name)
-                    )
-                ) {
+                if (trim((string) $key) !== '' && mb_strtolower(trim((string) $key)) === mb_strtolower($location_name)) {
                     $value = $mappedValue;
                     break;
                 }
@@ -686,25 +668,6 @@ class StockTransferController extends Controller
         $parts = array_map('trim', explode(',', $value));
 
         return array_values(array_filter($parts));
-    }
-
-    private function normalizeTelegramLocationName(?string $location_name): string
-    {
-        $normalized = mb_strtolower(trim((string) $location_name));
-        if ($normalized === '') {
-            return '';
-        }
-
-        // Remove invisible Unicode spacing/control chars that are easy to copy into Khmer labels.
-        $normalized = preg_replace('/[\x{00A0}\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $normalized);
-
-        // Remove Khmer word "branch" so configured names with/without that word can still match.
-        $normalized = preg_replace('/\x{179F}\x{17B6}\x{1781}\x{17B6}/u', '', $normalized);
-
-        $normalized = preg_replace('/\s+/u', ' ', $normalized);
-        $normalized = preg_replace('/\s*-\s*/u', '-', $normalized);
-
-        return trim($normalized);
     }
 
     /**
@@ -1067,14 +1030,13 @@ class StockTransferController extends Controller
         $statuses = $this->stockTransferStatuses();
 
         // Suggested Ref No: RT-<original>, ensure uniqueness within the business.
-        $base_ref_no = $original_transfer->ref_no;
-        $suggested_ref_no = $base_ref_no;
+        $suggested_ref_no = 'RT-' . $original_transfer->ref_no;
         if (Transaction::where('business_id', $business_id)->where('ref_no', $suggested_ref_no)->exists()) {
             $suffix = 1;
-            while (Transaction::where('business_id', $business_id)->where('ref_no', $base_ref_no . '-' . $suffix)->exists()) {
+            while (Transaction::where('business_id', $business_id)->where('ref_no', $suggested_ref_no . '-' . $suffix)->exists()) {
                 $suffix++;
             }
-            $suggested_ref_no = $base_ref_no . '-' . $suffix;
+            $suggested_ref_no = $suggested_ref_no . '-' . $suffix;
         }
 
         // Notes must match original exactly (no auto-append)

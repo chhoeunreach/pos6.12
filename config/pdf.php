@@ -15,12 +15,12 @@ return [
             'margin-right' => '8mm',
             'margin-bottom' => '8mm',
             'margin-left' => '8mm',
-
+            'disable-smart-shrinking' => true,
+            'print-media-type' => true,
             'enable-local-file-access' => true,
-
-            // Prevent PDF failure when image/css URL is missing
             'load-error-handling' => 'ignore',
             'load-media-error-handling' => 'ignore',
+            'quiet' => true,
         ],
     ],
 ];
