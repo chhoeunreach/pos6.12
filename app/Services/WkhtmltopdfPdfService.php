@@ -136,7 +136,7 @@ class WkhtmltopdfPdfService
      */
     private function saveHtmlWithMpdf(string $html, string $outputPath): void
     {
-        $tempDir = public_path('uploads/temp');
+        $tempDir = storage_path('app/temp/mpdf');
         if (! File::exists($tempDir)) {
             File::makeDirectory($tempDir, 0755, true);
         }

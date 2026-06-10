@@ -9,7 +9,9 @@
 Homestead.json
 Homestead.yaml
 npm-debug.log
-.env*
+.env
+.env.*
+!.env.example
 /public/uploads/business_logos
 /public/uploads/documents
 /public/uploads/img
@@ -25,3 +27,30 @@ npm-debug.log
 /storage/logs/*.log
 /storage/framework/sessions/*
 /storage/framework/views/*
+
+# Codex/local comparison files
+/.codex/
+
+# Local import/export and backup files
+*.xlsx
+*.xls
+*.csv
+*.zip
+*.rar
+*.7z
+*.sql
+*.bak
+*.backup
+
+# Generated PDFs and temp files
+/storage/app/temp/*
+!/storage/app/temp/.gitignore
+/storage/framework/cache/*
+/storage/framework/testing/*
+/storage/debugbar/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
