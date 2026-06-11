@@ -790,8 +790,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $sells->whereDate('transactions.transaction_date', '>=', $start)
-                                ->whereDate('transactions.transaction_date', '<=', $end);
+                $sells->where('transactions.transaction_date', '>=', $start)
+                                ->where('transactions.transaction_date', '<=', $end . ' 23:59:59');
             }
             $datatable = Datatables::of($sells);
             $raw_cols = ['total_before_tax', 'discount_amount', 'contact_name', 'payment_methods'];
@@ -3007,8 +3007,8 @@ class ReportController extends Controller
         if (! empty(request()->start_date) && ! empty(request()->end_date)) {
             $start = request()->start_date;
             $end = request()->end_date;
-            $query->whereDate('t.transaction_date', '>=', $start)
-                        ->whereDate('t.transaction_date', '<=', $end);
+            $query->where('t.transaction_date', '>=', $start)
+                        ->where('t.transaction_date', '<=', $end . ' 23:59:59');
         }
 
         $query->select(
@@ -3125,8 +3125,8 @@ class ReportController extends Controller
         if (! empty(request()->start_date) && ! empty(request()->end_date)) {
             $start = request()->start_date;
             $end = request()->end_date;
-            $query->whereDate('sale.transaction_date', '>=', $start)
-                        ->whereDate('sale.transaction_date', '<=', $end);
+            $query->where('sale.transaction_date', '>=', $start)
+                        ->where('sale.transaction_date', '<=', $end . ' 23:59:59');
         }
 
         if ($by == 'product') {
@@ -3346,19 +3346,19 @@ class ReportController extends Controller
             if (! empty(request()->purchase_start) && ! empty(request()->purchase_end)) {
                 $start = request()->purchase_start;
                 $end = request()->purchase_end;
-                $query->whereDate('purchase.transaction_date', '>=', $start)
-                            ->whereDate('purchase.transaction_date', '<=', $end);
+                $query->where('purchase.transaction_date', '>=', $start)
+                            ->where('purchase.transaction_date', '<=', $end . ' 23:59:59');
             }
             if (! empty(request()->sale_start) && ! empty(request()->sale_end)) {
                 $start = request()->sale_start;
                 $end = request()->sale_end;
                 $query->where(function ($q) use ($start, $end) {
                     $q->where(function ($qr) use ($start, $end) {
-                        $qr->whereDate('sale.transaction_date', '>=', $start)
-                           ->whereDate('sale.transaction_date', '<=', $end);
+                        $qr->where('sale.transaction_date', '>=', $start)
+                           ->where('sale.transaction_date', '<=', $end . ' 23:59:59');
                     })->orWhere(function ($qr) use ($start, $end) {
-                        $qr->whereDate('stock_adjustment.transaction_date', '>=', $start)
-                           ->whereDate('stock_adjustment.transaction_date', '<=', $end);
+                        $qr->where('stock_adjustment.transaction_date', '>=', $start)
+                           ->where('stock_adjustment.transaction_date', '<=', $end . ' 23:59:59');
                     });
                 });
             }
@@ -3531,8 +3531,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $purchases->whereDate('transactions.transaction_date', '>=', $start)
-                            ->whereDate('transactions.transaction_date', '<=', $end);
+                $purchases->where('transactions.transaction_date', '>=', $start)
+                            ->where('transactions.transaction_date', '<=', $end . ' 23:59:59');
             }
 
             if (! auth()->user()->can('purchase.view') && auth()->user()->can('view_own_purchase')) {
@@ -3706,8 +3706,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $activities->whereDate('activity_log.created_at', '>=', $start)
-                            ->whereDate('activity_log.created_at', '<=', $end);
+                $activities->where('activity_log.created_at', '>=', $start)
+                            ->where('activity_log.created_at', '<=', $end . ' 23:59:59');
             }
 
             if (! empty(request()->user_id)) {
@@ -3862,8 +3862,8 @@ class ReportController extends Controller
             $start_date = $request->get('start_date');
             $end_date = $request->get('end_date');
             if (! empty($start_date) && ! empty($end_date)) {
-                $query->whereDate('t.transaction_date', '>=', $start_date)
-                    ->whereDate('t.transaction_date', '<=', $end_date);
+                $query->where('t.transaction_date', '>=', $start_date)
+                    ->where('t.transaction_date', '<=', $end_date . ' 23:59:59');
             }
 
             $permitted_locations = auth()->user()->permitted_locations();

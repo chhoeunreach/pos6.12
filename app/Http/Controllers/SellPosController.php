@@ -937,11 +937,12 @@ class SellPosController extends Controller
                 //qty_available not added when negative to avoid max quanity getting decreased in edit and showing error in max quantity validation
                 DB::raw('IF(vld.qty_available > 0, vld.qty_available + transaction_sell_lines.quantity, transaction_sell_lines.quantity) AS qty_available')
             )
+            ->with(['variations.media', 'product.modifierSets', 'modifiers', 'children'])
             ->get();
         if (!empty($sell_details)) {
             foreach ($sell_details as $key => $value) {
-                $variation = Variation::with('media')->findOrFail($value->variation_id);
-                $sell_details[$key]->media = $variation->media;
+                $variation = $value->variations;
+                $sell_details[$key]->media = ! empty($variation) ? $variation->media : null;
 
                 //If modifier or combo sell line then unset
                 if (!empty($sell_details[$key]->parent_sell_line_id)) {
@@ -980,9 +981,7 @@ class SellPosController extends Controller
 
                     if ($this->transactionUtil->isModuleEnabled('modifiers')) {
                         //Add modifier details to sel line details
-                        $sell_line_modifiers = TransactionSellLine::where('parent_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
-                            ->where('children_type', 'modifier')
-                            ->get();
+                        $sell_line_modifiers = $value->modifiers;
                         $modifiers_ids = [];
                         if (count($sell_line_modifiers) > 0) {
                             $sell_details[$key]->modifiers = $sell_line_modifiers;
@@ -993,18 +992,15 @@ class SellPosController extends Controller
                         $sell_details[$key]->modifiers_ids = $modifiers_ids;
 
                         //add product modifier sets for edit
-                        $this_product = Product::find($sell_details[$key]->product_id);
-                        if (count($this_product->modifier_sets) > 0) {
+                        $this_product = $value->product;
+                        if (! empty($this_product) && count($this_product->modifier_sets) > 0) {
                             $sell_details[$key]->product_ms = $this_product->modifier_sets;
                         }
                     }
 
                     //Get details of combo items
                     if ($sell_details[$key]->product_type == 'combo') {
-                        $sell_line_combos = TransactionSellLine::where('parent_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
-                            ->where('children_type', 'combo')
-                            ->get()
-                            ->toArray();
+                        $sell_line_combos = ! empty($sell_details[$key]->children) ? $sell_details[$key]->children->toArray() : [];
                         if (!empty($sell_line_combos)) {
                             $sell_details[$key]->combo_products = $sell_line_combos;
                         }
@@ -1967,7 +1963,7 @@ class SellPosController extends Controller
             return view('sale_pos.partials.show_invoice')
                 ->with(compact('receipt', 'title', 'payment_link', 'transaction'));
         } else {
-            exit(__('messages.something_went_wrong'));
+            return response()->json(['success' => false, 'msg' => __('messages.something_went_wrong')]);
         }
     }
 
@@ -1997,7 +1993,7 @@ class SellPosController extends Controller
             return view('sale_pos.partials.guest_payment_form')
                 ->with(compact('transaction', 'title', 'pos_settings', 'total_payable', 'total_payable_formatted', 'date_formatted', 'total_amount', 'total_paid', 'business_details'));
         } else {
-            exit(__('messages.something_went_wrong'));
+            return response()->json(['success' => false, 'msg' => __('messages.something_went_wrong')]);
         }
     }
 

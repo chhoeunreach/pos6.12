@@ -144,7 +144,7 @@ class BookingController extends Controller
                     ];
                 }
             } else {
-                exit(__('messages.something_went_wrong'));
+                return response()->json(['success' => false, 'msg' => __('messages.something_went_wrong')]);
             }
         } catch (\Exception $e) {
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());

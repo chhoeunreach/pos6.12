@@ -34,6 +34,11 @@ class TransactionSellLine extends Model
             ->where('children_type', 'modifier');
     }
 
+    public function children()
+    {
+        return $this->hasMany(\App\TransactionSellLine::class, 'parent_sell_line_id');
+    }
+
     public function sell_line_purchase_lines()
     {
         return $this->hasMany(\App\TransactionSellLinesPurchaseLines::class, 'sell_line_id');

@@ -2,7 +2,6 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
-use App\Services\TelegramBotService;
 use App\Utils\TransactionUtil;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -1420,17 +1419,13 @@ class LoanInstallmentListController extends Controller
             ? "Loan payment received\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nAmount: ".number_format((float) $amount, 2).' '.($loanRow->currency ?? 'USD')."\nBalance: ".number_format((float) ($loanRow->balance_amount ?? 0), 2)
             : "Installment loan created\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loanRow->principal_amount ?? $loanRow->total_payable_amount ?? 0), 2).' '.($loanRow->currency ?? 'USD');
 
-        try {
-            app(TelegramBotService::class)->sendMessageToChat($chatId, $message);
-            $this->logTelegramNotification($loanRow, $location, $event, $message, 'sent', null, $chatId);
-        } catch (\Throwable $e) {
-            Log::warning('LoanManagement Telegram notification failed', [
-                'loan_id' => $loan,
-                'event' => $event,
-                'message' => $e->getMessage(),
-            ]);
-            $this->logTelegramNotification($loanRow, $location, $event, $message, 'failed', $e->getMessage(), $chatId);
-        }
+        app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
+            $event === 'payment' ? 'loan_payment' : 'loan_installment',
+            $chatId,
+            $message,
+            ['loan_id' => $loan, 'event' => $event, 'amount' => $amount]
+        );
+        $this->logTelegramNotification($loanRow, $location, $event, $message, 'sent', null, $chatId);
     }
 
     protected function telegramChatIdForEvent(object $location, string $event): string

@@ -648,13 +648,14 @@ class TransactionUtil extends Util
     {
         if (! empty($transaction_line_ids)) {
             $sell_lines = TransactionSellLine::whereIn('id', $transaction_line_ids)
+                        ->with('product')
                         ->get();
 
             //Adjust quanity
 
             foreach ($sell_lines as $line) {
                 if ($adjust_qty) {
-                    $this->adjustQuantity($location_id, $line->product_id, $line->variation_id, $line->quantity);
+                    $this->adjustQuantity($location_id, $line->product_id, $line->variation_id, $line->quantity, ! empty($line->product) ? $line->product : null);
                 }
 
                 //Update purchase order line quantity received
@@ -679,10 +680,12 @@ class TransactionUtil extends Util
      * @param  float  $increment_qty
      * @return bool
      */
-    private function adjustQuantity($location_id, $product_id, $variation_id, $increment_qty)
+    private function adjustQuantity($location_id, $product_id, $variation_id, $increment_qty, $product = null)
     {
         if ($increment_qty != 0) {
-            $product = Product::find($product_id);
+            if (is_null($product)) {
+                $product = Product::find($product_id);
+            }
             $enable_stock = ! empty($product) ? $product->enable_stock : 0;
 
             if ($enable_stock == 1) {

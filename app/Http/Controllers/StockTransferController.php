@@ -17,10 +17,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Activitylog\Models\Activity;
 use App\Events\StockTransferCreatedOrModified;
 use App\Variation;
-use App\Services\TelegramBotService;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log;
-use App\Services\WkhtmltopdfPdfService;
+
 
 class StockTransferController extends Controller
 {
@@ -472,159 +469,12 @@ class StockTransferController extends Controller
 
             DB::commit();
 
-            // Telegram notification + PDF invoice (after DB::commit)
-            $file_path = null;
+            // Dispatch notification via NotificationCenter module (async by default)
             try {
-                $from_location_channels = (array) config('telegram.stock_transfer.from_location_channels', []);
-                $to_location_channels = (array) config('telegram.stock_transfer.to_location_channels', []);
-
-                $sell_transfer_for_print = Transaction::where('business_id', $business_id)
-                    ->where('id', $sell_transfer->id)
-                    ->where('type', 'sell_transfer')
-                    ->with(
-                        'contact',
-                        'sell_lines',
-                        'sell_lines.product',
-                        'sell_lines.variations',
-                        'sell_lines.variations.product_variation',
-                        'sell_lines.lot_details',
-                        'sell_lines.sub_unit',
-                        'location',
-                        'sell_lines.product.unit'
-                    )
-                    ->first();
-
-                $purchase_transfer_for_print = Transaction::where('business_id', $business_id)
-                    ->where('transfer_parent_id', $sell_transfer->id)
-                    ->where('type', 'purchase_transfer')
-                    ->with('location')
-                    ->first();
-
-                if (! empty($sell_transfer_for_print) && ! empty($purchase_transfer_for_print)) {
-                    $sell_transfer = $sell_transfer_for_print;
-                    $location_details = [
-                        'sell' => $sell_transfer->location,
-                        'purchase' => $purchase_transfer_for_print->location,
-                    ];
-
-                    $lot_n_exp_enabled = false;
-                    if ($request->session()->get('business.enable_lot_number') == 1 || $request->session()->get('business.enable_product_expiry') == 1) {
-                        $lot_n_exp_enabled = true;
-                    }
-
-                    $total_qty = 0.0;
-                    foreach ($sell_transfer->sell_lines as $line) {
-                        $total_qty += (float) ($line->quantity ?? 0);
-                    }
-
-                    $status_label = $sell_transfer->status == 'final' ? 'completed' : $sell_transfer->status;
-                    $date_label = ! empty($sell_transfer->transaction_date)
-                        ? \Carbon\Carbon::parse($sell_transfer->transaction_date)->format('Y-m-d H:i')
-                        : '';
-                    $username = '';
-                    try {
-                        $username = trim((string) auth()->user()->first_name . ' ' . (string) auth()->user()->last_name);
-                    } catch (\Exception $e) {
-                        $username = '';
-                    }
-
-                    $message = "📦 <b>Stock Transfer</b>\n\n"
-                        . "Ref No: <b>{$sell_transfer->ref_no}</b>\n"
-                        . 'From: ' . ($location_details['sell']->name ?? '') . "\n"
-                        . 'To: ' . ($location_details['purchase']->name ?? '') . "\n"
-                        . 'Date: ' . $date_label . "\n"
-                        . 'Status: ' . $status_label . "\n"
-                        . 'Total Qty: ' . $this->productUtil->num_f($total_qty, false, null, true)
-                        . (! empty($username) ? "\nBy: <b>{$username}</b>" : '');
-
-                    $temp_dir = storage_path('app/temp');
-                    if (! File::exists($temp_dir)) {
-                        File::makeDirectory($temp_dir, 0755, true);
-                    }
-                    $file_path = storage_path('app/temp/transfer_' . $sell_transfer->id . '.pdf');
-                    $pdf_generated = false;
-                    try {
-                        // Generate PDF using wkhtmltopdf for better Khmer Unicode rendering.
-                        $wk = app(WkhtmltopdfPdfService::class);
-                        $wk->saveViewToPdf(
-                            'stock_transfer.print_pdf',
-                            compact('sell_transfer', 'location_details', 'lot_n_exp_enabled'),
-                            $file_path
-                        );
-                        $pdf_generated = File::exists($file_path) && File::size($file_path) > 0;
-                        Log::info('Stock transfer PDF generated for Telegram', [
-                            'file_path' => $file_path,
-                            'wkhtmltopdf_binary' => method_exists($wk, 'resolveBinaryPath') ? $wk->resolveBinaryPath() : null,
-                            'wkhtmltopdf_version' => method_exists($wk, 'versionString') ? $wk->versionString() : null,
-                            'font_khmer_os_battambang_exists' => File::exists(storage_path('fonts/KhmerOSbattambang.ttf')),
-                            'font_noto_khmer_exists' => File::exists(storage_path('fonts/NotoSansKhmer-Regular.ttf')),
-                        ]);
-                    } catch (\Exception $e) {
-                        Log::error('wkhtmltopdf error (will send Telegram message without PDF): ' . $e->getMessage(), [
-                            'exception' => get_class($e),
-                            'file_path' => $file_path,
-                            'temp_dir_writable' => is_writable(dirname($file_path)),
-                            'storage_app_writable' => is_writable(storage_path('app')),
-                            'wkhtmltopdf_binary_config' => (string) config('pdf.wkhtmltopdf.binary'),
-                            'wkhtmltopdf_binary_resolved' => method_exists($wk ?? null, 'resolveBinaryPath') ? $wk->resolveBinaryPath() : null,
-                        ]);
-                    }
-
-                    $document_name = 'transfer_' . $sell_transfer->ref_no . '.pdf';
-
-                    $telegram = new TelegramBotService();
-
-                    $from_name = $location_details['sell']->name ?? '';
-                    $to_name = $location_details['purchase']->name ?? '';
-
-                    $from_chat_ids = $this->telegramChatIdsForLocation($from_name, $from_location_channels);
-                    $to_chat_ids = $this->telegramChatIdsForLocation($to_name, $to_location_channels);
-
-                    // If transfer is within the same location, avoid sending twice.
-                    $normalized_from = mb_strtolower(trim((string) $from_name));
-                    $normalized_to = mb_strtolower(trim((string) $to_name));
-                    if ($normalized_from !== '' && $normalized_from === $normalized_to) {
-                        $to_chat_ids = [];
-                    }
-
-                    $chat_ids = array_values(array_unique(array_filter(array_merge($from_chat_ids, $to_chat_ids))));
-                    Log::info('Telegram stock transfer notify', [
-                        'ref_no' => $sell_transfer->ref_no ?? null,
-                        'from_location' => $from_name,
-                        'to_location' => $to_name,
-                        'from_chat_ids' => $from_chat_ids,
-                        'to_chat_ids' => $to_chat_ids,
-                        'merged_chat_ids' => $chat_ids,
-                    ]);
-
-                    if (empty($chat_ids)) {
-                        Log::warning('Telegram stock transfer notify skipped: no chat_ids resolved', [
-                            'ref_no' => $sell_transfer->ref_no ?? null,
-                            'from_location' => $from_name,
-                            'to_location' => $to_name,
-                        ]);
-                    }
-
-                    foreach ($chat_ids as $chat_id) {
-                        if ($pdf_generated) {
-                            // Send ONE message only: PDF document with full caption (no separate sendMessage).
-                            $telegram->sendDocumentToChat($chat_id, $file_path, $message, $document_name);
-                        } else {
-                            // Fallback: if PDF generation failed, send text only.
-                            $telegram->sendMessageToChat($chat_id, $message);
-                        }
-                    }
-
-                    if (! empty($file_path) && File::exists($file_path)) {
-                        File::delete($file_path);
-                    }
-                }
+                $service = app(\Modules\NotificationCenter\Services\NotificationService::class);
+                $service->send('stock_transfer', ['transfer_id' => $sell_transfer->id, 'business_id' => $business_id]);
             } catch (\Exception $e) {
-                Log::error('Telegram error: ' . $e->getMessage());
-            } finally {
-                if (! empty($file_path ?? null) && File::exists($file_path)) {
-                    File::delete($file_path);
-                }
+                \Log::error('NotificationCenter dispatch error: ' . $e->getMessage());
             }
         } catch (\Exception $e) {
             DB::rollBack();
@@ -636,75 +486,6 @@ class StockTransferController extends Controller
         }
 
         return redirect('stock-transfers')->with('status', $output);
-    }
-
-    private function telegramChatIdsForLocation(?string $location_name, array $mapping): array
-    {
-        $location_name = trim((string) $location_name);
-        if ($location_name === '' || empty($mapping)) {
-            return [];
-        }
-
-        $value = null;
-        if (array_key_exists($location_name, $mapping)) {
-            $value = $mapping[$location_name];
-        } else {
-            $normalized_location_name = $this->normalizeTelegramLocationName($location_name);
-
-            // Case-insensitive + normalized match for location names.
-            // This catches saved locations like "Shop-Name" when Telegram config uses "Shop-BranchName".
-            foreach ($mapping as $key => $mappedValue) {
-                $normalized_key = $this->normalizeTelegramLocationName((string) $key);
-
-                if (
-                    trim((string) $key) !== ''
-                    && (
-                        mb_strtolower(trim((string) $key)) === mb_strtolower($location_name)
-                        || ($normalized_key !== '' && $normalized_key === $normalized_location_name)
-                    )
-                ) {
-                    $value = $mappedValue;
-                    break;
-                }
-            }
-        }
-
-        if ($value === null) {
-            return [];
-        }
-
-        if (is_array($value)) {
-            return array_values(array_filter(array_map('trim', $value)));
-        }
-
-        $value = trim((string) $value);
-        if ($value === '') {
-            return [];
-        }
-
-        // Supports comma-separated chat IDs in config arrays.
-        $parts = array_map('trim', explode(',', $value));
-
-        return array_values(array_filter($parts));
-    }
-
-    private function normalizeTelegramLocationName(?string $location_name): string
-    {
-        $normalized = mb_strtolower(trim((string) $location_name));
-        if ($normalized === '') {
-            return '';
-        }
-
-        // Remove invisible Unicode spacing/control chars that are easy to copy into Khmer labels.
-        $normalized = preg_replace('/[\x{00A0}\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $normalized);
-
-        // Remove Khmer word "branch" so configured names with/without that word can still match.
-        $normalized = preg_replace('/\x{179F}\x{17B6}\x{1781}\x{17B6}/u', '', $normalized);
-
-        $normalized = preg_replace('/\s+/u', ' ', $normalized);
-        $normalized = preg_replace('/\s*-\s*/u', '-', $normalized);
-
-        return trim($normalized);
     }
 
     /**

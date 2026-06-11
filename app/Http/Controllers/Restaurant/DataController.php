@@ -99,11 +99,9 @@ class DataController extends Controller
 
         $exists = $query->exists();
         if ($exists) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 }

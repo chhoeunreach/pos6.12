@@ -1077,8 +1077,7 @@ class ProductController extends Controller
                     $html .= '<option value="'.$sub_category->id.'">'.$sub_category->name.'</option>';
                 }
             }
-            echo $html;
-            exit;
+            return response()->json($html);
         }
     }
 

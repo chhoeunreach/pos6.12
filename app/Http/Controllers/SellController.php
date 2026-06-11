@@ -1629,8 +1629,7 @@ class SellController extends Controller
 
         Artisan::call('pos:mapPurchaseSell');
 
-        echo 'Mapping reset success';
-        exit;
+        return response()->json('Mapping reset success');
     }
 
     /**
@@ -1903,11 +1902,9 @@ class SellController extends Controller
         $count = $query->count();
         
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 }

@@ -1301,11 +1301,9 @@ class PurchaseController extends Controller
             $count = $query->count();
         }
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 

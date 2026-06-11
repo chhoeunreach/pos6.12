@@ -28,6 +28,7 @@ use App\Utils\TransactionUtil;
 use App\Variation;
 use Datatables;
 use DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 use Spatie\Activitylog\Models\Activity;
 
@@ -106,7 +107,10 @@ class ReportController extends Controller
             $user_id = request()->input('user_id') ?? null;
 
             $permitted_locations = auth()->user()->permitted_locations();
-            $data = $this->transactionUtil->getProfitLossDetails($business_id, $location_id, $start_date, $end_date, $user_id, $permitted_locations);
+            $cache_key = 'report_profit_loss_'.$business_id.'_'.($location_id ?? 'all').'_'.$start_date.'_'.$end_date.'_'.($user_id ?? 'all');
+            $data = Cache::remember($cache_key, 300, function () use ($business_id, $location_id, $start_date, $end_date, $user_id, $permitted_locations) {
+                return $this->transactionUtil->getProfitLossDetails($business_id, $location_id, $start_date, $end_date, $user_id, $permitted_locations);
+            });
     
             // $data['closing_stock'] = $data['closing_stock'] - $data['total_sell_return'];
 
@@ -138,41 +142,48 @@ class ReportController extends Controller
 
             $location_id = $request->get('location_id');
 
-            $purchase_details = $this->transactionUtil->getPurchaseTotals($business_id, $start_date, $end_date, $location_id);
+            $cache_key = 'report_purchase_sell_'.$business_id.'_'.($start_date ?? 'all').'_'.($end_date ?? 'all').'_'.($location_id ?? 'all');
 
-            $sell_details = $this->transactionUtil->getSellTotals(
-                $business_id,
-                $start_date,
-                $end_date,
-                $location_id
-            );
+            $data = Cache::remember($cache_key, 300, function () use ($business_id, $start_date, $end_date, $location_id) {
+                $purchase_details = $this->transactionUtil->getPurchaseTotals($business_id, $start_date, $end_date, $location_id);
 
-            $transaction_types = [
-                'purchase_return', 'sell_return',
-            ];
+                $sell_details = $this->transactionUtil->getSellTotals(
+                    $business_id,
+                    $start_date,
+                    $end_date,
+                    $location_id
+                );
 
-            $transaction_totals = $this->transactionUtil->getTransactionTotals(
-                $business_id,
-                $transaction_types,
-                $start_date,
-                $end_date,
-                $location_id
-            );
+                $transaction_types = [
+                    'purchase_return', 'sell_return',
+                ];
 
-            $total_purchase_return_inc_tax = $transaction_totals['total_purchase_return_inc_tax'];
-            $total_sell_return_inc_tax = $transaction_totals['total_sell_return_inc_tax'];
+                $transaction_totals = $this->transactionUtil->getTransactionTotals(
+                    $business_id,
+                    $transaction_types,
+                    $start_date,
+                    $end_date,
+                    $location_id
+                );
 
-            $difference = [
-                'total' => $sell_details['total_sell_inc_tax'] - $total_sell_return_inc_tax - ($purchase_details['total_purchase_inc_tax'] - $total_purchase_return_inc_tax),
-                'due' => $sell_details['invoice_due'] - $purchase_details['purchase_due'],
-            ];
+                $total_purchase_return_inc_tax = $transaction_totals['total_purchase_return_inc_tax'];
+                $total_sell_return_inc_tax = $transaction_totals['total_sell_return_inc_tax'];
 
-            return ['purchase' => $purchase_details,
-                'sell' => $sell_details,
-                'total_purchase_return' => $total_purchase_return_inc_tax,
-                'total_sell_return' => $total_sell_return_inc_tax,
-                'difference' => $difference,
-            ];
+                $difference = [
+                    'total' => $sell_details['total_sell_inc_tax'] - $total_sell_return_inc_tax - ($purchase_details['total_purchase_inc_tax'] - $total_purchase_return_inc_tax),
+                    'due' => $sell_details['invoice_due'] - $purchase_details['purchase_due'],
+                ];
+
+                return [
+                    'purchase' => $purchase_details,
+                    'sell' => $sell_details,
+                    'total_purchase_return' => $total_purchase_return_inc_tax,
+                    'total_sell_return' => $total_sell_return_inc_tax,
+                    'difference' => $difference,
+                ];
+            });
+
+            return $data;
         }
 
         $business_locations = BusinessLocation::forDropdown($business_id, true);
@@ -790,8 +801,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $sells->whereDate('transactions.transaction_date', '>=', $start)
-                                ->whereDate('transactions.transaction_date', '<=', $end);
+                $sells->where('transactions.transaction_date', '>=', $start)
+                                ->where('transactions.transaction_date', '<=', $end . ' 23:59:59');
             }
             $datatable = Datatables::of($sells);
             $raw_cols = ['total_before_tax', 'discount_amount', 'contact_name', 'payment_methods'];
@@ -3212,8 +3223,8 @@ class ReportController extends Controller
         if (! empty(request()->start_date) && ! empty(request()->end_date)) {
             $start = request()->start_date;
             $end = request()->end_date;
-            $query->whereDate('t.transaction_date', '>=', $start)
-                        ->whereDate('t.transaction_date', '<=', $end);
+            $query->where('t.transaction_date', '>=', $start)
+                        ->where('t.transaction_date', '<=', $end . ' 23:59:59');
         }
 
         $query->select(
@@ -3330,8 +3341,8 @@ class ReportController extends Controller
         if (! empty(request()->start_date) && ! empty(request()->end_date)) {
             $start = request()->start_date;
             $end = request()->end_date;
-            $query->whereDate('sale.transaction_date', '>=', $start)
-                        ->whereDate('sale.transaction_date', '<=', $end);
+            $query->where('sale.transaction_date', '>=', $start)
+                        ->where('sale.transaction_date', '<=', $end . ' 23:59:59');
         }
 
         if ($by == 'product') {
@@ -3551,19 +3562,19 @@ class ReportController extends Controller
             if (! empty(request()->purchase_start) && ! empty(request()->purchase_end)) {
                 $start = request()->purchase_start;
                 $end = request()->purchase_end;
-                $query->whereDate('purchase.transaction_date', '>=', $start)
-                            ->whereDate('purchase.transaction_date', '<=', $end);
+                $query->where('purchase.transaction_date', '>=', $start)
+                            ->where('purchase.transaction_date', '<=', $end . ' 23:59:59');
             }
             if (! empty(request()->sale_start) && ! empty(request()->sale_end)) {
                 $start = request()->sale_start;
                 $end = request()->sale_end;
                 $query->where(function ($q) use ($start, $end) {
                     $q->where(function ($qr) use ($start, $end) {
-                        $qr->whereDate('sale.transaction_date', '>=', $start)
-                           ->whereDate('sale.transaction_date', '<=', $end);
+                        $qr->where('sale.transaction_date', '>=', $start)
+                           ->where('sale.transaction_date', '<=', $end . ' 23:59:59');
                     })->orWhere(function ($qr) use ($start, $end) {
-                        $qr->whereDate('stock_adjustment.transaction_date', '>=', $start)
-                           ->whereDate('stock_adjustment.transaction_date', '<=', $end);
+                        $qr->where('stock_adjustment.transaction_date', '>=', $start)
+                           ->where('stock_adjustment.transaction_date', '<=', $end . ' 23:59:59');
                     });
                 });
             }
@@ -3736,8 +3747,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $purchases->whereDate('transactions.transaction_date', '>=', $start)
-                            ->whereDate('transactions.transaction_date', '<=', $end);
+                $purchases->where('transactions.transaction_date', '>=', $start)
+                            ->where('transactions.transaction_date', '<=', $end . ' 23:59:59');
             }
 
             if (! auth()->user()->can('purchase.view') && auth()->user()->can('view_own_purchase')) {
@@ -3851,35 +3862,39 @@ class ReportController extends Controller
         $location_id = request()->input('location_id');
         $filters = request()->only(['category_id', 'sub_category_id', 'brand_id', 'unit_id']);
 
+        $cache_key = 'report_stock_value_'.$business_id.'_'.($location_id ?? 'all').'_'.md5(serialize($filters));
         $permitted_locations = auth()->user()->permitted_locations();
-        //Get Closing stock
-        $closing_stock_by_pp = $this->transactionUtil->getOpeningClosingStock(
-            $business_id,
-            $end_date,
-            $location_id,
-            false,
-            false,
-            $filters,
-            $permitted_locations
-        );
-        $closing_stock_by_sp = $this->transactionUtil->getOpeningClosingStock(
-            $business_id,
-            $end_date,
-            $location_id,
-            false,
-            true,
-            $filters,
-            $permitted_locations
-        );
-        $potential_profit = $closing_stock_by_sp - $closing_stock_by_pp;
-        $profit_margin = empty($closing_stock_by_sp) ? 0 : ($potential_profit / $closing_stock_by_sp) * 100;
 
-        return [
-            'closing_stock_by_pp' => $closing_stock_by_pp,
-            'closing_stock_by_sp' => $closing_stock_by_sp,
-            'potential_profit' => $potential_profit,
-            'profit_margin' => $profit_margin,
-        ];
+        return Cache::remember($cache_key, 600, function () use ($business_id, $end_date, $location_id, $filters, $permitted_locations) {
+            //Get Closing stock
+            $closing_stock_by_pp = $this->transactionUtil->getOpeningClosingStock(
+                $business_id,
+                $end_date,
+                $location_id,
+                false,
+                false,
+                $filters,
+                $permitted_locations
+            );
+            $closing_stock_by_sp = $this->transactionUtil->getOpeningClosingStock(
+                $business_id,
+                $end_date,
+                $location_id,
+                false,
+                true,
+                $filters,
+                $permitted_locations
+            );
+            $potential_profit = $closing_stock_by_sp - $closing_stock_by_pp;
+            $profit_margin = empty($closing_stock_by_sp) ? 0 : ($potential_profit / $closing_stock_by_sp) * 100;
+
+            return [
+                'closing_stock_by_pp' => $closing_stock_by_pp,
+                'closing_stock_by_sp' => $closing_stock_by_sp,
+                'potential_profit' => $potential_profit,
+                'profit_margin' => $profit_margin,
+            ];
+        });
     }
 
     public function activityLog()
@@ -3911,8 +3926,8 @@ class ReportController extends Controller
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
-                $activities->whereDate('activity_log.created_at', '>=', $start)
-                            ->whereDate('activity_log.created_at', '<=', $end);
+                $activities->where('activity_log.created_at', '>=', $start)
+                            ->where('activity_log.created_at', '<=', $end . ' 23:59:59');
             }
 
             if (! empty(request()->user_id)) {
@@ -4067,8 +4082,8 @@ class ReportController extends Controller
             $start_date = $request->get('start_date');
             $end_date = $request->get('end_date');
             if (! empty($start_date) && ! empty($end_date)) {
-                $query->whereDate('t.transaction_date', '>=', $start_date)
-                    ->whereDate('t.transaction_date', '<=', $end_date);
+                $query->where('t.transaction_date', '>=', $start_date)
+                    ->where('t.transaction_date', '<=', $end_date . ' 23:59:59');
             }
 
             $permitted_locations = auth()->user()->permitted_locations();

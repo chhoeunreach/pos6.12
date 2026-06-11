@@ -2,7 +2,6 @@
 
 namespace Modules\LoanManagement\Services;
 
-use App\Services\TelegramBotService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -567,16 +566,13 @@ class LoanSellConversionService
 
         $message = "Installment loan created\nLoan: ".($loan->loan_number ?? $loan->id)."\nCustomer: ".($loan->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loan->principal_amount ?? $loan->total_payable_amount ?? 0), 2).' '.($loan->currency ?? 'USD');
 
-        try {
-            app(TelegramBotService::class)->sendMessageToChat($chatId, $message);
-            $this->logTelegramNotification($loan, $location, $message, 'sent', $chatId);
-        } catch (\Throwable $e) {
-            Log::warning('LoanManagement conversion Telegram notification failed', [
-                'loan_id' => $loanId,
-                'message' => $e->getMessage(),
-            ]);
-            $this->logTelegramNotification($loan, $location, $message."\n\nError: ".$e->getMessage(), 'failed', $chatId);
-        }
+        app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
+            'loan_installment',
+            $chatId,
+            $message,
+            ['loan_id' => $loanId, 'module_type' => 'loan_installment']
+        );
+        $this->logTelegramNotification($loan, $location, $message, 'sent', $chatId);
     }
 
     protected function telegramChatIdForEvent(object $location, string $event): string

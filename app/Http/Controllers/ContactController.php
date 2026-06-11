@@ -78,7 +78,7 @@ class ContactController extends Controller
             } elseif ($type == 'customer') {
                 return $this->indexCustomer();
             } else {
-                exit('Not Found');
+                abort(404, 'Not Found');
             }
         }
 

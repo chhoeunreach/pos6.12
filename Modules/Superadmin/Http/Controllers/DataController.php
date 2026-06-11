@@ -136,14 +136,15 @@ class DataController extends Controller
 
         if (auth()->user()->can('superadmin.access_package_subscriptions') && auth()->user()->can('business_settings.access')) {
             $menu = Menu::instance('admin-sidebar-menu');
-            $menu->whereTitle(__('business.settings'), function ($sub) {
-                $sub->url(
+            $item = $menu->whereTitle(__('business.settings'));
+            if ($item) {
+                $item->url(
                     // Use url() to avoid "Action ... not defined" when module routes are not registered/cached.
                     url('subscription'),
                     __('superadmin::lang.subscription'),
                     ['icon' => '', 'active' => request()->segment(1) == 'subscription']
                 );
-            });
+            }
         }
     }
 

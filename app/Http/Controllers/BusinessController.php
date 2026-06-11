@@ -280,11 +280,9 @@ class BusinessController extends Controller
         $count = User::where('username', $username)->count();
 
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 
@@ -539,8 +537,7 @@ class BusinessController extends Controller
             ]);
 
             if ($email_validator->fails()) {
-                echo $email_validator->errors()->first('email');
-                exit;
+                return response()->json($email_validator->errors()->first('email'));
             }
         }
 
@@ -554,16 +551,13 @@ class BusinessController extends Controller
 
         $exists = $query->exists();
         if (! $exists) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            // If indisposable mode, return message string; else preserve boolean 'false' for legacy consumers.
             if ($request->boolean('is_disposable_email')) {
-                echo __('validation.unique', ['attribute' => __('business.email')]);
+                return response()->json(__('validation.unique', ['attribute' => __('business.email')]));
             } else {
-                echo 'false';
+                return response()->json(false);
             }
-            exit;
         }
     }
 
