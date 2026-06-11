@@ -21,8 +21,8 @@
     "Gym": true,
     "ZatcaIntegrationKsa": true,
     "FixStockMismatch": true,
-    "CustomBackup": true,
-    "ImportBackup": true,
+    "CustomBackup": false,
+    "ImportBackup": false,
     "ImportUsers": true,
     "ClearDataByDate": true,
     "ManageLot": true,
@@ -32,5 +32,9 @@
     "SmartStockInventory": true,
     "MismatchFixer": true,
     "LoanManagement": true,
-    "WarrantyCardPrint": true
+    "WarrantyCardPrint": true,
+    "Loan": true,
+    "Accessory": true,
+    "Service": true,
+    "NotificationCenter": true
 }
