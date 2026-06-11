@@ -7,23 +7,34 @@
         @csrf @method('PUT')
         <div>
             <label class="tw-block tw-text-sm tw-font-medium tw-text-gray-700">Group Name</label>
-            <input type="text" name="name" value="{{ $group->name }}" required class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+            <input type="text" name="name" value="{{ old('name', $group->name) }}" required class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+            @error('name')<p class="tw-text-xs tw-text-red-500 tw-mt-1">{{ $message }}</p>@enderror
         </div>
         <div>
             <label class="tw-block tw-text-sm tw-font-medium tw-text-gray-700">Chat ID</label>
-            <input type="text" name="chat_id" value="{{ $group->chat_id }}" required class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+            <input type="text" name="chat_id" value="{{ old('chat_id', $group->chat_id) }}" required class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+            @error('chat_id')<p class="tw-text-xs tw-text-red-500 tw-mt-1">{{ $message }}</p>@enderror
         </div>
         <div>
             <label class="tw-block tw-text-sm tw-font-medium tw-text-gray-700">Module Type</label>
             <select name="module_type" required class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
-                <option value="stock_transfer" @if($group->module_type === 'stock_transfer') selected @endif>Stock Transfer</option>
-                <option value="loan_payment" @if($group->module_type === 'loan_payment') selected @endif>Loan Payment</option>
-                <option value="loan_installment" @if($group->module_type === 'loan_installment') selected @endif>Loan Installment</option>
+                <option value="stock_transfer" @if(old('module_type', $group->module_type) === 'stock_transfer') selected @endif>Stock Transfer</option>
+                <option value="loan_payment" @if(old('module_type', $group->module_type) === 'loan_payment') selected @endif>Loan Payment</option>
+                <option value="loan_installment" @if(old('module_type', $group->module_type) === 'loan_installment') selected @endif>Loan Installment</option>
+            </select>
+            @error('module_type')<p class="tw-text-xs tw-text-red-500 tw-mt-1">{{ $message }}</p>@enderror
+        </div>
+        <div>
+            <label class="tw-block tw-text-sm tw-font-medium tw-text-gray-700">Direction</label>
+            <select name="direction" class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+                <option value="">Both / All</option>
+                <option value="from" @if(old('direction', $group->direction) === 'from') selected @endif>From Channel</option>
+                <option value="to" @if(old('direction', $group->direction) === 'to') selected @endif>To Channel</option>
             </select>
         </div>
         <div>
             <label class="tw-block tw-text-sm tw-font-medium tw-text-gray-700">Location ID (optional)</label>
-            <input type="number" name="location_id" value="{{ $group->location_id }}" class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
+            <input type="number" name="location_id" value="{{ old('location_id', $group->location_id) }}" class="tw-w-full tw-border tw-border-gray-300 tw-rounded-lg tw-px-3 tw-py-2 tw-text-sm">
         </div>
         <div class="tw-flex tw-gap-6">
             <label class="tw-flex tw-items-center tw-gap-2 tw-text-sm">

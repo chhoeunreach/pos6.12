@@ -26,12 +26,11 @@ class SendNotificationJob implements ShouldQueue
 
     public array $options;
 
-    public int $tries = 3;
-
     public int $backoff = 5;
 
     public function __construct(array $recipient, string $message, ?string $pdfPath, string $moduleType, array $data, array $options = [])
     {
+        $this->tries = (int) config('notificationcenter.retry_attempts', 3);
         $this->recipient = $recipient;
         $this->message = $message;
         $this->pdfPath = $pdfPath;

@@ -27,7 +27,9 @@ class TelegramConfigMigrateSeeder extends Seeder
         $config = config('telegram');
 
         if (empty($config['stock_transfer']['from_location_channels'])) {
-            $this->command->warn('No from_location_channels found in config/telegram.php');
+            if ($this->command) {
+                $this->command->warn('No from_location_channels found in config/telegram.php');
+            }
             return;
         }
 
@@ -83,6 +85,8 @@ class TelegramConfigMigrateSeeder extends Seeder
             ]
         );
 
-        $this->command->info('Migrated '.count($fromChannels).' from-channels and '.count($toChannels).' to-channels into notification_groups.');
+        if ($this->command) {
+            $this->command->info('Migrated '.count($fromChannels).' from-channels and '.count($toChannels).' to-channels into notification_groups.');
+        }
     }
 }

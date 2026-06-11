@@ -6,7 +6,8 @@
     "active": 1,
     "order": 0,
     "providers": [
-        "Modules\\NotificationCenter\\Providers\\NotificationCenterServiceProvider"
+        "Modules\\NotificationCenter\\Providers\\NotificationCenterServiceProvider",
+        "Modules\\NotificationCenter\\Providers\\RouteServiceProvider"
     ],
     "aliases": {},
     "files": [],

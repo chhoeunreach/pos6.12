@@ -12,6 +12,7 @@
         </div>
         <div>
             <label class="tw-flex tw-items-center tw-gap-2 tw-text-sm">
+                <input type="hidden" name="queue_enabled" value="0">
                 <input type="checkbox" name="queue_enabled" value="1" @if($settings['queue_enabled']) checked @endif> Queue Notifications
             </label>
         </div>

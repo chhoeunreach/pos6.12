@@ -51,7 +51,8 @@ class PdfService
         $deleted = 0;
 
         foreach (File::files($this->tempDir) as $file) {
-            if ($file->getMimeType() === 'application/pdf' && $file->getCTime() < $cutoff->timestamp) {
+            $isPdf = $file->getExtension() === 'pdf' || $file->getMimeType() === 'application/pdf';
+            if ($isPdf && $file->getCTime() < $cutoff->timestamp) {
                 File::delete($file->getPathname());
                 $deleted++;
             }
@@ -63,7 +64,12 @@ class PdfService
     protected function engine(): WkhtmltopdfPdfService
     {
         if ($this->engine === null) {
-            $this->engine = app(WkhtmltopdfPdfService::class);
+            $engineClass = config('notificationcenter.pdf_engine', 'wkhtmltopdf');
+            if ($engineClass === 'mpdf' && class_exists(\Mpdf\Mpdf::class)) {
+                $this->engine = app(\Modules\NotificationCenter\Services\MpdfPdfService::class);
+            } else {
+                $this->engine = app(WkhtmltopdfPdfService::class);
+            }
         }
 
         return $this->engine;

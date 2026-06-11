@@ -36,7 +36,7 @@
                         @elseif($log->status === 'pending')<span class="tw-text-yellow-600">Pending</span>
                         @else<span class="tw-text-gray-400">{{ $log->status }}</span>
                         @endif
-                        @if($log->error_message)<br><span class="tw-text-xs tw-text-red-400">{{ \Illuminate\Support\Str::limit($log->error_message, 60) }}</span>@endif
+                        @if($log->response)<br><span class="tw-text-xs tw-text-red-400">{{ \Illuminate\Support\Str::limit($log->response, 60) }}</span>@endif
                     </td>
                     <td class="tw-px-4 tw-py-3 tw-text-gray-500 tw-text-xs">{{ $log->created_at->format('Y-m-d H:i') }}</td>
                     <td class="tw-px-4 tw-py-3 tw-text-right">

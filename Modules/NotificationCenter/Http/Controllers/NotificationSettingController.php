@@ -31,6 +31,8 @@ class NotificationSettingController extends Controller
             'retry_attempts' => 'nullable|integer|min:0|max:10',
         ]);
 
+        $data['queue_enabled'] = $request->boolean('queue_enabled', false);
+
         foreach ($data as $key => $value) {
             NotificationSetting::setValue($key, (string) $value);
         }

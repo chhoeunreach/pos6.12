@@ -2,14 +2,14 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['web'])->prefix('notification-center')->group(function () {
+Route::prefix('notification-center')->group(function () {
     Route::get('/install', 'InstallController@index');
     Route::post('/install', 'InstallController@install');
     Route::get('/install/uninstall', 'InstallController@uninstall');
     Route::get('/install/update', 'InstallController@update');
 });
 
-Route::middleware(['web', 'auth', 'language', 'AdminSidebarMenu'])->prefix('notification-center')->group(function () {
+Route::middleware(['auth', 'language', 'AdminSidebarMenu'])->prefix('notification-center')->group(function () {
     Route::resource('groups', 'NotificationGroupController', [
         'as' => 'notificationcenter',
         'names' => [

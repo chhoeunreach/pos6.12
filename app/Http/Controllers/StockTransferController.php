@@ -1292,8 +1292,6 @@ class StockTransferController extends Controller
                 return $this->moduleUtil->expiredResponse(action([\App\Http\Controllers\StockTransferController::class, 'index']));
             }
 
-            $business_id = request()->session()->get('user.business_id');
-
             $sell_transfer = Transaction::where('business_id', $business_id)
                     ->where('type', 'sell_transfer')
                     ->findOrFail($id);
@@ -1312,7 +1310,6 @@ class StockTransferController extends Controller
             DB::beginTransaction();
 
             $input_data = $request->only(['transaction_date', 'additional_notes', 'shipping_charges', 'final_total']);
-            $status = $request->input('status');
 
             $input_data['total_before_tax'] = $input_data['final_total'];
 
@@ -1468,11 +1465,13 @@ class StockTransferController extends Controller
 
             $this->transactionUtil->activityLog($sell_transfer, 'edited', $sell_transfer_before);
 
+            DB::commit();
+
+            $this->sendStockTransferNotification($sell_transfer);
+
             $output = ['success' => 1,
                 'msg' => __('lang_v1.updated_succesfully'),
             ];
-
-            DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
@@ -1555,6 +1554,8 @@ class StockTransferController extends Controller
 
             DB::commit();
 
+            $this->sendStockTransferNotification($sell_transfer);
+
             $output = ['success' => 1,
                 'msg' => __('lang_v1.updated_succesfully'),
             ];
@@ -1568,5 +1569,15 @@ class StockTransferController extends Controller
         }
 
         return $output;
+    }
+
+    protected function sendStockTransferNotification($transfer): void
+    {
+        try {
+            $service = app(\Modules\NotificationCenter\Services\NotificationService::class);
+            $service->send('stock_transfer', ['transfer_id' => $transfer->id]);
+        } catch (\Throwable $e) {
+            \Log::warning('StockTransfer notification failed (non-blocking): ' . $e->getMessage());
+        }
     }
 }
