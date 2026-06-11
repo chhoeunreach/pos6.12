@@ -14,6 +14,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class LocalCashierReportController extends Controller
 {
+    private const DETAIL_ROW_LIMIT = 1000;
+
     public function __construct(private Util $util)
     {
     }
@@ -619,16 +621,18 @@ class LocalCashierReportController extends Controller
             }
         }
 
-        $expenseDetailRows = $this->getExpenseDetailRows($expenseTxnIds, $paymentTypes, $paymentColumns);
-        $accessorySaleDetailRows = $this->getModuleSaleDetailRows(
+        $expenseDetailResult = $this->getExpenseDetailRows($expenseTxnIds, $paymentTypes, $paymentColumns, self::DETAIL_ROW_LIMIT);
+        $accessorySaleDetailResult = $this->getModuleSaleDetailRows(
             (string) config('accessory.database_connection', 'accessory'),
             $filters,
-            $paymentColumns
+            $paymentColumns,
+            self::DETAIL_ROW_LIMIT
         );
-        $serviceSaleDetailRows = $this->getModuleSaleDetailRows(
+        $serviceSaleDetailResult = $this->getModuleSaleDetailRows(
             (string) config('service.database_connection', 'service'),
             $filters,
-            $paymentColumns
+            $paymentColumns,
+            self::DETAIL_ROW_LIMIT
         );
 
         $sellReturnQuery = DB::table('transactions as t')
@@ -702,7 +706,7 @@ class LocalCashierReportController extends Controller
             $actualIncomeByPayment[$method] = $sellPaidByMethod - $expenseByMethod;
         }
 
-        $sellLineRows = DB::table('transaction_sell_lines as tsl')
+        $sellLineQuery = DB::table('transaction_sell_lines as tsl')
             ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
             ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
@@ -730,6 +734,12 @@ class LocalCashierReportController extends Controller
                 DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
             )
+            ->orderBy('t.transaction_date', 'desc')
+            ->orderBy('t.id', 'desc');
+
+        $sellLineTotal = (clone $sellLineQuery)->count();
+        $sellLineRows = $sellLineQuery
+            ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
         $detailRows = [];
@@ -863,16 +873,27 @@ class LocalCashierReportController extends Controller
             'summary_payment' => $paymentSummary,
             'summary_totals' => $summaryTotals,
             'detail_rows' => $groupedDetailRows,
-            'expense_detail_rows' => $expenseDetailRows,
-            'accessory_sale_detail_rows' => $accessorySaleDetailRows,
-            'service_sale_detail_rows' => $serviceSaleDetailRows,
+            'expense_detail_rows' => $expenseDetailResult['rows'],
+            'accessory_sale_detail_rows' => $accessorySaleDetailResult['rows'],
+            'service_sale_detail_rows' => $serviceSaleDetailResult['rows'],
+            'detail_meta' => [
+                'limit' => self::DETAIL_ROW_LIMIT,
+                'main_total' => $sellLineTotal + (int) ($loanPaymentData['detail_total'] ?? count($loanPaymentData['detail_rows'] ?? [])),
+                'main_displayed' => count($detailRows),
+                'expense_total' => $expenseDetailResult['total'],
+                'expense_displayed' => count($expenseDetailResult['rows']),
+                'accessory_total' => $accessorySaleDetailResult['total'],
+                'accessory_displayed' => count($accessorySaleDetailResult['rows']),
+                'service_total' => $serviceSaleDetailResult['total'],
+                'service_displayed' => count($serviceSaleDetailResult['rows']),
+            ],
         ];
     }
 
-    private function getModuleSaleDetailRows(string $connection, array $filters, array $paymentColumns): array
+    private function getModuleSaleDetailRows(string $connection, array $filters, array $paymentColumns, int $limit): array
     {
         if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_sell_lines'])) {
-            return [];
+            return ['rows' => [], 'total' => 0];
         }
 
         $db = DB::connection($connection);
@@ -902,27 +923,14 @@ class LocalCashierReportController extends Controller
             ->all();
 
         if (empty($transactionIds)) {
-            return [];
-        }
-
-        $paymentByTransaction = [];
-        if ($this->hasRequiredReportTables($connection, ['transaction_payments'])) {
-            $paymentRows = $db->table('transaction_payments as tp')
-                ->whereIn('tp.transaction_id', $transactionIds)
-                ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
-                ->groupBy('tp.transaction_id', 'tp.method')
-                ->get();
-
-            foreach ($paymentRows as $paymentRow) {
-                $paymentByTransaction[(int) $paymentRow->transaction_id][(string) $paymentRow->method] = (float) $paymentRow->amount;
-            }
+            return ['rows' => [], 'total' => 0];
         }
 
         $locationMap = $this->hasRequiredReportTables($connection, ['business_locations'])
             ? $db->table('business_locations')->pluck('name', 'id')
             : collect();
 
-        $rows = $db->table('transaction_sell_lines as tsl')
+        $query = $db->table('transaction_sell_lines as tsl')
             ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
             ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
@@ -950,8 +958,26 @@ class LocalCashierReportController extends Controller
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
             )
             ->orderBy('t.transaction_date', 'desc')
-            ->orderBy('t.id', 'desc')
+            ->orderBy('t.id', 'desc');
+
+        $total = (clone $query)->count();
+        $rows = $query
+            ->limit($limit)
             ->get();
+
+        $paymentByTransaction = [];
+        $displayTransactionIds = $rows->pluck('txn_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        if (! empty($displayTransactionIds) && $this->hasRequiredReportTables($connection, ['transaction_payments'])) {
+            $paymentRows = $db->table('transaction_payments as tp')
+                ->whereIn('tp.transaction_id', $displayTransactionIds)
+                ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+                ->groupBy('tp.transaction_id', 'tp.method')
+                ->get();
+
+            foreach ($paymentRows as $paymentRow) {
+                $paymentByTransaction[(int) $paymentRow->transaction_id][(string) $paymentRow->method] = (float) $paymentRow->amount;
+            }
+        }
 
         $detailRows = [];
         $paymentShownTransactions = [];
@@ -1004,7 +1030,7 @@ class LocalCashierReportController extends Controller
             ];
         }
 
-        return $detailRows;
+        return ['rows' => $detailRows, 'total' => $total];
     }
 
     private function hasRequiredReportTables(string $connection, array $tables): bool
@@ -1022,40 +1048,13 @@ class LocalCashierReportController extends Controller
         return true;
     }
 
-    private function getExpenseDetailRows(array $expenseTxnIds, array $paymentTypes, array $paymentColumns): array
+    private function getExpenseDetailRows(array $expenseTxnIds, array $paymentTypes, array $paymentColumns, int $limit): array
     {
         if (empty($expenseTxnIds)) {
-            return [];
+            return ['rows' => [], 'total' => 0];
         }
 
-        $paymentRows = DB::table('transaction_payments as tp')
-            ->whereIn('tp.transaction_id', $expenseTxnIds)
-            ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
-            ->groupBy('tp.transaction_id', 'tp.method')
-            ->get();
-
-        $paymentsByTransaction = [];
-        foreach ($paymentRows as $paymentRow) {
-            $transactionId = (int) $paymentRow->transaction_id;
-            $method = (string) $paymentRow->method;
-            $amount = (float) $paymentRow->amount;
-
-            if (! isset($paymentsByTransaction[$transactionId])) {
-                $paymentsByTransaction[$transactionId] = [
-                    'paid' => 0.0,
-                    'methods' => [],
-                ];
-            }
-
-            $paymentsByTransaction[$transactionId]['paid'] += $amount;
-            $paymentsByTransaction[$transactionId]['methods'][] = [
-                'key' => $method,
-                'label' => (string) ($paymentTypes[$method] ?? $method),
-                'amount' => $amount,
-            ];
-        }
-
-        $rows = DB::table('transactions as t')
+        $query = DB::table('transactions as t')
             ->leftJoin('business_locations as l', 'l.id', '=', 't.location_id')
             ->leftJoin('expense_categories as ec', 'ec.id', '=', 't.expense_category_id')
             ->leftJoin('users as created_by_user', 'created_by_user.id', '=', 't.created_by')
@@ -1074,10 +1073,45 @@ class LocalCashierReportController extends Controller
                 DB::raw("TRIM(CONCAT(COALESCE(expense_for_user.first_name,''), ' ', COALESCE(expense_for_user.last_name,''))) as expense_for_name")
             )
             ->orderBy('t.transaction_date', 'desc')
-            ->orderBy('t.id', 'desc')
+            ->orderBy('t.id', 'desc');
+
+        $total = (clone $query)->count();
+        $rows = $query
+            ->limit($limit)
             ->get();
 
-        return $rows->map(function ($row) use ($paymentsByTransaction, $paymentColumns) {
+        $paymentsByTransaction = [];
+        $displayTransactionIds = $rows->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        if (! empty($displayTransactionIds)) {
+            $paymentRows = DB::table('transaction_payments as tp')
+                ->whereIn('tp.transaction_id', $displayTransactionIds)
+                ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+                ->groupBy('tp.transaction_id', 'tp.method')
+                ->get();
+
+            foreach ($paymentRows as $paymentRow) {
+                $transactionId = (int) $paymentRow->transaction_id;
+                $method = (string) $paymentRow->method;
+                $amount = (float) $paymentRow->amount;
+
+                if (! isset($paymentsByTransaction[$transactionId])) {
+                    $paymentsByTransaction[$transactionId] = [
+                        'paid' => 0.0,
+                        'methods' => [],
+                    ];
+                }
+
+                $paymentsByTransaction[$transactionId]['paid'] += $amount;
+                $paymentsByTransaction[$transactionId]['methods'][] = [
+                    'key' => $method,
+                    'label' => (string) ($paymentTypes[$method] ?? $method),
+                    'amount' => $amount,
+                ];
+            }
+        }
+
+        return [
+            'rows' => $rows->map(function ($row) use ($paymentsByTransaction, $paymentColumns) {
             $transactionId = (int) $row->id;
             $paymentInfo = $paymentsByTransaction[$transactionId] ?? ['paid' => 0.0, 'methods' => []];
             $paid = (float) ($paymentInfo['paid'] ?? 0);
@@ -1113,7 +1147,9 @@ class LocalCashierReportController extends Controller
                 'due' => $total - $paid,
                 'note' => (string) ($row->additional_notes ?? ''),
             ];
-        })->values()->all();
+            })->values()->all(),
+            'total' => $total,
+        ];
     }
 
     public function formatCurrency(?float $value): string
@@ -1158,6 +1194,7 @@ class LocalCashierReportController extends Controller
             'cashier_ids' => [],
             'location_ids' => [],
             'detail_rows' => [],
+            'detail_total' => 0,
             'total' => 0.0,
         ];
 
@@ -1227,7 +1264,7 @@ class LocalCashierReportController extends Controller
             ->groupBy('cashier_id', 'location_id', 'method')
             ->get();
 
-        $detailRows = DB::connection('mysql_loan')->table('loan_payments as p')
+        $detailRowsQuery = DB::connection('mysql_loan')->table('loan_payments as p')
             ->join('loans as l', 'l.id', '=', 'p.loan_id')
             ->when($joinLoanBusinessLocations, fn ($query) => $query->leftJoin('loan_business_locations as lbl', 'lbl.id', '=', 'l.business_location_id'))
             ->whereBetween(DB::raw('DATE(p.' . $dateColumn . ')'), [$filters['start_date'], $filters['end_date']])
@@ -1257,10 +1294,15 @@ class LocalCashierReportController extends Controller
             ->selectRaw(($this->loanColumnExists('loan_payments', 'loan_number_snapshot') ? 'p.loan_number_snapshot' : ($this->loanColumnExists('loans', 'loan_number') ? 'l.loan_number' : 'l.id')) . ' as loan_number')
             ->selectRaw(($this->loanColumnExists('loan_payments', 'receipt_number') ? 'p.receipt_number' : ($this->loanColumnExists('loan_payments', 'payment_ref_no') ? 'p.payment_ref_no' : 'p.id')) . ' as payment_ref')
             ->orderBy('paid_date')
-            ->orderBy('p.id')
+            ->orderBy('p.id');
+
+        $loanDetailTotal = (clone $detailRowsQuery)->count();
+        $detailRows = $detailRowsQuery
+            ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
         $data = $empty;
+        $data['detail_total'] = $loanDetailTotal;
         foreach ($detailRows as $row) {
             $method = $this->normalizeLoanPaymentMethod((string) ($row->method ?? 'cash'), $paymentTypes);
             if (! empty($filters['payment_methods']) && ! in_array($method, $filters['payment_methods'], true)) {

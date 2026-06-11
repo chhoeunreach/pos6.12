@@ -704,7 +704,21 @@
             $expenseRows = collect($report['expense_detail_rows'] ?? []);
             $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
             $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
+            $detailMeta = $report['detail_meta'] ?? [];
+            $detailLimit = (int) ($detailMeta['limit'] ?? 1000);
+            $hasLimitedDetails = collect([
+                ['label' => 'cashier sales', 'displayed' => $detailMeta['main_displayed'] ?? 0, 'total' => $detailMeta['main_total'] ?? 0],
+                ['label' => 'accessory sales', 'displayed' => $detailMeta['accessory_displayed'] ?? 0, 'total' => $detailMeta['accessory_total'] ?? 0],
+                ['label' => 'service sales', 'displayed' => $detailMeta['service_displayed'] ?? 0, 'total' => $detailMeta['service_total'] ?? 0],
+                ['label' => 'expenses', 'displayed' => $detailMeta['expense_displayed'] ?? 0, 'total' => $detailMeta['expense_total'] ?? 0],
+            ])->filter(fn ($row) => (int) $row['total'] > (int) $row['displayed'])->values();
         @endphp
+        @if($hasLimitedDetails->isNotEmpty())
+            <div class="alert alert-warning">
+                Detail tables are limited to {{ number_format($detailLimit) }} rows per section for faster loading.
+                Use narrower filters or export/print for full detail.
+            </div>
+        @endif
         <div class="box box-primary">
             <div class="box-header">
                 <ul class="nav nav-tabs local-detail-tabs" role="tablist">
@@ -722,11 +736,11 @@
                     </li>
                 </ul>
                 <div class="table-meta">
-                    <span>{{ count($report['detail_rows'] ?? []) }} rows</span>
+                    <span>{{ number_format($detailMeta['main_displayed'] ?? count($report['detail_rows'] ?? [])) }} / {{ number_format($detailMeta['main_total'] ?? count($report['detail_rows'] ?? [])) }} rows</span>
                     <span>{{ count($report['summary_user'] ?? []) }} cashiers</span>
-                    <span>{{ $accessorySaleRows->count() }} accessory sales</span>
-                    <span>{{ $serviceSaleRows->count() }} service sales</span>
-                    <span>{{ $expenseRows->count() }} expenses</span>
+                    <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} accessory sales</span>
+                    <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} service sales</span>
+                    <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} expenses</span>
                 </div>
             </div>
             <div class="box-body">
