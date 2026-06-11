@@ -69,7 +69,7 @@ return [
             'driver' => 'mysql',
             'host' => env('DB_LOAN_HOST', '127.0.0.1'),
             'port' => env('DB_LOAN_PORT', '3306'),
-            'database' => env('DB_LOAN_DATABASE', 'loan_management'),
+            'database' => env('DB_LOAN_DATABASE', 'ky_loanmanagement'),
             'username' => env('DB_LOAN_USERNAME', 'root'),
             'password' => env('DB_LOAN_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
@@ -80,19 +80,47 @@ return [
             'engine' => null,
         ],
 
-        'loan_management' => [
+        'accessory' => [
             'driver' => 'mysql',
-            'host' => env('LOAN_DB_HOST', '127.0.0.1'),
-            'port' => env('LOAN_DB_PORT', '3306'),
-            'database' => env('LOAN_DB_DATABASE', 'loan_management'),
-            'username' => env('LOAN_DB_USERNAME', 'root'),
-            'password' => env('LOAN_DB_PASSWORD', '090569070oK$'),
+            'url' => env('ACCESSORY_DATABASE_URL'),
+            'host' => env('ACCESSORY_DB_HOST', '127.0.0.1'),
+            'port' => env('ACCESSORY_DB_PORT', '3306'),
+            'database' => env('ACCESSORY_DB_DATABASE', 'ky_accessory'),
+            'username' => env('ACCESSORY_DB_USERNAME', 'root'),
+            'password' => env('ACCESSORY_DB_PASSWORD', ''),
+            'unix_socket' => env('ACCESSORY_DB_SOCKET', ''),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '',
+            'prefix_indexes' => true,
             'strict' => false,
             'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('ACCESSORY_MYSQL_ATTR_SSL_CA'),
+            ]) : [],
         ],
+
+        'service' => [
+            'driver' => 'mysql',
+            'url' => env('SERVICE_DATABASE_URL'),
+            'host' => env('SERVICE_DB_HOST', '127.0.0.1'),
+            'port' => env('SERVICE_DB_PORT', '3306'),
+            'database' => env('SERVICE_DB_DATABASE', 'ky_services'),
+            'username' => env('SERVICE_DB_USERNAME', 'root'),
+            'password' => env('SERVICE_DB_PASSWORD', ''),
+            'unix_socket' => env('SERVICE_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => false,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('SERVICE_MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+
 
         'pgsql' => [
             'driver' => 'pgsql',
