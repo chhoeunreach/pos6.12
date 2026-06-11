@@ -110,7 +110,10 @@
     @endif
 @stop
 @section('javascript')
-    <script src="{{ asset('modules/accessory/v7/js/pos.js?v=' . $asset_v) }}"></script>
+    <script>
+        window.accessory_pos_base_url = @json(url(config('accessory.route_prefix', 'accessory')));
+    </script>
+    <script src="{{ asset('modules/accessory/v7/js/pos.js?v=' . $asset_v . '&m=' . filemtime(public_path('modules/accessory/v7/js/pos.js'))) }}"></script>
     <script src="{{ asset('modules/accessory/v7/js/printer.js?v=' . $asset_v) }}"></script>
     <script src="{{ asset('modules/accessory/v7/js/product.js?v=' . $asset_v) }}"></script>
     <script src="{{ asset('modules/accessory/v7/js/opening_stock.js?v=' . $asset_v) }}"></script>

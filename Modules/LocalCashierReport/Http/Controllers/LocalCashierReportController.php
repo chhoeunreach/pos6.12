@@ -135,6 +135,7 @@ class LocalCashierReportController extends Controller
     public function getReportData(array $filters): array
     {
         $businessId = (int) session('user.business_id');
+        $paymentColumns = [];
 
         $baseTransactions = DB::table('transactions as t')
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
@@ -202,32 +203,6 @@ class LocalCashierReportController extends Controller
 
         $paymentTypes = $this->util->payment_types(null, false, $businessId);
         $loanPaymentData = $this->getLoanPaymentData($filters, $paymentTypes);
-
-        if ($baseTransactions->isEmpty() && empty($loanPaymentData['detail_rows'])) {
-            $paymentColumns = $this->buildPaymentColumns($loanPaymentData['methods'] ?? [], $paymentTypes);
-
-            return [
-                'rows' => [],
-                'rows_by_location' => [],
-                'payment_columns' => $paymentColumns,
-                'payment_labels' => $paymentTypes,
-                'grand_total' => 0.0,
-                'grand_paid' => 0.0,
-                'grand_expenses' => 0.0,
-                'grand_sell_return' => 0.0,
-                'grand_actual_income' => 0.0,
-                'grand_due' => 0.0,
-                'payment_with_expenses' => [],
-                'expense_payment_summary' => [],
-                'actual_income_payment_summary' => [],
-                'detail_rows' => [],
-                'summary_user' => [],
-                'summary_location' => [],
-                'summary_customer_group' => [],
-                'summary_brand' => [],
-                'summary_payment' => [],
-            ];
-        }
 
         $transactionIds = $baseTransactions->pluck('id')->all();
         $cashierIds = $baseTransactions->pluck('created_by')->unique()->values()->all();
@@ -644,6 +619,18 @@ class LocalCashierReportController extends Controller
             }
         }
 
+        $expenseDetailRows = $this->getExpenseDetailRows($expenseTxnIds, $paymentTypes, $paymentColumns);
+        $accessorySaleDetailRows = $this->getModuleSaleDetailRows(
+            (string) config('accessory.database_connection', 'accessory'),
+            $filters,
+            $paymentColumns
+        );
+        $serviceSaleDetailRows = $this->getModuleSaleDetailRows(
+            (string) config('service.database_connection', 'service'),
+            $filters,
+            $paymentColumns
+        );
+
         $sellReturnQuery = DB::table('transactions as t')
             ->where('t.business_id', $businessId)
             ->where('t.type', 'sell_return')
@@ -876,7 +863,257 @@ class LocalCashierReportController extends Controller
             'summary_payment' => $paymentSummary,
             'summary_totals' => $summaryTotals,
             'detail_rows' => $groupedDetailRows,
+            'expense_detail_rows' => $expenseDetailRows,
+            'accessory_sale_detail_rows' => $accessorySaleDetailRows,
+            'service_sale_detail_rows' => $serviceSaleDetailRows,
         ];
+    }
+
+    private function getModuleSaleDetailRows(string $connection, array $filters, array $paymentColumns): array
+    {
+        if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_sell_lines'])) {
+            return [];
+        }
+
+        $db = DB::connection($connection);
+        $businessId = 1;
+
+        $transactionIds = $db->table('transactions as t')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+            ->whereIn('t.location_id', $filters['location_ids'])
+            ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                $query->whereIn('t.created_by', $filters['user_ids']);
+            })
+            ->when(! empty($filters['payment_status']), function ($query) use ($filters) {
+                $query->where('t.payment_status', $filters['payment_status']);
+            })
+            ->when(! empty($filters['payment_methods']) && $this->hasRequiredReportTables($connection, ['transaction_payments']), function ($query) use ($filters) {
+                $query->whereExists(function ($sub) use ($filters) {
+                    $sub->select(DB::raw(1))
+                        ->from('transaction_payments as tpf')
+                        ->whereColumn('tpf.transaction_id', 't.id')
+                        ->whereIn('tpf.method', $filters['payment_methods']);
+                });
+            })
+            ->pluck('t.id')
+            ->all();
+
+        if (empty($transactionIds)) {
+            return [];
+        }
+
+        $paymentByTransaction = [];
+        if ($this->hasRequiredReportTables($connection, ['transaction_payments'])) {
+            $paymentRows = $db->table('transaction_payments as tp')
+                ->whereIn('tp.transaction_id', $transactionIds)
+                ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+                ->groupBy('tp.transaction_id', 'tp.method')
+                ->get();
+
+            foreach ($paymentRows as $paymentRow) {
+                $paymentByTransaction[(int) $paymentRow->transaction_id][(string) $paymentRow->method] = (float) $paymentRow->amount;
+            }
+        }
+
+        $locationMap = $this->hasRequiredReportTables($connection, ['business_locations'])
+            ? $db->table('business_locations')->pluck('name', 'id')
+            : collect();
+
+        $rows = $db->table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
+            ->leftJoin('products as p', 'p.id', '=', 'tsl.product_id')
+            ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
+            ->whereIn('tsl.transaction_id', $transactionIds)
+            ->select(
+                'tsl.transaction_id',
+                'tsl.quantity',
+                'tsl.unit_price_before_discount',
+                'tsl.unit_price_inc_tax',
+                'tsl.line_discount_amount',
+                DB::raw('((tsl.quantity * tsl.unit_price_before_discount) - COALESCE(tsl.line_discount_amount,0)) as line_total'),
+                'p.name as product_name',
+                'v.sub_sku',
+                't.id as txn_id',
+                't.transaction_date',
+                't.invoice_no',
+                't.location_id',
+                't.final_total',
+                't.additional_notes',
+                't.staff_note',
+                DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
+                DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
+            )
+            ->orderBy('t.transaction_date', 'desc')
+            ->orderBy('t.id', 'desc')
+            ->get();
+
+        $detailRows = [];
+        $paymentShownTransactions = [];
+        foreach ($rows as $line) {
+            $txnId = (int) $line->txn_id;
+            $paid = 0.0;
+            $paymentCols = [];
+            foreach ($paymentColumns as $method) {
+                $amount = (float) ($paymentByTransaction[$txnId][$method] ?? 0);
+                $paymentCols[$method] = $amount;
+                $paid += $amount;
+            }
+
+            $isDuplicateTransactionLine = isset($paymentShownTransactions[$txnId]);
+            if ($isDuplicateTransactionLine) {
+                $paid = 0.0;
+                foreach ($paymentColumns as $method) {
+                    $paymentCols[$method] = 0.0;
+                }
+            } else {
+                $paymentShownTransactions[$txnId] = true;
+            }
+
+            $customerGroupName = trim((string) ($line->customer_group_name ?? ''));
+            $customerGroupLabel = $customerGroupName === 'រំលស់'
+                ? 'រំលស់'
+                : ($customerGroupName === 'អ៊ីអន' ? 'អ៊ីអន' : 'លក់');
+            $sellNote = trim((string) ($line->additional_notes ?? ''));
+            $staffNoteLast4 = substr(trim((string) ($line->staff_note ?? '')), -4);
+            $itText = trim($sellNote . ($sellNote !== '' && $staffNoteLast4 !== '' ? '-' : '') . $staffNoteLast4);
+
+            $detailRows[] = [
+                'row_type' => 'sale',
+                'transaction_id' => $txnId,
+                'date' => Carbon::parse($line->transaction_date)->format('Y-m-d H:i'),
+                'invoice_no' => (string) ($line->invoice_no ?: ('#' . $txnId)),
+                'i_t' => $itText !== '' ? $itText : '-',
+                'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
+                'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
+                'customer_group_name' => $customerGroupLabel,
+                'sku' => (string) ($line->sub_sku ?? '-'),
+                'product_name' => (string) ($line->product_name ?? '-'),
+                'quantity' => (float) $line->quantity,
+                'unit_price' => (float) ($line->unit_price_before_discount ?? $line->unit_price_inc_tax ?? 0),
+                'line_total' => (float) $line->line_total,
+                'discount' => (float) ($line->line_discount_amount ?? 0),
+                'paid' => $paid,
+                'payments' => $paymentCols,
+                'due' => $isDuplicateTransactionLine ? 0.0 : (float) $line->final_total - $paid,
+            ];
+        }
+
+        return $detailRows;
+    }
+
+    private function hasRequiredReportTables(string $connection, array $tables): bool
+    {
+        try {
+            foreach ($tables as $table) {
+                if (! Schema::connection($connection)->hasTable($table)) {
+                    return false;
+                }
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function getExpenseDetailRows(array $expenseTxnIds, array $paymentTypes, array $paymentColumns): array
+    {
+        if (empty($expenseTxnIds)) {
+            return [];
+        }
+
+        $paymentRows = DB::table('transaction_payments as tp')
+            ->whereIn('tp.transaction_id', $expenseTxnIds)
+            ->select('tp.transaction_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+            ->groupBy('tp.transaction_id', 'tp.method')
+            ->get();
+
+        $paymentsByTransaction = [];
+        foreach ($paymentRows as $paymentRow) {
+            $transactionId = (int) $paymentRow->transaction_id;
+            $method = (string) $paymentRow->method;
+            $amount = (float) $paymentRow->amount;
+
+            if (! isset($paymentsByTransaction[$transactionId])) {
+                $paymentsByTransaction[$transactionId] = [
+                    'paid' => 0.0,
+                    'methods' => [],
+                ];
+            }
+
+            $paymentsByTransaction[$transactionId]['paid'] += $amount;
+            $paymentsByTransaction[$transactionId]['methods'][] = [
+                'key' => $method,
+                'label' => (string) ($paymentTypes[$method] ?? $method),
+                'amount' => $amount,
+            ];
+        }
+
+        $rows = DB::table('transactions as t')
+            ->leftJoin('business_locations as l', 'l.id', '=', 't.location_id')
+            ->leftJoin('expense_categories as ec', 'ec.id', '=', 't.expense_category_id')
+            ->leftJoin('users as created_by_user', 'created_by_user.id', '=', 't.created_by')
+            ->leftJoin('users as expense_for_user', 'expense_for_user.id', '=', 't.expense_for')
+            ->whereIn('t.id', $expenseTxnIds)
+            ->select(
+                't.id',
+                't.transaction_date',
+                't.ref_no',
+                't.final_total',
+                't.payment_status',
+                't.additional_notes',
+                'l.name as location_name',
+                'ec.name as category_name',
+                DB::raw("TRIM(CONCAT(COALESCE(created_by_user.first_name,''), ' ', COALESCE(created_by_user.last_name,''))) as created_by_name"),
+                DB::raw("TRIM(CONCAT(COALESCE(expense_for_user.first_name,''), ' ', COALESCE(expense_for_user.last_name,''))) as expense_for_name")
+            )
+            ->orderBy('t.transaction_date', 'desc')
+            ->orderBy('t.id', 'desc')
+            ->get();
+
+        return $rows->map(function ($row) use ($paymentsByTransaction, $paymentColumns) {
+            $transactionId = (int) $row->id;
+            $paymentInfo = $paymentsByTransaction[$transactionId] ?? ['paid' => 0.0, 'methods' => []];
+            $paid = (float) ($paymentInfo['paid'] ?? 0);
+            $total = (float) ($row->final_total ?? 0);
+            $paymentAmounts = [];
+            foreach ($paymentColumns as $method) {
+                $paymentAmounts[$method] = 0.0;
+            }
+            foreach ($paymentInfo['methods'] ?? [] as $methodRow) {
+                $methodLabel = (string) ($methodRow['key'] ?? '');
+                if ($methodLabel !== '') {
+                    $paymentAmounts[$methodLabel] = ($paymentAmounts[$methodLabel] ?? 0) + (float) ($methodRow['amount'] ?? 0);
+                }
+            }
+            $methodText = collect($paymentInfo['methods'] ?? [])
+                ->map(fn ($method) => $method['label'] . ': ' . $this->formatCurrency((float) $method['amount']))
+                ->implode(', ');
+
+            return [
+                'transaction_id' => $transactionId,
+                'date' => ! empty($row->transaction_date) ? Carbon::parse($row->transaction_date)->format('Y-m-d H:i') : '-',
+                'ref_no' => (string) ($row->ref_no ?: ('#' . $transactionId)),
+                'created_by_name' => trim((string) ($row->created_by_name ?? '')) ?: 'N/A',
+                'expense_for_name' => trim((string) ($row->expense_for_name ?? '')) ?: '-',
+                'location_name' => (string) ($row->location_name ?? 'N/A'),
+                'category_name' => (string) ($row->category_name ?? 'Uncategorized'),
+                'payment_status' => (string) ($row->payment_status ?? '-'),
+                'payment_methods' => $methodText !== '' ? $methodText : '-',
+                'payment_method_rows' => $paymentInfo['methods'] ?? [],
+                'payments' => $paymentAmounts,
+                'amount' => $total,
+                'paid' => $paid,
+                'due' => $total - $paid,
+                'note' => (string) ($row->additional_notes ?? ''),
+            ];
+        })->values()->all();
     }
 
     public function formatCurrency(?float $value): string

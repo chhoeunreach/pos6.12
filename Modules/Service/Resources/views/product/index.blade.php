@@ -1,6 +1,33 @@
 @extends('service::layouts.app')
 @section('title', __('sale.products'))
 
+@section('css')
+    <style>
+        #product_table.service-product-list-table th,
+        #product_table.service-product-list-table td {
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .service-text-ellipsis {
+            display: block;
+            max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .service-product-cell {
+            max-width: 190px;
+        }
+
+        .service-location-cell {
+            max-width: 170px;
+        }
+    </style>
+@endsection
+
 @section('content')
 
     <!-- Content Header (Page header) -->
@@ -227,9 +254,41 @@
     <script src="{{ asset('modules/service/v7/js/opening_stock.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
     <script type="text/javascript">
         $(document).ready(function() {
+            function service_get_text_from_html(html) {
+                return $('<div>').html(html || '').text().replace(/\s+/g, ' ').trim();
+            }
+
+            function service_escape_html(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function service_truncate_text(text, limit) {
+                var value = (text || '').toString();
+
+                if (!limit || value.length <= limit) {
+                    return value;
+                }
+
+                return value.substring(0, limit) + '...';
+            }
+
+            function service_ellipsis_display(data, type, limit, class_name) {
+                var full_text = service_get_text_from_html(data);
+
+                if (type !== 'display') {
+                    return full_text;
+                }
+
+                return '<span class="service-text-ellipsis ' + class_name + '" title="' +
+                    service_escape_html(full_text) + '">' +
+                    service_escape_html(service_truncate_text(full_text, limit)) +
+                    '</span>';
+            }
+
             product_table = $('#product_table').DataTable({
                 processing: true,
                 serverSide: true,
+                autoWidth: false,
                 fixedHeader:false,
                 aaSorting: [
                     [3, 'asc']
@@ -260,11 +319,19 @@
                         d = __datatable_ajax_callback(d);
                     }
                 },
-                columnDefs: [{
-                    "targets": [0, 1, 2],
-                    "orderable": false,
-                    "searchable": false
-                }],
+                columnDefs: [
+                    {
+                        "targets": [0, 1, 2],
+                        "orderable": false,
+                        "searchable": false
+                    },
+                    { "targets": 0, "width": "28px", "className": "text-center" },
+                    { "targets": 1, "width": "58px", "className": "text-center" },
+                    { "targets": 2, "width": "115px" },
+                    { "targets": 3, "width": "190px" },
+                    { "targets": 4, "width": "170px" },
+                    { "targets": "_all", "width": "85px" }
+                ],
                 columns: [{
                         data: 'mass_delete'
                     },
@@ -278,11 +345,17 @@
                     },
                     {
                         data: 'product',
-                        name: 'products.name'
+                        name: 'products.name',
+                        render: function(data, type, row, meta) {
+                            return service_ellipsis_display(data, type, 45, 'service-product-cell');
+                        }
                     },
                     {
                         data: 'product_locations',
-                        name: 'product_locations'
+                        name: 'product_locations',
+                        render: function(data, type, row, meta) {
+                            return service_ellipsis_display(data, type, 35, 'service-location-cell');
+                        }
                     },
                     @can('view_purchase_price')
                         {

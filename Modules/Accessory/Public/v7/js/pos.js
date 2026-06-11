@@ -2,6 +2,23 @@ var global_brand_id = null;
 var global_p_category_id = null;
 var global_is_clear_local_storage = false;
 
+function accessory_pos_url(path) {
+    if (!path) {
+        return path;
+    }
+
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+
+    var base = (window.accessory_pos_base_url || (window.location.origin + '/accessory')).replace(/\/+$/, '');
+    if (path === '/accessory' || path.indexOf('/accessory/') === 0) {
+        return window.location.origin + path;
+    }
+
+    return base + '/' + path.replace(/^\/+/, '');
+}
+
 function pos_play_success_sound() {
     var audio = document.getElementById('success-audio');
     if (audio) {
@@ -83,7 +100,7 @@ $(document).ready(function() {
     //get customer
     $('select#customer_id').select2({
         ajax: {
-            url: '/contacts/customers',
+            url: accessory_pos_url('/contacts/customers'),
             dataType: 'json',
             delay: 250,
             data: function(params) {
@@ -827,7 +844,7 @@ $(document).ready(function() {
         var location_id = $('input#location_id').val();
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get_payment_row',
+            url: accessory_pos_url('/sells/pos/get_payment_row'),
             data: { row_index: row_index, location_id: location_id },
             dataType: 'html',
             success: function(result) {
@@ -1064,7 +1081,7 @@ $(document).ready(function() {
             rules: {
                 contact_id: {
                     remote: {
-                        url: '/contacts/check-contacts-id',
+                        url: accessory_pos_url('/contacts/check-contacts-id'),
                         type: 'post',
                         data: {
                             contact_id: function() {
@@ -1197,7 +1214,7 @@ $(document).ready(function() {
         rules: {
             invoice_no: {
                 remote: {
-                    url: '/sell/check-invoice-number',
+                    url: accessory_pos_url('/sell/check-invoice-number'),
                     type: 'post',
                     data: {
                         invoice_no: function() {
@@ -1833,7 +1850,7 @@ function get_featured_products() {
     if (location_id) {
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get-featured-products/' + location_id,
+            url: accessory_pos_url('/sells/pos/get-featured-products/' + location_id),
             dataType: 'html',
             success: function(result) {
                 $box.html(result ? result : emptyHtml);
@@ -1855,7 +1872,9 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
     var $items_container = $('div#product_list_items').length ? $('div#product_list_items') : $('div#product_list_body');
 
     if (url == null) {
-        url = '/sells/pos/get-product-suggestion';
+        url = accessory_pos_url('/sells/pos/get-product-suggestion');
+    } else {
+        url = accessory_pos_url(url);
     }
     $('#suggestion_page_loader').fadeIn(700);
     var page = $('input#suggestion_page').val();
@@ -1893,7 +1912,7 @@ function get_recent_transactions(status, element_obj) {
     var transaction_sub_type = $("#transaction_sub_type").val();
     $.ajax({
         method: 'GET',
-        url: '/sells/pos/get-recent-transactions',
+        url: accessory_pos_url('/sells/pos/get-recent-transactions'),
         data: { status: status , transaction_sub_type: transaction_sub_type},
         dataType: 'html',
         success: function(result) {
@@ -2140,7 +2159,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get_product_row/' + variation_id + '/' + location_id,
+            url: accessory_pos_url('/sells/pos/get_product_row/' + variation_id + '/' + location_id),
             async: false,
             data: {
                 product_row: product_row,
@@ -2793,7 +2812,7 @@ function getCustomerRewardPoints() {
 
     $.ajax({
         method: 'POST',
-        url: '/sells/pos/get-reward-details',
+        url: accessory_pos_url('/sells/pos/get-reward-details'),
         data: { 
             customer_id: customer_id
         },
@@ -2914,7 +2933,7 @@ $(document).on('change', '#types_of_service_id', function(){
     if(types_of_service_id) {
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get-types-of-service-details',
+            url: accessory_pos_url('/sells/pos/get-types-of-service-details'),
             data: { 
                 types_of_service_id: types_of_service_id,
                 location_id: location_id
@@ -2983,12 +3002,12 @@ $(document).on('change', '.payment_types_dropdown', function(e) {
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');
     if (payment_type && payment_type != 'advance') {
-        var default_account = default_accounts && default_accounts[payment_type]['account'] ? 
+        var default_account = default_accounts && default_accounts[payment_type] && default_accounts[payment_type]['account'] ?
             default_accounts[payment_type]['account'] : '';
         var row_index = payment_row.find('.payment_row_index').val();
 
         var account_dropdown = payment_row.find('select#account_' + row_index);
-        if (account_dropdown.length && default_accounts) {
+        if (account_dropdown.length && default_accounts && default_accounts[payment_type]) {
             account_dropdown.val(default_account);
             account_dropdown.change();
         }
@@ -3199,7 +3218,7 @@ function get_sales_orders() {
         var customer_id = $('select#customer_id').val();
         var location_id = $('input#location_id').val();
         $.ajax({
-            url: '/get-sales-orders/' + customer_id + '?location_id=' + location_id,
+            url: accessory_pos_url('/get-sales-orders/' + customer_id + '?location_id=' + location_id),
             dataType: 'json',
             success: function(data) {
                 $('#sales_order_ids').select2('destroy').empty().select2({data: data});
@@ -3220,7 +3239,7 @@ $("#sales_order_ids").on("select2:select", function (e) {
     var location_id = $('input#location_id').val();
     $.ajax({
         method: 'GET',
-        url: '/get-sales-order-lines',
+        url: accessory_pos_url('/get-sales-order-lines'),
         async: false,
         data: {
             product_row: product_row,
@@ -3313,7 +3332,7 @@ $("#sales_order_ids").on("select2:unselect", function (e) {
 
 $(document).on('click', '#add_expense', function(){
     $.ajax({
-        url: '/expenses/create',
+        url: accessory_pos_url('/expenses/create'),
         data: { 
             location_id: $('#select_location_id').val()
         },
@@ -3369,7 +3388,7 @@ $(document).on('click', '#pos-receive-customer-payment', function() {
         return;
     }
     $.ajax({
-        url: '/payments/pay-contact-due/' + customer_id + '?type=sell',
+        url: accessory_pos_url('/payments/pay-contact-due/' + customer_id + '?type=sell'),
         dataType: 'html',
         success: function(result) {
             $('#pos_pay_contact_due_modal').html(result);
@@ -3685,7 +3704,7 @@ $(document).on('change', '#res_waiter_id', function(e){
             if (inputValue !== null) {
                     $.ajax({
                         method: 'get',
-                        url: '/modules/data/check-staff-pin',
+                        url: accessory_pos_url('/modules/data/check-staff-pin'),
                         dataType: 'json',
                         data: {
                         service_staff_pin: inputValue,

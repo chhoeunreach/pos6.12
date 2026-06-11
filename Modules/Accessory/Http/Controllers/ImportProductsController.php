@@ -5,6 +5,7 @@ namespace Modules\Accessory\Http\Controllers;
 use App\Brands;
 use App\BusinessLocation;
 use App\Category;
+use App\Exports\ImportProductsTemplateExport;
 use App\Product;
 use App\TaxRate;
 use App\Transaction;
@@ -67,6 +68,20 @@ class ImportProductsController extends Controller
         } else {
             return view('accessory::import_products.index');
         }
+    }
+
+    /**
+     * Download the latest product import template.
+     *
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function downloadImportTemplate()
+    {
+        if (! auth()->user()->can('product.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        return Excel::download(new ImportProductsTemplateExport, 'accessory_import_products_template.xlsx');
     }
 
     /**
@@ -701,10 +716,10 @@ class ImportProductsController extends Controller
                 'msg' => $e->getMessage(),
             ];
 
-            return redirect('import-products')->with('notification', $output);
+            return redirect('accessory/import-products')->with('notification', $output);
         }
 
-        return redirect('import-products')->with('status', $output);
+        return redirect('accessory/import-products')->with('status', $output);
     }
 
     private function calculateVariationPrices($dpp_exc_tax, $dpp_inc_tax, $selling_price, $tax_amount, $tax_type, $margin)

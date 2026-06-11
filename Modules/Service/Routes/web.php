@@ -365,6 +365,7 @@ Route::middleware(['setData', 'auth', 'service.database', 'language', 'timezone'
 
     //Import products
     Route::get('/import-products', [ImportProductsController::class, 'index']);
+    Route::get('/import-products/template', [ImportProductsController::class, 'downloadImportTemplate']);
     Route::post('/import-products/store', [ImportProductsController::class, 'store']);
 
     //Sales Commission Agent

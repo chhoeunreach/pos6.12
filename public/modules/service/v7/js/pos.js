@@ -2,6 +2,62 @@ var global_brand_id = null;
 var global_p_category_id = null;
 var global_is_clear_local_storage = false;
 
+function service_pos_url(path) {
+    if (!path) {
+        return path;
+    }
+
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+
+    var prefix = (window.service_pos_base_url || (typeof base_path !== 'undefined' ? base_path : (window.location.origin + '/service'))).replace(/\/+$/, '');
+    if (path === '/service' || path.indexOf('/service/') === 0) {
+        return window.location.origin + path;
+    }
+
+    return prefix + '/' + path.replace(/^\/+/, '');
+}
+
+function service_sync_selected_location() {
+    if ($('select#select_location_id').length !== 1) {
+        return;
+    }
+
+    var $selected = $('select#select_location_id').find(':selected');
+
+    $('input#location_id').val($('select#select_location_id').val());
+    $('input#location_id').data('receipt_printer_type', $selected.data('receipt_printer_type'));
+    $('input#location_id').data('default_payment_accounts', $selected.data('default_payment_accounts'));
+    $('input#location_id').attr('data-receipt_printer_type', $selected.data('receipt_printer_type'));
+    $('input#location_id').attr('data-default_payment_accounts', $selected.data('default_payment_accounts'));
+}
+
+function pos_filter_all_label(kind) {
+    if (kind === 'category') {
+        return $('.pos-card-grid-categories').data('label-all') || 'All';
+    }
+
+    if (kind === 'brand') {
+        return $('.product_brand[data-value="all"]').data('name') || 'All';
+    }
+
+    return 'All';
+}
+
+function service_reload_all_products_for_selected_location() {
+    service_sync_selected_location();
+    global_p_category_id = null;
+    global_brand_id = null;
+    $('input#suggestion_page').val(1);
+    var location_id = $('input#location_id').val();
+
+    if (location_id != '' || location_id != undefined) {
+        get_product_suggestion_list(null, null, location_id, null);
+    }
+    get_featured_products();
+}
+
 function pos_play_success_sound() {
     var audio = document.getElementById('success-audio');
     if (audio) {
@@ -38,7 +94,9 @@ $(document).ready(function() {
     }
 
     $('select#select_location_id').change(function() {
+        service_sync_selected_location();
         reset_pos_form();
+        pos_reset_product_filters();
 
         var default_price_group = $(this).find(':selected').data('default_price_group')
         if (default_price_group) {
@@ -78,12 +136,13 @@ $(document).ready(function() {
         if ($('#types_of_service_id').length && $('#types_of_service_id').val()) {
             $('#types_of_service_id').change();
         }
+
     });
 
     //get customer
     $('select#customer_id').select2({
         ajax: {
-            url: '/contacts/customers',
+            url: service_pos_url('/contacts/customers'),
             dataType: 'json',
             delay: 250,
             data: function(params) {
@@ -226,7 +285,7 @@ $(document).ready(function() {
                     }
                     
                     $.getJSON(
-                        '/products/list',
+                        service_pos_url('/products/list'),
                         {
                             price_group: price_group,
                             location_id: $('input#location_id').val(),
@@ -827,7 +886,7 @@ $(document).ready(function() {
         var location_id = $('input#location_id').val();
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get_payment_row',
+            url: service_pos_url('/sells/pos/get_payment_row'),
             data: { row_index: row_index, location_id: location_id },
             dataType: 'html',
             success: function(result) {
@@ -1064,7 +1123,7 @@ $(document).ready(function() {
             rules: {
                 contact_id: {
                     remote: {
-                        url: '/contacts/check-contacts-id',
+                        url: service_pos_url('/contacts/check-contacts-id'),
                         type: 'post',
                         data: {
                             contact_id: function() {
@@ -1094,7 +1153,7 @@ $(document).ready(function() {
         if ($('#tax_number').length && $('#tax_number').val().trim() !== '') {
             $.ajax({
                 method: 'POST',
-                url: base_path + '/contacts/check-tax-number',
+                url: service_pos_url('/contacts/check-tax-number'),
                 dataType: 'json',
                 data: {
                     contact_id: $('#hidden_id').val(),
@@ -1129,7 +1188,7 @@ $(document).ready(function() {
     function checkMobileAndSubmitQuick(form) {
         $.ajax({
             method: 'POST',
-            url: base_path + '/check-mobile',
+            url: service_pos_url('/check-mobile'),
             dataType: 'json',
             data: {
                 contact_id: function() {
@@ -1197,7 +1256,7 @@ $(document).ready(function() {
         rules: {
             invoice_no: {
                 remote: {
-                    url: '/sell/check-invoice-number',
+                    url: service_pos_url('/sell/check-invoice-number'),
                     type: 'post',
                     data: {
                         invoice_no: function() {
@@ -1304,6 +1363,7 @@ $(document).ready(function() {
     }
 
     //Show product list.
+    pos_reset_product_filters();
     get_product_suggestion_list(
         global_p_category_id,
         global_brand_id,
@@ -1314,17 +1374,7 @@ $(document).ready(function() {
     );
     
     $('select#select_location_id').on('change', function(e) {
-        $('input#suggestion_page').val(1);
-        var location_id = $('input#location_id').val();
-        if (location_id != '' || location_id != undefined) {
-            get_product_suggestion_list(
-                global_p_category_id,
-                global_brand_id,
-                $('input#location_id').val(),
-                null
-            );
-        }
-        get_featured_products();
+        service_reload_all_products_for_selected_location();
     });
 
 // Active filter is shown as a second line INSIDE the matching Category / Brand
@@ -1347,6 +1397,21 @@ $(document).ready(function() {
         $rows.addClass('is-active');
     }
 
+    function pos_reset_product_filters() {
+        global_p_category_id = null;
+        global_brand_id = null;
+
+        pos_set_filter_chip('category', pos_filter_all_label('category'));
+        pos_set_filter_chip('brand', pos_filter_all_label('brand'));
+
+        $('.pos-subcat-strip').remove();
+        $('.pos-card.cat, .pos-card.brand').removeClass('is-active');
+        $('.main-category[data-value="all"] .pos-card.cat').addClass('is-active');
+        $('.product_brand[data-value="all"] .pos-card.brand').addClass('is-active');
+        $('.tw-dw-drawer-toggle').prop('checked', false);
+        $('input#suggestion_page').val(1);
+    }
+
     // Re-trigger the staggered card entrance each time a drawer opens.
     // Using class toggle + forced reflow because CSS @keyframes only fire once per element.
     function pos_animate_drawer_cards($drawerSide) {
@@ -1367,10 +1432,16 @@ $(document).ready(function() {
         var kind = $(this).data('clear');
         if (kind === 'category') {
             global_p_category_id = null;
+            pos_set_filter_chip('category', pos_filter_all_label('category'));
+            $('.pos-subcat-strip').remove();
+            $('.pos-card.cat').removeClass('is-active');
+            $('.main-category[data-value="all"] .pos-card.cat').addClass('is-active');
         } else if (kind === 'brand') {
             global_brand_id = null;
+            pos_set_filter_chip('brand', pos_filter_all_label('brand'));
+            $('.pos-card.brand').removeClass('is-active');
+            $('.product_brand[data-value="all"] .pos-card.brand').addClass('is-active');
         }
-        pos_set_filter_chip(kind, null);
         $('input#suggestion_page').val(1);
         get_product_suggestion_list(global_p_category_id, global_brand_id, $('input#location_id').val(), null);
         get_featured_products();
@@ -1408,10 +1479,11 @@ $(document).ready(function() {
         // "All Categories" — clear filter and any open strip
         if (value === 'all') {
             global_p_category_id = null;
-            pos_set_filter_chip('category', null);
+            pos_set_filter_chip('category', pos_filter_all_label('category'));
             $grid.find('.pos-subcat-strip').remove();
             $grid.removeData('open-cat');
             $grid.find('.pos-card.cat').removeClass('is-active');
+            $(this).find('.pos-card.cat').addClass('is-active');
             get_product_suggestion_list(null, global_brand_id, $('input#location_id').val(), null);
             get_featured_products();
             $('.overlay-category').trigger('click');
@@ -1489,8 +1561,19 @@ $(document).ready(function() {
 
     // on click brand in brand drawer
     $('.product_brand').on('click', function(e) {
-        global_brand_id = $(this).data('value');
-        pos_set_filter_chip('brand', $(this).data('name'));
+        var value = $(this).data('value');
+        var name = $(this).data('name');
+
+        if (value === 'all') {
+            global_brand_id = null;
+            pos_set_filter_chip('brand', pos_filter_all_label('brand'));
+        } else {
+            global_brand_id = value;
+            pos_set_filter_chip('brand', name);
+        }
+
+        $('.pos-card.brand').removeClass('is-active');
+        $(this).find('.pos-card.brand').addClass('is-active');
         $('input#suggestion_page').val(1);
         var location_id = $('input#location_id').val();
 
@@ -1833,7 +1916,7 @@ function get_featured_products() {
     if (location_id) {
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get-featured-products/' + location_id,
+            url: service_pos_url('/sells/pos/get-featured-products/' + location_id),
             dataType: 'html',
             success: function(result) {
                 $box.html(result ? result : emptyHtml);
@@ -1855,7 +1938,7 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
     var $items_container = $('div#product_list_items').length ? $('div#product_list_items') : $('div#product_list_body');
 
     if (url == null) {
-        url = '/sells/pos/get-product-suggestion';
+        url = service_pos_url('/sells/pos/get-product-suggestion');
     }
     $('#suggestion_page_loader').fadeIn(700);
     var page = $('input#suggestion_page').val();
@@ -1893,7 +1976,7 @@ function get_recent_transactions(status, element_obj) {
     var transaction_sub_type = $("#transaction_sub_type").val();
     $.ajax({
         method: 'GET',
-        url: '/sells/pos/get-recent-transactions',
+        url: service_pos_url('/sells/pos/get-recent-transactions'),
         data: { status: status , transaction_sub_type: transaction_sub_type},
         dataType: 'html',
         success: function(result) {
@@ -2140,7 +2223,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get_product_row/' + variation_id + '/' + location_id,
+            url: service_pos_url('/sells/pos/get_product_row/' + variation_id + '/' + location_id),
             async: false,
             data: {
                 product_row: product_row,
@@ -2793,7 +2876,7 @@ function getCustomerRewardPoints() {
 
     $.ajax({
         method: 'POST',
-        url: '/sells/pos/get-reward-details',
+        url: service_pos_url('/sells/pos/get-reward-details'),
         data: { 
             customer_id: customer_id
         },
@@ -2914,7 +2997,7 @@ $(document).on('change', '#types_of_service_id', function(){
     if(types_of_service_id) {
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get-types-of-service-details',
+            url: service_pos_url('/sells/pos/get-types-of-service-details'),
             data: { 
                 types_of_service_id: types_of_service_id,
                 location_id: location_id
@@ -2983,12 +3066,12 @@ $(document).on('change', '.payment_types_dropdown', function(e) {
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');
     if (payment_type && payment_type != 'advance') {
-        var default_account = default_accounts && default_accounts[payment_type]['account'] ? 
+        var default_account = default_accounts && default_accounts[payment_type] && default_accounts[payment_type]['account'] ?
             default_accounts[payment_type]['account'] : '';
         var row_index = payment_row.find('.payment_row_index').val();
 
         var account_dropdown = payment_row.find('select#account_' + row_index);
-        if (account_dropdown.length && default_accounts) {
+        if (account_dropdown.length && default_accounts && default_accounts[payment_type]) {
             account_dropdown.val(default_account);
             account_dropdown.change();
         }
@@ -3199,7 +3282,7 @@ function get_sales_orders() {
         var customer_id = $('select#customer_id').val();
         var location_id = $('input#location_id').val();
         $.ajax({
-            url: '/get-sales-orders/' + customer_id + '?location_id=' + location_id,
+            url: service_pos_url('/get-sales-orders/' + customer_id + '?location_id=' + location_id),
             dataType: 'json',
             success: function(data) {
                 $('#sales_order_ids').select2('destroy').empty().select2({data: data});
@@ -3220,7 +3303,7 @@ $("#sales_order_ids").on("select2:select", function (e) {
     var location_id = $('input#location_id').val();
     $.ajax({
         method: 'GET',
-        url: '/get-sales-order-lines',
+        url: service_pos_url('/get-sales-order-lines'),
         async: false,
         data: {
             product_row: product_row,
@@ -3313,7 +3396,7 @@ $("#sales_order_ids").on("select2:unselect", function (e) {
 
 $(document).on('click', '#add_expense', function(){
     $.ajax({
-        url: '/expenses/create',
+        url: service_pos_url('/expenses/create'),
         data: { 
             location_id: $('#select_location_id').val()
         },
@@ -3369,7 +3452,7 @@ $(document).on('click', '#pos-receive-customer-payment', function() {
         return;
     }
     $.ajax({
-        url: '/payments/pay-contact-due/' + customer_id + '?type=sell',
+        url: service_pos_url('/payments/pay-contact-due/' + customer_id + '?type=sell'),
         dataType: 'html',
         success: function(result) {
             $('#pos_pay_contact_due_modal').html(result);
@@ -3444,7 +3527,7 @@ $(document).on('hidden.bs.modal', '#pos_pay_contact_due_modal', function() {
 function get_contact_due(id) {
     $.ajax({
         method: 'get',
-        url: /get-contact-due/ + id,
+        url: service_pos_url('/get-contact-due/' + id),
         dataType: 'text',
         success: function(result) {
             if (result != '') {
@@ -3498,7 +3581,7 @@ $(document).on('click', '#send_for_sell_return', function(e) {
     if (invoice_no) {
         $.ajax({
             method: 'get',
-            url: /validate-invoice-to-return/ + encodeURI(invoice_no),
+            url: service_pos_url('/validate-invoice-to-return/' + encodeURI(invoice_no)),
             dataType: 'json',
             success: function(result) {
                 if (result.success == true) {
@@ -3517,7 +3600,7 @@ $(document).on('click', '#send_for_sell_return', function(e) {
         if (invoice_no) {
             $.ajax({
                 method: 'get',
-                url: /validate-invoice-to-service-staff-replacement/ + encodeURI(invoice_no),
+                url: service_pos_url('/validate-invoice-to-service-staff-replacement/' + encodeURI(invoice_no)),
                 dataType: 'json',
                 success: function (result) {
                     if (result.success == true) {
@@ -3685,7 +3768,7 @@ $(document).on('change', '#res_waiter_id', function(e){
             if (inputValue !== null) {
                     $.ajax({
                         method: 'get',
-                        url: '/modules/data/check-staff-pin',
+                        url: service_pos_url('/modules/data/check-staff-pin'),
                         dataType: 'json',
                         data: {
                         service_staff_pin: inputValue,

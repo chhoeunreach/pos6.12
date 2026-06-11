@@ -110,7 +110,10 @@
     @endif
 @stop
 @section('javascript')
-    <script src="{{ asset('modules/service/v7/js/pos.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
+    <script>
+        window.service_pos_base_url = @json(url(config('service.route_prefix', 'service')));
+    </script>
+    <script src="{{ asset('modules/service/v7/js/pos.js?v=' . $asset_v . '&m=' . filemtime(public_path('modules/service/v7/js/pos.js'))) }}"></script>
     <script src="{{ asset('modules/service/v7/js/printer.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
     <script src="{{ asset('modules/service/v7/js/product.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
     <script src="{{ asset('modules/service/v7/js/opening_stock.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>

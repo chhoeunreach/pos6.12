@@ -266,7 +266,7 @@
 @stop
 
 @section('javascript')
-	<script src="{{ asset('modules/service/v7/js/pos.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
+	<script src="{{ asset('modules/service/v7/js/pos.js?v=' . $asset_v . '-service-pos-original-reload-20260611') }}"></script>
 	<script src="{{ asset('modules/service/v7/js/printer.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
 	<script src="{{ asset('modules/service/v7/js/product.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
 	<script src="{{ asset('modules/service/v7/js/opening_stock.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>

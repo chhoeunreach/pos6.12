@@ -134,6 +134,13 @@
 
                         <div class="pos-drawer-body tw-px-6 tw-pt-[18px] tw-pb-6 tw-overflow-y-auto tw-flex-1">
                             <div class="row pos-card-grid pos-card-grid-brands" style="margin-right: 0; margin-left: -8px;">
+                                <div class="col-md-4 col-xs-6 tw-mb-3 tw-cursor-pointer product_brand no-print"
+                                    data-value="all" data-name="@lang('messages.all')"
+                                    style="padding-left: 4px; padding-right: 4px;">
+                                    <div class="pos-card brand">
+                                        <h4 class="pos-card-name">@lang('messages.all') @lang('brand.brands')</h4>
+                                    </div>
+                                </div>
                                 @foreach ($brands as $key => $brand)
                                     <div class="col-md-4 col-xs-6 tw-mb-3 tw-cursor-pointer product_brand no-print"
                                         data-value="{{ $key }}" data-name="{{ $brand }}"

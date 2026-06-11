@@ -44,6 +44,32 @@
             }
             return '$ ' . number_format($number, 2);
         };
+        $expenseRows = collect($report['expense_detail_rows'] ?? []);
+        $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
+        $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
+        $moduleDashboardSummary = function ($label, $rows, $tabTarget) use ($report, $filters) {
+            $rows = collect($rows ?? []);
+            $payments = [];
+            foreach ($report['payment_columns'] as $method) {
+                $payments[$method] = $rows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+            }
+
+            return [
+                'label' => $label,
+                'tab_target' => $tabTarget,
+                'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
+                    ? $rows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
+                    : $rows->pluck('transaction_id')->filter()->unique()->count(),
+                'total' => $rows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
+                'paid' => $rows->sum(fn ($row) => (float) ($row['paid'] ?? 0)),
+                'due' => $rows->sum(fn ($row) => (float) ($row['due'] ?? 0)),
+                'payments' => $payments,
+            ];
+        };
+        $moduleDashboardRows = [
+            $moduleDashboardSummary('Accessory sales', $accessorySaleRows, '#accessory_sales_detail_tab'),
+            $moduleDashboardSummary('Service sales', $serviceSaleRows, '#service_sales_detail_tab'),
+        ];
     @endphp
     <div class="local-filter-wrap">
         <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-sm local-filter-reset">
@@ -367,6 +393,38 @@
                                 {{ in_array($dashboardCustomerGroup, ['រំលស់', 'អ៊ីអន'], true) ? '$ -' : $fmt($customerGroupRow['due'] ?? null) }}
                             </td>
                         </tr>
+                        @php
+                            $nextDashboardCustomerGroup = $dashboardLocationGroupRows->get($loop->index + 1);
+                            $isLastNormalDashboardGroup = (int) ($customerGroupRow['sort'] ?? 0) === 1
+                                && (int) data_get($nextDashboardCustomerGroup, 'sort', 0) !== 1;
+                        @endphp
+                        @if($isLastNormalDashboardGroup)
+                            @foreach($moduleDashboardRows as $moduleDashboardRow)
+                                <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
+                                    <td class="name-main cashier-group-breakdown-name">
+                                        <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                            {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
+                                        </a>
+                                    </td>
+                                    <td class="text-right">
+                                        <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                            {{ $fmt($moduleDashboardRow['total'] ?? null) }}
+                                        </a>
+                                    </td>
+                                    @foreach($report['payment_columns'] as $method)
+                                        <td class="text-right">
+                                            <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                                {{ $fmt($moduleDashboardRow['payments'][$method] ?? null) }}
+                                            </a>
+                                        </td>
+                                    @endforeach
+                                    <td class="text-right">{{ $fmt($moduleDashboardRow['paid'] ?? null) }}</td>
+                                    <td class="text-right @if(($moduleDashboardRow['due'] ?? 0) != 0) due-negative @endif">
+                                        {{ $fmt($moduleDashboardRow['due'] ?? null) }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @endif
                 @empty
                     <tr>
                         <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
@@ -642,15 +700,38 @@
             </div>
         </div>
         <hr>
+        @php
+            $expenseRows = collect($report['expense_detail_rows'] ?? []);
+            $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
+            $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
+        @endphp
         <div class="box box-primary">
             <div class="box-header">
-                <h4 class="box-title">All cashier sales</h4>
+                <ul class="nav nav-tabs local-detail-tabs" role="tablist">
+                    <li role="presentation" class="active">
+                        <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">All cashier sales</a>
+                    </li>
+                    <li role="presentation">
+                        <a href="#accessory_sales_detail_tab" aria-controls="accessory_sales_detail_tab" role="tab" data-toggle="tab">Accessory sales</a>
+                    </li>
+                    <li role="presentation">
+                        <a href="#service_sales_detail_tab" aria-controls="service_sales_detail_tab" role="tab" data-toggle="tab">Service sales</a>
+                    </li>
+                    <li role="presentation">
+                        <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
+                    </li>
+                </ul>
                 <div class="table-meta">
                     <span>{{ count($report['detail_rows'] ?? []) }} rows</span>
                     <span>{{ count($report['summary_user'] ?? []) }} cashiers</span>
+                    <span>{{ $accessorySaleRows->count() }} accessory sales</span>
+                    <span>{{ $serviceSaleRows->count() }} service sales</span>
+                    <span>{{ $expenseRows->count() }} expenses</span>
                 </div>
             </div>
             <div class="box-body">
+                <div class="tab-content local-detail-tab-content">
+                    <div role="tabpanel" class="tab-pane active" id="cashier_sales_detail_tab">
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped ajax_view" id="local_cashier_sales_detail_table" style="width:100%;">
                         <thead>
@@ -775,6 +856,96 @@
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="accessory_sales_detail_tab">
+                        @include('localcashierreport::partials.module_sales_detail_table', [
+                            'tableId' => 'local_cashier_accessory_sales_detail_table',
+                            'rows' => $accessorySaleRows,
+                            'report' => $report,
+                            'fmt' => $fmt,
+                        ])
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="service_sales_detail_tab">
+                        @include('localcashierreport::partials.module_sales_detail_table', [
+                            'tableId' => 'local_cashier_service_sales_detail_table',
+                            'rows' => $serviceSaleRows,
+                            'report' => $report,
+                            'fmt' => $fmt,
+                        ])
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="cashier_expenses_detail_tab">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped ajax_view" id="local_cashier_expenses_detail_table" style="width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Date</th>
+                                        <th>Ref No</th>
+                                        <th>Cashier/User</th>
+                                        <th>Expense For</th>
+                                        <th>Location</th>
+                                        <th>Category</th>
+                                        <th>Payment Status</th>
+                                        @foreach($report['payment_columns'] as $method)
+                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                        @endforeach
+                                        <th class="text-right">Amount</th>
+                                        <th class="text-right">Paid</th>
+                                        <th class="text-right">Due</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($expenseRows as $row)
+                                        <tr>
+                                            <td>
+                                                @can('expense.edit')
+                                                    <a class="btn btn-xs btn-primary action-icon-btn action-edit"
+                                                       href="{{ action([\App\Http\Controllers\ExpenseController::class, 'edit'], [$row['transaction_id']]) }}"
+                                                       target="_blank"
+                                                       title="Edit Expense">
+                                                        <i class="fas fa-pen"></i>
+                                                    </a>
+                                                @endcan
+                                            </td>
+                                            <td>{{ $row['date'] }}</td>
+                                            <td>{{ $row['ref_no'] }}</td>
+                                            <td>{{ $row['created_by_name'] }}</td>
+                                            <td>{{ $row['expense_for_name'] }}</td>
+                                            <td>{{ $row['location_name'] }}</td>
+                                            <td>{{ $row['category_name'] }}</td>
+                                            <td>{{ ucfirst($row['payment_status']) }}</td>
+                                            @foreach($report['payment_columns'] as $method)
+                                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                            @endforeach
+                                            <td class="text-right">{{ $fmt($row['amount']) }}</td>
+                                            <td class="text-right">{{ $fmt($row['paid']) }}</td>
+                                            <td class="text-right @if(($row['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
+                                            <td>{{ $row['note'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot>
+                                    <tr class="detail-total-row">
+                                        <th colspan="8" class="text-right">Total</th>
+                                        @foreach($report['payment_columns'] as $method)
+                                            @php
+                                                $expensePaymentTotal = $expenseRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+                                            @endphp
+                                            <th class="text-right">{{ $fmt($expensePaymentTotal) }}</th>
+                                        @endforeach
+                                        <th class="text-right">{{ $fmt($expenseRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
+                                        <th class="text-right">{{ $fmt($expenseRows->sum(fn ($row) => (float) ($row['paid'] ?? 0))) }}</th>
+                                        <th class="text-right @if($expenseRows->sum(fn ($row) => (float) ($row['due'] ?? 0)) != 0) due-negative @endif">
+                                            {{ $fmt($expenseRows->sum(fn ($row) => (float) ($row['due'] ?? 0))) }}
+                                        </th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -954,6 +1125,86 @@
                 ]
             });
         }
+        if ($.fn.DataTable && $('#local_cashier_expenses_detail_table').length) {
+            $('#local_cashier_expenses_detail_table').DataTable({
+                paging: true,
+                searching: true,
+                ordering: true,
+                info: true,
+                autoWidth: false,
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                pagingType: 'full_numbers',
+                scrollX: true,
+                responsive: false,
+                dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
+                language: {
+                    search: 'Search:',
+                    lengthMenu: 'Show _MENU_ entries',
+                    zeroRecords: 'No data available in table',
+                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                    infoEmpty: 'Showing 0 to 0 of 0 entries'
+                },
+                buttons: [
+                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                ]
+            });
+        }
+        if ($.fn.DataTable && $('.local-module-sales-detail-table').length) {
+            $('.local-module-sales-detail-table').each(function () {
+                $(this).DataTable({
+                    paging: true,
+                    searching: true,
+                    ordering: false,
+                    info: true,
+                    autoWidth: false,
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                    pagingType: 'full_numbers',
+                    scrollX: true,
+                    responsive: false,
+                    dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
+                    language: {
+                        search: 'Search:',
+                        lengthMenu: 'Show _MENU_ entries',
+                        zeroRecords: 'No data available in table',
+                        info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                        infoEmpty: 'Showing 0 to 0 of 0 entries'
+                    },
+                    buttons: [
+                        { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
+                        { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
+                        { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
+                        { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
+                        { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    ]
+                });
+            });
+        }
+        $(document).on('click', '.local-detail-tab-link', function (e) {
+            var targetTab = $(this).data('target-tab');
+            if (! targetTab || ! $('.local-detail-tabs a[href="' + targetTab + '"]').length) {
+                return;
+            }
+
+            e.preventDefault();
+            $('.local-detail-tabs a[href="' + targetTab + '"]').tab('show');
+
+            if ($('.local-detail-tabs').length) {
+                $('html, body').animate({
+                    scrollTop: $('.local-detail-tabs').offset().top - 80
+                }, 250);
+            }
+        });
+        $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
+            if ($.fn.DataTable) {
+                $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+            }
+        });
     });
 </script>
 <style>
@@ -1196,19 +1447,58 @@
     font-size: 12px;
     font-weight: 600;
 }
+#local_cashier_report_app .local-detail-tabs {
+    border-bottom: 1px solid #cbd5e1;
+}
+#local_cashier_report_app .local-detail-tabs > li > a {
+    border-radius: 6px 6px 0 0;
+    color: #334155;
+    font-weight: 700;
+    padding: 9px 14px;
+}
+#local_cashier_report_app .local-detail-tabs > li.active > a,
+#local_cashier_report_app .local-detail-tabs > li.active > a:focus,
+#local_cashier_report_app .local-detail-tabs > li.active > a:hover {
+    background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+    border-color: #1d4ed8 #1d4ed8 transparent;
+    color: #fff;
+}
+#local_cashier_report_app .local-detail-tabs > li > a:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+#local_cashier_report_app .local-detail-tab-content {
+    padding-top: 12px;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
+    margin-bottom: 8px;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons {
     margin-bottom: 8px;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter {
     margin-bottom: 8px;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter {
+    margin-bottom: 8px;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter input {
+    width: 220px;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter input {
     width: 220px;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_length select {
     min-width: 78px;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_length select {
+    min-width: 78px;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
+    text-align: center;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons {
     text-align: center;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn {
@@ -1216,7 +1506,42 @@
     background: #fff;
     color: #5d6b82;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn {
+    border: 1px solid #c7cfdb;
+    background: #fff;
+    color: #5d6b82;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn:hover {
+    background: #f5f8fc;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn:hover {
+    background: #f5f8fc;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dt-buttons {
+    margin-bottom: 8px;
+    text-align: center;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dataTables_filter,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dataTables_filter {
+    margin-bottom: 8px;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dataTables_filter input,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dataTables_filter input {
+    width: 220px;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dataTables_length select,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dataTables_length select {
+    min-width: 78px;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dt-buttons .btn,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dt-buttons .btn {
+    border: 1px solid #c7cfdb;
+    background: #fff;
+    color: #5d6b82;
+}
+#local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dt-buttons .btn:hover,
+#local_cashier_report_app #local_cashier_service_sales_detail_table_wrapper .dt-buttons .btn:hover {
     background: #f5f8fc;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table th,
@@ -1224,7 +1549,27 @@
     white-space: nowrap;
     vertical-align: middle;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table th,
+#local_cashier_report_app #local_cashier_expenses_detail_table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+#local_cashier_report_app .local-module-sales-detail-table th,
+#local_cashier_report_app .local-module-sales-detail-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table thead th {
+    background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+    color: #fff;
+    font-weight: 700;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table thead th {
+    background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+    color: #fff;
+    font-weight: 700;
+}
+#local_cashier_report_app .local-module-sales-detail-table thead th {
     background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
     color: #fff;
     font-weight: 700;
@@ -1236,13 +1581,42 @@
     font-weight: 800;
     white-space: nowrap;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table tfoot th {
+    background: #e2e8f0;
+    border-top: 2px solid #0f172a;
+    color: #0f172a;
+    font-weight: 800;
+    white-space: nowrap;
+}
+#local_cashier_report_app .local-module-sales-detail-table tfoot th {
+    background: #e2e8f0;
+    border-top: 2px solid #0f172a;
+    color: #0f172a;
+    font-weight: 800;
+    white-space: nowrap;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table td .btn {
+    margin-right: 4px;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table td .btn {
     margin-right: 4px;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table tbody tr:nth-child(odd) td {
     background: #fcfdff;
 }
+#local_cashier_report_app #local_cashier_expenses_detail_table tbody tr:nth-child(odd) td {
+    background: #fcfdff;
+}
+#local_cashier_report_app .local-module-sales-detail-table tbody tr:nth-child(odd) td {
+    background: #fcfdff;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table tbody tr:hover td {
+    background: #eaf3ff;
+}
+#local_cashier_report_app #local_cashier_expenses_detail_table tbody tr:hover td {
+    background: #eaf3ff;
+}
+#local_cashier_report_app .local-module-sales-detail-table tbody tr:hover td {
     background: #eaf3ff;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator td {
@@ -1334,6 +1708,28 @@
 }
 #local_cashier_report_app .action-icon-btn i {
     font-size: 12px;
+}
+#local_cashier_report_app .expense-payment-list {
+    min-width: 220px;
+    white-space: normal !important;
+}
+#local_cashier_report_app .expense-payment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 4px 2px 0;
+    padding: 2px 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+#local_cashier_report_app .expense-payment-pill strong {
+    color: #0f172a;
+    font-weight: 800;
 }
 #local_cashier_report_app .action-view {
     border-color: #c9d3e6;
@@ -1476,6 +1872,13 @@
     background: #f8fafc;
     border-top: 1px solid #cbd5e1;
     color: #334155;
+}
+#local_cashier_report_app .sheet-table tbody tr.module-dashboard-breakdown-row td {
+    background: #f0f9ff;
+    border-top: 1px solid #7dd3fc;
+}
+#local_cashier_report_app .sheet-table tbody tr.module-dashboard-breakdown-row:hover td {
+    background: #e0f2fe;
 }
 #local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.installment-breakdown-row td {
     background: #fff7ed;

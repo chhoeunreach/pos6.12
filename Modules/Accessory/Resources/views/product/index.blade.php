@@ -1,6 +1,31 @@
 @extends('accessory::layouts.app')
 @section('title', __('sale.products'))
 
+@section('css')
+    <style>
+        .text-ellipsis {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        .upos-ellipsis-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .upos-ellipsis-cell .upos-view-product-details {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+    </style>
+@endsection
+
 @section('content')
 
     <!-- Content Header (Page header) -->
@@ -212,6 +237,32 @@
             aria-labelledby="gridSystemModalLabel">
         </div>
 
+        <div class="modal fade" id="product_list_details_modal" tabindex="-1" role="dialog" aria-labelledby="productListDetailsModalLabel">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        <h4 class="modal-title" id="productListDetailsModalLabel">@lang('messages.view')</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="control-label">@lang('sale.product'):</label>
+                            <div id="product_list_details_modal_product" class="tw-font-semibold"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="control-label">@lang('purchase.business_location'):</label>
+                            <div id="product_list_details_modal_locations"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         @if ($is_woocommerce)
             @include('accessory::product.partials.toggle_woocommerce_sync_modal')
         @endif
@@ -227,6 +278,24 @@
     <script src="{{ asset('modules/accessory/v7/js/opening_stock.js?v=' . $asset_v) }}"></script>
     <script type="text/javascript">
         $(document).ready(function() {
+            var upos_view_label = @json(__('messages.view'));
+
+            function upos_get_text_from_html(html) {
+                return $('<div>').html(html || '').text().replace(/\s+/g, ' ').trim();
+            }
+
+            function upos_escape_html(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function upos_truncate_text(text, limit) {
+                var t = (text || '').toString();
+                if (!limit || t.length <= limit) {
+                    return t;
+                }
+                return t.substring(0, limit) + '...';
+            }
+
             product_table = $('#product_table').DataTable({
                 processing: true,
                 serverSide: true,
@@ -278,11 +347,47 @@
                     },
                     {
                         data: 'product',
-                        name: 'products.name'
+                        name: 'products.name',
+                        render: function(data, type, row, meta) {
+                            var full_product_text = upos_get_text_from_html(data);
+                            if (type !== 'display') {
+                                return full_product_text;
+                            }
+
+                            var display_product_text = upos_truncate_text(full_product_text, 50);
+                            var product_title_html = upos_escape_html(full_product_text);
+                            var product_display_html = upos_escape_html(display_product_text);
+
+                            return '<span class="text-ellipsis" title="' + product_title_html + '">' + product_display_html + '</span>';
+                        }
                     },
                     {
                         data: 'product_locations',
-                        name: 'product_locations'
+                        name: 'product_locations',
+                        render: function(data, type, row, meta) {
+                            var full_locations_text = upos_get_text_from_html(data);
+                            var full_product_text = upos_get_text_from_html(row.product);
+
+                            if (type !== 'display') {
+                                return full_locations_text;
+                            }
+
+                            var display_locations_text = upos_truncate_text(full_locations_text, 50);
+                            var locations_title_html = upos_escape_html(full_locations_text);
+                            var locations_display_html = upos_escape_html(display_locations_text);
+                            var product_html = upos_escape_html(full_product_text);
+
+                            return (
+                                '<div class="upos-ellipsis-cell">' +
+                                    '<span class="text-ellipsis" title="' + locations_title_html + '">' + locations_display_html + '</span>' +
+                                    '<button type="button" class="btn btn-xs btn-default upos-view-product-details" ' +
+                                        'data-product="' + product_html + '" ' +
+                                        'data-locations="' + locations_title_html + '">' +
+                                        upos_escape_html(upos_view_label) +
+                                    '</button>' +
+                                '</div>'
+                            );
+                        }
                     },
                     @can('view_purchase_price')
                         {
@@ -422,6 +527,33 @@
 
             $('#opening_stock_modal').on('hidden.bs.modal', function(e) {
                 product_table.ajax.reload();
+            });
+
+            $(document).on('click', '.upos-view-product-details', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var product = $(this).attr('data-product') || '';
+                var locations = $(this).attr('data-locations') || '';
+
+                $('#product_list_details_modal_product').text($('<div>').html(product).text());
+
+                var locations_text = $('<div>').html(locations).text().trim();
+                if (locations_text.length) {
+                    var parts = locations_text.split(',').map(function(p) {
+                        return p.trim();
+                    }).filter(Boolean);
+
+                    var $list = $('<ul class="list-unstyled" style="margin-bottom:0;"></ul>');
+                    parts.forEach(function(p) {
+                        $list.append($('<li>').text(p));
+                    });
+                    $('#product_list_details_modal_locations').empty().append($list);
+                } else {
+                    $('#product_list_details_modal_locations').html('<span class="text-muted">--</span>');
+                }
+
+                $('#product_list_details_modal').modal('show');
             });
 
             $('table#product_table tbody').on('click', 'a.delete-product', function(e) {
