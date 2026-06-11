@@ -121,7 +121,8 @@ class RestaurantUtil extends Util
     {
         $is_service_staff = false;
         $user = User::find($user_id);
-        if ($user->roles->first()->is_service_staff == 1) {
+        $first_role = ! empty($user) ? $user->roles->first() : null;
+        if (! empty($first_role) && $first_role->is_service_staff == 1) {
             $is_service_staff = true;
         }
 

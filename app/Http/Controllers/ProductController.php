@@ -1480,11 +1480,9 @@ class ProductController extends Controller
             $count = $query2->count();
         }
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(['valid' => true]);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(['valid' => false]);
         }
     }
 
@@ -1511,11 +1509,9 @@ class ProductController extends Controller
         //check in variation table if $count = 0
         
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(['valid' => true]);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(['valid' => false]);
         }
     }
 

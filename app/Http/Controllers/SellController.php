@@ -872,7 +872,8 @@ class SellController extends Controller
         }
 
         $location_id = $transaction->location_id;
-        $location_printer_type = BusinessLocation::find($location_id)->receipt_printer_type;
+        $business_location = BusinessLocation::find($location_id);
+        $location_printer_type = ! empty($business_location) ? $business_location->receipt_printer_type : null;
 
         $sell_details = TransactionSellLine::join(
                             'products AS p',

@@ -991,8 +991,7 @@ class ContactController extends Controller
                 $valid = 'false';
             }
         }
-        echo $valid;
-        exit;
+        return response()->json(['valid' => $valid]);
     }
 
     /**

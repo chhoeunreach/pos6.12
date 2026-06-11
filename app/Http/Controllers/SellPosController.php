@@ -872,7 +872,7 @@ class SellPosController extends Controller
         $location_id = $transaction->location_id;
         $business_location = BusinessLocation::find($location_id);
         $payment_types = $this->productUtil->payment_types($business_location, true);
-        $location_printer_type = $business_location->receipt_printer_type;
+        $location_printer_type = ! empty($business_location) ? $business_location->receipt_printer_type : null;
         $sell_details = TransactionSellLine::join(
             'products AS p',
             'transaction_sell_lines.product_id',

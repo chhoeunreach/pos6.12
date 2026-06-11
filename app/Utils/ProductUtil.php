@@ -1158,7 +1158,8 @@ class ProductUtil extends Util
                     $qty_formated = $this->num_f($qty);
                     //Calculate transaction total
                     $purchase_total += ($purchase_price_inc_tax * $qty);
-                    $variation_id = $product->variations->first()->id;
+                    $first_variation = $product->variations->first();
+                    $variation_id = ! empty($first_variation) ? $first_variation->id : null;
 
                     $purchase_line = new PurchaseLine();
                     $purchase_line->product_id = $product->id;

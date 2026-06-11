@@ -54,8 +54,8 @@ class TransactionUtil extends Util
         //if pay term empty set contact pay term
         if (empty($pay_term_number) || empty($pay_term_type)) {
             $contact = Contact::find($input['contact_id']);
-            $pay_term_number = $contact->pay_term_number;
-            $pay_term_type = $contact->pay_term_type;
+            $pay_term_number = ! empty($contact) ? $contact->pay_term_number : null;
+            $pay_term_type = ! empty($contact) ? $contact->pay_term_type : null;
         }
         $transaction = Transaction::create([
             'business_id' => $business_id,
@@ -183,8 +183,8 @@ class TransactionUtil extends Util
         //if pay term empty set contact pay term
         if (empty($pay_term_number) || empty($pay_term_type)) {
             $contact = Contact::find($input['contact_id']);
-            $pay_term_number = $contact->pay_term_number;
-            $pay_term_type = $contact->pay_term_type;
+            $pay_term_number = ! empty($contact) ? $contact->pay_term_number : null;
+            $pay_term_type = ! empty($contact) ? $contact->pay_term_type : null;
         }
 
         $update_date = [
@@ -496,8 +496,10 @@ class TransactionUtil extends Util
         $diff = $new_qty - $old_qty;
         if (! empty($so_line_id) && ! empty($diff)) {
             $so_line = TransactionSellLine::find($so_line_id);
-            $so_line->so_quantity_invoiced += ($diff);
-            $so_line->save();
+            if (! empty($so_line)) {
+                $so_line->so_quantity_invoiced += ($diff);
+                $so_line->save();
+            }
         }
     }
 
@@ -680,7 +682,8 @@ class TransactionUtil extends Util
     private function adjustQuantity($location_id, $product_id, $variation_id, $increment_qty)
     {
         if ($increment_qty != 0) {
-            $enable_stock = Product::find($product_id)->enable_stock;
+            $product = Product::find($product_id);
+            $enable_stock = ! empty($product) ? $product->enable_stock : 0;
 
             if ($enable_stock == 1) {
                 //Adjust Quantity in variations location table
@@ -1234,7 +1237,8 @@ class TransactionUtil extends Util
             $output['invoice_no_prefix'] = $il->cn_no_label;
 
             //Parent sell details(return_parent_id)
-            $output['parent_invoice_no'] = Transaction::find($transaction->return_parent_id)->invoice_no;
+            $parent_transaction = Transaction::find($transaction->return_parent_id);
+            $output['parent_invoice_no'] = ! empty($parent_transaction) ? $parent_transaction->invoice_no : '';
             $output['parent_invoice_no_prefix'] = $il->invoice_no_prefix;
         } elseif ($transaction->status == 'draft' && $transaction->sub_status == 'proforma' && ! empty($il->common_settings['proforma_heading'])) {
             $output['invoice_heading'] = $il->common_settings['proforma_heading'];
@@ -2499,13 +2503,13 @@ class TransactionUtil extends Util
 
         $purchase_details = $query->first();
 
-        $output['total_purchase_inc_tax'] = $purchase_details->final_total_sum;
+        $output['total_purchase_inc_tax'] = $purchase_details->final_total_sum ?? 0;
         //$output['total_purchase_exc_tax'] = $purchase_details->sum('total_exc_tax');
-        $output['total_purchase_exc_tax'] = $purchase_details->total_before_tax_sum;
-        $output['purchase_due'] = $purchase_details->final_total_sum -
-                                    $purchase_details->total_paid;
-        $output['total_shipping_charges'] = $purchase_details->total_shipping_charges;
-        $output['total_additional_expense'] = $purchase_details->total_expense;
+        $output['total_purchase_exc_tax'] = $purchase_details->total_before_tax_sum ?? 0;
+        $output['purchase_due'] = ($purchase_details->final_total_sum ?? 0) -
+                                    ($purchase_details->total_paid ?? 0);
+        $output['total_shipping_charges'] = $purchase_details->total_shipping_charges ?? 0;
+        $output['total_additional_expense'] = $purchase_details->total_expense ?? 0;
 
         return $output;
     }
@@ -2541,7 +2545,8 @@ class TransactionUtil extends Util
         if (! empty($created_by)) {
             $query->where('t.created_by', $created_by);
         }
-        $total_purchase_return_paid = $query->first()->total_paid ?? 0;
+        $purchase_return_result = $query->first();
+        $total_purchase_return_paid = $purchase_return_result->total_paid ?? 0;
 
         return $total_purchase_return_paid;
     }
@@ -2578,7 +2583,8 @@ class TransactionUtil extends Util
             $query->where('t.created_by', $created_by);
         }
 
-        $total_sell_return_paid = $query->first()->total_paid ?? 0;
+        $sell_return_result = $query->first();
+        $total_sell_return_paid = $sell_return_result->total_paid ?? 0;
 
         return $total_sell_return_paid;
     }
@@ -2631,12 +2637,12 @@ class TransactionUtil extends Util
 
         $sell_details = $query->first();
 
-        $output['total_sell_inc_tax'] = $sell_details->total_sell;
+        $output['total_sell_inc_tax'] = $sell_details->total_sell ?? 0;
         //$output['total_sell_exc_tax'] = $sell_details->sum('total_exc_tax');
-        $output['total_sell_exc_tax'] = $sell_details->total_before_tax;
-        $output['invoice_due'] = $sell_details->total_due;
-        $output['total_shipping_charges'] = $sell_details->total_shipping_charges;
-        $output['total_additional_expense'] = $sell_details->total_expense;
+        $output['total_sell_exc_tax'] = $sell_details->total_before_tax ?? 0;
+        $output['invoice_due'] = $sell_details->total_due ?? 0;
+        $output['total_shipping_charges'] = $sell_details->total_shipping_charges ?? 0;
+        $output['total_additional_expense'] = $sell_details->total_expense ?? 0;
 
         return $output;
     }
@@ -2662,8 +2668,8 @@ class TransactionUtil extends Util
 
         $sell_details = $query->first();
 
-        $output['total_sell_discount'] = $sell_details->total_sell_discount;
-        $output['total_purchase_discount'] = $sell_details->total_purchase_discount;
+        $output['total_sell_discount'] = $sell_details->total_sell_discount ?? 0;
+        $output['total_purchase_discount'] = $sell_details->total_purchase_discount ?? 0;
 
         return $output;
     }
@@ -3068,7 +3074,8 @@ class TransactionUtil extends Util
         $total_paid = $this->getTotalPaid($transaction_id);
 
         if (is_null($final_amount)) {
-            $final_amount = Transaction::find($transaction_id)->final_total;
+            $transaction = Transaction::find($transaction_id);
+            $final_amount = ! empty($transaction) ? $transaction->final_total : 0;
         }
 
         $status = 'due';
@@ -3808,7 +3815,7 @@ class TransactionUtil extends Util
             }
         }
 
-        $business = Business::find($transaction->business_id)->toArray();
+        $business = optional(Business::find($transaction->business_id))->toArray() ?? [];
         $business['location_id'] = $transaction->location_id;
 
         //Allocate the sold lines to purchases.
@@ -4169,7 +4176,8 @@ class TransactionUtil extends Util
             return false;
         }
 
-        $credit_limit = Contact::find($input['contact_id'])->credit_limit;
+        $contact = Contact::find($input['contact_id']);
+        $credit_limit = ! empty($contact) ? $contact->credit_limit : null;
 
         if ($credit_limit == null) {
             return false;
@@ -4217,7 +4225,7 @@ class TransactionUtil extends Util
         $final_amount = $uf_data ? $this->num_uf($amount) : $amount;
         $ob_data = [
             'business_id' => $business_id,
-            'location_id' => $business_location->id,
+            'location_id' => ! empty($business_location) ? $business_location->id : null,
             'type' => 'opening_balance',
             'status' => 'final',
             'payment_status' => 'due',
@@ -4857,7 +4865,7 @@ class TransactionUtil extends Util
                 $expiry_date = $expiry_date->addYears($business->rp_expiry_period);
             }
 
-            if ($expiry_date->format('Y-m-d') >= \Carbon::now()->format('Y-m-d')) {
+            if ($expiry_date->format('Y-m-d') <= \Carbon::now()->format('Y-m-d')) {
                 $is_expired = true;
             }
         }

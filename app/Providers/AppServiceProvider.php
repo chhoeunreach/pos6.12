@@ -55,8 +55,6 @@ class AppServiceProvider extends ServiceProvider
         //Laravel 5.6 uses Bootstrap 4 by default. Shift did not update your front-end resources or dependencies as this could impact your UI. If you are using Bootstrap and wish to continue using Bootstrap 3, you should add Paginator::useBootstrapThree() to your AppServiceProvider boot method.
         Paginator::useBootstrapThree();
 
-        \Illuminate\Pagination\Paginator::useBootstrap();
-
         // Dropbox service provider
         Storage::extend('dropbox', function ($app, $config) {
             $adapter = new DropboxAdapter(new DropboxClient(
