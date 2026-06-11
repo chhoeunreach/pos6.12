@@ -201,7 +201,7 @@ class LabelsController extends Controller
 
                 $output = view('service::labels.partials.preview_2')
                             ->with(compact('print', 'page_products', 'business_name', 'barcode_details', 'margin_top', 'margin_left', 'paper_width', 'paper_height', 'is_first', 'is_last', 'factor'))->render();
-                print_r($output);
+                $html .= $output;
                 //$mpdf->WriteHTML($output);
 
                 // if($i < $len - 1){
@@ -212,9 +212,7 @@ class LabelsController extends Controller
                 $i++;
             }
 
-            print_r('<script>window.print()</script>');
-            exit;
-            //return $output;
+            return response($html . '<script>window.print()</script>');
 
             //$mpdf->Output();
 

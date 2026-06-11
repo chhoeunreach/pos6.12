@@ -3499,18 +3499,21 @@ class TransactionUtil extends Util
                             ->get()
                             ->toArray();
 
-                $sell_purchases = $sell_purchases + $deleted_sell_purchases;
+                $sell_purchases = array_merge($sell_purchases, $deleted_sell_purchases);
             }
 
-            //TODO: Optimize the query to take our of loop.
             $sell_purchase_ids = [];
             if (! empty($sell_purchases)) {
-                //Decrease the quantity sold of products
+                $purchase_line_quantities = [];
                 foreach ($sell_purchases as $row) {
-                    PurchaseLine::where('id', $row['purchase_line_id'])
-                        ->decrement('quantity_sold', $row['quantity']);
-
+                    $purchase_line_id = (int) $row['purchase_line_id'];
+                    $purchase_line_quantities[$purchase_line_id] = ($purchase_line_quantities[$purchase_line_id] ?? 0) + (float) $row['quantity'];
                     $sell_purchase_ids[] = $row['id'];
+                }
+
+                foreach ($purchase_line_quantities as $purchase_line_id => $quantity) {
+                    PurchaseLine::where('id', $purchase_line_id)
+                        ->decrement('quantity_sold', $quantity);
                 }
 
                 //Delete the lines.
@@ -4665,7 +4668,7 @@ class TransactionUtil extends Util
         return $output;
     }
 
-    public function getGrossProfit($business_id, $start_date = null, $end_date = null, $location_id = null, $user_id = null, $permitted_locations)
+    public function getGrossProfit($business_id, $start_date = null, $end_date = null, $location_id = null, $user_id = null, $permitted_locations = null)
     {
         $query = TransactionSellLine::join('transactions as sale', 'transaction_sell_lines.transaction_id', '=', 'sale.id')
             ->leftjoin('transaction_sell_lines_purchase_lines as TSPL', 'transaction_sell_lines.id', '=', 'TSPL.sell_line_id')

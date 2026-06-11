@@ -346,6 +346,21 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/reports/product-sell-grouped-report', [ReportController::class, 'getproductSellGroupedReport']);
     Route::get('/reports/lot-report', [ReportController::class, 'getLotReport']);
     Route::get('/reports/lot-history', [ReportController::class, 'getLotHistory']);
+    Route::get('/manage-lot', function () {
+        return redirect('/smart-stock-inventory/lot');
+    });
+    Route::get('/manage-lot/data', function () {
+        return redirect('/smart-stock-inventory/lot');
+    });
+    Route::get('/manage-lot/lot-search', function () {
+        return redirect('/smart-stock-inventory/lot?q=' . urlencode((string) request('q', request('term', ''))));
+    });
+    Route::get('/manage-lot/{lot_id}/history', function ($lot_id) {
+        return redirect('/smart-stock-inventory/lot/history/' . urlencode((string) $lot_id));
+    });
+    Route::get('/manage-lot/{lot_id}/history/data', function ($lot_id) {
+        return redirect('/smart-stock-inventory/lot/history/' . urlencode((string) $lot_id));
+    });
     Route::get('/reports/purchase-payment-report', [ReportController::class, 'purchasePaymentReport']);
     Route::get('/reports/sell-payment-report', [ReportController::class, 'sellPaymentReport']);
     Route::get('/reports/product-stock-details', [ReportController::class, 'productStockDetails']);
