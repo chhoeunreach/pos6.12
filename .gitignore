@@ -1,8 +1,5 @@
 /node_modules
 /public/hot
-# /public/storage
-# /storage/*.key
-# /storage/
 /vendor
 /.idea
 /.vagrant
@@ -12,24 +9,37 @@ npm-debug.log
 .env
 .env.*
 !.env.example
-/public/uploads/business_logos
-/public/uploads/documents
-/public/uploads/img
-/public/uploads/media
-/public/uploads/invoice_logos
-/public/uploads/UltimatePOS
-/public/uploads/temp
 
+# User uploads
+/public/uploads/*
+!/public/uploads/.gitignore
+/public/modules/service/v7/uploads/*
+
+# Module storage (exports, imports)
+/Modules/*/storage/exports/*
+/Modules/*/storage/imports/*
+/Modules/LoanManagement/storage/*
+
+# Compiled assets (regenerated on build)
 /public/mix-manifest.json
 .scribe
 /public/docs
+
+# Storage - runtime files (regenerated automatically)
 /storage/framework/cache/data/*
-/storage/logs/*.log
 /storage/framework/sessions/*
 /storage/framework/views/*
+/storage/framework/cache/*
+/storage/framework/testing/*
+/storage/framework/tmp/*
+/storage/logs/*
+/storage/app/temp/*
+!/storage/app/temp/.gitignore
+/storage/debugbar/
 
-# Codex/local comparison files
+# Local tools config
 /.codex/
+.codex/
 
 # Local import/export and backup files
 *.xlsx
@@ -42,15 +52,18 @@ npm-debug.log
 *.bak
 *.backup
 
-# Generated PDFs and temp files
-/storage/app/temp/*
-!/storage/app/temp/.gitignore
-/storage/framework/cache/*
-/storage/framework/testing/*
-/storage/debugbar/
-
 # OS/editor noise
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+
+# Debug/test files from local dev
+cookies.txt
+login_page.html
+login_result*.html
+products_page.html
+response*.json
+test_query*.php
+tmp_loan_check.php
+.tmp_check_loan_cols.php

@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use DateTimeZone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use App\Rules\ReCaptcha;
@@ -489,6 +490,8 @@ class BusinessController extends Controller
             $business_details['enabled_modules'] = ! empty($enabled_modules) ? $enabled_modules : null;
             $business->fill($business_details);
             $business->save();
+
+            Cache::forget("business_{$business_id}");
 
             //update session data
             $request->session()->put('business', $business);

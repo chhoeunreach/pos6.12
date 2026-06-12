@@ -20,14 +20,14 @@
 <td>{{ $log->problem_type ?? $log->fix_type }}</td><td>{{ $log->old_qty }}</td><td>{{ $log->new_qty }}</td><td>{{ $log->fix_type }}</td>
 <td>
 @if(!$log->is_rollback && $log->rollbackable)
-<form method="post" action="{{ route('ssi.mismatch.rollback') }}">@csrf
+<form method="post" action="{{ ssi_route('ssi.mismatch.rollback') }}">@csrf
 <input type="hidden" name="fix_log_id" value="{{ $log->id }}"><input type="hidden" name="reason" value="manual_rollback">
 <button class="btn btn-xs btn-danger">Rollback</button>
 </form>
 @else N/A @endif
 </td>
 <td>
-<form method="post" action="{{ route('ssi.fix_logs.delete', $log->id) }}">@csrf @method('DELETE')
+<form method="post" action="{{ ssi_route('ssi.fix_logs.delete', $log->id) }}">@csrf @method('DELETE')
 <input type="hidden" name="reason" value="incorrect_log_entry"><button class="btn btn-xs btn-danger">Delete</button>
 </form>
 </td>

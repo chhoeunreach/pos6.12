@@ -20,7 +20,7 @@ return [
         'monitored' => 10080,
     ],
     'fast_termination' => false,
-    'memory_limit' => 256,
+    'memory_limit' => 512,
     'defaults' => [
         'supervisor-imports' => [
             'connection' => 'redis',

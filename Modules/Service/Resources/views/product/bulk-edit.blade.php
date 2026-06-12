@@ -51,13 +51,16 @@
 
 @section('javascript')
 <script type="text/javascript">
+	var listNoVariationUrl = "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'getProductsWithoutVariations']) }}";
+	var getSubCategoriesUrl = "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'getSubCategories']) }}";
+	var getProductToEditUrl = "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'getProductToEdit'], ['product_id' => '__product_id__']) }}";
 
 	$(document).ready( function(){
 		if ($('#search_product').length) {
 		    $('#search_product').autocomplete({
 	            source: function(request, response) {
 	                $.getJSON(
-	                    '/products/list-no-variation',
+	                    listNoVariationUrl,
 	                    {
 	                        term: request.term,
 	                    },
@@ -162,7 +165,7 @@
 		var tr = $(this).closest('tr');
 	    $.ajax({
 	        method: 'POST',
-	        url: '/products/get_sub_categories',
+	        url: getSubCategoriesUrl,
 	        dataType: 'html',
 	        data: { cat_id: cat },
 	        success: function(result) {
@@ -176,7 +179,7 @@
 	function addProductRow(product_id) {
 		if ($('#product_' + product_id).length == 0) {
 			$.ajax({
-		        url: '/products/get-product-to-edit/' + product_id,
+		        url: getProductToEditUrl.replace('__product_id__', product_id),
 		        dataType: 'html',
 		        success: function(result) {
 		            if (result) {

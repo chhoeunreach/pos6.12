@@ -104,10 +104,10 @@ class ProductController extends Controller
                     $query->whereHas('product_locations', function ($query) use ($permitted_locations) {
                         $query->whereIn('product_locations.location_id', $permitted_locations);
                     });
-                } else {
-                    $query->with('product_locations');
                 }
             }
+
+            $query->with('product_locations');
 
             $products = $query->select(
                 'products.id',
@@ -190,7 +190,13 @@ class ProductController extends Controller
                 $products->where('products.repair_model_id', request()->get('repair_model_id'));
             }
 
-            return Datatables::of($products)
+            $previous_error_reporting = error_reporting();
+            $previous_display_errors = ini_get('display_errors');
+            error_reporting($previous_error_reporting & ~E_DEPRECATED & ~E_WARNING & ~E_NOTICE);
+            ini_set('display_errors', '0');
+
+            try {
+                return Datatables::of($products)
                 ->addColumn(
                     'product_locations',
                     function ($row) {
@@ -308,6 +314,10 @@ class ProductController extends Controller
                     }, ])
                 ->rawColumns(['action', 'image', 'mass_delete', 'product', 'selling_price', 'purchase_price', 'category', 'current_stock'])
                 ->make(true);
+            } finally {
+                error_reporting($previous_error_reporting);
+                ini_set('display_errors', $previous_display_errors);
+            }
         }
 
         $rack_enabled = (request()->session()->get('business.enable_racks') || request()->session()->get('business.enable_row') || request()->session()->get('business.enable_position'));

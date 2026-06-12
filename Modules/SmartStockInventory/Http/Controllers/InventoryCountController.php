@@ -34,7 +34,7 @@ class InventoryCountController extends BaseSmartStockController
             $systemQty = (float) ($line['system_qty'] ?? 0); $actualQty = (float) ($line['actual_qty'] ?? 0); $diff = $actualQty - $systemQty;
             SmartStockInventoryLine::create(['session_id' => $session->id, 'product_id' => $line['product_id'] ?? null, 'variation_id' => $line['variation_id'] ?? null, 'sku' => $line['sku'] ?? null, 'product_name' => $line['product_name'] ?? null, 'variation_name' => $line['variation_name'] ?? null, 'imei' => $line['imei'] ?? null, 'lot_number' => $line['lot_number'] ?? null, 'system_qty' => $systemQty, 'actual_qty' => $actualQty, 'difference_qty' => $diff, 'status' => $diff == 0 ? 'matched' : ($diff > 0 ? 'over_stock' : 'missing'), 'remark' => $line['remark'] ?? null]);
         }
-        return redirect()->route('ssi.count.index')->with('status', ['success' => 1, 'msg' => 'Inventory count draft saved']);
+        return redirect()->to(ssi_route('ssi.count.index'))->with('status', ['success' => 1, 'msg' => 'Inventory count draft saved']);
     }
 
     public function updateSession(Request $request, SmartStockInventorySession $session)

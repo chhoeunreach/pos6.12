@@ -14,7 +14,7 @@ return new class extends Migration
     public function up()
     {
         Schema::table('business', function (Blueprint $table) {
-            $table->text('weighing_scale_setting')->after('pos_settings')->comment('used to store the configuration of weighing scale');
+            $table->text('weighing_scale_setting')->nullable()->after('pos_settings')->comment('used to store the configuration of weighing scale');
         });
     }
 

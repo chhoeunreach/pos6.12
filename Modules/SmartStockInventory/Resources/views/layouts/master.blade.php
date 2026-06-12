@@ -3,23 +3,27 @@
     $__system_settings = $__system_settings ?? [];
     $businessName = Session::get('business.name', config('app.name', 'Ultimate POS'));
     $pageTitle = trim($__env->yieldContent('page_title')) ?: 'Smart Stock Inventory';
+    $accessoryPrefix = trim(config('accessory.route_prefix', 'accessory'), '/');
+    $isAccessoryContext = request()->is($accessoryPrefix) || request()->is($accessoryPrefix . '/*');
+    $ssiRoute = fn (string $name, array $parameters = []) => ssi_route($name, $parameters);
+    $moduleUrl = fn (string $path = '') => ssi_url($path);
     $menuGroups = [
         [
             'label' => 'Smart Stock Inventory',
             'icon' => 'fa fa-cubes',
             'active' => ['smart-stock-inventory'],
             'items' => [
-                ['label' => 'Dashboard', 'url' => route('ssi.dashboard'), 'active' => ['smart-stock-inventory/dashboard']],
-                ['label' => 'Inventory Count', 'url' => route('ssi.count.index'), 'active' => ['smart-stock-inventory/count']],
-                ['label' => 'Enterprise Count', 'url' => route('ssi.count.enterprise'), 'active' => ['smart-stock-inventory/count/enterprise']],
-                ['label' => 'Verification Report', 'url' => route('ssi.verification.index'), 'active' => ['smart-stock-inventory/verification']],
-                ['label' => 'Mismatch Detector', 'url' => route('ssi.mismatch.index'), 'active' => ['smart-stock-inventory/mismatch']],
-                ['label' => 'Movement History', 'url' => route('ssi.movement.index'), 'active' => ['smart-stock-inventory/movement']],
-                ['label' => 'IMEI Management', 'url' => route('ssi.imei.index'), 'active' => ['smart-stock-inventory/imei']],
-                ['label' => 'Lot Management', 'url' => route('ssi.lot.index'), 'active' => ['smart-stock-inventory/lot']],
-                ['label' => 'Fix Logs', 'url' => route('ssi.fix_logs'), 'active' => ['smart-stock-inventory/fix-logs']],
-                ['label' => 'Inventory Reports', 'url' => route('ssi.count.reports'), 'active' => ['smart-stock-inventory/count/reports']],
-                ['label' => 'Settings', 'url' => route('ssi.settings.index'), 'active' => ['smart-stock-inventory/settings']],
+                ['label' => 'Dashboard', 'url' => $ssiRoute('ssi.dashboard'), 'active' => ['smart-stock-inventory/dashboard']],
+                ['label' => 'Inventory Count', 'url' => $ssiRoute('ssi.count.index'), 'active' => ['smart-stock-inventory/count']],
+                ['label' => 'Enterprise Count', 'url' => $ssiRoute('ssi.count.enterprise'), 'active' => ['smart-stock-inventory/count/enterprise']],
+                ['label' => 'Verification Report', 'url' => $ssiRoute('ssi.verification.index'), 'active' => ['smart-stock-inventory/verification']],
+                ['label' => 'Mismatch Detector', 'url' => $ssiRoute('ssi.mismatch.index'), 'active' => ['smart-stock-inventory/mismatch']],
+                ['label' => 'Movement History', 'url' => $ssiRoute('ssi.movement.index'), 'active' => ['smart-stock-inventory/movement']],
+                ['label' => 'IMEI Management', 'url' => $ssiRoute('ssi.imei.index'), 'active' => ['smart-stock-inventory/imei']],
+                ['label' => 'Lot Management', 'url' => $ssiRoute('ssi.lot.index'), 'active' => ['smart-stock-inventory/lot']],
+                ['label' => 'Fix Logs', 'url' => $ssiRoute('ssi.fix_logs'), 'active' => ['smart-stock-inventory/fix-logs']],
+                ['label' => 'Inventory Reports', 'url' => $ssiRoute('ssi.count.reports'), 'active' => ['smart-stock-inventory/count/reports']],
+                ['label' => 'Settings', 'url' => $ssiRoute('ssi.settings.index'), 'active' => ['smart-stock-inventory/settings']],
             ],
         ],
         [
@@ -27,10 +31,10 @@
             'icon' => 'fa fa-address-book',
             'active' => ['contacts', 'customer-group'],
             'items' => [
-                ['label' => 'Suppliers', 'url' => url('/contacts?type=supplier'), 'active' => ['contacts?type=supplier']],
-                ['label' => 'Customers', 'url' => url('/contacts?type=customer'), 'active' => ['contacts?type=customer']],
-                ['label' => 'Customer Groups', 'url' => url('/customer-group'), 'active' => ['customer-group']],
-                ['label' => 'Import Contacts', 'url' => url('/contacts/import'), 'active' => ['contacts/import']],
+                ['label' => 'Suppliers', 'url' => $moduleUrl('/contacts?type=supplier'), 'active' => ['contacts?type=supplier']],
+                ['label' => 'Customers', 'url' => $moduleUrl('/contacts?type=customer'), 'active' => ['contacts?type=customer']],
+                ['label' => 'Customer Groups', 'url' => $moduleUrl('/customer-group'), 'active' => ['customer-group']],
+                ['label' => 'Import Contacts', 'url' => $moduleUrl('/contacts/import'), 'active' => ['contacts/import']],
             ],
         ],
         [
@@ -38,18 +42,18 @@
             'icon' => 'fa fa-cube',
             'active' => ['products', 'update-product-price', 'labels', 'variation-templates', 'import-products', 'import-opening-stock', 'selling-price-group', 'units', 'taxonomies', 'brands', 'warranties'],
             'items' => [
-                ['label' => 'List Products', 'url' => url('/products'), 'active' => ['products']],
-                ['label' => 'Add Product', 'url' => url('/products/create'), 'active' => ['products/create']],
-                ['label' => 'Update Price', 'url' => url('/update-product-price'), 'active' => ['update-product-price']],
-                ['label' => 'Print Labels', 'url' => url('/labels/show'), 'active' => ['labels/show']],
-                ['label' => 'Variations', 'url' => url('/variation-templates'), 'active' => ['variation-templates']],
-                ['label' => 'Import Products', 'url' => url('/import-products'), 'active' => ['import-products']],
-                ['label' => 'Import Opening Stock', 'url' => url('/import-opening-stock'), 'active' => ['import-opening-stock']],
-                ['label' => 'Selling Price Group', 'url' => url('/selling-price-group'), 'active' => ['selling-price-group']],
-                ['label' => 'Units', 'url' => url('/units'), 'active' => ['units']],
-                ['label' => 'Categories', 'url' => url('/taxonomies?type=product'), 'active' => ['taxonomies?type=product']],
-                ['label' => 'Brands', 'url' => url('/brands'), 'active' => ['brands']],
-                ['label' => 'Warranties', 'url' => url('/warranties'), 'active' => ['warranties']],
+                ['label' => 'List Products', 'url' => $moduleUrl('/products'), 'active' => ['products']],
+                ['label' => 'Add Product', 'url' => $moduleUrl('/products/create'), 'active' => ['products/create']],
+                ['label' => 'Update Price', 'url' => $moduleUrl('/update-product-price'), 'active' => ['update-product-price']],
+                ['label' => 'Print Labels', 'url' => $moduleUrl('/labels/show'), 'active' => ['labels/show']],
+                ['label' => 'Variations', 'url' => $moduleUrl('/variation-templates'), 'active' => ['variation-templates']],
+                ['label' => 'Import Products', 'url' => $moduleUrl('/import-products'), 'active' => ['import-products']],
+                ['label' => 'Import Opening Stock', 'url' => $moduleUrl('/import-opening-stock'), 'active' => ['import-opening-stock']],
+                ['label' => 'Selling Price Group', 'url' => $moduleUrl('/selling-price-group'), 'active' => ['selling-price-group']],
+                ['label' => 'Units', 'url' => $moduleUrl('/units'), 'active' => ['units']],
+                ['label' => 'Categories', 'url' => $moduleUrl('/taxonomies?type=product'), 'active' => ['taxonomies?type=product']],
+                ['label' => 'Brands', 'url' => $moduleUrl('/brands'), 'active' => ['brands']],
+                ['label' => 'Warranties', 'url' => $moduleUrl('/warranties'), 'active' => ['warranties']],
             ],
         ],
         [
@@ -57,10 +61,10 @@
             'icon' => 'fa fa-download',
             'active' => ['purchase-requisition', 'purchases', 'purchase-return'],
             'items' => [
-                ['label' => 'Purchase Requisition', 'url' => url('/purchase-requisition'), 'active' => ['purchase-requisition']],
-                ['label' => 'List Purchases', 'url' => url('/purchases'), 'active' => ['purchases']],
-                ['label' => 'Add Purchase', 'url' => url('/purchases/create'), 'active' => ['purchases/create']],
-                ['label' => 'List Purchase Return', 'url' => url('/purchase-return'), 'active' => ['purchase-return']],
+                ['label' => 'Purchase Requisition', 'url' => $moduleUrl('/purchase-requisition'), 'active' => ['purchase-requisition']],
+                ['label' => 'List Purchases', 'url' => $moduleUrl('/purchases'), 'active' => ['purchases']],
+                ['label' => 'Add Purchase', 'url' => $moduleUrl('/purchases/create'), 'active' => ['purchases/create']],
+                ['label' => 'List Purchase Return', 'url' => $moduleUrl('/purchase-return'), 'active' => ['purchase-return']],
             ],
         ],
         [
@@ -68,18 +72,18 @@
             'icon' => 'fa fa-upload',
             'active' => ['sells', 'pos', 'sell-return', 'shipments', 'discount', 'import-sales'],
             'items' => [
-                ['label' => 'All sales', 'url' => url('/sells'), 'active' => ['sells']],
-                ['label' => 'Add Sale', 'url' => url('/sells/create'), 'active' => ['sells/create']],
-                ['label' => 'List POS', 'url' => url('/pos'), 'active' => ['pos']],
-                ['label' => 'POS', 'url' => url('/pos/create'), 'active' => ['pos/create']],
-                ['label' => 'Add Draft', 'url' => url('/sells/create?status=draft'), 'active' => ['sells/create?status=draft']],
-                ['label' => 'List Drafts', 'url' => url('/sells/drafts'), 'active' => ['sells/drafts']],
-                ['label' => 'Add Quotation', 'url' => url('/sells/create?status=quotation'), 'active' => ['sells/create?status=quotation']],
-                ['label' => 'List quotations', 'url' => url('/sells/quotations'), 'active' => ['sells/quotations']],
-                ['label' => 'List Sell Return', 'url' => url('/sell-return'), 'active' => ['sell-return']],
-                ['label' => 'Shipments', 'url' => url('/shipments'), 'active' => ['shipments']],
-                ['label' => 'Discounts', 'url' => url('/discount'), 'active' => ['discount']],
-                ['label' => 'Import Sales', 'url' => url('/import-sales'), 'active' => ['import-sales']],
+                ['label' => 'All sales', 'url' => $moduleUrl('/sells'), 'active' => ['sells']],
+                ['label' => 'Add Sale', 'url' => $moduleUrl('/sells/create'), 'active' => ['sells/create']],
+                ['label' => 'List POS', 'url' => $moduleUrl('/pos'), 'active' => ['pos']],
+                ['label' => 'POS', 'url' => $moduleUrl('/pos/create'), 'active' => ['pos/create']],
+                ['label' => 'Add Draft', 'url' => $moduleUrl('/sells/create?status=draft'), 'active' => ['sells/create?status=draft']],
+                ['label' => 'List Drafts', 'url' => $moduleUrl('/sells/drafts'), 'active' => ['sells/drafts']],
+                ['label' => 'Add Quotation', 'url' => $moduleUrl('/sells/create?status=quotation'), 'active' => ['sells/create?status=quotation']],
+                ['label' => 'List quotations', 'url' => $moduleUrl('/sells/quotations'), 'active' => ['sells/quotations']],
+                ['label' => 'List Sell Return', 'url' => $moduleUrl('/sell-return'), 'active' => ['sell-return']],
+                ['label' => 'Shipments', 'url' => $moduleUrl('/shipments'), 'active' => ['shipments']],
+                ['label' => 'Discounts', 'url' => $moduleUrl('/discount'), 'active' => ['discount']],
+                ['label' => 'Import Sales', 'url' => $moduleUrl('/import-sales'), 'active' => ['import-sales']],
             ],
         ],
         [
@@ -87,8 +91,8 @@
             'icon' => 'fa fa-truck',
             'active' => ['stock-transfers'],
             'items' => [
-                ['label' => 'List Stock Transfers', 'url' => url('/stock-transfers'), 'active' => ['stock-transfers']],
-                ['label' => 'Add Stock Transfer', 'url' => url('/stock-transfers/create'), 'active' => ['stock-transfers/create']],
+                ['label' => 'List Stock Transfers', 'url' => $moduleUrl('/stock-transfers'), 'active' => ['stock-transfers']],
+                ['label' => 'Add Stock Transfer', 'url' => $moduleUrl('/stock-transfers/create'), 'active' => ['stock-transfers/create']],
             ],
         ],
         [
@@ -96,8 +100,8 @@
             'icon' => 'fa fa-database',
             'active' => ['stock-adjustments'],
             'items' => [
-                ['label' => 'List Stock Adjustments', 'url' => url('/stock-adjustments'), 'active' => ['stock-adjustments']],
-                ['label' => 'Add Stock Adjustment', 'url' => url('/stock-adjustments/create'), 'active' => ['stock-adjustments/create']],
+                ['label' => 'List Stock Adjustments', 'url' => $moduleUrl('/stock-adjustments'), 'active' => ['stock-adjustments']],
+                ['label' => 'Add Stock Adjustment', 'url' => $moduleUrl('/stock-adjustments/create'), 'active' => ['stock-adjustments/create']],
             ],
         ],
         [
@@ -105,25 +109,25 @@
             'icon' => 'fa fa-line-chart',
             'active' => ['reports', 'manage-lot'],
             'items' => [
-                ['label' => 'Profit / Loss Report', 'url' => url('/reports/profit-loss'), 'active' => ['reports/profit-loss']],
-                ['label' => 'Purchase & Sale', 'url' => url('/reports/purchase-sell'), 'active' => ['reports/purchase-sell']],
-                ['label' => 'Tax Report', 'url' => url('/reports/tax-report'), 'active' => ['reports/tax-report']],
-                ['label' => 'Supplier & Customer Report', 'url' => url('/reports/customer-supplier'), 'active' => ['reports/customer-supplier']],
-                ['label' => 'Customer Groups Report', 'url' => url('/reports/customer-group'), 'active' => ['reports/customer-group']],
-                ['label' => 'Stock Report', 'url' => url('/reports/stock-report'), 'active' => ['reports/stock-report']],
-                ['label' => 'Lot Report', 'url' => url('/reports/lot-report'), 'active' => ['reports/lot-report']],
-                ['label' => 'Manage Lot', 'url' => url('/manage-lot'), 'active' => ['manage-lot']],
-                ['label' => 'Stock Adjustment Report', 'url' => url('/reports/stock-adjustment-report'), 'active' => ['reports/stock-adjustment-report']],
-                ['label' => 'Trending Products', 'url' => url('/reports/trending-products'), 'active' => ['reports/trending-products']],
-                ['label' => 'Items Report', 'url' => url('/reports/items-report'), 'active' => ['reports/items-report']],
-                ['label' => 'Product Purchase Report', 'url' => url('/reports/product-purchase-report'), 'active' => ['reports/product-purchase-report']],
-                ['label' => 'Product Sell Report', 'url' => url('/reports/product-sell-report'), 'active' => ['reports/product-sell-report']],
-                ['label' => 'Purchase Payment Report', 'url' => url('/reports/purchase-payment-report'), 'active' => ['reports/purchase-payment-report']],
-                ['label' => 'Sell Payment Report', 'url' => url('/reports/sell-payment-report'), 'active' => ['reports/sell-payment-report']],
-                ['label' => 'Expense Report', 'url' => url('/reports/expense-report'), 'active' => ['reports/expense-report']],
-                ['label' => 'Register Report', 'url' => url('/reports/register-report'), 'active' => ['reports/register-report']],
-                ['label' => 'Sales Representative Report', 'url' => url('/reports/sales-representative-report'), 'active' => ['reports/sales-representative-report']],
-                ['label' => 'Activity Log', 'url' => url('/reports/activity-log'), 'active' => ['reports/activity-log']],
+                ['label' => 'Profit / Loss Report', 'url' => $moduleUrl('/reports/profit-loss'), 'active' => ['reports/profit-loss']],
+                ['label' => 'Purchase & Sale', 'url' => $moduleUrl('/reports/purchase-sell'), 'active' => ['reports/purchase-sell']],
+                ['label' => 'Tax Report', 'url' => $moduleUrl('/reports/tax-report'), 'active' => ['reports/tax-report']],
+                ['label' => 'Supplier & Customer Report', 'url' => $moduleUrl('/reports/customer-supplier'), 'active' => ['reports/customer-supplier']],
+                ['label' => 'Customer Groups Report', 'url' => $moduleUrl('/reports/customer-group'), 'active' => ['reports/customer-group']],
+                ['label' => 'Stock Report', 'url' => $moduleUrl('/reports/stock-report'), 'active' => ['reports/stock-report']],
+                ['label' => 'Lot Report', 'url' => $moduleUrl('/reports/lot-report'), 'active' => ['reports/lot-report']],
+                ['label' => 'Manage Lot', 'url' => $moduleUrl('/manage-lot'), 'active' => ['manage-lot']],
+                ['label' => 'Stock Adjustment Report', 'url' => $moduleUrl('/reports/stock-adjustment-report'), 'active' => ['reports/stock-adjustment-report']],
+                ['label' => 'Trending Products', 'url' => $moduleUrl('/reports/trending-products'), 'active' => ['reports/trending-products']],
+                ['label' => 'Items Report', 'url' => $moduleUrl('/reports/items-report'), 'active' => ['reports/items-report']],
+                ['label' => 'Product Purchase Report', 'url' => $moduleUrl('/reports/product-purchase-report'), 'active' => ['reports/product-purchase-report']],
+                ['label' => 'Product Sell Report', 'url' => $moduleUrl('/reports/product-sell-report'), 'active' => ['reports/product-sell-report']],
+                ['label' => 'Purchase Payment Report', 'url' => $moduleUrl('/reports/purchase-payment-report'), 'active' => ['reports/purchase-payment-report']],
+                ['label' => 'Sell Payment Report', 'url' => $moduleUrl('/reports/sell-payment-report'), 'active' => ['reports/sell-payment-report']],
+                ['label' => 'Expense Report', 'url' => $moduleUrl('/reports/expense-report'), 'active' => ['reports/expense-report']],
+                ['label' => 'Register Report', 'url' => $moduleUrl('/reports/register-report'), 'active' => ['reports/register-report']],
+                ['label' => 'Sales Representative Report', 'url' => $moduleUrl('/reports/sales-representative-report'), 'active' => ['reports/sales-representative-report']],
+                ['label' => 'Activity Log', 'url' => $moduleUrl('/reports/activity-log'), 'active' => ['reports/activity-log']],
             ],
         ],
         [
@@ -131,33 +135,45 @@
             'icon' => 'fa fa-cogs',
             'active' => ['business', 'business-location', 'invoice-schemes', 'invoice-layouts', 'barcodes', 'printers', 'tax-rates', 'types-of-service'],
             'items' => [
-                ['label' => 'Business Settings', 'url' => url('/business/settings'), 'active' => ['business/settings']],
-                ['label' => 'Business Locations', 'url' => url('/business-location'), 'active' => ['business-location']],
-                ['label' => 'Invoice Settings', 'url' => url('/invoice-schemes'), 'active' => ['invoice-schemes', 'invoice-layouts']],
-                ['label' => 'Barcode Settings', 'url' => url('/barcodes'), 'active' => ['barcodes']],
-                ['label' => 'Receipt Printers', 'url' => url('/printers'), 'active' => ['printers']],
-                ['label' => 'Tax Rates', 'url' => url('/tax-rates'), 'active' => ['tax-rates']],
-                ['label' => 'Types of service', 'url' => url('/types-of-service'), 'active' => ['types-of-service']],
+                ['label' => 'Business Settings', 'url' => $moduleUrl('/business/settings'), 'active' => ['business/settings']],
+                ['label' => 'Business Locations', 'url' => $moduleUrl('/business-location'), 'active' => ['business-location']],
+                ['label' => 'Invoice Settings', 'url' => $moduleUrl('/invoice-schemes'), 'active' => ['invoice-schemes', 'invoice-layouts']],
+                ['label' => 'Barcode Settings', 'url' => $moduleUrl('/barcodes'), 'active' => ['barcodes']],
+                ['label' => 'Receipt Printers', 'url' => $moduleUrl('/printers'), 'active' => ['printers']],
+                ['label' => 'Tax Rates', 'url' => $moduleUrl('/tax-rates'), 'active' => ['tax-rates']],
+                ['label' => 'Types of service', 'url' => $moduleUrl('/types-of-service'), 'active' => ['types-of-service']],
             ],
         ],
     ];
     $currentPath = trim(request()->path(), '/');
     $currentWithQuery = $currentPath . (request()->getQueryString() ? '?' . request()->getQueryString() : '');
-    $isActive = function (array $patterns) use ($currentPath, $currentWithQuery) {
+    $isActive = function (array $patterns) use ($currentPath, $currentWithQuery, $isAccessoryContext, $accessoryPrefix) {
         foreach ($patterns as $pattern) {
             $pattern = trim($pattern, '/');
-            if ($currentWithQuery === $pattern || $currentPath === $pattern || str_starts_with($currentPath . '/', $pattern . '/')) {
-                return true;
+            $candidates = [$pattern];
+            if ($isAccessoryContext) {
+                $candidates[] = trim($accessoryPrefix . '/' . $pattern, '/');
+            }
+            foreach ($candidates as $candidate) {
+                if ($currentWithQuery === $candidate || $currentPath === $candidate || str_starts_with($currentPath . '/', $candidate . '/')) {
+                    return true;
+                }
             }
         }
 
         return false;
     };
-    $isItemActive = function (array $patterns) use ($currentPath, $currentWithQuery) {
+    $isItemActive = function (array $patterns) use ($currentPath, $currentWithQuery, $isAccessoryContext, $accessoryPrefix) {
         foreach ($patterns as $pattern) {
             $pattern = trim($pattern, '/');
-            if ($currentWithQuery === $pattern || $currentPath === $pattern) {
-                return true;
+            $candidates = [$pattern];
+            if ($isAccessoryContext) {
+                $candidates[] = trim($accessoryPrefix . '/' . $pattern, '/');
+            }
+            foreach ($candidates as $candidate) {
+                if ($currentWithQuery === $candidate || $currentPath === $candidate) {
+                    return true;
+                }
             }
         }
 
@@ -406,7 +422,7 @@
 <body class="hold-transition skin-blue-light ssi-standalone">
     <div class="ssi-shell">
         <aside class="ssi-sidebar no-print" id="ssi_sidebar">
-            <a href="{{ route('ssi.dashboard') }}" class="ssi-brand">
+            <a href="{{ ssi_route('ssi.dashboard') }}" class="ssi-brand">
                 <span class="ssi-brand-mark"><i class="fa fa-cubes"></i></span>
                 <span class="ssi-brand-text">
                     <span>Smart Stock Inventory</span>
@@ -445,7 +461,7 @@
                     <a href="{{ route('home') }}" class="btn btn-sm btn-default">
                         <i class="fa fa-home"></i> POS
                     </a>
-                    <a href="{{ route('ssi.dashboard') }}" class="btn btn-sm btn-info">
+                    <a href="{{ ssi_route('ssi.dashboard') }}" class="btn btn-sm btn-info">
                         <i class="fa fa-dashboard"></i> Dashboard
                     </a>
                 </div>
@@ -462,13 +478,13 @@
 
                 <section class="content" id="ssi_app" style="font-size:14px;">
                     <div class="ssi-action-bar btn-group">
-                        <a class="btn btn-xs btn-primary" href="{{ route('ssi.count.index') }}">Add</a>
-                        <a class="btn btn-xs btn-info" href="{{ route('ssi.count.index') }}">Edit</a>
-                        <a class="btn btn-xs btn-success" href="{{ route('ssi.settings.index') }}">Update</a>
-                        <a class="btn btn-xs btn-danger" href="{{ route('ssi.count.index') }}">Delete</a>
-                        <a class="btn btn-xs btn-warning" href="{{ route('ssi.mismatch.index') }}">Fix</a>
-                        <a class="btn btn-xs btn-default" href="{{ route('ssi.fix_logs') }}">Rollback</a>
-                        <a class="btn btn-xs btn-default" href="{{ route('ssi.count.export', ['session_id' => request('session_id')]) }}">Export</a>
+                        <a class="btn btn-xs btn-primary" href="{{ ssi_route('ssi.count.index') }}">Add</a>
+                        <a class="btn btn-xs btn-info" href="{{ ssi_route('ssi.count.index') }}">Edit</a>
+                        <a class="btn btn-xs btn-success" href="{{ ssi_route('ssi.settings.index') }}">Update</a>
+                        <a class="btn btn-xs btn-danger" href="{{ ssi_route('ssi.count.index') }}">Delete</a>
+                        <a class="btn btn-xs btn-warning" href="{{ ssi_route('ssi.mismatch.index') }}">Fix</a>
+                        <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.fix_logs') }}">Rollback</a>
+                        <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.count.export', ['session_id' => request('session_id')]) }}">Export</a>
                         <a class="btn btn-xs btn-default" href="#" onclick="window.print();return false;">Print</a>
                     </div>
                     @if(session('status'))

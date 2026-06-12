@@ -5,6 +5,7 @@ namespace Modules\Service\Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class ServiceBootstrapSeeder extends Seeder
 {
@@ -46,7 +47,12 @@ class ServiceBootstrapSeeder extends Seeder
                 'fy_start_month' => 1,
                 'accounting_method' => 'fifo',
                 'sell_price_tax' => 'includes',
+                'enable_product_expiry' => 0,
+                'expiry_type' => 'add_expiry',
+                'on_product_expiry' => 'keep_selling',
+                'stop_selling_before' => 0,
                 'enable_tooltip' => 1,
+                'weighing_scale_setting' => '{}',
                 'enabled_modules' => json_encode([
                     'purchases',
                     'add_sale',
@@ -143,6 +149,7 @@ class ServiceBootstrapSeeder extends Seeder
                 'contact_id' => 'CO0001',
                 'mobile' => '',
                 'is_default' => 1,
+                'created_by' => 1,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]
@@ -184,6 +191,19 @@ class ServiceBootstrapSeeder extends Seeder
                 ],
                 []
             );
+
+            $this->syncAllPermissionsToService($connection);
+
+            $allPermissionIds = $connection->table('permissions')->pluck('id');
+            foreach ($allPermissionIds as $permId) {
+                $connection->table('role_has_permissions')->updateOrInsert(
+                    [
+                        'permission_id' => $permId,
+                        'role_id' => $adminRoleId,
+                    ],
+                    []
+                );
+            }
         }
 
         $connection->table('roles')->updateOrInsert(
@@ -226,5 +246,30 @@ class ServiceBootstrapSeeder extends Seeder
         }
 
         $connection->statement('SET FOREIGN_KEY_CHECKS=1');
+    }
+
+    private function syncAllPermissionsToService($service): void
+    {
+        $main = DB::connection(config('database.default', 'mysql'));
+
+        if (
+            ! Schema::connection($main->getName())->hasTable('permissions') ||
+            ! Schema::connection($service->getName())->hasTable('permissions')
+        ) {
+            return;
+        }
+
+        $mainPermissions = $main->table('permissions')->get();
+
+        foreach ($mainPermissions as $permission) {
+            $data = (array) $permission;
+            $columns = Schema::connection($service->getName())->getColumnListing('permissions');
+            $data = array_intersect_key($data, array_flip($columns));
+
+            $service->table('permissions')->updateOrInsert(
+                ['name' => $data['name'], 'guard_name' => $data['guard_name'] ?? 'web'],
+                $data
+            );
+        }
     }
 }

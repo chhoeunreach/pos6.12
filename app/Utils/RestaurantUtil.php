@@ -202,6 +202,7 @@ class RestaurantUtil extends Util
             DB::raw("CONCAT(COALESCE(line_service_staff.surname, ''),' ',COALESCE(line_service_staff.first_name, ''),' ',COALESCE(line_service_staff.last_name,'')) as service_staff_name")
         )
                 ->orderBy('created_at', 'desc')
+                ->limit(200)
                 ->get();
 
         return $orders;

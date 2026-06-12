@@ -94,7 +94,7 @@ class ProductUtil extends Util
             if (empty($variation_template_id)) {
                 if ($variation_template_name != 'DUMMY') {
                     $variation_template = VariationTemplate::where('business_id', $business_id)
-                                                        ->whereRaw('LOWER(name)="'.strtolower($variation_template_name).'"')
+                                                        ->whereRaw('LOWER(name) = ?', [strtolower($variation_template_name)])
                                                         ->with(['values'])
                                                         ->first();
                     if (empty($variation_template)) {
@@ -145,7 +145,7 @@ class ProductUtil extends Util
                     } else {
                         if (! empty($variation_template)) {
                             $variation_value = VariationValueTemplate::where('variation_template_id', $variation_template->id)
-                                ->whereRaw('LOWER(name)="'.$variation_value_name.'"')
+                                ->whereRaw('LOWER(name) = ?', [strtolower($variation_value_name)])
                                 ->first();
                             if (empty($variation_value)) {
                                 $variation_value = VariationValueTemplate::create([
@@ -251,7 +251,7 @@ class ProductUtil extends Util
 
                     if (! empty($product_variation->variation_template_id)) {
                         $variation_value = VariationValueTemplate::where('variation_template_id', $product_variation->variation_template_id)
-                                ->whereRaw('LOWER(name)="'.$v['value'].'"')
+                                ->whereRaw('LOWER(name) = ?', [strtolower($v['value'])])
                                 ->first();
                         if (empty($variation_value)) {
                             $variation_value = VariationValueTemplate::create([
@@ -1567,8 +1567,12 @@ class ProductUtil extends Util
                             }
                         })
                             ->orWhere(function ($sub_q) use ($product) {
-                                $sub_q->whereRaw('(brand_id="'.$product->brand_id.'" AND category_id IS NULL)')
-                                ->orWhereRaw('(category_id="'.$product->category_id.'" AND brand_id IS NULL)');
+                                $sub_q->where('brand_id', $product->brand_id)
+                                      ->whereNull('category_id')
+                                      ->orWhere(function ($q) use ($product) {
+                                          $q->where('category_id', $product->category_id)
+                                            ->whereNull('brand_id');
+                                      });
                             });
 
                         if (! empty($variation_id)) {
@@ -1759,6 +1763,7 @@ class ProductUtil extends Util
 
         $data = $query->groupBy('variations.id')
              ->orderBy('VLD.qty_available', 'desc')
+             ->limit(50)
              ->get();
 
         // 🔐 Escape `name`, `variation`, `sub_sku`
@@ -1785,21 +1790,15 @@ class ProductUtil extends Util
                   ->whereIn('p.type', ['single', 'variable']);
 
         $permitted_locations = auth()->user()->permitted_locations();
-        $location_filter = '';
 
         if ($permitted_locations != 'all') {
             $query->whereIn('vld.location_id', $permitted_locations);
-
-            $locations_imploded = implode(', ', $permitted_locations);
-            $location_filter .= "AND transactions.location_id IN ($locations_imploded) ";
         }
 
         if (! empty($filters['location_id'])) {
             $location_id = $filters['location_id'];
 
             $query->where('vld.location_id', $location_id);
-
-            $location_filter .= "AND transactions.location_id=$location_id";
 
             //If filter by location then hide products not available in that location
             $query->join('product_locations as pl', 'pl.product_id', '=', 'p.id')
@@ -2335,52 +2334,9 @@ class ProductUtil extends Util
             $query->where('variations.id', $variation_id);
         }
 
+        $safe_location_id = (int) $location_id;
+
         $stock_details = $query->select(
-            DB::raw("(SELECT SUM(COALESCE(TSL.quantity, 0)) FROM transactions 
-                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-                    WHERE transactions.status='final' AND transactions.type='sell' AND transactions.location_id=$location_id 
-                    AND TSL.variation_id=variations.id) as total_sold"),
-            DB::raw("(SELECT SUM(COALESCE(TSL.quantity_returned, 0)) FROM transactions 
-                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-                    WHERE transactions.status='final' AND transactions.type='sell' AND transactions.location_id=$location_id 
-                    AND TSL.variation_id=variations.id) as total_sell_return"),
-            DB::raw("(SELECT SUM(COALESCE(TSL.quantity,0)) FROM transactions 
-                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-                    WHERE transactions.status='final' AND transactions.type='sell_transfer' AND transactions.location_id=$location_id 
-                    AND TSL.variation_id=variations.id) as total_sell_transfered"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity,0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.status='received' AND transactions.type='purchase_transfer' AND transactions.location_id=$location_id 
-                    AND PL.variation_id=variations.id) as total_purchase_transfered"),
-            DB::raw("(SELECT SUM(COALESCE(SAL.quantity, 0)) FROM transactions 
-                    LEFT JOIN stock_adjustment_lines AS SAL ON transactions.id=SAL.transaction_id
-                    WHERE transactions.type='stock_adjustment' AND transactions.location_id=$location_id 
-                    AND SAL.variation_id=variations.id) as total_adjusted"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.status='received' AND transactions.type='purchase' AND transactions.location_id=$location_id
-                    AND PL.variation_id=variations.id) as total_purchased"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity_returned, 0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.status='received' AND transactions.type='purchase' AND transactions.location_id=$location_id
-                    AND PL.variation_id=variations.id) as total_purchase_return"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity_returned, 0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.type='purchase_return' AND transactions.location_id=$location_id
-                    AND PL.variation_id=variations.id) as total_combined_purchase_return"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.type='opening_stock' AND transactions.status='received' AND transactions.location_id=$location_id
-                    AND PL.variation_id=variations.id) as total_opening_stock"),
-            DB::raw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
-                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
-                    WHERE transactions.status='received' AND transactions.type='production_purchase' AND transactions.location_id=$location_id
-                    AND PL.variation_id=variations.id) as total_manufactured"),
-            DB::raw("(SELECT SUM(COALESCE(TSL.quantity, 0)) FROM transactions 
-                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-                    WHERE transactions.status='final' AND transactions.type='production_sell' AND transactions.location_id=$location_id 
-                    AND TSL.variation_id=variations.id) as total_ingredients_used"),
-            DB::raw('SUM(vld.qty_available) as stock'),
             'variations.sub_sku as sub_sku',
             'p.name as product',
             'p.id as product_id',
@@ -2393,6 +2349,51 @@ class ProductUtil extends Util
             'variations.name as variation_name',
             'variations.id as variation_id'
         )
+            ->selectRaw('SUM(vld.qty_available) as stock')
+            ->selectRaw("(SELECT SUM(COALESCE(TSL.quantity, 0)) FROM transactions 
+                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
+                    WHERE transactions.status='final' AND transactions.type='sell' AND transactions.location_id = ?
+                    AND TSL.variation_id=variations.id) as total_sold", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(TSL.quantity_returned, 0)) FROM transactions 
+                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
+                    WHERE transactions.status='final' AND transactions.type='sell' AND transactions.location_id = ?
+                    AND TSL.variation_id=variations.id) as total_sell_return", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(TSL.quantity,0)) FROM transactions 
+                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
+                    WHERE transactions.status='final' AND transactions.type='sell_transfer' AND transactions.location_id = ?
+                    AND TSL.variation_id=variations.id) as total_sell_transfered", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity,0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.status='received' AND transactions.type='purchase_transfer' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_purchase_transfered", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(SAL.quantity, 0)) FROM transactions 
+                    LEFT JOIN stock_adjustment_lines AS SAL ON transactions.id=SAL.transaction_id
+                    WHERE transactions.type='stock_adjustment' AND transactions.location_id = ?
+                    AND SAL.variation_id=variations.id) as total_adjusted", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.status='received' AND transactions.type='purchase' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_purchased", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity_returned, 0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.status='received' AND transactions.type='purchase' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_purchase_return", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity_returned, 0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.type='purchase_return' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_combined_purchase_return", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.type='opening_stock' AND transactions.status='received' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_opening_stock", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(PL.quantity, 0)) FROM transactions 
+                    LEFT JOIN purchase_lines AS PL ON transactions.id=PL.transaction_id
+                    WHERE transactions.status='received' AND transactions.type='production_purchase' AND transactions.location_id = ?
+                    AND PL.variation_id=variations.id) as total_manufactured", [$safe_location_id])
+            ->selectRaw("(SELECT SUM(COALESCE(TSL.quantity, 0)) FROM transactions 
+                    LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
+                    WHERE transactions.status='final' AND transactions.type='production_sell' AND transactions.location_id = ?
+                    AND TSL.variation_id=variations.id) as total_ingredients_used", [$safe_location_id])
         ->groupBy('variations.id')
         ->get();
 

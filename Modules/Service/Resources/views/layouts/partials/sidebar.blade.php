@@ -44,12 +44,12 @@
             $menuHtml = preg_replace('#<li\b[^>]*>\s*<a\b[^>]*href="[^"]*/repair/dashboard[^"]*"[\s\S]*?</li>#i', '', $menuHtml);
         }
         $baseUrl = url('/');
-        $servicePrefix = trim(config('service.route_prefix', 'service-pos'), '/');
+        $servicePrefix = trim(config('service.route_prefix', 'service'), '/');
         $serviceUrl = url($servicePrefix);
 
         $menuHtml = preg_replace_callback('/href="([^"]*)"/', function ($matches) use ($baseUrl, $serviceUrl) {
             $href = $matches[1];
-            $routePrefix = trim(config('service.route_prefix', 'service-pos'), '/');
+            $routePrefix = trim(config('service.route_prefix', 'service'), '/');
 
             if (
                 empty($href) ||

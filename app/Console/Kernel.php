@@ -33,6 +33,9 @@ class Kernel extends ConsoleKernel
 
             $schedule->command('pos:generateRecurringExpense')->dailyAt('02:00');
 
+            //Pre-compute stock values for today's reports (warms cache + DB snapshot)
+            $schedule->command('pos:recalculate-stock-values')->dailyAt('03:00');
+
         }
 
         if ($env === 'demo') {

@@ -32,7 +32,7 @@
         </div>
     @endif
     <h4 style="margin-top:0; margin-bottom:14px;">Transaction #{{ $tx->id }}</h4>
-    <form method="post" action="{{ route('ssi.movement.update_modal', ['transaction' => $tx->id]) }}">
+    <form method="post" action="{{ ssi_route('ssi.movement.update_modal', ['transaction' => $tx->id]) }}">
         @csrf
         <div class="row">
             <div class="col">

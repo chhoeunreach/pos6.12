@@ -46,6 +46,17 @@ $(document).ready(function() {
                     .html(result)
                     .modal('show');
             },
+            error: function(xhr) {
+                var msg = LANG.something_went_wrong;
+                if (xhr.status === 403) {
+                    msg = typeof LANG.forbidden !== 'undefined' ? LANG.forbidden : 'Access denied. You may not have the required permission.';
+                } else if (xhr.status === 404) {
+                    msg = typeof LANG.not_found !== 'undefined' ? LANG.not_found : 'Page not found.';
+                } else if (xhr.status === 500) {
+                    msg = typeof LANG.internal_error !== 'undefined' ? LANG.internal_error : 'Internal server error.';
+                }
+                toastr.error(msg);
+            },
         });
     });
 
@@ -2800,7 +2811,8 @@ $(document).on('click', 'a.convert-draft', function(e){
         dangerMode: true,
     }).then(willDelete => {
         if (willDelete) {
-            window.location = $(this).attr('href');
+            var href = $(this).attr('href');
+            window.location = typeof serviceRouteUrl === 'function' ? serviceRouteUrl(href) : href;
         }
     });
 });

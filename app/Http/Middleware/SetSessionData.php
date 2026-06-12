@@ -6,6 +6,7 @@ use App\Business;
 use App\Utils\BusinessUtil;
 use Closure;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class SetSessionData
 {
@@ -30,7 +31,9 @@ class SetSessionData
                 'business_id' => $user->business_id,
                 'language' => $user->language,
             ];
-            $business = Business::findOrFail($user->business_id);
+            $business = Cache::remember("business_{$user->business_id}", 3600, function () use ($user) {
+                return Business::findOrFail($user->business_id);
+            });
 
             $currency = $business->currency;
             $currency_data = ['id' => $currency->id,

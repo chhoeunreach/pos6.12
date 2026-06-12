@@ -1,4 +1,5 @@
 <link href="{{ asset('modules/service/v7/css/tailwind/app.css?v='.$asset_v.'-service-jsfix-20260609') }}" rel="stylesheet">
+<link rel="stylesheet" href="{{ asset('css/init.css?v='.$asset_v) }}">
 
 @php
     $themeColor = session('business.theme_color', 'primary');

@@ -5,7 +5,7 @@
 <div class="box box-primary">
     <div class="box-header"><h4>Create Count Session</h4></div>
     <div class="box-body">
-        <form method="post" action="{{ route('ssi.count.store') }}">@csrf
+        <form method="post" action="{{ ssi_route('ssi.count.store') }}">@csrf
             <div class="row">
                 <div class="col-md-4"><input class="form-control" name="session_name" placeholder="Session name" required></div>
                 <div class="col-md-4">
@@ -26,7 +26,7 @@
     <div class="box-header">
         <h4>Count Lines</h4>
         <div class="pull-right">
-            <a class="btn btn-success btn-sm" href="{{ route('ssi.count.export', ['session_id' => optional($sessions->first())->id]) }}">Export Excel</a>
+            <a class="btn btn-success btn-sm" href="{{ ssi_route('ssi.count.export', ['session_id' => optional($sessions->first())->id]) }}">Export Excel</a>
         </div>
     </div>
     <div class="box-body table-responsive">
@@ -44,14 +44,14 @@
                         <td><span class="badge bg-info">{{ ucfirst(str_replace('_',' ', $line->status)) }}</span></td>
                         <td>{{ $line->remark }}</td>
                         <td>
-                            <form method="post" action="{{ route('ssi.count.line.update', $line->id) }}" style="display:inline-block;">@csrf
+                            <form method="post" action="{{ ssi_route('ssi.count.line.update', $line->id) }}" style="display:inline-block;">@csrf
                                 <input type="hidden" name="actual_qty" value="{{ $line->actual_qty }}">
                                 <input type="hidden" name="status" value="{{ $line->status }}">
                                 <input type="hidden" name="remark" value="{{ $line->remark }}">
                                 <input type="hidden" name="reason" value="quick_update">
                                 <button class="btn btn-xs btn-info">Update</button>
                             </form>
-                            <form method="post" action="{{ route('ssi.count.line.delete', $line->id) }}" style="display:inline-block;">@csrf @method('DELETE')
+                            <form method="post" action="{{ ssi_route('ssi.count.line.delete', $line->id) }}" style="display:inline-block;">@csrf @method('DELETE')
                                 <input type="hidden" name="reason" value="quick_delete">
                                 <button class="btn btn-xs btn-danger">Delete</button>
                             </form>

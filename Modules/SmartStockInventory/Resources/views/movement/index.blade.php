@@ -86,21 +86,21 @@
         @php($txStatus = (string)($row->transaction_status ?? ''))
         @php($isPendingTransfer = $txType === 'sell_transfer_pending')
         @if($txId > 0)
-            @php($voidUrl = route('ssi.movement.void', ['transaction' => $txId]))
-            @php($restoreUrl = route('ssi.movement.restore', ['transaction' => $txId]))
-            @php($editUrl = route('ssi.movement.edit_modal', ['transaction' => $txId]))
+            @php($voidUrl = ssi_route('ssi.movement.void', ['transaction' => $txId]))
+            @php($restoreUrl = ssi_route('ssi.movement.restore', ['transaction' => $txId]))
+            @php($editUrl = ssi_route('ssi.movement.edit_modal', ['transaction' => $txId]))
             @if(in_array($txType, ['sell','production_sell'], true))
-                @php($viewUrl = url('/sells/' . $txId))
+                @php($viewUrl = ssi_url('/sells/' . $txId))
             @elseif($txType === 'sell_return')
-                @php($viewUrl = url('/sell-return/' . $txId))
+                @php($viewUrl = ssi_url('/sell-return/' . $txId))
             @elseif(in_array($txType, ['purchase','opening_stock','production_purchase'], true))
-                @php($viewUrl = url('/purchases/' . $txId))
+                @php($viewUrl = ssi_url('/purchases/' . $txId))
             @elseif($txType === 'purchase_return')
-                @php($viewUrl = url('/purchase-return/' . $txId))
+                @php($viewUrl = ssi_url('/purchase-return/' . $txId))
             @elseif($txType === 'stock_adjustment')
-                @php($viewUrl = url('/stock-adjustments/' . $txId))
+                @php($viewUrl = ssi_url('/stock-adjustments/' . $txId))
             @elseif(in_array($txType, ['sell_transfer','purchase_transfer','sell_transfer_pending'], true))
-                @php($viewUrl = url('/stock-transfers/' . $txId))
+                @php($viewUrl = ssi_url('/stock-transfers/' . $txId))
             @endif
         @endif
 
@@ -140,9 +140,9 @@
             @endif
 
             @if($isPendingTransfer)
-                <form id="status_completed_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="completed"></form>
-                <form id="status_in_transit_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="in_transit"></form>
-                <form id="status_pending_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="pending"></form>
+                <form id="status_completed_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="completed"></form>
+                <form id="status_in_transit_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="in_transit"></form>
+                <form id="status_pending_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . $txId) }}" style="display:none;">@csrf<input type="hidden" name="status" value="pending"></form>
             @endif
         @else
             <span class="text-muted">-</span>

@@ -513,25 +513,30 @@ class SellPosController extends Controller
                 //Check for final and do some processing.
                 if ($input['status'] == 'final') {
                     if (!$is_direct_sale) {
-                        //set service staff timer
+                        $product_ids = collect($input['products'])->pluck('product_id')->unique()->filter()->values()->toArray();
+                        $staff_ids = collect($input['products'])->pluck('res_service_staff_id')->unique()->filter()->values()->toArray();
+                        $products_batch = !empty($product_ids) ? Product::whereIn('id', $product_ids)->get()->keyBy('id') : collect();
+                        $staff_batch = !empty($staff_ids) ? User::whereIn('id', $staff_ids)->get()->keyBy('id') : collect();
+
                         foreach ($input['products'] as $product_line) {
                             if (!empty($product_line['res_service_staff_id'])) {
-                                $product = Product::find($product_line['product_id']);
+                                $product = $products_batch->get($product_line['product_id']);
 
-                                if (!empty($product->preparation_time_in_minutes)) {
-                                    $service_staff = User::find($product_line['res_service_staff_id']);
+                                if (!empty($product) && !empty($product->preparation_time_in_minutes)) {
+                                    $service_staff = $staff_batch->get($product_line['res_service_staff_id']);
 
-                                    $base_time = \Carbon::parse($transaction->transaction_date);
+                                    if (!empty($service_staff)) {
+                                        $base_time = \Carbon::parse($transaction->transaction_date);
 
-                                    //if already assigned set base time as available_at
-                                    if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
-                                        $base_time = \Carbon::parse($service_staff->available_at);
+                                        if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
+                                            $base_time = \Carbon::parse($service_staff->available_at);
+                                        }
+
+                                        $total_minutes = $product->preparation_time_in_minutes * $this->transactionUtil->num_uf($product_line['quantity']);
+
+                                        $service_staff->available_at = $base_time->addMinutes($total_minutes);
+                                        $service_staff->save();
                                     }
-
-                                    $total_minutes = $product->preparation_time_in_minutes * $this->transactionUtil->num_uf($product_line['quantity']);
-
-                                    $service_staff->available_at = $base_time->addMinutes($total_minutes);
-                                    $service_staff->save();
                                 }
                             }
                         }
@@ -1332,36 +1337,44 @@ class SellPosController extends Controller
 
                 //update service staff timer
                 if (!$is_direct_sale && $transaction->status == 'final') {
+                    $product_ids = collect($input['products'])->pluck('product_id')->unique()->filter()->values()->toArray();
+                    $staff_ids = collect($input['products'])->pluck('res_service_staff_id')->unique()->filter()->values()->toArray();
+                    $sell_line_ids = collect($input['products'])->pluck('transaction_sell_lines_id')->unique()->filter()->values()->toArray();
+                    $products_batch = !empty($product_ids) ? Product::whereIn('id', $product_ids)->get()->keyBy('id') : collect();
+                    $staff_batch = !empty($staff_ids) ? User::whereIn('id', $staff_ids)->get()->keyBy('id') : collect();
+                    $sell_lines_batch = !empty($sell_line_ids) ? TransactionSellLine::whereIn('id', $sell_line_ids)->get()->keyBy('id') : collect();
+
                     foreach ($input['products'] as $product_line) {
                         if (!empty($product_line['res_service_staff_id'])) {
-                            $product = Product::find($product_line['product_id']);
+                            $product = $products_batch->get($product_line['product_id']);
 
-                            if (!empty($product->preparation_time_in_minutes)) {
+                            if (!empty($product) && !empty($product->preparation_time_in_minutes)) {
                                 //if quantity not increase skip line
                                 $quantity = $this->transactionUtil->num_uf($product_line['quantity']);
                                 if (!empty($product_line['transaction_sell_lines_id'])) {
-                                    $sl = TransactionSellLine::find($product_line['transaction_sell_lines_id']);
+                                    $sl = $sell_lines_batch->get($product_line['transaction_sell_lines_id']);
 
-                                    if ($sl->quantity >= $quantity && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
+                                    if (!empty($sl) && $sl->quantity >= $quantity && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
                                         continue;
                                     }
 
                                     //if same service staff assigned quantity is only increased quantity
-                                    if ($sl->res_service_staff_id == $product_line['res_service_staff_id']) {
+                                    if (!empty($sl) && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
                                         $quantity = $quantity - $sl->quantity;
                                     }
                                 }
 
-                                $service_staff = User::find($product_line['res_service_staff_id']);
+                                $service_staff = $staff_batch->get($product_line['res_service_staff_id']);
 
-                                $base_time = \Carbon::parse($transaction->transaction_date);
-                                //is transaction date is past take base time as now
-                                if ($base_time->lt(\Carbon::now())) {
-                                    $base_time = \Carbon::now();
-                                }
+                                if (!empty($service_staff)) {
+                                    $base_time = \Carbon::parse($transaction->transaction_date);
+                                    //is transaction date is past take base time as now
+                                    if ($base_time->lt(\Carbon::now())) {
+                                        $base_time = \Carbon::now();
+                                    }
 
-                                //if already assigned set base time as available_at
-                                if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
+                                    //if already assigned set base time as available_at
+                                    if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
                                     $base_time = \Carbon::parse($service_staff->available_at);
                                 }
 
@@ -1372,6 +1385,8 @@ class SellPosController extends Controller
                             }
                         }
                     }
+                }
+
                 }
 
                 //Update Sell lines

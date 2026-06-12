@@ -551,7 +551,8 @@ $(document).on('click', 'a.link_confirmation', function (e) {
         dangerMode: true,
     }).then((confirmed) => {
         if (confirmed) {
-            window.location.href = $(this).attr('href');
+            var href = $(this).attr('href');
+            window.location.href = typeof serviceRouteUrl === 'function' ? serviceRouteUrl(href) : href;
         }
     });
 });
@@ -677,11 +678,13 @@ $(document).on('shown.bs.modal', '.contains_select2, .view_modal', function () {
 });
 
 //common configuration : tinyMCE editor
-
-tinymce.overrideDefaults({
+var tinymce_defaults = {
     height: 300,
-    language: app_locale, // Set language dynamically
-    language_url: base_path + '/js/lang/tiny/' + app_locale + '.js', // Dynamic URL
+    base_url: typeof tinymce_base_url !== 'undefined' && tinymce_base_url ? tinymce_base_url : '/modules/service/v7/js',
+    suffix: '.min',
+    icons: 'default',
+    skin_url: (typeof tinymce_base_url !== 'undefined' && tinymce_base_url ? tinymce_base_url : '/modules/service/v7/js') + '/skins/ui/oxide',
+    content_css: (typeof tinymce_base_url !== 'undefined' && tinymce_base_url ? tinymce_base_url : '/modules/service/v7/js') + '/skins/content/default/content.min.css',
     theme: 'silver',
     plugins: [
         'advlist autolink link image lists charmap print preview hr anchor pagebreak',
@@ -696,7 +699,14 @@ tinymce.overrideDefaults({
         favs: { title: 'My Favorites', items: 'code | searchreplace' },
     },
     menubar: 'favs file edit view insert format tools table help',
-});
+};
+
+if (typeof tinymce_language !== 'undefined' && tinymce_language && typeof tinymce_language_url !== 'undefined' && tinymce_language_url) {
+    tinymce_defaults.language = tinymce_language;
+    tinymce_defaults.language_url = tinymce_language_url;
+}
+
+tinymce.overrideDefaults(tinymce_defaults);
 
 // Prevent Bootstrap dialog from blocking focusin
 $(document).on('focusin', function (e) {

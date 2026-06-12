@@ -386,7 +386,13 @@
 @endsection
 
 @section('javascript')
-  <script src="{{ asset('modules/service/v7/js/product.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
+  @php
+    $service_product_js = module_path('Service', 'Public/v7/js/product.js');
+  @endphp
+  <script>
+    window.service_product_base_url = @json(url(config('service.route_prefix', 'service') . '/products'));
+  </script>
+  <script src="{{ asset('modules/service/v7/js/product.js?v=' . $asset_v . '&m=' . (file_exists($service_product_js) ? filemtime($service_product_js) : time())) }}"></script>
   <script type="text/javascript">
     $(document).ready( function(){
       __page_leave_confirmation('#product_add_form');

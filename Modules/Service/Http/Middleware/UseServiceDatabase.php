@@ -23,7 +23,7 @@ class UseServiceDatabase
         }
         $mainSessionData = $this->captureMainSessionData($request);
 
-        if ($mainUser) {
+        if ($mainUser && Schema::connection($connection)->hasTable('users')) {
             $this->syncAuthenticatedUserToService($mainUser, $original, $connection);
         }
 
@@ -42,6 +42,8 @@ class UseServiceDatabase
             if ($serviceUser) {
                 $this->setServiceSessionData($request, $serviceUser);
             }
+
+            
         }
 
         try {
@@ -184,6 +186,7 @@ class UseServiceDatabase
                     'contact_id' => 'CO0001',
                     'mobile' => '',
                     'is_default' => 1,
+                    'created_by' => $userId,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]
@@ -274,25 +277,31 @@ class UseServiceDatabase
             );
         }
 
-        if ($this->hasTable($service, 'business')) {
-            $service->table('business')->updateOrInsert(
-                ['id' => $businessId],
-                [
-                    'name' => 'Service',
-                    'currency_id' => 2,
-                    'owner_id' => $userId,
-                    'fy_start_month' => 1,
-                    'time_zone' => config('app.timezone', 'Asia/Bangkok'),
-                    'accounting_method' => 'fifo',
-                    'sell_price_tax' => 'includes',
-                    'enabled_modules' => json_encode(['purchases', 'add_sale', 'pos_sale', 'stock_transfers', 'stock_adjustment', 'expenses', 'account']),
-                    'date_format' => 'm/d/Y',
-                    'time_format' => '24',
-                    'is_active' => 1,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]
-            );
+        if (
+            $this->hasTable($service, 'business') &&
+            ! $service->table('business')->where('id', $businessId)->exists()
+        ) {
+            $service->table('business')->insert([
+                'id' => $businessId,
+                'name' => 'Service',
+                'currency_id' => 2,
+                'owner_id' => $userId,
+                'fy_start_month' => 1,
+                'time_zone' => config('app.timezone', 'Asia/Bangkok'),
+                'accounting_method' => 'fifo',
+                'sell_price_tax' => 'includes',
+                'enable_product_expiry' => 0,
+                'expiry_type' => 'add_expiry',
+                'on_product_expiry' => 'keep_selling',
+                'stop_selling_before' => 0,
+                'weighing_scale_setting' => '{}',
+                'enabled_modules' => json_encode(['purchases', 'add_sale', 'pos_sale', 'stock_transfers', 'stock_adjustment', 'expenses', 'account']),
+                'date_format' => 'm/d/Y',
+                'time_format' => '24',
+                'is_active' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 

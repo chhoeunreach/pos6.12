@@ -152,7 +152,8 @@
         $(document).ready( function(){
             $('#user_id').change( function() {
                 if ($(this).val()) {
-                    window.location = "{{url('/users')}}/" + $(this).val();
+                    var userUrl = "{{ route('service.users.show', ['user' => '__user_id__']) }}";
+                    window.location = userUrl.replace('__user_id__', $(this).val());
                 }
             });
         });

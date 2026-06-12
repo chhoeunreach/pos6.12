@@ -153,7 +153,7 @@
 
                 <?php if(in_array('pos_sale', $enabled_modules)): ?>
                     <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('sell.create')): ?>
-                        <a href="<?php echo e(action([\App\Http\Controllers\SellPosController::class, 'create']), false); ?>"
+                        <a href="<?php echo e(repair_route('pos.create'), false); ?>"
                             class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 theme-btn-bg tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
                             <svg aria-hidden="true" class="tw-size-5 tw-hidden md:tw-block" xmlns="http://www.w3.org/2000/svg"
                                 viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none"

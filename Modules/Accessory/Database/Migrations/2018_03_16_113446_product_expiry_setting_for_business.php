@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::table('business', function (Blueprint $table) {
             $table->enum('on_product_expiry', ['keep_selling', 'stop_selling', 'auto_delete'])->default('keep_selling')->after('expiry_type');
-            $table->integer('stop_selling_before')->after('on_product_expiry')->comment('Stop selling expied item n days before expiry');
+            $table->integer('stop_selling_before')->default(0)->after('on_product_expiry')->comment('Stop selling expired item n days before expiry');
         });
     }
 

@@ -575,7 +575,7 @@ class MovementController extends BaseSmartStockController
         $tx->save();
 
         return redirect()
-            ->route('ssi.movement.edit_modal', ['transaction' => $tx->id])
+            ->to(ssi_route('ssi.movement.edit_modal', ['transaction' => $tx->id]))
             ->with('status', ['success' => 1, 'msg' => 'Transaction updated successfully']);
     }
 

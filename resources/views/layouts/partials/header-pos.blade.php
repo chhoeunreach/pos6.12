@@ -1,9 +1,9 @@
 <!-- default value -->
 @php
-    $go_back_url = action([\App\Http\Controllers\SellPosController::class, 'index']);
+    $go_back_url = repair_route('pos.index');
     $transaction_sub_type = '';
-    $view_suspended_sell_url = action([\App\Http\Controllers\SellController::class, 'index']) . '?suspended=1';
-    $pos_redirect_url = action([\App\Http\Controllers\SellPosController::class, 'create']);
+    $view_suspended_sell_url = repair_route('sells.index') . '?suspended=1';
+    $pos_redirect_url = repair_route('pos.create');
 @endphp
 
 @if (!empty($pos_module_data))
@@ -250,7 +250,7 @@
 
             @if (in_array('pos_sale', $enabled_modules) && !empty($transaction_sub_type))
                 @can('sell.create')
-                    <a href="{{ action([\App\Http\Controllers\SellPosController::class, 'create']) }}"
+                    <a href="{{ repair_route('pos.create') }}"
                         title="@lang('sale.pos_sale')"
                         class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 active:tw-scale-95 tw-transition-transform tw-rounded-md pull-right">
                         <strong class="tw-inline-flex tw-items-center tw-gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-layout-grid tw-text-[#00935F]" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M14 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/></svg>@lang('sale.pos_sale')</strong>

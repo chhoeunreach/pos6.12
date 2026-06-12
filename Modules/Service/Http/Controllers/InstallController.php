@@ -8,6 +8,8 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -88,7 +90,7 @@ class InstallController extends Controller
             ->with('status', $output);
     }
 
-    public function uninstall()
+    public function uninstall(Request $request)
     {
         $this->authorizeModuleManagement();
 
@@ -98,7 +100,13 @@ class InstallController extends Controller
 
             System::removeProperty($this->moduleName . '_version');
             $this->disableModuleInStatuses();
+            $this->removePublishedAssets();
             $this->removeModuleBootstrapCache();
+
+            if ($request->boolean('remove_data')) {
+                $this->dropServiceDatabase();
+            }
+
             $this->clearCaches();
 
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
@@ -160,6 +168,8 @@ class InstallController extends Controller
         $connection = config('service.database_connection', 'service');
         $originalDefault = config('database.default');
 
+        $authUser = auth()->user();
+
         config(['database.default' => $connection]);
         DB::setDefaultConnection($connection);
 
@@ -191,6 +201,18 @@ class InstallController extends Controller
                 '--class' => 'Modules\\Service\\Database\\Seeders\\ServiceBootstrapSeeder',
                 '--force' => true,
             ]);
+
+            if ($authUser && $db->table('users')->where('id', 1)->exists()) {
+                $db->table('users')->where('id', 1)->update([
+                    'username' => $authUser->username,
+                    'surname' => $authUser->surname,
+                    'first_name' => $authUser->first_name,
+                    'last_name' => $authUser->last_name,
+                    'email' => $authUser->email,
+                    'password' => $authUser->password,
+                    'language' => $authUser->language,
+                ]);
+            }
         } finally {
             config(['database.default' => $originalDefault]);
             DB::setDefaultConnection($originalDefault);
@@ -280,11 +302,55 @@ class InstallController extends Controller
 
     private function removeModuleBootstrapCache(): void
     {
-        $path = base_path('bootstrap/cache/service_module.php');
-
-        if (file_exists($path)) {
-            @unlink($path);
+        foreach (glob(base_path('bootstrap/cache/*service*')) ?: [] as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
         }
+    }
+
+    private function removePublishedAssets(): void
+    {
+        $path = public_path('modules/service');
+
+        if (File::isDirectory($path)) {
+            File::deleteDirectory($path);
+        }
+    }
+
+    private function dropServiceDatabase(): void
+    {
+        $connection = config('service.database_connection', 'service');
+        $cfg = Config::get('database.connections.' . $connection);
+
+        if (empty($cfg)) {
+            throw new \RuntimeException($connection . ' connection is not configured.');
+        }
+
+        $database = $cfg['database'] ?? null;
+        $defaultDatabase = Config::get('database.connections.' . Config::get('database.default') . '.database');
+
+        if (empty($database)) {
+            throw new \RuntimeException($connection . ' database name is not configured.');
+        }
+
+        if ($database === $defaultDatabase) {
+            throw new \RuntimeException('Refusing to drop the main application database.');
+        }
+
+        DB::purge($connection);
+
+        $host = $cfg['host'] ?? '127.0.0.1';
+        $port = (int) ($cfg['port'] ?? 3306);
+        $username = $cfg['username'] ?? 'root';
+        $password = $cfg['password'] ?? '';
+
+        $pdo = new \PDO("mysql:host={$host};port={$port}", $username, $password, [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+        ]);
+
+        $safeDb = str_replace('`', '``', $database);
+        $pdo->exec("DROP DATABASE IF EXISTS `{$safeDb}`");
     }
 
     private function clearCaches(): void

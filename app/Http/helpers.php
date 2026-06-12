@@ -147,3 +147,54 @@ if (! function_exists('str_ordinal')) {
         return number_format($number).$suffix;
     }
 }
+
+if (! function_exists('ssi_route')) {
+    function ssi_route($name, $parameters = [], $absolute = true)
+    {
+        $accessoryPrefix = trim(config('accessory.route_prefix', 'accessory'), '/');
+        $isAccessoryContext = request()->is($accessoryPrefix) || request()->is($accessoryPrefix.'/*');
+
+        return route(($isAccessoryContext ? 'accessory.' : '').$name, $parameters, $absolute);
+    }
+}
+
+if (! function_exists('ssi_url')) {
+    function ssi_url($path = '', $parameters = [], $secure = null)
+    {
+        $accessoryPrefix = trim(config('accessory.route_prefix', 'accessory'), '/');
+        $isAccessoryContext = request()->is($accessoryPrefix) || request()->is($accessoryPrefix.'/*');
+        $path = ltrim($path, '/');
+
+        return url(($isAccessoryContext ? $accessoryPrefix.'/' : '').$path, $parameters, $secure);
+    }
+}
+
+if (! function_exists('repair_is_service_context')) {
+    function repair_is_service_context()
+    {
+        $servicePrefix = trim(config('service.route_prefix', 'service'), '/');
+
+        return request()->is($servicePrefix) || request()->is($servicePrefix.'/*');
+    }
+}
+
+if (! function_exists('repair_route')) {
+    function repair_route($name, $parameters = [], $absolute = true)
+    {
+        $routeName = repair_is_service_context() && \Illuminate\Support\Facades\Route::has('service.'.$name)
+            ? 'service.'.$name
+            : $name;
+
+        return route($routeName, $parameters, $absolute);
+    }
+}
+
+if (! function_exists('repair_url')) {
+    function repair_url($path = '', $parameters = [], $secure = null)
+    {
+        $servicePrefix = trim(config('service.route_prefix', 'service'), '/');
+        $path = ltrim($path, '/');
+
+        return url((repair_is_service_context() ? $servicePrefix.'/' : '').$path, $parameters, $secure);
+    }
+}

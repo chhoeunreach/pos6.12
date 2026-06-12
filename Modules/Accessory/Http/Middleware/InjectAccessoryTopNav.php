@@ -37,6 +37,10 @@ class InjectAccessoryTopNav
 
     protected function shouldInject(Request $request, $response): bool
     {
+        if ($this->isModuleRoute($request)) {
+            return false;
+        }
+
         if (
             $request->ajax() ||
             ! auth()->check() ||
@@ -55,6 +59,34 @@ class InjectAccessoryTopNav
         $contentType = $response->headers->get('Content-Type', '');
 
         return $response->isSuccessful() && (empty($contentType) || str_contains($contentType, 'text/html'));
+    }
+
+    protected function isModuleRoute(Request $request): bool
+    {
+        $routeName = optional($request->route())->getName();
+        if (
+            is_string($routeName) &&
+            (str_starts_with($routeName, 'accessory.') || str_starts_with($routeName, 'service.'))
+        ) {
+            return true;
+        }
+
+        $modulePrefixes = array_filter([
+            trim(config('accessory.route_prefix', 'accessory'), '/'),
+            trim(config('service.route_prefix', 'service'), '/'),
+            'modules/accessory',
+            'modules/service',
+            'modules/accessoryV7',
+            'modules/serviceV7',
+        ]);
+
+        foreach ($modulePrefixes as $prefix) {
+            if ($request->is($prefix) || $request->is($prefix . '/*')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function topNavButton(): string

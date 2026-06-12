@@ -27,7 +27,7 @@ const draft=JSON.parse(localStorage.getItem(key)||'{}');if(draft.scan){scanEl.va
 function saveDraft(){localStorage.setItem(key,JSON.stringify({scan:scanEl.value,qty:qtyEl.value,t:Date.now()}));}
 scanEl.addEventListener('input',saveDraft);qtyEl.addEventListener('input',saveDraft);
 document.getElementById('save_btn').addEventListener('click',function(){
-  $.post('{{ route('ssi.count.enterprise.line',$session->id) }}',{_token:'{{ csrf_token() }}',sku:scanEl.value,imei:scanEl.value,actual_qty:qtyEl.value||1,system_qty:0,product_name:scanEl.value,variation_name:'',remark:'mobile_count'},function(resp){
+  $.post('{{ ssi_route('ssi.count.enterprise.line',$session->id) }}',{_token:'{{ csrf_token() }}',sku:scanEl.value,imei:scanEl.value,actual_qty:qtyEl.value||1,system_qty:0,product_name:scanEl.value,variation_name:'',remark:'mobile_count'},function(resp){
     if(resp.success){ if(window.Audio){new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA').play().catch(()=>{});} scanEl.value='';qtyEl.value='';saveDraft();scanEl.focus(); }
   });
 });

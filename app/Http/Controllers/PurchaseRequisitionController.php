@@ -437,6 +437,7 @@ class PurchaseRequisitionController extends Controller
 
             )
             ->groupBy('v.id')
+            ->limit(100)
             ->get();
 
             return view('purchase_requisition.product_list')->with(compact('products'));

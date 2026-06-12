@@ -213,9 +213,35 @@ class ContactUtil extends Util
 
     public function getContactQuery($business_id, $type, $contact_ids = [])
     {
-        $query = Contact::leftjoin('transactions AS t', 'contacts.id', '=', 't.contact_id')
-                    ->leftjoin('customer_groups AS cg', 'contacts.customer_group_id', '=', 'cg.id')
-                    ->where('contacts.business_id', $business_id);
+        $subSql = "SELECT
+            t.contact_id,
+            COALESCE(SUM(IF(t.type = 'opening_balance', final_total, 0)), 0) as opening_balance,
+            COALESCE(SUM(IF(t.type = 'opening_balance', paid.net_paid, 0)), 0) as opening_balance_paid,
+            MAX(t.transaction_date) as max_transaction_date,
+            COALESCE(SUM(IF(t.type = 'ledger_discount', final_total, 0)), 0) as total_ledger_discount,
+            COALESCE(SUM(IF(t.type = 'purchase', final_total, 0)), 0) as total_purchase,
+            COALESCE(SUM(IF(t.type = 'purchase', paid.total_paid, 0)), 0) as purchase_paid,
+            COALESCE(SUM(IF(t.type = 'purchase_return', final_total, 0)), 0) as total_purchase_return,
+            COALESCE(SUM(IF(t.type = 'purchase_return', paid.total_paid, 0)), 0) as purchase_return_paid,
+            COALESCE(SUM(IF(t.type = 'sell' AND t.status = 'final', final_total, 0)), 0) as total_invoice,
+            COALESCE(SUM(IF(t.type = 'sell' AND t.status = 'final', paid.net_paid, 0)), 0) as invoice_received,
+            COALESCE(SUM(IF(t.type = 'sell_return', final_total, 0)), 0) as total_sell_return,
+            COALESCE(SUM(IF(t.type = 'sell_return', paid.total_paid, 0)), 0) as sell_return_paid
+        FROM transactions t
+        LEFT JOIN (
+            SELECT transaction_id,
+                SUM(amount) as total_paid,
+                SUM(IF(is_return = 1, -1 * amount, amount)) as net_paid
+            FROM transaction_payments
+            GROUP BY transaction_id
+        ) paid ON paid.transaction_id = t.id
+        WHERE t.business_id = ?
+        GROUP BY t.contact_id";
+
+        $query = Contact::leftJoin(DB::raw("($subSql) as txn_agg"), 'txn_agg.contact_id', '=', 'contacts.id')
+                    ->leftJoin('customer_groups AS cg', 'contacts.customer_group_id', '=', 'cg.id')
+                    ->where('contacts.business_id', $business_id)
+                    ->addBinding($business_id, 'join');
 
         if ($type == 'supplier') {
             $query->onlySuppliers();
@@ -233,31 +259,29 @@ class ContactUtil extends Util
         $query->select([
             'contacts.*',
             'cg.name as customer_group',
-            DB::raw("SUM(IF(t.type = 'opening_balance', final_total, 0)) as opening_balance"),
-            DB::raw("SUM(IF(t.type = 'opening_balance', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as opening_balance_paid"),
-            DB::raw('MAX(DATE(transaction_date)) as max_transaction_date'),
-            DB::raw("SUM(IF(t.type = 'ledger_discount', final_total, 0)) as total_ledger_discount"),
-            't.transaction_date',
+            'txn_agg.opening_balance',
+            'txn_agg.opening_balance_paid',
+            'txn_agg.max_transaction_date',
+            'txn_agg.total_ledger_discount',
         ]);
 
         if (in_array($type, ['supplier', 'both'])) {
             $query->addSelect([
-                DB::raw("SUM(IF(t.type = 'purchase', final_total, 0)) as total_purchase"),
-                DB::raw("SUM(IF(t.type = 'purchase', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_paid"),
-                DB::raw("SUM(IF(t.type = 'purchase_return', final_total, 0)) as total_purchase_return"),
-                DB::raw("SUM(IF(t.type = 'purchase_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_return_paid"),
+                'txn_agg.total_purchase',
+                'txn_agg.purchase_paid',
+                'txn_agg.total_purchase_return',
+                'txn_agg.purchase_return_paid',
             ]);
         }
 
         if (in_array($type, ['customer', 'both'])) {
             $query->addSelect([
-                DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', final_total, 0)) as total_invoice"),
-                DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as invoice_received"),
-                DB::raw("SUM(IF(t.type = 'sell_return', final_total, 0)) as total_sell_return"),
-                DB::raw("SUM(IF(t.type = 'sell_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as sell_return_paid"),
+                'txn_agg.total_invoice',
+                'txn_agg.invoice_received',
+                'txn_agg.total_sell_return',
+                'txn_agg.sell_return_paid',
             ]);
         }
-        $query->groupBy('contacts.id');
 
         return $query;
     }

@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Contact;
-use App\Notifications\CustomerNotification;
-use App\Notifications\SupplierNotification;
+use App\Jobs\SendNotificationWithPdfJob;
 use App\NotificationTemplate;
 use App\Restaurant\Booking;
 use App\Transaction;
@@ -147,56 +146,63 @@ class NotificationController extends Controller
             $notification_type = $request->input('notification_type');
 
             $whatsapp_link = '';
-            if (array_key_exists($request->input('template_for'), $customer_notifications)) {
-                if (in_array('email', $notification_type)) {
-                    if (! empty($request->input('attach_pdf'))) {
-                        $data['pdf_name'] = 'INVOICE-'.$transaction->invoice_no.'.pdf';
-                        $data['pdf'] = $this->transactionUtil->getEmailAttachmentForGivenTransaction($business_id, $transaction_id, true);
-                    }
+            $template_for = $request->input('template_for');
 
-                    Notification::route('mail', $emails_array)
-                                    ->notify(new CustomerNotification($data));
+            if (! empty($request->input('attach_pdf')) || $template_for == 'purchase_order') {
+                $data['attach_pdf'] = $request->input('attach_pdf');
+                SendNotificationWithPdfJob::dispatch(
+                    $data,
+                    $emails_array,
+                    $template_for,
+                    $transaction_id,
+                    $business_id,
+                    $notification_type
+                );
+                $output = ['success' => 1, 'msg' => __('lang_v1.notification_will_be_sent')];
+            } else {
+                if (array_key_exists($template_for, $customer_notifications)) {
+                    if (in_array('email', $notification_type)) {
+                        Notification::route('mail', $emails_array)
+                                        ->notify(new \App\Notifications\CustomerNotification($data));
 
-                    if (! empty($transaction)) {
-                        $this->notificationUtil->activityLog($transaction, 'email_notification_sent', null, [], false);
+                        if (! empty($transaction)) {
+                            $this->notificationUtil->activityLog($transaction, 'email_notification_sent', null, [], false);
+                        }
                     }
-                }
-                if (in_array('sms', $notification_type)) {
-                    $this->notificationUtil->sendSms($data);
+                    if (in_array('sms', $notification_type)) {
+                        $this->notificationUtil->sendSms($data);
 
-                    if (! empty($transaction)) {
-                        $this->notificationUtil->activityLog($transaction, 'sms_notification_sent', null, [], false);
+                        if (! empty($transaction)) {
+                            $this->notificationUtil->activityLog($transaction, 'sms_notification_sent', null, [], false);
+                        }
                     }
-                }
-                if (in_array('whatsapp', $notification_type)) {
-                    $whatsapp_link = $this->notificationUtil->getWhatsappNotificationLink($data);
-                }
-            } elseif (array_key_exists($request->input('template_for'), $supplier_notifications)) {
-                if (in_array('email', $notification_type)) {
-                    if ($request->input('template_for') == 'purchase_order') {
-                        $data['pdf_name'] = 'PO-'.$transaction->ref_no.'.pdf';
-                        $data['pdf'] = $this->transactionUtil->getPurchaseOrderPdf($business_id, $transaction_id, true);
+                    if (in_array('whatsapp', $notification_type)) {
+                        $whatsapp_link = $this->notificationUtil->getWhatsappNotificationLink($data);
                     }
-                    Notification::route('mail', $emails_array)
-                                    ->notify(new SupplierNotification($data));
+                } elseif (array_key_exists($template_for, $supplier_notifications)) {
+                    if (in_array('email', $notification_type)) {
+                        Notification::route('mail', $emails_array)
+                                        ->notify(new \App\Notifications\SupplierNotification($data));
 
-                    if (! empty($transaction)) {
-                        $this->notificationUtil->activityLog($transaction, 'email_notification_sent', null, [], false);
+                        if (! empty($transaction)) {
+                            $this->notificationUtil->activityLog($transaction, 'email_notification_sent', null, [], false);
+                        }
                     }
-                }
-                if (in_array('sms', $notification_type)) {
-                    $this->notificationUtil->sendSms($data);
+                    if (in_array('sms', $notification_type)) {
+                        $this->notificationUtil->sendSms($data);
 
-                    if (! empty($transaction)) {
-                        $this->notificationUtil->activityLog($transaction, 'sms_notification_sent', null, [], false);
+                        if (! empty($transaction)) {
+                            $this->notificationUtil->activityLog($transaction, 'sms_notification_sent', null, [], false);
+                        }
+                    }
+                    if (in_array('whatsapp', $notification_type)) {
+                        $whatsapp_link = $this->notificationUtil->getWhatsappNotificationLink($data);
                     }
                 }
-                if (in_array('whatsapp', $notification_type)) {
-                    $whatsapp_link = $this->notificationUtil->getWhatsappNotificationLink($data);
-                }
+
+                $output = ['success' => 1, 'msg' => __('lang_v1.notification_sent_successfully')];
             }
 
-            $output = ['success' => 1, 'msg' => __('lang_v1.notification_sent_successfully')];
             if (! empty($whatsapp_link)) {
                 $output['whatsapp_link'] = $whatsapp_link;
             }

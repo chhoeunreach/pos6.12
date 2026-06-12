@@ -92,7 +92,7 @@
 		//Add products
 	    if($( "#search_product" ).length > 0){
 	        $( "#search_product" ).autocomplete({
-	            source: "/purchases/get_products?check_enable_stock=false",
+	            source: "{{ action([\Modules\Service\Http\Controllers\PurchaseController::class, 'getProducts'], ['check_enable_stock' => 'false']) }}",
 	            minLength: 2,
 	            response: function(event,ui) {
 	                if (ui.content.length == 1)
@@ -117,7 +117,7 @@
 	    	if (product_id) {
 	    		$.ajax({
 	    			method : 'GET',
-	    			url: '/products/get-combo-product-entry-row',
+	    			url: "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'getComboProductEntryRow']) }}",
 	    			dataType : "html",
 	    			data: { 'product_id' : product_id, 'variation_id' : variation_id},
 	    			success :function(result){

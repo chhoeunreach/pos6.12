@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendStockTransferPdfJob;
 use App\Services\TelegramBotService;
 use App\Services\WkhtmltopdfPdfService;
 use App\Transaction;
@@ -68,7 +69,7 @@ class StockTransferPdfController extends Controller
         return response()->download($pdfPath)->deleteFileAfterSend(false);
     }
 
-    public function sendToTelegram($id, Request $request, WkhtmltopdfPdfService $pdfService, TelegramBotService $telegram)
+    public function sendToTelegram($id, Request $request)
     {
         $chat_id = trim((string) $request->input('chat_id', ''));
         if ($chat_id === '') {
@@ -77,52 +78,13 @@ class StockTransferPdfController extends Controller
 
         $business_id = $request->session()->get('user.business_id');
 
-        $sell_transfer = Transaction::where('business_id', $business_id)
-            ->where('id', $id)
-            ->where('type', 'sell_transfer')
-            ->with(
-                'sell_lines',
-                'sell_lines.product',
-                'sell_lines.variations',
-                'sell_lines.lot_details',
-                'sell_lines.sub_unit',
-                'location',
-                'sell_lines.product.unit'
-            )
-            ->firstOrFail();
-
-        $purchase_transfer = Transaction::where('business_id', $business_id)
-            ->where('transfer_parent_id', $sell_transfer->id)
-            ->where('type', 'purchase_transfer')
-            ->with('location')
-            ->firstOrFail();
-
-        $location_details = ['sell' => $sell_transfer->location, 'purchase' => $purchase_transfer->location];
-
         $lot_n_exp_enabled = false;
         if ($request->session()->get('business.enable_lot_number') == 1 || $request->session()->get('business.enable_product_expiry') == 1) {
             $lot_n_exp_enabled = true;
         }
 
-        $tmpDir = storage_path('app/temp');
-        if (! File::exists($tmpDir)) {
-            File::makeDirectory($tmpDir, 0755, true);
-        }
+        SendStockTransferPdfJob::dispatch((int) $id, (int) $business_id, $chat_id, $lot_n_exp_enabled, $lot_n_exp_enabled);
 
-        $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . 'transfer_' . $sell_transfer->ref_no . '.pdf';
-
-        try {
-            $pdfService->saveViewToPdf('pdf.stock_transfer', compact('sell_transfer', 'location_details', 'lot_n_exp_enabled'), $pdfPath);
-            $telegram->sendDocumentToChat($chat_id, $pdfPath, 'វិក្កយបត្រ', basename($pdfPath));
-
-            return ['success' => true];
-        } catch (\Exception $e) {
-            Log::error('wkhtmltopdf/Telegram error: ' . $e->getMessage());
-            return ['success' => false, 'msg' => $e->getMessage()];
-        } finally {
-            if (File::exists($pdfPath)) {
-                File::delete($pdfPath);
-            }
-        }
+        return ['success' => true, 'msg' => 'PDF generation and Telegram send queued.'];
     }
 }

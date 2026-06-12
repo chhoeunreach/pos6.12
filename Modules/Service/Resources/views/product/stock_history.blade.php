@@ -56,12 +56,15 @@
 
 @section('javascript')
    <script type="text/javascript">
+        var listNoVariationUrl = "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'getProductsWithoutVariations']) }}";
+        var productStockHistoryUrl = "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'productStockHistory'], ['id' => '__id__']) }}";
+
         $(document).ready( function(){
             load_stock_history($('#variation_id').val(), $('#location_id').val());
 
             $('#product_id').select2({
                 ajax: {
-                    url: '/products/list-no-variation',
+                    url: listNoVariationUrl,
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
@@ -81,14 +84,14 @@
                 },
             }).on('select2:select', function (e) {
                 var data = e.params.data;
-                window.location.href = "{{url('/')}}/products/stock-history/" + data.id
+                window.location.href = productStockHistoryUrl.replace('__id__', data.id)
             });
         });
 
        function load_stock_history(variation_id, location_id) {
             $('#product_stock_history').fadeOut();
             $.ajax({
-                url: '/products/stock-history/' + variation_id + "?location_id=" + location_id,
+                url: productStockHistoryUrl.replace('__id__', variation_id) + "?location_id=" + location_id,
                 dataType: 'html',
                 success: function(result) {
                     $('#product_stock_history')

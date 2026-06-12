@@ -459,6 +459,7 @@ return [
     'mobile_number' => 'Mobile Number',
     'send' => 'Send',
     'notification_sent_successfully' => 'Notification sent successfully',
+    'notification_will_be_sent' => 'Notification will be sent in the background. Check notification logs for status.',
     'payment_received_notification' => 'Send Payment Received Notification',
     'send_payment_reminder' => 'Send Payment Remider',
     'new_order_notification' => 'New Order Notification',

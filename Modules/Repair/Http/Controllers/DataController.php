@@ -191,7 +191,9 @@ class DataController extends Controller
     {
         $business_id = session()->get('user.business_id');
         $module_util = new ModuleUtil();
-        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+        $repair = \Module::has('Repair') ? \Module::find('Repair') : null;
+        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module')
+            || (!empty($repair) && $repair->isEnabled());
 
         if ($is_repair_enabled && (! is_null($params['sub_type']) && $params['sub_type'] == 'repair')) {
             $repairUtil = new RepairUtil();

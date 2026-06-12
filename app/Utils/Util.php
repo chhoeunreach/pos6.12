@@ -1289,19 +1289,27 @@ class Util
      */
     public function getContactDue($contact_id, $business_id = null)
     {
-        // aad type sell_return for to calculate total_sell_return 
+        $payment_totals = DB::table('transaction_payments')
+            ->select(
+                'transaction_id',
+                DB::raw('SUM(amount) as total_amount'),
+                DB::raw("SUM(IF(is_return = 1, -1*amount, amount)) as net_amount")
+            )
+            ->groupBy('transaction_id');
+
         $query = Contact::where('contacts.id', $contact_id)
             ->join('transactions AS t', 'contacts.id', '=', 't.contact_id')
+            ->leftJoinSub($payment_totals, 'tp', 'tp.transaction_id', '=', 't.id')
             ->whereIn('t.type', ['sell', 'opening_balance', 'purchase', 'sell_return'])
             ->select(
                 DB::raw("SUM(IF(t.status = 'final' AND t.type = 'sell', final_total, 0)) as total_invoice"),
                 DB::raw("SUM(IF(t.type = 'purchase', final_total, 0)) as total_purchase"),
-                DB::raw("SUM(IF(t.status = 'final' AND t.type = 'sell', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as total_paid"),
-                DB::raw("SUM(IF(t.type = 'purchase', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_paid"),
-                DB::raw("SUM(IF(t.type = 'sell_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as sell_return_paid"),
+                DB::raw("SUM(IF(t.status = 'final' AND t.type = 'sell', COALESCE(tp.net_amount, 0), 0)) as total_paid"),
+                DB::raw("SUM(IF(t.type = 'purchase', COALESCE(tp.total_amount, 0), 0)) as purchase_paid"),
+                DB::raw("SUM(IF(t.type = 'sell_return', COALESCE(tp.total_amount, 0), 0)) as sell_return_paid"),
                 DB::raw("SUM(IF(t.type = 'opening_balance', final_total, 0)) as opening_balance"),
                 DB::raw("SUM(IF(t.type = 'sell_return', final_total, 0)) as total_sell_return"),
-                DB::raw("SUM(IF(t.type = 'opening_balance', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as opening_balance_paid")
+                DB::raw("SUM(IF(t.type = 'opening_balance', COALESCE(tp.net_amount, 0), 0)) as opening_balance_paid")
             );
         if (! empty($business_id)) {
             $query->where('contacts.business_id', $business_id);

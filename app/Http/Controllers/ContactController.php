@@ -960,7 +960,7 @@ class ContactController extends Controller
             if (request()->session()->get('business.enable_rp') == 1) {
                 $contacts->addSelect('total_rp');
             }
-            $contacts = $contacts->get();
+            $contacts = $contacts->limit(50)->get();
 
             return json_encode($contacts);
         }
@@ -1603,10 +1603,11 @@ class ContactController extends Controller
         if (! empty(request()->input('contacts'))) {
             $query->whereIn('id', request()->input('contacts'));
         }
-        $contacts = $query->get();
+        $contacts = $query->limit(200)->get();
 
         $all_contacts = Contact::where('business_id', $business_id)
                         ->active()
+                        ->limit(200)
                         ->get();
 
         return view('contact.contact_map')

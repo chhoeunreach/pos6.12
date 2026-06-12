@@ -19,6 +19,7 @@ use Datatables;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Cache;
 
 class HomeController extends Controller
 {
@@ -79,12 +80,29 @@ class HomeController extends Controller
 
         $fy = $this->businessUtil->getCurrentFinancialYear($business_id);
 
-        $currency = Currency::where('id', request()->session()->get('business.currency_id'))->first();
-        //ensure start date starts from at least 30 days before to get sells last 30 days
+        $currency = session('currency');
+        $currency_code = data_get($currency, 'code', '');
         $least_30_days = \Carbon::parse($fy['start'])->subDays(30)->format('Y-m-d');
 
-        //get all sells
-        $sells_this_fy = $this->transactionUtil->getSellsCurrentFy($business_id, $least_30_days, $fy['end']);
+        $sells_this_fy = Cache::remember("sells_current_fy_{$business_id}", 300, function () use ($business_id, $least_30_days, $fy) {
+            return $this->transactionUtil->getSellsCurrentFy($business_id, $least_30_days, $fy['end']);
+        });
+
+        $sells_by_date = [];
+        $sells_by_date_location = [];
+        $sells_by_month = [];
+        $sells_by_month_location = [];
+        foreach ($sells_this_fy as $sell) {
+            $amount = (float) $sell->total_sells;
+            $date = $sell->date;
+            $month = $sell->yearmonth;
+            $location_id = $sell->location_id;
+
+            $sells_by_date[$date] = ($sells_by_date[$date] ?? 0) + $amount;
+            $sells_by_date_location[$date][$location_id] = ($sells_by_date_location[$date][$location_id] ?? 0) + $amount;
+            $sells_by_month[$month] = ($sells_by_month[$month] ?? 0) + $amount;
+            $sells_by_month_location[$month][$location_id] = ($sells_by_month_location[$month][$location_id] ?? 0) + $amount;
+        }
 
         $all_locations = BusinessLocation::forDropdown($business_id)->toArray();
 
@@ -98,7 +116,7 @@ class HomeController extends Controller
 
             $labels[] = date('j M Y', strtotime($date));
 
-            $total_sell_on_date = $sells_this_fy->where('date', $date)->sum('total_sells');
+            $total_sell_on_date = $sells_by_date[$date] ?? 0;
 
             if (! empty($total_sell_on_date)) {
                 $all_sell_values[] = (float) $total_sell_on_date;
@@ -112,7 +130,7 @@ class HomeController extends Controller
         foreach ($all_locations as $loc_id => $loc_name) {
             $values = [];
             foreach ($dates as $date) {
-                $total_sell_on_date_location = $sells_this_fy->where('date', $date)->where('location_id', $loc_id)->sum('total_sells');
+                $total_sell_on_date_location = $sells_by_date_location[$date][$loc_id] ?? 0;
 
                 if (! empty($total_sell_on_date_location)) {
                     $values[] = (float) $total_sell_on_date_location;
@@ -129,7 +147,7 @@ class HomeController extends Controller
         $sells_chart_1->labels($labels)
                         ->options($this->__chartOptions(__(
                             'home.total_sells',
-                            ['currency' => $currency->code]
+                            ['currency' => $currency_code]
                             )));
 
         if (! empty($location_sells)) {
@@ -155,7 +173,7 @@ class HomeController extends Controller
                             ->format('M-Y');
             $date = strtotime('+1 month', $date);
 
-            $total_sell_in_month_year = $sells_this_fy->where('yearmonth', $month_year)->sum('total_sells');
+            $total_sell_in_month_year = $sells_by_month[$month_year] ?? 0;
 
             if (! empty($total_sell_in_month_year)) {
                 $values[] = (float) $total_sell_in_month_year;
@@ -169,7 +187,7 @@ class HomeController extends Controller
         foreach ($all_locations as $loc_id => $loc_name) {
             $values_data = [];
             foreach ($fy_months as $month) {
-                $total_sell_in_month_year_location = $sells_this_fy->where('yearmonth', $month)->where('location_id', $loc_id)->sum('total_sells');
+                $total_sell_in_month_year_location = $sells_by_month_location[$month][$loc_id] ?? 0;
 
                 if (! empty($total_sell_in_month_year_location)) {
                     $values_data[] = (float) $total_sell_in_month_year_location;
@@ -185,7 +203,7 @@ class HomeController extends Controller
         $sells_chart_2->labels($labels)
                     ->options($this->__chartOptions(__(
                         'home.total_sells',
-                        ['currency' => $currency->code]
+                        ['currency' => $currency_code]
                             )));
         if (! empty($fy_sells_by_location_data)) {
             foreach ($fy_sells_by_location_data as $location_sell) {
@@ -225,53 +243,54 @@ class HomeController extends Controller
             $end = request()->end;
             $location_id = request()->location_id;
             $business_id = request()->session()->get('user.business_id');
-
-            // get user id parameter
             $created_by = request()->user_id;
 
-            $purchase_details = $this->transactionUtil->getPurchaseTotals($business_id, $start, $end, $location_id, $created_by);
+            $cache_key = "dash_totals_{$business_id}_{$start}_{$end}_{$location_id}_{$created_by}";
 
-            $sell_details = $this->transactionUtil->getSellTotals($business_id, $start, $end, $location_id, $created_by);
+            return Cache::remember($cache_key, 120, function () use ($business_id, $start, $end, $location_id, $created_by) {
+                $purchase_details = $this->transactionUtil->getPurchaseTotals($business_id, $start, $end, $location_id, $created_by);
 
-            $total_ledger_discount = $this->transactionUtil->getTotalLedgerDiscount($business_id, $start, $end);
+                $sell_details = $this->transactionUtil->getSellTotals($business_id, $start, $end, $location_id, $created_by);
 
-            $purchase_details['purchase_due'] = $purchase_details['purchase_due'] - $total_ledger_discount['total_purchase_discount'];
+                $total_ledger_discount = $this->transactionUtil->getTotalLedgerDiscount($business_id, $start, $end);
 
-            $transaction_types = [
-                'purchase_return', 'sell_return', 'expense',
-            ];
+                $purchase_details['purchase_due'] = $purchase_details['purchase_due'] - $total_ledger_discount['total_purchase_discount'];
 
-            $transaction_totals = $this->transactionUtil->getTransactionTotals(
-                $business_id,
-                $transaction_types,
-                $start,
-                $end,
-                $location_id,
-                $created_by
-            );
+                $transaction_types = [
+                    'purchase_return', 'sell_return', 'expense',
+                ];
 
-            $total_purchase_inc_tax = ! empty($purchase_details['total_purchase_inc_tax']) ? $purchase_details['total_purchase_inc_tax'] : 0;
-            $total_purchase_return_inc_tax = $transaction_totals['total_purchase_return_inc_tax'];
+                $transaction_totals = $this->transactionUtil->getTransactionTotals(
+                    $business_id,
+                    $transaction_types,
+                    $start,
+                    $end,
+                    $location_id,
+                    $created_by
+                );
 
-            $output = $purchase_details;
-            $output['total_purchase'] = $total_purchase_inc_tax;
-            $output['total_purchase_return'] = $total_purchase_return_inc_tax;
-            $output['total_purchase_return_paid'] = $this->transactionUtil->getTotalPurchaseReturnPaid($business_id, $start, $end, $location_id);
+                $total_purchase_inc_tax = ! empty($purchase_details['total_purchase_inc_tax']) ? $purchase_details['total_purchase_inc_tax'] : 0;
+                $total_purchase_return_inc_tax = $transaction_totals['total_purchase_return_inc_tax'];
 
-            $total_sell_inc_tax = ! empty($sell_details['total_sell_inc_tax']) ? $sell_details['total_sell_inc_tax'] : 0;
-            $total_sell_return_inc_tax = ! empty($transaction_totals['total_sell_return_inc_tax']) ? $transaction_totals['total_sell_return_inc_tax'] : 0;
-            $output['total_sell_return_paid'] = $this->transactionUtil->getTotalSellReturnPaid($business_id, $start, $end, $location_id);
+                $output = $purchase_details;
+                $output['total_purchase'] = $total_purchase_inc_tax;
+                $output['total_purchase_return'] = $total_purchase_return_inc_tax;
+                $output['total_purchase_return_paid'] = $this->transactionUtil->getTotalPurchaseReturnPaid($business_id, $start, $end, $location_id);
 
-            $output['total_sell'] = $total_sell_inc_tax;
-            $output['total_sell_return'] = $total_sell_return_inc_tax;
+                $total_sell_inc_tax = ! empty($sell_details['total_sell_inc_tax']) ? $sell_details['total_sell_inc_tax'] : 0;
+                $total_sell_return_inc_tax = ! empty($transaction_totals['total_sell_return_inc_tax']) ? $transaction_totals['total_sell_return_inc_tax'] : 0;
+                $output['total_sell_return_paid'] = $this->transactionUtil->getTotalSellReturnPaid($business_id, $start, $end, $location_id);
 
-            $output['invoice_due'] = $sell_details['invoice_due'] - $total_ledger_discount['total_sell_discount'];
-            $output['total_expense'] = $transaction_totals['total_expense'];
+                $output['total_sell'] = $total_sell_inc_tax;
+                $output['total_sell_return'] = $total_sell_return_inc_tax;
 
-            //NET = TOTAL SALES - INVOICE DUE - EXPENSE
-            $output['net'] = $output['total_sell'] - $output['invoice_due'] - $output['total_expense'];
+                $output['invoice_due'] = $sell_details['invoice_due'] - $total_ledger_discount['total_sell_discount'];
+                $output['total_expense'] = $transaction_totals['total_expense'];
 
-            return $output;
+                $output['net'] = $output['total_sell'] - $output['invoice_due'] - $output['total_expense'];
+
+                return $output;
+            });
         }
     }
 

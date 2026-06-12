@@ -64,25 +64,25 @@ class DataController extends Controller
             $root = $menu->dropdown(
                 'Stock Inventory',
                 function ($sub) {
-                    $sub->url(route('ssi.dashboard'), 'Dashboard', ['icon' => 'fa fa-dashboard']);
-                    $sub->url(route('ssi.count.index'), 'Inventory Count', ['icon' => 'fa fa-list']);
-                    $sub->url(route('ssi.count.enterprise'), 'Enterprise Count', ['icon' => 'fa fa-tasks']);
-                    $sub->url(route('ssi.verification.index'), 'Verification Report', ['icon' => 'fa fa-check-square-o']);
-                    $sub->url(route('ssi.mismatch.index'), 'Mismatch Detector', ['icon' => 'fa fa-exclamation-triangle']);
-                    $sub->url(route('ssi.movement.index'), 'Movement History', ['icon' => 'fa fa-exchange']);
-                    $sub->url(route('ssi.imei.index'), 'IMEI Management', ['icon' => 'fa fa-mobile']);
-                    $sub->url(route('ssi.lot.index'), 'Lot Management', ['icon' => 'fa fa-tags']);
+                    $sub->url(ssi_route('ssi.dashboard'), 'Dashboard', ['icon' => 'fa fa-dashboard']);
+                    $sub->url(ssi_route('ssi.count.index'), 'Inventory Count', ['icon' => 'fa fa-list']);
+                    $sub->url(ssi_route('ssi.count.enterprise'), 'Enterprise Count', ['icon' => 'fa fa-tasks']);
+                    $sub->url(ssi_route('ssi.verification.index'), 'Verification Report', ['icon' => 'fa fa-check-square-o']);
+                    $sub->url(ssi_route('ssi.mismatch.index'), 'Mismatch Detector', ['icon' => 'fa fa-exclamation-triangle']);
+                    $sub->url(ssi_route('ssi.movement.index'), 'Movement History', ['icon' => 'fa fa-exchange']);
+                    $sub->url(ssi_route('ssi.imei.index'), 'IMEI Management', ['icon' => 'fa fa-mobile']);
+                    $sub->url(ssi_route('ssi.lot.index'), 'Lot Management', ['icon' => 'fa fa-tags']);
                     if (auth()->user()->can('stock_inventory.logs')) {
-                        $sub->url(route('ssi.fix_logs'), 'Fix Logs', ['icon' => 'fa fa-history']);
+                        $sub->url(ssi_route('ssi.fix_logs'), 'Fix Logs', ['icon' => 'fa fa-history']);
                     }
                     if (auth()->user()->can('stock_inventory.report')) {
-                        $sub->url(route('ssi.count.reports'), 'Inventory Reports', ['icon' => 'fa fa-bar-chart']);
+                        $sub->url(ssi_route('ssi.count.reports'), 'Inventory Reports', ['icon' => 'fa fa-bar-chart']);
                     }
                     if (auth()->user()->can('stock_inventory.settings')) {
-                        $sub->url(route('ssi.settings.index'), 'Settings', ['icon' => 'fa fa-cogs']);
+                        $sub->url(ssi_route('ssi.settings.index'), 'Settings', ['icon' => 'fa fa-cogs']);
                     }
                 },
-                ['icon' => 'fa fa-cubes', 'active' => request()->segment(1) === 'smart-stock-inventory']
+                ['icon' => 'fa fa-cubes', 'active' => request()->is('smart-stock-inventory/*') || request()->is(trim(config('accessory.route_prefix', 'accessory'), '/').'/smart-stock-inventory/*')]
             );
 
             $root->order(35);

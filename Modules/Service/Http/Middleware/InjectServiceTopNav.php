@@ -37,13 +37,7 @@ class InjectServiceTopNav
 
     protected function shouldInject(Request $request, $response): bool
     {
-        $routePrefix = trim(config('service.route_prefix', 'service'), '/');
-        if (
-            $request->is($routePrefix) ||
-            $request->is($routePrefix . '/*') ||
-            $request->is('modules/service/*') ||
-            $request->is('modules/serviceV7/*')
-        ) {
+        if ($this->isModuleRoute($request)) {
             return false;
         }
 
@@ -65,6 +59,34 @@ class InjectServiceTopNav
         $contentType = $response->headers->get('Content-Type', '');
 
         return $response->isSuccessful() && (empty($contentType) || str_contains($contentType, 'text/html'));
+    }
+
+    protected function isModuleRoute(Request $request): bool
+    {
+        $routeName = optional($request->route())->getName();
+        if (
+            is_string($routeName) &&
+            (str_starts_with($routeName, 'service.') || str_starts_with($routeName, 'accessory.'))
+        ) {
+            return true;
+        }
+
+        $modulePrefixes = array_filter([
+            trim(config('service.route_prefix', 'service'), '/'),
+            trim(config('accessory.route_prefix', 'accessory'), '/'),
+            'modules/service',
+            'modules/accessory',
+            'modules/serviceV7',
+            'modules/accessoryV7',
+        ]);
+
+        foreach ($modulePrefixes as $prefix) {
+            if ($request->is($prefix) || $request->is($prefix . '/*')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function topNavButton(): string

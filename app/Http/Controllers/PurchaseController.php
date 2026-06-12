@@ -916,6 +916,7 @@ class PurchaseController extends Controller
                             'contacts.balance'
                         )
                         ->onlySuppliers()
+                        ->limit(50)
                         ->get();
 
             return json_encode($suppliers);
@@ -981,7 +982,7 @@ class PurchaseController extends Controller
             if (! empty(request()->location_id)) {
                 $q->ForLocation(request()->location_id);
             }
-            $products = $q->get();
+            $products = $q->limit(50)->get();
 
             $products_array = [];
             foreach ($products as $product) {

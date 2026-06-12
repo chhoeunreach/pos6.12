@@ -244,7 +244,7 @@
       rules: {
           sku: {
               remote: {
-                  url: "/products/check_product_sku",
+                  url: "{{ action([\Modules\Service\Http\Controllers\ProductController::class, 'checkProductSku']) }}",
                   type: "post",
                   data: {
                       sku: function() {

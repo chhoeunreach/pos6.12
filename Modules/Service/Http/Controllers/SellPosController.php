@@ -158,8 +158,11 @@ class SellPosController extends Controller
     public function create()
     {
         $business_id = request()->session()->get('user.business_id');
+        $sub_type = request()->get('sub_type');
+        $is_repair_pos = $sub_type == 'repair';
+        $is_repair_enabled = $this->isServiceRepairModuleEnabled();
 
-        if (!(auth()->user()->can('superadmin') || auth()->user()->can('sell.create'))) {
+        if (!(auth()->user()->can('superadmin') || auth()->user()->can('sell.create') || ($is_repair_pos && $is_repair_enabled && auth()->user()->can('repair.create')))) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -169,8 +172,6 @@ class SellPosController extends Controller
         } elseif (!$this->moduleUtil->isQuotaAvailable('invoices', $business_id)) {
             return $this->moduleUtil->quotaExpiredResponse('invoices', $business_id, action([\Modules\Service\Http\Controllers\SellPosController::class, 'index']));
         }
-
-        $sub_type = null;
 
         //Check if there is a open register, if no then redirect to Create Register screen.
         if ($this->cashRegisterUtil->countOpenedRegister() == 0) {
@@ -249,6 +250,16 @@ class SellPosController extends Controller
 
         //pos screen view from module
         $pos_module_data = $this->getServiceModuleData($this->moduleUtil, 'get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
+        if ($is_repair_pos && $is_repair_enabled && empty($pos_module_data['Repair']) && class_exists(\Modules\Repair\Http\Controllers\DataController::class)) {
+            $repair_module_data = app(\Modules\Repair\Http\Controllers\DataController::class)->get_pos_screen_view([
+                'sub_type' => $sub_type,
+                'job_sheet_id' => request()->get('job_sheet_id'),
+            ]);
+
+            if (!empty($repair_module_data)) {
+                $pos_module_data['Repair'] = $repair_module_data;
+            }
+        }
         $invoice_layouts = InvoiceLayout::forDropdown($business_id);
 
         $invoice_schemes = InvoiceScheme::forDropdown($business_id);
@@ -308,6 +319,17 @@ class SellPosController extends Controller
         return view('service::sale_pos.display', compact('pos_settings'));
     }
 
+    private function isServiceRepairModuleEnabled()
+    {
+        if (in_array('Repair', config('service.excluded_main_modules', []), true) || !\Module::has('Repair')) {
+            return false;
+        }
+
+        $repair = \Module::find('Repair');
+
+        return $this->moduleUtil->isModuleInstalled('Repair') || (!empty($repair) && $repair->isEnabled());
+    }
+
     /**
      * Store a newly created resource in storage.
      *
@@ -316,7 +338,9 @@ class SellPosController extends Controller
      */
     public function store(Request $request)
     {
-        if (!auth()->user()->can('sell.create') && !auth()->user()->can('direct_sell.access') && !auth()->user()->can('so.create')) {
+        $is_repair_sale = $request->input('sub_type') == 'repair';
+
+        if (!auth()->user()->can('sell.create') && !auth()->user()->can('direct_sell.access') && !auth()->user()->can('so.create') && !($is_repair_sale && $this->isServiceRepairModuleEnabled() && auth()->user()->can('repair.create'))) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -604,7 +628,13 @@ class SellPosController extends Controller
                     $this->transactionUtil->updateSalesOrderStatus($transaction->sales_order_ids);
                 }
 
-                $this->getServiceModuleData($this->moduleUtil, 'after_sale_saved', ['transaction' => $transaction, 'input' => $input]);
+                $after_sale_saved_data = $this->getServiceModuleData($this->moduleUtil, 'after_sale_saved', ['transaction' => $transaction, 'input' => $input]);
+                if (($input['sub_type'] ?? null) == 'repair' && $this->isServiceRepairModuleEnabled() && empty($after_sale_saved_data['Repair']) && class_exists(\Modules\Repair\Http\Controllers\DataController::class)) {
+                    app(\Modules\Repair\Http\Controllers\DataController::class)->after_sale_saved([
+                        'transaction' => $transaction,
+                        'input' => $input,
+                    ]);
+                }
 
                 Media::uploadMedia($business_id, $transaction, $request, 'documents');
 

@@ -17,7 +17,8 @@ class ArchiveOldTransactions extends Command
     protected $signature = 'pos:archive-transactions
         {--months=12 : Archive transactions older than this many months}
         {--dry-run : Preview what would be archived without deleting}
-        {--force : Skip confirmation prompt}';
+        {--force : Skip confirmation prompt}
+        {--chunk=500 : Number of transactions to process per batch}';
 
     protected $description = 'Archive old transactions and related records to JSON files to reduce database size';
 
@@ -26,6 +27,7 @@ class ArchiveOldTransactions extends Command
         $months = (int) $this->option('months');
         $dryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
+        $chunkSize = (int) $this->option('chunk');
         $cutoff = Carbon::now()->subMonths($months);
 
         $this->info("Looking for transactions older than {$cutoff->toDateString()} ({$months} months)");
@@ -35,89 +37,108 @@ class ArchiveOldTransactions extends Command
             return 0;
         }
 
-        $tables = [
-            'transactions' => Transaction::class,
-            'transaction_sell_lines' => TransactionSellLine::class,
-            'purchase_lines' => PurchaseLine::class,
-            'transaction_payments' => null,
-        ];
-
         $archiveDir = storage_path('app/archives');
         if (! File::exists($archiveDir)) {
             File::makeDirectory($archiveDir, 0755, true);
         }
 
         $batchFile = $archiveDir . '/archive_' . now()->format('Ymd_His') . '.json';
-        $batchData = [];
+        $allBatchData = [];
         $totalArchived = 0;
+
+        // Count total for progress
+        $totalCount = Transaction::where('transaction_date', '<', $cutoff)
+            ->whereNotIn('type', ['opening_stock', 'opening_balance'])
+            ->count();
+
+        if ($totalCount === 0) {
+            $this->info('No old transactions found to archive.');
+            return 0;
+        }
+
+        $this->info("Found {$totalCount} transactions to archive (processing in chunks of {$chunkSize})");
+        $bar = $this->output->createProgressBar($totalCount);
+        $bar->start();
 
         DB::beginTransaction();
 
         try {
-            // 1. Find old transactions
-            $oldTransactions = Transaction::where('transaction_date', '<', $cutoff)
-                ->whereNotIn('type', ['opening_stock', 'opening_balance'])
-                ->get();
+            $hasMore = true;
+            $lastId = 0;
 
-            if ($oldTransactions->isEmpty()) {
-                $this->info('No old transactions found to archive.');
-                DB::rollBack();
-                return 0;
+            while ($hasMore) {
+                $oldTransactions = Transaction::where('transaction_date', '<', $cutoff)
+                    ->whereNotIn('type', ['opening_stock', 'opening_balance'])
+                    ->where('id', '>', $lastId)
+                    ->orderBy('id')
+                    ->limit($chunkSize)
+                    ->get();
+
+                if ($oldTransactions->isEmpty()) {
+                    $hasMore = false;
+                    break;
+                }
+
+                $lastId = $oldTransactions->last()->id;
+                $ids = $oldTransactions->pluck('id')->toArray();
+
+                $chunkData = [];
+                $chunkData['transactions'] = $oldTransactions->toArray();
+
+                $sellLines = TransactionSellLine::whereIn('transaction_id', $ids)->get();
+                $chunkData['transaction_sell_lines'] = $sellLines->toArray();
+
+                $purchaseLines = PurchaseLine::whereIn('transaction_id', $ids)->get();
+                $chunkData['purchase_lines'] = $purchaseLines->toArray();
+
+                $payments = [];
+                if (Schema::hasTable('transaction_payments')) {
+                    $payments = DB::table('transaction_payments')->whereIn('transaction_id', $ids)->get();
+                    $chunkData['transaction_payments'] = $payments->toArray();
+                }
+
+                $allBatchData[] = $chunkData;
+
+                if (! $dryRun) {
+                    $paymentIds = [];
+                    if (! empty($payments)) {
+                        $paymentIds = array_column($payments->toArray(), 'id');
+                        DB::table('transaction_payments')->whereIn('id', $paymentIds)->delete();
+                    }
+
+                    if (! $sellLines->isEmpty()) {
+                        TransactionSellLine::whereIn('transaction_id', $ids)->delete();
+                    }
+
+                    if (! $purchaseLines->isEmpty()) {
+                        PurchaseLine::whereIn('transaction_id', $ids)->delete();
+                    }
+
+                    Transaction::whereIn('id', $ids)->delete();
+                }
+
+                $count = count($ids) + $sellLines->count() + $purchaseLines->count() + count($payments);
+                $totalArchived += $count;
+                $bar->advance(count($ids));
             }
 
-            $ids = $oldTransactions->pluck('id')->toArray();
-            $this->info("Found {$oldTransactions->count()} transactions to archive");
+            $bar->finish();
+            $this->line('');
 
-            // 2. Collect related data
-            $batchData['transactions'] = $oldTransactions->toArray();
-            $totalArchived += count($batchData['transactions']);
+            $batchData = [
+                'archived_at' => now()->toDateTimeString(),
+                'cutoff_date' => $cutoff->toDateString(),
+                'chunks' => $allBatchData,
+            ];
 
-            $sellLines = TransactionSellLine::whereIn('transaction_id', $ids)->get();
-            $batchData['transaction_sell_lines'] = $sellLines->toArray();
-            $totalArchived += count($batchData['transaction_sell_lines']);
-
-            $purchaseLines = PurchaseLine::whereIn('transaction_id', $ids)->get();
-            $batchData['purchase_lines'] = $purchaseLines->toArray();
-            $totalArchived += count($batchData['purchase_lines']);
-
-            if (Schema::hasTable('transaction_payments')) {
-                $payments = DB::table('transaction_payments')->whereIn('transaction_id', $ids)->get();
-                $batchData['transaction_payments'] = $payments->toArray();
-                $totalArchived += count($batchData['transaction_payments']);
-            }
-
-            $batchData['archived_at'] = now()->toDateTimeString();
-            $batchData['cutoff_date'] = $cutoff->toDateString();
-
-            // 3. Write archive file
             File::put($batchFile, json_encode($batchData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
             if ($dryRun) {
-                $this->warn("[DRY RUN] Would archive {$totalArchived} records across " . count($batchData) . " tables");
+                $this->warn("[DRY RUN] Would archive {$totalArchived} records");
                 $this->warn("[DRY RUN] Archive file: {$batchFile}");
                 DB::rollBack();
                 return 0;
             }
-
-            // 4. Delete related records first (FK constraints)
-            if (! empty($batchData['transaction_payments'])) {
-                $paymentIds = array_column($batchData['transaction_payments'], 'id');
-                DB::table('transaction_payments')->whereIn('id', $paymentIds)->delete();
-                $this->info("Deleted " . count($paymentIds) . " transaction_payments");
-            }
-
-            if (! empty($batchData['transaction_sell_lines'])) {
-                TransactionSellLine::whereIn('transaction_id', $ids)->delete();
-                $this->info("Deleted " . count($batchData['transaction_sell_lines']) . " transaction_sell_lines");
-            }
-
-            if (! empty($batchData['purchase_lines'])) {
-                PurchaseLine::whereIn('transaction_id', $ids)->delete();
-                $this->info("Deleted " . count($batchData['purchase_lines']) . " purchase_lines");
-            }
-
-            Transaction::whereIn('id', $ids)->delete();
-            $this->info("Deleted " . count($batchData['transactions']) . " transactions");
 
             DB::commit();
 
@@ -125,7 +146,6 @@ class ArchiveOldTransactions extends Command
             Log::info('Archive completed', [
                 'file' => $batchFile,
                 'total_records' => $totalArchived,
-                'transaction_ids' => $ids,
             ]);
 
             return 0;

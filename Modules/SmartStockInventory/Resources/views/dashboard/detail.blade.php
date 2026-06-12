@@ -36,7 +36,7 @@
                     <div class="form-group">
                         <br>
                         <button type="button" class="btn btn-primary" id="ssi_apply_detail_filters">Apply</button>
-                        <a class="btn btn-default" href="{{ route('ssi.dashboard.detail', ['metric' => $metric, 'location_ids' => request('location_ids', [])]) }}">Clear</a>
+                        <a class="btn btn-default" href="{{ ssi_route('ssi.dashboard.detail', ['metric' => $metric, 'location_ids' => request('location_ids', [])]) }}">Clear</a>
                     </div>
                 </div>
             </form>
@@ -63,7 +63,7 @@
                             <td>{{ $row->stock_value ?? '' }}</td>
                             <td>
                                 <a class="btn btn-xs btn-info"
-                                   href="{{ route('ssi.movement.index', ['product' => $row->product ?? '', 'product_id' => $row->product_id ?? '', 'variation_id' => $row->variation_id ?? '', 'location_id' => $row->location_id ?? '']) }}">
+                                    href="{{ ssi_route('ssi.movement.index', ['product' => $row->product ?? '', 'product_id' => $row->product_id ?? '', 'variation_id' => $row->variation_id ?? '', 'location_id' => $row->location_id ?? '']) }}">
                                     View History
                                 </a>
                             </td>
@@ -80,8 +80,8 @@
                                         Actions <span class="caret"></span>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-right" role="menu">
-                                        <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0)) }}" target="_blank"><i class="fa fa-eye"></i> View</a></li>
-                                        <li><a href="{{ url('/stock-transfers/' . (int)($row->transfer_id ?? 0) . '/edit') }}" target="_blank"><i class="fa fa-pencil"></i> Edit</a></li>
+                                        <li><a href="{{ ssi_url('/stock-transfers/' . (int)($row->transfer_id ?? 0)) }}" target="_blank"><i class="fa fa-eye"></i> View</a></li>
+                                        <li><a href="{{ ssi_url('/stock-transfers/' . (int)($row->transfer_id ?? 0) . '/edit') }}" target="_blank"><i class="fa fa-pencil"></i> Edit</a></li>
                                         @if(auth()->user()->can('stock_transfer.delete') && !in_array((string)($row->status ?? ''), ['final', 'completed'], true))
                                             <li>
                                                 <a href="#" class="ssi-delete-transfer" data-transfer-id="{{ (int)($row->transfer_id ?? 0) }}">
@@ -95,9 +95,9 @@
                                         <li><a href="#" class="ssi-post-action" data-form-id="pt_pending_{{ $loop->index }}" data-confirm-msg="Mark this transfer as pending?"><i class="fa fa-clock-o text-info"></i> Set Pending</a></li>
                                     </ul>
                                 </div>
-                                <form id="pt_completed_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="completed"></form>
-                                <form id="pt_in_transit_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="in_transit"></form>
-                                <form id="pt_pending_{{ $loop->index }}" method="POST" action="{{ url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="pending"></form>
+                                <form id="pt_completed_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="completed"></form>
+                                <form id="pt_in_transit_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="in_transit"></form>
+                                <form id="pt_pending_{{ $loop->index }}" method="POST" action="{{ ssi_url('/stock-transfers/update-status/' . (int)($row->transfer_id ?? 0)) }}" style="display:none;">@csrf<input type="hidden" name="status" value="pending"></form>
                             </td>
                         @else
                             @foreach((array)$row as $v)<td>{{ $v }}</td>@endforeach

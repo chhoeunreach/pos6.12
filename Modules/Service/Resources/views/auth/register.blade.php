@@ -13,7 +13,7 @@
                 <h3 class="box-title text-center">Register and Get Started in minutes</h3>
             </div>
 
-            {!! Form::open(['url' => {{ route('service.business.postRegister') }}]) !!}
+            {!! Form::open(['url' => route('service.business.postRegister')]) !!}
             {!! Form::token(); !!}
 
                 <!-- /.box-header -->

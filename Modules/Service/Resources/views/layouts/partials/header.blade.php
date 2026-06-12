@@ -54,9 +54,14 @@
 
 
             <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-3">
-                <a href="{{ $main_products_url }}" class="btn btn-primary btn-sm lm-btn-back" data-service-skip-rewrite="true">
-                    <i class="fa fa-arrow-left"></i> Back to Main
-                </a>
+                @include('service::layouts.partials.header-action-button', [
+                    'href' => $main_products_url,
+                    'icon' => 'arrow-left',
+                    'label' => 'Back to Main',
+                    'attributes' => [
+                        'data-service-skip-rewrite' => 'true',
+                    ],
+                ])
 
                 @if (Module::has('Essentials'))
                     @includeIf('essentials::layouts.partials.header_part')
@@ -157,19 +162,11 @@
 
                 @if (in_array('pos_sale', $enabled_modules))
                     @can('sell.create')
-                        <a href="/{{ trim(config('service.route_prefix', 'service-pos'), '/') }}/pos/create"
-                            class="sm:tw-inline-flex tw-transition-all tw-duration-200 tw-gap-2 theme-btn-bg tw-py-1.5 tw-px-3 tw-rounded-lg tw-items-center tw-justify-center tw-text-sm tw-font-medium tw-ring-1 tw-ring-white/10 hover:tw-text-white tw-text-white">
-                            <svg aria-hidden="true" class="tw-size-5 tw-hidden md:tw-block" xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none"
-                                stroke-linecap="round" stroke-linejoin="round">
-                                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                                <path d="M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
-                                <path d="M14 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
-                                <path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
-                                <path d="M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
-                            </svg>
-                            @lang('sale.pos_sale')
-                        </a>
+                        @include('service::layouts.partials.header-action-button', [
+                            'href' => '/' . trim(config('service.route_prefix', 'service-pos'), '/') . '/pos/create',
+                            'icon' => 'pos',
+                            'label' => __('sale.pos_sale'),
+                        ])
                     @endcan
                 @endif
                 @if (!in_array('Repair', config('service.excluded_main_modules', []), true) && Module::has('Repair'))

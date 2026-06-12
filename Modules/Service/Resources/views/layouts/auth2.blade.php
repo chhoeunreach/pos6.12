@@ -42,7 +42,7 @@
 
                     <div class="tw-absolute tw-top-2 md:tw-top-5 tw-left-4 md:tw-left-8 tw-flex tw-items-center tw-gap-4"
                         style="text-align: left">
-                        <a href="{{ url('/') }}">
+                        <a href="{{ route('service.home') }}">
                             <div
                                 class="lg:tw-w-16 md:tw-h-16 tw-w-12 tw-h-12 tw-flex tw-items-center tw-justify-center tw-mx-auto tw-overflow-hidden tw-p-0.5 tw-mb-4">
                                 <img src="{{ asset('img/logo-small.png')}}" alt="lock" class="tw-object-fill" />
@@ -65,7 +65,7 @@
 
                     <div class="tw-absolute tw-top-5 md:tw-top-8 tw-right-5 md:tw-right-10 tw-flex tw-items-center tw-gap-4"
                         style="text-align: left">
-                        @if (!($request->segment(1) == 'business' && $request->segment(2) == 'register'))
+                        @if (!request()->routeIs('service.business.getRegister'))
                             <!-- Register Url -->
                             @if (config('constants.allow_registration'))
                             {{-- <span
@@ -85,7 +85,7 @@
                                 @endif
                             @endif
                         @endif
-                        @if ($request->segment(1) != 'login')
+                        @if (!request()->routeIs('service.login'))
                             <a class="tw-text-white tw-font-medium tw-text-sm md:tw-text-base hover:tw-text-white"
                                 href="{{ action([\Modules\Service\Http\Controllers\Auth\LoginController::class, 'login'])}}@if(!empty(request()->lang)){{'?lang='.request()->lang}}@endif">{{ __('business.sign_in') }}</a>
                         @endif

@@ -301,7 +301,12 @@ class BusinessController extends Controller
         }
 
         $business_id = request()->session()->get('user.business_id');
-        $business = Business::where('id', $business_id)->first();
+        $service_connection = config('service.database_connection', 'service');
+        $business = (new Business)
+            ->setConnection($service_connection)
+            ->newQuery()
+            ->where('id', $business_id)
+            ->firstOrFail();
 
         $currencies = $this->businessUtil->allCurrencies();
         $tax_details = TaxRate::forBusinessDropdown($business_id);
@@ -408,8 +413,8 @@ class BusinessController extends Controller
             }
 
             $business_details['enable_product_expiry'] = ! empty($request->input('enable_product_expiry')) && $request->input('enable_product_expiry') == 1 ? 1 : 0;
-            if ($business_details['on_product_expiry'] == 'keep_selling') {
-                $business_details['stop_selling_before'] = null;
+            if (($business_details['on_product_expiry'] ?? null) == 'keep_selling') {
+                $business_details['stop_selling_before'] = 0;
             }
 
             $business_details['stock_expiry_alert_days'] = ! empty($request->input('stock_expiry_alert_days')) ? $request->input('stock_expiry_alert_days') : 30;
@@ -440,7 +445,12 @@ class BusinessController extends Controller
             }
 
             $business_id = request()->session()->get('user.business_id');
-            $business = Business::where('id', $business_id)->first();
+            $service_connection = config('service.database_connection', 'service');
+            $business = (new Business)
+                ->setConnection($service_connection)
+                ->newQuery()
+                ->where('id', $business_id)
+                ->firstOrFail();
 
             //Update business settings
             if (! empty($business_details['logo'])) {
@@ -491,7 +501,10 @@ class BusinessController extends Controller
             $request->session()->put('business', $business);
 
             //Update Currency details
-            $currency = Currency::find($business->currency_id);
+            $currency = (new Currency)
+                ->setConnection($service_connection)
+                ->newQuery()
+                ->find($business->currency_id);
             $request->session()->put('currency', [
                 'id' => $currency->id,
                 'code' => $currency->code,

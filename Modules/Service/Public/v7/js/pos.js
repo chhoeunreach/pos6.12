@@ -52,7 +52,7 @@ function service_reload_all_products_for_selected_location() {
     $('input#suggestion_page').val(1);
     var location_id = $('input#location_id').val();
 
-    if (location_id != '' || location_id != undefined) {
+    if (location_id !== '' && location_id !== undefined && location_id !== null) {
         get_product_suggestion_list(null, null, location_id, null);
     }
     get_featured_products();
@@ -137,6 +137,7 @@ $(document).ready(function() {
             $('#types_of_service_id').change();
         }
 
+        service_reload_all_products_for_selected_location();
     });
 
     //get customer
@@ -1373,10 +1374,6 @@ $(document).ready(function() {
         device_model_id
     );
     
-    $('select#select_location_id').on('change', function(e) {
-        service_reload_all_products_for_selected_location();
-    });
-
 // Active filter is shown as a second line INSIDE the matching Category / Brand
     // button. The blade template already renders the row markup (hidden); this
     // function just toggles `.is-active` on it and writes the selected name in.

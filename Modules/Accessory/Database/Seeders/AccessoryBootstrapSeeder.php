@@ -46,7 +46,12 @@ class AccessoryBootstrapSeeder extends Seeder
                 'fy_start_month' => 1,
                 'accounting_method' => 'fifo',
                 'sell_price_tax' => 'includes',
+                'enable_product_expiry' => 0,
+                'expiry_type' => 'add_expiry',
+                'on_product_expiry' => 'keep_selling',
+                'stop_selling_before' => 0,
                 'enable_tooltip' => 1,
+                'weighing_scale_setting' => '{}',
                 'enabled_modules' => json_encode([
                     'purchases',
                     'add_sale',
@@ -143,6 +148,7 @@ class AccessoryBootstrapSeeder extends Seeder
                 'contact_id' => 'CO0001',
                 'mobile' => '',
                 'is_default' => 1,
+                'created_by' => 1,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]

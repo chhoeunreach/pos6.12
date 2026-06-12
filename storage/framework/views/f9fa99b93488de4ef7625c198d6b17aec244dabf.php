@@ -5,7 +5,7 @@
 
     
 
-    <a href="<?php echo e(route('home'), false); ?>"
+    <a href="<?php echo e(repair_is_service_context() ? route('service.home') : route('home'), false); ?>"
         class="tw-flex tw-items-center tw-justify-center tw-w-full tw-border-r tw-h-15 theme-logo-bg tw-shrink-0 tw-border-primary-500/30">
         <p class="tw-text-lg tw-font-medium tw-text-white side-bar-heading tw-text-center">
             <?php echo e(Session::get('business.name'), false); ?> <span class="tw-inline-block tw-w-3 tw-h-3 tw-bg-green-400 tw-rounded-full" title="Online"></span>
@@ -35,7 +35,41 @@
     </div>
 
     <!-- Sidebar Menu -->
-    <?php echo Menu::render('admin-sidebar-menu', 'adminltecustom'); ?>
+    <?php
+        $menuHtml = Menu::render('admin-sidebar-menu', 'adminltecustom');
+
+        if (repair_is_service_context()) {
+            $baseUrl = url('/');
+            $servicePrefix = trim(config('service.route_prefix', 'service'), '/');
+            $serviceUrl = url($servicePrefix);
+
+            $menuHtml = preg_replace_callback('/href="([^"]*)"/', function ($matches) use ($baseUrl, $serviceUrl, $servicePrefix) {
+                $href = $matches[1];
+
+                if (
+                    empty($href) ||
+                    $href === '#' ||
+                    str_starts_with($href, 'javascript:') ||
+                    str_starts_with($href, 'mailto:') ||
+                    str_starts_with($href, 'tel:') ||
+                    str_starts_with($href, $serviceUrl)
+                ) {
+                    return $matches[0];
+                }
+
+                if (str_starts_with($href, $baseUrl)) {
+                    $path = ltrim(substr($href, strlen($baseUrl)), '/');
+
+                    if ($path !== '' && ! str_starts_with($path, $servicePrefix)) {
+                        return 'href="' . $serviceUrl . '/' . $path . '"';
+                    }
+                }
+
+                return $matches[0];
+            }, $menuHtml);
+        }
+    ?>
+    <?php echo $menuHtml; ?>
 
 
     <!-- No results message -->

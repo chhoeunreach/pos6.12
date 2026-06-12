@@ -92,6 +92,7 @@
             '/storage',
             '/vendor',
             '/AdminLTE',
+            '/modules',
             '/Modules',
             '/favicon',
         ];
@@ -192,6 +193,13 @@
     var moment_time_format = "{{ $moment_time_format }}";
 
     var app_locale = "{{ session()->get('user.language', config('app.locale')) }}";
+    @php
+        $tiny_locale = session()->get('user.language', config('app.locale'));
+        $tiny_locale_file = 'js/lang/tiny/' . $tiny_locale . '.js';
+    @endphp
+    var tinymce_language = "{{ $tiny_locale !== 'en' && file_exists(public_path($tiny_locale_file)) ? $tiny_locale : '' }}";
+    var tinymce_language_url = "{{ $tiny_locale !== 'en' && file_exists(public_path($tiny_locale_file)) ? asset($tiny_locale_file) : '' }}";
+    var tinymce_base_url = "{{ asset('js') }}";
 
     var non_utf8_languages = [
         @foreach (config('constants.non_utf8_languages') as $const)
@@ -261,8 +269,36 @@
         return str;
     };
     window.__highlight = window.__highlight || function() {};
+    window.__disable_submit_button = window.__disable_submit_button || function(element) {
+        element.attr('disabled', true);
+    };
+    window.__fa_awesome = window.__fa_awesome || function($class) {
+        return '<i class="fa ' + $class + '"></i>';
+    };
+    window.__page_leave_confirmation = window.__page_leave_confirmation || function(form) {
+        var form_obj = $(form);
+        var orig_form_data = form_obj.serialize();
+
+        setTimeout(function() {
+            orig_form_data = form_obj.serialize();
+        }, 1000);
+
+        $(document).on('submit', 'form', function() {
+            window.onbeforeunload = null;
+        });
+
+        window.onbeforeunload = function() {
+            if (form_obj.serialize() != orig_form_data) {
+                return LANG.sure;
+            }
+        };
+    };
+    var __page_leave_confirmation = window.__page_leave_confirmation;
 </script>
-<script src="{{ asset('modules/service/v7/js/common.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
+@php
+    $service_common_js = module_path('Service', 'Public/v7/js/common.js');
+@endphp
+<script src="{{ asset('modules/service/v7/js/common.js?v=' . $asset_v . '-service-jsfix-20260609&m=' . (file_exists($service_common_js) ? filemtime($service_common_js) : time())) }}"></script>
 <script src="{{ asset('modules/service/v7/js/app.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
 <script src="{{ asset('modules/service/v7/js/help-tour.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>
 <script src="{{ asset('modules/service/v7/js/documents_and_note.js?v=' . $asset_v . '-service-jsfix-20260609') }}"></script>

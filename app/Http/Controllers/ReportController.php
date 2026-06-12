@@ -207,21 +207,30 @@ class ReportController extends Controller
 
         //Return the details in ajax call
         if ($request->ajax()) {
+            $payment_totals = DB::table('transaction_payments')
+                ->select(
+                    'transaction_id',
+                    DB::raw('SUM(amount) as total_amount'),
+                    DB::raw("SUM(IF(is_return = 1, -1*amount, amount)) as net_amount")
+                )
+                ->groupBy('transaction_id');
+
             $contacts = Contact::where('contacts.business_id', $business_id)
                 ->join('transactions AS t', 'contacts.id', '=', 't.contact_id')
+                ->leftJoinSub($payment_totals, 'tp', 'tp.transaction_id', '=', 't.id')
                 ->active()
                 ->groupBy('contacts.id')
                 ->select(
                     DB::raw("SUM(IF(t.type = 'purchase', final_total, 0)) as total_purchase"),
                     DB::raw("SUM(IF(t.type = 'purchase_return', final_total, 0)) as total_purchase_return"),
                     DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', final_total, 0)) as total_invoice"),
-                    DB::raw("SUM(IF(t.type = 'purchase', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_paid"),
-                    DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as invoice_received"),
-                    DB::raw("SUM(IF(t.type = 'sell_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as sell_return_paid"),
-                    DB::raw("SUM(IF(t.type = 'purchase_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_return_received"),
+                    DB::raw("SUM(IF(t.type = 'purchase', COALESCE(tp.total_amount, 0), 0)) as purchase_paid"),
+                    DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', COALESCE(tp.net_amount, 0), 0)) as invoice_received"),
+                    DB::raw("SUM(IF(t.type = 'sell_return', COALESCE(tp.total_amount, 0), 0)) as sell_return_paid"),
+                    DB::raw("SUM(IF(t.type = 'purchase_return', COALESCE(tp.total_amount, 0), 0)) as purchase_return_received"),
                     DB::raw("SUM(IF(t.type = 'sell_return', final_total, 0)) as total_sell_return"),
                     DB::raw("SUM(IF(t.type = 'opening_balance', final_total, 0)) as opening_balance"),
-                    DB::raw("SUM(IF(t.type = 'opening_balance', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as opening_balance_paid"),
+                    DB::raw("SUM(IF(t.type = 'opening_balance', COALESCE(tp.net_amount, 0), 0)) as opening_balance_paid"),
                     DB::raw("SUM(IF(t.type = 'ledger_discount' AND sub_type='sell_discount', final_total, 0)) as total_ledger_discount_sell"),
                     DB::raw("SUM(IF(t.type = 'ledger_discount' AND sub_type='purchase_discount', final_total, 0)) as total_ledger_discount_purchase"),
                     'contacts.supplier_business_name',
@@ -651,10 +660,11 @@ class ReportController extends Controller
      */
     public function getStockDetails(Request $request)
     {
-        //Return the details in ajax call
         if ($request->ajax()) {
             $business_id = $request->session()->get('user.business_id');
             $product_id = $request->input('product_id');
+            $location_id = $request->input('location_id');
+
             $query = Product::leftjoin('units as u', 'products.unit_id', '=', 'u.id')
                 ->join('variations as v', 'products.id', '=', 'v.product_id')
                 ->join('product_variations as pv', 'pv.id', '=', 'v.product_variation_id')
@@ -664,19 +674,43 @@ class ReportController extends Controller
                 ->whereNull('v.deleted_at');
 
             $permitted_locations = auth()->user()->permitted_locations();
-            $location_filter = '';
             if ($permitted_locations != 'all') {
                 $query->whereIn('vld.location_id', $permitted_locations);
-                $locations_imploded = implode(', ', $permitted_locations);
-                $location_filter .= "AND transactions.location_id IN ($locations_imploded) ";
+            }
+            if (! empty($location_id)) {
+                $query->where('vld.location_id', $location_id);
             }
 
-            if (! empty($request->input('location_id'))) {
-                $location_id = $request->input('location_id');
+            $perfStatsQuery = DB::table('transactions')
+                ->select(
+                    DB::raw('COALESCE(TSL.variation_id, SAL.variation_id) as variation_id'),
+                    DB::raw("SUM(CASE WHEN transactions.type = 'sell' THEN TSL.quantity - TSL.quantity_returned ELSE 0 END) as total_sold"),
+                    DB::raw("SUM(CASE WHEN transactions.type = 'sell_transfer' THEN TSL.quantity ELSE 0 END) as total_transfered"),
+                    DB::raw("SUM(CASE WHEN transactions.type = 'stock_adjustment' THEN SAL.quantity ELSE 0 END) as total_adjusted")
+                )
+                ->leftJoin('transaction_sell_lines AS TSL', function ($j) {
+                    $j->on('transactions.id', '=', 'TSL.transaction_id')
+                      ->whereIn('transactions.type', ['sell', 'sell_transfer']);
+                })
+                ->leftJoin('stock_adjustment_lines AS SAL', function ($j) {
+                    $j->on('transactions.id', '=', 'SAL.transaction_id')
+                      ->where('transactions.type', '=', 'stock_adjustment');
+                })
+                ->where(function ($q) {
+                    $q->where(function ($q2) {
+                        $q2->where('transactions.status', 'final')
+                           ->whereIn('transactions.type', ['sell', 'sell_transfer']);
+                    })->orWhere(function ($q2) {
+                        $q2->where('transactions.status', 'received')
+                           ->where('transactions.type', 'stock_adjustment');
+                    });
+                });
 
-                $query->where('vld.location_id', $location_id);
-
-                $location_filter .= "AND transactions.location_id=$location_id";
+            if ($permitted_locations != 'all') {
+                $perfStatsQuery->whereIn('transactions.location_id', $permitted_locations);
+            }
+            if (! empty($location_id)) {
+                $perfStatsQuery->where('transactions.location_id', $location_id);
             }
 
             $product_details = $query->select(
@@ -687,26 +721,13 @@ class ReportController extends Controller
                 'v.sub_sku as sub_sku',
                 'v.sell_price_inc_tax',
                 DB::raw('SUM(vld.qty_available) as stock'),
-                DB::raw("(SELECT SUM(IF(transactions.type='sell', TSL.quantity - TSL.quantity_returned, -1* TPL.quantity) ) FROM transactions 
-                        LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-
-                        LEFT JOIN purchase_lines AS TPL ON transactions.id=TPL.transaction_id
-
-                        WHERE transactions.status='final' AND transactions.type='sell' $location_filter 
-                        AND (TSL.variation_id=v.id OR TPL.variation_id=v.id)) as total_sold"),
-                DB::raw("(SELECT SUM(IF(transactions.type='sell_transfer', TSL.quantity, 0) ) FROM transactions 
-                        LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-                        WHERE transactions.status='final' AND transactions.type='sell_transfer' $location_filter 
-                        AND (TSL.variation_id=v.id)) as total_transfered"),
-                DB::raw("(SELECT SUM(IF(transactions.type='stock_adjustment', SAL.quantity, 0) ) FROM transactions 
-                        LEFT JOIN stock_adjustment_lines AS SAL ON transactions.id=SAL.transaction_id
-                        WHERE transactions.status='received' AND transactions.type='stock_adjustment' $location_filter 
-                        AND (SAL.variation_id=v.id)) as total_adjusted")
-                // DB::raw("(SELECT SUM(quantity) FROM transaction_sell_lines LEFT JOIN transactions ON transaction_sell_lines.transaction_id=transactions.id WHERE transactions.status='final' $location_filter AND
-                //     transaction_sell_lines.variation_id=v.id) as total_sold")
+                DB::raw('COALESCE(perf_stats.total_sold, 0) as total_sold'),
+                DB::raw('COALESCE(perf_stats.total_transfered, 0) as total_transfered'),
+                DB::raw('COALESCE(perf_stats.total_adjusted, 0) as total_adjusted')
             )
-                        ->groupBy('v.id')
-                        ->get();
+                ->leftJoinSub($perfStatsQuery, 'perf_stats', 'perf_stats.variation_id', '=', 'v.id')
+                ->groupBy('v.id')
+                ->get();
 
             return view('report.stock_details')
                         ->with(compact('product_details'));
@@ -2206,22 +2227,15 @@ class ReportController extends Controller
                     ->join('transactions as t', 'pl.transaction_id', '=', 't.id');
 
             $permitted_locations = auth()->user()->permitted_locations();
-            $location_filter = 'WHERE ';
 
             if ($permitted_locations != 'all') {
                 $query->whereIn('t.location_id', $permitted_locations);
-
-                $locations_imploded = implode(', ', $permitted_locations);
-                $location_filter = " LEFT JOIN transactions as t2 on pls.transaction_id=t2.id WHERE t2.location_id IN ($locations_imploded) AND ";
             }
 
-            if (! empty($request->input('location_id'))) {
-                $location_id = $request->input('location_id');
-                $query->where('t.location_id', $location_id)
-                    //If filter by location then hide products not available in that location
-                    ->ForLocation($location_id);
-
-                $location_filter = "LEFT JOIN transactions as t2 on pls.transaction_id=t2.id WHERE t2.location_id=$location_id AND ";
+            $input_location_id = $request->input('location_id');
+            if (! empty($input_location_id)) {
+                $query->where('t.location_id', $input_location_id)
+                    ->ForLocation($input_location_id);
             }
 
             if (! empty($request->input('category_id'))) {
@@ -2245,27 +2259,36 @@ class ReportController extends Controller
                 $query->where('t.type', 'production_purchase');
             }
 
+            $stockJoin = '';
+            $stockWhere = [];
+            $stockBindings = [];
+
+            if ($permitted_locations != 'all') {
+                $stockJoin = ' LEFT JOIN transactions as t2 on pls.transaction_id=t2.id';
+                $placeholders = implode(', ', array_fill(0, count($permitted_locations), '?'));
+                $stockWhere[] = "t2.location_id IN ($placeholders)";
+                $stockBindings = array_merge($stockBindings, array_map('intval', $permitted_locations));
+            }
+            if (! empty($input_location_id)) {
+                $stockJoin = ' LEFT JOIN transactions as t2 on pls.transaction_id=t2.id';
+                $stockWhere[] = 't2.location_id = ?';
+                $stockBindings[] = (int) $input_location_id;
+            }
+
+            $stockWhereSql = ! empty($stockWhere) ? 'WHERE ' . implode(' AND ', $stockWhere) . ' AND ' : 'WHERE ';
+
             $products = $query->select(
                 'products.name as product',
                 'v.name as variation_name',
                 'sub_sku',
                 'pl.lot_number',
                 'pl.exp_date as exp_date',
-                DB::raw("( COALESCE((SELECT SUM(quantity - quantity_returned) from purchase_lines as pls $location_filter variation_id = v.id AND lot_number = pl.lot_number), 0) - 
-                    SUM(COALESCE((tspl.quantity - tspl.qty_returned), 0))) as stock"),
-                // DB::raw("(SELECT SUM(IF(transactions.type='sell', TSL.quantity, -1* TPL.quantity) ) FROM transactions
-                //         LEFT JOIN transaction_sell_lines AS TSL ON transactions.id=TSL.transaction_id
-
-                //         LEFT JOIN purchase_lines AS TPL ON transactions.id=TPL.transaction_id
-
-                //         WHERE transactions.status='final' AND transactions.type IN ('sell', 'sell_return') $location_filter
-                //         AND (TSL.product_id=products.id OR TPL.product_id=products.id)) as total_sold"),
-
                 DB::raw('COALESCE(SUM(IF(tspl.sell_line_id IS NULL, 0, (tspl.quantity - tspl.qty_returned)) ), 0) as total_sold'),
                 DB::raw('COALESCE(SUM(IF(tspl.stock_adjustment_line_id IS NULL, 0, tspl.quantity ) ), 0) as total_adjusted'),
                 'products.type',
                 'units.short_name as unit'
             )
+                ->selectRaw("(COALESCE((SELECT SUM(quantity - quantity_returned) from purchase_lines as pls$stockJoin $stockWhereSql variation_id = v.id AND lot_number = pl.lot_number), 0) - SUM(COALESCE((tspl.quantity - tspl.qty_returned), 0))) as stock", $stockBindings)
             ->whereNotNull('pl.lot_number')
             ->groupBy('v.id')
             ->groupBy('pl.lot_number');
@@ -2540,12 +2563,7 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
         if ($request->ajax()) {
             $supplier_id = $request->get('supplier_id', null);
-            $contact_filter1 = ! empty($supplier_id) ? "AND t.contact_id=$supplier_id" : '';
-            $contact_filter2 = ! empty($supplier_id) ? "AND transactions.contact_id=$supplier_id" : '';
-
             $location_id = $request->get('location_id', null);
-
-            $parent_payment_query_part = empty($location_id) ? 'AND transaction_payments.parent_id IS NULL' : '';
 
             $query = TransactionPayment::leftjoin('transactions as t', function ($join) use ($business_id) {
                 $join->on('transaction_payments.transaction_id', '=', 't.id')
@@ -2553,9 +2571,22 @@ class ReportController extends Controller
                     ->whereIn('t.type', ['purchase', 'opening_balance']);
             })
                 ->where('transaction_payments.business_id', $business_id)
-                ->where(function ($q) use ($business_id, $contact_filter1, $contact_filter2, $parent_payment_query_part) {
-                    $q->whereRaw("(transaction_payments.transaction_id IS NOT NULL AND t.type IN ('purchase', 'opening_balance')  $parent_payment_query_part $contact_filter1)")
-                        ->orWhereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('purchase', 'opening_balance') AND transactions.business_id = $business_id AND tp.parent_id=transaction_payments.id $contact_filter2)");
+                ->where(function ($q) use ($business_id, $supplier_id, $location_id) {
+                    $q->where(function ($q2) use ($supplier_id, $location_id) {
+                        $q2->whereNotNull('transaction_payments.transaction_id');
+                        $q2->whereIn('t.type', ['purchase', 'opening_balance']);
+                        if (empty($location_id)) {
+                            $q2->whereNull('transaction_payments.parent_id');
+                        }
+                        if (! empty($supplier_id)) {
+                            $q2->where('t.contact_id', $supplier_id);
+                        }
+                    })->orWhere(function ($q2) use ($business_id, $supplier_id) {
+                        $q2->whereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('purchase', 'opening_balance') AND transactions.business_id = ? AND tp.parent_id=transaction_payments.id)", [$business_id]);
+                        if (! empty($supplier_id)) {
+                            $q2->whereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('purchase', 'opening_balance') AND transactions.business_id = ? AND tp.parent_id=transaction_payments.id AND transactions.contact_id = ?)", [$business_id, $supplier_id]);
+                        }
+                    });
                 })
 
                 ->select(
@@ -2664,11 +2695,7 @@ class ReportController extends Controller
         $payment_types = $this->transactionUtil->payment_types(null, true, $business_id);
         if ($request->ajax()) {
             $customer_id = $request->get('supplier_id', null);
-            $contact_filter1 = ! empty($customer_id) ? "AND t.contact_id=$customer_id" : '';
-            $contact_filter2 = ! empty($customer_id) ? "AND transactions.contact_id=$customer_id" : '';
-
             $location_id = $request->get('location_id', null);
-            $parent_payment_query_part = empty($location_id) ? 'AND transaction_payments.parent_id IS NULL' : '';
 
             $query = TransactionPayment::leftjoin('transactions as t', function ($join) use ($business_id) {
                 $join->on('transaction_payments.transaction_id', '=', 't.id')
@@ -2715,9 +2742,22 @@ class ReportController extends Controller
                     LEFT JOIN contacts c ON t.contact_id = c.id
                 ) as customer_subquery"), 'transaction_payments.id', '=', 'customer_subquery.payment_id')              
                 ->where('transaction_payments.business_id', $business_id)
-                ->where(function ($q) use ($business_id, $contact_filter1, $contact_filter2, $parent_payment_query_part) {
-                    $q->whereRaw("(transaction_payments.transaction_id IS NOT NULL AND t.type IN ('sell', 'opening_balance') $parent_payment_query_part $contact_filter1)")
-                        ->orWhereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('sell', 'opening_balance') AND transactions.business_id = $business_id AND tp.parent_id=transaction_payments.id $contact_filter2)");
+                ->where(function ($q) use ($business_id, $customer_id, $location_id) {
+                    $q->where(function ($q2) use ($customer_id, $location_id) {
+                        $q2->whereNotNull('transaction_payments.transaction_id');
+                        $q2->whereIn('t.type', ['sell', 'opening_balance']);
+                        if (empty($location_id)) {
+                            $q2->whereNull('transaction_payments.parent_id');
+                        }
+                        if (! empty($customer_id)) {
+                            $q2->where('t.contact_id', $customer_id);
+                        }
+                    })->orWhere(function ($q2) use ($business_id, $customer_id) {
+                        $q2->whereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('sell', 'opening_balance') AND transactions.business_id = ? AND tp.parent_id=transaction_payments.id)", [$business_id]);
+                        if (! empty($customer_id)) {
+                            $q2->whereRaw("EXISTS(SELECT * FROM transaction_payments as tp JOIN transactions ON tp.transaction_id = transactions.id WHERE transactions.type IN ('sell', 'opening_balance') AND transactions.business_id = ? AND tp.parent_id=transaction_payments.id AND transactions.contact_id = ?)", [$business_id, $customer_id]);
+                        }
+                    });
                 })
                 ->select(
                     'customer_subquery.customer_name as customer',
@@ -2897,11 +2937,6 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
         $location_id = $request->get('location_id', null);
 
-        $vld_str = '';
-        if (! empty($location_id)) {
-            $vld_str = "AND vld.location_id=$location_id";
-        }
-
         if ($request->ajax()) {
             $variation_id = $request->get('variation_id', null);
             $query = TransactionSellLine::join(
@@ -2933,12 +2968,17 @@ class ReportController extends Controller
                     't.transaction_date as transaction_date',
                     'transaction_sell_lines.parent_sell_line_id',
                     DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as formated_date'),
-                    DB::raw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=v.id $vld_str) as current_stock"),
                     DB::raw('SUM(transaction_sell_lines.quantity - transaction_sell_lines.quantity_returned) as total_qty_sold'),
                     'u.short_name as unit',
                     DB::raw('SUM((transaction_sell_lines.quantity - transaction_sell_lines.quantity_returned) * transaction_sell_lines.unit_price_inc_tax) as subtotal')
-                )
-                ->groupBy('v.id')
+                );
+
+            if (! empty($location_id)) {
+                $query->selectRaw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=v.id AND vld.location_id = ?) as current_stock", [$location_id]);
+            } else {
+                $query->selectRaw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=v.id) as current_stock");
+            }
+            $query->groupBy('v.id')
                 ->groupBy('formated_date');
 
             if (! empty($variation_id)) {
@@ -3029,11 +3069,6 @@ class ReportController extends Controller
         $location_id = $request->get('location_id', null);
         $group_by = $request->get('group_by', null);
 
-        $vld_str = '';
-        if (! empty($location_id)) {
-            $vld_str = "AND vld.location_id=$location_id";
-        }
-
         if ($request->ajax()) {
             $query = TransactionSellLine::join(
                 'transactions as t',
@@ -3054,8 +3089,15 @@ class ReportController extends Controller
                 ->where('t.status', 'final')
                 ->select(
                     'b.name as brand_name',
-                    'cat.name as category_name',
-                    DB::raw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=transaction_sell_lines.variation_id $vld_str) as current_stock"),
+                    'cat.name as category_name');
+
+            if (! empty($location_id)) {
+                $query->selectRaw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=transaction_sell_lines.variation_id AND vld.location_id = ?) as current_stock", [$location_id]);
+            } else {
+                $query->selectRaw("(SELECT SUM(vld.qty_available) FROM variation_location_details as vld WHERE vld.variation_id=transaction_sell_lines.variation_id) as current_stock");
+            }
+
+            $query->selectRaw(
                     DB::raw('SUM(transaction_sell_lines.quantity - transaction_sell_lines.quantity_returned) as total_qty_sold'),
                     DB::raw('SUM((transaction_sell_lines.quantity - transaction_sell_lines.quantity_returned) * transaction_sell_lines.unit_price_inc_tax) as subtotal'),
                     'transaction_sell_lines.parent_sell_line_id'
@@ -3464,7 +3506,7 @@ class ReportController extends Controller
             $datatable->filterColumn(
                  'product',
                  function ($query, $keyword) {
-                     $query->whereRaw("IF(P.type='variable', CONCAT(P.name, ' - ', PV.name, ' - ', V.name, ' (', V.sub_sku, ')'), CONCAT(P.name, ' (', P.sku, ')')) LIKE '%{$keyword}%'");
+                     $query->whereRaw("IF(P.type='variable', CONCAT(P.name, ' - ', PV.name, ' - ', V.name, ' (', V.sub_sku, ')'), CONCAT(P.name, ' (', P.sku, ')')) LIKE ?", ["%{$keyword}%"]);
                  });
         }
         $raw_columns = ['gross_profit'];

@@ -1437,6 +1437,7 @@ class ProductController extends Controller
                     DB::raw('CONCAT(products.name, " - ", products.sku) as text')
                 )
                     ->orderBy('products.name')
+                    ->limit(50)
                     ->get();
 
             return json_encode($products);

@@ -677,11 +677,8 @@ $(document).on('shown.bs.modal', '.contains_select2, .view_modal', function () {
 });
 
 //common configuration : tinyMCE editor
-
-tinymce.overrideDefaults({
+var tinymce_defaults = {
     height: 300,
-    language: app_locale, // Set language dynamically
-    language_url: base_path + '/js/lang/tiny/' + app_locale + '.js', // Dynamic URL
     theme: 'silver',
     plugins: [
         'advlist autolink link image lists charmap print preview hr anchor pagebreak',
@@ -696,7 +693,14 @@ tinymce.overrideDefaults({
         favs: { title: 'My Favorites', items: 'code | searchreplace' },
     },
     menubar: 'favs file edit view insert format tools table help',
-});
+};
+
+if (app_locale && app_locale !== 'en') {
+    tinymce_defaults.language = app_locale;
+    tinymce_defaults.language_url = '/js/lang/tiny/' + app_locale + '.js';
+}
+
+tinymce.overrideDefaults(tinymce_defaults);
 
 // Prevent Bootstrap dialog from blocking focusin
 $(document).on('focusin', function (e) {

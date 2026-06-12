@@ -40,6 +40,11 @@ class LoginController extends Controller
 
     protected $moduleUtil;
 
+    protected function loginRoute()
+    {
+        return route('service.login');
+    }
+
     /**
      * Create a new controller instance.
      *
@@ -74,7 +79,7 @@ class LoginController extends Controller
         request()->session()->flush();
         \Auth::logout();
 
-        return redirect('/login');
+        return redirect()->route('service.login');
     }
 
     /**
@@ -92,7 +97,7 @@ class LoginController extends Controller
         if (! $user->business->is_active) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect($this->loginRoute())
               ->with(
                   'status',
                   ['success' => 0, 'msg' => __('lang_v1.business_inactive')]
@@ -100,7 +105,7 @@ class LoginController extends Controller
         } elseif ($user->status != 'active') {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect($this->loginRoute())
               ->with(
                   'status',
                   ['success' => 0, 'msg' => __('lang_v1.user_inactive')]
@@ -108,7 +113,7 @@ class LoginController extends Controller
         } elseif (! $user->allow_login) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect($this->loginRoute())
                 ->with(
                     'status',
                     ['success' => 0, 'msg' => __('lang_v1.login_not_allowed')]
@@ -116,7 +121,7 @@ class LoginController extends Controller
         } elseif (($user->user_type == 'user_customer') && ! $this->moduleUtil->hasThePermissionInSubscription($user->business_id, 'crm_module')) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect($this->loginRoute())
                 ->with(
                     'status',
                     ['success' => 0, 'msg' => __('lang_v1.business_dont_have_crm_subscription')]
@@ -128,14 +133,14 @@ class LoginController extends Controller
     {
         $user = \Auth::user();
         if (! $user->can('dashboard.data') && $user->can('sell.create')) {
-            return '/pos/create';
+            return route('service.pos.create', [], false);
         }
 
         if ($user->user_type == 'user_customer') {
-            return 'contact/contact-dashboard';
+            return route('service.home', [], false);
         }
 
-        return '/home';
+        return route('service.home', [], false);
     }
 
     public function validateLogin(Request $request)

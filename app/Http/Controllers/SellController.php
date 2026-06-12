@@ -165,6 +165,7 @@ class SellController extends Controller
                 $sales = $sells->where('transactions.is_suspend', 1)
                             ->with($with)
                             ->addSelect('transactions.is_suspend', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes')
+                            ->limit(50)
                             ->get();
 
                 return view('sale_pos.partials.suspended_sales_modal')->with(compact('sales', 'is_tables_enabled', 'is_service_staff_enabled', 'transaction_sub_type'));
@@ -941,6 +942,9 @@ class SellController extends Controller
                         ->get();
 
         if (! empty($sell_details)) {
+            $product_ids = collect($sell_details)->pluck('product_id')->unique()->filter()->values()->toArray();
+            $products = !empty($product_ids) ? Product::whereIn('id', $product_ids)->with('modifier_sets')->get()->keyBy('id') : collect();
+
             foreach ($sell_details as $key => $value) {
 
                 $variation = Variation::with('media')->findOrFail($value->variation_id);
@@ -992,8 +996,8 @@ class SellController extends Controller
                         $sell_details[$key]->modifiers_ids = $modifiers_ids;
 
                         //add product modifier sets for edit
-                        $this_product = Product::find($sell_details[$key]->product_id);
-                        if (count($this_product->modifier_sets) > 0) {
+                        $this_product = $products->get($sell_details[$key]->product_id);
+                        if (!empty($this_product) && $this_product->modifier_sets->count() > 0) {
                             $sell_details[$key]->product_ms = $this_product->modifier_sets;
                         }
                     }

@@ -5,9 +5,10 @@ namespace App\Notifications;
 use App\Utils\NotificationUtil;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class TestEmailNotification extends Notification
+class TestEmailNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 

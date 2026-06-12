@@ -9,8 +9,8 @@
                 <i class="fa fa-tags"></i> Manage Lot
             </a>
         @endif
-        <a class="btn btn-success" href="{{ route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
-        <a class="btn btn-default" href="{{ route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
+        <a class="btn btn-success" href="{{ ssi_route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
+        <a class="btn btn-default" href="{{ ssi_route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
     </div>
 </div>
 <div class="row">
@@ -30,7 +30,7 @@
         <div class="small-box bg-aqua">
             <div class="inner"><h3>{{ $card['value'] }}</h3><p>{{ $card['label'] }}</p></div>
             <div class="icon"><i class="fa fa-cubes"></i></div>
-            <a href="{{ route('ssi.dashboard.detail', ['metric' => $card['metric'], 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
+            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => $card['metric'], 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
         </div>
     </div>
     @endforeach
@@ -71,12 +71,12 @@
                             @forelse(($summaryByLocation ?? collect()) as $row)
                                 <tr data-name="{{ $row->location_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
-                                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
                                             {{ $row->location_name }}
                                         </a>
                                     </td>
                                     <td class="text-right">
-                                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
                                             {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                         </a>
                                     </td>
@@ -117,7 +117,7 @@
                                 <tr data-name="{{ $row->category_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
                                         @if(!empty($row->category_id))
-                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
                                                 {{ $row->category_name }}
                                             </a>
                                         @else
@@ -126,7 +126,7 @@
                                     </td>
                                     <td class="text-right">
                                         @if(!empty($row->category_id))
-                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
                                                 {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                             </a>
                                         @else
@@ -170,7 +170,7 @@
                                 <tr data-name="{{ $row->brand_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
                                         @if(!empty($row->brand_id))
-                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
                                                 {{ $row->brand_name }}
                                             </a>
                                         @else
@@ -179,7 +179,7 @@
                                     </td>
                                     <td class="text-right">
                                         @if(!empty($row->brand_id))
-                                            <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
                                                 {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                             </a>
                                         @else
@@ -261,7 +261,7 @@
                             <p style="margin:0;">Value: <strong>$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</strong></p>
                         </div>
                         <div class="icon"><i class="fa fa-map-marker"></i></div>
-                        <a href="{{ route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}" class="small-box-footer">
+                        <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}" class="small-box-footer">
                             View Detail <i class="fa fa-arrow-circle-right"></i>
                         </a>
                     </div>
