@@ -169,7 +169,7 @@ class DataController extends Controller
         if ($is_repair_enabled && (auth()->user()->can('superadmin') || auth()->user()->can('repair.view') || auth()->user()->can('job_sheet.view_assigned') || auth()->user()->can('job_sheet.view_all'))) {
             Menu::modify('admin-sidebar-menu', function ($menu) use ($background_color) {
                 $menu->url(
-                            action([\Modules\Repair\Http\Controllers\DashboardController::class, 'index']),
+                            repair_route('dashboard.index'),
                             __('repair::lang.repair'),
                             ['icon' => '<svg aria-hidden="true" class="tw-size-5 tw-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
                             <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
