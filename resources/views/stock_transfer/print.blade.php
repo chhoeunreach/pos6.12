@@ -60,6 +60,29 @@
   }
 </style>
 
+@php
+  $format_pdf_currency = function ($amount) {
+    $formatted = '';
+
+    if (session('business.currency_symbol_placement') == 'before') {
+      $formatted .= session('currency')['symbol'] . ' ';
+    }
+
+    $formatted .= number_format(
+      (float) $amount,
+      session('business.currency_precision', 2),
+      session('currency')['decimal_separator'],
+      session('currency')['thousand_separator']
+    );
+
+    if (session('business.currency_symbol_placement') == 'after') {
+      $formatted .= ' ' . session('currency')['symbol'];
+    }
+
+    return $formatted;
+  };
+@endphp
+
 <div class="row">
   <div class="col-xs-12">
     <h2 class="page-header">
@@ -177,7 +200,7 @@
             </td>
             <td>{{ @format_quantity($group['quantity']) }} {{ $group['unit'] }}</td>
             <td class="show_price_with_permission">
-              <span class="display_currency" data-currency_symbol="true">{{ $group['subtotal'] }}</span>
+              <span class="display_currency" data-currency_symbol="true">{{ !empty($is_pdf) ? $format_pdf_currency($group['subtotal']) : $group['subtotal'] }}</span>
             </td>
           </tr>
 
@@ -226,19 +249,19 @@
         <tr>
           <th >@lang('purchase.net_total_amount'): </th>
           <td></td>
-          <td><span class="display_currency pull-right" data-currency_symbol="true">{{ $total }}</span></td>
+          <td><span class="display_currency pull-right" data-currency_symbol="true">{{ !empty($is_pdf) ? $format_pdf_currency($total) : $total }}</span></td>
         </tr>
         @if( !empty( $sell_transfer->shipping_charges ) )
           <tr>
             <th>@lang('purchase.additional_shipping_charges'):</th>
             <td><b>(+)</b></td>
-            <td><span class="display_currency pull-right" data-currency_symbol="true">{{ $sell_transfer->shipping_charges }}</span></td>
+            <td><span class="display_currency pull-right" data-currency_symbol="true">{{ !empty($is_pdf) ? $format_pdf_currency($sell_transfer->shipping_charges) : $sell_transfer->shipping_charges }}</span></td>
           </tr>
         @endif
         <tr>
           <th>@lang('purchase.purchase_total'):</th>
           <td></td>
-          <td><span class="display_currency pull-right" data-currency_symbol="true" >{{ $sell_transfer->final_total }}</span></td>
+          <td><span class="display_currency pull-right" data-currency_symbol="true" >{{ !empty($is_pdf) ? $format_pdf_currency($sell_transfer->final_total) : $sell_transfer->final_total }}</span></td>
         </tr>
       </table>
     </div>

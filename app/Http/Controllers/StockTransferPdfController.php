@@ -63,10 +63,11 @@ class StockTransferPdfController extends Controller
             $lot_n_exp_enabled = true;
         }
 
-        $pdfPath = storage_path('app/public/invoices/transfer_' . $sell_transfer->ref_no . '.pdf');
+        $pdfFilename = $this->safeFilename((string) $sell_transfer->ref_no) . '.pdf';
+        $pdfPath = storage_path('app/public/invoices/' . $pdfFilename);
         $pdfService->saveViewToPdf('pdf.stock_transfer', compact('sell_transfer', 'location_details', 'lot_n_exp_enabled'), $pdfPath);
 
-        return response()->download($pdfPath)->deleteFileAfterSend(false);
+        return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(false);
     }
 
     public function sendToTelegram($id, Request $request)
@@ -86,5 +87,15 @@ class StockTransferPdfController extends Controller
         SendStockTransferPdfJob::dispatch((int) $id, (int) $business_id, $chat_id, $lot_n_exp_enabled, $lot_n_exp_enabled);
 
         return ['success' => true, 'msg' => 'PDF generation and Telegram send queued.'];
+    }
+
+    protected function safeFilename(string $filename): string
+    {
+        $filename = trim($filename);
+        $filename = preg_replace('/[\\\\\/:*?"<>|]+/', '-', $filename);
+        $filename = preg_replace('/\s+/', ' ', $filename);
+        $filename = trim($filename, " .\t\n\r\0\x0B");
+
+        return $filename !== '' ? $filename : 'stock-transfer';
     }
 }

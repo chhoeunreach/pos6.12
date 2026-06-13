@@ -16,6 +16,29 @@ class TelegramConfigMigrateSeeder extends Seeder
                 ->orWhere('name', 'like', '%'.$locationName.'%')
                 ->orWhere('landmark', 'like', '%'.$locationName.'%')
                 ->first(['id']);
+
+            // Fallback: try without common prefixes like "សាខា" (branch)
+            if (! $location) {
+                $stripped = trim(str_replace(['សាខា', ' សាខា'], '', $locationName));
+                if ($stripped !== $locationName) {
+                    $location = \DB::table('business_locations')
+                        ->where('name', $stripped)
+                        ->orWhere('name', 'like', '%'.$stripped.'%')
+                        ->first(['id']);
+                }
+            }
+
+            // Final fallback: try to find by the last significant word
+            if (! $location) {
+                $parts = preg_split('/[\s\-]+/u', $locationName);
+                $lastPart = end($parts);
+                if (mb_strlen($lastPart) > 2) {
+                    $location = \DB::table('business_locations')
+                        ->where('name', 'like', '%'.$lastPart.'%')
+                        ->first(['id']);
+                }
+            }
+
             return $location->id ?? null;
         } catch (\Throwable $e) {
             return null;

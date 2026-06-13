@@ -91,6 +91,10 @@ class NotificationService
                 $data['status'] = $transfer->status === 'final' ? 'completed' : ($transfer->status ?? '');
                 $data['total_qty'] = $transfer->sell_lines->sum('quantity') ?? 0;
                 $data['user'] = trim((string) optional($transfer->createdByUser)->first_name . ' ' . optional($transfer->createdByUser)->last_name);
+                $data['business_id'] = $transfer->business_id;
+                $data['reference_type'] = 'stock_transfer';
+                $data['reference_id'] = $transfer->id;
+                $data['reference_no'] = $transfer->ref_no;
             }
         }
 
@@ -146,7 +150,7 @@ class NotificationService
 
             if ($usePdf) {
                 $caption = $sendText ? $message : null;
-                $result = $this->telegram->sendDocument($chatId, $pdfPath, $caption);
+                $result = $this->telegram->sendDocument($chatId, $pdfPath, $caption, $this->pdfFilename($data, $pdfPath));
             } elseif ($sendText) {
                 $result = $this->telegram->sendText($chatId, $message);
             } else {
@@ -183,23 +187,28 @@ class NotificationService
         $groups = collect();
 
         if ($moduleType === 'stock_transfer' && (! empty($data['from_location']) || ! empty($data['to_location']))) {
-            $fromQuery = NotificationGroup::active()->forModule($moduleType)->forDirection('from');
+            $fromGroups = collect();
+            $toGroups = collect();
 
             if (! empty($data['from_location_id'])) {
-                $fromQuery->forLocation($data['from_location_id']);
-            } elseif (! empty($data['from_location'])) {
-                $fromQuery->forLocationName($data['from_location']);
+                $fromGroups = NotificationGroup::active()->forModule($moduleType)->forDirection('from')
+                    ->forLocation($data['from_location_id'])->get();
             }
-
-            $toQuery = NotificationGroup::active()->forModule($moduleType)->forDirection('to');
+            if ($fromGroups->isEmpty() && ! empty($data['from_location'])) {
+                $fromGroups = NotificationGroup::active()->forModule($moduleType)->forDirection('from')
+                    ->forLocationName($data['from_location'])->get();
+            }
 
             if (! empty($data['to_location_id'])) {
-                $toQuery->forLocation($data['to_location_id']);
-            } elseif (! empty($data['to_location'])) {
-                $toQuery->forLocationName($data['to_location']);
+                $toGroups = NotificationGroup::active()->forModule($moduleType)->forDirection('to')
+                    ->forLocation($data['to_location_id'])->get();
+            }
+            if ($toGroups->isEmpty() && ! empty($data['to_location'])) {
+                $toGroups = NotificationGroup::active()->forModule($moduleType)->forDirection('to')
+                    ->forLocationName($data['to_location'])->get();
             }
 
-            $groups = $fromQuery->get()->concat($toQuery->get());
+            $groups = $fromGroups->concat($toGroups);
         } else {
             $query = NotificationGroup::active()->forModule($moduleType);
 
@@ -256,7 +265,9 @@ class NotificationService
             return null;
         }
 
-        return $this->pdf->generate($template->pdf_template_view, $data, $options['pdf_prefix'] ?? null);
+        $prefix = $options['pdf_prefix'] ?? $this->pdfPrefix($data);
+
+        return $this->pdf->generate($template->pdf_template_view, $data, $prefix);
     }
 
     /**
@@ -311,5 +322,29 @@ class NotificationService
         ];
 
         return $map[$moduleType] ?? "Notification [$moduleType]";
+    }
+
+    protected function pdfPrefix(array $data): ?string
+    {
+        $refNo = $data['reference_no'] ?? $data['ref_no'] ?? null;
+
+        return $refNo ? $this->safeFilename((string) $refNo) : null;
+    }
+
+    protected function pdfFilename(array $data, string $pdfPath): string
+    {
+        $refNo = $data['reference_no'] ?? $data['ref_no'] ?? pathinfo($pdfPath, PATHINFO_FILENAME);
+
+        return $this->safeFilename((string) $refNo).'.pdf';
+    }
+
+    protected function safeFilename(string $filename): string
+    {
+        $filename = trim($filename);
+        $filename = preg_replace('/[\\\\\/:*?"<>|]+/', '-', $filename);
+        $filename = preg_replace('/\s+/', ' ', $filename);
+        $filename = trim($filename, " .\t\n\r\0\x0B");
+
+        return $filename !== '' ? $filename : 'stock-transfer';
     }
 }

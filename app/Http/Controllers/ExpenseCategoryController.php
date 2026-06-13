@@ -237,6 +237,6 @@ class ExpenseCategoryController extends Controller
                 $html .= '<option value="'.$sub_category->id.'">'.$sub_category->name.'</option>';
             }
         }
-        return response()->json($html);
+        return response($html);
     }
 }

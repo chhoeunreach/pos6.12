@@ -41,7 +41,10 @@ class NotificationGroup extends Model
 
     public function scopeForLocationName($query, string $locationName)
     {
-        return $query->where('location_name', $locationName)
-            ->orWhere('location_name', 'like', '%'.$locationName.'%');
+        return $query->where(function ($q) use ($locationName) {
+            $q->where('location_name', $locationName)
+              ->orWhere('location_name', 'like', '%'.$locationName.'%')
+              ->orWhereRaw('? LIKE CONCAT(\'%\', location_name, \'%\')', [$locationName]);
+        });
     }
 }

@@ -86,6 +86,11 @@ class Transaction extends Model
         return $this->belongsTo(\App\User::class, 'created_by');
     }
 
+    public function createdByUser()
+    {
+        return $this->belongsTo(\App\User::class, 'created_by');
+    }
+
     public function sale_commission_agent()
     {
         return $this->belongsTo(\App\User::class, 'commission_agent');
@@ -99,6 +104,12 @@ class Transaction extends Model
     public function return_parent_sell()
     {
         return $this->belongsTo(\App\Transaction::class, 'return_parent_id');
+    }
+
+    public function transferParent()
+    {
+        return $this->hasOne(\App\Transaction::class, 'transfer_parent_id')
+            ->where('type', 'purchase_transfer');
     }
 
     public function table()

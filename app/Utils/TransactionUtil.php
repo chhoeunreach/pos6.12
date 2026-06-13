@@ -6055,6 +6055,18 @@ class TransactionUtil extends Util
             'location_id', 'final_total', 'expense_for', 'additional_notes',
             'expense_category_id', 'tax_id', 'contact_id', ]);
 
+        foreach (['expense_for', 'tax_id', 'contact_id'] as $optional_id_field) {
+            if (array_key_exists($optional_id_field, $transaction_data)) {
+                $optional_id_value = $transaction_data[$optional_id_field];
+                if (is_string($optional_id_value)) {
+                    $optional_id_value = trim($optional_id_value, " \t\n\r\0\x0B\"'");
+                }
+                $transaction_data[$optional_id_field] = is_numeric($optional_id_value)
+                    ? (int) $optional_id_value
+                    : null;
+            }
+        }
+
         $transaction_data['business_id'] = $business_id;
         $transaction_data['created_by'] = $user_id;
         $transaction_data['type'] = ! empty($request->input('is_refund')) && $request->input('is_refund') == 1 ? 'expense_refund' : 'expense';
@@ -6069,9 +6081,13 @@ class TransactionUtil extends Util
             $transaction_data['transaction_date'] = \Carbon::now();
         }
 
-        if ($request->has('expense_sub_category_id')) {
-            $transaction_data['expense_sub_category_id'] = $request->input('expense_sub_category_id');
+        $expense_sub_category_id = $request->input('expense_sub_category_id');
+        if (is_string($expense_sub_category_id)) {
+            $expense_sub_category_id = trim($expense_sub_category_id, " \t\n\r\0\x0B\"'");
         }
+        $transaction_data['expense_sub_category_id'] = is_numeric($expense_sub_category_id)
+            ? (int) $expense_sub_category_id
+            : null;
 
         $transaction_data['total_before_tax'] = $transaction_data['final_total'];
         if (! empty($transaction_data['tax_id'])) {
@@ -6123,10 +6139,18 @@ class TransactionUtil extends Util
             $transaction_data['ref_no'] = $request->input('ref_no');
         }
         if ($request->has('expense_for')) {
-            $transaction_data['expense_for'] = $request->input('expense_for');
+            $expense_for = $request->input('expense_for');
+            if (is_string($expense_for)) {
+                $expense_for = trim($expense_for, " \t\n\r\0\x0B\"'");
+            }
+            $transaction_data['expense_for'] = is_numeric($expense_for) ? (int) $expense_for : null;
         }
         if ($request->has('contact_id')) {
-            $transaction_data['contact_id'] = $request->input('contact_id');
+            $contact_id = $request->input('contact_id');
+            if (is_string($contact_id)) {
+                $contact_id = trim($contact_id, " \t\n\r\0\x0B\"'");
+            }
+            $transaction_data['contact_id'] = is_numeric($contact_id) ? (int) $contact_id : null;
         }
         if ($request->has('transaction_date')) {
             $transaction_data['transaction_date'] = $format_data ? $this->uf_date($request->input('transaction_date'), true) : $request->input('transaction_date');
@@ -6138,9 +6162,13 @@ class TransactionUtil extends Util
             $transaction_data['additional_notes'] = $request->input('additional_notes');
         }
 
-        if ($request->has('expense_sub_category_id')) {
-            $transaction_data['expense_sub_category_id'] = $request->input('expense_sub_category_id');
+        $expense_sub_category_id = $request->input('expense_sub_category_id');
+        if (is_string($expense_sub_category_id)) {
+            $expense_sub_category_id = trim($expense_sub_category_id, " \t\n\r\0\x0B\"'");
         }
+        $transaction_data['expense_sub_category_id'] = is_numeric($expense_sub_category_id)
+            ? (int) $expense_sub_category_id
+            : null;
 
         if ($request->has('expense_category_id')) {
             $transaction_data['expense_category_id'] = $request->input('expense_category_id');
@@ -6154,7 +6182,11 @@ class TransactionUtil extends Util
         }
 
         $transaction_data['total_before_tax'] = $transaction_data['final_total'];
-        $tax_id = ! empty($request->input('tax_id')) ? $request->input('tax_id') : $transaction->tax_id;
+        $tax_id = $request->input('tax_id', $transaction->tax_id);
+        if (is_string($tax_id)) {
+            $tax_id = trim($tax_id, " \t\n\r\0\x0B\"'");
+        }
+        $tax_id = is_numeric($tax_id) ? (int) $tax_id : null;
         if (! empty($tax_id)) {
             $transaction_data['tax_id'] = $tax_id;
             $tax_details = TaxRate::find($tax_id);

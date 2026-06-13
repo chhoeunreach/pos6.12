@@ -64,7 +64,9 @@ class SendStockTransferPdfJob implements ShouldQueue
             File::makeDirectory($tmpDir, 0755, true);
         }
 
-        $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . 'transfer_' . $sell_transfer->ref_no . '.pdf';
+        $safeRefNo = $this->safeFilename((string) $sell_transfer->ref_no);
+        $pdfFilename = $safeRefNo . '.pdf';
+        $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . $pdfFilename;
 
         try {
             $pdfService->saveViewToPdf('pdf.stock_transfer', compact('sell_transfer', 'location_details', 'lot_n_exp_enabled'), $pdfPath);
@@ -74,5 +76,15 @@ class SendStockTransferPdfJob implements ShouldQueue
                 File::delete($pdfPath);
             }
         }
+    }
+
+    protected function safeFilename(string $filename): string
+    {
+        $filename = trim($filename);
+        $filename = preg_replace('/[\\\\\/:*?"<>|]+/', '-', $filename);
+        $filename = preg_replace('/\s+/', ' ', $filename);
+        $filename = trim($filename, " .\t\n\r\0\x0B");
+
+        return $filename !== '' ? $filename : 'stock-transfer';
     }
 }
