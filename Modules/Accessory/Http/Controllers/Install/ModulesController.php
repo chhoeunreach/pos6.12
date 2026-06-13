@@ -4,6 +4,7 @@ namespace Modules\Accessory\Http\Controllers\Install;
 
 use Modules\Accessory\Http\Controllers\Controller;
 use App\Utils\ModuleUtil;
+use App\System;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Module;
@@ -363,7 +364,11 @@ class ModulesController extends Controller
 
             $details = json_decode(file_get_contents($module_json), true) ?: [];
             $name = $details['name'] ?? basename($module_path);
-            $is_installed = $statuses[$name] ?? (bool) ($details['active'] ?? false);
+            $has_installer = $this->hasLocalModuleInstaller($name);
+            $installed_version = $this->localModuleInstalledVersion($name);
+            $is_installed = $has_installer
+                ? ! empty($installed_version)
+                : ($statuses[$name] ?? (bool) ($details['active'] ?? false));
 
             $modules[$name] = [
                 'name' => $name,
@@ -372,6 +377,17 @@ class ModulesController extends Controller
                 'is_installed' => $is_installed,
                 'path' => $module_path,
             ];
+
+            if (! empty($installed_version)) {
+                $modules[$name]['version'] = [
+                    'installed_version' => $installed_version,
+                    'is_update_available' => version_compare(
+                        $installed_version,
+                        $this->localModuleAvailableVersion($name, $installed_version),
+                        '<'
+                    ),
+                ];
+            }
         }
 
         return $modules;
@@ -406,11 +422,45 @@ class ModulesController extends Controller
 
     private function localModuleActionUrl(string $module_name, string $action): string
     {
+        $controller = $this->localModuleInstallController($module_name);
+        if (class_exists($controller) && method_exists($controller, $action)) {
+            return action([$controller, $action]);
+        }
+
         $method = $action === 'uninstall'
             ? 'uninstallModule'
             : ($action === 'update' ? 'updateModule' : 'installModule');
 
         return action([self::class, $method], ['module_name' => $module_name]);
+    }
+
+    private function hasLocalModuleInstaller(string $module_name): bool
+    {
+        $controller = $this->localModuleInstallController($module_name);
+
+        return class_exists($controller);
+    }
+
+    private function localModuleInstallController(string $module_name): string
+    {
+        return 'Modules\\'.$module_name.'\Http\Controllers\InstallController';
+    }
+
+    private function localModuleInstalledVersion(string $module_name): ?string
+    {
+        $module_key = strtolower($module_name).'_version';
+        $snake_key = Str::snake($module_name).'_version';
+
+        return System::getProperty($module_key) ?: System::getProperty($snake_key);
+    }
+
+    private function localModuleAvailableVersion(string $module_name, string $default): string
+    {
+        return (string) (
+            config(strtolower($module_name).'.module_version')
+            ?: config(Str::snake($module_name).'.module_version')
+            ?: $default
+        );
     }
 
     private function ensureLocalModulePermissions(string $module_name): void

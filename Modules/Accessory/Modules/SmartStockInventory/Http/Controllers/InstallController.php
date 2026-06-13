@@ -2,7 +2,6 @@
 
 namespace Modules\SmartStockInventory\Http\Controllers;
 
-use App\Http\Controllers\Install\ModulesController as ModulesIndexController;
 use App\System;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Artisan;
@@ -23,7 +22,7 @@ class InstallController extends Controller
 
         if (! empty(System::getProperty($this->module_name . '_version'))) {
             return redirect()
-                ->action([ModulesIndexController::class, 'index'])
+                ->to($this->manageModulesUrl())
                 ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
         }
 
@@ -46,7 +45,7 @@ class InstallController extends Controller
             if (! empty(System::getProperty($this->module_name . '_version'))) {
                 DB::rollBack();
                 return redirect()
-                    ->action([ModulesIndexController::class, 'index'])
+                    ->to($this->manageModulesUrl())
                     ->with('status', ['success' => 1, 'msg' => $this->module_display_name . ' module is already installed.']);
             }
 
@@ -61,7 +60,7 @@ class InstallController extends Controller
         }
 
         return redirect()
-            ->action([ModulesIndexController::class, 'index'])
+            ->to($this->manageModulesUrl())
             ->with('status', $output);
     }
 
@@ -103,5 +102,10 @@ class InstallController extends Controller
         if (! auth()->user()->can('manage_modules')) {
             abort(403, 'Unauthorized action.');
         }
+    }
+
+    private function manageModulesUrl(): string
+    {
+        return url(trim(config('accessory.route_prefix', 'accessory'), '/') . '/manage-modules');
     }
 }

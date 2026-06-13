@@ -80,45 +80,46 @@ class MapPurchaseSell extends Command
             $businesses = Business::all();
 
             foreach ($businesses as $business) {
-                //Get all transactions
-                $transactions = Transaction::where('business_id', $business->id)
-                                    ->with('sell_lines')
-                                    ->where('type', 'sell')
-                                    ->where('status', 'final')
-                                    ->orderBy('created_at', 'asc')
-                                    ->get();
-
                 $pos_settings = empty($business->pos_settings) ? $this->businessUtil->defaultPosSettings() : json_decode($business->pos_settings, true);
                 $pos_settings['allow_overselling'] = 1;
-                //Iterate through all transaction and add mapping. First go throught sell_lines having lot number.
-                foreach ($transactions as $transaction) {
-                    $business_formatted = ['id' => $business->id,
-                        'accounting_method' => $business->accounting_method,
-                        'location_id' => $transaction->location_id,
-                        'pos_settings' => $pos_settings,
-                    ];
 
-                    foreach ($transaction->sell_lines as $line) {
-                        if (! empty($line->lot_no_line_id)) {
-                            $this->transactionUtil->mapPurchaseSell($business_formatted, [$line], 'purchase', false);
+                //Process transactions in chunks to avoid memory issues with large datasets
+                Transaction::where('business_id', $business->id)
+                    ->with('sell_lines')
+                    ->where('type', 'sell')
+                    ->where('status', 'final')
+                    ->orderBy('created_at', 'asc')
+                    ->chunk(100, function ($transactions) use ($business, $pos_settings) {
+                        //First pass: process sell_lines having lot number
+                        foreach ($transactions as $transaction) {
+                            $business_formatted = ['id' => $business->id,
+                                'accounting_method' => $business->accounting_method,
+                                'location_id' => $transaction->location_id,
+                                'pos_settings' => $pos_settings,
+                            ];
+
+                            foreach ($transaction->sell_lines as $line) {
+                                if (! empty($line->lot_no_line_id)) {
+                                    $this->transactionUtil->mapPurchaseSell($business_formatted, [$line], 'purchase', false);
+                                }
+                            }
                         }
-                    }
-                }
 
-                //Then through sell_lines not having lot number
-                foreach ($transactions as $transaction) {
-                    $business_formatted = ['id' => $business->id,
-                        'accounting_method' => $business->accounting_method,
-                        'location_id' => $transaction->location_id,
-                        'pos_settings' => $pos_settings,
-                    ];
+                        //Second pass: process sell_lines not having lot number
+                        foreach ($transactions as $transaction) {
+                            $business_formatted = ['id' => $business->id,
+                                'accounting_method' => $business->accounting_method,
+                                'location_id' => $transaction->location_id,
+                                'pos_settings' => $pos_settings,
+                            ];
 
-                    foreach ($transaction->sell_lines as $line) {
-                        if (empty($line->lot_no_line_id)) {
-                            $this->transactionUtil->mapPurchaseSell($business_formatted, [$line], 'purchase', false);
+                            foreach ($transaction->sell_lines as $line) {
+                                if (empty($line->lot_no_line_id)) {
+                                    $this->transactionUtil->mapPurchaseSell($business_formatted, [$line], 'purchase', false);
+                                }
+                            }
                         }
-                    }
-                }
+                    });
             }
 
             DB::commit();
