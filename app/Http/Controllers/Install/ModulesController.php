@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Utils\ModuleUtil;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Module;
 use ZipArchive;
 use Illuminate\Support\Facades\Artisan;
@@ -46,34 +47,50 @@ class ModulesController extends Controller
         $modules = Module::toCollection()->toArray();
         //print_r($modules);exit;
 
-        foreach ($modules as $module => $details) {
-            $modules[$module]['is_installed'] = $this->moduleUtil->isModuleInstalled($details['name']) ? true : false;
+        $original_connection = config('database.default');
+        $main_connection = $this->mainDatabaseConnection();
+        config(['database.default' => $main_connection]);
+        DB::setDefaultConnection($main_connection);
 
-            //Get version information.
-            if ($modules[$module]['is_installed']) {
-                $modules[$module]['version'] = $this->moduleUtil->getModuleVersionInfo($details['name']);
-            }
+        try {
+            foreach ($modules as $module => $details) {
+                $modules[$module]['is_installed'] = $this->moduleUtil->isModuleInstalled($details['name']) ? true : false;
 
-            //Install Link.
-            try {
-                $modules[$module]['install_link'] = action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@index');
-            } catch (\Exception $e) {
-                $modules[$module]['install_link'] = '#';
-            }
+                //Get version information.
+                if ($modules[$module]['is_installed']) {
+                    $modules[$module]['version'] = $this->moduleUtil->getModuleVersionInfo($details['name']);
+                }
 
-            //Update Link.
-            try {
-                $modules[$module]['update_link'] = action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@update');
-            } catch (\Exception $e) {
-                $modules[$module]['update_link'] = '#';
-            }
+                //Install Link.
+                try {
+                    $modules[$module]['install_link'] = $this->mainModuleUrl(
+                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@index')
+                    );
+                } catch (\Exception $e) {
+                    $modules[$module]['install_link'] = '#';
+                }
 
-            //Uninstall Link.
-            try {
-                $modules[$module]['uninstall_link'] = action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@uninstall');
-            } catch (\Exception $e) {
-                $modules[$module]['uninstall_link'] = '#';
+                //Update Link.
+                try {
+                    $modules[$module]['update_link'] = $this->mainModuleUrl(
+                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@update')
+                    );
+                } catch (\Exception $e) {
+                    $modules[$module]['update_link'] = '#';
+                }
+
+                //Uninstall Link.
+                try {
+                    $modules[$module]['uninstall_link'] = $this->mainModuleUrl(
+                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@uninstall')
+                    );
+                } catch (\Exception $e) {
+                    $modules[$module]['uninstall_link'] = '#';
+                }
             }
+        } finally {
+            config(['database.default' => $original_connection]);
+            DB::setDefaultConnection($original_connection);
         }
 
         $is_demo = (config('app.env') == 'demo');
@@ -87,6 +104,28 @@ class ModulesController extends Controller
         //Option to activate/deactivate
 
         //Upload module.
+    }
+
+    private function mainDatabaseConnection(): string
+    {
+        $service_connection = config('service.database_connection', 'service');
+        $default_connection = config('database.default', 'mysql');
+
+        return $default_connection === $service_connection
+            ? env('DB_CONNECTION', 'mysql')
+            : $default_connection;
+    }
+
+    private function mainModuleUrl(string $module_url): string
+    {
+        $service_prefix = trim(config('service.route_prefix', 'service'), '/');
+        $service_base_url = url($service_prefix);
+
+        if ($service_prefix !== '' && Str::startsWith($module_url, $service_base_url.'/')) {
+            return url(Str::after($module_url, $service_base_url.'/'));
+        }
+
+        return $module_url;
     }
 
     public function regenerate()

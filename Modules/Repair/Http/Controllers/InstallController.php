@@ -35,14 +35,14 @@ class InstallController extends Controller
         $this->installSettings();
 
         //Check if installed or not.
-        $is_installed = System::getProperty($this->module_name.'_version');
-        if (! empty($is_installed)) {
-            abort(404);
+        $installed_version = $this->getInstalledVersion();
+        if (! empty($installed_version)) {
+            return $this->alreadyInstalledResponse($installed_version);
         }
 
         $action_url = $this->isServiceRepairRequest()
             ? url(config('service.route_prefix', 'service').'/repair/install')
-            : action([\Modules\Repair\Http\Controllers\InstallController::class, 'install']);
+            : url('repair/install');
         $intruction_type = 'uf';
         $action_type = 'install';
         $module_display_name = $this->module_display_name;
@@ -65,8 +65,10 @@ class InstallController extends Controller
      */
     public function install()
     {
+        $connection = $this->moduleConnection();
+
         try {
-            DB::beginTransaction();
+            DB::connection($connection)->beginTransaction();
 
             request()->validate(
                 ['license_code' => 'required',
@@ -87,23 +89,29 @@ class InstallController extends Controller
                 return $response;
             }
 
-            $is_installed = System::getProperty($this->module_name.'_version');
-            if (! empty($is_installed)) {
-                abort(404);
+            $installed_version = $this->getInstalledVersion();
+            if (! empty($installed_version)) {
+                DB::connection($connection)->rollBack();
+
+                return $this->alreadyInstalledResponse($installed_version);
             }
 
-            DB::statement('SET default_storage_engine=INNODB;');
-            Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
-            System::addProperty($this->module_name.'_version', $this->appVersion);
+            DB::connection($connection)->statement('SET default_storage_engine=INNODB;');
+            Artisan::call('module:migrate', [
+                'module' => 'Repair',
+                '--database' => $connection,
+                '--force' => true,
+            ]);
+            $this->addInstalledVersion($this->appVersion);
             $this->clearCaches();
 
-            DB::commit();
+            DB::connection($connection)->commit();
 
             $output = ['success' => 1,
                 'msg' => 'Repair module installed succesfully',
             ];
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection($connection)->rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
             $output = [
@@ -135,7 +143,7 @@ class InstallController extends Controller
         }
 
         try {
-            System::removeProperty($this->module_name.'_version');
+            $this->removeInstalledVersion();
             $this->clearCaches();
 
             $output = ['success' => true,
@@ -164,37 +172,120 @@ class InstallController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $connection = $this->moduleConnection();
+
         try {
-            DB::beginTransaction();
+            DB::connection($connection)->beginTransaction();
             ini_set('max_execution_time', 0);
             ini_set('memory_limit', '512M');
 
-            $repair_version = System::getProperty($this->module_name.'_version');
+            $repair_version = $this->getInstalledVersion();
 
             if (Comparator::greaterThan($this->appVersion, $repair_version)) {
                 ini_set('max_execution_time', 0);
                 ini_set('memory_limit', '512M');
                 $this->installSettings();
 
-                DB::statement('SET default_storage_engine=INNODB;');
-                Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
-                System::setProperty($this->module_name.'_version', $this->appVersion);
+                DB::connection($connection)->statement('SET default_storage_engine=INNODB;');
+                Artisan::call('module:migrate', [
+                    'module' => 'Repair',
+                    '--database' => $connection,
+                    '--force' => true,
+                ]);
+                $this->setInstalledVersion($this->appVersion);
                 $this->clearCaches();
             } else {
-                abort(404);
+                DB::connection($connection)->rollBack();
+
+                return $this->alreadyInstalledResponse($repair_version);
             }
 
-            DB::commit();
+            DB::connection($connection)->commit();
 
             $output = ['success' => 1,
                 'msg' => 'Repair module updated Succesfully to version '.$this->appVersion.' !!',
             ];
 
             return redirect()->back()->with(['status' => $output]);
-        } catch (Exception $e) {
-            DB::rollBack();
+        } catch (\Exception $e) {
+            DB::connection($connection)->rollBack();
             exit($e->getMessage());
         }
+    }
+
+    private function moduleConnection(): string
+    {
+        return $this->isServiceRepairRequest()
+            ? config('service.database_connection', 'service')
+            : config('database.default', 'mysql');
+    }
+
+    private function getInstalledVersion(): ?string
+    {
+        $row = (new System)
+            ->setConnection($this->moduleConnection())
+            ->newQuery()
+            ->where('key', $this->module_name.'_version')
+            ->first();
+
+        return $row->value ?? null;
+    }
+
+    private function addInstalledVersion(string $version): void
+    {
+        (new System)
+            ->setConnection($this->moduleConnection())
+            ->newQuery()
+            ->updateOrCreate(
+                ['key' => $this->module_name.'_version'],
+                ['value' => $version]
+            );
+    }
+
+    private function setInstalledVersion(string $version): void
+    {
+        (new System)
+            ->setConnection($this->moduleConnection())
+            ->newQuery()
+            ->where('key', $this->module_name.'_version')
+            ->update(['value' => $version]);
+    }
+
+    private function removeInstalledVersion(): void
+    {
+        (new System)
+            ->setConnection($this->moduleConnection())
+            ->newQuery()
+            ->where('key', $this->module_name.'_version')
+            ->delete();
+    }
+
+    private function alreadyInstalledResponse(?string $installed_version)
+    {
+        $message = $this->module_display_name.' module is already installed.';
+        if (! empty($installed_version)) {
+            $message = $this->module_display_name.' module is already installed (version '.$installed_version.').';
+        }
+
+        $output = [
+            'success' => false,
+            'msg' => $message,
+        ];
+
+        if ($this->isServiceRepairRequest()) {
+            return redirect()
+                ->to($this->serviceRepairHomeUrl())
+                ->with('status', $output);
+        }
+
+        return redirect()
+            ->action([\App\Http\Controllers\Install\ModulesController::class, 'index'])
+            ->with('status', $output);
+    }
+
+    private function serviceRepairHomeUrl(): string
+    {
+        return url(trim(config('service.route_prefix', 'service'), '/').'/repair/dashboard');
     }
 
     private function clearCaches(): void
