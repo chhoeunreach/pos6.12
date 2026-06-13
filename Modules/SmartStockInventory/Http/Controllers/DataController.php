@@ -13,6 +13,10 @@ class DataController extends Controller
             return false;
         }
         $user = auth()->user();
+        if ($this->hasSuperAdminAccess($user)) {
+            return true;
+        }
+
         $reachUsername = strtolower(trim((string) config('smartstockinventory.reach_username', 'Reach')));
         $username = strtolower(trim((string) ($user->username ?? '')));
         if ($reachUsername !== '' && $username === $reachUsername) {
@@ -25,6 +29,28 @@ class DataController extends Controller
                     return true;
                 }
             } catch (\Throwable $e) {
+            }
+        }
+
+        return false;
+    }
+
+    private function hasSuperAdminAccess($user): bool
+    {
+        if (! config('smartstockinventory.enable_super_admin_override', true)) {
+            return false;
+        }
+
+        if ($user->can('superadmin')) {
+            return true;
+        }
+
+        $roles = method_exists($user, 'getRoleNames') ? $user->getRoleNames() : collect($user->roles ?? []);
+        foreach ($roles as $role) {
+            $roleName = is_string($role) ? $role : (string) ($role->name ?? '');
+            $baseRoleName = preg_replace('/#\d+$/', '', trim($roleName));
+            if (strcasecmp($baseRoleName, 'Super Admin') === 0) {
+                return true;
             }
         }
 
@@ -56,11 +82,14 @@ class DataController extends Controller
 
     public function modifyAdminMenu(): void
     {
-        if (! $this->isReachAdmin() || ! auth()->user()->can('stock_inventory.view')) {
+        $user = auth()->user();
+        $hasSuperAdminAccess = $this->hasSuperAdminAccess($user);
+        if (! $this->isReachAdmin() || (! $hasSuperAdminAccess && ! $user->can('stock_inventory.view'))) {
             return;
         }
 
         Menu::modify('admin-sidebar-menu', function ($menu) {
+            $hasSuperAdminAccess = $this->hasSuperAdminAccess(auth()->user());
             $root = $menu->dropdown(
                 'Stock Inventory',
                 function ($sub) {
@@ -72,13 +101,14 @@ class DataController extends Controller
                     $sub->url(ssi_route('ssi.movement.index'), 'Movement History', ['icon' => 'fa fa-exchange']);
                     $sub->url(ssi_route('ssi.imei.index'), 'IMEI Management', ['icon' => 'fa fa-mobile']);
                     $sub->url(ssi_route('ssi.lot.index'), 'Lot Management', ['icon' => 'fa fa-tags']);
-                    if (auth()->user()->can('stock_inventory.logs')) {
+                    $hasSuperAdminAccess = $this->hasSuperAdminAccess(auth()->user());
+                    if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.logs')) {
                         $sub->url(ssi_route('ssi.fix_logs'), 'Fix Logs', ['icon' => 'fa fa-history']);
                     }
-                    if (auth()->user()->can('stock_inventory.report')) {
+                    if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.report')) {
                         $sub->url(ssi_route('ssi.count.reports'), 'Inventory Reports', ['icon' => 'fa fa-bar-chart']);
                     }
-                    if (auth()->user()->can('stock_inventory.settings')) {
+                    if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.settings')) {
                         $sub->url(ssi_route('ssi.settings.index'), 'Settings', ['icon' => 'fa fa-cogs']);
                     }
                 },

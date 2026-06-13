@@ -1,5 +1,26 @@
 //This file contains all functions used products tab
 
+function service_product_url(path) {
+    if (!path) {
+        return path;
+    }
+
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+
+    var prefix = (window.service_product_base_url || (window.location.origin + '/service/products')).replace(/\/+$/, '');
+    if (path === '/service/products' || path.indexOf('/service/products/') === 0) {
+        return window.location.origin + path;
+    }
+
+    if (path === '/products' || path.indexOf('/products/') === 0) {
+        path = path.replace(/^\/products\/?/, '');
+    }
+
+    return prefix + '/' + path.replace(/^\/+/, '');
+}
+
 $(document).ready(function() {
     $(document).on('ifChecked', 'input#enable_stock', function() {
         $('div#alert_quantity_div').show();
@@ -167,7 +188,7 @@ $(document).ready(function() {
             rules: {
                 sku: {
                     remote: {
-                        url: '/products/check_product_sku',
+                        url: service_product_url('/check_product_sku'),
                         type: 'post',
                         data: {
                             sku: function() {
@@ -185,7 +206,7 @@ $(document).ready(function() {
                 },
                 name: {
                     remote: {
-                        url: '/products/check_product_name',
+                        url: service_product_url('/check_product_name'),
                         type: 'post',
                         data: {
                             name: function() {
@@ -247,7 +268,7 @@ $(document).ready(function() {
         if (variation_skus.length > 0) {
             $.ajax({
                 method: 'post',
-                url: '/products/validate_variation_skus',
+                url: service_product_url('/validate_variation_skus'),
                 data: { skus: variation_skus},
                 success: function(result) {
                     if (result.success == true) {
@@ -409,7 +430,7 @@ $(document).ready(function() {
 
         $.ajax({
             method: 'GET',
-            url: '/products/get_variation_value_row',
+            url: service_product_url('/get_variation_value_row'),
             data: {
                 variation_row_index: variation_row_index,
                 value_index: variation_value_row_index,
@@ -454,7 +475,7 @@ $(document).ready(function() {
                 .val();
             $.ajax({
                 method: 'POST',
-                url: '/products/get_variation_template',
+                url: service_product_url('/get_variation_template'),
                 dataType: 'json',
                 data: { template_id: template_id, row_index: row_index },
                 success: function(result) {
@@ -642,7 +663,7 @@ function get_product_details(rowData) {
         .text('Loading...');
 
     $.ajax({
-        url: '/products/' + rowData.id,
+        url: service_product_url('/' + rowData.id),
         dataType: 'html',
         success: function(data) {
             div.html(data).removeClass('loading');

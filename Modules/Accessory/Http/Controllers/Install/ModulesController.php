@@ -10,6 +10,8 @@ use Module;
 use ZipArchive;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class ModulesController extends Controller
 {
@@ -154,6 +156,9 @@ class ModulesController extends Controller
 
         try {
             $this->setLocalModuleStatus($module_name, $request->action_type == 'activate');
+            if ($request->action_type == 'activate') {
+                $this->ensureLocalModulePermissions($module_name);
+            }
 
             // Clear module assets cache when module is activated/deactivated
             Cache::forget('accessory_module_assets');
@@ -168,6 +173,60 @@ class ModulesController extends Controller
         }
 
         return redirect()->back()->with(['status' => $output]);
+    }
+
+    public function installModule($module_name)
+    {
+        if (! auth()->user()->can('manage_modules')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $notAllowed = $this->moduleUtil->notAllowedInDemo();
+        if (! empty($notAllowed)) {
+            return $notAllowed;
+        }
+
+        if (! is_dir($this->localModulePath($module_name))) {
+            abort(404);
+        }
+
+        $this->setLocalModuleStatus($module_name, true);
+        $this->ensureLocalModulePermissions($module_name);
+        Cache::forget('accessory_module_assets');
+
+        return redirect()->back()->with(['status' => [
+            'success' => true,
+            'msg' => __('lang_v1.success'),
+        ]]);
+    }
+
+    public function uninstallModule($module_name)
+    {
+        if (! auth()->user()->can('manage_modules')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $notAllowed = $this->moduleUtil->notAllowedInDemo();
+        if (! empty($notAllowed)) {
+            return $notAllowed;
+        }
+
+        if (! is_dir($this->localModulePath($module_name))) {
+            abort(404);
+        }
+
+        $this->setLocalModuleStatus($module_name, false);
+        Cache::forget('accessory_module_assets');
+
+        return redirect()->back()->with(['status' => [
+            'success' => true,
+            'msg' => __('lang_v1.success'),
+        ]]);
+    }
+
+    public function updateModule($module_name)
+    {
+        return $this->installModule($module_name);
     }
 
     /**
@@ -347,13 +406,42 @@ class ModulesController extends Controller
 
     private function localModuleActionUrl(string $module_name, string $action): string
     {
-        $controller = '\\Modules\\Accessory\\Modules\\'.$module_name.'\\Http\\Controllers\\InstallController@'.$action;
+        $method = $action === 'uninstall'
+            ? 'uninstallModule'
+            : ($action === 'update' ? 'updateModule' : 'installModule');
 
-        try {
-            return action($controller);
-        } catch (\Exception $e) {
-            return '#';
+        return action([self::class, $method], ['module_name' => $module_name]);
+    }
+
+    private function ensureLocalModulePermissions(string $module_name): void
+    {
+        $class = 'Modules\\'.$module_name.'\Http\Controllers\DataController';
+
+        if (! class_exists($class)) {
+            return;
         }
+
+        $controller = app($class);
+        if (! method_exists($controller, 'user_permissions')) {
+            return;
+        }
+
+        foreach ((array) $controller->user_permissions() as $permission) {
+            $permission_name = is_array($permission)
+                ? ($permission['value'] ?? $permission['name'] ?? null)
+                : null;
+
+            if (empty($permission_name)) {
+                continue;
+            }
+
+            Permission::firstOrCreate([
+                'name' => $permission_name,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     private function detectUploadedModuleDirectory(array $existing_modules, string $path, string $fallback_name): string

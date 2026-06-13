@@ -250,7 +250,13 @@ class ServiceBootstrapSeeder extends Seeder
 
     private function syncAllPermissionsToService($service): void
     {
-        $main = DB::connection(config('database.default', 'mysql'));
+        $mainConnection = env('DB_CONNECTION', 'mysql');
+
+        if ($mainConnection === $service->getName()) {
+            return;
+        }
+
+        $main = DB::connection($mainConnection);
 
         if (
             ! Schema::connection($main->getName())->hasTable('permissions') ||
@@ -265,6 +271,7 @@ class ServiceBootstrapSeeder extends Seeder
             $data = (array) $permission;
             $columns = Schema::connection($service->getName())->getColumnListing('permissions');
             $data = array_intersect_key($data, array_flip($columns));
+            unset($data['id']);
 
             $service->table('permissions')->updateOrInsert(
                 ['name' => $data['name'], 'guard_name' => $data['guard_name'] ?? 'web'],

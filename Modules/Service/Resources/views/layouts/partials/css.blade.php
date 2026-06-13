@@ -1,5 +1,5 @@
 <link href="{{ asset('modules/service/v7/css/tailwind/app.css?v='.$asset_v.'-service-jsfix-20260609') }}" rel="stylesheet">
-<link rel="stylesheet" href="{{ asset('css/init.css?v='.$asset_v) }}">
+<link rel="stylesheet" href="{{ asset('modules/service/v7/css/init.css?v='.$asset_v.'-service-jsfix-20260609') }}">
 
 @php
     $themeColor = session('business.theme_color', 'primary');
@@ -77,6 +77,19 @@
 </style>
 
 <link rel="stylesheet" href="{{ asset('modules/service/v7/css/vendor.css?v='.$asset_v.'-service-jsfix-20260609') }}">
+<style>
+    .icheckbox_square-blue,
+    .iradio_square-blue {
+        background-image: url("{{ asset('images/vendor/icheck/skins/square/blue.png') }}");
+    }
+
+    @media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+        .icheckbox_square-blue,
+        .iradio_square-blue {
+            background-image: url("{{ asset('images/vendor/icheck/skins/square/blue@2x.png') }}");
+        }
+    }
+</style>
 
 @if( in_array(session()->get('user.language', config('app.locale')), config('constants.langs_rtl')) )
 	<link rel="stylesheet" href="{{ asset('modules/service/v7/css/rtl.css?v='.$asset_v.'-service-jsfix-20260609') }}">

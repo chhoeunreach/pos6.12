@@ -113,7 +113,15 @@ class ModulesController extends Controller
     private function moduleInstallUrl(string $module_name, string $action): string
     {
         if ($module_name === 'Repair') {
-            return route('repair.install.'.$action);
+            return url($action === 'index' ? 'repair/install' : 'repair/install/'.$action);
+        }
+
+        if ($module_name === 'Service') {
+            return action([\Modules\Service\Http\Controllers\InstallController::class, $action]);
+        }
+
+        if ($module_name === 'Accessory') {
+            return action([\Modules\Accessory\Http\Controllers\InstallController::class, $action]);
         }
 
         return $this->mainModuleUrl(

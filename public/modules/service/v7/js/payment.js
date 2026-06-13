@@ -189,4 +189,4 @@ $(document).on('submit', 'form#transaction_payment_add_form', function(e){
         $('#transaction_payment_add_form').find('.cash_denomination_error').addClass('hide');
     }
     
-})
+});

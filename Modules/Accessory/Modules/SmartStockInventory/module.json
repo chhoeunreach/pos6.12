@@ -1,0 +1,14 @@
+{
+    "name": "SmartStockInventory",
+    "alias": "smartstockinventory",
+    "description": "Smart stock inventory control module for Ultimate POS",
+    "keywords": ["stock", "inventory", "imei", "lot"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\SmartStockInventory\\Providers\\SmartStockInventoryServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
