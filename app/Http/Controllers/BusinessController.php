@@ -412,10 +412,11 @@ class BusinessController extends Controller
             }
 
             $business_details['enable_product_expiry'] = ! empty($request->input('enable_product_expiry')) && $request->input('enable_product_expiry') == 1 ? 1 : 0;
+            $business_details['on_product_expiry'] = $business_details['on_product_expiry'] ?? 'keep_selling';
             if ($business_details['on_product_expiry'] == 'keep_selling') {
                 $business_details['stop_selling_before'] = 0;
             } else {
-                $business_details['stop_selling_before'] = ! empty($business_details['stop_selling_before']) ? $business_details['stop_selling_before'] : 0;
+                $business_details['stop_selling_before'] = ! empty($business_details['stop_selling_before']) ? (int) $business_details['stop_selling_before'] : 0;
             }
 
             $business_details['stock_expiry_alert_days'] = ! empty($request->input('stock_expiry_alert_days')) ? $request->input('stock_expiry_alert_days') : 30;
