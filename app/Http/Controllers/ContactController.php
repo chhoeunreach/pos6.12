@@ -25,6 +25,10 @@ use App\Events\ContactCreatedOrModified;
 
 class ContactController extends Controller
 {
+    protected array $customerContactTotalsCache = [];
+
+    protected array $supplierContactTotalsCache = [];
+
     protected $commonUtil;
 
     protected $contactUtil;
@@ -108,22 +112,30 @@ class ContactController extends Controller
 
         $business_id = request()->session()->get('user.business_id');
 
-        $contact = $this->contactUtil->getContactQuery($business_id, 'supplier');
+        $use_light_supplier_query = ! request()->has('has_purchase_due')
+            && ! request()->has('has_purchase_return')
+            && ! request()->has('has_opening_balance');
 
-        if (request()->has('has_purchase_due')) {
-			$contact->havingRaw('(IFNULL(total_purchase, 0) - IFNULL(purchase_paid, 0) - IFNULL(total_ledger_discount, 0)) > 0');
-		}
+        $contact = $use_light_supplier_query
+            ? $this->getSupplierListQuery($business_id)
+            : $this->contactUtil->getContactQuery($business_id, 'supplier');
 
-        if (request()->has('has_purchase_return')) {
-            $contact->havingRaw('total_purchase_return > 0');
+        if (! $use_light_supplier_query) {
+            if (request()->has('has_purchase_due')) {
+                $contact->havingRaw('(IFNULL(total_purchase, 0) - IFNULL(purchase_paid, 0) - IFNULL(total_ledger_discount, 0)) > 0');
+            }
+
+            if (request()->has('has_purchase_return')) {
+                $contact->havingRaw('total_purchase_return > 0');
+            }
+
+            if (request()->has('has_opening_balance')) {
+                $contact->havingRaw('opening_balance > 0');
+            }
         }
 
         if (request()->has('has_advance_balance')) {
             $contact->where('balance', '>', 0);
-        }
-
-        if (request()->has('has_opening_balance')) {
-            $contact->havingRaw('opening_balance > 0');
         }
 
         if (! empty(request()->input('contact_status'))) {
@@ -137,17 +149,23 @@ class ContactController extends Controller
 
         return Datatables::of($contact)
             ->addColumn('address', '{{implode(", ", array_filter([$address_line_1, $address_line_2, $city, $state, $country, $zip_code]))}}')
-            ->addColumn(
-                'due',
-                '<span class="contact_due" data-orig-value="{{$total_purchase - $purchase_paid - $total_ledger_discount}}" data-highlight=false>@format_currency($total_purchase - $purchase_paid - $total_ledger_discount)</span>'
-            )
-            ->addColumn(
-                'return_due',
-                '<span class="return_due" data-orig-value="{{$total_purchase_return - $purchase_return_paid}}" data-highlight=false>@format_currency($total_purchase_return - $purchase_return_paid)'
-            )
+            ->addColumn('due', function ($row) use ($business_id, $use_light_supplier_query) {
+                $totals = $use_light_supplier_query ? $this->getSupplierContactTotalsForRow($business_id, $row->id) : $row;
+                $due = $totals->total_purchase - $totals->purchase_paid - $totals->total_ledger_discount;
+
+                return '<span class="contact_due" data-orig-value="'.$due.'" data-highlight=false>'.$this->transactionUtil->num_f($due, true).'</span>';
+            })
+            ->addColumn('return_due', function ($row) use ($business_id, $use_light_supplier_query) {
+                $totals = $use_light_supplier_query ? $this->getSupplierContactTotalsForRow($business_id, $row->id) : $row;
+                $return_due = $totals->total_purchase_return - $totals->purchase_return_paid;
+
+                return '<span class="return_due" data-orig-value="'.$return_due.'" data-highlight=false>'.$this->transactionUtil->num_f($return_due, true).'</span>';
+            })
             ->addColumn(
                 'action',
-                function ($row) {
+                function ($row) use ($business_id, $use_light_supplier_query) {
+                    $totals = $use_light_supplier_query ? $this->getSupplierContactTotalsForRow($business_id, $row->id) : $row;
+
                     $html = '<div class="btn-group">
                     <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max  dropdown-toggle" 
                         data-toggle="dropdown" aria-expanded="false">'.
@@ -159,7 +177,7 @@ class ContactController extends Controller
 
                     $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'getPayContactDue'], [$row->id]).'?type=purchase" class="pay_purchase_due"><i class="fas fa-money-bill-alt" aria-hidden="true"></i>'.__('lang_v1.pay').'</a></li>';
 
-                    $return_due = $row->total_purchase_return - $row->purchase_return_paid;
+                    $return_due = $totals->total_purchase_return - $totals->purchase_return_paid;
                     if ($return_due > 0) {
                         $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'getPayContactDue'], [$row->id]).'?type=purchase_return" class="pay_purchase_due"><i class="fas fa-money-bill-alt" aria-hidden="true"></i>'.__('lang_v1.receive_purchase_return_due').'</a></li>';
                     }
@@ -232,8 +250,9 @@ class ContactController extends Controller
                     return $html;
                 }
             )
-            ->editColumn('opening_balance', function ($row) {
-                $html = '<span data-orig-value="'.$row->opening_balance.'">'.$this->transactionUtil->num_f($row->opening_balance, true).'</span>';
+            ->editColumn('opening_balance', function ($row) use ($business_id, $use_light_supplier_query) {
+                $totals = $use_light_supplier_query ? $this->getSupplierContactTotalsForRow($business_id, $row->id) : $row;
+                $html = '<span data-orig-value="'.$totals->opening_balance.'">'.$this->transactionUtil->num_f($totals->opening_balance, true).'</span>';
 
                 return $html;
             })
@@ -278,6 +297,60 @@ class ContactController extends Controller
             ->make(true);
     }
 
+    private function getSupplierListQuery($business_id)
+    {
+        $query = Contact::leftJoin('customer_groups AS cg', 'contacts.customer_group_id', '=', 'cg.id')
+            ->where('contacts.business_id', $business_id)
+            ->onlySuppliers()
+            ->select([
+                'contacts.*',
+                'cg.name as customer_group',
+            ]);
+
+        return $query;
+    }
+
+    private function getSupplierContactTotalsForRow($business_id, $contact_id)
+    {
+        if (isset($this->supplierContactTotalsCache[$contact_id])) {
+            return $this->supplierContactTotalsCache[$contact_id];
+        }
+
+        $transaction_totals = Transaction::from('transactions as t')
+            ->where('t.business_id', $business_id)
+            ->where('t.contact_id', $contact_id)
+            ->selectRaw("
+                COALESCE(SUM(IF(t.type = 'opening_balance', final_total, 0)), 0) as opening_balance,
+                COALESCE(SUM(IF(t.type = 'ledger_discount', final_total, 0)), 0) as total_ledger_discount,
+                COALESCE(SUM(IF(t.type = 'purchase', final_total, 0)), 0) as total_purchase,
+                COALESCE(SUM(IF(t.type = 'purchase_return', final_total, 0)), 0) as total_purchase_return
+            ")
+            ->first();
+
+        $payment_totals = DB::table('transaction_payments as tp')
+            ->join('transactions as t', 'tp.transaction_id', '=', 't.id')
+            ->where('t.business_id', $business_id)
+            ->where('t.contact_id', $contact_id)
+            ->selectRaw("
+                COALESCE(SUM(IF(t.type = 'purchase', IF(tp.is_return = 1, -1 * tp.amount, tp.amount), 0)), 0) as purchase_paid,
+                COALESCE(SUM(IF(t.type = 'purchase_return', tp.amount, 0)), 0) as purchase_return_paid
+            ")
+            ->first();
+
+        $totals = (object) [
+            'opening_balance' => (float) $transaction_totals->opening_balance,
+            'total_ledger_discount' => (float) $transaction_totals->total_ledger_discount,
+            'total_purchase' => (float) $transaction_totals->total_purchase,
+            'purchase_paid' => (float) $payment_totals->purchase_paid,
+            'total_purchase_return' => (float) $transaction_totals->total_purchase_return,
+            'purchase_return_paid' => (float) $payment_totals->purchase_return_paid,
+        ];
+
+        $this->supplierContactTotalsCache[$contact_id] = $totals;
+
+        return $totals;
+    }
+
     /**
      * Returns the database object for customer
      *
@@ -293,7 +366,15 @@ class ContactController extends Controller
 
         $is_admin = $this->contactUtil->is_admin(auth()->user());
 
-        $query = $this->contactUtil->getContactQuery($business_id, 'customer');
+        $has_no_sell_from = request()->input('has_no_sell_from', null);
+        $use_light_customer_query = ! request()->has('has_sell_due')
+            && ! request()->has('has_sell_return')
+            && ! request()->has('has_opening_balance')
+            && empty($has_no_sell_from);
+
+        $query = $use_light_customer_query
+            ? $this->getCustomerListQuery($business_id)
+            : $this->contactUtil->getContactQuery($business_id, 'customer');
 
         if (request()->has('has_sell_due')) {
             $query->havingRaw('(COALESCE(total_invoice, 0) - COALESCE(invoice_received, 0) - COALESCE(total_ledger_discount, 0) - COALESCE(total_sell_return, 0) + COALESCE(sell_return_paid, 0)) > 0');
@@ -315,8 +396,6 @@ class ContactController extends Controller
             $query->join('user_contact_access AS uc', 'contacts.id', 'uc.contact_id')
                 ->where('uc.user_id', request()->input('assigned_to'));
         }
-
-        $has_no_sell_from = request()->input('has_no_sell_from', null);
 
         if (
             (! $is_admin && auth()->user()->can('customer_with_no_sell_one_month')) ||
@@ -364,17 +443,21 @@ class ContactController extends Controller
         $contacts = Datatables::of($query)
             ->addColumn('address', '{{implode(", ", array_filter([$address_line_1, $address_line_2, $city, $state, $country, $zip_code]))}}')
         //    + $sell_return_paid add this in due because after paymnet for sell return not calculated 
-            ->addColumn(
-                'due',
-                '<span class="contact_due" data-orig-value="{{$total_invoice - $invoice_received - $total_ledger_discount - $total_sell_return  + $sell_return_paid}}" data-highlight=true>@format_currency($total_invoice - $invoice_received - $total_ledger_discount -  $total_sell_return + $sell_return_paid)  </span>'
-            )
-            ->addColumn(
-                'return_due',
-                '<span class="return_due" data-orig-value="{{$total_sell_return - $sell_return_paid}}" data-highlight=false>@format_currency($total_sell_return - $sell_return_paid)</span>'
-            )
+            ->addColumn('due', function ($row) use ($business_id, $use_light_customer_query) {
+                $totals = $use_light_customer_query ? $this->getCustomerContactTotalsForRow($business_id, $row->id) : $row;
+                $due = $totals->total_invoice - $totals->invoice_received - $totals->total_ledger_discount - $totals->total_sell_return + $totals->sell_return_paid;
+
+                return '<span class="contact_due" data-orig-value="'.$due.'" data-highlight=true>'.$this->transactionUtil->num_f($due, true).'</span>';
+            })
+            ->addColumn('return_due', function ($row) use ($business_id, $use_light_customer_query) {
+                $totals = $use_light_customer_query ? $this->getCustomerContactTotalsForRow($business_id, $row->id) : $row;
+                $return_due = $totals->total_sell_return - $totals->sell_return_paid;
+
+                return '<span class="return_due" data-orig-value="'.$return_due.'" data-highlight=false>'.$this->transactionUtil->num_f($return_due, true).'</span>';
+            })
             ->addColumn(
                 'action',
-                function ($row) {
+                function ($row) use ($business_id, $use_light_customer_query) {
                     $html = '<div class="btn-group">
                     <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max dropdown-toggle" 
                         data-toggle="dropdown" aria-expanded="false">'.
@@ -384,8 +467,9 @@ class ContactController extends Controller
                     </button>
                     <ul class="dropdown-menu dropdown-menu-left" role="menu">';
 
+                    $totals = $use_light_customer_query ? $this->getCustomerContactTotalsForRow($business_id, $row->id) : $row;
                     $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'getPayContactDue'], [$row->id]).'?type=sell" class="pay_sale_due"><i class="fas fa-money-bill-alt" aria-hidden="true"></i>'.__('lang_v1.pay').'</a></li>';
-                    $return_due = $row->total_sell_return - $row->sell_return_paid;
+                    $return_due = $totals->total_sell_return - $totals->sell_return_paid;
                     if ($return_due > 0) {
                         $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'getPayContactDue'], [$row->id]).'?type=sell_return" class="pay_purchase_due"><i class="fas fa-money-bill-alt" aria-hidden="true"></i>'.__('lang_v1.pay_sell_return_due').'</a></li>';
                     }
@@ -460,8 +544,9 @@ class ContactController extends Controller
                     return $html;
                 }
             )
-            ->editColumn('opening_balance', function ($row) {
-                $html = '<span data-orig-value="'.$row->opening_balance.'">'.$this->transactionUtil->num_f($row->opening_balance, true).'</span>';
+            ->editColumn('opening_balance', function ($row) use ($business_id, $use_light_customer_query) {
+                $totals = $use_light_customer_query ? $this->getCustomerContactTotalsForRow($business_id, $row->id) : $row;
+                $html = '<span data-orig-value="'.$totals->opening_balance.'">'.$this->transactionUtil->num_f($totals->opening_balance, true).'</span>';
 
                 return $html;
             })
@@ -527,6 +612,60 @@ class ContactController extends Controller
 
         return $contacts->rawColumns(['action', 'opening_balance', 'credit_limit', 'pay_term', 'due', 'return_due', 'name', 'balance'])
                         ->make(true);
+    }
+
+    private function getCustomerListQuery($business_id)
+    {
+        $query = Contact::leftJoin('customer_groups AS cg', 'contacts.customer_group_id', '=', 'cg.id')
+            ->where('contacts.business_id', $business_id)
+            ->onlyCustomers()
+            ->select([
+                'contacts.*',
+                'cg.name as customer_group',
+            ]);
+
+        return $query;
+    }
+
+    private function getCustomerContactTotalsForRow($business_id, $contact_id)
+    {
+        if (isset($this->customerContactTotalsCache[$contact_id])) {
+            return $this->customerContactTotalsCache[$contact_id];
+        }
+
+        $transaction_totals = Transaction::from('transactions as t')
+            ->where('t.business_id', $business_id)
+            ->where('t.contact_id', $contact_id)
+            ->selectRaw("
+                COALESCE(SUM(IF(t.type = 'opening_balance', t.final_total, 0)), 0) as opening_balance,
+                COALESCE(SUM(IF(t.type = 'ledger_discount', t.final_total, 0)), 0) as total_ledger_discount,
+                COALESCE(SUM(IF(t.type = 'sell' AND t.status = 'final', t.final_total, 0)), 0) as total_invoice,
+                COALESCE(SUM(IF(t.type = 'sell_return', t.final_total, 0)), 0) as total_sell_return
+            ")
+            ->first();
+
+        $payment_totals = DB::table('transaction_payments as tp')
+            ->join('transactions as t', 'tp.transaction_id', '=', 't.id')
+            ->where('t.business_id', $business_id)
+            ->where('t.contact_id', $contact_id)
+            ->selectRaw("
+                COALESCE(SUM(IF(t.type = 'sell' AND t.status = 'final', IF(tp.is_return = 1, -1 * tp.amount, tp.amount), 0)), 0) as invoice_received,
+                COALESCE(SUM(IF(t.type = 'sell_return', tp.amount, 0)), 0) as sell_return_paid
+            ")
+            ->first();
+
+        $totals = (object) [
+            'opening_balance' => (float) $transaction_totals->opening_balance,
+            'total_ledger_discount' => (float) $transaction_totals->total_ledger_discount,
+            'total_invoice' => (float) $transaction_totals->total_invoice,
+            'invoice_received' => (float) $payment_totals->invoice_received,
+            'total_sell_return' => (float) $transaction_totals->total_sell_return,
+            'sell_return_paid' => (float) $payment_totals->sell_return_paid,
+        ];
+
+        $this->customerContactTotalsCache[$contact_id] = $totals;
+
+        return $totals;
     }
 
     /**

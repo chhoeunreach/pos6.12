@@ -144,7 +144,7 @@
                     <table class="table table-bordered table-striped" id="contact_table">
                         <thead>
                             <tr>
-                                <th class="tw-w-full">@lang('messages.action')</th>
+                                <th class="text-center" style="width: 90px; white-space: nowrap;">@lang('messages.action')</th>
                                 <th>@lang('lang_v1.contact_id')</th>
                                 @if ($type == 'supplier')
                                     <th>@lang('business.business_name')</th>

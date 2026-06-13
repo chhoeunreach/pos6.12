@@ -62,7 +62,7 @@
         <div class="col-sm-4">
           <div class="form-group">
             {!! Form::label('contact_id', __('lang_v1.expense_for_contact').':') !!} 
-            {!! Form::select('contact_id', $contacts, $expense->contact_id, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select')]); !!}
+            {!! Form::select('contact_id', $contacts, $expense->contact_id, ['class' => 'form-control select2 contact_id_ajax', 'placeholder' => __('messages.please_select'), 'style' => 'width: 100%;']); !!}
           </div>
         </div>
         <div class="clearfix"></div>
@@ -113,7 +113,12 @@
 </section>
 @stop
 @section('javascript')
+@include('expense.partials.contact_select2')
 <script type="text/javascript">
+  $(document).ready(function() {
+    initExpenseContactSelect();
+  });
+
   __page_leave_confirmation('#add_expense_form');
 </script>
 @endsection

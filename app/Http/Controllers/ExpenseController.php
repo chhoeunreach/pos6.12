@@ -335,7 +335,7 @@ class ExpenseController extends Controller
 
         $payment_types = $this->transactionUtil->payment_types(null, false, $business_id);
 
-        $contacts = Contact::contactDropdown($business_id, false, false);
+        $contacts = [];
 
         //Accounts
         $accounts = [];
@@ -457,7 +457,19 @@ class ExpenseController extends Controller
 
         $taxes = TaxRate::forBusinessDropdown($business_id, true, true);
 
-        $contacts = Contact::contactDropdown($business_id, false, false);
+        $contacts = [];
+        if (! empty($expense->contact_id)) {
+            $contact = Contact::where('business_id', $business_id)
+                ->where('id', $expense->contact_id)
+                ->first(['id', 'name', 'contact_id']);
+
+            if (! empty($contact)) {
+                $contact_name = ! empty($contact->contact_id)
+                    ? $contact->name.' ('.$contact->contact_id.')'
+                    : $contact->name;
+                $contacts = [$contact->id => $contact_name];
+            }
+        }
 
         //Sub-category
         $sub_categories = [];
