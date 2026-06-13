@@ -10,8 +10,18 @@ Route::prefix('notification-center')->group(function () {
 });
 
 Route::middleware(['auth', 'language', 'AdminSidebarMenu'])->prefix('notification-center')->group(function () {
+    Route::get('groups/import-template', 'NotificationGroupController@downloadTemplate')
+        ->name('notificationcenter.groups.download-template');
+    Route::get('groups/export', 'NotificationGroupController@export')
+        ->name('notificationcenter.groups.export');
+    Route::post('groups/import-preview', 'NotificationGroupController@importPreview')
+        ->name('notificationcenter.groups.import-preview');
+    Route::post('groups/import-confirm', 'NotificationGroupController@importConfirm')
+        ->name('notificationcenter.groups.import-confirm');
+
     Route::resource('groups', 'NotificationGroupController', [
         'as' => 'notificationcenter',
+        'only' => ['index', 'create', 'store', 'edit', 'update', 'destroy'],
         'names' => [
             'index' => 'notificationcenter.groups.index',
             'create' => 'notificationcenter.groups.create',
