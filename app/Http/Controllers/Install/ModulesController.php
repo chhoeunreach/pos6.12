@@ -63,27 +63,21 @@ class ModulesController extends Controller
 
                 //Install Link.
                 try {
-                    $modules[$module]['install_link'] = $this->mainModuleUrl(
-                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@index')
-                    );
+                    $modules[$module]['install_link'] = $this->moduleInstallUrl($details['name'], 'index');
                 } catch (\Exception $e) {
                     $modules[$module]['install_link'] = '#';
                 }
 
                 //Update Link.
                 try {
-                    $modules[$module]['update_link'] = $this->mainModuleUrl(
-                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@update')
-                    );
+                    $modules[$module]['update_link'] = $this->moduleInstallUrl($details['name'], 'update');
                 } catch (\Exception $e) {
                     $modules[$module]['update_link'] = '#';
                 }
 
                 //Uninstall Link.
                 try {
-                    $modules[$module]['uninstall_link'] = $this->mainModuleUrl(
-                        action('\Modules\\'.$details['name'].'\Http\Controllers\InstallController@uninstall')
-                    );
+                    $modules[$module]['uninstall_link'] = $this->moduleInstallUrl($details['name'], 'uninstall');
                 } catch (\Exception $e) {
                     $modules[$module]['uninstall_link'] = '#';
                 }
@@ -114,6 +108,17 @@ class ModulesController extends Controller
         return $default_connection === $service_connection
             ? env('DB_CONNECTION', 'mysql')
             : $default_connection;
+    }
+
+    private function moduleInstallUrl(string $module_name, string $action): string
+    {
+        if ($module_name === 'Repair') {
+            return route('repair.install.'.$action);
+        }
+
+        return $this->mainModuleUrl(
+            action('\Modules\\'.$module_name.'\Http\Controllers\InstallController@'.$action)
+        );
     }
 
     private function mainModuleUrl(string $module_url): string

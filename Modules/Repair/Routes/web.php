@@ -13,10 +13,10 @@ Route::middleware('web', 'authh', 'auth', 'SetSessionData', 'language', 'timezon
 
     Route::resource('/repair-settings', '\Modules\Repair\Http\Controllers\RepairSettingsController')->only('index', 'store');
 
-    Route::get('/install', ['\Modules\Repair\Http\Controllers\InstallController', 'index']);
-    Route::post('/install', ['\Modules\Repair\Http\Controllers\InstallController', 'install']);
-    Route::get('/install/uninstall', ['\Modules\Repair\Http\Controllers\InstallController', 'uninstall']);
-    Route::get('/install/update', ['\Modules\Repair\Http\Controllers\InstallController', 'update']);
+    Route::get('/install', ['\Modules\Repair\Http\Controllers\InstallController', 'index'])->name('repair.install.index');
+    Route::post('/install', ['\Modules\Repair\Http\Controllers\InstallController', 'install'])->name('repair.install.store');
+    Route::get('/install/uninstall', ['\Modules\Repair\Http\Controllers\InstallController', 'uninstall'])->name('repair.install.uninstall');
+    Route::get('/install/update', ['\Modules\Repair\Http\Controllers\InstallController', 'update'])->name('repair.install.update');
 
     Route::get('get-device-models', ['\Modules\Repair\Http\Controllers\DeviceModelController', 'getDeviceModels']);
     Route::get('models-repair-checklist', ['\Modules\Repair\Http\Controllers\DeviceModelController', 'getRepairChecklists']);

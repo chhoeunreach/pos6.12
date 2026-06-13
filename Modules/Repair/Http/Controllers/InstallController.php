@@ -41,8 +41,8 @@ class InstallController extends Controller
         }
 
         $action_url = $this->isServiceRepairRequest()
-            ? url(config('service.route_prefix', 'service').'/repair/install')
-            : url('repair/install');
+            ? route('service.repair.install.store')
+            : route('repair.install.store');
         $intruction_type = 'uf';
         $action_type = 'install';
         $module_display_name = $this->module_display_name;
