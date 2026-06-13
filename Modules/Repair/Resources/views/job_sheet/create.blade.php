@@ -98,7 +98,7 @@
                     {!! Form::select('brand_id', $brands, null, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select')]); !!}
                         <span class="input-group-btn">
                             <button type="button" class="btn btn-default bg-white btn-flat btn-modal" 
-                            data-href="{{ repair_route('brands.create') }}" 
+                            data-href="{{action([\App\Http\Controllers\BrandController::class, 'create'])}}" 
                             data-container=".brands_modal"><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
                         </span>
                     </div>
@@ -112,7 +112,7 @@
 
                         <span class="input-group-btn">
                             <button type="button" class="btn btn-default bg-white btn-flat btn-modal" 
-                             data-href="{{ repair_route('taxonomies.create', ['type' => 'device']) }}" data-container=".category_modal"><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
+                             data-href="{{action([\App\Http\Controllers\TaxonomyController::class, 'create'])}}?type=device" data-container=".category_modal"><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
                         </span>
                     </div>
                 </div>

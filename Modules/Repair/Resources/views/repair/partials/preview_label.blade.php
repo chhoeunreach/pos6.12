@@ -70,7 +70,7 @@
 				@endwhile
 				<br>
 				<br>
-				<a href="#" class="print-invoice no-print btn btn-success" data-href="{{ repair_route('sell.printInvoice', [$details['details']->id]) }}"><i class="fa fa-print"></i> {{__("repair::lang.print_invoice")}}</a>
+				<a href="#" class="print-invoice no-print btn btn-success" data-href="{{route('sell.printInvoice', [$details['details']->id])}}"><i class="fa fa-print"></i> {{__("repair::lang.print_invoice")}}</a>
 
 				<a href="#" id="print-barcode" class="no-print btn btn-primary"><i class="fa fa-barcode"></i> {{__("repair::lang.print_barcode")}}</a>
 			@endforeach

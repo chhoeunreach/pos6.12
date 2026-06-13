@@ -252,26 +252,26 @@ class RepairController extends Controller
                                     <ul class="dropdown-menu dropdown-menu-left" role="menu">';
 
                         if (auth()->user()->can('repair.view') || auth()->user()->can('direct_sell.access')) {
-                            $html .= '<li><a href="#" data-href="'.repair_route('repair.show', [$row->id]).'" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> '.__('messages.view').'</a></li>';
+                            $html .= '<li><a href="#" data-href="'.action([\Modules\Repair\Http\Controllers\RepairController::class, 'show'], [$row->id]).'" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> '.__('messages.view').'</a></li>';
                         }
 
                         if (auth()->user()->can('repair.update')) {
-                            $html .= '<li><a target="_blank" href="'.repair_route('pos.edit', [$row->id, 'sub_type' => 'repair']).'"><i class="fas fa-edit"></i> '.__('messages.edit').'</a></li>';
+                            $html .= '<li><a target="_blank" href="'.action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row->id]).'?sub_type=repair"><i class="fas fa-edit"></i> '.__('messages.edit').'</a></li>';
                         }
 
                         if (auth()->user()->can('repair.delete')) {
-                            $html .= '<li><a href="'.repair_route('pos.destroy', [$row->id]).'" class="delete-sale"><i class="fa fa-trash"></i> '.__('messages.delete').'</a></li>';
+                            $html .= '<li><a href="'.action([\App\Http\Controllers\SellPosController::class, 'destroy'], [$row->id]).'" class="delete-sale"><i class="fa fa-trash"></i> '.__('messages.delete').'</a></li>';
                         }
 
                         if (auth()->user()->can('repair.view') || auth()->user()->can('direct_sell.access')) {
                             $html .= '<li>
-                                        <a href="#" class="print-invoice" data-href="'.repair_route('sell.printInvoice', [$row->id]).'">
+                                        <a href="#" class="print-invoice" data-href="'.route('sell.printInvoice', [$row->id]).'">
                                             <i class="fa fa-print" aria-hidden="true"></i> '
                                             .__('messages.print')
                                         .'</a>
                                     </li>
                                     <li>
-                                        <a href="#" class="print-invoice" data-href="'.repair_route('repair.customerCopy', [$row->id]).'">
+                                        <a href="#" class="print-invoice" data-href="'.route('repair.customerCopy', [$row->id]).'">
                                             <i class="fa fa-print" aria-hidden="true"></i> '
                                             .__('repair::lang.print_customer_copy')
                                         .'</a>
@@ -280,11 +280,11 @@ class RepairController extends Controller
                         $html .= '<li class="divider"></li>';
 
                         if (auth()->user()->can('repair.create')) {
-                            $html .= '<li><a href="'.repair_url('/sell-return/add/'.$row->id).'"><i class="fas fa-undo"></i> '.__('lang_v1.sell_return').'</a></li>';
+                            $html .= '<li><a href="'.action([\App\Http\Controllers\SellReturnController::class, 'add'], [$row->id]).'"><i class="fas fa-undo"></i> '.__('lang_v1.sell_return').'</a></li>';
                         }
 
                         if (auth()->user()->can('repair_status.update')) {
-                            $html .= '<li><a data-href="'.repair_url('/repair/edit-repair/'.$row->id.'/status').'" class="edit_repair_status"><i class="fa fa-edit"></i> '.__('repair::lang.change_status').'</a></li>';
+                            $html .= '<li><a data-href="'.action([\Modules\Repair\Http\Controllers\RepairController::class, 'editRepairStatus'], [$row->id]).'" class="edit_repair_status"><i class="fa fa-edit"></i> '.__('repair::lang.change_status').'</a></li>';
                         }
 
                         if ($row->payment_status != 'paid' && (auth()->user()->can('repair.create') || auth()->user()->can('direct_sell.access'))) {
