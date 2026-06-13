@@ -123,7 +123,11 @@ class ImportProductsController extends Controller
                 $is_valid = true;
                 $error_msg = '';
 
-                $total_rows = count($imported_data);
+                $total_rows = collect($imported_data)->reject(function ($row) {
+                    return collect($row)->filter(function ($cell) {
+                        return trim((string) $cell) !== '';
+                    })->isEmpty();
+                })->count();
 
                 //Check if subscribed or not, then check for products quota
                 if (! $this->moduleUtil->isSubscribed($business_id)) {
@@ -135,6 +139,13 @@ class ImportProductsController extends Controller
                 $business_locations = BusinessLocation::where('business_id', $business_id)->get();
                 DB::beginTransaction();
                 foreach ($imported_data as $key => $value) {
+                    $is_empty_row = collect($value)->filter(function ($cell) {
+                        return trim((string) $cell) !== '';
+                    })->isEmpty();
+
+                    if ($is_empty_row) {
+                        continue;
+                    }
 
                     //Check if any column is missing
                     if (count($value) < 37) {
@@ -143,8 +154,10 @@ class ImportProductsController extends Controller
                         break;
                     }
 
-                    $row_no = $key + 1;
+                    $row_no = $key + 2;
                     $product_array = [];
+                    $product_array['__import_row'] = $value;
+                    $product_array['__row_no'] = $row_no;
                     $product_array['business_id'] = $business_id;
                     $product_array['created_by'] = $user_id;
 
@@ -624,7 +637,11 @@ class ImportProductsController extends Controller
                 }
 
                 if (! empty($formated_data)) {
-                    foreach ($formated_data as $index => $product_data) {
+                    foreach ($formated_data as $product_data) {
+                        $import_row = $product_data['__import_row'];
+                        $row_no = $product_data['__row_no'];
+                        unset($product_data['__import_row'], $product_data['__row_no']);
+
                         $variation_data = $product_data['variation'];
                         unset($product_data['variation']);
 
@@ -647,17 +664,17 @@ class ImportProductsController extends Controller
 
                         //Rack, Row & Position.
                         $this->rackDetails(
-                            $imported_data[$index][26],
-                            $imported_data[$index][27],
-                            $imported_data[$index][28],
+                            $import_row[26],
+                            $import_row[27],
+                            $import_row[28],
                             $business_id,
                             $product->id,
-                            $index + 1
+                            $row_no
                         );
 
                         //Product locations
-                        if (! empty($imported_data[$index][36])) {
-                            $locations_array = explode(',', $imported_data[$index][36]);
+                        if (! empty($import_row[36])) {
+                            $locations_array = explode(',', $import_row[36]);
                             $location_ids = [];
                             foreach ($locations_array as $business_location) {
                                 foreach ($business_locations as $loc) {

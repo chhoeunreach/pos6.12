@@ -942,7 +942,7 @@ class SellPosController extends Controller
                 //qty_available not added when negative to avoid max quanity getting decreased in edit and showing error in max quantity validation
                 DB::raw('IF(vld.qty_available > 0, vld.qty_available + transaction_sell_lines.quantity, transaction_sell_lines.quantity) AS qty_available')
             )
-            ->with(['variations.media', 'product.modifierSets', 'modifiers', 'children'])
+            ->with(['variations.media', 'product.modifier_sets', 'modifiers', 'children'])
             ->get();
         if (!empty($sell_details)) {
             foreach ($sell_details as $key => $value) {
