@@ -192,6 +192,7 @@ class StockAdjustmentController extends Controller
             $user_id = $request->session()->get('user.id');
 
             $input_data['type'] = 'stock_adjustment';
+            $input_data['status'] = 'final';
             $input_data['business_id'] = $business_id;
             $input_data['created_by'] = $user_id;
             $input_data['transaction_date'] = $this->productUtil->uf_date($input_data['transaction_date'], true);
@@ -456,6 +457,7 @@ class StockAdjustmentController extends Controller
 
                 $stock_adjstmt_data = [
                     'type' => 'stock_adjustment',
+                    'status' => 'final',
                     'business_id' => $business_id,
                     'created_by' => $user_id,
                     'transaction_date' => \Carbon::now()->format('Y-m-d'),
