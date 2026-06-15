@@ -258,7 +258,62 @@ class UseServiceDatabase
             return;
         }
 
+        if ($table === 'users') {
+            $data = $this->prepareUserDataForCopy($service, $data);
+        }
+
         $service->table($table)->updateOrInsert(['id' => $data['id']], $data);
+    }
+
+    private function prepareUserDataForCopy($service, array $data): array
+    {
+        if (empty($data['username'])) {
+            return $data;
+        }
+
+        $conflictId = $service->table('users')
+            ->where('username', $data['username'])
+            ->where('id', '!=', $data['id'])
+            ->value('id');
+
+        if (! $conflictId) {
+            return $data;
+        }
+
+        if ((int) $conflictId === 1 && (int) $data['id'] !== 1) {
+            $service->table('users')->where('id', 1)->update([
+                'user_type' => 'user',
+                'surname' => null,
+                'first_name' => 'Service',
+                'last_name' => 'Admin',
+                'username' => 'service',
+                'email' => 'service@example.com',
+                'business_id' => 1,
+                'allow_login' => 1,
+                'status' => 'active',
+                'updated_at' => now(),
+            ]);
+
+            return $data;
+        }
+
+        $baseUsername = substr($data['username'] . '_service_' . $data['id'], 0, 240);
+        $username = $baseUsername;
+        $counter = 1;
+
+        while (
+            $service->table('users')
+                ->where('username', $username)
+                ->where('id', '!=', $data['id'])
+                ->exists()
+        ) {
+            $username = $baseUsername . '_' . $counter;
+            $counter++;
+        }
+
+        $data['username'] = $username;
+
+        return $data;
     }
 
     private function ensureFallbackBusiness($service, int $businessId, int $userId): void

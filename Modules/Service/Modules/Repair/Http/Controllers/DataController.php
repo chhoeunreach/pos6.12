@@ -159,7 +159,7 @@ class DataController extends Controller
     {
         $business_id = session()->get('user.business_id');
         $module_util = new ModuleUtil();
-        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+        $is_repair_enabled = $this->isRepairEnabledForCurrentContext($business_id, $module_util);
 
         $background_color = '';
         if (config('app.env') == 'demo') {
@@ -169,12 +169,12 @@ class DataController extends Controller
         if ($is_repair_enabled && (auth()->user()->can('superadmin') || auth()->user()->can('repair.view') || auth()->user()->can('job_sheet.view_assigned') || auth()->user()->can('job_sheet.view_all'))) {
             Menu::modify('admin-sidebar-menu', function ($menu) use ($background_color) {
                 $menu->url(
-                            action([\Modules\Repair\Http\Controllers\DashboardController::class, 'index']),
+                            repair_url('repair/dashboard'),
                             __('repair::lang.repair'),
                             ['icon' => '<svg aria-hidden="true" class="tw-size-5 tw-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
                             <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
                             <path d="M7 10h3v-3l-3.5 -3.5a6 6 0 0 1 8 8l6 6a2 2 0 0 1 -3 3l-6 -6a6 6 0 0 1 -8 -8l3.5 3.5"></path>
-                          </svg>', 'active' => request()->segment(1) == 'repair', 'style' => 'background-color:'.$background_color]
+                          </svg>', 'active' => repair_is_service_context() ? request()->is(trim(config('service.route_prefix', 'service'), '/').'/repair*') : request()->segment(1) == 'repair', 'style' => 'background-color:'.$background_color]
                         )
                 ->order(24);
             });
@@ -191,7 +191,7 @@ class DataController extends Controller
     {
         $business_id = session()->get('user.business_id');
         $module_util = new ModuleUtil();
-        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+        $is_repair_enabled = $this->isRepairEnabledForCurrentContext($business_id, $module_util);
 
         if ($is_repair_enabled && (! is_null($params['sub_type']) && $params['sub_type'] == 'repair')) {
             $repairUtil = new RepairUtil();
@@ -236,7 +236,7 @@ class DataController extends Controller
                 ],
                 'module_js_path' => 'repair::layouts.partials.javascripts',
                 'module_css_path' => 'repair::job_sheet.tagify_css',
-                'go_back_url' => action([\Modules\Repair\Http\Controllers\RepairController::class, 'index']),
+                'go_back_url' => repair_url('repair/repair'),
                 'transaction_sub_type' => 'repair',
             ];
         } else {
@@ -281,7 +281,7 @@ class DataController extends Controller
     {
         $business_id = session()->get('user.business_id');
         $module_util = new ModuleUtil();
-        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+        $is_repair_enabled = $this->isRepairEnabledForCurrentContext($business_id, $module_util);
 
         if ($is_repair_enabled) {
             $device_models = DeviceModel::forDropdown($business_id);
@@ -329,7 +329,7 @@ class DataController extends Controller
     {
         $business_id = session()->get('user.business_id');
         $module_util = new ModuleUtil();
-        $is_repair_enabled = (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+        $is_repair_enabled = $this->isRepairEnabledForCurrentContext($business_id, $module_util);
 
         if ($is_repair_enabled) {
             $device_models = DeviceModel::forDropdown($business_id);
@@ -343,5 +343,28 @@ class DataController extends Controller
         } else {
             return [];
         }
+    }
+    private function isRepairEnabledForCurrentContext($business_id, ModuleUtil $module_util): bool
+    {
+        return $this->isServiceLocalModuleActive('Repair')
+            || (bool) $module_util->hasThePermissionInSubscription($business_id, 'repair_module');
+    }
+
+    private function isServiceLocalModuleActive(string $moduleName): bool
+    {
+        if (! function_exists('repair_is_service_context') || ! repair_is_service_context()) {
+            return false;
+        }
+
+        $statusesPath = module_path('Service', 'modules_statuses.json');
+        $modulePath = module_path('Service', 'Modules'.DIRECTORY_SEPARATOR.$moduleName);
+
+        if (! file_exists($statusesPath) || ! is_dir($modulePath)) {
+            return false;
+        }
+
+        $statuses = json_decode(file_get_contents($statusesPath), true) ?: [];
+
+        return ! empty($statuses[$moduleName]);
     }
 }

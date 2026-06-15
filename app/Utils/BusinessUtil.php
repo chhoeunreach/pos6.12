@@ -60,6 +60,7 @@ class BusinessUtil extends Util
             'is_default' => 1,
             'contact_id' => $contact_id,
             'credit_limit' => 0,
+            'mobile' => '',
         ];
         Contact::create($customer);
 
@@ -211,6 +212,8 @@ class BusinessUtil extends Util
 
         //Disable inline tax editing
         $business_details['enable_inline_tax'] = 0;
+
+        $business_details['weighing_scale_setting'] = $business_details['weighing_scale_setting'] ?? '{}';
 
         $business = Business::create_business($business_details);
 

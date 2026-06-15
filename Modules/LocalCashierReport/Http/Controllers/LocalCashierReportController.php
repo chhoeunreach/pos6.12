@@ -99,13 +99,74 @@ class LocalCashierReportController extends Controller
     {
         $permitted = auth()->user()->permitted_locations($businessId);
 
-        return DB::table('business_locations')
+        $locations = DB::table('business_locations')
             ->where('business_id', $businessId)
             ->when($permitted !== 'all', function ($query) use ($permitted) {
                 $query->whereIn('id', (array) $permitted);
             })
             ->orderBy('name')
             ->get(['id', 'name']);
+
+        $moduleLocations = collect()
+            ->merge($this->getModuleLocationsWithSales(
+                (string) config('accessory.database_connection', 'accessory'),
+                'Accessory',
+                $businessId,
+                $permitted
+            ))
+            ->merge($this->getModuleLocationsWithSales(
+                (string) config('service.database_connection', 'service'),
+                'Service',
+                $businessId,
+                $permitted
+            ));
+
+        return $locations
+            ->merge($moduleLocations)
+            ->unique(fn ($location) => (int) $location->id . '|' . (string) $location->name)
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+    }
+
+    private function getModuleLocationsWithSales(string $connection, string $label, int $businessId, $permitted)
+    {
+        if (! $this->hasRequiredReportTables($connection, ['business_locations', 'transactions'])) {
+            return collect();
+        }
+
+        try {
+            $db = DB::connection($connection);
+
+            $salesLocationIds = $db->table('transactions as t')
+                ->where('t.business_id', $businessId)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->when($permitted !== 'all', function ($query) use ($permitted) {
+                    $query->whereIn('t.location_id', (array) $permitted);
+                })
+                ->distinct()
+                ->pluck('t.location_id')
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($salesLocationIds)) {
+                return collect();
+            }
+
+            return $db->table('business_locations')
+                ->whereIn('id', $salesLocationIds)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(function ($location) use ($label) {
+                    $location->name = trim((string) $location->name) . ' (' . $label . ')';
+
+                    return $location;
+                });
+        } catch (\Throwable $e) {
+            return collect();
+        }
     }
 
     public function getCashiers(int $businessId, array $locationIds = [])

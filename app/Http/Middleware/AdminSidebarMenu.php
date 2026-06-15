@@ -895,9 +895,41 @@ class AdminSidebarMenu
         });
 
         //Add menus from modules
-        $moduleUtil = new ModuleUtil;
-        $moduleUtil->getModuleData('modifyAdminMenu');
+        if (function_exists('repair_is_service_context') && repair_is_service_context()) {
+            $this->loadServiceModuleMenus('modifyAdminMenu');
+        } else {
+            $moduleUtil = new ModuleUtil;
+            $moduleUtil->getModuleData('modifyAdminMenu');
+        }
 
         return $next($request);
+    }
+
+    private function loadServiceModuleMenus(string $functionName): void
+    {
+        $statusesPath = module_path('Service', 'modules_statuses.json');
+        $modulesPath = module_path('Service', 'Modules');
+
+        if (! file_exists($statusesPath) || ! is_dir($modulesPath)) {
+            return;
+        }
+
+        $statuses = json_decode(file_get_contents($statusesPath), true) ?: [];
+
+        foreach ($statuses as $moduleName => $isActive) {
+            if (! $isActive || ! is_dir($modulesPath.DIRECTORY_SEPARATOR.$moduleName)) {
+                continue;
+            }
+
+            $class = 'Modules\\'.$moduleName.'\\Http\\Controllers\\DataController';
+            if (! class_exists($class)) {
+                continue;
+            }
+
+            $controller = new $class();
+            if (method_exists($controller, $functionName)) {
+                $controller->{$functionName}();
+            }
+        }
     }
 }

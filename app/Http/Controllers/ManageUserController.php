@@ -25,6 +25,8 @@ use App\Events\UserCreatedOrModified;
 
 class ManageUserController extends Controller
 {
+    protected $moduleUtil;
+
     protected $commonUtil;
 
     /**
@@ -938,7 +940,7 @@ class ManageUserController extends Controller
             $exists = ! empty($existing);
 
             if ($row['role'] !== '' && ! isset($roles[strtolower($row['role'])])) {
-                $warnings[] = 'role not found';
+                $warnings[] = 'role will be created';
             }
 
             $resolved_locations = $this->resolveImportedLocations($row['location_names'], $location_names, $warnings);
@@ -996,7 +998,7 @@ class ManageUserController extends Controller
     {
         $normalized = [];
         foreach ($row as $key => $value) {
-            $normalized[strtolower(trim((string) $key))] = is_string($value) ? trim($value) : $value;
+            $normalized[strtolower(trim((string) $key))] = is_null($value) ? '' : trim((string) $value);
         }
 
         foreach (['surname', 'first_name', 'last_name', 'username', 'email', 'contact_no', 'password', 'status', 'role', 'allow_login', 'language', 'address', 'location_names', 'password_hash'] as $field) {
@@ -1093,9 +1095,9 @@ class ManageUserController extends Controller
         return $locations;
     }
 
-    private function resolveImportedLocations(string $location_names, array $location_map, array &$warnings = []): array
+    private function resolveImportedLocations(?string $location_names, array $location_map, array &$warnings = []): array
     {
-        $location_names = trim($location_names);
+        $location_names = trim((string) $location_names);
         if ($location_names === '') {
             return [
                 'all' => false,
@@ -1241,13 +1243,30 @@ class ManageUserController extends Controller
         $roles = $this->getImportRoleMap($business_id);
         $role = $roles[strtolower($role_name)] ?? null;
         if (empty($role)) {
-            $warnings[] = 'role not found';
-
-            return;
+            $role = $this->createImportedRole($role_name, $business_id);
+            $warnings[] = 'role created: ' . str_replace('#' . $business_id, '', $role->name);
         }
 
         $this->commonUtil->revokeLocationPermissionsFromRole($role);
         $user->syncRoles([$role->name]);
+    }
+
+    private function createImportedRole(string $role_name, int $business_id): Role
+    {
+        $role_name = trim($role_name);
+        $suffix = '#' . $business_id;
+        $stored_name = Str::endsWith($role_name, $suffix) ? $role_name : $role_name . $suffix;
+
+        return Role::firstOrCreate(
+            [
+                'name' => $stored_name,
+                'business_id' => $business_id,
+                'guard_name' => 'web',
+            ],
+            [
+                'is_default' => 0,
+            ]
+        );
     }
 
     private function syncImportedLocations(User $user, array $resolved_locations, int $business_id): void

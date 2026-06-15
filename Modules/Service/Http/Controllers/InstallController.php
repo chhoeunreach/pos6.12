@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -202,21 +203,50 @@ class InstallController extends Controller
                 '--force' => true,
             ]);
 
-            if ($authUser && $db->table('users')->where('id', 1)->exists()) {
-                $db->table('users')->where('id', 1)->update([
-                    'username' => $authUser->username,
-                    'surname' => $authUser->surname,
-                    'first_name' => $authUser->first_name,
-                    'last_name' => $authUser->last_name,
-                    'email' => $authUser->email,
-                    'password' => $authUser->password,
-                    'language' => $authUser->language,
-                ]);
+            if ($authUser) {
+                $this->syncAuthenticatedUserToModule($db, $authUser);
             }
         } finally {
             config(['database.default' => $originalDefault]);
             DB::setDefaultConnection($originalDefault);
         }
+    }
+
+    private function syncAuthenticatedUserToModule($db, $authUser): void
+    {
+        if (! Schema::connection($db->getName())->hasTable('users')) {
+            return;
+        }
+
+        if ((int) $authUser->id !== 1 && $db->table('users')->where('id', 1)->exists()) {
+            $db->table('users')->where('id', 1)->update([
+                'user_type' => 'user',
+                'surname' => null,
+                'first_name' => 'Service',
+                'last_name' => 'Admin',
+                'username' => 'service',
+                'email' => 'service@example.com',
+                'business_id' => 1,
+                'allow_login' => 1,
+                'status' => 'active',
+                'updated_at' => now(),
+            ]);
+        }
+
+        $columns = Schema::connection($db->getName())->getColumnListing('users');
+        $data = array_intersect_key($authUser->getAttributes(), array_flip($columns));
+
+        $data['id'] = $authUser->id;
+        $data['business_id'] = 1;
+        $data['allow_login'] = 1;
+        $data['status'] = 'active';
+        $data['updated_at'] = now();
+
+        if (in_array('created_at', $columns, true) && empty($data['created_at'])) {
+            $data['created_at'] = now();
+        }
+
+        $db->table('users')->updateOrInsert(['id' => $authUser->id], $data);
     }
 
     private function ensureMainPermissionExists(): void

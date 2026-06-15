@@ -256,7 +256,62 @@ class UseAccessoryDatabase
             return;
         }
 
+        if ($table === 'users') {
+            $data = $this->prepareUserDataForCopy($accessory, $data);
+        }
+
         $accessory->table($table)->updateOrInsert(['id' => $data['id']], $data);
+    }
+
+    private function prepareUserDataForCopy($accessory, array $data): array
+    {
+        if (empty($data['username'])) {
+            return $data;
+        }
+
+        $conflictId = $accessory->table('users')
+            ->where('username', $data['username'])
+            ->where('id', '!=', $data['id'])
+            ->value('id');
+
+        if (! $conflictId) {
+            return $data;
+        }
+
+        if ((int) $conflictId === 1 && (int) $data['id'] !== 1) {
+            $accessory->table('users')->where('id', 1)->update([
+                'user_type' => 'user',
+                'surname' => null,
+                'first_name' => 'Accessory',
+                'last_name' => 'Admin',
+                'username' => 'accessory',
+                'email' => 'accessory@example.com',
+                'business_id' => 1,
+                'allow_login' => 1,
+                'status' => 'active',
+                'updated_at' => now(),
+            ]);
+
+            return $data;
+        }
+
+        $baseUsername = substr($data['username'] . '_accessory_' . $data['id'], 0, 240);
+        $username = $baseUsername;
+        $counter = 1;
+
+        while (
+            $accessory->table('users')
+                ->where('username', $username)
+                ->where('id', '!=', $data['id'])
+                ->exists()
+        ) {
+            $username = $baseUsername . '_' . $counter;
+            $counter++;
+        }
+
+        $data['username'] = $username;
+
+        return $data;
     }
 
     private function ensureFallbackBusiness($accessory, int $businessId, int $userId): void

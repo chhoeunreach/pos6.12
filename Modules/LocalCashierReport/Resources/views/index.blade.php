@@ -47,29 +47,38 @@
         $expenseRows = collect($report['expense_detail_rows'] ?? []);
         $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
         $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
-        $moduleDashboardSummary = function ($label, $rows, $tabTarget) use ($report, $filters) {
+        $moduleDashboardSummary = function ($rows, $tabTarget) use ($report, $filters) {
             $rows = collect($rows ?? []);
-            $payments = [];
-            foreach ($report['payment_columns'] as $method) {
-                $payments[$method] = $rows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
-            }
 
-            return [
-                'label' => $label,
-                'tab_target' => $tabTarget,
-                'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
-                    ? $rows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
-                    : $rows->pluck('transaction_id')->filter()->unique()->count(),
-                'total' => $rows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
-                'paid' => $rows->sum(fn ($row) => (float) ($row['paid'] ?? 0)),
-                'due' => $rows->sum(fn ($row) => (float) ($row['due'] ?? 0)),
-                'payments' => $payments,
-            ];
+            return $rows
+                ->groupBy(fn ($row) => (string) ($row['location_name'] ?? 'N/A'))
+                ->map(function ($locationRows, $locationName) use ($tabTarget, $report, $filters) {
+                    $payments = [];
+                    foreach ($report['payment_columns'] as $method) {
+                        $payments[$method] = $locationRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+                    }
+
+                    return [
+                        'label' => $locationName,
+                        'tab_target' => $tabTarget,
+                        'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
+                            ? $locationRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
+                            : $locationRows->pluck('transaction_id')->filter()->unique()->count(),
+                        'total' => $locationRows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
+                        'paid' => $locationRows->sum(fn ($row) => (float) ($row['paid'] ?? 0)),
+                        'due' => $locationRows->sum(fn ($row) => (float) ($row['due'] ?? 0)),
+                        'payments' => $payments,
+                    ];
+                })
+                ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()
+                ->all();
         };
-        $moduleDashboardRows = [
-            $moduleDashboardSummary('Accessory sales', $accessorySaleRows, '#accessory_sales_detail_tab'),
-            $moduleDashboardSummary('Service sales', $serviceSaleRows, '#service_sales_detail_tab'),
-        ];
+        $moduleDashboardRows = collect()
+            ->merge($moduleDashboardSummary($accessorySaleRows, '#accessory_sales_detail_tab'))
+            ->merge($moduleDashboardSummary($serviceSaleRows, '#service_sales_detail_tab'))
+            ->values()
+            ->all();
     @endphp
     <div class="local-filter-wrap">
         <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-sm local-filter-reset">
@@ -348,6 +357,8 @@
                     $dashboardDueTotal = $dashboardLocationGroupRows
                         ->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
                         ->sum(fn ($row) => (float) ($row['due'] ?? 0));
+                    $hasNormalDashboardGroup = $dashboardLocationGroupRows
+                        ->contains(fn ($row) => (int) ($row['sort'] ?? 0) === 1);
                     $lastDashboardCustomerGroup = null;
                 @endphp
                 @forelse($dashboardLocationGroupRows as $customerGroupRow)
@@ -426,10 +437,39 @@
                             @endforeach
                         @endif
                 @empty
-                    <tr>
-                        <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
-                    </tr>
+                    @if(empty($moduleDashboardRows))
+                        <tr>
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                        </tr>
+                    @endif
                 @endforelse
+                @if(! $hasNormalDashboardGroup)
+                    @foreach($moduleDashboardRows as $moduleDashboardRow)
+                        <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
+                            <td class="name-main cashier-group-breakdown-name">
+                                <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                    {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
+                                </a>
+                            </td>
+                            <td class="text-right">
+                                <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                    {{ $fmt($moduleDashboardRow['total'] ?? null) }}
+                                </a>
+                            </td>
+                            @foreach($report['payment_columns'] as $method)
+                                <td class="text-right">
+                                    <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
+                                        {{ $fmt($moduleDashboardRow['payments'][$method] ?? null) }}
+                                    </a>
+                                </td>
+                            @endforeach
+                            <td class="text-right">{{ $fmt($moduleDashboardRow['paid'] ?? null) }}</td>
+                            <td class="text-right @if(($moduleDashboardRow['due'] ?? 0) != 0) due-negative @endif">
+                                {{ $fmt($moduleDashboardRow['due'] ?? null) }}
+                            </td>
+                        </tr>
+                    @endforeach
+                @endif
             </tbody>
             <tfoot>
                 <tr class="row-total">
