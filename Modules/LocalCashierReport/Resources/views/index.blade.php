@@ -47,6 +47,11 @@
         $expenseRows = collect($report['expense_detail_rows'] ?? []);
         $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
         $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
+        $allSaleRows = collect($report['detail_rows'] ?? [])
+            ->filter(fn ($row) => ($row['row_type'] ?? 'sale') === 'sale')
+            ->merge($accessorySaleRows)
+            ->merge($serviceSaleRows)
+            ->values();
         $moduleDashboardSummary = function ($rows, $tabTarget) use ($report, $filters) {
             $rows = collect($rows ?? []);
 
@@ -763,6 +768,9 @@
             <div class="box-header">
                 <ul class="nav nav-tabs local-detail-tabs" role="tablist">
                     <li role="presentation" class="active">
+                        <a href="#all_sale_detail_tab" aria-controls="all_sale_detail_tab" role="tab" data-toggle="tab">All Sale</a>
+                    </li>
+                    <li role="presentation">
                         <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">All cashier sales</a>
                     </li>
                     <li role="presentation">
@@ -778,6 +786,7 @@
                 <div class="table-meta">
                     <span>{{ number_format($detailMeta['main_displayed'] ?? count($report['detail_rows'] ?? [])) }} / {{ number_format($detailMeta['main_total'] ?? count($report['detail_rows'] ?? [])) }} rows</span>
                     <span>{{ count($report['summary_user'] ?? []) }} cashiers</span>
+                    <span>{{ number_format($allSaleRows->count()) }} all sales</span>
                     <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} accessory sales</span>
                     <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} service sales</span>
                     <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} expenses</span>
@@ -785,7 +794,16 @@
             </div>
             <div class="box-body">
                 <div class="tab-content local-detail-tab-content">
-                    <div role="tabpanel" class="tab-pane active" id="cashier_sales_detail_tab">
+                    <div role="tabpanel" class="tab-pane active" id="all_sale_detail_tab">
+                        @include('localcashierreport::partials.module_sales_detail_table', [
+                            'tableId' => 'local_cashier_all_sale_detail_table',
+                            'rows' => $allSaleRows,
+                            'report' => $report,
+                            'fmt' => $fmt,
+                            'isAllSaleTable' => true,
+                        ])
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="cashier_sales_detail_tab">
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped ajax_view" id="local_cashier_sales_detail_table" style="width:100%;">
                         <thead>
@@ -1171,6 +1189,7 @@
                     infoEmpty: 'Showing 0 to 0 of 0 entries'
                 },
                 buttons: [
+                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
@@ -1200,6 +1219,7 @@
                     infoEmpty: 'Showing 0 to 0 of 0 entries'
                 },
                 buttons: [
+                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
@@ -1229,15 +1249,46 @@
                         info: 'Showing _START_ to _END_ of _TOTAL_ entries',
                         infoEmpty: 'Showing 0 to 0 of 0 entries'
                     },
+                    columnDefs: [
+                        { targets: 'never-visible', visible: false, searchable: true }
+                    ],
                     buttons: [
-                        { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                        { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                        { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                        { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                        { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                        { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
+                        { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } }
                     ]
                 });
             });
+        }
+        function escapeDataTableRegex(value) {
+            return $.fn.dataTable.util.escapeRegex(value || '');
+        }
+
+        function applyAllSaleFilters(tableId) {
+            var table = $('#' + tableId).DataTable();
+            var location = $('.all-sale-location-filter[data-table-id="' + tableId + '"]').val();
+            var cashier = $('.all-sale-cashier-filter[data-table-id="' + tableId + '"]').val();
+            var locationColumn = $('#' + tableId + ' thead th.all-sale-location-column').index();
+            var cashierColumn = $('#' + tableId + ' thead th.all-sale-cashier-column').index();
+
+            if (locationColumn >= 0) {
+                table.column(locationColumn).search(location ? '^' + escapeDataTableRegex(location) + '$' : '', true, false);
+            }
+            if (cashierColumn >= 0) {
+                table.column(cashierColumn).search(cashier ? '^' + escapeDataTableRegex(cashier) + '$' : '', true, false);
+            }
+
+            table.draw();
+        }
+
+        $(document).on('change', '.all-sale-location-filter, .all-sale-cashier-filter', function () {
+            applyAllSaleFilters($(this).data('table-id'));
+        });
+        if (window.location.hash && $('.local-detail-tabs a[href="' + window.location.hash + '"]').length) {
+            $('.local-detail-tabs a[href="' + window.location.hash + '"]').tab('show');
         }
         $(document).on('click', '.local-detail-tab-link', function (e) {
             var targetTab = $(this).data('target-tab');
@@ -1257,6 +1308,10 @@
         $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
             if ($.fn.DataTable) {
                 $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+            }
+
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search + $(this).attr('href'));
             }
         });
     });
@@ -1524,6 +1579,13 @@
 }
 #local_cashier_report_app .local-detail-tab-content {
     padding-top: 12px;
+}
+#local_cashier_report_app .all-sale-table-filters {
+    margin-bottom: 10px;
+}
+#local_cashier_report_app .all-sale-table-filters label {
+    color: #334155;
+    font-weight: 700;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
     margin-bottom: 8px;

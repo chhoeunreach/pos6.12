@@ -830,6 +830,8 @@ class LocalCashierReportController extends Controller
                 'date' => Carbon::parse($line->transaction_date)->format('Y-m-d H:i'),
                 'invoice_no' => (string) ($line->invoice_no ?: ('#' . $txnId)),
                 'i_t' => $itText !== '' ? $itText : '-',
+                'cashier_id' => (int) $line->created_by,
+                'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
                 'customer_group_name' => $customerGroupLabel,
@@ -862,6 +864,8 @@ class LocalCashierReportController extends Controller
                 'date' => ! empty($loanPaymentRow['date']) ? Carbon::parse($loanPaymentRow['date'])->format('Y-m-d H:i') : '-',
                 'invoice_no' => $paymentRef !== '' ? $paymentRef : ($loanNumber !== '' ? $loanNumber : ('#LP' . ($loanPaymentRow['payment_id'] ?? ''))),
                 'i_t' => $loanNumber !== '' ? $loanNumber : '-',
+                'cashier_id' => (int) ($loanPaymentRow['cashier_id'] ?? 0),
+                'cashier_name' => (string) ($cashierMap[(int) ($loanPaymentRow['cashier_id'] ?? 0)] ?? 'N/A'),
                 'location_name' => (string) ($locationMap[$loanPaymentRow['location_id'] ?? 0] ?? 'N/A'),
                 'customer_name' => (string) ($loanPaymentRow['customer_name'] ?? 'Loan Customer'),
                 'customer_group_name' => 'បង់ប្រាក់',
@@ -1011,6 +1015,7 @@ class LocalCashierReportController extends Controller
                 't.id as txn_id',
                 't.transaction_date',
                 't.invoice_no',
+                't.created_by',
                 't.location_id',
                 't.final_total',
                 't.additional_notes',
@@ -1038,6 +1043,15 @@ class LocalCashierReportController extends Controller
             foreach ($paymentRows as $paymentRow) {
                 $paymentByTransaction[(int) $paymentRow->transaction_id][(string) $paymentRow->method] = (float) $paymentRow->amount;
             }
+        }
+
+        $cashierMap = collect();
+        $displayCashierIds = $rows->pluck('created_by')->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        if (! empty($displayCashierIds) && $this->hasRequiredReportTables($connection, ['users'])) {
+            $cashierMap = $db->table('users')
+                ->whereIn('id', $displayCashierIds)
+                ->select('id', DB::raw("TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name"))
+                ->pluck('name', 'id');
         }
 
         $detailRows = [];
@@ -1076,6 +1090,8 @@ class LocalCashierReportController extends Controller
                 'date' => Carbon::parse($line->transaction_date)->format('Y-m-d H:i'),
                 'invoice_no' => (string) ($line->invoice_no ?: ('#' . $txnId)),
                 'i_t' => $itText !== '' ? $itText : '-',
+                'cashier_id' => (int) $line->created_by,
+                'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
                 'customer_group_name' => $customerGroupLabel,
