@@ -16,7 +16,7 @@ return new class extends Migration
             'guard_name' => 'web',
         ];
 
-        Permission::create($insert_data);
+        Permission::firstOrCreate($insert_data);
     }
 
     /**

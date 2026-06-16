@@ -34,7 +34,7 @@
     "LoanManagement": true,
     "WarrantyCardPrint": true,
     "Loan": true,
-    "Accessory": true,
-    "Service": true,
+    "Accessory": false,
+    "Service": false,
     "NotificationCenter": true
 }
