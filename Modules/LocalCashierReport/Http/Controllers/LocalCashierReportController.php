@@ -496,7 +496,7 @@ class LocalCashierReportController extends Controller
 
             $rows[] = $cashierRow;
             $userSummary[] = [
-                'id' => (int) $cashierId,
+                'id' => (int) ($cashierRow['cashier_id'] ?? 0),
                 'name' => $cashierRow['cashier_name'],
                 'amount' => (float) $cashierRow['total'],
                 'qty' => (float) $cashierRow['qty_total'],
@@ -706,8 +706,27 @@ class LocalCashierReportController extends Controller
             $paymentColumns,
             self::DETAIL_ROW_LIMIT
         );
+
+        $accessorySaleSummaryRows = $accessorySaleDetailResult['total'] > count($accessorySaleDetailResult['rows'])
+            ? $this->getModuleSaleDetailRows(
+                (string) config('accessory.database_connection', 'accessory'),
+                'accessory',
+                $filters,
+                $paymentColumns,
+                null
+            )['rows']
+            : $accessorySaleDetailResult['rows'];
+        $serviceSaleSummaryRows = $serviceSaleDetailResult['total'] > count($serviceSaleDetailResult['rows'])
+            ? $this->getModuleSaleDetailRows(
+                (string) config('service.database_connection', 'service'),
+                'service',
+                $filters,
+                $paymentColumns,
+                null
+            )['rows']
+            : $serviceSaleDetailResult['rows'];
         $this->mergeModuleSummaryRows(
-            collect($accessorySaleDetailResult['rows'] ?? [])->merge($serviceSaleDetailResult['rows'] ?? []),
+            collect($accessorySaleSummaryRows ?? [])->merge($serviceSaleSummaryRows ?? []),
             $filters,
             $userSummary,
             $locationSummary,
@@ -1128,7 +1147,7 @@ class LocalCashierReportController extends Controller
         ];
     }
 
-    private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, int $limit): array
+    private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, ?int $limit): array
     {
         if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_sell_lines'])) {
             return ['rows' => [], 'total' => 0];
@@ -1212,9 +1231,11 @@ class LocalCashierReportController extends Controller
             ->orderBy('t.id', 'desc');
 
         $total = (clone $query)->count();
-        $rows = $query
-            ->limit($limit)
-            ->get();
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        $rows = $query->get();
 
         $paymentByTransaction = [];
         $displayTransactionIds = $rows->pluck('txn_id')->map(fn ($id) => (int) $id)->unique()->values()->all();

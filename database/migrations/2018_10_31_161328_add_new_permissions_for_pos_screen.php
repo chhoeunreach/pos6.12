@@ -12,8 +12,8 @@ return new class extends Migration
      */
     public function up()
     {
-        Permission::create(['name' => 'edit_product_price_from_sale_screen']);
-        Permission::create(['name' => 'edit_product_discount_from_sale_screen']);
+        Permission::firstOrCreate(['name' => 'edit_product_price_from_sale_screen', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'edit_product_discount_from_sale_screen', 'guard_name' => 'web']);
     }
 
     /**

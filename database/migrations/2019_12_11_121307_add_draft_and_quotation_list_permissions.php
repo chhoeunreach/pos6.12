@@ -12,8 +12,8 @@ return new class extends Migration
      */
     public function up()
     {
-        Permission::create(['name' => 'list_drafts']);
-        Permission::create(['name' => 'list_quotations']);
+        Permission::firstOrCreate(['name' => 'list_drafts', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'list_quotations', 'guard_name' => 'web']);
     }
 
     /**

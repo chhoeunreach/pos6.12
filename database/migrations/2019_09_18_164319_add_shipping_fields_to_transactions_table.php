@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('delivered_to')->nullable()->after('shipping_status');
         });
 
-        Permission::create(['name' => 'access_shipping']);
+        Permission::firstOrCreate(['name' => 'access_shipping', 'guard_name' => 'web']);
     }
 
     /**

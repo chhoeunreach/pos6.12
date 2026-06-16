@@ -23,7 +23,10 @@ return new class extends Migration
             ],
         ];
         foreach ($insert_data as $data) {
-            Permission::create($data);
+            Permission::firstOrCreate([
+                'name' => $data['name'],
+                'guard_name' => $data['guard_name'] ?? 'web',
+            ]);
         }
 
         Schema::create('bookings', function (Blueprint $table) {

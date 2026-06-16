@@ -14,7 +14,7 @@ return new class extends Migration
     public function up()
     {
         //Create a new permission related to the created selling price group
-        Permission::create(['name' => 'access_default_selling_price']);
+        Permission::firstOrCreate(['name' => 'access_default_selling_price', 'guard_name' => 'web']);
 
         $roles = Role::get();
         foreach ($roles as $role) {
