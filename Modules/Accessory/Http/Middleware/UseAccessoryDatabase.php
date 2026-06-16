@@ -101,6 +101,7 @@ class UseAccessoryDatabase
 
         try {
             $this->ensureFallbackBusiness($accessory, $businessId, $mainUser->id);
+            $this->syncModuleState($main, $accessory, $businessId);
 
             $this->copyRowById($main, $accessory, 'users', $mainUser->id, [
                 'business_id' => $businessId,
@@ -356,6 +357,55 @@ class UseAccessoryDatabase
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    private function syncModuleState($main, $accessory, int $businessId): void
+    {
+        if ($this->hasTable($main, 'business') && $this->hasTable($accessory, 'business')) {
+            $enabledModules = $main->table('business')->where('id', $businessId)->value('enabled_modules');
+            if (! empty($enabledModules)) {
+                $accessory->table('business')->where('id', $businessId)->update([
+                    'enabled_modules' => $enabledModules,
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        if (! $this->hasTable($main, 'system') || ! $this->hasTable($accessory, 'system')) {
+            return;
+        }
+
+        $versionKeys = [
+            'accessory_version',
+            'service_version',
+            'smart_stock_inventory_version',
+            'local_cashier_report_version',
+            'notification_center_version',
+            'warranty_card_print_version',
+            'loan_management_version',
+        ];
+
+        $systemColumns = Schema::connection($accessory->getName())->getColumnListing('system');
+
+        $main->table('system')
+            ->whereIn('key', $versionKeys)
+            ->get()
+            ->each(function ($row) use ($accessory, $systemColumns) {
+                $values = [
+                    'value' => $row->value,
+                ];
+                if (in_array('created_at', $systemColumns, true)) {
+                    $values['created_at'] = $row->created_at ?? now();
+                }
+                if (in_array('updated_at', $systemColumns, true)) {
+                    $values['updated_at'] = now();
+                }
+
+                $accessory->table('system')->updateOrInsert(
+                    ['key' => $row->key],
+                    $values
+                );
+            });
     }
 
     private function copyUserAuthorizationData($main, $accessory, $mainUser): void
