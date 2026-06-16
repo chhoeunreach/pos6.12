@@ -213,6 +213,9 @@ class BusinessUtil extends Util
         //Disable inline tax editing
         $business_details['enable_inline_tax'] = 0;
 
+        $business_details['on_product_expiry'] = $business_details['on_product_expiry'] ?? 'keep_selling';
+        $business_details['stop_selling_before'] = $business_details['stop_selling_before'] ?? 0;
+
         $business_details['weighing_scale_setting'] = $business_details['weighing_scale_setting'] ?? '{}';
 
         $business = Business::create_business($business_details);
