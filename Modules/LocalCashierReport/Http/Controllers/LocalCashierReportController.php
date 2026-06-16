@@ -320,6 +320,15 @@ class LocalCashierReportController extends Controller
             $methodsWithAmount[$method] = true;
         }
 
+        foreach ([
+            (string) config('accessory.database_connection', 'accessory'),
+            (string) config('service.database_connection', 'service'),
+        ] as $moduleConnection) {
+            foreach ($this->getModulePaymentMethodsWithAmount($moduleConnection, $filters) as $method) {
+                $methodsWithAmount[$method] = true;
+            }
+        }
+
         $cashierIds = array_values(array_unique(array_merge($cashierIds, $loanPaymentData['cashier_ids'])));
         $locationIds = array_values(array_unique(array_merge($locationIds, $loanPaymentData['location_ids'])));
         $cashierMap = DB::table('users')
@@ -685,16 +694,27 @@ class LocalCashierReportController extends Controller
         $expenseDetailResult = $this->getExpenseDetailRows($expenseTxnIds, $paymentTypes, $paymentColumns, self::DETAIL_ROW_LIMIT);
         $accessorySaleDetailResult = $this->getModuleSaleDetailRows(
             (string) config('accessory.database_connection', 'accessory'),
+            'accessory',
             $filters,
             $paymentColumns,
             self::DETAIL_ROW_LIMIT
         );
         $serviceSaleDetailResult = $this->getModuleSaleDetailRows(
             (string) config('service.database_connection', 'service'),
+            'service',
             $filters,
             $paymentColumns,
             self::DETAIL_ROW_LIMIT
         );
+        $this->mergeModuleSummaryRows(
+            collect($accessorySaleDetailResult['rows'] ?? [])->merge($serviceSaleDetailResult['rows'] ?? []),
+            $filters,
+            $userSummary,
+            $locationSummary,
+            $customerGroupSummary,
+            $brandSummary
+        );
+        $summaryTotals = $this->summaryTotals($userSummary, $locationSummary, $customerGroupSummary, $brandSummary, $paymentSummary);
 
         $sellReturnQuery = DB::table('transactions as t')
             ->where('t.business_id', $businessId)
@@ -769,6 +789,7 @@ class LocalCashierReportController extends Controller
 
         $sellLineQuery = DB::table('transaction_sell_lines as tsl')
             ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->leftJoin('business_locations as l', 'l.id', '=', 't.location_id')
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
             ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
             ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
@@ -795,6 +816,7 @@ class LocalCashierReportController extends Controller
                 DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
             )
+            ->orderBy('l.name')
             ->orderBy('t.transaction_date', 'desc')
             ->orderBy('t.id', 'desc');
 
@@ -884,8 +906,17 @@ class LocalCashierReportController extends Controller
         }
 
         usort($detailRows, function ($a, $b) {
-            return [$a['customer_group_sort'], $a['customer_name'], $b['date']]
-                <=> [$b['customer_group_sort'], $b['customer_name'], $a['date']];
+            return [
+                $a['location_name'] ?? '',
+                $a['customer_group_sort'],
+                $a['customer_name'],
+                $b['date'],
+            ] <=> [
+                $b['location_name'] ?? '',
+                $b['customer_group_sort'],
+                $b['customer_name'],
+                $a['date'],
+            ];
         });
 
         $groupedDetailRows = [];
@@ -955,7 +986,149 @@ class LocalCashierReportController extends Controller
         ];
     }
 
-    private function getModuleSaleDetailRows(string $connection, array $filters, array $paymentColumns, int $limit): array
+    private function mergeModuleSummaryRows($moduleRows, array $filters, array &$userSummary, array &$locationSummary, array &$customerGroupSummary, array &$brandSummary): void
+    {
+        $qtyType = (string) ($filters['qty_type'] ?? 'invoice_count');
+        $counted = [
+            'user' => [],
+            'location' => [],
+            'customer_group' => [],
+            'brand' => [],
+        ];
+
+        $upsert = function (&$rows, string $key, array $base, float $amount, float $qty) {
+            if (! isset($rows[$key])) {
+                $rows[$key] = $base + ['amount' => 0.0, 'qty' => 0.0];
+            }
+
+            $rows[$key]['amount'] += $amount;
+            $rows[$key]['qty'] += $qty;
+        };
+
+        $userMap = [];
+        foreach ($userSummary as $row) {
+            $key = ((int) ($row['id'] ?? 0)) > 0 ? 'id:' . (int) $row['id'] : 'name:' . strtolower((string) ($row['name'] ?? 'N/A'));
+            $userMap[$key] = $row;
+        }
+
+        $locationMap = [];
+        foreach ($locationSummary as $row) {
+            $key = ((int) ($row['id'] ?? 0)) > 0 ? 'main:id:' . (int) $row['id'] : 'main:name:' . strtolower((string) ($row['name'] ?? 'N/A'));
+            $locationMap[$key] = $row;
+        }
+
+        $customerGroupMap = [];
+        foreach ($customerGroupSummary as $row) {
+            $key = strtolower((string) ($row['name'] ?? 'áž›áž€áŸ‹'));
+            $customerGroupMap[$key] = $row;
+        }
+
+        $brandMap = [];
+        foreach ($brandSummary as $row) {
+            $key = strtolower((string) ($row['name'] ?? 'No Brand'));
+            $brandMap[$key] = $row;
+        }
+
+        foreach ($moduleRows as $row) {
+            if (($row['row_type'] ?? 'sale') !== 'sale') {
+                continue;
+            }
+
+            $transactionKey = (string) ($row['module_prefix'] ?? 'module') . ':' . (int) ($row['transaction_id'] ?? 0);
+            $amount = (float) ($row['line_total'] ?? 0);
+            $soldQty = (float) ($row['quantity'] ?? 0);
+
+            $userKey = ((int) ($row['cashier_id'] ?? 0)) > 0 ? 'id:' . (int) $row['cashier_id'] : 'name:' . strtolower((string) ($row['cashier_name'] ?? 'N/A'));
+            $userQty = $qtyType === 'invoice_count'
+                ? (isset($counted['user'][$userKey][$transactionKey]) ? 0.0 : 1.0)
+                : $soldQty;
+            $counted['user'][$userKey][$transactionKey] = true;
+            $upsert($userMap, $userKey, [
+                'id' => (int) ($row['cashier_id'] ?? 0),
+                'name' => (string) ($row['cashier_name'] ?? 'N/A'),
+            ], $amount, $userQty);
+
+            $modulePrefix = (string) ($row['module_prefix'] ?? 'module');
+            $locationName = (string) ($row['location_name'] ?? 'N/A');
+            if (in_array($modulePrefix, ['accessory', 'service'], true)) {
+                $moduleLabel = ucfirst($modulePrefix);
+                if (! str_contains(strtolower($locationName), strtolower($moduleLabel))) {
+                    $locationName .= ' (' . $moduleLabel . ')';
+                }
+            }
+
+            $locationKey = ((int) ($row['location_id'] ?? 0)) > 0
+                ? $modulePrefix . ':id:' . (int) $row['location_id']
+                : $modulePrefix . ':name:' . strtolower($locationName);
+            $locationQty = $qtyType === 'invoice_count'
+                ? (isset($counted['location'][$locationKey][$transactionKey]) ? 0.0 : 1.0)
+                : $soldQty;
+            $counted['location'][$locationKey][$transactionKey] = true;
+            $upsert($locationMap, $locationKey, [
+                'id' => (int) ($row['location_id'] ?? 0),
+                'name' => $locationName,
+            ], $amount, $locationQty);
+
+            $customerGroupName = (string) ($row['customer_group_name'] ?? 'áž›áž€áŸ‹');
+            $customerGroupKey = strtolower($customerGroupName);
+            $customerGroupQty = $qtyType === 'invoice_count'
+                ? (isset($counted['customer_group'][$customerGroupKey][$transactionKey]) ? 0.0 : 1.0)
+                : $soldQty;
+            $counted['customer_group'][$customerGroupKey][$transactionKey] = true;
+            $upsert($customerGroupMap, $customerGroupKey, [
+                'name' => $customerGroupName,
+                'sort' => ['áž›áž€áŸ‹' => 1, 'áž¢áŸŠáž¸áž¢áž“' => 2, 'ážšáŸ†áž›ážŸáŸ‹' => 3, 'áž”áž„áŸ‹áž”áŸ’ážšáž¶áž€áŸ‹' => 4][$customerGroupName] ?? 1,
+            ], $amount, $customerGroupQty);
+
+            $brandName = (string) ($row['brand_name'] ?? 'No Brand');
+            $brandKey = strtolower($brandName);
+            $brandQty = $qtyType === 'invoice_count'
+                ? (isset($counted['brand'][$brandKey][$transactionKey]) ? 0.0 : 1.0)
+                : $soldQty;
+            $counted['brand'][$brandKey][$transactionKey] = true;
+            $upsert($brandMap, $brandKey, [
+                'id' => (int) ($row['brand_id'] ?? 0),
+                'name' => $brandName,
+            ], $amount, $brandQty);
+        }
+
+        $userSummary = array_values($userMap);
+        usort($userSummary, fn ($a, $b) => strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+        $locationSummary = array_values($locationMap);
+        usort($locationSummary, fn ($a, $b) => strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+        $customerGroupSummary = array_values($customerGroupMap);
+        usort($customerGroupSummary, fn ($a, $b) => ($a['sort'] ?? 1) <=> ($b['sort'] ?? 1));
+        $brandSummary = array_values($brandMap);
+        usort($brandSummary, fn ($a, $b) => strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+    }
+
+    private function summaryTotals(array $userSummary, array $locationSummary, array $customerGroupSummary, array $brandSummary, array $paymentSummary): array
+    {
+        return [
+            'user' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $userSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $userSummary)),
+            ],
+            'location' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $locationSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $locationSummary)),
+            ],
+            'customer_group' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $customerGroupSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $customerGroupSummary)),
+            ],
+            'brand' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $brandSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $brandSummary)),
+            ],
+            'payment' => [
+                'amount' => array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $paymentSummary)),
+                'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $paymentSummary)),
+            ],
+        ];
+    }
+
+    private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, int $limit): array
     {
         if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_sell_lines'])) {
             return ['rows' => [], 'total' => 0];
@@ -994,13 +1167,18 @@ class LocalCashierReportController extends Controller
         $locationMap = $this->hasRequiredReportTables($connection, ['business_locations'])
             ? $db->table('business_locations')->pluck('name', 'id')
             : collect();
+        $hasLocationTable = $this->hasRequiredReportTables($connection, ['business_locations']);
 
         $query = $db->table('transaction_sell_lines as tsl')
             ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->when($hasLocationTable, function ($query) {
+                $query->leftJoin('business_locations as l', 'l.id', '=', 't.location_id');
+            })
             ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
             ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
             ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
             ->leftJoin('products as p', 'p.id', '=', 'tsl.product_id')
+            ->leftJoin('brands as b', 'b.id', '=', 'p.brand_id')
             ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
             ->whereIn('tsl.transaction_id', $transactionIds)
             ->select(
@@ -1020,9 +1198,16 @@ class LocalCashierReportController extends Controller
                 't.final_total',
                 't.additional_notes',
                 't.staff_note',
+                'p.brand_id',
+                DB::raw("COALESCE(NULLIF(TRIM(b.name), ''), 'No Brand') as brand_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
             )
+            ->when($hasLocationTable, function ($query) {
+                $query->orderBy('l.name');
+            }, function ($query) {
+                $query->orderBy('t.location_id');
+            })
             ->orderBy('t.transaction_date', 'desc')
             ->orderBy('t.id', 'desc');
 
@@ -1086,15 +1271,20 @@ class LocalCashierReportController extends Controller
 
             $detailRows[] = [
                 'row_type' => 'sale',
+                'row_source' => $modulePrefix . '_sale',
+                'module_prefix' => $modulePrefix,
                 'transaction_id' => $txnId,
                 'date' => Carbon::parse($line->transaction_date)->format('Y-m-d H:i'),
                 'invoice_no' => (string) ($line->invoice_no ?: ('#' . $txnId)),
                 'i_t' => $itText !== '' ? $itText : '-',
                 'cashier_id' => (int) $line->created_by,
                 'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
+                'location_id' => (int) $line->location_id,
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
                 'customer_group_name' => $customerGroupLabel,
+                'brand_id' => isset($line->brand_id) ? (int) $line->brand_id : 0,
+                'brand_name' => (string) ($line->brand_name ?? 'No Brand'),
                 'sku' => (string) ($line->sub_sku ?? '-'),
                 'product_name' => (string) ($line->product_name ?? '-'),
                 'quantity' => (float) $line->quantity,
@@ -1108,6 +1298,44 @@ class LocalCashierReportController extends Controller
         }
 
         return ['rows' => $detailRows, 'total' => $total];
+    }
+
+    private function getModulePaymentMethodsWithAmount(string $connection, array $filters): array
+    {
+        if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_payments'])) {
+            return [];
+        }
+
+        try {
+            return DB::connection($connection)
+                ->table('transaction_payments as tp')
+                ->join('transactions as t', 't.id', '=', 'tp.transaction_id')
+                ->where('t.business_id', 1)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+                ->whereIn('t.location_id', $filters['location_ids'])
+                ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                    $query->whereIn('t.created_by', $filters['user_ids']);
+                })
+                ->when(! empty($filters['payment_status']), function ($query) use ($filters) {
+                    $query->where('t.payment_status', $filters['payment_status']);
+                })
+                ->when(! empty($filters['payment_methods']), function ($query) use ($filters) {
+                    $query->whereIn('tp.method', $filters['payment_methods']);
+                })
+                ->whereNotNull('tp.method')
+                ->where('tp.method', '<>', '')
+                ->select('tp.method', DB::raw('SUM(tp.amount) as amount'))
+                ->groupBy('tp.method')
+                ->havingRaw('ABS(SUM(tp.amount)) > 0.00001')
+                ->pluck('tp.method')
+                ->map(fn ($method) => (string) $method)
+                ->values()
+                ->all();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     private function hasRequiredReportTables(string $connection, array $tables): bool
@@ -1149,6 +1377,7 @@ class LocalCashierReportController extends Controller
                 DB::raw("TRIM(CONCAT(COALESCE(created_by_user.first_name,''), ' ', COALESCE(created_by_user.last_name,''))) as created_by_name"),
                 DB::raw("TRIM(CONCAT(COALESCE(expense_for_user.first_name,''), ' ', COALESCE(expense_for_user.last_name,''))) as expense_for_name")
             )
+            ->orderBy('l.name')
             ->orderBy('t.transaction_date', 'desc')
             ->orderBy('t.id', 'desc');
 

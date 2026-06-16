@@ -513,6 +513,7 @@
 
     @if($filters['style_mode'] === 'classic')
         <hr>
+        <h4 class="section-title">Summary</h4>
         <div class="row">
             <div class="col-md-3">
                 <h4>User/Cashier</h4>
@@ -603,6 +604,13 @@
 
     @if($filters['style_mode'] === 'classic_plain')
         <hr>
+        <div class="summary-collapse-header">
+            <h4 class="section-title">Summary</h4>
+            <button type="button" class="btn btn-default btn-sm summary-collapse-toggle" data-toggle="collapse" data-target="#summary_cards_section" aria-expanded="true" aria-controls="summary_cards_section">
+                <i class="fa fa-chevron-up"></i> Hide Summary
+            </button>
+        </div>
+        <div class="collapse in" id="summary_cards_section">
         <div class="summary-kpi-grid">
             <div class="summary-kpi-card">
                 <div class="kpi-label">Total Sale</div>
@@ -621,7 +629,6 @@
                 <div class="kpi-value @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</div>
             </div>
         </div>
-        <h4 class="section-title">Summary</h4>
         <div class="row">
             <div class="col-md-3">
                 <div class="summary-panel">
@@ -744,6 +751,7 @@
                 </div>
             </div>
         </div>
+        </div>
         <hr>
         @php
             $expenseRows = collect($report['expense_detail_rows'] ?? []);
@@ -804,6 +812,49 @@
                         ])
                     </div>
                     <div role="tabpanel" class="tab-pane" id="cashier_sales_detail_tab">
+                @php
+                    $cashierSaleRowsForFilters = collect($report['detail_rows'] ?? [])
+                        ->filter(fn ($detailRow) => ($detailRow['row_type'] ?? 'sale') === 'sale');
+                    $cashierSaleLocations = $cashierSaleRowsForFilters->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                    $cashierSaleCashiers = $cashierSaleRowsForFilters->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                @endphp
+                <div class="sale-table-filter-toggle">
+                    <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_sales_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_sales_detail_table_filters">
+                        <i class="fa fa-filter"></i> Filters
+                    </button>
+                </div>
+                <div class="collapse" id="local_cashier_sales_detail_table_filters">
+                    <div class="row all-sale-table-filters">
+                        <div class="col-md-3 col-sm-6">
+                            <div class="form-group">
+                                <label>Location</label>
+                                <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="All locations">
+                                    @foreach($cashierSaleLocations as $locationName)
+                                        <option value="{{ $locationName }}">{{ $locationName }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="all-sale-filter-actions">
+                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">Select All</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="form-group">
+                                <label>Cashier</label>
+                                <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="All cashiers">
+                                    @foreach($cashierSaleCashiers as $cashierName)
+                                        <option value="{{ $cashierName }}">{{ $cashierName }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="all-sale-filter-actions">
+                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">Select All</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped ajax_view" id="local_cashier_sales_detail_table" style="width:100%;">
                         <thead>
@@ -812,7 +863,7 @@
                             <th>Date</th>
                             <th>Invoice No</th>
                             <th>I-T</th>
-                            <th>Location</th>
+                            <th class="all-sale-location-column">Location</th>
                             <th>Customer</th>
                             <th>Group</th>
                             <th>SKU</th>
@@ -826,6 +877,7 @@
                                 <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                             @endforeach
                             <th class="text-right">Due</th>
+                            <th class="never-visible all-sale-cashier-column">Cashier</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -849,6 +901,7 @@
                                     @foreach($report['payment_columns'] as $method)
                                         <td></td>
                                     @endforeach
+                                    <td></td>
                                     <td></td>
                                 </tr>
                                 @continue
@@ -900,6 +953,7 @@
                                     <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                                 @endforeach
                                 <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
+                                <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -925,6 +979,7 @@
                                 <th class="text-right @if($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['due'] ?? 0)) < 0) due-negative @endif">
                                     {{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['due'] ?? 0))) }}
                                 </th>
+                                <th></th>
                             </tr>
                         </tfoot>
                     </table>
@@ -947,6 +1002,47 @@
                         ])
                     </div>
                     <div role="tabpanel" class="tab-pane" id="cashier_expenses_detail_tab">
+                        @php
+                            $expenseLocations = $expenseRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                            $expenseCashiers = $expenseRows->pluck('created_by_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                        @endphp
+                        <div class="sale-table-filter-toggle">
+                            <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_expenses_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_expenses_detail_table_filters">
+                                <i class="fa fa-filter"></i> Filters
+                            </button>
+                        </div>
+                        <div class="collapse" id="local_cashier_expenses_detail_table_filters">
+                            <div class="row all-sale-table-filters">
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group">
+                                        <label>Location</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All locations">
+                                            @foreach($expenseLocations as $locationName)
+                                                <option value="{{ $locationName }}">{{ $locationName }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="all-sale-filter-actions">
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group">
+                                        <label>Cashier/User</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All cashiers">
+                                            @foreach($expenseCashiers as $cashierName)
+                                                <option value="{{ $cashierName }}">{{ $cashierName }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="all-sale-filter-actions">
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped ajax_view" id="local_cashier_expenses_detail_table" style="width:100%;">
                                 <thead>
@@ -954,9 +1050,9 @@
                                         <th>Action</th>
                                         <th>Date</th>
                                         <th>Ref No</th>
-                                        <th>Cashier/User</th>
+                                        <th class="all-sale-cashier-column">Cashier/User</th>
                                         <th>Expense For</th>
-                                        <th>Location</th>
+                                        <th class="all-sale-location-column">Location</th>
                                         <th>Category</th>
                                         <th>Payment Status</th>
                                         @foreach($report['payment_columns'] as $method)
@@ -1188,12 +1284,15 @@
                     info: 'Showing _START_ to _END_ of _TOTAL_ entries',
                     infoEmpty: 'Showing 0 to 0 of 0 entries'
                 },
+                columnDefs: [
+                    { targets: 'never-visible', visible: false, searchable: true }
+                ],
                 buttons: [
                     { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
                     { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
@@ -1203,6 +1302,7 @@
                 paging: true,
                 searching: true,
                 ordering: true,
+                order: [[5, 'asc']],
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
@@ -1230,10 +1330,17 @@
         }
         if ($.fn.DataTable && $('.local-module-sales-detail-table').length) {
             $('.local-module-sales-detail-table').each(function () {
+                var $moduleTable = $(this);
+                var locationOrderColumn = $moduleTable.find('thead th.all-sale-location-column').index();
+                if (locationOrderColumn < 0) {
+                    locationOrderColumn = $moduleTable.find('thead th.sale-location-column').index();
+                }
+
                 $(this).DataTable({
                     paging: true,
                     searching: true,
-                    ordering: false,
+                    ordering: true,
+                    order: locationOrderColumn >= 0 ? [[locationOrderColumn, 'asc']] : [],
                     info: true,
                     autoWidth: false,
                     pageLength: 25,
@@ -1267,18 +1374,27 @@
             return $.fn.dataTable.util.escapeRegex(value || '');
         }
 
+        function exactMatchAnyRegex(values) {
+            values = $.isArray(values) ? values : (values ? [values] : []);
+            values = values.filter(function (value) {
+                return value !== null && value !== undefined && value !== '';
+            });
+
+            return values.length ? '^(' + values.map(escapeDataTableRegex).join('|') + ')$' : '';
+        }
+
         function applyAllSaleFilters(tableId) {
             var table = $('#' + tableId).DataTable();
-            var location = $('.all-sale-location-filter[data-table-id="' + tableId + '"]').val();
-            var cashier = $('.all-sale-cashier-filter[data-table-id="' + tableId + '"]').val();
+            var locations = $('.all-sale-location-filter[data-table-id="' + tableId + '"]').val();
+            var cashiers = $('.all-sale-cashier-filter[data-table-id="' + tableId + '"]').val();
             var locationColumn = $('#' + tableId + ' thead th.all-sale-location-column').index();
             var cashierColumn = $('#' + tableId + ' thead th.all-sale-cashier-column').index();
 
             if (locationColumn >= 0) {
-                table.column(locationColumn).search(location ? '^' + escapeDataTableRegex(location) + '$' : '', true, false);
+                table.column(locationColumn).search(exactMatchAnyRegex(locations), true, false);
             }
             if (cashierColumn >= 0) {
-                table.column(cashierColumn).search(cashier ? '^' + escapeDataTableRegex(cashier) + '$' : '', true, false);
+                table.column(cashierColumn).search(exactMatchAnyRegex(cashiers), true, false);
             }
 
             table.draw();
@@ -1286,6 +1402,41 @@
 
         $(document).on('change', '.all-sale-location-filter, .all-sale-cashier-filter', function () {
             applyAllSaleFilters($(this).data('table-id'));
+        });
+        $(document).on('click', '.all-sale-select-all, .all-sale-clear-select', function () {
+            var tableId = $(this).data('table-id');
+            var $select = $($(this).data('target') + '[data-table-id="' + tableId + '"]');
+            var values = $(this).hasClass('all-sale-select-all')
+                ? $select.find('option').map(function () { return this.value; }).get()
+                : [];
+
+            $select.val(values).trigger('change');
+        });
+        $(document).on('shown.bs.collapse hidden.bs.collapse', '.local-detail-tab-content .collapse', function () {
+            var isOpen = $(this).hasClass('in');
+            var $button = $('[data-toggle="collapse"][data-target="#' + this.id + '"]');
+            $button.html('<i class="fa fa-filter"></i> ' + (isOpen ? 'Hide filters' : 'Filters'));
+        });
+        $(document).on('shown.bs.collapse hidden.bs.collapse', '#classic_summary_section, #classic_plain_summary_section, #summary_cards_section', function () {
+            var isOpen = $(this).hasClass('in');
+            var $button = $('[data-toggle="collapse"][data-target="#' + this.id + '"]');
+            $button.html('<i class="fa fa-chevron-' + (isOpen ? 'up' : 'down') + '"></i> ' + (isOpen ? 'Hide Summary' : 'Show Summary'));
+        });
+        var dateActionCloseTimer = null;
+        $(document)
+            .on('mouseenter', '.date-action-wrap', function () {
+                clearTimeout(dateActionCloseTimer);
+                $('.date-action-wrap').not(this).removeClass('is-open');
+                $(this).addClass('is-open');
+            })
+            .on('mouseleave', '.date-action-wrap', function () {
+                var $wrap = $(this);
+                dateActionCloseTimer = setTimeout(function () {
+                    $wrap.removeClass('is-open');
+                }, 250);
+            });
+        $(document).on('click', '.date-action-pill', function () {
+            $(this).closest('.date-action-wrap').removeClass('is-open');
         });
         if (window.location.hash && $('.local-detail-tabs a[href="' + window.location.hash + '"]').length) {
             $('.local-detail-tabs a[href="' + window.location.hash + '"]').tab('show');
@@ -1424,6 +1575,19 @@
     font-size: 20px;
     font-weight: 700;
     color: #1f2937;
+}
+#local_cashier_report_app .summary-collapse-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 16px 0 12px;
+}
+#local_cashier_report_app .summary-collapse-header .section-title {
+    margin: 0;
+}
+#local_cashier_report_app .summary-collapse-toggle {
+    white-space: nowrap;
 }
 #local_cashier_report_app .local-filter-wrap {
     position: relative;
@@ -1580,12 +1744,27 @@
 #local_cashier_report_app .local-detail-tab-content {
     padding-top: 12px;
 }
+#local_cashier_report_app .sale-table-filter-toggle {
+    margin-bottom: 8px;
+}
 #local_cashier_report_app .all-sale-table-filters {
-    margin-bottom: 10px;
+    margin: 0 0 10px 0;
+    padding: 10px 10px 4px;
+    border: 1px solid #e5e7eb;
+    background: #f8fafc;
 }
 #local_cashier_report_app .all-sale-table-filters label {
     color: #334155;
     font-weight: 700;
+}
+#local_cashier_report_app .all-sale-table-filters .select2-container {
+    width: 100% !important;
+}
+#local_cashier_report_app .all-sale-filter-actions {
+    margin-top: 6px;
+}
+#local_cashier_report_app .all-sale-filter-actions .btn + .btn {
+    margin-left: 4px;
 }
 #local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
     margin-bottom: 8px;
@@ -1856,6 +2035,86 @@
     background: #2f6feb;
     border-color: #2f6feb;
     color: #fff;
+}
+#local_cashier_report_app .date-action-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    z-index: 2;
+}
+#local_cashier_report_app .date-action-text {
+    border-bottom: 1px dotted #94a3b8;
+    cursor: default;
+}
+#local_cashier_report_app .date-action-popover {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin-top: 2px;
+    z-index: 1000;
+    display: none;
+    gap: 6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+    white-space: nowrap;
+}
+#local_cashier_report_app .date-action-wrap:hover .date-action-popover,
+#local_cashier_report_app .date-action-wrap.is-open .date-action-popover,
+#local_cashier_report_app .date-action-popover:hover {
+    display: inline-flex;
+}
+#local_cashier_report_app .date-action-popover::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -8px;
+    height: 8px;
+}
+#local_cashier_report_app .date-action-popover::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: -6px;
+    width: 10px;
+    height: 10px;
+    background: #fff;
+    border-left: 1px solid #cbd5e1;
+    border-top: 1px solid #cbd5e1;
+    transform: rotate(45deg);
+}
+#local_cashier_report_app .date-action-pill {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+}
+#local_cashier_report_app .date-action-pill:hover {
+    color: #1e40af;
+    background: #dbeafe;
+    text-decoration: none;
+}
+#local_cashier_report_app .date-action-edit {
+    border-color: #bbf7d0;
+    background: #ecfdf5;
+    color: #047857;
+}
+#local_cashier_report_app .date-action-edit:hover {
+    background: #d1fae5;
+    color: #065f46;
 }
 #local_cashier_report_app .dataTables_wrapper .dataTables_paginate .paginate_button {
     border-radius: 8px !important;
