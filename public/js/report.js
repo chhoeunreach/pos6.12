@@ -143,6 +143,7 @@ $(document).ready(function() {
                 d.sub_category_id = $('#sub_category_id').val();
                 d.brand_id = $('#brand').val();
                 d.unit_id = $('#unit').val();
+                d.stock_status = $('#stock_status').val();
 
                 d.only_mfg_products = $('#only_mfg_products').length && $('#only_mfg_products').is(':checked') ? 1 : 0;
             },
@@ -224,7 +225,7 @@ $(document).ready(function() {
         });
     }
 
-    $('#stock_report_filter_form #location_id, #stock_report_filter_form #category_id, #stock_report_filter_form #sub_category_id, #stock_report_filter_form #brand, #stock_report_filter_form #unit,#stock_report_filter_form #view_stock_filter'
+    $('#stock_report_filter_form #location_id, #stock_report_filter_form #category_id, #stock_report_filter_form #sub_category_id, #stock_report_filter_form #brand, #stock_report_filter_form #unit, #stock_report_filter_form #stock_status, #stock_report_filter_form #view_stock_filter'
     ).change(function() {
         stock_report_table.ajax.reload();
         stock_expiry_report_table.ajax.reload();

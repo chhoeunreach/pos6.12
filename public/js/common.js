@@ -160,15 +160,30 @@ $(document).ready(function () {
     }
 
     var buttons = [
-        // {
-        //     extend: 'copy',
-        //     text: '<i class="fa fa-files-o" aria-hidden="true"></i> ' + LANG.copy,
-        //     className: 'btn-sm',
-        //     exportOptions: {
-        //         columns: ':visible',
-        //     },
-        //     footer: true,
-        // },
+        {
+            extend: 'copy',
+            text: '<i class="fa fa-files-o" aria-hidden="true"></i> ' + LANG.copy,
+            className: 'tw-dw-btn-xs  tw-dw-btn tw-dw-btn-outline tw-my-2',
+            exportOptions: {
+                columns: ':visible',
+                format: {
+                    body: function(data, row, column, node) {
+                        var $node = $(node);
+                        var $quantityElement = $node.find('[data-is_quantity="true"]');
+
+                        if ($quantityElement.length > 0) {
+                            return $quantityElement.attr('data-orig-value');
+                        }
+
+                        return __remove_currency_symbol(data);
+                    },
+                    footer: function(data, row, column, node) {
+                        return __remove_currency_symbol(data);
+                    }
+                }
+            },
+            footer: true,
+        },
         {
             extend: 'csv',
             text: '<i class="fa fa-file-csv" aria-hidden="true"></i> ' + LANG.export_to_csv,

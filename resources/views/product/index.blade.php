@@ -108,40 +108,27 @@
                             ]) !!}
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            {!! Form::label('product_list_filter_product_keywords', 'Product keywords:') !!}
-                            {!! Form::text('product_keywords', null, [
-                                'class' => 'form-control',
-                                'id' => 'product_list_filter_product_keywords',
-                                'placeholder' => 'Search',
-                            ]) !!}
-                        </div>
-                    </div>
                     <div class="col-md-3" id="location_filter">
                         <div class="form-group">
                             {!! Form::label('location_id', __('purchase.business_location') . ':') !!}
-                            {!! Form::select('location_id', $business_locations, null, [
+                            {!! Form::select('location_id[]', $business_locations, null, [
                                 'class' => 'form-control select2',
                                 'style' => 'width:100%',
+                                'id' => 'location_id',
+                                'multiple' => 'multiple',
                                 'placeholder' => __('lang_v1.all'),
                             ]) !!}
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <br>
                         <div class="form-group">
-                            {!! Form::select(
-                                'active_state',
-                                ['active' => __('business.is_active'), 'inactive' => __('lang_v1.inactive')],
-                                null,
-                                [
-                                    'class' => 'form-control select2',
-                                    'style' => 'width:100%',
-                                    'id' => 'active_state',
-                                    'placeholder' => __('lang_v1.all'),
-                                ],
-                            ) !!}
+                            {!! Form::label('product_list_filter_stock_status', 'Stock status:') !!}
+                            {!! Form::select('stock_status', ['positive' => 'Positive', 'negative' => 'Negative'], null, [
+                                'class' => 'form-control select2',
+                                'style' => 'width:100%',
+                                'id' => 'product_list_filter_stock_status',
+                                'placeholder' => __('lang_v1.all'),
+                            ]) !!}
                         </div>
                     </div>
 
@@ -329,10 +316,8 @@
                         d.brand_id = $('#product_list_filter_brand_id').val();
                         d.unit_id = $('#product_list_filter_unit_id').val();
                         d.tax_id = $('#product_list_filter_tax_id').val();
-                        d.active_state = $('#active_state').val();
                         d.not_for_selling = $('#not_for_selling').is(':checked');
                         d.location_id = $('#location_id').val();
-                        d.product_keywords = $('#product_list_filter_product_keywords').val();
                         if ($('#repair_model_id').length == 1) {
                             d.repair_model_id = $('#repair_model_id').val();
                         }
@@ -681,7 +666,7 @@
             });
 
             $(document).on('change',
-                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #active_state, #repair_model_id',
+                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #repair_model_id',
                 function() {
                     if ($("#product_list_tab").hasClass('active')) {
                         product_table.ajax.reload();
@@ -692,11 +677,7 @@
                     }
                 });
 
-            $(document).on('keyup change', '#product_list_filter_product_keywords', function() {
-                if ($("#product_list_tab").hasClass('active')) {
-                    product_table.ajax.reload();
-                }
-
+            $(document).on('change', '#product_list_filter_stock_status', function() {
                 if ($("#product_stock_report").hasClass('active')) {
                     stock_report_table.ajax.reload();
                 }
@@ -891,9 +872,8 @@
                                 d.brand_id = $('#product_list_filter_brand_id').val();
                                 d.unit_id = $('#product_list_filter_unit_id').val();
                                 d.type = $('#product_list_filter_type').val();
-                                d.active_state = $('#active_state').val();
                                 d.not_for_selling = $('#not_for_selling').is(':checked');
-                                d.product_keywords = $('#product_list_filter_product_keywords').val();
+                                d.stock_status = $('#product_list_filter_stock_status').val();
                                 if ($('#repair_model_id').length == 1) {
                                     d.repair_model_id = $('#repair_model_id').val();
                                 }

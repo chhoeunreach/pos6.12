@@ -371,7 +371,7 @@ class ReportController extends Controller
             $show_manufacturing_data = 0;
         }
         if ($request->ajax()) {
-            $filters = request()->only(['location_id', 'category_id', 'sub_category_id', 'brand_id', 'unit_id', 'tax_id', 'type',
+            $filters = request()->only(['location_id', 'category_id', 'sub_category_id', 'brand_id', 'unit_id', 'tax_id', 'type', 'stock_status',
                 'only_mfg_products', 'active_state',  'not_for_selling', 'repair_model_id', 'product_id', 'product_keywords', 'active_state', ]);
 
             $filters['not_for_selling'] = isset($filters['not_for_selling']) && $filters['not_for_selling'] == 'true' ? 1 : 0;
@@ -3903,8 +3903,9 @@ class ReportController extends Controller
         $end_date = \Carbon::now()->format('Y-m-d');
         $location_id = request()->input('location_id');
         $filters = request()->only(['category_id', 'sub_category_id', 'brand_id', 'unit_id']);
+        $location_cache_key = is_array($location_id) ? implode(',', array_filter($location_id)) : ($location_id ?? 'all');
 
-        $cache_key = 'report_stock_value_'.$business_id.'_'.($location_id ?? 'all').'_'.md5(serialize($filters));
+        $cache_key = 'report_stock_value_'.$business_id.'_'.$location_cache_key.'_'.md5(serialize($filters));
         $permitted_locations = auth()->user()->permitted_locations();
 
         return Cache::remember($cache_key, 600, function () use ($business_id, $end_date, $location_id, $filters, $permitted_locations) {

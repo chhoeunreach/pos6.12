@@ -72,7 +72,16 @@ class ProductController extends Controller
         if (request()->ajax()) {
             //Filter by location
             $location_id = request()->get('location_id', null);
+            $location_ids = is_array($location_id) ? $location_id : [$location_id];
+            $location_ids = array_values(array_filter($location_ids, function ($id) {
+                return $id !== null && $id !== '';
+            }));
             $permitted_locations = auth()->user()->permitted_locations();
+            $filter_by_locations = ! empty($location_ids) && ! in_array('none', $location_ids);
+
+            if ($filter_by_locations && $permitted_locations != 'all') {
+                $location_ids = array_values(array_intersect($location_ids, $permitted_locations));
+            }
 
             $query = Product::with(['media'])
                 ->leftJoin('brands', 'products.brand_id', '=', 'brands.id')
@@ -81,9 +90,11 @@ class ProductController extends Controller
                 ->leftJoin('categories as c2', 'products.sub_category_id', '=', 'c2.id')
                 ->leftJoin('tax_rates', 'products.tax', '=', 'tax_rates.id')
                 ->join('variations as v', 'v.product_id', '=', 'products.id')
-                ->leftJoin('variation_location_details as vld', function ($join) use ($permitted_locations) {
+                ->leftJoin('variation_location_details as vld', function ($join) use ($permitted_locations, $filter_by_locations, $location_ids) {
                     $join->on('vld.variation_id', '=', 'v.id');
-                    if ($permitted_locations != 'all') {
+                    if ($filter_by_locations) {
+                        $join->whereIn('vld.location_id', $location_ids);
+                    } elseif ($permitted_locations != 'all') {
                         $join->whereIn('vld.location_id', $permitted_locations);
                     }
                 })
@@ -91,13 +102,15 @@ class ProductController extends Controller
                 ->where('products.business_id', $business_id)
                 ->where('products.type', '!=', 'modifier');
 
-            if (! empty($location_id) && $location_id != 'none') {
-                if ($permitted_locations == 'all' || in_array($location_id, $permitted_locations)) {
-                    $query->whereHas('product_locations', function ($query) use ($location_id) {
-                        $query->where('product_locations.location_id', '=', $location_id);
+            if ($filter_by_locations) {
+                if (! empty($location_ids)) {
+                    $query->whereHas('product_locations', function ($query) use ($location_ids) {
+                        $query->whereIn('product_locations.location_id', $location_ids);
                     });
+                } else {
+                    $query->whereRaw('0 = 1');
                 }
-            } elseif ($location_id == 'none') {
+            } elseif (in_array('none', $location_ids)) {
                 $query->doesntHave('product_locations');
             } else {
                 if ($permitted_locations != 'all') {

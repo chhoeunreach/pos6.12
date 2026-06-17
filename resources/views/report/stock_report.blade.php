@@ -17,7 +17,7 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         {!! Form::label('location_id',  __('purchase.business_location') . ':') !!}
-                        {!! Form::select('location_id', $business_locations, null, ['class' => 'form-control select2', 'style' => 'width:100%']); !!}
+                        {!! Form::select('location_id[]', $business_locations, null, ['class' => 'form-control select2', 'multiple' => 'multiple', 'style' => 'width:100%', 'id' => 'location_id']); !!}
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -42,6 +42,12 @@
                     <div class="form-group">
                         {!! Form::label('unit',__('product.unit') . ':') !!}
                         {!! Form::select('unit', $units, null, ['placeholder' => __('messages.all'), 'class' => 'form-control select2', 'style' => 'width:100%']); !!}
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('stock_status', 'Stock status:') !!}
+                        {!! Form::select('stock_status', ['positive' => 'Positive', 'negative' => 'Negative'], null, ['placeholder' => __('messages.all'), 'class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'stock_status']); !!}
                     </div>
                 </div>
                 @if($show_manufacturing_data)

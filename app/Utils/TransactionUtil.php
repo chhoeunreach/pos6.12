@@ -3994,7 +3994,17 @@ class TransactionUtil extends Util
         }
 
         if (! empty($location_id)) {
-            $query->where('purchase.location_id', $location_id);
+            if (is_array($location_id)) {
+                $location_ids = array_values(array_filter($location_id, function ($id) {
+                    return $id !== null && $id !== '';
+                }));
+
+                if (! empty($location_ids)) {
+                    $query->whereIn('purchase.location_id', $location_ids);
+                }
+            } else {
+                $query->where('purchase.location_id', $location_id);
+            }
         }
 
         $details = $query->first();

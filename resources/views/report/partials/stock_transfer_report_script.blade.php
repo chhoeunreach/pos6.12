@@ -57,12 +57,19 @@ $(document).ready(function() {
     });
 
     if ($('#st_report_date_range').length == 1) {
-        $('#st_report_date_range').daterangepicker(dateRangeSettings, function(start, end) {
+        var drpSettings = $.extend(true, {}, dateRangeSettings, {
+            startDate: moment().subtract(3, 'months'),
+            endDate: moment()
+        });
+        $('#st_report_date_range').daterangepicker(drpSettings, function(start, end) {
             $('#st_report_date_range').val(
                 start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
             );
             stock_transfer_report_table.ajax.reload();
         });
+        $('#st_report_date_range').val(
+            moment().subtract(3, 'months').format(moment_date_format) + ' ~ ' + moment().format(moment_date_format)
+        );
         $('#st_report_date_range').on('cancel.daterangepicker', function(ev, picker) {
             $('#st_report_date_range').val('');
             stock_transfer_report_table.ajax.reload();

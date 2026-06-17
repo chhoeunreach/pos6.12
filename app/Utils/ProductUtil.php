@@ -1795,6 +1795,14 @@ class ProductUtil extends Util
 
     public function getProductStockDetails($business_id, $filters, $for)
     {
+        $location_ids = [];
+        if (! empty($filters['location_id'])) {
+            $location_ids = is_array($filters['location_id']) ? $filters['location_id'] : [$filters['location_id']];
+            $location_ids = array_values(array_filter($location_ids, function ($location_id) {
+                return $location_id !== null && $location_id !== '';
+            }));
+        }
+
         $query = Variation::join('products as p', 'p.id', '=', 'variations.product_id')
                   ->join('units', 'p.unit_id', '=', 'units.id')
                   ->leftjoin('variation_location_details as vld', 'variations.id', '=', 'vld.variation_id')
@@ -1810,15 +1818,13 @@ class ProductUtil extends Util
             $query->whereIn('vld.location_id', $permitted_locations);
         }
 
-        if (! empty($filters['location_id'])) {
-            $location_id = $filters['location_id'];
-
-            $query->where('vld.location_id', $location_id);
+        if (! empty($location_ids)) {
+            $query->whereIn('vld.location_id', $location_ids);
 
             //If filter by location then hide products not available in that location
             $query->join('product_locations as pl', 'pl.product_id', '=', 'p.id')
-                  ->where(function ($q) use ($location_id) {
-                      $q->where('pl.location_id', $location_id);
+                  ->where(function ($q) use ($location_ids) {
+                      $q->whereIn('pl.location_id', $location_ids);
                   });
         }
 
@@ -1879,8 +1885,8 @@ class ProductUtil extends Util
             $aggregate_location_ids = $permitted_locations;
         }
 
-        if (! empty($filters['location_id'])) {
-            $aggregate_location_ids = [$filters['location_id']];
+        if (! empty($location_ids)) {
+            $aggregate_location_ids = $location_ids;
         }
 
         $apply_aggregate_location_filter = function ($subquery) use ($aggregate_location_ids) {
@@ -1989,6 +1995,12 @@ class ProductUtil extends Util
             'p.product_custom_field3',
             'p.product_custom_field4'
         )->groupBy('variations.id', 'vld.location_id');
+
+        if (($filters['stock_status'] ?? '') === 'positive') {
+            $products->havingRaw('SUM(vld.qty_available) > 0');
+        } elseif (($filters['stock_status'] ?? '') === 'negative') {
+            $products->havingRaw('SUM(vld.qty_available) < 0');
+        }
 
         if (isset($filters['show_manufacturing_data']) && $filters['show_manufacturing_data']) {
             $pl_query_string = $this->get_pl_quantity_sum_string('PL');
