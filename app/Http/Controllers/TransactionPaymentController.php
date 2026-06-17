@@ -581,6 +581,10 @@ class TransactionPaymentController extends Controller
             ];
         }
 
+        if ($request->ajax() || $request->boolean('from_pos')) {
+            return response()->json($output);
+        }
+
         return redirect()->back()->with(['status' => $output]);
     }
 

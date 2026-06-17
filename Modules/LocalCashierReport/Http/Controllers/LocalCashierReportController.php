@@ -15,6 +15,8 @@ use Maatwebsite\Excel\Facades\Excel;
 class LocalCashierReportController extends Controller
 {
     private const DETAIL_ROW_LIMIT = 1000;
+    private const COLLECTION_PAYMENT_GROUP = 'Collection Payment';
+    private const INSTALLMENT_CUSTOMER_GROUP = 'រំលស់';
 
     public function __construct(private Util $util)
     {
@@ -223,7 +225,7 @@ class LocalCashierReportController extends Controller
                         ->whereIn('tpf.method', $filters['payment_methods']);
                 });
             })
-            ->when(! empty($filters['customer_group']) && $filters['customer_group'] !== 'បង់ប្រាក់', function ($query) use ($filters) {
+            ->when(! empty($filters['customer_group']) && $filters['customer_group'] !== self::COLLECTION_PAYMENT_GROUP, function ($query) use ($filters) {
                 $query->whereRaw(
                     "CASE
                         WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
@@ -233,7 +235,7 @@ class LocalCashierReportController extends Controller
                     ['រំលស់', 'រំលស់', 'អ៊ីអន', 'អ៊ីអន', 'លក់', $filters['customer_group']]
                 );
             })
-            ->when(! empty($filters['customer_group']) && $filters['customer_group'] === 'បង់ប្រាក់', function ($query) {
+            ->when(! empty($filters['customer_group']) && $filters['customer_group'] === self::COLLECTION_PAYMENT_GROUP, function ($query) {
                 $query->whereRaw('1 = 0');
             })
             ->when(! empty($filters['brand_ids']), function ($query) use ($filters) {
@@ -266,6 +268,7 @@ class LocalCashierReportController extends Controller
 
         $paymentTypes = $this->util->payment_types(null, false, $businessId);
         $loanPaymentData = $this->getLoanPaymentData($filters, $paymentTypes);
+        $customerDuePaymentData = $this->getCustomerDuePaymentData($filters, $paymentTypes, self::DETAIL_ROW_LIMIT);
 
         $transactionIds = $baseTransactions->pluck('id')->all();
         $cashierIds = $baseTransactions->pluck('created_by')->unique()->values()->all();
@@ -319,6 +322,9 @@ class LocalCashierReportController extends Controller
         foreach ($loanPaymentData['methods'] as $method) {
             $methodsWithAmount[$method] = true;
         }
+        foreach ($customerDuePaymentData['methods'] as $method) {
+            $methodsWithAmount[$method] = true;
+        }
 
         foreach ([
             (string) config('accessory.database_connection', 'accessory'),
@@ -329,8 +335,8 @@ class LocalCashierReportController extends Controller
             }
         }
 
-        $cashierIds = array_values(array_unique(array_merge($cashierIds, $loanPaymentData['cashier_ids'])));
-        $locationIds = array_values(array_unique(array_merge($locationIds, $loanPaymentData['location_ids'])));
+        $cashierIds = array_values(array_unique(array_merge($cashierIds, $loanPaymentData['cashier_ids'], $customerDuePaymentData['cashier_ids'])));
+        $locationIds = array_values(array_unique(array_merge($locationIds, $loanPaymentData['location_ids'], $customerDuePaymentData['location_ids'])));
         $cashierMap = DB::table('users')
             ->whereIn('id', $cashierIds)
             ->select('id', DB::raw("TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name"))
@@ -338,6 +344,8 @@ class LocalCashierReportController extends Controller
         $locationMap = DB::table('business_locations')->whereIn('id', array_values(array_unique(array_merge($filters['location_ids'], $locationIds))))->pluck('name', 'id');
 
         $paymentColumns = $this->buildPaymentColumns(array_keys($methodsWithAmount), $paymentTypes);
+        $customerDuePaymentData['rows'] = $this->normalizeCustomerDuePaymentRows($customerDuePaymentData['rows'], $paymentColumns);
+        $customerDuePaymentData['summary_rows'] = $this->normalizeCustomerDuePaymentRows($customerDuePaymentData['summary_rows'], $paymentColumns);
 
         $rowsByCashier = [];
         $rowsByLocation = [];
@@ -445,6 +453,10 @@ class LocalCashierReportController extends Controller
             }
 
             $rowsByCashier[$cashierId]['customer_groups']['loan_payment'] = $loanGroupRow;
+            foreach (($loanGroupRow['payments'] ?? []) as $method => $amount) {
+                $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + (float) $amount;
+                $rowsByCashier[$cashierId]['paid'] += (float) $amount;
+            }
         }
 
         foreach ($loanPaymentData['location_groups'] as $locationId => $loanGroupRow) {
@@ -463,6 +475,81 @@ class LocalCashierReportController extends Controller
             }
 
             $rowsByLocation[$locationId]['customer_groups']['loan_payment'] = $loanGroupRow;
+            foreach (($loanGroupRow['payments'] ?? []) as $method => $amount) {
+                $rowsByLocation[$locationId]['payments'][$method] = ($rowsByLocation[$locationId]['payments'][$method] ?? 0) + (float) $amount;
+                $rowsByLocation[$locationId]['paid'] += (float) $amount;
+            }
+        }
+
+        $includeCustomerDuePayments = empty($filters['customer_group']) || $filters['customer_group'] === 'Customer Payment';
+        if ($includeCustomerDuePayments) {
+            foreach ($customerDuePaymentData['summary_rows'] as $customerDuePaymentRow) {
+                $cashierId = (int) ($customerDuePaymentRow['cashier_id'] ?? 0);
+                $locationId = (int) ($customerDuePaymentRow['location_id'] ?? 0);
+                $amount = (float) ($customerDuePaymentRow['amount'] ?? 0);
+                $method = (string) ($customerDuePaymentRow['method'] ?? 'cash');
+
+                if ($cashierId <= 0 || $locationId <= 0 || abs($amount) < 0.00001) {
+                    continue;
+                }
+
+                if (! isset($rowsByCashier[$cashierId])) {
+                    $rowsByCashier[$cashierId] = [
+                        'cashier_id' => $cashierId,
+                        'cashier_name' => (string) ($cashierMap[$cashierId] ?? ($customerDuePaymentRow['cashier_name'] ?? 'N/A')),
+                        'location_qty_map' => [],
+                        'payments' => [],
+                        'customer_groups' => [],
+                        'total' => 0.0,
+                        'paid' => 0.0,
+                        'due' => 0.0,
+                    ];
+                }
+                if (! isset($rowsByLocation[$locationId])) {
+                    $rowsByLocation[$locationId] = [
+                        'location_id' => $locationId,
+                        'location_name' => (string) ($locationMap[$locationId] ?? ($customerDuePaymentRow['location_name'] ?? 'N/A')),
+                        'qty_total' => 0.0,
+                        'payments' => [],
+                        'customer_groups' => [],
+                        'total' => 0.0,
+                        'paid' => 0.0,
+                        'due' => 0.0,
+                    ];
+                }
+                if (! isset($rowsByCashier[$cashierId]['customer_groups']['customer_payment'])) {
+                    $rowsByCashier[$cashierId]['customer_groups']['customer_payment'] = [
+                        'name' => 'Customer Payment',
+                        'sort' => 5,
+                        'location_qty_map' => [],
+                        'payments' => [],
+                        'total' => 0.0,
+                        'paid' => 0.0,
+                        'due' => 0.0,
+                    ];
+                }
+                if (! isset($rowsByLocation[$locationId]['customer_groups']['customer_payment'])) {
+                    $rowsByLocation[$locationId]['customer_groups']['customer_payment'] = [
+                        'name' => 'Customer Payment',
+                        'sort' => 5,
+                        'qty_total' => 0.0,
+                        'payments' => [],
+                        'total' => 0.0,
+                        'paid' => 0.0,
+                        'due' => 0.0,
+                    ];
+                }
+
+                $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + $amount;
+                $rowsByCashier[$cashierId]['paid'] += $amount;
+                $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] = ($rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] ?? 0) + $amount;
+                $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['paid'] += $amount;
+
+                $rowsByLocation[$locationId]['payments'][$method] = ($rowsByLocation[$locationId]['payments'][$method] ?? 0) + $amount;
+                $rowsByLocation[$locationId]['paid'] += $amount;
+                $rowsByLocation[$locationId]['customer_groups']['customer_payment']['payments'][$method] = ($rowsByLocation[$locationId]['customer_groups']['customer_payment']['payments'][$method] ?? 0) + $amount;
+                $rowsByLocation[$locationId]['customer_groups']['customer_payment']['paid'] += $amount;
+            }
         }
 
         $rows = [];
@@ -482,7 +569,7 @@ class LocalCashierReportController extends Controller
             foreach ($cashierRow['customer_groups'] as &$customerGroupRow) {
                 $customerGroupRow['location_qty_text'] = $this->formatLocationQty($customerGroupRow['location_qty_map'], $locationMap);
                 $customerGroupRow['qty_total'] = array_sum($customerGroupRow['location_qty_map']);
-                $customerGroupRow['due'] = (int) ($customerGroupRow['sort'] ?? 0) === 4
+                $customerGroupRow['due'] = in_array((int) ($customerGroupRow['sort'] ?? 0), [4, 5], true)
                     ? 0.0
                     : (float) $customerGroupRow['total'] - (float) $customerGroupRow['paid'];
                 foreach ($paymentColumns as $method) {
@@ -516,7 +603,7 @@ class LocalCashierReportController extends Controller
                 }
             }
             foreach ($locationRow['customer_groups'] as &$customerGroupRow) {
-                $customerGroupRow['due'] = (int) ($customerGroupRow['sort'] ?? 0) === 4
+                $customerGroupRow['due'] = in_array((int) ($customerGroupRow['sort'] ?? 0), [4, 5], true)
                     ? 0.0
                     : (float) $customerGroupRow['total'] - (float) $customerGroupRow['paid'];
                 foreach ($paymentColumns as $method) {
@@ -794,12 +881,15 @@ class LocalCashierReportController extends Controller
         unset($row);
 
         $paymentWithExpenses['expenses'] = $grandExpenses;
-        $grandPaid += (float) ($loanPaymentData['total'] ?? 0);
-        $grandActualIncome += (float) ($loanPaymentData['total'] ?? 0);
-        foreach (($loanPaymentData['method_totals'] ?? []) as $method => $amount) {
-            $paymentSummaryMap[$method] = ($paymentSummaryMap[$method] ?? 0) + (float) $amount;
-            $paymentWithExpenses[$method] = ($paymentWithExpenses[$method] ?? 0) + (float) $amount;
+        $paymentSummary = [];
+        foreach ($paymentSummaryMap as $method => $amount) {
+            $paymentSummary[] = [
+                'name' => (string) ($paymentTypes[$method] ?? $method),
+                'amount' => (float) $amount,
+                'qty' => (float) ($paymentQtySummaryMap[$method] ?? 0),
+            ];
         }
+        $summaryTotals = $this->summaryTotals($userSummary, $locationSummary, $customerGroupSummary, $brandSummary, $paymentSummary);
         foreach ($paymentColumns as $method) {
             $sellPaidByMethod = (float) ($paymentSummaryMap[$method] ?? 0);
             $expenseByMethod = (float) ($expensePaymentSummaryMap[$method] ?? 0);
@@ -892,41 +982,6 @@ class LocalCashierReportController extends Controller
             ];
         }
 
-        foreach (($loanPaymentData['detail_rows'] ?? []) as $loanPaymentRow) {
-            $paymentCols = [];
-            foreach ($paymentColumns as $method) {
-                $paymentCols[$method] = $method === ($loanPaymentRow['method'] ?? '') ? (float) ($loanPaymentRow['amount'] ?? 0) : 0.0;
-            }
-
-            $loanNumber = trim((string) ($loanPaymentRow['loan_number'] ?? ''));
-            $paymentRef = trim((string) ($loanPaymentRow['payment_ref'] ?? ''));
-
-            $detailRows[] = [
-                'row_source' => 'loan_payment',
-                'transaction_id' => 0,
-                'date' => ! empty($loanPaymentRow['date']) ? Carbon::parse($loanPaymentRow['date'])->format('Y-m-d H:i') : '-',
-                'invoice_no' => $paymentRef !== '' ? $paymentRef : ($loanNumber !== '' ? $loanNumber : ('#LP' . ($loanPaymentRow['payment_id'] ?? ''))),
-                'i_t' => $loanNumber !== '' ? $loanNumber : '-',
-                'cashier_id' => (int) ($loanPaymentRow['cashier_id'] ?? 0),
-                'cashier_name' => (string) ($cashierMap[(int) ($loanPaymentRow['cashier_id'] ?? 0)] ?? 'N/A'),
-                'location_name' => (string) ($locationMap[$loanPaymentRow['location_id'] ?? 0] ?? 'N/A'),
-                'customer_name' => (string) ($loanPaymentRow['customer_name'] ?? 'Loan Customer'),
-                'phone_number' => (string) ($loanPaymentRow['phone_number'] ?? ''),
-                'customer_group_name' => 'បង់ប្រាក់',
-                'customer_group_sort' => 4,
-                'sku' => '-',
-                'product_name' => 'Monthly installment payment',
-                'quantity' => null,
-                'unit_price' => null,
-                'line_total' => null,
-                'discount' => null,
-                'final_total' => null,
-                'paid' => (float) ($loanPaymentRow['amount'] ?? 0),
-                'payments' => $paymentCols,
-                'due' => 0.0,
-            ];
-        }
-
         usort($detailRows, function ($a, $b) {
             return [
                 $a['location_name'] ?? '',
@@ -969,6 +1024,7 @@ class LocalCashierReportController extends Controller
             $row['row_type'] = 'sale';
             $groupedDetailRows[] = $row;
         }
+        $collectionPaymentDetailRows = $this->normalizeCollectionPaymentRows($loanPaymentData['detail_rows'] ?? [], $paymentColumns, $cashierMap, $locationMap, $paymentTypes);
 
         return [
             'rows' => $rows,
@@ -981,6 +1037,8 @@ class LocalCashierReportController extends Controller
             'grand_sell_return' => $grandSellReturn,
             'grand_actual_income' => $grandActualIncome,
             'grand_due' => $grandDue,
+            'customer_due_payment_total' => $includeCustomerDuePayments ? (float) ($customerDuePaymentData['total'] ?? 0) : 0.0,
+            'collection_payment_total' => (float) ($loanPaymentData['total'] ?? 0),
             'payment_with_expenses' => $paymentWithExpenses,
             'expense_payment_summary' => $expensePaymentSummaryMap,
             'actual_income_payment_summary' => $actualIncomeByPayment,
@@ -991,13 +1049,19 @@ class LocalCashierReportController extends Controller
             'summary_payment' => $paymentSummary,
             'summary_totals' => $summaryTotals,
             'detail_rows' => $groupedDetailRows,
+            'collection_payment_detail_rows' => $collectionPaymentDetailRows,
+            'customer_due_payment_detail_rows' => $customerDuePaymentData['rows'],
             'expense_detail_rows' => $expenseDetailResult['rows'],
             'accessory_sale_detail_rows' => $accessorySaleDetailResult['rows'],
             'service_sale_detail_rows' => $serviceSaleDetailResult['rows'],
             'detail_meta' => [
                 'limit' => self::DETAIL_ROW_LIMIT,
-                'main_total' => $sellLineTotal + (int) ($loanPaymentData['detail_total'] ?? count($loanPaymentData['detail_rows'] ?? [])),
+                'main_total' => $sellLineTotal,
                 'main_displayed' => count($detailRows),
+                'collection_payment_total' => $loanPaymentData['detail_total'],
+                'collection_payment_displayed' => count($collectionPaymentDetailRows),
+                'customer_due_payment_total' => $customerDuePaymentData['detail_total'],
+                'customer_due_payment_displayed' => count($customerDuePaymentData['rows']),
                 'expense_total' => $expenseDetailResult['total'],
                 'expense_displayed' => count($expenseDetailResult['rows']),
                 'accessory_total' => $accessorySaleDetailResult['total'],
@@ -1379,6 +1443,186 @@ class LocalCashierReportController extends Controller
         return true;
     }
 
+    private function getCustomerDuePaymentData(array $filters, array $paymentTypes, int $limit): array
+    {
+        $empty = [
+            'rows' => [],
+            'summary_rows' => [],
+            'detail_total' => 0,
+            'methods' => [],
+            'method_totals' => [],
+            'cashier_ids' => [],
+            'location_ids' => [],
+            'total' => 0.0,
+        ];
+
+        if (! empty($filters['customer_group']) && $filters['customer_group'] !== 'Customer Payment') {
+            return $empty;
+        }
+
+        $businessId = (int) session('user.business_id');
+
+        $query = DB::table('transaction_payments as tp')
+            ->join('transactions as t', 't.id', '=', 'tp.transaction_id')
+            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('contacts as pc', 'pc.id', '=', 'tp.payment_for')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as pcg', 'pcg.id', '=', 'pc.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
+            ->leftJoin('business_locations as l', 'l.id', '=', 't.location_id')
+            ->leftJoin('users as u', 'u.id', '=', 'tp.created_by')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->whereBetween(DB::raw('DATE(tp.paid_on)'), [$filters['start_date'], $filters['end_date']])
+            ->whereRaw('DATE(t.transaction_date) < DATE(tp.paid_on)')
+            ->whereRaw("COALESCE(NULLIF(TRIM(pcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') <> ?", [self::INSTALLMENT_CUSTOMER_GROUP])
+            ->whereIn('t.location_id', $filters['location_ids'])
+            ->where('tp.amount', '>', 0)
+            ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                $query->whereIn('tp.created_by', $filters['user_ids']);
+            })
+            ->when(! empty($filters['payment_methods']), function ($query) use ($filters) {
+                $query->whereIn('tp.method', $filters['payment_methods']);
+            })
+            ->select(
+                'tp.id as payment_id',
+                'tp.transaction_id',
+                'tp.paid_on',
+                'tp.method',
+                'tp.amount',
+                'tp.payment_ref_no',
+                'tp.note',
+                'tp.created_by',
+                't.invoice_no',
+                't.transaction_date',
+                't.final_total',
+                't.location_id',
+                't.staff_note',
+                'l.name as location_name',
+                DB::raw("COALESCE(NULLIF(TRIM(pc.mobile), ''), NULLIF(TRIM(c.mobile), '')) as customer_phone"),
+                DB::raw("COALESCE(NULLIF(TRIM(pcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name"),
+                DB::raw("COALESCE(NULLIF(TRIM(pc.name), ''), NULLIF(TRIM(CONCAT(COALESCE(pc.first_name,''), ' ', COALESCE(pc.last_name,''))), ''), NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
+                DB::raw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as cashier_name")
+            )
+            ->orderBy('tp.paid_on', 'desc')
+            ->orderBy('tp.id', 'desc');
+
+        $total = (clone $query)->count();
+        $summaryRows = (clone $query)->get();
+        $rows = $summaryRows->take($limit);
+        $data = $empty;
+        $data['detail_total'] = $total;
+        if ($summaryRows->isEmpty()) {
+            return $data;
+        }
+
+        $transactionIds = $summaryRows->pluck('transaction_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $paidBeforeByTransaction = DB::table('transaction_payments as tp')
+            ->whereIn('tp.transaction_id', $transactionIds)
+            ->whereRaw("DATE(tp.paid_on) < ?", [$filters['start_date']])
+            ->select('tp.transaction_id', DB::raw('SUM(tp.amount) as amount'))
+            ->groupBy('tp.transaction_id')
+            ->pluck('amount', 'transaction_id');
+
+        $displayedPaymentIds = $rows->pluck('payment_id')->map(fn ($id) => (int) $id)->flip();
+        foreach ($summaryRows as $row) {
+            $customerGroupName = trim((string) ($row->customer_group_name ?? ''));
+            if ($customerGroupName === self::INSTALLMENT_CUSTOMER_GROUP) {
+                continue;
+            }
+
+            $method = (string) ($row->method ?? 'cash');
+            $amount = (float) ($row->amount ?? 0);
+            $transactionId = (int) ($row->transaction_id ?? 0);
+            $invoiceTotal = (float) ($row->final_total ?? 0);
+            $previousPaid = (float) ($paidBeforeByTransaction[$transactionId] ?? 0);
+            $previousDue = max($invoiceTotal - $previousPaid, 0);
+            $remainingDue = max($previousDue - $amount, 0);
+
+            $paymentRow = [
+                'payment_id' => (int) ($row->payment_id ?? 0),
+                'transaction_id' => $transactionId,
+                'date' => ! empty($row->paid_on) ? Carbon::parse($row->paid_on)->format('Y-m-d H:i') : '-',
+                'receipt_no' => (string) ($row->payment_ref_no ?: ('#PMT' . ($row->payment_id ?? ''))),
+                'invoice_no' => (string) ($row->invoice_no ?: ('#' . $transactionId)),
+                'invoice_date' => ! empty($row->transaction_date) ? Carbon::parse($row->transaction_date)->format('Y-m-d H:i') : '-',
+                'customer_name' => (string) ($row->customer_name ?? 'Walk-In Customer'),
+                'customer_group_name' => $customerGroupName,
+                'phone_number' => $this->resolveCustomerPhone($row->customer_phone ?? null, $row->staff_note ?? null),
+                'location_id' => (int) ($row->location_id ?? 0),
+                'location_name' => (string) ($row->location_name ?? 'N/A'),
+                'cashier_id' => (int) ($row->created_by ?? 0),
+                'cashier_name' => trim((string) ($row->cashier_name ?? '')) ?: 'N/A',
+                'method' => $method,
+                'method_label' => (string) ($paymentTypes[$method] ?? $method),
+                'amount' => $amount,
+                'invoice_total' => $invoiceTotal,
+                'previous_due' => $previousDue,
+                'remaining_due' => $remainingDue,
+                'note' => (string) ($row->note ?? ''),
+            ];
+            $data['summary_rows'][] = $paymentRow;
+            if ($displayedPaymentIds->has((int) ($row->payment_id ?? 0))) {
+                $data['rows'][] = $paymentRow;
+            }
+            $data['methods'][$method] = $method;
+            $data['method_totals'][$method] = ($data['method_totals'][$method] ?? 0) + $amount;
+            $data['cashier_ids'][(int) ($row->created_by ?? 0)] = (int) ($row->created_by ?? 0);
+            $data['location_ids'][(int) ($row->location_id ?? 0)] = (int) ($row->location_id ?? 0);
+            $data['total'] += $amount;
+        }
+
+        $data['methods'] = array_values($data['methods']);
+        $data['cashier_ids'] = array_values(array_filter($data['cashier_ids']));
+        $data['location_ids'] = array_values(array_filter($data['location_ids']));
+
+        return $data;
+    }
+
+    private function normalizeCustomerDuePaymentRows(array $rows, array $paymentColumns): array
+    {
+        return array_map(function ($row) use ($paymentColumns) {
+            $payments = [];
+            foreach ($paymentColumns as $method) {
+                $payments[$method] = $method === ($row['method'] ?? '') ? (float) ($row['amount'] ?? 0) : 0.0;
+            }
+            $row['payments'] = $payments;
+
+            return $row;
+        }, $rows);
+    }
+
+    private function normalizeCollectionPaymentRows(array $rows, array $paymentColumns, $cashierMap, $locationMap, array $paymentTypes): array
+    {
+        return array_map(function ($row) use ($paymentColumns, $cashierMap, $locationMap, $paymentTypes) {
+            $method = (string) ($row['method'] ?? 'cash');
+            $payments = [];
+            foreach ($paymentColumns as $paymentColumn) {
+                $payments[$paymentColumn] = $paymentColumn === $method ? (float) ($row['amount'] ?? 0) : 0.0;
+            }
+
+            $loanNumber = trim((string) ($row['loan_number'] ?? ''));
+            $paymentRef = trim((string) ($row['payment_ref'] ?? ''));
+
+            return [
+                'payment_id' => (int) ($row['payment_id'] ?? 0),
+                'date' => ! empty($row['date']) ? Carbon::parse($row['date'])->format('Y-m-d H:i') : '-',
+                'receipt_no' => $paymentRef !== '' ? $paymentRef : ('#LP' . ($row['payment_id'] ?? '')),
+                'customer_name' => (string) ($row['customer_name'] ?? 'Loan Customer'),
+                'loan_number' => $loanNumber !== '' ? $loanNumber : '-',
+                'location_id' => (int) ($row['location_id'] ?? 0),
+                'location_name' => (string) ($locationMap[(int) ($row['location_id'] ?? 0)] ?? 'N/A'),
+                'cashier_id' => (int) ($row['cashier_id'] ?? 0),
+                'cashier_name' => (string) ($cashierMap[(int) ($row['cashier_id'] ?? 0)] ?? 'N/A'),
+                'method' => $method,
+                'method_label' => (string) ($paymentTypes[$method] ?? $method),
+                'payments' => $payments,
+                'amount' => (float) ($row['amount'] ?? 0),
+            ];
+        }, $rows);
+    }
+
     private function getExpenseDetailRows(array $expenseTxnIds, array $paymentTypes, array $paymentColumns, int $limit): array
     {
         if (empty($expenseTxnIds)) {
@@ -1530,7 +1774,7 @@ class LocalCashierReportController extends Controller
             'total' => 0.0,
         ];
 
-        if (! empty($filters['customer_group']) && $filters['customer_group'] !== 'បង់ប្រាក់') {
+        if (! empty($filters['customer_group']) && $filters['customer_group'] !== self::COLLECTION_PAYMENT_GROUP) {
             return $empty;
         }
 
@@ -1674,7 +1918,7 @@ class LocalCashierReportController extends Controller
 
             if (! isset($data['cashier_groups'][$cashierId])) {
                 $data['cashier_groups'][$cashierId] = [
-                    'name' => 'បង់ប្រាក់',
+                    'name' => self::COLLECTION_PAYMENT_GROUP,
                     'sort' => 4,
                     'location_qty_map' => [],
                     'payments' => [],
@@ -1685,7 +1929,7 @@ class LocalCashierReportController extends Controller
             }
             if (! isset($data['location_groups'][$locationId])) {
                 $data['location_groups'][$locationId] = [
-                    'name' => 'បង់ប្រាក់',
+                    'name' => self::COLLECTION_PAYMENT_GROUP,
                     'sort' => 4,
                     'qty_total' => 0.0,
                     'payments' => [],
@@ -1702,12 +1946,12 @@ class LocalCashierReportController extends Controller
             $data['location_groups'][$locationId]['payments'][$method] = ($data['location_groups'][$locationId]['payments'][$method] ?? 0) + $amount;
             $data['location_groups'][$locationId]['paid'] += $amount;
             $data['method_totals'][$method] = ($data['method_totals'][$method] ?? 0) + $amount;
-            if (empty($filters['customer_group']) || $filters['customer_group'] === 'បង់ប្រាក់') {
+            if (empty($filters['customer_group']) || $filters['customer_group'] === self::COLLECTION_PAYMENT_GROUP) {
                 $data['methods'][$method] = $method;
             }
             $data['cashier_ids'][$cashierId] = $cashierId;
             $data['location_ids'][$locationId] = $locationId;
-            if (empty($filters['customer_group']) || $filters['customer_group'] === 'បង់ប្រាក់') {
+            if (empty($filters['customer_group']) || $filters['customer_group'] === self::COLLECTION_PAYMENT_GROUP) {
                 $data['total'] += $amount;
             }
         }

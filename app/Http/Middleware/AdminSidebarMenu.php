@@ -646,6 +646,14 @@ class AdminSidebarMenu
                                     ['icon' => '', 'active' => request()->segment(2) == 'stock-adjustment-report']
                                 );
                             }
+
+                            if (in_array('stock_transfers', $enabled_modules)) {
+                                $sub->url(
+                                    action([\App\Http\Controllers\ReportController::class, 'getStockTransferReport']),
+                                    __('report.stock_transfer_report'),
+                                    ['icon' => '', 'active' => request()->segment(2) == 'stock-transfer-report']
+                                );
+                            }
                         }
 
                         if (auth()->user()->can('trending_product_report.view')) {

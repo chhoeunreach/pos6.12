@@ -4359,4 +4359,131 @@ class ReportController extends Controller
 
         return view('report.gst_purchase_report')->with(compact('suppliers', 'taxes'));
     }
+
+    /**
+     * Shows stock transfer report
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function getStockTransferReport(Request $request)
+    {
+        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('stock_transfer.view') && ! auth()->user()->can('stock_transfer.view_own')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $query = TransactionSellLine::join(
+                'transactions',
+                'transaction_sell_lines.transaction_id',
+                '=',
+                'transactions.id'
+            )
+                ->join(
+                    'business_locations AS l1',
+                    'transactions.location_id',
+                    '=',
+                    'l1.id'
+                )
+                ->join('transactions as t2', 't2.transfer_parent_id', '=', 'transactions.id')
+                ->join(
+                    'business_locations AS l2',
+                    't2.location_id',
+                    '=',
+                    'l2.id'
+                )
+                ->join(
+                    'products',
+                    'transaction_sell_lines.product_id',
+                    '=',
+                    'products.id'
+                )
+                ->join(
+                    'variations',
+                    'transaction_sell_lines.variation_id',
+                    '=',
+                    'variations.id'
+                )
+                ->leftJoin(
+                    'product_variations',
+                    'variations.product_variation_id',
+                    '=',
+                    'product_variations.id'
+                )
+                ->leftJoin('users as sender', 'transactions.created_by', '=', 'sender.id')
+                ->where('transactions.business_id', $business_id)
+                ->where('transactions.type', 'sell_transfer');
+
+            $permitted_locations = auth()->user()->permitted_locations();
+            if ($permitted_locations != 'all') {
+                $query->where(function ($q) use ($permitted_locations) {
+                    $q->whereIn('transactions.location_id', $permitted_locations)
+                        ->orWhereIn('t2.location_id', $permitted_locations);
+                });
+            }
+
+            if (! auth()->user()->can('stock_transfer.view') && auth()->user()->can('stock_transfer.view_own')) {
+                $query->where('transactions.created_by', $request->session()->get('user.id'));
+            }
+
+            $location_from_id = $request->get('location_from_id', null);
+            if (! empty($location_from_id)) {
+                $query->where('transactions.location_id', $location_from_id);
+            }
+
+            $location_to_id = $request->get('location_to_id', null);
+            if (! empty($location_to_id)) {
+                $query->where('t2.location_id', $location_to_id);
+            }
+
+            $sender_id = $request->get('sender_id', []);
+            if (! empty($sender_id)) {
+                $sender_ids = is_array($sender_id) ? $sender_id : [$sender_id];
+                $sender_ids = array_filter($sender_ids);
+                if (! empty($sender_ids)) {
+                    $query->whereIn('transactions.created_by', $sender_ids);
+                }
+            }
+
+            $start_date = $request->get('start_date', null);
+            $end_date = $request->get('end_date', null);
+            if (! empty($start_date) && ! empty($end_date)) {
+                $query->whereDate('transactions.transaction_date', '>=', $start_date)
+                    ->whereDate('transactions.transaction_date', '<=', $end_date);
+            }
+
+            $query->select(
+                DB::raw('DATE_FORMAT(transactions.transaction_date, "%Y-%m-%d") as transaction_date'),
+                'variations.sub_sku as sku',
+                DB::raw("IF(products.type='variable', CONCAT(products.name, ' - ', COALESCE(product_variations.name, ''), ' - ', variations.name), products.name) as product_name"),
+                'transaction_sell_lines.quantity as qty',
+                'l1.name as location_from',
+                'l2.name as location_to',
+                'transactions.ref_no as invoice',
+                DB::raw("CONCAT(COALESCE(sender.surname, ''),' ',COALESCE(sender.first_name, ''),' ',COALESCE(sender.last_name,'')) as sender_by"),
+                'transactions.additional_notes as note'
+            );
+
+            $datatable = Datatables::of($query)
+                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('qty', function ($row) {
+                    return $this->transactionUtil->num_f($row->qty, false, null, true);
+                })
+                ->filterColumn('sender_by', function ($query, $keyword) {
+                    $query->whereRaw("CONCAT(COALESCE(sender.surname, ''),' ',COALESCE(sender.first_name, ''),' ',COALESCE(sender.last_name,'')) like ?", ["%{$keyword}%"]);
+                })
+                ->rawColumns([])
+                ->make(true);
+
+            return $datatable;
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+        $users = User::forDropdown($business_id, false, false, false);
+
+        return view('report.stock_transfer_report')
+            ->with(compact('business_locations', 'users'));
+    }
 }

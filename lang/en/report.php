@@ -78,4 +78,8 @@ return [
     'net_profit' => 'Net Profit',
     'total_stock_adjustment' => 'Total Stock Adjustment',
     'total_stock_recovered' => 'Total Stock Recovered',
+    'stock_transfer_report' => 'Stock Transfer Report',
+    'total_stock_transfered' => 'Total Stock Transferred',
+    'total_transfer_value' => 'Total Transfer Value',
+    'receive_by' => 'Receive By',
 ];
