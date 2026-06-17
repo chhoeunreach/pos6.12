@@ -1521,11 +1521,25 @@
             .on('mouseleave', '.date-action-wrap', function () {
                 var $wrap = $(this);
                 dateActionCloseTimer = setTimeout(function () {
-                    $wrap.removeClass('is-open');
-                }, 250);
+                    if (! $wrap.hasClass('is-pinned')) {
+                        $wrap.removeClass('is-open');
+                    }
+                }, 700);
             });
+        $(document).on('click', '.date-action-text', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $wrap = $(this).closest('.date-action-wrap');
+            $('.date-action-wrap').not($wrap).removeClass('is-open is-pinned');
+            $wrap.toggleClass('is-open is-pinned');
+        });
         $(document).on('click', '.date-action-pill', function () {
-            $(this).closest('.date-action-wrap').removeClass('is-open');
+            $(this).closest('.date-action-wrap').removeClass('is-open is-pinned');
+        });
+        $(document).on('click', function (e) {
+            if (! $(e.target).closest('.date-action-wrap').length) {
+                $('.date-action-wrap').removeClass('is-open is-pinned');
+            }
         });
         if (window.location.hash && $('.local-detail-tabs a[href="' + window.location.hash + '"]').length) {
             $('.local-detail-tabs a[href="' + window.location.hash + '"]').tab('show');
@@ -2150,6 +2164,8 @@
     display: inline-flex;
     align-items: center;
     min-height: 24px;
+    padding-bottom: 8px;
+    margin-bottom: -8px;
     z-index: 2;
 }
 #local_cashier_report_app .date-action-text {
@@ -2160,7 +2176,7 @@
     position: absolute;
     left: 0;
     top: 100%;
-    margin-top: 2px;
+    margin-top: 0;
     z-index: 1000;
     display: none;
     gap: 6px;
