@@ -341,7 +341,7 @@ class BusinessLocationController extends Controller
                 $valid = 'false';
             }
         }
-        return response()->json(['valid' => $valid]);
+        return response($valid);
     }
 
     /**
