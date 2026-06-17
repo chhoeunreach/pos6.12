@@ -832,6 +832,7 @@ class LocalCashierReportController extends Controller
                 't.final_total',
                 't.additional_notes',
                 't.staff_note',
+                'c.mobile as customer_phone',
                 DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
             )
@@ -875,6 +876,7 @@ class LocalCashierReportController extends Controller
                 'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
+                'phone_number' => $this->resolveCustomerPhone($line->customer_phone ?? null, $line->staff_note ?? null),
                 'customer_group_name' => $customerGroupLabel,
                 'customer_group_sort' => $customerGroupSort,
                 'sku' => (string) ($line->sub_sku ?? '-'),
@@ -909,6 +911,7 @@ class LocalCashierReportController extends Controller
                 'cashier_name' => (string) ($cashierMap[(int) ($loanPaymentRow['cashier_id'] ?? 0)] ?? 'N/A'),
                 'location_name' => (string) ($locationMap[$loanPaymentRow['location_id'] ?? 0] ?? 'N/A'),
                 'customer_name' => (string) ($loanPaymentRow['customer_name'] ?? 'Loan Customer'),
+                'phone_number' => (string) ($loanPaymentRow['phone_number'] ?? ''),
                 'customer_group_name' => 'បង់ប្រាក់',
                 'customer_group_sort' => 4,
                 'sku' => '-',
@@ -1218,6 +1221,7 @@ class LocalCashierReportController extends Controller
                 't.additional_notes',
                 't.staff_note',
                 'p.brand_id',
+                'c.mobile as customer_phone',
                 DB::raw("COALESCE(NULLIF(TRIM(b.name), ''), 'No Brand') as brand_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
                 DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') as customer_group_name")
@@ -1303,6 +1307,7 @@ class LocalCashierReportController extends Controller
                 'location_id' => (int) $line->location_id,
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
+                'phone_number' => $this->resolveCustomerPhone($line->customer_phone ?? null, $line->staff_note ?? null),
                 'customer_group_name' => $customerGroupLabel,
                 'brand_id' => isset($line->brand_id) ? (int) $line->brand_id : 0,
                 'brand_name' => (string) ($line->brand_name ?? 'No Brand'),
@@ -1751,6 +1756,35 @@ class LocalCashierReportController extends Controller
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    private function resolveCustomerPhone($contactMobile, $staffNote): string
+    {
+        $contactMobile = $this->normalizePhoneText($contactMobile);
+        if ($contactMobile !== '') {
+            return $contactMobile;
+        }
+
+        $staffNote = (string) ($staffNote ?? '');
+        if (preg_match('/\bMobile\s*:\s*([^\r\n]+)/i', $staffNote, $matches)) {
+            return $this->normalizePhoneText($matches[1] ?? '');
+        }
+
+        $plainStaffNote = $this->normalizePhoneText($staffNote);
+        if (preg_match('/^\+?[0-9][0-9\s().-]{5,}$/', $plainStaffNote)) {
+            return $plainStaffNote;
+        }
+
+        return '';
+    }
+
+    private function normalizePhoneText($value): string
+    {
+        $value = trim((string) ($value ?? ''));
+        $value = preg_replace('/\s+/', ' ', $value) ?? '';
+        $value = trim($value, " \t\n\r\0\x0B:-*");
+
+        return in_array(strtolower($value), ['', 'null', 'n/a', 'na', '-'], true) ? '' : $value;
     }
 
     private function validatedFilters(Request $request, array $defaultLocationIds): array

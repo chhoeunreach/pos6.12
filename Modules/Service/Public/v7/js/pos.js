@@ -243,6 +243,9 @@ $(document).ready(function() {
                     $('.search_fields:checked').each(function(i){
                       search_fields[i] = $(this).val();
                     });
+                    if (search_fields.indexOf('lot') === -1) {
+                        search_fields.push('lot');
+                    }
 
                     if ($('#price_group').length > 0) {
                         price_group = $('#price_group').val();
@@ -456,6 +459,8 @@ $(document).ready(function() {
             }
         };
     }
+
+    init_lot_number_select2($('table#pos_table tbody'));
 
     //Update line total and check for quantity not greater than max quantity
     $('table#pos_table tbody').on('change', 'input.pos_quantity', function() {
@@ -2023,6 +2028,7 @@ function pos_insert_product_row(result) {
 
     round_row_to_iraqi_dinnar(this_row);
     __currency_convert_recursively(this_row);
+    init_lot_number_select2(this_row);
 
     if (!$('#__is_mobile').length) {
         $('input#search_product')
@@ -2041,6 +2047,27 @@ function pos_insert_product_row(result) {
 
     //scroll bottom of items list
     $(".pos_product_div").animate({ scrollTop: $('.pos_product_div').prop("scrollHeight")}, 1000);
+}
+
+function init_lot_number_select2(context) {
+    if (!$.fn.select2) {
+        return;
+    }
+
+    var $context = context ? $(context) : $(document);
+    $context.find('select.lot_number').each(function() {
+        var $select = $(this);
+
+        if ($select.data('select2')) {
+            return;
+        }
+
+        $select.select2({
+            width: '100%',
+            minimumResultsForSearch: 0,
+            dropdownParent: $(document.body)
+        });
+    });
 }
 
 // Helper function to add product row from server data

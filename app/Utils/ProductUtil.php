@@ -1656,7 +1656,8 @@ class ProductUtil extends Util
         }
 
         if (in_array('lot', $search_fields)) {
-            $query->leftjoin('purchase_lines as pl', 'variations.id', '=', 'pl.variation_id');
+            $query->leftjoin('purchase_lines as pl', 'variations.id', '=', 'pl.variation_id')
+                ->leftjoin('transactions as plt', 'pl.transaction_id', '=', 'plt.id');
         }
 
         //Include search
@@ -1664,7 +1665,7 @@ class ProductUtil extends Util
 
             //Search with like condition
             if ($search_type == 'like') {
-                $query->where(function ($query) use ($search_term, $search_fields) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', 'like', '%'.$search_term.'%');
                     }
@@ -1678,7 +1679,14 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere('pl.lot_number', 'like', '%'.$search_term.'%');
+                        $query->orWhere(function ($query) use ($search_term, $location_id) {
+                            $query->where('pl.lot_number', 'like', '%'.$search_term.'%')
+                                ->whereRaw('(pl.quantity - (pl.quantity_sold + pl.quantity_adjusted + pl.quantity_returned + pl.mfg_quantity_used)) > 0');
+
+                            if (! empty($location_id)) {
+                                $query->where('plt.location_id', $location_id);
+                            }
+                        });
                     }
 
                     if (in_array('product_keywords', $search_fields)) {
@@ -1702,7 +1710,7 @@ class ProductUtil extends Util
 
             //Search with exact condition
             if ($search_type == 'exact') {
-                $query->where(function ($query) use ($search_term, $search_fields) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', $search_term);
                     }
@@ -1716,7 +1724,14 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere('pl.lot_number', $search_term);
+                        $query->orWhere(function ($query) use ($search_term, $location_id) {
+                            $query->where('pl.lot_number', $search_term)
+                                ->whereRaw('(pl.quantity - (pl.quantity_sold + pl.quantity_adjusted + pl.quantity_returned + pl.mfg_quantity_used)) > 0');
+
+                            if (! empty($location_id)) {
+                                $query->where('plt.location_id', $location_id);
+                            }
+                        });
                     }
 
                     if (in_array('product_keywords', $search_fields)) {

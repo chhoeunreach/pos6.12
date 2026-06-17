@@ -3,6 +3,36 @@
     $saleRowsForFilters = collect($rows ?? []);
     $allSaleLocations = $saleRowsForFilters->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
     $allSaleCashiers = $saleRowsForFilters->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+    $shortPaymentLabel = function ($method, $label) {
+        $method = (string) $method;
+        $label = trim((string) $label);
+        $map = [
+            'cash' => 'Cash',
+            'card' => 'Card',
+            'other' => 'Other',
+        ];
+
+        if (isset($map[$method])) {
+            return $map[$method];
+        }
+        if (stripos($label, 'wing') !== false || str_contains($label, 'វីង')) {
+            return 'Wing';
+        }
+        if (stripos($label, 'aba') !== false || str_contains($label, 'អេប៊ីអេ')) {
+            return 'ABA';
+        }
+        if (stripos($label, 'acleda') !== false || str_contains($label, 'អេស៊ីលីដា')) {
+            return 'Acleda';
+        }
+        if (stripos($label, 'true money') !== false || stripos($label, 'truemoney') !== false || str_contains($label, 'ទ្រូម៉ានី')) {
+            return 'True';
+        }
+        if (str_contains($label, 'កាត់អីវ៉ាន់')) {
+            return 'Cut';
+        }
+
+        return $label !== '' ? $label : $method;
+    };
 @endphp
 
 <div class="sale-table-filter-toggle">
@@ -43,7 +73,7 @@
     </div>
 </div>
 
-<div class="table-responsive">
+<div class="table-responsive {{ $isAllSaleTable ? 'all-sale-fit-table-wrapper' : '' }}">
     <table class="table table-bordered table-striped ajax_view local-module-sales-detail-table" id="{{ $tableId }}" style="width:100%;">
         <thead>
             <tr>
@@ -53,25 +83,31 @@
                 @unless($isAllSaleTable)
                     <th class="sale-location-column all-sale-location-column">Location</th>
                 @endunless
-                <th>Customer</th>
+                <th>{{ $isAllSaleTable ? 'Cust.' : 'Customer' }}</th>
+                @if($isAllSaleTable)
+                    <th>Phone</th>
+                @endif
                 @unless($isAllSaleTable)
                     <th>Group</th>
                 @endunless
                 <th>SKU</th>
-                <th>Product Name</th>
-                <th class="text-right">Quantity</th>
-                <th class="text-right">Unit Price</th>
-                @unless($isAllSaleTable)
+                <th>{{ $isAllSaleTable ? 'Product' : 'Product Name' }}</th>
+                <th class="text-right">{{ $isAllSaleTable ? 'Qty' : 'Quantity' }}</th>
+                <th class="text-right">{{ $isAllSaleTable ? 'Price' : 'Unit Price' }}</th>
+                @if($isAllSaleTable)
+                    <th class="text-right">Total</th>
+                @else
                     <th class="text-right">Line Total</th>
                     <th class="text-right">Discount</th>
-                @endunless
-                <th class="text-right">Total Paid</th>
+                @endif
                 @foreach($report['payment_columns'] as $method)
-                    <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                    <th class="text-right">{{ $isAllSaleTable ? $shortPaymentLabel($method, $report['payment_labels'][$method] ?? $method) : ($report['payment_labels'][$method] ?? $method) }}</th>
                 @endforeach
+                <th class="text-right">{{ $isAllSaleTable ? 'Paid' : 'Total Paid' }}</th>
                 <th class="text-right">Due</th>
                 @if($isAllSaleTable)
-                    <th class="never-visible all-sale-location-column">Location</th>
+                    <th class="all-sale-location-column">Location</th>
+                    <th>Group</th>
                     <th class="never-visible all-sale-cashier-column">Cashier</th>
                 @else
                     <th class="never-visible all-sale-cashier-column">Cashier</th>
@@ -98,12 +134,16 @@
                             $editUrl = action([\App\Http\Controllers\SellPosController::class, 'edit'], [$transactionId]);
                         }
                     }
+                    $fullDate = (string) ($row['date'] ?? '');
+                    $displayDate = $isAllSaleTable && preg_match('/^\d{4}-\d{2}-\d{2}/', $fullDate)
+                        ? substr($fullDate, 0, 10)
+                        : $fullDate;
                 @endphp
                 <tr class="{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-customer-row' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-customer-row' : 'normal-customer-row') }}">
                     <td>
                         @if($isAllSaleTable && ($viewUrl || $editUrl))
                             <span class="date-action-wrap">
-                                <span class="date-action-text">{{ $row['date'] }}</span>
+                                <span class="date-action-text" title="{{ $fullDate }}">{{ $displayDate }}</span>
                                 <span class="date-action-popover">
                                     @if($viewUrl)
                                         <a class="date-action-pill btn-modal"
@@ -122,7 +162,7 @@
                                 </span>
                             </span>
                         @else
-                            {{ $row['date'] }}
+                            <span title="{{ $fullDate }}">{{ $displayDate }}</span>
                         @endif
                     </td>
                     <td>{{ $row['invoice_no'] }}</td>
@@ -132,6 +172,7 @@
                     @endunless
                     @if($isAllSaleTable)
                         <td title="Location: {{ $row['location_name'] ?? 'N/A' }}&#10;Cashier: {{ $row['cashier_name'] ?? 'N/A' }}">{{ $row['customer_name'] ?? '-' }}</td>
+                        <td>{{ $row['phone_number'] ?? '' }}</td>
                     @else
                         <td>{{ $row['customer_name'] ?? '-' }}</td>
                     @endif
@@ -146,17 +187,24 @@
                     <td>{{ $row['product_name'] }}</td>
                     <td class="text-right">{{ is_null($row['quantity'] ?? null) ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
                     <td class="text-right">{{ is_null($row['unit_price'] ?? null) ? '' : $fmt($row['unit_price']) }}</td>
-                    @unless($isAllSaleTable)
+                    @if($isAllSaleTable)
+                        <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
+                    @else
                         <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
                         <td class="text-right">{{ is_null($row['discount'] ?? null) ? '' : $fmt($row['discount']) }}</td>
-                    @endunless
-                    <td class="text-right">{{ $fmt($row['paid']) }}</td>
+                    @endif
                     @foreach($report['payment_columns'] as $method)
                         <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                     @endforeach
+                    <td class="text-right">{{ $fmt($row['paid']) }}</td>
                     <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
                     @if($isAllSaleTable)
                         <td>{{ $row['location_name'] ?? 'N/A' }}</td>
+                        <td>
+                            <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment' : 'normal')) }}">
+                                {{ $row['customer_group_name'] ?? 'លក់' }}
+                            </span>
+                        </td>
                         <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
                     @else
                         <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
@@ -173,21 +221,24 @@
         @endphp
         <tfoot>
             <tr class="detail-total-row">
-                <th colspan="{{ $isAllSaleTable ? 6 : 8 }}" class="text-right">Total</th>
+                <th colspan="{{ $isAllSaleTable ? 7 : 8 }}" class="text-right">Total</th>
                 <th class="text-right">{{ rtrim(rtrim(number_format($saleRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['unit_price'] ?? 0))) }}</th>
-                @unless($isAllSaleTable)
+                @if($isAllSaleTable)
+                    <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['line_total'] ?? 0))) }}</th>
+                @else
                     <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['line_total'] ?? 0))) }}</th>
                     <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['discount'] ?? 0))) }}</th>
-                @endunless
-                <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['paid'] ?? 0))) }}</th>
+                @endif
                 @foreach($report['payment_columns'] as $method)
                     <th class="text-right">{{ $fmt($paymentTotals[$method] ?? 0) }}</th>
                 @endforeach
+                <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['paid'] ?? 0))) }}</th>
                 <th class="text-right @if($saleRows->sum(fn ($row) => (float) ($row['due'] ?? 0)) < 0) due-negative @endif">
                     {{ $fmt($saleRows->sum(fn ($row) => (float) ($row['due'] ?? 0))) }}
                 </th>
                 @if($isAllSaleTable)
+                    <th></th>
                     <th></th>
                     <th></th>
                 @else

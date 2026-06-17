@@ -779,7 +779,7 @@
                         <a href="#all_sale_detail_tab" aria-controls="all_sale_detail_tab" role="tab" data-toggle="tab">All Sale</a>
                     </li>
                     <li role="presentation">
-                        <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">All cashier sales</a>
+                        <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">Product Sale</a>
                     </li>
                     <li role="presentation">
                         <a href="#accessory_sales_detail_tab" aria-controls="accessory_sales_detail_tab" role="tab" data-toggle="tab">Accessory sales</a>
@@ -1264,6 +1264,74 @@
                 buttons: ['pageLength', 'colvis', 'excel', 'print']
             });
         }
+        function localCashierCopyCellFormatter(data, row, column, node) {
+            var $node = $(node);
+            var isDateCell = $node.find('.date-action-text').length > 0;
+            var text = '';
+
+            if (isDateCell) {
+                text = $node.find('.date-action-text').first().text();
+            } else {
+                text = $('<div>').html(data === null || data === undefined ? '' : data).text();
+            }
+
+            text = (text || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+
+            if (text === '-' || /^[^\dA-Za-z]?\s*-\s*$/.test(text)) {
+                return '';
+            }
+
+            var headerText = $node.closest('table').find('thead th').eq(column).text().replace(/\s+/g, ' ').trim().toLowerCase();
+            var isoDate = text.match(/\b\d{4}-\d{2}-\d{2}\b/);
+            var isDateTimeText = /^\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(text);
+            if ((isDateCell || headerText.indexOf('date') !== -1 || isDateTimeText) && isoDate) {
+                return isoDate[0];
+            }
+
+            return text;
+        }
+
+        function localCashierCopyExportOptions(columns) {
+            return {
+                columns: columns || ':visible',
+                format: {
+                    body: localCashierCopyCellFormatter
+                }
+            };
+        }
+
+        function localCashierCopyButton(options) {
+            options = options || {};
+
+            var button = {
+                extend: 'copy',
+                text: 'Copy',
+                className: 'btn btn-sm btn-outline-primary',
+                exportOptions: localCashierCopyExportOptions(options.columns || ':visible')
+            };
+
+            if (options.withoutHeader) {
+                button.header = false;
+                button.title = null;
+            }
+
+            return button;
+        }
+
+        function localCashierAdjustVisibleDataTables() {
+            if (! $.fn.DataTable) {
+                return;
+            }
+
+            setTimeout(function () {
+                $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust().draw(false);
+            }, 0);
+
+            setTimeout(function () {
+                $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust().draw(false);
+            }, 250);
+        }
+
         if ($.fn.DataTable && $('#local_cashier_sales_detail_table').length) {
             $('#local_cashier_sales_detail_table').DataTable({
                 paging: true,
@@ -1288,7 +1356,7 @@
                     { targets: 'never-visible', visible: false, searchable: true }
                 ],
                 buttons: [
-                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary', exportOptions: localCashierCopyExportOptions(':visible') },
                     { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
@@ -1319,7 +1387,12 @@
                     infoEmpty: 'Showing 0 to 0 of 0 entries'
                 },
                 buttons: [
-                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary' },
+                    localCashierCopyButton({
+                        withoutHeader: true,
+                        columns: function(index, data, node) {
+                            return index !== 0 && $(node).is(':visible');
+                        }
+                    }),
                     { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
                     { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
@@ -1335,6 +1408,10 @@
                 if (locationOrderColumn < 0) {
                     locationOrderColumn = $moduleTable.find('thead th.sale-location-column').index();
                 }
+                var isAllSaleDetailTable = $moduleTable.attr('id') === 'local_cashier_all_sale_detail_table';
+                var moduleCopyButton = localCashierCopyButton({
+                    withoutHeader: isAllSaleDetailTable
+                });
 
                 $(this).DataTable({
                     paging: true,
@@ -1346,7 +1423,7 @@
                     pageLength: 25,
                     lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
                     pagingType: 'full_numbers',
-                    scrollX: true,
+                    scrollX: ! isAllSaleDetailTable,
                     responsive: false,
                     dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
                     language: {
@@ -1360,7 +1437,7 @@
                         { targets: 'never-visible', visible: false, searchable: true }
                     ],
                     buttons: [
-                        { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        moduleCopyButton,
                         { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
                         { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
                         { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
@@ -1383,12 +1460,24 @@
             return values.length ? '^(' + values.map(escapeDataTableRegex).join('|') + ')$' : '';
         }
 
+        function localCashierColumnIndexByClass(table, className) {
+            var foundIndex = -1;
+
+            table.columns().every(function (index) {
+                if (foundIndex === -1 && $(this.header()).hasClass(className)) {
+                    foundIndex = index;
+                }
+            });
+
+            return foundIndex;
+        }
+
         function applyAllSaleFilters(tableId) {
             var table = $('#' + tableId).DataTable();
             var locations = $('.all-sale-location-filter[data-table-id="' + tableId + '"]').val();
             var cashiers = $('.all-sale-cashier-filter[data-table-id="' + tableId + '"]').val();
-            var locationColumn = $('#' + tableId + ' thead th.all-sale-location-column').index();
-            var cashierColumn = $('#' + tableId + ' thead th.all-sale-cashier-column').index();
+            var locationColumn = localCashierColumnIndexByClass(table, 'all-sale-location-column');
+            var cashierColumn = localCashierColumnIndexByClass(table, 'all-sale-cashier-column');
 
             if (locationColumn >= 0) {
                 table.column(locationColumn).search(exactMatchAnyRegex(locations), true, false);
@@ -1441,6 +1530,7 @@
         if (window.location.hash && $('.local-detail-tabs a[href="' + window.location.hash + '"]').length) {
             $('.local-detail-tabs a[href="' + window.location.hash + '"]').tab('show');
         }
+        localCashierAdjustVisibleDataTables();
         $(document).on('click', '.local-detail-tab-link', function (e) {
             var targetTab = $(this).data('target-tab');
             if (! targetTab || ! $('.local-detail-tabs a[href="' + targetTab + '"]').length) {
@@ -1457,14 +1547,13 @@
             }
         });
         $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
-            if ($.fn.DataTable) {
-                $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
-            }
+            localCashierAdjustVisibleDataTables();
 
             if (window.history && window.history.replaceState) {
                 window.history.replaceState(null, '', window.location.pathname + window.location.search + $(this).attr('href'));
             }
         });
+        $(window).on('load resize', localCashierAdjustVisibleDataTables);
     });
 </script>
 <style>
@@ -1914,6 +2003,26 @@
 #local_cashier_report_app .local-module-sales-detail-table tbody tr:hover td {
     background: #eaf3ff;
 }
+#local_cashier_report_app #local_cashier_all_sale_detail_table {
+    table-layout: auto;
+    width: 100% !important;
+}
+#local_cashier_report_app .all-sale-fit-table-wrapper {
+    overflow-x: visible;
+}
+#local_cashier_report_app #local_cashier_all_sale_detail_table th,
+#local_cashier_report_app #local_cashier_all_sale_detail_table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    font-size: 12px;
+    line-height: 1.25;
+    padding: 5px 6px !important;
+}
+#local_cashier_report_app #local_cashier_all_sale_detail_table td.text-right,
+#local_cashier_report_app #local_cashier_all_sale_detail_table th.text-right {
+    white-space: nowrap;
+}
 #local_cashier_report_app #local_cashier_sales_detail_table tbody tr.customer-group-separator td {
     background: #f1f5f9 !important;
     border-top: 3px solid #0f172a !important;
@@ -2119,6 +2228,14 @@
 #local_cashier_report_app .dataTables_wrapper .dataTables_paginate .paginate_button {
     border-radius: 8px !important;
     margin: 0 2px;
+}
+#local_cashier_report_app .dataTables_scrollBody {
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+}
+#local_cashier_report_app .dataTables_scroll {
+    overflow-y: visible !important;
 }
 
 /* Global friendly UI across all tabs */
