@@ -278,7 +278,15 @@ class StockController extends BaseController
 
         $query = Transaction::where('business_id', $business_id)
             ->whereIn('type', ['sell_transfer', 'purchase_transfer'])
-            ->with(['location', 'transferParent', 'createdByUser']);
+            ->with([
+                'location',
+                'transferParent.location',
+                'createdByUser',
+                'sell_lines.product',
+                'sell_lines.variations',
+                'purchase_lines.product',
+                'purchase_lines.variations',
+            ]);
 
         $permitted_locations = $this->getPermittedLocations();
         if ($permitted_locations != 'all') {
@@ -299,6 +307,35 @@ class StockController extends BaseController
 
         $perPage = $request->input('per_page', 20);
         $transfers = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+        $transfers->getCollection()->transform(function ($transfer) {
+            $lines = $transfer->type == 'sell_transfer'
+                ? $transfer->sell_lines
+                : $transfer->purchase_lines;
+
+            return [
+                'id' => $transfer->id,
+                'type' => $transfer->type,
+                'ref_no' => $transfer->ref_no,
+                'transaction_date' => $transfer->transaction_date,
+                'location_id' => $transfer->location_id,
+                'location' => $transfer->location,
+                'transfer_parent_id' => $transfer->transfer_parent_id,
+                'transfer_parent' => $transfer->transferParent,
+                'additional_notes' => $transfer->additional_notes,
+                'created_by_user' => $transfer->createdByUser,
+                'lines' => $lines->map(function ($line) {
+                    return [
+                        'id' => $line->id,
+                        'product_id' => $line->product_id,
+                        'variation_id' => $line->variation_id,
+                        'quantity' => $line->quantity,
+                        'product' => $line->product,
+                        'variations' => $line->variations,
+                    ];
+                })->values(),
+            ];
+        });
 
         return $this->success($transfers);
     }

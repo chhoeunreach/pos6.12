@@ -113,6 +113,8 @@ Route::middleware(['auth:api', 'SetMobileApiSession'])->group(function () {
         Route::get('/', [PurchaseController::class, 'index']);
         Route::get('{id}', [PurchaseController::class, 'show']);
         Route::post('/', [PurchaseController::class, 'store']);
+        Route::put('{id}', [PurchaseController::class, 'update']);
+        Route::delete('{id}', [PurchaseController::class, 'destroy']);
         Route::post('{id}/payment', [PurchaseController::class, 'payment']);
         Route::post('{id}/return', [PurchaseController::class, 'purchaseReturn']);
     });

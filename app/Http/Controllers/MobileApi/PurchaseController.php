@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\MobileApi;
 
 use App\Http\Requests\MobileApi\CreatePurchaseRequest;
+use App\Http\Requests\MobileApi\UpdatePurchaseRequest;
 use App\Http\Resources\Mobile\TransactionResource;
 use App\PurchaseLine;
 use App\Transaction;
+use App\AccountTransaction;
+use App\TransactionPayment;
 use App\Utils\BusinessUtil;
 use App\Utils\ModuleUtil;
 use App\Utils\ProductUtil;
@@ -156,6 +159,102 @@ class PurchaseController extends BaseController
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->error('Failed to create purchase: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function update(UpdatePurchaseRequest $request, $id)
+    {
+        $business_id = $this->getBusinessId();
+        $user_id = $this->getUserId();
+
+        $input = $request->validated();
+
+        $transaction = Transaction::where('business_id', $business_id)
+            ->where('type', 'purchase')
+            ->with(['purchase_lines'])
+            ->findOrFail($id);
+
+        if (!$this->checkLocationAccess($input['location_id'])) {
+            return $this->unauthorized('Invalid location');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $input['contact_id'] = $input['contact_id'] ?? $input['supplier_id'];
+            $input['transaction_date'] = $this->parseMobileDate($input['transaction_date'], true);
+            $input['type'] = 'purchase';
+            $input['products'] = $this->normalizePurchaseProducts($input['products']);
+            $totals = $this->calculatePurchaseTotals($input);
+
+            $before_status = $transaction->status;
+
+            // Match incoming products with existing purchase lines
+            $existingLines = $transaction->purchase_lines->keyBy(function ($line) {
+                return $line->product_id . '-' . $line->variation_id . '-' . ($line->lot_number ?? '');
+            });
+
+            foreach ($input['products'] as &$product) {
+                $key = $product['product_id'] . '-' . $product['variation_id'] . '-' . ($product['lot_number'] ?? '');
+                if ($existingLines->has($key)) {
+                    $product['purchase_line_id'] = $existingLines[$key]->id;
+                }
+            }
+            unset($product);
+
+            $transaction_data = [
+                'location_id' => $input['location_id'],
+                'status' => $input['status'],
+                'contact_id' => $input['contact_id'],
+                'ref_no' => $input['ref_no'] ?? $transaction->ref_no,
+                'transaction_date' => $input['transaction_date'],
+                'total_before_tax' => $totals['total_before_tax'],
+                'discount_type' => $input['discount_type'] ?? null,
+                'discount_amount' => $input['discount_amount'] ?? 0,
+                'tax_id' => $input['tax_rate_id'] ?? ($input['tax_id'] ?? null),
+                'tax_amount' => $totals['tax_amount'],
+                'shipping_charges' => $input['shipping_charges'] ?? 0,
+                'final_total' => $totals['final_total'],
+                'additional_notes' => $input['additional_notes'] ?? null,
+                'pay_term_number' => $input['pay_term_number'] ?? null,
+                'pay_term_type' => $input['pay_term_type'] ?? null,
+            ];
+
+            $transaction->update($transaction_data);
+
+            $this->productUtil->createOrUpdatePurchaseLines(
+                $transaction,
+                $input['products'],
+                null,
+                false,
+                $before_status
+            );
+
+            // Delete existing payment lines and recreate if payments are sent
+            if (!empty($input['payments'])) {
+                $input['payments'] = $this->normalizePaymentLines($input['payments']);
+                $this->transactionUtil->createOrUpdatePaymentLines($transaction, $input['payments'], $business_id, $user_id, false);
+                $this->transactionUtil->updatePaymentStatus($transaction->id);
+            } else {
+                $this->transactionUtil->updatePaymentStatus($transaction->id);
+            }
+
+            $this->productUtil->adjustStockOverSelling($transaction);
+            $this->transactionUtil->activityLog($transaction, 'edited');
+
+            DB::commit();
+
+            return $this->success(new TransactionResource($transaction->fresh()->load([
+                'contact',
+                'location',
+                'payment_lines',
+                'purchase_lines.product',
+                'purchase_lines.variations',
+                'purchase_lines.line_tax',
+            ])), 'Purchase updated successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error('Failed to update purchase: ' . $e->getMessage(), 500);
         }
     }
 
@@ -357,5 +456,61 @@ class PurchaseController extends BaseController
         $return->purchase_lines()->saveMany($return_lines);
 
         return $return;
+    }
+
+    public function destroy($id)
+    {
+        $business_id = $this->getBusinessId();
+
+        $transaction = Transaction::where('business_id', $business_id)
+            ->whereIn('type', ['purchase', 'purchase_return'])
+            ->with(['purchase_lines'])
+            ->findOrFail($id);
+
+        if ($this->transactionUtil->isReturnExist($id)) {
+            return $this->error('Cannot delete: return exists for this purchase', 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $transaction_status = $transaction->status;
+            $delete_purchase_lines = $transaction->purchase_lines;
+
+            $this->transactionUtil->activityLog($transaction, 'purchase_deleted');
+
+            if ($transaction_status == 'received') {
+                $delete_purchase_line_ids = [];
+                foreach ($delete_purchase_lines as $purchase_line) {
+                    $delete_purchase_line_ids[] = $purchase_line->id;
+                    $this->productUtil->decreaseProductQuantity(
+                        $purchase_line->product_id,
+                        $purchase_line->variation_id,
+                        $transaction->location_id,
+                        $purchase_line->quantity
+                    );
+                }
+                PurchaseLine::where('transaction_id', $transaction->id)
+                    ->whereIn('id', $delete_purchase_line_ids)
+                    ->delete();
+
+                $this->transactionUtil->adjustMappingPurchaseSellAfterEditingPurchase(
+                    $transaction_status,
+                    $transaction,
+                    $delete_purchase_lines
+                );
+            }
+
+            $transaction->delete();
+
+            AccountTransaction::where('transaction_id', $id)->delete();
+
+            DB::commit();
+
+            return $this->success(null, 'Purchase deleted successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error('Failed to delete purchase: ' . $e->getMessage(), 500);
+        }
     }
 }
