@@ -230,6 +230,10 @@ class Util
      */
     public function uf_date($date, $time = false)
     {
+        if (!session()->has('business')) {
+            return $date;
+        }
+
         $date_format = session('business.date_format');
         $mysql_format = 'Y-m-d';
         if ($time) {
@@ -309,7 +313,7 @@ class Util
     public function setAndGetReferenceCount($type, $business_id = null)
     {
         if (empty($business_id)) {
-            $business_id = request()->session()->get('user.business_id');
+            $business_id = session()->get('user.business_id');
         }
 
         $ref = ReferenceCount::where('ref_type', $type)
@@ -342,8 +346,8 @@ class Util
     {
         $prefix = '';
 
-        if (session()->has('business') && ! empty(request()->session()->get('business.ref_no_prefixes')[$type])) {
-            $prefix = request()->session()->get('business.ref_no_prefixes')[$type];
+        if (session()->has('business') && ! empty(session()->get('business.ref_no_prefixes')[$type])) {
+            $prefix = session()->get('business.ref_no_prefixes')[$type];
         }
         if (! empty($business_id)) {
             $business = Business::find($business_id);

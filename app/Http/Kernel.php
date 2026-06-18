@@ -71,5 +71,6 @@ class Kernel extends HttpKernel
         'superadmin' => \App\Http\Middleware\Superadmin::class,
         'admin_or_superadmin' => \App\Http\Middleware\AdminOrSuperadmin::class,
         'CheckUserLogin' => \App\Http\Middleware\CheckUserLogin::class,
+        'SetMobileApiSession' => \App\Http\Middleware\SetMobileApiSession::class,
     ];
 }

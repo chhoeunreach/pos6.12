@@ -3329,7 +3329,7 @@ class TransactionUtil extends Util
         //Set flag to check for expired items during SELLING only.
         $stop_selling_expired = false;
         if ($check_expiry) {
-            if (session()->has('business') && request()->session()->get('business')['enable_product_expiry'] == 1 && request()->session()->get('business')['on_product_expiry'] == 'stop_selling') {
+            if (session()->has('business') && session()->get('business')['enable_product_expiry'] == 1 && session()->get('business')['on_product_expiry'] == 'stop_selling') {
                 if ($mapping_type == 'purchase') {
                     $stop_selling_expired = true;
                 }
@@ -3362,7 +3362,7 @@ class TransactionUtil extends Util
 
             //If product expiry is enabled then check for on expiry conditions
             if ($stop_selling_expired && empty($purchase_line_id)) {
-                $stop_before = request()->session()->get('business')['stop_selling_before'];
+                $stop_before = session()->get('business')['stop_selling_before'];
                 $expiry_date = \Carbon::today()->addDays($stop_before)->toDateString();
                 $query->where(function ($q) use ($expiry_date) {
                     $q->whereNull('PL.exp_date')
@@ -4196,7 +4196,7 @@ class TransactionUtil extends Util
                                         ->where('purchase_lines.variation_id', $variation_id);
 
         //If expiry is disabled
-        if (request()->session()->get('business.enable_product_expiry') == 0) {
+        if (session()->get('business.enable_product_expiry') == 0) {
             $query->whereNotNull('purchase_lines.lot_number');
         }
         if ($exclude_empty_lot) {
@@ -5289,7 +5289,7 @@ class TransactionUtil extends Util
      */
     public function getLedgerDetails($contact_id, $start, $end, $format = 'format_1', $location_id = null, $line_details = false)
     {
-        $business_id = request()->session()->get('user.business_id');
+        $business_id = session()->get('user.business_id');
         //Get sum of totals before start date
         $previous_transaction_sums = $this->__transactionQuery($contact_id, $start, null, $location_id)
                 ->select(
@@ -5644,7 +5644,7 @@ class TransactionUtil extends Util
      */
     private function __transactionQuery($contact_id, $start, $end = null, $location_id = null)
     {
-        $business_id = request()->session()->get('user.business_id');
+        $business_id = session()->get('user.business_id');
         $transaction_type_keys = array_keys(Transaction::transactionTypes());
 
         $query = Transaction::where('transactions.contact_id', $contact_id)
@@ -5677,7 +5677,7 @@ class TransactionUtil extends Util
      */
     private function __paymentQuery($contact_id, $start, $end = null, $location_id = null)
     {
-        $business_id = request()->session()->get('user.business_id');
+        $business_id = session()->get('user.business_id');
 
         $query = TransactionPayment::leftJoin(
             'transactions as t',

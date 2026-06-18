@@ -708,7 +708,7 @@ class ProductUtil extends Util
      */
     public function generateProductSku($string)
     {
-        $business_id = request()->session()->get('user.business_id');
+        $business_id = session()->get('user.business_id');
         $sku_prefix = Business::where('id', $business_id)->value('sku_prefix');
 
         return $sku_prefix.str_pad($string, 4, '0', STR_PAD_LEFT);
@@ -2650,7 +2650,7 @@ class ProductUtil extends Util
      */
     public function getSellLineRow($variation_id, $location_id, $quantity, $row_count, $is_direct_sell, $is_serial_no, $so_line = null)
     {
-        $business_id = request()->session()->get('user.business_id');
+        $business_id = session()->get('user.business_id');
         $business_util = new BusinessUtil();
         $transaction_util = new TransactionUtil();
         $contact_util = new ContactUtil();
@@ -2698,7 +2698,7 @@ class ProductUtil extends Util
 
         //Get lot number dropdown if enabled
         $lot_numbers = [];
-        if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
+        if (session()->get('business.enable_lot_number') == 1 || session()->get('business.enable_product_expiry') == 1) {
             $lot_number_obj = $transaction_util->getLotNumbersFromVariation($variation_id, $business_id, $location_id, true);
             foreach ($lot_number_obj as $lot_number) {
                 $lot_number->qty_formated = $this->num_f($lot_number->qty_available);
@@ -2808,7 +2808,7 @@ class ProductUtil extends Util
             $transaction_util = new TransactionUtil();
             if ($transaction_util->isModuleEnabled('modifiers') && !$is_direct_sell) {
                 $variation = \App\Variation::find($variation_id);
-                $business_id = request()->session()->get('user.business_id');
+                $business_id = session()->get('user.business_id');
                 $this_product = \App\Product::where('business_id', $business_id)
                     ->with(['modifier_sets'])
                     ->find($variation->product_id);

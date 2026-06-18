@@ -288,7 +288,7 @@ class NotificationUtil extends Util
         $email_settings = ! empty($notificationInfo['email_settings']) ? $notificationInfo['email_settings'] : [];
 
         if (empty($email_settings) && session()->has('business')) {
-            $email_settings = request()->session()->get('business.email_settings');
+            $email_settings = session()->get('business.email_settings');
         }
 
         $is_superadmin_settings_allowed = System::getProperty('allow_email_settings_to_businesses');

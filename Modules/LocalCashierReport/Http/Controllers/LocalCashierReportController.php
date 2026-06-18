@@ -542,11 +542,13 @@ class LocalCashierReportController extends Controller
 
                 $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + $amount;
                 $rowsByCashier[$cashierId]['paid'] += $amount;
+                $rowsByCashier[$cashierId]['customer_due_payment_total'] = ($rowsByCashier[$cashierId]['customer_due_payment_total'] ?? 0) + $amount;
                 $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] = ($rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] ?? 0) + $amount;
                 $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['paid'] += $amount;
 
                 $rowsByLocation[$locationId]['payments'][$method] = ($rowsByLocation[$locationId]['payments'][$method] ?? 0) + $amount;
                 $rowsByLocation[$locationId]['paid'] += $amount;
+                $rowsByLocation[$locationId]['customer_due_payment_total'] = ($rowsByLocation[$locationId]['customer_due_payment_total'] ?? 0) + $amount;
                 $rowsByLocation[$locationId]['customer_groups']['customer_payment']['payments'][$method] = ($rowsByLocation[$locationId]['customer_groups']['customer_payment']['payments'][$method] ?? 0) + $amount;
                 $rowsByLocation[$locationId]['customer_groups']['customer_payment']['paid'] += $amount;
             }
@@ -559,7 +561,8 @@ class LocalCashierReportController extends Controller
         foreach ($rowsByCashier as $cashierRow) {
             $cashierRow['location_qty_text'] = $this->formatLocationQty($cashierRow['location_qty_map'], $locationMap);
             $cashierRow['qty_total'] = array_sum($cashierRow['location_qty_map']);
-            $cashierRow['due'] = (float) $cashierRow['total'] - (float) $cashierRow['paid'];
+            $cashierPaidForDue = (float) $cashierRow['paid'] - (float) ($cashierRow['customer_due_payment_total'] ?? 0);
+            $cashierRow['due'] = (float) $cashierRow['total'] - $cashierPaidForDue;
 
             foreach ($paymentColumns as $method) {
                 if (! isset($cashierRow['payments'][$method])) {
@@ -585,7 +588,7 @@ class LocalCashierReportController extends Controller
             $userSummary[] = [
                 'id' => (int) ($cashierRow['cashier_id'] ?? 0),
                 'name' => $cashierRow['cashier_name'],
-                'amount' => (float) $cashierRow['total'],
+                'amount' => (float) $cashierRow['total'] + (float) ($cashierRow['customer_due_payment_total'] ?? 0),
                 'qty' => (float) $cashierRow['qty_total'],
             ];
             $grandTotal += (float) $cashierRow['total'];
@@ -596,7 +599,8 @@ class LocalCashierReportController extends Controller
 
         $locationRows = [];
         foreach ($rowsByLocation as $locationRow) {
-            $locationRow['due'] = (float) $locationRow['total'] - (float) $locationRow['paid'];
+            $locationPaidForDue = (float) $locationRow['paid'] - (float) ($locationRow['customer_due_payment_total'] ?? 0);
+            $locationRow['due'] = (float) $locationRow['total'] - $locationPaidForDue;
             foreach ($paymentColumns as $method) {
                 if (! isset($locationRow['payments'][$method])) {
                     $locationRow['payments'][$method] = null;
@@ -633,6 +637,18 @@ class LocalCashierReportController extends Controller
                 $locationSummaryMap[$locId] = ['id' => (int) $locId, 'name' => (string) ($locationMap[$locId] ?? 'N/A'), 'amount' => 0.0, 'qty' => 0.0];
             }
             $locationSummaryMap[$locId]['amount'] += (float) $t->final_total;
+        }
+        if ($includeCustomerDuePayments) {
+            foreach ($customerDuePaymentData['summary_rows'] as $customerDuePaymentRow) {
+                $locId = (int) ($customerDuePaymentRow['location_id'] ?? 0);
+                if ($locId <= 0) {
+                    continue;
+                }
+                if (! isset($locationSummaryMap[$locId])) {
+                    $locationSummaryMap[$locId] = ['id' => $locId, 'name' => (string) ($locationMap[$locId] ?? ($customerDuePaymentRow['location_name'] ?? 'N/A')), 'amount' => 0.0, 'qty' => 0.0];
+                }
+                $locationSummaryMap[$locId]['amount'] += (float) ($customerDuePaymentRow['amount'] ?? 0);
+            }
         }
         $locationSummary = array_values($locationSummaryMap);
 
