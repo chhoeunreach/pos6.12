@@ -854,6 +854,85 @@
                             searchable: false
                         });
                     }
+
+                    var stock_report_copy_cell_data = function(data, node) {
+                        var $node = $(node);
+                        var $quantity_element = $node.find('[data-is_quantity="true"]');
+
+                        if ($quantity_element.length) {
+                            return $quantity_element.attr('data-orig-value');
+                        }
+
+                        var value = $node.length ? $node.text() : data;
+                        value = value == null ? '' : String(value).replace(/<[^>]*>/g, '');
+
+                        if (typeof __currency_symbol !== 'undefined' && __currency_symbol) {
+                            value = value.split(__currency_symbol).join('');
+                        }
+
+                        return $.trim(value);
+                    };
+
+                    var stock_report_copy_button = {
+                        extend: 'copy',
+                        text: '<i class="fa fa-files-o" aria-hidden="true"></i> ' + LANG.copy,
+                        className: 'tw-dw-btn-xs  tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        header: false,
+                        footer: false,
+                        title: null,
+                        messageTop: null,
+                        messageBottom: null,
+                        exportOptions: {
+                            columns: ':visible',
+                            modifier: {
+                                search: 'applied',
+                                order: 'applied',
+                                page: 'all'
+                            },
+                            format: {
+                                body: function(data, row, column, node) {
+                                    return stock_report_copy_cell_data(data, node);
+                                }
+                            }
+                        },
+                        action: function(e, dt, button, config) {
+                            var button_context = this;
+                            var page_info = dt.page.info();
+                            var original_length = dt.page.len();
+
+                            var copy_all_visible_rows = function() {
+                                $.fn.dataTable.ext.buttons.copyHtml5.action.call(
+                                    button_context,
+                                    e,
+                                    dt,
+                                    button,
+                                    config
+                                );
+                            };
+
+                            if (dt.settings()[0].oFeatures.bServerSide && original_length !== -1) {
+                                dt.one('draw', function() {
+                                    copy_all_visible_rows();
+                                    dt.one('draw', function() {
+                                        dt.page(Math.floor(page_info.start / original_length)).draw('page');
+                                    });
+                                    dt.page.len(original_length).draw();
+                                });
+                                dt.page.len(-1).draw();
+                            } else {
+                                copy_all_visible_rows();
+                            }
+                        }
+                    };
+
+                    var stock_report_buttons = $.extend(true, [], $.fn.dataTable.defaults.buttons || []);
+                    for (var button_index = 0; button_index < stock_report_buttons.length; button_index++) {
+                        if (stock_report_buttons[button_index].extend == 'copy' || stock_report_buttons[button_index].extend == 'copyHtml5') {
+                            stock_report_buttons[button_index] = stock_report_copy_button;
+                            break;
+                        }
+                    }
+
                     stock_report_table = $('#stock_report_table').DataTable({
                         order: [
                             [1, 'asc']
@@ -864,6 +943,7 @@
                         scrollX: true,
                         scrollCollapse: true,
                         fixedHeader:false,
+                        buttons: stock_report_buttons,
                         ajax: {
                             url: '/reports/stock-report',
                             data: function(d) {
