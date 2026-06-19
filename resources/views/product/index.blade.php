@@ -302,6 +302,10 @@
                 processing: true,
                 serverSide: true,
                 fixedHeader:false,
+                aLengthMenu: [
+                    [25, 50, 100, 200, 500, 1000],
+                    [25, 50, 100, 200, 500, 1000],
+                ],
                 aaSorting: [
                     [3, 'asc']
                 ],

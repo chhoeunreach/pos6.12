@@ -70,6 +70,10 @@ class ProductController extends Controller
         $is_woocommerce = $this->moduleUtil->isModuleInstalled('Woocommerce');
 
         if (request()->ajax()) {
+            if ((int) request()->input('length') === -1) {
+                request()->merge(['length' => 1000]);
+            }
+
             //Filter by location
             $location_id = request()->get('location_id', null);
             $location_ids = is_array($location_id) ? $location_id : [$location_id];

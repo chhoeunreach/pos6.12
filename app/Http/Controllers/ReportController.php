@@ -412,7 +412,7 @@ class ReportController extends Controller
                 ->addColumn('variation', function ($row) {
                     $variation = '';
                     if ($row->type == 'variable') {
-                        $variation .= $row->product_variation.'-'.$row->variation_name;
+                        $variation .= $row->variation_name;
                     }
 
                     return $variation;
