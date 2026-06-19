@@ -401,7 +401,7 @@ class PurchaseController extends Controller
             $transaction = Transaction::create($transaction_data);
 
             $purchase_lines = [];
-            $purchases = $request->input('purchases');
+            $purchases = $this->getPurchaseLinesFromRequest($request);
 
             $this->productUtil->createOrUpdatePurchaseLines($transaction, $purchases, $currency_details, $enable_product_editing);
 
@@ -434,11 +434,51 @@ class PurchaseController extends Controller
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
             $output = ['success' => 0,
-                'msg' => __('messages.something_went_wrong'),
+                'msg' => config('app.debug') ? $e->getMessage() : __('messages.something_went_wrong'),
             ];
         }
 
         return redirect('purchases')->with('status', $output);
+    }
+
+    private function getPurchaseLinesFromRequest(Request $request)
+    {
+        if ($request->filled('purchases_json')) {
+            $purchases = json_decode($request->input('purchases_json'), true);
+
+            return is_array($purchases) ? $this->normalizePurchaseLines($purchases) : [];
+        }
+
+        return $this->normalizePurchaseLines($request->input('purchases', []));
+    }
+
+    private function normalizePurchaseLines(array $purchases)
+    {
+        $nullable_fields = [
+            'purchase_line_id',
+            'purchase_order_line_id',
+            'purchase_requisition_line_id',
+            'purchase_line_tax_id',
+            'sub_unit_id',
+            'lot_number',
+            'mfg_date',
+            'exp_date',
+        ];
+
+        foreach ($purchases as &$purchase) {
+            if (! is_array($purchase)) {
+                $purchase = [];
+                continue;
+            }
+
+            foreach ($nullable_fields as $field) {
+                if (array_key_exists($field, $purchase) && $purchase[$field] === '') {
+                    $purchase[$field] = null;
+                }
+            }
+        }
+
+        return $purchases;
     }
 
     /**
@@ -737,7 +777,7 @@ class PurchaseController extends Controller
             $payment_status = $this->transactionUtil->updatePaymentStatus($transaction->id);
             $transaction->payment_status = $payment_status;
 
-            $purchases = $request->input('purchases');
+            $purchases = $this->getPurchaseLinesFromRequest($request);
 
             $delete_purchase_lines = $this->productUtil->createOrUpdatePurchaseLines($transaction, $purchases, $currency_details, $enable_product_editing, $before_status);
 
@@ -1123,8 +1163,7 @@ class PurchaseController extends Controller
             $file = $request->file('file');
 
             $parsed_array = Excel::toArray([], $file);
-            //Remove header row
-            $imported_data = array_splice($parsed_array[0], 1);
+            $sheet = $parsed_array[0] ?? [];
 
             $business_id = $request->session()->get('user.business_id');
             $location_id = $request->input('location_id');
@@ -1133,12 +1172,22 @@ class PurchaseController extends Controller
             $formatted_data = [];
             $row_index = 0;
             $error_msg = '';
-            foreach ($imported_data as $key => $value) {
+            foreach ($sheet as $key => $value) {
+                if ($key === 0) {
+                    continue;
+                }
+
                 $row_index = $key + 1;
                 $temp_array = [];
+                $sku = isset($value[0]) ? trim((string) $value[0]) : '';
+                $quantity = $value[1] ?? null;
 
-                if (! empty($value[0])) {
-                    $variation = Variation::where('sub_sku', trim($value[0]))
+                if ($sku === '' && ($quantity === null || trim((string) $quantity) === '') && empty($value[2]) && empty($value[3]) && empty($value[4]) && empty($value[5]) && empty($value[6]) && empty($value[7])) {
+                    continue;
+                }
+
+                if ($sku !== '') {
+                    $variation = Variation::where('sub_sku', $sku)
                                         ->join('products', 'products.id', '=', 'variations.product_id')
                                         ->where('products.business_id', $business_id) 
                                         ->with([
@@ -1152,7 +1201,7 @@ class PurchaseController extends Controller
                     $temp_array['variation'] = $variation;
 
                     if (empty($variation)) {
-                        $error_msg = __('lang_v1.product_not_found_exception', ['row' => $row_index, 'sku' => $value[0]]);
+                        $error_msg = __('lang_v1.product_not_found_exception', ['row' => $row_index, 'sku' => $sku]);
                         break;
                     }
 
@@ -1172,12 +1221,12 @@ class PurchaseController extends Controller
 
                     $temp_array['sub_units'] = $sub_units;
                 } else {
-                    $error_msg = __('lang_v1.product_not_found_exception', ['row' => $row_index, 'sku' => $value[0]]);
+                    $error_msg = __('lang_v1.product_not_found_exception', ['row' => $row_index, 'sku' => $sku]);
                     break;
                 }
 
-                if (! empty($value[0])) {
-                    $temp_array['quantity'] = $value[1];
+                if ($quantity !== null && trim((string) $quantity) !== '') {
+                    $temp_array['quantity'] = $quantity;
                 } else {
                     $error_msg = __('lang_v1.quantity_required', ['row' => $row_index]);
                     break;

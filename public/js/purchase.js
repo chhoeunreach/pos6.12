@@ -1049,6 +1049,78 @@ function update_table_sr_number() {
         });
 }
 
+function show_purchase_submit_progress(message, percent) {
+    var $overlay = $('#purchase_submit_progress_overlay');
+    if (!$overlay.length) {
+        $overlay = $(
+            '<div id="purchase_submit_progress_overlay" style="position:fixed;z-index:20000;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">' +
+                '<div style="width:min(440px,90vw);background:#fff;border-radius:6px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.25);">' +
+                    '<div id="purchase_submit_progress_text" style="font-weight:600;margin-bottom:10px;"></div>' +
+                    '<div class="progress" style="height:18px;margin-bottom:8px;">' +
+                        '<div id="purchase_submit_progress_bar" class="progress-bar progress-bar-striped active" role="progressbar" style="width:0%">0%</div>' +
+                    '</div>' +
+                    '<div style="font-size:12px;color:#666;">Please keep this page open.</div>' +
+                '</div>' +
+            '</div>'
+        );
+        $('body').append($overlay);
+    }
+
+    percent = Math.max(0, Math.min(100, parseInt(percent, 10) || 0));
+    $('#purchase_submit_progress_text').text(message);
+    $('#purchase_submit_progress_bar').css('width', percent + '%').text(percent + '%');
+}
+
+function compact_purchase_lines_for_submit($form, done) {
+    $form.find('input[name="purchases_json"]').remove();
+
+    var purchases = [];
+    var rows = $('table#purchase_entry_table tbody tr').toArray();
+    var total = rows.length;
+    var index = 0;
+    var chunk_size = 25;
+
+    function process_chunk() {
+        var end = Math.min(index + chunk_size, total);
+        for (; index < end; index++) {
+            var row = rows[index];
+            var line = {};
+            $(row).find(':input[name^="purchases["]').each(function() {
+                var match = this.name.match(/^purchases\[[^\]]+\]\[([^\]]+)\]$/);
+                if (!match) {
+                    return;
+                }
+
+                line[match[1]] = $(this).val();
+                $(this).attr('data-purchase-line-name', this.name).removeAttr('name');
+            });
+
+            if (!$.isEmptyObject(line)) {
+                purchases.push(line);
+            }
+        }
+
+        var percent = total > 0 ? Math.floor((index / total) * 95) : 95;
+        show_purchase_submit_progress('Preparing purchase rows ' + index + ' of ' + total, percent);
+
+        if (index < total) {
+            setTimeout(process_chunk, 0);
+            return;
+        }
+
+        $('<input>', {
+            type: 'hidden',
+            name: 'purchases_json',
+            value: JSON.stringify(purchases),
+        }).appendTo($form);
+
+        show_purchase_submit_progress('Saving purchase. This can take a while for large imports.', 100);
+        done();
+    }
+
+    process_chunk();
+}
+
 $(document).on('click', 'button#submit_purchase_form', function(e) {
     e.preventDefault();
 
@@ -1138,8 +1210,13 @@ $(document).on('click', 'button#submit_purchase_form', function(e) {
     }
 
     if ($('form#add_purchase_form').valid()) {
-        $(this).attr('disabled', true);
-        $('form#add_purchase_form').submit();
+        var $button = $(this);
+        var $form = $('form#add_purchase_form');
+        $button.attr('disabled', true);
+        show_purchase_submit_progress('Preparing purchase rows...', 1);
+        compact_purchase_lines_for_submit($form, function() {
+            $form.submit();
+        });
     }
 });
 

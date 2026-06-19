@@ -1049,6 +1049,34 @@ function update_table_sr_number() {
         });
 }
 
+function compact_purchase_lines_for_submit($form) {
+    $form.find('input[name="purchases_json"]').remove();
+
+    var purchases = [];
+    $('table#purchase_entry_table tbody tr').each(function() {
+        var line = {};
+        $(this).find(':input[name^="purchases["]').each(function() {
+            var match = this.name.match(/^purchases\[[^\]]+\]\[([^\]]+)\]$/);
+            if (!match) {
+                return;
+            }
+
+            line[match[1]] = $(this).val();
+            $(this).attr('data-purchase-line-name', this.name).removeAttr('name');
+        });
+
+        if (!$.isEmptyObject(line)) {
+            purchases.push(line);
+        }
+    });
+
+    $('<input>', {
+        type: 'hidden',
+        name: 'purchases_json',
+        value: JSON.stringify(purchases),
+    }).appendTo($form);
+}
+
 $(document).on('click', 'button#submit_purchase_form', function(e) {
     e.preventDefault();
 
@@ -1139,6 +1167,7 @@ $(document).on('click', 'button#submit_purchase_form', function(e) {
 
     if ($('form#add_purchase_form').valid()) {
         $(this).attr('disabled', true);
+        compact_purchase_lines_for_submit($('form#add_purchase_form'));
         $('form#add_purchase_form').submit();
     }
 });
