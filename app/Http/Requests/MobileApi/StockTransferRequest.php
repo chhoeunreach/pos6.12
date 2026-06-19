@@ -17,6 +17,8 @@ class StockTransferRequest extends FormRequest
             'location_id' => 'required|exists:business_locations,id',
             'transfer_location_id' => 'required|exists:business_locations,id|different:location_id',
             'transaction_date' => 'required|date',
+            'ref_no' => 'nullable|string',
+            'status' => 'nullable|in:pending,in_transit,completed,final',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.variation_id' => 'required|exists:variations,id',
@@ -27,3 +29,4 @@ class StockTransferRequest extends FormRequest
         ];
     }
 }
+

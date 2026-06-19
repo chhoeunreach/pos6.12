@@ -119,10 +119,13 @@ class PosController extends BaseController
         $brand_id = $request->input('brand_id');
         $search = $request->input('search');
 
-        if ($category_id) {
-            $query->where('products.category_id', $category_id);
+        if (!empty($category_id) && $category_id != 'all') {
+            $query->where(function ($q) use ($category_id) {
+                $q->where('products.category_id', $category_id)
+                    ->orWhere('products.sub_category_id', $category_id);
+            });
         }
-        if ($brand_id) {
+        if (!empty($brand_id) && $brand_id != 'all') {
             $query->where('products.brand_id', $brand_id);
         }
         if ($search) {
@@ -339,3 +342,4 @@ class PosController extends BaseController
         ];
     }
 }
+

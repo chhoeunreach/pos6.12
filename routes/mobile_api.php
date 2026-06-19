@@ -163,12 +163,14 @@ Route::middleware(['auth:api', 'SetMobileApiSession'])->group(function () {
     // Categories & Brands (for select/dropdown)
     Route::get('categories', function () {
         $business_id = auth()->user()->business_id;
-        $categories = \App\Category::where('business_id', $business_id)->get(['id', 'name', 'short_code']);
+        $categories = \App\Category::catAndSubCategories($business_id);
         return response()->json(['success' => true, 'data' => $categories]);
     });
     Route::get('brands', function () {
         $business_id = auth()->user()->business_id;
-        $brands = \App\Brands::where('business_id', $business_id)->get(['id', 'name']);
+        $brands = \App\Brands::where('business_id', $business_id)
+            ->orderBy('name', 'asc')
+            ->get(['id', 'name']);
         return response()->json(['success' => true, 'data' => $brands]);
     });
 
@@ -177,3 +179,4 @@ Route::middleware(['auth:api', 'SetMobileApiSession'])->group(function () {
     Route::get('payment-methods', [SettingsController::class, 'paymentMethods']);
     Route::get('business', [SettingsController::class, 'business']);
 });
+
