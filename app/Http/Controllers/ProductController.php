@@ -71,7 +71,8 @@ class ProductController extends Controller
 
         if (request()->ajax()) {
             if ((int) request()->input('length') === -1) {
-                request()->merge(['length' => 1000]);
+                @ini_set('memory_limit', '2048M');
+                @set_time_limit(0);
             }
 
             //Filter by location
