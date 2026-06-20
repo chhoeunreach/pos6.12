@@ -24,7 +24,7 @@
                     </div>
                     <div class="form-group">
                         <label>Warranty Text</label>
-                        <textarea class="form-control js-card-input" id="manual_warranty_text" data-target="preview_warranty_text" rows="2">ម៉ាស៊ីនថ្មី និងមិនធានាខុសបច្ចេក:ទំនិញមិនធានាការចូលទឹក</textarea>
+                        <textarea class="form-control js-card-input" id="manual_warranty_text" data-target="preview_warranty_text" rows="2">ម៉ាស៊ីនថ្ម​​ និងមិនធានាខុសចំពោះទំរង់ដើមនឹងមិនធានាការចូលទឹក</textarea>
                     </div>
                     <div class="row">
                         <div class="col-sm-6">
