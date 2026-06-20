@@ -78,10 +78,6 @@ Route::post('/install', [ServiceInstallController::class, 'install']);
 Route::get('/install/uninstall', [ServiceInstallController::class, 'uninstall']);
 Route::get('/install/update', [ServiceInstallController::class, 'update']);
 
-if (class_exists(\Modules\Repair\Http\Controllers\RepairController::class)) {
-    Route::middleware(['service.database'])->group(module_path('Repair', 'Routes/web.php'));
-}
-
 if (class_exists(\Modules\Superadmin\Http\Controllers\SuperadminController::class)) {
     Route::middleware(['service.database'])->group(module_path('Superadmin', 'Routes/web.php'));
 }

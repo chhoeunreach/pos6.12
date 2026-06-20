@@ -12,13 +12,13 @@ class AddRepairPermissions extends Migration
      */
     public function up()
     {
-        Permission::create(['name' => 'repair.create']);
-        Permission::create(['name' => 'repair.update']);
-        Permission::create(['name' => 'repair.view']);
-        Permission::create(['name' => 'repair.delete']);
+        Permission::firstOrCreate(['name' => 'repair.create', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'repair.update', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'repair.view', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'repair.delete', 'guard_name' => 'web']);
 
-        Permission::create(['name' => 'repair_status.update']);
-        Permission::create(['name' => 'repair_status.access']);
+        Permission::firstOrCreate(['name' => 'repair_status.update', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'repair_status.access', 'guard_name' => 'web']);
     }
 
     /**
