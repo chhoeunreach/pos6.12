@@ -39,6 +39,7 @@ class InstallController extends Controller
             DB::statement('SET default_storage_engine=INNODB;');
             Artisan::call('module:migrate', ['module' => 'Superadmin', '--force' => true]);
             System::addProperty($this->module_name.'_version', $this->appVersion);
+            $this->setModuleStatus(true);
         }
 
         $output = ['success' => 1,
@@ -93,6 +94,7 @@ class InstallController extends Controller
                 Artisan::call('module:migrate', ['module' => 'Superadmin', '--force' => true]);
 
                 System::setProperty($this->module_name.'_version', $this->appVersion);
+                $this->setModuleStatus(true);
             } else {
                 abort(404);
             }
@@ -131,6 +133,7 @@ class InstallController extends Controller
 
         try {
             System::removeProperty($this->module_name.'_version');
+            $this->setModuleStatus(false);
 
             $output = ['success' => true,
                 'msg' => __('lang_v1.success'),
@@ -147,5 +150,14 @@ class InstallController extends Controller
     private function isServiceSuperadminRequest(): bool
     {
         return request()->is(trim(config('service.route_prefix', 'service'), '/').'/superadmin/install*');
+    }
+
+    private function setModuleStatus(bool $active): void
+    {
+        $path = base_path('modules_statuses.json');
+        $statuses = file_exists($path) ? (json_decode(file_get_contents($path), true) ?: []) : [];
+        $statuses['Superadmin'] = $active;
+
+        file_put_contents($path, json_encode($statuses, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

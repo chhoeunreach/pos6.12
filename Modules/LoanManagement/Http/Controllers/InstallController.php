@@ -85,6 +85,7 @@ class InstallController extends Controller
         try {
             $this->runUninstallSteps();
             System::removeProperty($this->module_name . '_version');
+            $this->setModuleStatus(false);
             $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
@@ -105,6 +106,7 @@ class InstallController extends Controller
             if (empty($installedVersion) || version_compare($this->appVersion, $installedVersion, '>')) {
                 $this->runInstallSteps();
                 System::setProperty($this->module_name . '_version', $this->appVersion);
+                $this->setModuleStatus(true);
                 $output = ['success' => 1, 'msg' => $this->module_display_name . ' module updated successfully to version ' . $this->appVersion];
             } else {
                 abort(404);
@@ -182,19 +184,16 @@ class InstallController extends Controller
 
     private function enableModuleInStatuses(): void
     {
+        $this->setModuleStatus(true);
+    }
+
+    private function setModuleStatus(bool $active): void
+    {
         $path = base_path('modules_statuses.json');
-        if (! file_exists($path)) {
-            return;
-        }
+        $statuses = file_exists($path) ? (json_decode(file_get_contents($path), true) ?: []) : [];
+        $statuses['LoanManagement'] = $active;
 
-        $raw = file_get_contents($path);
-        $json = json_decode((string) $raw, true);
-        if (! is_array($json)) {
-            return;
-        }
-
-        $json['LoanManagement'] = true;
-        file_put_contents($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        file_put_contents($path, json_encode($statuses, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     private function clearCaches(): void

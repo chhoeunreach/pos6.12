@@ -63,6 +63,7 @@ class InstallController extends Controller
 
             Artisan::call('module:migrate', ['module' => 'NotificationCenter', '--force' => true]);
             System::addProperty($this->module_name.'_version', $this->appVersion);
+            $this->setModuleStatus(true);
             $this->clearCaches();
 
             DB::commit();
@@ -87,6 +88,7 @@ class InstallController extends Controller
 
         try {
             System::removeProperty($this->module_name.'_version');
+            $this->setModuleStatus(false);
             $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
@@ -109,6 +111,7 @@ class InstallController extends Controller
             if (version_compare($this->appVersion, $installed_version, '>')) {
                 Artisan::call('module:migrate', ['module' => 'NotificationCenter', '--force' => true]);
                 System::setProperty($this->module_name.'_version', $this->appVersion);
+                $this->setModuleStatus(true);
                 $this->clearCaches();
             } else {
                 abort(404);
@@ -130,5 +133,14 @@ class InstallController extends Controller
         foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
             Artisan::call($cmd);
         }
+    }
+
+    private function setModuleStatus(bool $active): void
+    {
+        $path = base_path('modules_statuses.json');
+        $statuses = file_exists($path) ? (json_decode(file_get_contents($path), true) ?: []) : [];
+        $statuses['NotificationCenter'] = $active;
+
+        file_put_contents($path, json_encode($statuses, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

@@ -178,31 +178,21 @@ class ModulesController extends Controller
 
     public function installModule($module_name)
     {
-        if (! auth()->user()->can('manage_modules')) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $notAllowed = $this->moduleUtil->notAllowedInDemo();
-        if (! empty($notAllowed)) {
-            return $notAllowed;
-        }
-
-        if (! is_dir($this->localModulePath($module_name))) {
-            abort(404);
-        }
-
-        $this->setLocalModuleStatus($module_name, true);
-        $this->ensureLocalModulePermissions($module_name);
-        Cache::forget('accessory_module_assets');
-
-        return redirect()->back()->with(['status' => [
-            'success' => true,
-            'msg' => __('lang_v1.success'),
-        ]]);
+        return $this->runLocalModuleLifecycleAction($module_name, 'install');
     }
 
     public function uninstallModule($module_name)
     {
+        return $this->runLocalModuleLifecycleAction($module_name, 'uninstall');
+    }
+
+    public function updateModule($module_name)
+    {
+        return $this->runLocalModuleLifecycleAction($module_name, 'update');
+    }
+
+    private function runLocalModuleLifecycleAction(string $module_name, string $action)
+    {
         if (! auth()->user()->can('manage_modules')) {
             abort(403, 'Unauthorized action.');
         }
@@ -216,18 +206,51 @@ class ModulesController extends Controller
             abort(404);
         }
 
-        $this->setLocalModuleStatus($module_name, false);
-        Cache::forget('accessory_module_assets');
+        try {
+            if ($action !== 'uninstall') {
+                $this->setLocalModuleStatus($module_name, true);
+            }
 
-        return redirect()->back()->with(['status' => [
-            'success' => true,
-            'msg' => __('lang_v1.success'),
-        ]]);
-    }
+            $controller = $this->localModuleInstallController($module_name);
+            if (class_exists($controller)) {
+                $controller = app($controller);
 
-    public function updateModule($module_name)
-    {
-        return $this->installModule($module_name);
+                if ($action === 'install' && method_exists($controller, 'index') && empty($this->localModuleInstalledVersion($module_name))) {
+                    $this->forgetLocalModuleCaches();
+
+                    return redirect()->to($this->localModuleInstallerUrl($module_name, 'install'));
+                }
+
+                if (method_exists($controller, $action)) {
+                    $response = $controller->{$action}(request());
+                    $this->setLocalModuleStatus($module_name, $action !== 'uninstall');
+                    $this->forgetLocalModuleCaches();
+
+                    return $response;
+                }
+            }
+
+            if ($action === 'uninstall') {
+                System::removeProperty(strtolower($module_name).'_version');
+                System::removeProperty(Str::snake($module_name).'_version');
+                $this->setLocalModuleStatus($module_name, false);
+            } else {
+                $this->ensureLocalModulePermissions($module_name);
+                $this->setLocalModuleStatus($module_name, true);
+            }
+
+            $this->forgetLocalModuleCaches();
+
+            return redirect()->back()->with(['status' => [
+                'success' => true,
+                'msg' => __('lang_v1.success'),
+            ]]);
+        } catch (\Throwable $e) {
+            return redirect()->back()->with(['status' => [
+                'success' => false,
+                'msg' => $e->getMessage(),
+            ]]);
+        }
     }
 
     /**
@@ -339,7 +362,7 @@ class ModulesController extends Controller
 
     private function localModulesPath(): string
     {
-        return module_path('Accessory', 'Modules');
+        return base_path('Modules');
     }
 
     private function localModuleDirectories(): array
@@ -395,7 +418,7 @@ class ModulesController extends Controller
 
     private function localModuleStatusesPath(): string
     {
-        return module_path('Accessory', 'modules_statuses.json');
+        return base_path('modules_statuses.json');
     }
 
     private function localModuleStatuses(): array
@@ -422,11 +445,6 @@ class ModulesController extends Controller
 
     private function localModuleActionUrl(string $module_name, string $action): string
     {
-        $controller = $this->localModuleInstallController($module_name);
-        if (class_exists($controller) && method_exists($controller, $action)) {
-            return action([$controller, $action]);
-        }
-
         $method = $action === 'uninstall'
             ? 'uninstallModule'
             : ($action === 'update' ? 'updateModule' : 'installModule');
@@ -444,6 +462,26 @@ class ModulesController extends Controller
     private function localModuleInstallController(string $module_name): string
     {
         return 'Modules\\'.$module_name.'\Http\Controllers\InstallController';
+    }
+
+    private function localModuleInstallerUrl(string $module_name, string $action): string
+    {
+        $prefixes = [
+            'Accessory' => trim(config('accessory.route_prefix', 'accessory'), '/'),
+            'LoanManagement' => 'loan-management',
+            'LocalCashierReport' => 'local-cashier-report',
+            'NotificationCenter' => 'notification-center',
+            'Repair' => 'repair',
+            'Service' => trim(config('service.route_prefix', 'service'), '/'),
+            'SmartStockInventory' => 'smart-stock-inventory',
+            'Superadmin' => 'superadmin',
+            'WarrantyCardPrint' => 'warranty-card-print',
+        ];
+
+        $prefix = $prefixes[$module_name] ?? Str::kebab($module_name);
+        $suffix = $action === 'install' ? 'install' : 'install/'.$action;
+
+        return url(trim($prefix.'/'.$suffix, '/'));
     }
 
     private function localModuleInstalledVersion(string $module_name): ?string
@@ -492,6 +530,12 @@ class ModulesController extends Controller
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function forgetLocalModuleCaches(): void
+    {
+        Cache::forget('module_assets');
+        Cache::forget('accessory_module_assets');
     }
 
     private function detectUploadedModuleDirectory(array $existing_modules, string $path, string $fallback_name): string

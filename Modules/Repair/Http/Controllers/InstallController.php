@@ -93,6 +93,7 @@ class InstallController extends Controller
             DB::statement('SET default_storage_engine=INNODB;');
             Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
             System::addProperty($this->module_name.'_version', $this->appVersion);
+            $this->setModuleStatus(true);
 
             DB::commit();
 
@@ -127,6 +128,7 @@ class InstallController extends Controller
 
         try {
             System::removeProperty($this->module_name.'_version');
+            $this->setModuleStatus(false);
 
             $output = ['success' => true,
                 'msg' => __('lang_v1.success'),
@@ -169,6 +171,7 @@ class InstallController extends Controller
                 DB::statement('SET default_storage_engine=INNODB;');
                 Artisan::call('module:migrate', ['module' => 'Repair', '--force' => true]);
                 System::setProperty($this->module_name.'_version', $this->appVersion);
+                $this->setModuleStatus(true);
             } else {
                 abort(404);
             }
@@ -184,5 +187,14 @@ class InstallController extends Controller
             DB::rollBack();
             exit($e->getMessage());
         }
+    }
+
+    private function setModuleStatus(bool $active): void
+    {
+        $path = base_path('modules_statuses.json');
+        $statuses = file_exists($path) ? (json_decode(file_get_contents($path), true) ?: []) : [];
+        $statuses[$this->module_display_name] = $active;
+
+        file_put_contents($path, json_encode($statuses, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

@@ -59,6 +59,7 @@ class InstallController extends Controller
             Artisan::call('module:migrate', ['module' => 'SmartStockInventory', '--force' => true]);
             $this->ensurePermissionsExist();
             System::addProperty($this->module_name . '_version', $this->appVersion);
+            $this->setModuleStatus(true);
             $this->clearCaches();
 
             DB::commit();
@@ -78,6 +79,7 @@ class InstallController extends Controller
         try {
             $this->deletePermissions();
             System::removeProperty($this->module_name . '_version');
+            $this->setModuleStatus(false);
             $this->clearCaches();
             $output = ['success' => true, 'msg' => __('lang_v1.success')];
         } catch (\Exception $e) {
@@ -99,6 +101,7 @@ class InstallController extends Controller
             Artisan::call('module:migrate', ['module' => 'SmartStockInventory', '--force' => true]);
             $this->ensurePermissionsExist();
             System::setProperty($this->module_name . '_version', $this->appVersion);
+            $this->setModuleStatus(true);
             $this->clearCaches();
             $output = ['success' => 1, 'msg' => $this->module_display_name . ' module updated successfully to version ' . $this->appVersion];
         } catch (\Exception $e) {
@@ -146,6 +149,15 @@ class InstallController extends Controller
         foreach (['optimize:clear', 'config:clear', 'route:clear', 'view:clear', 'cache:clear'] as $cmd) {
             Artisan::call($cmd);
         }
+    }
+
+    private function setModuleStatus(bool $active): void
+    {
+        $path = base_path('modules_statuses.json');
+        $statuses = file_exists($path) ? (json_decode(file_get_contents($path), true) ?: []) : [];
+        $statuses[$this->module_display_name] = $active;
+
+        file_put_contents($path, json_encode($statuses, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     private function redirectAfterInstall(array $status)
