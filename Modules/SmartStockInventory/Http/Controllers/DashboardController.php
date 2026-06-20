@@ -13,12 +13,16 @@ class DashboardController extends BaseSmartStockController
 
         $businessId = $this->businessId();
         [$start, $end] = $this->defaultDateRange($request->all());
-        $locationIds = array_map('intval', (array) $request->input('location_ids', $this->permittedLocationIds($businessId)));
+        $locationIds = $this->dashboardLocationIds($request, $businessId);
         if ($request->filled('location_id')) {
             $locationIds = [(int) $request->input('location_id')];
         }
         $categoryId = $request->input('category_id');
         $brandId = $request->input('brand_id');
+        $stockFilter = function ($q) use ($categoryId, $brandId) {
+            $q->when(! empty($categoryId), fn ($query) => $query->where('p.category_id', $categoryId))
+                ->when(! empty($brandId), fn ($query) => $query->where('p.brand_id', $brandId));
+        };
 
         $totalProductsQuery = DB::table('products')->where('business_id', $businessId)
             ->when(! empty($categoryId), fn ($q) => $q->where('category_id', $categoryId))
@@ -29,6 +33,7 @@ class DashboardController extends BaseSmartStockController
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->sum('vld.qty_available');
 
         $lowStockProducts = DB::table('variation_location_details as vld')
@@ -36,6 +41,7 @@ class DashboardController extends BaseSmartStockController
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->whereRaw('vld.qty_available <= COALESCE(v.default_purchase_price, 0) * 0 + 5')
             ->count();
 
@@ -44,6 +50,7 @@ class DashboardController extends BaseSmartStockController
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->where('vld.qty_available', '<', 0)
             ->count();
 
@@ -66,12 +73,16 @@ class DashboardController extends BaseSmartStockController
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->sum(DB::raw('vld.qty_available * COALESCE(v.default_purchase_price, 0)'));
 
         $totalLots = DB::table('purchase_lines as pl')
             ->join('transactions as t', 't.id', '=', 'pl.transaction_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pl.product_id')
             ->where('t.business_id', $businessId)
             ->whereIn('t.location_id', $locationIds)
+            ->when(! empty($categoryId), fn ($q) => $q->where('p.category_id', $categoryId))
+            ->when(! empty($brandId), fn ($q) => $q->where('p.brand_id', $brandId))
             ->whereNotNull('pl.lot_number')
             ->where('pl.lot_number', '!=', '')
             ->distinct('pl.lot_number')
@@ -83,6 +94,7 @@ class DashboardController extends BaseSmartStockController
             ->join('business_locations as bl', 'bl.id', '=', 'vld.location_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->groupBy('vld.location_id', 'bl.name')
             ->select(
                 'vld.location_id',
@@ -99,6 +111,7 @@ class DashboardController extends BaseSmartStockController
             ->leftJoin('categories as c', 'c.id', '=', 'p.category_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->groupBy('p.category_id', 'c.name')
             ->select(
                 'p.category_id',
@@ -115,6 +128,7 @@ class DashboardController extends BaseSmartStockController
             ->leftJoin('brands as b', 'b.id', '=', 'p.brand_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->groupBy('p.brand_id', 'b.name')
             ->select(
                 'p.brand_id',
@@ -130,6 +144,7 @@ class DashboardController extends BaseSmartStockController
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('p.business_id', $businessId)
             ->whereIn('vld.location_id', $locationIds)
+            ->where($stockFilter)
             ->groupBy('p.id', 'p.name')
             ->select(
                 'p.id as product_id',
@@ -142,9 +157,11 @@ class DashboardController extends BaseSmartStockController
 
         return view('smartstockinventory::dashboard.index', compact(
             'totalProducts', 'totalStockQty', 'lowStockProducts', 'negativeStockProducts',
-            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday', 'totalLots', 'summaryByLocation', 'summaryByCategory', 'summaryByBrand', 'summaryByProduct'
+            'mismatchProducts', 'pendingTransfers', 'totalStockValue', 'locationIds', 'duplicateImei', 'duplicateLot', 'inventorySessionsToday', 'totalLots', 'summaryByLocation', 'summaryByCategory', 'summaryByBrand', 'summaryByProduct', 'categoryId', 'brandId'
         ))->with([
             'locations' => $this->locationOptions($businessId),
+            'categories' => DB::table('categories')->where('business_id', $businessId)->orderBy('name')->get(['id', 'name']),
+            'brands' => DB::table('brands')->where('business_id', $businessId)->orderBy('name')->get(['id', 'name']),
             'filters' => ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
         ]);
     }
@@ -157,7 +174,7 @@ class DashboardController extends BaseSmartStockController
     {
         abort_unless($request->user()->can('stock_inventory.view'), 403);
         $businessId = $this->businessId();
-        $locationIds = (array) $request->input('location_ids', $this->permittedLocationIds($businessId));
+        $locationIds = $this->dashboardLocationIds($request, $businessId);
         if ($request->filled('location_id')) {
             $locationIds = [(int) $request->input('location_id')];
         }
@@ -172,6 +189,7 @@ class DashboardController extends BaseSmartStockController
             $qtyFilters = (array) $request->input('qty_filter', []);
             $categoryId = $request->input('category_id');
             $brandId = $request->input('brand_id');
+            $productId = $request->input('product_id');
             $rows = DB::table('variation_location_details as vld')
                 ->join('variations as v', 'v.id', '=', 'vld.variation_id')
                 ->join('products as p', 'p.id', '=', 'v.product_id')
@@ -180,6 +198,7 @@ class DashboardController extends BaseSmartStockController
                 ->whereIn('vld.location_id', $locationIds)
                 ->when(! empty($categoryId), fn ($q) => $q->where('p.category_id', $categoryId))
                 ->when(! empty($brandId), fn ($q) => $q->where('p.brand_id', $brandId))
+                ->when(! empty($productId), fn ($q) => $q->where('p.id', $productId))
                 ->when(! empty($qtyFilters), function ($q) use ($qtyFilters) {
                     $q->where(function ($sq) use ($qtyFilters) {
                         if (in_array('non_zero', $qtyFilters, true)) {
@@ -282,5 +301,18 @@ class DashboardController extends BaseSmartStockController
 
         $locations = $this->locationOptions($businessId);
         return view('smartstockinventory::dashboard.detail', compact('title', 'headers', 'rows', 'metric', 'locations', 'locationIds'));
+    }
+
+    private function dashboardLocationIds(Request $request, int $businessId): array
+    {
+        if (! $request->has('location_ids')) {
+            return $this->permittedLocationIds($businessId);
+        }
+
+        $locationIds = array_values(array_filter(array_map('intval', (array) $request->input('location_ids')), fn ($id) => $id > 0));
+
+        return ! empty($locationIds)
+            ? $locationIds
+            : $this->permittedLocationIds($businessId);
     }
 }

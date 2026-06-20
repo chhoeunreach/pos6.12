@@ -2,6 +2,15 @@
 @section('page_title', 'Stock Inventory Dashboard')
 
 @section('module_content')
+@php
+    $requestedLocationIds = array_filter(array_map('intval', (array) request('location_ids', [])));
+    $isAllLocations = empty($requestedLocationIds) && !request()->filled('location_id');
+    $summaryFilterParams = [
+        'location_ids' => $requestedLocationIds,
+        'category_id' => request('category_id'),
+        'brand_id' => request('brand_id'),
+    ];
+@endphp
 <div class="box box-primary">
     <div class="box-body text-right">
         @if(\Nwidart\Modules\Facades\Module::has('ManageLot') && \Nwidart\Modules\Facades\Module::isEnabled('ManageLot') && (auth()->user()->can('stock_report.view') || auth()->user()->can('product.view')))
@@ -11,6 +20,69 @@
         @endif
         <a class="btn btn-success" href="{{ ssi_route('ssi.dashboard.export', request()->all()) }}">Export Dashboard</a>
         <a class="btn btn-default" href="{{ ssi_route('ssi.dashboard.print', request()->all()) }}">Print Summary</a>
+    </div>
+</div>
+<div class="box box-primary">
+    <div class="box-header with-border">
+        <h3 class="box-title">Dashboard Filter</h3>
+    </div>
+    <div class="box-body">
+        <form method="get" action="{{ ssi_route('ssi.dashboard') }}" class="dashboard-filter-form">
+            <div class="row">
+                <div class="col-md-4 col-sm-6">
+                    <div class="form-group">
+                        <label for="summary_location_ids">Location</label>
+                        <select name="location_ids[]" id="summary_location_ids" class="form-control select2" multiple>
+                            <option value="__all__" @if($isAllLocations) selected @endif>All Locations</option>
+                            @foreach(($locations ?? collect()) as $location)
+                                <option value="{{ $location->id }}" @if(in_array((int) $location->id, $requestedLocationIds, true)) selected @endif>
+                                    {{ $location->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="form-group">
+                        <label for="summary_category_id">Category</label>
+                        <select name="category_id" id="summary_category_id" class="form-control select2">
+                            <option value="">All Categories</option>
+                            @foreach(($categories ?? collect()) as $category)
+                                <option value="{{ $category->id }}" @if((string) request('category_id') === (string) $category->id) selected @endif>
+                                    {{ $category->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="form-group">
+                        <label for="summary_brand_id">Brand</label>
+                        <select name="brand_id" id="summary_brand_id" class="form-control select2">
+                            <option value="">All Brands</option>
+                            @foreach(($brands ?? collect()) as $brand)
+                                <option value="{{ $brand->id }}" @if((string) request('brand_id') === (string) $brand->id) selected @endif>
+                                    {{ $brand->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <div class="btn-group btn-group-sm btn-block">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fa fa-filter"></i> Filter
+                            </button>
+                            <a href="{{ ssi_route('ssi.dashboard') }}" class="btn btn-default">
+                                <i class="fa fa-refresh"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 <div class="row">
@@ -30,7 +102,7 @@
         <div class="small-box bg-aqua">
             <div class="inner"><h3>{{ $card['value'] }}</h3><p>{{ $card['label'] }}</p></div>
             <div class="icon"><i class="fa fa-cubes"></i></div>
-            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => $card['metric'], 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
+            <a href="{{ ssi_route('ssi.dashboard.detail', array_merge(['metric' => $card['metric']], $summaryFilterParams)) }}" class="small-box-footer">View Detail <i class="fa fa-arrow-circle-right"></i></a>
         </div>
     </div>
     @endforeach
@@ -49,7 +121,7 @@
 <div class="box box-info">
     <div class="box-header with-border">
         <h3 class="box-title">Summary</h3>
-        <small class="text-muted">Qty and Value by Location, Category, and Brand</small>
+        <small class="text-muted">Qty and Value by Location, Category, Brand, and Product</small>
     </div>
     <div class="box-body">
         <div class="row">
@@ -71,12 +143,12 @@
                             @forelse(($summaryByLocation ?? collect()) as $row)
                                 <tr data-name="{{ $row->location_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
-                                            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id])) }}">
                                             {{ $row->location_name }}
                                         </a>
                                     </td>
                                     <td class="text-right">
-                                            <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}">
+                                            <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id])) }}">
                                             {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                         </a>
                                     </td>
@@ -117,7 +189,7 @@
                                 <tr data-name="{{ $row->category_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
                                         @if(!empty($row->category_id))
-                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id])) }}">
                                                 {{ $row->category_name }}
                                             </a>
                                         @else
@@ -126,7 +198,7 @@
                                     </td>
                                     <td class="text-right">
                                         @if(!empty($row->category_id))
-                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'category_id' => (int) $row->category_id])) }}">
                                                 {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                             </a>
                                         @else
@@ -170,7 +242,7 @@
                                 <tr data-name="{{ $row->brand_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
                                     <td>
                                         @if(!empty($row->brand_id))
-                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id])) }}">
                                                 {{ $row->brand_name }}
                                             </a>
                                         @else
@@ -179,7 +251,7 @@
                                     </td>
                                     <td class="text-right">
                                         @if(!empty($row->brand_id))
-                                                <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id, 'location_ids' => request('location_ids', (array)($locationIds ?? []))]) }}">
+                                                <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'brand_id' => (int) $row->brand_id])) }}">
                                                 {{ number_format((float) ($row->total_qty ?? 0), 2) }}
                                             </a>
                                         @else
@@ -221,8 +293,16 @@
                         <tbody>
                             @forelse(($summaryByProduct ?? collect()) as $row)
                                 <tr data-name="{{ $row->product_name }}" data-qty="{{ (float) ($row->total_qty ?? 0) }}" data-value="{{ (float) ($row->total_value ?? 0) }}">
-                                    <td>{{ $row->product_name }}</td>
-                                    <td class="text-right">{{ number_format((float) ($row->total_qty ?? 0), 2) }}</td>
+                                    <td>
+                                        <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'product_id' => (int) $row->product_id])) }}">
+                                            {{ $row->product_name }}
+                                        </a>
+                                    </td>
+                                    <td class="text-right">
+                                        <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'product_id' => (int) $row->product_id])) }}">
+                                            {{ number_format((float) ($row->total_qty ?? 0), 2) }}
+                                        </a>
+                                    </td>
                                     <td class="text-right">$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</td>
                                 </tr>
                             @empty
@@ -261,7 +341,7 @@
                             <p style="margin:0;">Value: <strong>$ {{ number_format((float) ($row->total_value ?? 0), 2) }}</strong></p>
                         </div>
                         <div class="icon"><i class="fa fa-map-marker"></i></div>
-                        <a href="{{ ssi_route('ssi.dashboard.detail', ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id]) }}" class="small-box-footer">
+                        <a href="{{ ssi_route('ssi.dashboard.detail', array_merge($summaryFilterParams, ['metric' => 'total_stock_qty', 'location_id' => (int) $row->location_id])) }}" class="small-box-footer">
                             View Detail <i class="fa fa-arrow-circle-right"></i>
                         </a>
                     </div>
@@ -413,6 +493,8 @@ $(function(){
         });
     }
 
+    $('#summary_location_ids').data('last-value', $('#summary_location_ids').val() || []);
+
     $(document).on('click', '.summary-open-modal', function(){
         var title = $(this).data('title') || 'Summary Report';
         var source = $(this).data('source-table');
@@ -448,6 +530,28 @@ $(function(){
         var escaped = vals.map(function(v){ return $.fn.dataTable.util.escapeRegex(v); });
         // Strict exact match per cell (trimmed) to avoid matching similar names.
         dt.column(0).search('^\\s*(?:' + escaped.join('|') + ')\\s*$', true, false).draw();
+    });
+
+    $(document).on('change', '#summary_location_ids', function(){
+        var $select = $(this);
+        var values = $select.val() || [];
+        if (values.indexOf('__all__') !== -1 && values.length > 1) {
+            var lastValue = $select.data('last-value') || [];
+            var allWasNew = lastValue.indexOf('__all__') === -1;
+            $select.val(allWasNew ? ['__all__'] : values.filter(function(value){
+                return value !== '__all__';
+            })).trigger('change.select2');
+        }
+        $select.data('last-value', $select.val() || []);
+    });
+
+    $(document).on('submit', '.dashboard-filter-form', function(){
+        var $locations = $('#summary_location_ids');
+        var values = $locations.val() || [];
+        if (values.indexOf('__all__') !== -1) {
+            $locations.find('option').prop('selected', false);
+            $locations.trigger('change.select2');
+        }
     });
 
 });
