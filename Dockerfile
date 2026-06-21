@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
 COPY . /var/www
 WORKDIR /var/www
 
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
+    composer install --no-dev --no-interaction --optimize-autoloader 2>&1 | tail -5
+
 RUN chmod -R 775 storage bootstrap/cache && \
     chown -R www-data:www-data storage bootstrap/cache && \
     rm -f /etc/nginx/sites-enabled/*; \
