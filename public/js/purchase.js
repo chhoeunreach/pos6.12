@@ -1057,6 +1057,9 @@ function get_purchase_entry_row(product_id, variation_id, insert_after_row = nul
 
 function append_purchase_lines(data, row_count, trigger_change = false, insert_after_row = null) {
     var anchor_row = insert_after_row ? $(insert_after_row) : $();
+    var added_from_row = anchor_row.length > 0;
+    var last_inserted_row = $();
+
     $(data)
         .find('.purchase_quantity')
         .each(function() {
@@ -1072,6 +1075,7 @@ function append_purchase_lines(data, row_count, trigger_change = false, insert_a
             } else {
                 $('#purchase_entry_table tbody').append(row);
             }
+            last_inserted_row = row;
             update_row_price_for_exchange_rate(row);
 
             update_inline_profit_percentage(row);
@@ -1096,12 +1100,28 @@ function append_purchase_lines(data, row_count, trigger_change = false, insert_a
         );
     }
     refresh_purchase_lot_groups();
+
+    if (last_inserted_row.length) {
+        focus_purchase_after_insert(last_inserted_row, added_from_row);
+    }
 }
 
 function render_purchase_product_autocomplete_item(ul, item) {
     return $('<li>')
         .append('<div>' + escapeHtml(item.text) + '</div>')
         .appendTo(ul);
+}
+
+function focus_purchase_after_insert(row, added_from_row) {
+    if (added_from_row) {
+        var input = row.find('.purchase_lot_number:visible:first, .purchase_quantity:visible:first').first();
+        if (input.length) {
+            input.focus().select();
+            return;
+        }
+    }
+
+    $('#search_product').focus().select();
 }
 
 function get_purchase_group_insert_target(row) {
