@@ -14,6 +14,43 @@ function pos_sync_empty_state() {
     $('#pos_table').toggleClass('pos-has-rows', hasRows);
     $('#add_pos_sell_form, #edit_pos_sell_form').toggleClass('pos-has-rows', hasRows);
 }
+
+function pos_get_row_lot_line_id(row) {
+    var lot_select = $(row).find('select.lot_number');
+    return lot_select.length ? (lot_select.val() || '') : '';
+}
+
+function pos_can_increment_existing_row(row, variation_id, purchase_line_id) {
+    var row_obj = $(row);
+    var row_v_id = row_obj.find('.row_variation_id').val();
+    var enable_sr_no = row_obj.find('.enable_sr_no').val();
+    var modifiers_exist = row_obj.find('input.modifiers_exist').length > 0;
+
+    if (row_v_id != variation_id || enable_sr_no === '1' || modifiers_exist) {
+        return false;
+    }
+
+    var current_lot_line_id = pos_get_row_lot_line_id(row_obj);
+    var new_lot_line_id = purchase_line_id || '';
+
+    if (current_lot_line_id || new_lot_line_id) {
+        return current_lot_line_id == new_lot_line_id;
+    }
+
+    return true;
+}
+
+function pos_get_matching_purchase_line_id(item, searched_term) {
+    if (!item.purchase_line_id || !item.lot_number) {
+        return null;
+    }
+
+    var lot_number = $.trim(String(item.lot_number)).toLowerCase();
+    var term = $.trim(String(searched_term || '')).toLowerCase();
+
+    return term !== '' && lot_number.indexOf(term) !== -1 ? item.purchase_line_id : null;
+}
+
 $(document).ready(function() {
     pos_sync_empty_state();
     customer_set = false;
@@ -329,8 +366,8 @@ $(document).ready(function() {
                     if (ui.item.enable_stock != 1 || ui.item.qty_available > 0 || is_overselling_allowed || for_so || is_draft) {
                         $(this).val(null);
 
-                        //Pre select lot number only if the searched term is same as the lot number
-                        var purchase_line_id = ui.item.purchase_line_id && searched_term == ui.item.lot_number ? ui.item.purchase_line_id : null;
+                        // Preselect lot when the searched/scanned term matches the lot number.
+                        var purchase_line_id = pos_get_matching_purchase_line_id(ui.item, searched_term);
                         pos_product_row(ui.item.variation_id, purchase_line_id);
                     } else {
                         alert(LANG.out_of_stock);
@@ -2064,7 +2101,7 @@ function init_pos_add_below_search($input, $anchor_row) {
 
             if (ui.item.enable_stock != 1 || ui.item.qty_available > 0 || is_overselling_allowed || for_so || is_draft) {
                 $(this).val(null);
-                var purchase_line_id = ui.item.purchase_line_id && searched_term == ui.item.lot_number ? ui.item.purchase_line_id : null;
+                var purchase_line_id = pos_get_matching_purchase_line_id(ui.item, searched_term);
                 pos_product_row(ui.item.variation_id, purchase_line_id, null, 1, $anchor_row);
             } else {
                 alert(LANG.out_of_stock);
@@ -2158,19 +2195,9 @@ function pos_add_product_row_from_data(result, insert_after_row) {
             $('#pos_table tbody')
                 .find('tr')
                 .each(function() {
-                    var row_v_id = $(this).find('.row_variation_id').val();
-                    var enable_sr_no = $(this).find('.enable_sr_no').val();
-                    var modifiers_exist = false;
-                    if ($(this).find('input.modifiers_exist').length > 0) {
-                        modifiers_exist = true;
-                    }
+                    var purchase_line_id = result.purchase_line_id || result.lot_no_line_id || null;
                     
-                    if (
-                        row_v_id == variation_id &&
-                        enable_sr_no !== '1' &&
-                        !modifiers_exist &&
-                        !is_added
-                    ) {
+                    if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                         add_new_row = false;
                         is_added = true;
                         
@@ -2224,23 +2251,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         $('#pos_table tbody')
             .find('tr')
             .each(function() {
-                var row_v_id = $(this)
-                    .find('.row_variation_id')
-                    .val();
-                var enable_sr_no = $(this)
-                    .find('.enable_sr_no')
-                    .val();
-                var modifiers_exist = false;
-                if ($(this).find('input.modifiers_exist').length > 0) {
-                    modifiers_exist = true;
-                }
-
-                if (
-                    row_v_id == variation_id &&
-                    enable_sr_no !== '1' &&
-                    !modifiers_exist &&
-                    !is_added
-                ) {
+                if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                     add_via_ajax = false;
                     is_added = true;
 

@@ -148,6 +148,33 @@ return [
             ]) : [],
         ],
 
+        'hr' => [
+            'driver' => 'mysql',
+            'url' => env('HR_DATABASE_URL'),
+            'host' => env('HR_DB_HOST', '127.0.0.1'),
+            'port' => env('HR_DB_PORT', '3306'),
+            'database' => env('HR_DB_DATABASE', 'hr'),
+            'username' => env('HR_DB_USERNAME', 'root'),
+            'password' => env('HR_DB_PASSWORD', ''),
+            'unix_socket' => env('HR_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => 'InnoDB',
+            'modes' => [
+                'STRICT_TRANS_TABLES',
+                'NO_ZERO_IN_DATE',
+                'NO_ZERO_DATE',
+                'ERROR_FOR_DIVISION_BY_ZERO',
+                'NO_ENGINE_SUBSTITUTION',
+            ],
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('HR_MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
 
 
         'pgsql' => [
