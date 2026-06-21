@@ -3893,6 +3893,232 @@ class ReportController extends Controller
     }
 
     /**
+     * Shows stock sell report.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function stockSellReport()
+    {
+        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+
+        if (request()->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $payments = DB::table('transaction_payments')
+                ->select(
+                    'transaction_id',
+                    DB::raw("SUM(IF(method = 'cash', IF(is_return = 1, -1 * amount, amount), 0)) as cash"),
+                    DB::raw("SUM(IF(method = 'custom_pay_1', IF(is_return = 1, -1 * amount, amount), 0)) as wing"),
+                    DB::raw("SUM(IF(method = 'custom_pay_2', IF(is_return = 1, -1 * amount, amount), 0)) as aba"),
+                    DB::raw("SUM(IF(method = 'custom_pay_3', IF(is_return = 1, -1 * amount, amount), 0)) as acleda"),
+                    DB::raw("SUM(IF(method = 'custom_pay_4', IF(is_return = 1, -1 * amount, amount), 0)) as true_money"),
+                    DB::raw("SUM(IF(method = 'card', IF(is_return = 1, -1 * amount, amount), 0)) as card"),
+                    DB::raw("SUM(IF(method = 'other', IF(is_return = 1, -1 * amount, amount), 0)) as other"),
+                    DB::raw('SUM(IF(is_return = 1, -1 * amount, amount)) as paid')
+                )
+                ->whereNull('parent_id')
+                ->groupBy('transaction_id');
+
+            $purchase_costs = DB::table('transaction_sell_lines_purchase_lines as tspl')
+                ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+                ->select(
+                    'tspl.sell_line_id',
+                    DB::raw('SUM((tspl.quantity - COALESCE(tspl.qty_returned, 0)) * pl.purchase_price_inc_tax) as purchase_total'),
+                    DB::raw('SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)) as purchase_qty'),
+                    DB::raw("GROUP_CONCAT(DISTINCT NULLIF(pl.lot_number, '') ORDER BY pl.lot_number SEPARATOR ', ') as lots")
+                )
+                ->whereNotNull('tspl.sell_line_id')
+                ->groupBy('tspl.sell_line_id');
+
+            $fifo_purchase_price_sql = "COALESCE(
+                pc.purchase_total / NULLIF(pc.purchase_qty, 0),
+                lot_pl.purchase_price_inc_tax,
+                (
+                    SELECT pl_fifo.purchase_price_inc_tax
+                    FROM purchase_lines as pl_fifo
+                    INNER JOIN transactions as t_fifo ON pl_fifo.transaction_id = t_fifo.id
+                    WHERE pl_fifo.variation_id = transaction_sell_lines.variation_id
+                        AND t_fifo.business_id = t.business_id
+                        AND t_fifo.location_id = t.location_id
+                        AND t_fifo.status = 'received'
+                        AND t_fifo.type IN ('purchase', 'opening_stock')
+                        AND t_fifo.transaction_date <= t.transaction_date
+                    ORDER BY t_fifo.transaction_date ASC, pl_fifo.id ASC
+                    LIMIT 1
+                ),
+                v.dpp_inc_tax,
+                v.default_purchase_price,
+                0
+            )";
+            $fifo_purchase_total_sql = "COALESCE(pc.purchase_total, transaction_sell_lines.quantity * ({$fifo_purchase_price_sql}), 0)";
+            $line_sell_total_sql = '((transaction_sell_lines.quantity * transaction_sell_lines.unit_price_before_discount) - COALESCE(transaction_sell_lines.line_discount_amount, 0))';
+
+            $sells = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('products as p', 'transaction_sell_lines.product_id', '=', 'p.id')
+                ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
+                ->leftJoin('purchase_lines as lot_pl', 'transaction_sell_lines.lot_no_line_id', '=', 'lot_pl.id')
+                ->leftJoin('customer_groups as tcg', 't.customer_group_id', '=', 'tcg.id')
+                ->leftJoin('customer_groups as ccg', 'c.customer_group_id', '=', 'ccg.id')
+                ->leftJoinSub($payments, 'tp', function ($join) {
+                    $join->on('tp.transaction_id', '=', 't.id');
+                })
+                ->leftJoinSub($purchase_costs, 'pc', function ($join) {
+                    $join->on('pc.sell_line_id', '=', 'transaction_sell_lines.id');
+                })
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where(function ($query) {
+                    $query->where('t.sub_type', '!=', 'project_invoice')
+                        ->orWhereNull('t.sub_type');
+                })
+                ->whereNull('transaction_sell_lines.parent_sell_line_id')
+                ->select(
+                    'transaction_sell_lines.id',
+                    't.id as transaction_id',
+                    't.transaction_date',
+                    't.invoice_no',
+                    't.additional_notes',
+                    't.staff_note',
+                    't.final_total',
+                    't.payment_status',
+                    'c.mobile as phone',
+                    'bl.name as location',
+                    'p.name as product',
+                    'v.sub_sku as sku',
+                    DB::raw("COALESCE(pc.lots, NULLIF(lot_pl.lot_number, ''), '') as lots"),
+                    'transaction_sell_lines.quantity',
+                    'transaction_sell_lines.unit_price_before_discount as price',
+                    DB::raw($line_sell_total_sql.' as total'),
+                    DB::raw($fifo_purchase_price_sql.' as purchase_price'),
+                    DB::raw($fifo_purchase_total_sql.' as purchase_total'),
+                    DB::raw('('.$line_sell_total_sql.' - '.$fifo_purchase_total_sql.') as profit_loss'),
+                    DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
+                    DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), 'លក់') as customer_group"),
+                    DB::raw('COALESCE(tp.cash, 0) as cash'),
+                    DB::raw('COALESCE(tp.wing, 0) as wing'),
+                    DB::raw('COALESCE(tp.aba, 0) as aba'),
+                    DB::raw('COALESCE(tp.acleda, 0) as acleda'),
+                    DB::raw('COALESCE(tp.true_money, 0) as true_money'),
+                    DB::raw('COALESCE(tp.card, 0) as card'),
+                    DB::raw('COALESCE(tp.other, 0) as other'),
+                    DB::raw('COALESCE(tp.paid, 0) as paid'),
+                    DB::raw('(t.final_total - COALESCE(tp.paid, 0)) as due')
+                );
+
+            if ($permitted_locations != 'all') {
+                $sells->whereIn('t.location_id', $permitted_locations);
+            }
+
+            if (! auth()->user()->can('direct_sell.view') && auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping', 'view_commission_agent_sell', 'access_commission_agent_shipping'])) {
+                $sells->where(function ($query) {
+                    if (auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping'])) {
+                        $query->where('t.created_by', request()->session()->get('user.id'));
+                    }
+
+                    if (auth()->user()->hasAnyPermission(['view_commission_agent_sell', 'access_commission_agent_shipping'])) {
+                        $query->orWhere('t.commission_agent', request()->session()->get('user.id'));
+                    }
+                });
+            }
+
+            if (! empty(request()->input('location_id'))) {
+                $location_id = request()->input('location_id');
+                if (is_array($location_id)) {
+                    $location_id = array_values(array_filter($location_id, function ($id) {
+                        return $id !== 'all';
+                    }));
+
+                    if (! empty($location_id)) {
+                        $sells->whereIn('t.location_id', $location_id);
+                    }
+                } elseif ($location_id !== 'all') {
+                    $sells->where('t.location_id', $location_id);
+                }
+            }
+
+            if (! empty(request()->input('customer_id'))) {
+                $sells->where('t.contact_id', request()->input('customer_id'));
+            }
+
+            if (! empty(request()->input('payment_status'))) {
+                $sells->where('t.payment_status', request()->input('payment_status'));
+            }
+
+            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
+                $sells->whereDate('t.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+            }
+
+            return Datatables::of($sells)
+                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->addColumn('i_t', function ($row) {
+                    $sell_note = trim((string) $row->additional_notes);
+                    $staff_note_last4 = substr(trim((string) $row->staff_note), -4);
+                    $i_t = trim($sell_note.($sell_note !== '' && $staff_note_last4 !== '' ? '-' : '').$staff_note_last4);
+
+                    return $i_t !== '' ? $i_t : '-';
+                })
+                ->editColumn('quantity', function ($row) {
+                    return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
+                })
+                ->editColumn('price', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->price.'">'.$row->price.'</span>';
+                })
+                ->editColumn('purchase_price', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                })
+                ->editColumn('total', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
+                })
+                ->editColumn('profit_loss', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->profit_loss.'">'.$row->profit_loss.'</span>';
+                })
+                ->editColumn('cash', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->cash.'">'.$row->cash.'</span>';
+                })
+                ->editColumn('wing', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->wing.'">'.$row->wing.'</span>';
+                })
+                ->editColumn('aba', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->aba.'">'.$row->aba.'</span>';
+                })
+                ->editColumn('acleda', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->acleda.'">'.$row->acleda.'</span>';
+                })
+                ->editColumn('true_money', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->true_money.'">'.$row->true_money.'</span>';
+                })
+                ->editColumn('card', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->card.'">'.$row->card.'</span>';
+                })
+                ->editColumn('other', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->other.'">'.$row->other.'</span>';
+                })
+                ->editColumn('paid', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->paid.'">'.$row->paid.'</span>';
+                })
+                ->editColumn('due', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
+                })
+                ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'paid', 'due'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+        $customers = Contact::customersDropdown($business_id, false);
+
+        return view('report.stock_sell_report')
+            ->with(compact('business_locations', 'customers'));
+    }
+
+    /**
      * Calculates stock values
      *
      * @return array

@@ -245,11 +245,7 @@ $(document).ready(function() {
                     get_purchase_entry_row(ui.item.product_id, ui.item.variation_id);
                 },
             })
-            .autocomplete('instance')._renderItem = function(ul, item) {
-            return $('<li>')
-                .append('<div>' + escapeHtml(item.text) + '</div>')
-                .appendTo(ul);
-        };
+            .autocomplete('instance')._renderItem = render_purchase_product_autocomplete_item;
     }
 
     $(document).on('click', '.remove_purchase_entry_row', function() {
@@ -260,15 +256,264 @@ $(document).ready(function() {
             dangerMode: true,
         }).then(value => {
             if (value) {
-                $(this)
-                    .closest('tr')
-                    .remove();
+                var row = $(this).closest('tr');
+                row.next('.purchase-add-below-row').remove();
+                row.remove();
                 update_table_total();
                 update_grand_total();
                 update_table_sr_number();
+                refresh_purchase_lot_groups();
             }
         });
     });
+
+    $(document).on('click', '.add_purchase_product_below', function() {
+        var row = $(this).closest('tr.purchase_entry_row');
+        var existing = row.next('.purchase-add-below-row');
+
+        $('#purchase_entry_table tbody .purchase-add-below-row').not(existing).remove();
+
+        if (existing.length) {
+            existing.remove();
+            return;
+        }
+
+        var colspan = $('#purchase_entry_table thead th').length || row.children('td').length;
+        var placeholder = $('#search_product').attr('placeholder') || '';
+        var search_row =
+            '<tr class="purchase-add-below-row">' +
+                '<td colspan="' + colspan + '">' +
+                    '<div class="input-group input-group-sm">' +
+                        '<span class="input-group-addon"><i class="fa fa-plus"></i></span>' +
+                        '<input type="text" class="form-control purchase_add_below_search" autocomplete="off" placeholder="' + placeholder + '">' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
+
+        row.after(search_row);
+        var input = row.next('.purchase-add-below-row').find('.purchase_add_below_search');
+        init_purchase_add_below_search(input, row);
+        input.focus();
+    });
+
+    window.get_purchase_row_key = function(row) {
+        return [
+            row.find('input[name$="[product_id]"]').val(),
+            row.find('input[name$="[variation_id]"]').val(),
+        ].join('-');
+    };
+
+    function validate_purchase_lot_number(input) {
+        var lot_number = $.trim(input.val());
+
+        if (!lot_number) {
+            return true;
+        }
+
+        var row = input.closest('tr');
+        var product_key = get_purchase_row_key(row);
+        var lot_key = lot_number.toLowerCase();
+        var is_duplicate = false;
+
+        $('table#purchase_entry_table tbody tr.purchase_entry_row').each(function() {
+            var compare_row = $(this);
+            if (compare_row.is(row) || get_purchase_row_key(compare_row) !== product_key) {
+                return;
+            }
+
+            var compare_lot = $.trim(compare_row.find('.purchase_lot_number').val()).toLowerCase();
+            if (compare_lot && compare_lot === lot_key) {
+                is_duplicate = true;
+                return false;
+            }
+        });
+
+        if (is_duplicate) {
+            toastr.error('Duplicate lot number for this product.');
+            input.val('').focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    window.validate_all_purchase_lot_numbers = function() {
+        var seen_lots = {};
+        var is_valid = true;
+
+        $('table#purchase_entry_table tbody tr.purchase_entry_row').each(function() {
+            var row = $(this);
+            var lot_input = row.find('.purchase_lot_number');
+            var lot_number = $.trim(lot_input.val());
+
+            if (!lot_number) {
+                return;
+            }
+
+            var key = get_purchase_row_key(row) + '-' + lot_number.toLowerCase();
+            if (seen_lots[key]) {
+                toastr.error('Duplicate lot number for this product.');
+                lot_input.focus();
+                is_valid = false;
+                return false;
+            }
+
+            seen_lots[key] = true;
+        });
+
+        return is_valid;
+    };
+
+    var purchase_lot_group_collapsed = {};
+
+    window.refresh_purchase_lot_groups = function() {
+        var groups = {};
+
+        $('table#purchase_entry_table tbody tr.purchase_entry_row').each(function() {
+            var row = $(this);
+            var group_key = get_purchase_row_key(row);
+
+            row.attr('data-purchase-lot-group', group_key)
+                .removeClass('purchase-lot-parent-row purchase-lot-child-row');
+            row.find('.toggle_purchase_lot_group').remove();
+
+            if (!groups[group_key]) {
+                groups[group_key] = [];
+            }
+
+            groups[group_key].push(row);
+        });
+
+        $.each(groups, function(group_key, rows) {
+            var has_multiple_lots = rows.length > 1;
+            var is_collapsed = purchase_lot_group_collapsed[group_key] === true;
+
+            $.each(rows, function(index, row) {
+                if (!has_multiple_lots) {
+                    row.show();
+                    return;
+                }
+
+                if (index === 0) {
+                    row.addClass('purchase-lot-parent-row').show();
+                    row.find('.sr_number').after(
+                        ' <button type="button" class="btn btn-xs btn-default toggle_purchase_lot_group" ' +
+                            'data-purchase-lot-group="' + group_key + '" title="Expand/collapse lots">' +
+                            '<i class="fa ' + (is_collapsed ? 'fa-chevron-right' : 'fa-chevron-down') + '"></i> ' +
+                            rows.length + ' lots</button>'
+                    );
+                } else {
+                    row.addClass('purchase-lot-child-row');
+                    if (is_collapsed) {
+                        row.hide();
+                    } else {
+                        row.show();
+                    }
+                }
+            });
+        });
+
+        update_table_sr_number();
+    };
+
+    function add_purchase_lot_row(row) {
+        var new_row = row.clone(false, false);
+        var row_count = parseInt($('#row_count').val(), 10) || $('table#purchase_entry_table tbody tr.purchase_entry_row').length;
+
+        new_row.find('input[name$="[purchase_line_id]"]').remove();
+        new_row.find('.select2-container').remove();
+        new_row.find('select.select2')
+            .removeClass('select2-hidden-accessible')
+            .removeAttr('data-select2-id')
+            .removeAttr('aria-hidden')
+            .removeAttr('tabindex')
+            .show()
+            .find('option')
+            .removeAttr('data-select2-id');
+        new_row.find(':input[name^="purchases["]').each(function() {
+            this.name = this.name.replace(/^purchases\[[^\]]+\]/, 'purchases[' + row_count + ']');
+        });
+        new_row.find('.purchase_lot_number').val('');
+        __write_number(new_row.find('input.purchase_quantity'), 1, true);
+
+        row.after(update_purchase_entry_row_values(new_row));
+        if ($.fn.select2) {
+            new_row.find('select.select2').select2();
+        }
+        update_inline_profit_percentage(new_row);
+        update_table_total();
+        update_grand_total();
+        update_table_sr_number();
+        refresh_purchase_lot_groups();
+        $('#row_count').val(row_count + 1);
+
+        return new_row;
+    }
+
+    $(document).on('click', '.toggle_purchase_lot_group', function() {
+        var group_key = $(this).data('purchase-lot-group');
+        purchase_lot_group_collapsed[group_key] = !purchase_lot_group_collapsed[group_key];
+        refresh_purchase_lot_groups();
+    });
+
+    $(document).on('click', '.add_purchase_lot_row', function() {
+        var row = $(this).closest('tr');
+        var lot_input = row.find('.purchase_lot_number');
+
+        if (!validate_purchase_lot_number(lot_input)) {
+            return;
+        }
+
+        add_purchase_lot_row(row).find('.purchase_lot_number').focus();
+    });
+
+    $(document).on('keydown', '.purchase_lot_number', function(e) {
+        if (e.which !== 13) {
+            return;
+        }
+
+        e.preventDefault();
+
+        var lot_input = $(this);
+        if (!$.trim(lot_input.val()) || !validate_purchase_lot_number(lot_input)) {
+            return;
+        }
+
+        add_purchase_lot_row(lot_input.closest('tr')).find('.purchase_lot_number').focus();
+    });
+
+    $(document).on('change', '.purchase_lot_number', function() {
+        validate_purchase_lot_number($(this));
+    });
+
+    function init_purchase_add_below_search(input, anchor_row) {
+        input.autocomplete({
+            source: function(request, response) {
+                $.getJSON(
+                    '/purchases/get_products',
+                    { location_id: $('#location_id').val(), term: request.term },
+                    response
+                );
+            },
+            minLength: 2,
+            response: function(event, ui) {
+                if (ui.content.length == 1) {
+                    ui.item = ui.content[0];
+                    $(this)
+                        .data('ui-autocomplete')
+                        ._trigger('select', 'autocompleteselect', ui);
+                    $(this).autocomplete('close');
+                } else if (ui.content.length == 0) {
+                    toastr.error(LANG.no_products_found);
+                }
+            },
+            select: function(event, ui) {
+                $(this).val(null);
+                get_purchase_entry_row(ui.item.product_id, ui.item.variation_id, anchor_row);
+                return false;
+            },
+        }).autocomplete('instance')._renderItem = render_purchase_product_autocomplete_item;
+    }
 
     //On Change of quantity
     $(document).on('change', '.purchase_quantity', function() {
@@ -778,10 +1023,11 @@ $(document).ready(function() {
         __write_number(cp_element, unit_cost);
         cp_element.change();
     });
+    refresh_purchase_lot_groups();
     toggle_search();
 });
 
-function get_purchase_entry_row(product_id, variation_id) {
+function get_purchase_entry_row(product_id, variation_id, insert_after_row = null) {
     if (product_id) {
         var row_count = $('#row_count').val();
         var location_id = $('#location_id').val();
@@ -803,21 +1049,29 @@ function get_purchase_entry_row(product_id, variation_id) {
             dataType: 'html',
             data: data,
             success: function(result) {
-                append_purchase_lines(result, row_count);
+                append_purchase_lines(result, row_count, false, insert_after_row);
             },
         });
     }
 }
 
-function append_purchase_lines(data, row_count, trigger_change = false) {
+function append_purchase_lines(data, row_count, trigger_change = false, insert_after_row = null) {
+    var anchor_row = insert_after_row ? $(insert_after_row) : $();
     $(data)
         .find('.purchase_quantity')
         .each(function() {
             row = $(this).closest('tr');
+            row = update_purchase_entry_row_values(row);
+            row.addClass('purchase_entry_row');
+            var insert_target = anchor_row.length ? anchor_row : get_purchase_group_insert_target(row);
 
-            $('#purchase_entry_table tbody').append(
-                update_purchase_entry_row_values(row)
-            );
+            if (insert_target.length) {
+                insert_target.next('.purchase-add-below-row').remove();
+                insert_target.after(row);
+                anchor_row = row;
+            } else {
+                $('#purchase_entry_table tbody').append(row);
+            }
             update_row_price_for_exchange_rate(row);
 
             update_inline_profit_percentage(row);
@@ -825,6 +1079,7 @@ function append_purchase_lines(data, row_count, trigger_change = false) {
             update_table_total();
             update_grand_total();
             update_table_sr_number();
+            refresh_purchase_lot_groups();
 
             //Check if multipler is present then multiply it when a new row is added.
             if(__getUnitMultiplier(row) > 1){
@@ -840,6 +1095,32 @@ function append_purchase_lines(data, row_count, trigger_change = false) {
             $(data).find('.purchase_quantity').length + parseInt(row_count)
         );
     }
+    refresh_purchase_lot_groups();
+}
+
+function render_purchase_product_autocomplete_item(ul, item) {
+    return $('<li>')
+        .append('<div>' + escapeHtml(item.text) + '</div>')
+        .appendTo(ul);
+}
+
+function get_purchase_group_insert_target(row) {
+    if (typeof get_purchase_row_key !== 'function') {
+        return $();
+    }
+
+    var group_key = get_purchase_row_key(row);
+    var insert_after_row = $();
+
+    $('table#purchase_entry_table tbody tr.purchase_entry_row').each(function() {
+        var existing_row = $(this);
+
+        if (get_purchase_row_key(existing_row) === group_key) {
+            insert_after_row = existing_row;
+        }
+    });
+
+    return insert_after_row;
 }
 
 function update_purchase_entry_row_values(row) {
@@ -972,7 +1253,7 @@ function update_table_total() {
     var total_subtotal = 0;
 
     $('#purchase_entry_table tbody')
-        .find('tr')
+        .find('tr.purchase_entry_row')
         .each(function() {
             total_quantity += __read_number($(this).find('.purchase_quantity'), true);
             total_st_before_tax += __read_number(
@@ -1042,7 +1323,7 @@ $(document).on('change', 'input.payment-amount', function() {
 function update_table_sr_number() {
     var sr_number = 1;
     $('table#purchase_entry_table tbody')
-        .find('.sr_number')
+        .find('tr:visible .sr_number')
         .each(function() {
             $(this).text(sr_number);
             sr_number++;
@@ -1075,7 +1356,7 @@ function compact_purchase_lines_for_submit($form, done) {
     $form.find('input[name="purchases_json"]').remove();
 
     var purchases = [];
-    var rows = $('table#purchase_entry_table tbody tr').toArray();
+    var rows = $('table#purchase_entry_table tbody tr.purchase_entry_row').toArray();
     var total = rows.length;
     var index = 0;
     var chunk_size = 25;
@@ -1125,9 +1406,13 @@ $(document).on('click', 'button#submit_purchase_form', function(e) {
     e.preventDefault();
 
     //Check if product is present or not.
-    if ($('table#purchase_entry_table tbody tr').length <= 0) {
+    if ($('table#purchase_entry_table tbody tr.purchase_entry_row').length <= 0) {
         toastr.warning(LANG.no_products_added);
         $('input#search_product').select();
+        return false;
+    }
+
+    if (!validate_all_purchase_lot_numbers()) {
         return false;
     }
 
@@ -1236,6 +1521,7 @@ $(document).on('change', '#location_id', function() {
     update_table_total();
     update_grand_total();
     update_table_sr_number();
+    refresh_purchase_lot_groups();
 });
 
 $(document).on('shown.bs.modal', '.quick_add_product_modal', function(){

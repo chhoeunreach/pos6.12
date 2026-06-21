@@ -193,7 +193,10 @@
             </td>
             @if(session('business.enable_lot_number'))
                 <td>
-                    {!! Form::text('purchases[' . $loop->index . '][lot_number]', $purchase_line->lot_number, ['class' => 'form-control input-sm']); !!}
+                    {!! Form::text('purchases[' . $loop->index . '][lot_number]', $purchase_line->lot_number, ['class' => 'form-control input-sm purchase_lot_number', 'placeholder' => __('lang_v1.lot_number')]); !!}
+                    <button type="button" class="btn btn-xs btn-primary add_purchase_lot_row mt-5">
+                        <i class="fa fa-plus"></i> Row
+                    </button>
                 </td>
             @endif
 

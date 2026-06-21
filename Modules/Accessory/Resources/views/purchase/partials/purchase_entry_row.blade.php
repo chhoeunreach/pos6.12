@@ -177,7 +177,10 @@
                 $lot_number = !empty($imported_data['lot_number']) ? $imported_data['lot_number'] : null;
             @endphp
             <td>
-                {!! Form::text('purchases[' . $row_count . '][lot_number]', $lot_number, ['class' => 'form-control input-sm']); !!}
+                {!! Form::text('purchases[' . $row_count . '][lot_number]', $lot_number, ['class' => 'form-control input-sm purchase_lot_number', 'placeholder' => __('lang_v1.lot_number')]); !!}
+                <button type="button" class="btn btn-xs btn-primary add_purchase_lot_row mt-5">
+                    <i class="fa fa-plus"></i> Row
+                </button>
             </td>
         @endif
         @if(session('business.enable_product_expiry'))

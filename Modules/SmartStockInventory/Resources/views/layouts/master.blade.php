@@ -145,6 +145,7 @@
             ],
         ],
     ];
+    $menuGroups = array_values(array_filter($menuGroups, fn ($group) => ($group['label'] ?? '') === 'Smart Stock Inventory'));
     $currentPath = trim(request()->path(), '/');
     $currentWithQuery = $currentPath . (request()->getQueryString() ? '?' . request()->getQueryString() : '');
     $isActive = function (array $patterns) use ($currentPath, $currentWithQuery, $isAccessoryContext, $accessoryPrefix) {

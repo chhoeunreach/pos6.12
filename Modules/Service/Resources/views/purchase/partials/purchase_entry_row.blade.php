@@ -1,5 +1,5 @@
 @foreach( $variations as $variation)
-    <tr @if(!empty($purchase_order_line)) data-purchase_order_id="{{$purchase_order_line->transaction_id}}" @endif @if(!empty($purchase_requisition_line)) data-purchase_requisition_id="{{$purchase_requisition_line->transaction_id}}" @endif>
+    <tr class="purchase_entry_row" @if(!empty($purchase_order_line)) data-purchase_order_id="{{$purchase_order_line->transaction_id}}" @endif @if(!empty($purchase_requisition_line)) data-purchase_requisition_id="{{$purchase_requisition_line->transaction_id}}" @endif>
         <td><span class="sr_number"></span></td>
         <td>
             {{ $product->name }} ({{$variation->sub_sku}})
@@ -177,7 +177,10 @@
                 $lot_number = !empty($imported_data['lot_number']) ? $imported_data['lot_number'] : null;
             @endphp
             <td>
-                {!! Form::text('purchases[' . $row_count . '][lot_number]', $lot_number, ['class' => 'form-control input-sm']); !!}
+                {!! Form::text('purchases[' . $row_count . '][lot_number]', $lot_number, ['class' => 'form-control input-sm purchase_lot_number', 'placeholder' => __('lang_v1.lot_number')]); !!}
+                <button type="button" class="btn btn-xs btn-primary add_purchase_lot_row mt-5">
+                    <i class="fa fa-plus"></i> Row
+                </button>
             </td>
         @endif
         @if(session('business.enable_product_expiry'))
@@ -230,7 +233,12 @@
         @endif
         <?php $row_count++ ;?>
 
-        <td><i class="fa fa-times remove_purchase_entry_row text-danger" title="Remove" style="cursor:pointer;"></i></td>
+        <td>
+            <button type="button" class="btn btn-xs btn-primary add_purchase_product_below" title="Add product below">
+                <i class="fa fa-plus"></i>
+            </button>
+            <i class="fa fa-times remove_purchase_entry_row text-danger" title="Remove" style="cursor:pointer;"></i>
+        </td>
     </tr>
 @endforeach
 

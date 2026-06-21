@@ -26,11 +26,6 @@
                 </th>
                 @if(empty($is_purchase_order))
                     <th>@lang( 'purchase.unit_selling_price') <small>(@lang('product.inc_of_tax'))</small></th>
-                    @if(session('business.enable_lot_number'))
-                        <th>
-                            @lang('lang_v1.lot_number')
-                        </th>
-                    @endif
                     @if(session('business.enable_product_expiry'))
                         <th>@lang('product.mfg_date') / @lang('product.exp_date')</th>
                     @endif
@@ -49,6 +44,15 @@
                 {{ $purchase_line->product->name }} ({{$purchase_line->variations->sub_sku}})
                 @if( $purchase_line->product->type == 'variable') 
                     <br/>(<b>{{ $purchase_line->variations->product_variation->name}}</b> : {{ $purchase_line->variations->name}})
+                @endif
+                @if(empty($is_purchase_order) && session('business.enable_lot_number'))
+                    <div class="mt-5">
+                        <small class="text-muted">@lang('lang_v1.lot_number')</small>
+                        {!! Form::text('purchases[' . $loop->index . '][lot_number]', $purchase_line->lot_number, ['class' => 'form-control input-sm purchase_lot_number', 'placeholder' => __('lang_v1.lot_number')]); !!}
+                        <button type="button" class="btn btn-xs btn-primary add_purchase_lot_row mt-5">
+                            <i class="fa fa-plus"></i> Row
+                        </button>
+                    </div>
                 @endif
             </td>
 
@@ -191,12 +195,6 @@
                 @endif
 
             </td>
-            @if(session('business.enable_lot_number'))
-                <td>
-                    {!! Form::text('purchases[' . $loop->index . '][lot_number]', $purchase_line->lot_number, ['class' => 'form-control input-sm']); !!}
-                </td>
-            @endif
-
             @if(session('business.enable_product_expiry'))
                 <td style="text-align: left;">
                     @php

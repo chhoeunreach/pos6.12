@@ -40,14 +40,14 @@
 			<div style="min-width:0;flex:1;">
 				@if( ($edit_price || $edit_discount) && empty($is_direct_sell) )
 				<div title="@lang('lang_v1.pos_edit_product_price_help')">
-				<span class="text-link text-info tw-cursor-pointer tw-font-semibold tw-text-[13px] tw-leading-snug tw-block tw-truncate md:tw-truncate" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" data-toggle="modal" data-target="#row_edit_product_price_modal_{{$row_count}}">
+				<span class="pos-product-name text-link text-info tw-cursor-pointer tw-font-semibold tw-text-[13px] tw-leading-snug tw-block tw-truncate md:tw-truncate" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" data-toggle="modal" data-target="#row_edit_product_price_modal_{{$row_count}}">
 					{!! $product_name !!} &nbsp;<i class="fa fa-info-circle"></i>
 				</span>
 				</div>
 				@else
-					<span class="tw-font-semibold tw-text-[13px] tw-leading-snug tw-block" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{!! $product_name !!}</span>
+					<span class="pos-product-name tw-font-semibold tw-text-[13px] tw-leading-snug tw-block" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{!! $product_name !!}</span>
 				@endif
-				<div class="tw-text-[11px] tw-text-slate-400 tw-leading-[1.3] tw-truncate">{{ $product_sku_brand }}@if($product->enable_stock) &nbsp;·&nbsp; {{ @num_format($product->qty_available) }} {{$product->unit}}@endif</div>
+				<div class="pos-product-meta tw-text-[11px] tw-text-slate-400 tw-leading-[1.3] tw-truncate">{{ $product_sku_brand }}@if($product->enable_stock) &nbsp;·&nbsp; {{ @num_format($product->qty_available) }} {{$product->unit}}@endif</div>
 			</div>
 		</div>
 
@@ -413,8 +413,13 @@
 		<span class="display_currency pos_line_total_text @if(!empty($pos_settings['is_pos_subtotal_editable'])) hide @endif" data-currency_symbol="true">{{$product->quantity_ordered*$unit_price_inc_tax}}</span>
 	</td>
 	<td class="text-center v-center">
-		<button type="button" class="pos_remove_row tw-w-9 tw-h-9 tw-rounded-full tw-bg-red-100 tw-text-red-600 hover:tw-bg-red-200 active:tw-scale-95 tw-transition-transform tw-inline-flex tw-items-center tw-justify-center tw-border-0 tw-cursor-pointer tw-mx-auto" aria-label="Remove item">
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>
-		</button>
+		<div class="tw-flex tw-items-center tw-justify-center tw-gap-1">
+			<button type="button" class="pos_add_product_below tw-w-8 tw-h-8 tw-rounded-full tw-bg-blue-100 tw-text-blue-600 hover:tw-bg-blue-200 active:tw-scale-95 tw-transition-transform tw-inline-flex tw-items-center tw-justify-center tw-border-0 tw-cursor-pointer" aria-label="Add product below">
+				<i class="fa fa-plus" aria-hidden="true"></i>
+			</button>
+			<button type="button" class="pos_remove_row tw-w-8 tw-h-8 tw-rounded-full tw-bg-red-100 tw-text-red-600 hover:tw-bg-red-200 active:tw-scale-95 tw-transition-transform tw-inline-flex tw-items-center tw-justify-center tw-border-0 tw-cursor-pointer" aria-label="Remove item">
+				<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>
+			</button>
+		</div>
 	</td>
 </tr>

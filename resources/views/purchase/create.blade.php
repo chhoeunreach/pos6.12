@@ -275,11 +275,6 @@
 									@lang( 'purchase.unit_selling_price' )
 									<small>(@lang('product.inc_of_tax'))</small>
 								</th>
-								@if(session('business.enable_lot_number'))
-									<th>
-										@lang('lang_v1.lot_number')
-									</th>
-								@endif
 								@if(session('business.enable_product_expiry'))
 									<th>
 										@lang('product.mfg_date') / @lang('product.exp_date')

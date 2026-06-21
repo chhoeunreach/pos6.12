@@ -237,7 +237,7 @@
 					<th class="text-center pos-th-subtotal tw-sticky tw-top-0 tw-z-10 !tw-bg-[#f8fafc] !tw-text-[#94a3b8] !tw-border-b !tw-border-[#e2e8f0] !tw-border-t-0 !tw-border-l-0 !tw-border-r-0 !tw-px-2 !tw-py-1 !tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-[0.4px] !tw-leading-[1.2] tw-whitespace-nowrap tw-overflow-hidden !tw-align-middle tw-w-auto tw-min-w-[14%]">
 						@lang('sale.subtotal')
 					</th>
-					<th class="pos-th-action tw-sticky tw-top-0 tw-z-10 !tw-bg-[#f8fafc] !tw-border-b !tw-border-[#e2e8f0] !tw-border-t-0 !tw-border-l-0 !tw-border-r-0 !tw-py-1 !tw-pr-2 !tw-pl-0 !tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-[0.4px] !tw-leading-[1.2] tw-whitespace-nowrap tw-overflow-hidden !tw-align-middle tw-w-[52px] !tw-text-center"></th>
+					<th class="pos-th-action tw-sticky tw-top-0 tw-z-10 !tw-bg-[#f8fafc] !tw-border-b !tw-border-[#e2e8f0] !tw-border-t-0 !tw-border-l-0 !tw-border-r-0 !tw-py-1 !tw-pr-2 !tw-pl-0 !tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-[0.4px] !tw-leading-[1.2] tw-whitespace-nowrap tw-overflow-hidden !tw-align-middle tw-w-[76px] !tw-text-center"></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -257,6 +257,83 @@
 		<style>
 			#pos_table:not(.pos-has-rows) thead { display: none !important; }
 			#pos_table.pos-has-rows .pos-empty-state-row { display: none !important; }
+			#pos_table .pos-product-group-summary > td {
+				background: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-left: 0;
+				border-right: 0;
+				padding: 6px 8px;
+			}
+			#pos_table .pos-product-group-toggle {
+				width: 28px;
+				height: 28px;
+				border: 0;
+				border-radius: 999px;
+				background: #e0f2fe;
+				color: #0369a1;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				margin-right: 8px;
+				vertical-align: middle;
+			}
+			#pos_table .pos-product-group-body {
+				display: inline-flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 10px;
+				width: calc(100% - 42px);
+				vertical-align: middle;
+			}
+			#pos_table .pos-product-group-title-wrap {
+				min-width: 0;
+			}
+			#pos_table .pos-product-group-title {
+				color: #0f172a;
+				font-size: 13px;
+				font-weight: 700;
+				line-height: 1.25;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			#pos_table .pos-product-group-meta {
+				color: #64748b;
+				font-size: 11px;
+				line-height: 1.25;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			#pos_table .pos-product-group-totals {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				flex-shrink: 0;
+				color: #334155;
+				font-size: 12px;
+				font-weight: 700;
+				white-space: nowrap;
+			}
+			#pos_table .pos-product-group-totals span {
+				background: #fff;
+				border: 1px solid #e2e8f0;
+				border-radius: 999px;
+				padding: 3px 8px;
+			}
+			#pos_table .pos-product-group-child > td:first-child {
+				padding-left: 28px !important;
+			}
+			@media (max-width: 767px) {
+				#pos_table .pos-product-group-body {
+					align-items: flex-start;
+					flex-direction: column;
+					gap: 4px;
+				}
+				#pos_table .pos-product-group-totals {
+					flex-wrap: wrap;
+				}
+			}
 			#add_pos_sell_form:not(.pos-has-rows) .pos_form_totals,
 			#edit_pos_sell_form:not(.pos-has-rows) .pos_form_totals { display: none !important; }
 		</style>

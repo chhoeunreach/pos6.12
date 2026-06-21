@@ -31,6 +31,120 @@ function pos_sync_empty_state() {
     $('#pos_table').toggleClass('pos-has-rows', hasRows);
     $('#add_pos_sell_form, #edit_pos_sell_form').toggleClass('pos-has-rows', hasRows);
 }
+
+var pos_product_group_collapsed = {};
+
+function pos_get_row_lot_line_id(row) {
+    var lot_select = $(row).find('select.lot_number');
+    return lot_select.length ? (lot_select.val() || '') : '';
+}
+
+function pos_can_increment_existing_row(row, variation_id, purchase_line_id) {
+    var row_obj = $(row);
+    var row_v_id = row_obj.find('.row_variation_id').val();
+    var enable_sr_no = row_obj.find('.enable_sr_no').val();
+    var modifiers_exist = row_obj.find('input.modifiers_exist').length > 0;
+
+    if (row_v_id != variation_id || enable_sr_no === '1' || modifiers_exist) {
+        return false;
+    }
+
+    var current_lot_line_id = pos_get_row_lot_line_id(row_obj);
+    var new_lot_line_id = purchase_line_id || '';
+
+    if (current_lot_line_id || new_lot_line_id) {
+        return current_lot_line_id == new_lot_line_id;
+    }
+
+    return true;
+}
+
+function pos_product_group_key(row) {
+    var row_obj = $(row);
+    return row_obj.find('.row_variation_id').val() || row_obj.find('.product_id').val() || '';
+}
+
+function pos_refresh_grouped_product_rows() {
+    var tbody = $('#pos_table tbody');
+    tbody.find('tr.pos-product-group-summary').remove();
+
+    var rows = tbody.find('tr.product_row');
+    rows.removeClass('pos-product-group-child').removeAttr('data-pos-group-key').show();
+
+    var groups = {};
+    var group_order = [];
+
+    rows.each(function() {
+        var key = pos_product_group_key(this);
+        if (!key) {
+            return;
+        }
+
+        if (!groups[key]) {
+            groups[key] = [];
+            group_order.push(key);
+        }
+
+        groups[key].push(this);
+    });
+
+    $.each(group_order, function(i, key) {
+        if (groups[key].length < 2) {
+            return;
+        }
+
+        var group_rows = $(groups[key]);
+        var first_row = $(groups[key][0]);
+        var is_collapsed = pos_product_group_collapsed[key] !== false;
+        var total_qty = 0;
+        var total_price = 0;
+        var product_name = $.trim(first_row.find('.pos-product-name').first().text());
+        var product_meta = $.trim(first_row.find('.pos-product-meta').first().text());
+
+        if (!product_name) {
+            product_name = $.trim(first_row.find('td:first').text());
+        }
+
+        group_rows.each(function() {
+            total_qty += __read_number($(this).find('input.pos_quantity'));
+            total_price += __read_number($(this).find('input.pos_line_total'));
+        });
+
+        var summary = $('<tr class="pos-product-group-summary"></tr>').attr('data-pos-group-key', key);
+        var cell = $('<td colspan="100"></td>');
+        var button = $('<button type="button" class="pos-product-group-toggle"></button>')
+            .attr('aria-expanded', is_collapsed ? 'false' : 'true')
+            .append($('<i></i>').addClass(is_collapsed ? 'fa fa-chevron-right' : 'fa fa-chevron-down'));
+        var body = $('<div class="pos-product-group-body"></div>');
+        var title_wrap = $('<div class="pos-product-group-title-wrap"></div>');
+        var title = $('<div class="pos-product-group-title"></div>').text(product_name);
+        var meta = $('<div class="pos-product-group-meta"></div>').text(product_meta);
+        var totals = $('<div class="pos-product-group-totals"></div>')
+            .append($('<span></span>').text('Qty: ' + __number_f(total_qty)))
+            .append($('<span></span>').text('Total: ' + __currency_trans_from_en(total_price, true)));
+
+        title_wrap.append(title);
+        if (product_meta) {
+            title_wrap.append(meta);
+        }
+        body.append(title_wrap).append(totals);
+        cell.append(button).append(body);
+        summary.append(cell);
+        first_row.before(summary);
+
+        var anchor = summary;
+        group_rows.each(function() {
+            var row = $(this);
+            row.addClass('pos-product-group-child').attr('data-pos-group-key', key);
+            anchor.after(row);
+            anchor = row;
+        });
+
+        if (is_collapsed) {
+            group_rows.hide();
+        }
+    });
+}
 $(document).ready(function() {
     pos_sync_empty_state();
     customer_set = false;
@@ -418,6 +532,12 @@ $(document).ready(function() {
     }
 
     init_lot_number_select2($('table#pos_table tbody'));
+
+    $('table#pos_table tbody').on('click', '.pos-product-group-toggle', function() {
+        var key = $(this).closest('tr.pos-product-group-summary').data('pos-group-key');
+        pos_product_group_collapsed[key] = pos_product_group_collapsed[key] === false;
+        pos_refresh_grouped_product_rows();
+    });
 
     //Update line total and check for quantity not greater than max quantity
     $('table#pos_table tbody').on('change', 'input.pos_quantity', function() {
@@ -2029,19 +2149,9 @@ function pos_add_product_row_from_data(result) {
             $('#pos_table tbody')
                 .find('tr')
                 .each(function() {
-                    var row_v_id = $(this).find('.row_variation_id').val();
-                    var enable_sr_no = $(this).find('.enable_sr_no').val();
-                    var modifiers_exist = false;
-                    if ($(this).find('input.modifiers_exist').length > 0) {
-                        modifiers_exist = true;
-                    }
-                    
-                    if (
-                        row_v_id == variation_id &&
-                        enable_sr_no !== '1' &&
-                        !modifiers_exist &&
-                        !is_added
-                    ) {
+                    var purchase_line_id = result.purchase_line_id || result.lot_no_line_id || null;
+
+                    if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                         add_new_row = false;
                         is_added = true;
                         
@@ -2095,23 +2205,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         $('#pos_table tbody')
             .find('tr')
             .each(function() {
-                var row_v_id = $(this)
-                    .find('.row_variation_id')
-                    .val();
-                var enable_sr_no = $(this)
-                    .find('.enable_sr_no')
-                    .val();
-                var modifiers_exist = false;
-                if ($(this).find('input.modifiers_exist').length > 0) {
-                    modifiers_exist = true;
-                }
-
-                if (
-                    row_v_id == variation_id &&
-                    enable_sr_no !== '1' &&
-                    !modifiers_exist &&
-                    !is_added
-                ) {
+                if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                     add_via_ajax = false;
                     is_added = true;
 
@@ -2248,7 +2342,7 @@ function pos_each_row(row_obj) {
 function pos_total_row() {
     var total_quantity = 0;
     var price_total = get_subtotal();
-    $('table#pos_table tbody tr').each(function() {
+    $('table#pos_table tbody tr.product_row').each(function() {
         total_quantity = total_quantity + __read_number($(this).find('input.pos_quantity'));
     });
 
@@ -2273,6 +2367,7 @@ function pos_total_row() {
     }
     // store on any update
     saveFormDataToLocalStorage();
+    pos_refresh_grouped_product_rows();
 
 }
 
@@ -2485,7 +2580,8 @@ function reset_pos_form(){
 	set_default_customer();
 	set_location();
 
-	$('tr.product_row').remove();
+	$('tr.product_row, tr.pos-product-group-summary').remove();
+    pos_product_group_collapsed = {};
 	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount, span#loyalty_amount_display').text(0);
 	$('span.total_payable_span', 'span.total_paying', 'span.balance_due').text(0);
 

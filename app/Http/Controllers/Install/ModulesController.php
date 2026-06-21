@@ -391,7 +391,7 @@ class ModulesController extends Controller
             $module_name = Str::slug(str_replace('.zip', '', $module->getClientOriginalName()));
 
             //check if 'Modules' folder exist or not, if not exist create
-            $path = '../Modules';
+            $path = base_path('Modules');
             if (! is_dir($path)) {
                 mkdir($path, 0755, true);
             }
@@ -405,8 +405,7 @@ class ModulesController extends Controller
                 // Check for required files after extraction
                 $module_dir = $path . '/' . $module_name;
                 $data_controller_path = $module_dir . '/Http/Controllers/DataController.php';
-                if (!(file_exists($module_dir . '/composer.json')
-                    && file_exists($module_dir . '/module.json')
+                if (!(file_exists($module_dir . '/module.json')
                     && file_exists($module_dir . '/Config/config.php')
                     && file_exists($data_controller_path))
                 ) {
