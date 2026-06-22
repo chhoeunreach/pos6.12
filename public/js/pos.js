@@ -45,6 +45,10 @@ function pos_get_matching_purchase_line_id(item, searched_term) {
         return null;
     }
 
+    if (item.is_lot_row) {
+        return item.purchase_line_id;
+    }
+
     var lot_number = $.trim(String(item.lot_number)).toLowerCase();
     var term = $.trim(String(searched_term || '')).toLowerCase();
 

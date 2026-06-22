@@ -1338,6 +1338,7 @@ class ProductController extends Controller
                     $item->name = e($item->name);
                     $item->variation = e($item->variation);
                     $item->sub_sku = e($item->sub_sku);
+                    $item->is_lot_row = true;
                     return $item;
                 });
 
