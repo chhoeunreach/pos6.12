@@ -455,6 +455,7 @@ class StockTransferController extends Controller
                 $business = ['id' => $business_id,
                     'accounting_method' => $request->session()->get('business.accounting_method'),
                     'location_id' => $sell_transfer->location_id,
+                    'pos_settings' => $request->session()->get('business.pos_settings'),
                 ];
                 $this->transactionUtil->mapPurchaseSell($business, $sell_transfer->sell_lines, 'purchase');
             }
@@ -1544,6 +1545,7 @@ class StockTransferController extends Controller
                 $business = ['id' => $business_id,
                     'accounting_method' => $request->session()->get('business.accounting_method'),
                     'location_id' => $sell_transfer->location_id,
+                    'pos_settings' => $request->session()->get('business.pos_settings'),
                 ];
                 $this->transactionUtil->mapPurchaseSell($business, $sell_transfer->sell_lines, 'purchase');
             }
