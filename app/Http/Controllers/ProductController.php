@@ -1355,11 +1355,23 @@ class ProductController extends Controller
             if (count($result) == 1 && !empty($location_id) && request()->get('auto_add_single', false)) {
                 
                 $variation_id = $result[0]->variation_id;
+                $purchase_line_id = null;
+
+                if (! empty($result[0]->purchase_line_id) && ! empty($result[0]->lot_number)) {
+                    $lot_number = strtolower(trim((string) $result[0]->lot_number));
+                    $term = strtolower(trim((string) $search_term));
+
+                    if ($term !== '' && strpos($lot_number, $term) !== false) {
+                        $purchase_line_id = $result[0]->purchase_line_id;
+                        request()->merge(['purchase_line_id' => $purchase_line_id]);
+                    }
+                }
                         
                 $row_data = $this->productUtil->getPosProductRow($variation_id, $location_id);
                 
                 // Add variation_id to row_data for duplicate checking
                 $row_data['variation_id'] = $variation_id;
+                $row_data['purchase_line_id'] = $purchase_line_id;
                 
                 return json_encode([
                     'auto_add' => true,
