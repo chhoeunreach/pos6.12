@@ -55,6 +55,19 @@ function pos_get_matching_purchase_line_id(item, searched_term) {
     return term !== '' && lot_number.indexOf(term) !== -1 ? item.purchase_line_id : null;
 }
 
+function pos_select_row_lot(row, purchase_line_id) {
+    if (!purchase_line_id) {
+        return;
+    }
+
+    var lot_select = $(row).find('select.lot_number');
+    if (!lot_select.length || !lot_select.find('option[value="' + purchase_line_id + '"]').length) {
+        return;
+    }
+
+    lot_select.val(purchase_line_id).trigger('change');
+}
+
 $(document).ready(function() {
     pos_sync_empty_state();
     customer_set = false;
@@ -2024,6 +2037,7 @@ function pos_insert_product_row(result, insert_after_row) {
     round_row_to_iraqi_dinnar(this_row);
     __currency_convert_recursively(this_row);
     init_lot_number_select2(this_row);
+    pos_select_row_lot(this_row, result.purchase_line_id || result.lot_no_line_id);
 
     if (!$('#__is_mobile').length) {
         $('input#search_product')
@@ -2348,6 +2362,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
             dataType: 'json',
             success: function(result) {
                 if (result.success) {
+                    result.purchase_line_id = purchase_line_id;
                     pos_insert_product_row(result, insert_after_row);
                 } else {
                     toastr.error(result.msg);
