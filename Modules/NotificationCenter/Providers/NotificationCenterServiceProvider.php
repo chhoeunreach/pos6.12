@@ -37,9 +37,11 @@ class NotificationCenterServiceProvider extends ServiceProvider
         $this->publishes([
             $sourcePath => $viewPath,
         ], 'views');
-        $this->loadViewsFrom(array_merge(array_map(function ($path) {
+        $viewPaths = array_filter(array_map(function ($path) {
             return $path.'/modules/notificationcenter';
-        }, config('view.paths')), [$sourcePath]), 'notificationcenter');
+        }, config('view.paths')), 'is_dir');
+
+        $this->loadViewsFrom(array_merge($viewPaths, [$sourcePath]), 'notificationcenter');
     }
 
     public function registerTranslations()

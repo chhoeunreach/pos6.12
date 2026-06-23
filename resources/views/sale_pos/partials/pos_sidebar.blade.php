@@ -177,11 +177,34 @@
             @endif
         </button>
     </div>
+
+    <div class="tw-flex-1 tw-min-w-[140px]" id="sell_list_staff_div">
+        <button type="button" id="show_sell_list_staff"
+            class="tw-dw-btn tw-dw-btn-sm tw-group tw-w-full tw-h-9 tw-min-h-[2.25rem] tw-rounded-full tw-flex-nowrap tw-gap-2 tw-px-3 tw-text-sm tw-font-semibold tw-normal-case tw-bg-white tw-border-slate-200 tw-text-slate-700 tw-shadow-sm tw-transition-all tw-duration-200 hover:tw-bg-sky-50 hover:tw-border-sky-300 hover:tw-text-slate-900 hover:tw-shadow-md hover:tw-shadow-sky-500/15 hover:-tw-translate-y-0.5 focus:tw-ring-2 focus:tw-ring-sky-400 focus:tw-ring-offset-1">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                class="tw-w-4 md:tw-w-5 tw-flex-shrink-0 tw-text-sky-600 tw-transition-transform tw-duration-200 group-hover:tw-scale-110 icon icon-tabler icon-tabler-users" width="44" height="44"
+                viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+                <path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
+            </svg>
+            <span class="tw-truncate">Sell List</span>
+            @if (!empty($hr_sell_out_reports) && count($hr_sell_out_reports) > 0)
+                <span class="tw-dw-badge tw-dw-badge-sm tw-bg-sky-50 tw-border-sky-100 tw-text-sky-700 tw-font-bold tw-text-[11px] group-hover:tw-bg-white group-hover:tw-border-sky-200 tw-transition-colors">{{ count($hr_sell_out_reports) }}</span>
+            @endif
+        </button>
+    </div>
 </div>
 <div class="row" style="margin: 0;">
     <input type="hidden" id="suggestion_page" value="1">
     <div class="col-md-12" style="padding: 0;">
         <div id="product_list_body" class="eq-height-row tw-max-h-[calc(100vh_-_229px)] tw-overflow-y-auto tw-overflow-x-hidden" style="padding-right: 4px;">
+            <div id="sell_list_staff_box" style="display: none;">
+                @include('sale_pos.partials.hr_sell_list_staff', ['hr_sell_out_reports' => $hr_sell_out_reports ?? collect()])
+            </div>
             <div id="featured_products_box" style="display: none;">
                 @if (!empty($featured_products))
                     @include('sale_pos.partials.featured_products')

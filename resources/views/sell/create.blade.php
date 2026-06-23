@@ -16,6 +16,10 @@
 
 @section('title', $title)
 
+@section('css')
+@include('sell.partials.direct_sell_table_styles')
+@stop
+
 @section('content')
 <!-- Content Header (Page header) -->
 <section class="content-header">
@@ -365,40 +369,40 @@
 						}
 					@endphp
 					<div class="table-responsive">
-					<table class="table table-condensed table-bordered table-striped table-responsive" id="pos_table">
+					<table class="table table-condensed table-bordered table-striped table-responsive direct-sell-product-table" id="pos_table">
 						<thead>
 							<tr>
-								<th class="text-center">#</th>
-								<th class="text-center">	
+								<th class="text-center dst-col-num">#</th>
+								<th class="text-center dst-col-product">	
 									@lang('sale.product')
 								</th>
-								<th class="text-center">
+								<th class="text-center dst-col-qty">
 									@lang('sale.qty')
 								</th>
 								@if(!empty($pos_settings['inline_service_staff']))
-									<th class="text-center">
+									<th class="text-center dst-col-staff">
 										@lang('restaurant.service_staff')
 									</th>
 								@endif
-								<th class="@if(!auth()->user()->can('edit_product_price_from_sale_screen')) hide @endif">
+								<th class="dst-col-price @if(!auth()->user()->can('edit_product_price_from_sale_screen')) hide @endif">
 									@lang('sale.unit_price')
 								</th>
-								<th class="@if(!auth()->user()->can('edit_product_discount_from_sale_screen')) hide @endif">
+								<th class="dst-col-discount @if(!auth()->user()->can('edit_product_discount_from_sale_screen')) hide @endif">
 									@lang('receipt.discount')
 								</th>
-								<th class="text-center {{$hide_tax}}">
+								<th class="text-center dst-col-tax {{$hide_tax}}">
 									@lang('sale.tax')
 								</th>
-								<th class="text-center {{$hide_tax}}">
+								<th class="text-center dst-col-price-inc-tax {{$hide_tax}}">
 									@lang('sale.price_inc_tax')
 								</th>
 								@if(!empty($common_settings['enable_product_warranty']))
-									<th>@lang('lang_v1.warranty')</th>
+									<th class="dst-col-warranty">@lang('lang_v1.warranty')</th>
 								@endif
-								<th class="text-center">
+								<th class="text-center dst-col-subtotal">
 									@lang('sale.subtotal')
 								</th>
-								<th class="text-center"><i class="fas fa-times" aria-hidden="true"></i></th>
+								<th class="text-center dst-col-remove"><i class="fas fa-times" aria-hidden="true"></i></th>
 							</tr>
 						</thead>
 						<tbody></tbody>

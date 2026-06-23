@@ -56,6 +56,7 @@ use App\Variation;
 use App\Warranty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Razorpay\Api\Api;
@@ -247,6 +248,12 @@ class SellPosController extends Controller
         $default_datetime = $this->businessUtil->format_date('now', true);
 
         $featured_products = !empty($default_location) ? $default_location->getFeaturedProducts() : [];
+        $pos_sell_list_invoice_key = request()->session()->get('pos_sell_list_invoice_key');
+        if (empty($pos_sell_list_invoice_key)) {
+            $pos_sell_list_invoice_key = (string) Str::uuid();
+            request()->session()->put('pos_sell_list_invoice_key', $pos_sell_list_invoice_key);
+        }
+        $hr_sell_out_reports = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null);
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -288,6 +295,8 @@ class SellPosController extends Controller
                 'shipping_statuses',
                 'default_datetime',
                 'featured_products',
+                'pos_sell_list_invoice_key',
+                'hr_sell_out_reports',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
@@ -295,6 +304,354 @@ class SellPosController extends Controller
                 'invoice_layouts',
                 'users',
             ));
+    }
+
+    private function getHrSellOutReports($location_id = null)
+    {
+        try {
+            $location_name = null;
+            if (!empty($location_id)) {
+                $location_name = optional(BusinessLocation::find($location_id))->name;
+            }
+
+            $reports = DB::connection('hr')
+                ->table('sell_out_reports as sor')
+                ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+                ->select(
+                    'sor.id',
+                    'sor.invoice_no',
+                    'sor.customer_phone',
+                    'sor.customer_name',
+                    'sor.seller_name',
+                    'sor.branch_name',
+                    'sor.total_amount',
+                    'sor.created_at',
+                    DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                    'u.employee_code as staff_code',
+                    'u.avatar as staff_avatar'
+                )
+                ->where('sor.service_type', 'លក់')
+                ->when(!empty($location_name), function ($query) use ($location_name) {
+                    $query->where(function ($query) use ($location_name) {
+                        $query->where('sor.branch_name', $location_name)
+                            ->orWhereRaw("? LIKE CONCAT('%', sor.branch_name, '%')", [$location_name]);
+                    });
+                })
+                ->orderBy('sor.invoice_no', 'asc')
+                ->limit(50)
+                ->get();
+
+            if ($reports->isEmpty()) {
+                return $reports;
+            }
+
+            $lines = DB::connection('hr')
+                ->table('sell_out_report_lines')
+                ->whereIn('sell_out_report_id', $reports->pluck('id')->all())
+                ->orderBy('id')
+                ->get()
+                ->groupBy('sell_out_report_id');
+
+            $line_ids = $lines->flatten(1)->pluck('id')->all();
+            $statuses = collect();
+            if (!empty($line_ids) && Schema::hasTable('pos_sell_list_serial_statuses')) {
+                $statuses = DB::table('pos_sell_list_serial_statuses')
+                    ->whereIn('hr_sell_out_report_line_id', $line_ids)
+                    ->get()
+                    ->keyBy('hr_sell_out_report_line_id');
+            }
+
+            return $reports->map(function ($report) use ($lines, $statuses) {
+                $report->lines = $lines->get($report->id, collect())->map(function ($line) use ($statuses) {
+                    $status = $statuses->get($line->id);
+                    $line->pos_serial_status = !empty($status) ? $status->status : 'active';
+                    $line->pos_serial_status_id = !empty($status) ? $status->id : null;
+                    $line->pos_serial_invoice_key = !empty($status) ? $status->invoice_key : null;
+
+                    return $line;
+                });
+                $report->has_active_lines = $report->lines->contains(function ($line) {
+                    return $line->pos_serial_status === 'active';
+                });
+                $report->has_added_lines = $report->lines->contains(function ($line) {
+                    return $line->pos_serial_status === 'added';
+                });
+
+                return $report;
+            });
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell out reports for POS screen: ' . $e->getMessage());
+
+            return collect();
+        }
+    }
+
+    public function getHrSellList($location_id)
+    {
+        $hr_sell_out_reports = $this->getHrSellOutReports($location_id);
+
+        return view('sale_pos.partials.hr_sell_list_staff')
+            ->with(compact('hr_sell_out_reports'));
+    }
+
+    public function copyHrSellListReport($report_id, Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 0, 'msg' => 'Please run database migrations for Sell List serial status.'];
+        }
+
+        $invoice_key = $request->input('invoice_key');
+        if (empty($invoice_key)) {
+            return ['success' => 0, 'msg' => 'Missing invoice key. Please refresh POS and try again.'];
+        }
+
+        $report = DB::connection('hr')
+            ->table('sell_out_reports as sor')
+            ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+            ->where('sor.id', $report_id)
+            ->where('sor.service_type', 'លក់')
+            ->select('sor.*', 'u.employee_code as staff_code')
+            ->first();
+
+        if (empty($report)) {
+            return ['success' => 0, 'msg' => 'Sell Out record not found.'];
+        }
+
+        $lines = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        $copied = [];
+        $warnings = [];
+
+        foreach ($lines as $line) {
+            $serial = $this->getHrLineSerial($line);
+            if (empty($serial)) {
+                $warnings[] = $line->product_name . ': no serial number found.';
+                continue;
+            }
+
+            $existing_for_invoice = DB::table('pos_sell_list_serial_statuses')
+                ->where('serial_number', $serial)
+                ->where('invoice_key', $invoice_key)
+                ->where('status', 'added')
+                ->first();
+
+            if (!empty($existing_for_invoice)) {
+                $warnings[] = $serial . ' already added to this invoice.';
+                continue;
+            }
+
+            $status = DB::table('pos_sell_list_serial_statuses')
+                ->where('hr_sell_out_report_line_id', $line->id)
+                ->first();
+
+            if (!empty($status) && $status->status !== 'active') {
+                $warnings[] = $serial . ' is already ' . $status->status . '.';
+                continue;
+            }
+
+            $completed_sale = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+                ->where('t.status', 'final')
+                ->where('transaction_sell_lines.sell_line_note', 'like', '%' . $serial . '%')
+                ->select('t.invoice_no')
+                ->first();
+
+            if (!empty($completed_sale)) {
+                $warnings[] = $serial . ' already exists in completed sale ' . $completed_sale->invoice_no . '.';
+            }
+
+            $variation_id = $this->resolveHrLineVariationId($line, $serial);
+            if (empty($variation_id)) {
+                $warnings[] = $serial . ': product not found in POS.';
+                continue;
+            }
+
+            $status_id = $this->setHrSerialStatus($line, 'added', $invoice_key, null, 'copied_to_pos');
+
+            $copied[] = [
+                'status_id' => $status_id,
+                'hr_line_id' => $line->id,
+                'variation_id' => $variation_id,
+                'serial' => $serial,
+                'unit_price' => (float) $line->unit_price,
+                'phone' => $report->customer_phone,
+                'staff_number' => $report->staff_code ?: $report->seller_name,
+            ];
+        }
+
+        if (empty($copied)) {
+            return ['success' => 0, 'msg' => implode("\n", $warnings) ?: 'No active serial numbers available.'];
+        }
+
+        return ['success' => 1, 'lines' => $copied, 'warnings' => $warnings];
+    }
+
+    public function releaseHrSellListLine(Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 1];
+        }
+
+        $status_id = $request->input('status_id');
+        $invoice_key = $request->input('invoice_key');
+
+        $status = DB::table('pos_sell_list_serial_statuses')
+            ->where('id', $status_id)
+            ->where('invoice_key', $invoice_key)
+            ->first();
+
+        if (empty($status) || !empty($status->transaction_id)) {
+            return ['success' => 1];
+        }
+
+        DB::table('pos_sell_list_serial_statuses')
+            ->where('id', $status->id)
+            ->update([
+                'status' => 'active',
+                'invoice_key' => null,
+                'released_at' => \Carbon::now(),
+                'updated_at' => \Carbon::now(),
+            ]);
+
+        $this->recordHrSerialStatusHistory($status->id, $status->status, 'active', $invoice_key, null, 'removed_from_pos');
+
+        return ['success' => 1];
+    }
+
+    private function getHrLineSerial($line)
+    {
+        foreach (['serial_number', 'imei', 'imei2', 'primary_identifier', 'sku'] as $field) {
+            if (!empty($line->{$field})) {
+                return trim($line->{$field});
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveHrLineVariationId($line, $serial)
+    {
+        if (!empty($line->variation_id) && Variation::where('id', $line->variation_id)->exists()) {
+            return $line->variation_id;
+        }
+
+        $variation = Variation::where('sub_sku', $serial)->first();
+        if (!empty($variation)) {
+            return $variation->id;
+        }
+
+        $variation = Variation::join('products as p', 'variations.product_id', '=', 'p.id')
+            ->where('p.name', 'like', '%' . $line->product_name . '%')
+            ->select('variations.id')
+            ->first();
+
+        return !empty($variation) ? $variation->id : null;
+    }
+
+    private function setHrSerialStatus($line, $status, $invoice_key = null, $transaction_id = null, $reason = null)
+    {
+        $serial = $this->getHrLineSerial($line);
+        $existing = DB::table('pos_sell_list_serial_statuses')
+            ->where('hr_sell_out_report_line_id', $line->id)
+            ->first();
+        $now = \Carbon::now();
+
+        if (empty($existing)) {
+            $status_id = DB::table('pos_sell_list_serial_statuses')->insertGetId([
+                'hr_sell_out_report_id' => $line->sell_out_report_id,
+                'hr_sell_out_report_line_id' => $line->id,
+                'serial_number' => $serial,
+                'status' => $status,
+                'invoice_key' => $invoice_key,
+                'transaction_id' => $transaction_id,
+                'created_by' => auth()->id(),
+                'added_at' => $status === 'added' ? $now : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $from_status = null;
+        } else {
+            $status_id = $existing->id;
+            $from_status = $existing->status;
+            DB::table('pos_sell_list_serial_statuses')
+                ->where('id', $status_id)
+                ->update([
+                    'status' => $status,
+                    'invoice_key' => $invoice_key,
+                    'transaction_id' => $transaction_id,
+                    'added_at' => $status === 'added' ? ($existing->added_at ?: $now) : $existing->added_at,
+                    'released_at' => $status === 'active' ? $now : $existing->released_at,
+                    'updated_at' => $now,
+                ]);
+        }
+
+        $this->recordHrSerialStatusHistory($status_id, $from_status, $status, $invoice_key, $transaction_id, $reason);
+
+        return $status_id;
+    }
+
+    private function recordHrSerialStatusHistory($status_id, $from_status, $to_status, $invoice_key = null, $transaction_id = null, $reason = null)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_status_histories')) {
+            return;
+        }
+
+        DB::table('pos_sell_list_serial_status_histories')->insert([
+            'serial_status_id' => $status_id,
+            'from_status' => $from_status,
+            'to_status' => $to_status,
+            'invoice_key' => $invoice_key,
+            'transaction_id' => $transaction_id,
+            'changed_by' => auth()->id(),
+            'reason' => $reason,
+            'created_at' => \Carbon::now(),
+            'updated_at' => \Carbon::now(),
+        ]);
+    }
+
+    private function attachHrSerialStatusesToTransaction($transaction, $products, $invoice_key = null)
+    {
+        if (empty($invoice_key) || !Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return;
+        }
+
+        $status_ids = collect($products)
+            ->pluck('hr_sell_list_serial_status_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($status_ids->isEmpty()) {
+            return;
+        }
+
+        $statuses = DB::table('pos_sell_list_serial_statuses')
+            ->whereIn('id', $status_ids->all())
+            ->where('invoice_key', $invoice_key)
+            ->get();
+
+        foreach ($statuses as $status) {
+            $sell_line = TransactionSellLine::where('transaction_id', $transaction->id)
+                ->where('sell_line_note', 'like', '%' . $status->serial_number . '%')
+                ->orderByDesc('id')
+                ->first();
+
+            DB::table('pos_sell_list_serial_statuses')
+                ->where('id', $status->id)
+                ->update([
+                    'status' => 'added',
+                    'transaction_id' => $transaction->id,
+                    'transaction_sell_line_id' => !empty($sell_line) ? $sell_line->id : null,
+                    'updated_at' => \Carbon::now(),
+                ]);
+
+            $this->recordHrSerialStatusHistory($status->id, $status->status, 'added', $invoice_key, $transaction->id, 'invoice_saved');
+        }
+
+        request()->session()->forget('pos_sell_list_invoice_key');
     }
 
     /**
@@ -498,6 +855,7 @@ class SellPosController extends Controller
                 Media::uploadMedia($business_id, $transaction, $request, 'shipping_documents', false, 'shipping_document');
 
                 $this->transactionUtil->createOrUpdateSellLines($transaction, $input['products'], $input['location_id']);
+                $this->attachHrSerialStatusesToTransaction($transaction, $input['products'], $request->input('pos_sell_list_invoice_key'));
 
                 $change_return['amount'] = $input['change_return'] ?? 0;
                 $change_return['is_return'] = 1;

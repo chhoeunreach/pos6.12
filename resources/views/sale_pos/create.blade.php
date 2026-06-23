@@ -37,6 +37,7 @@
                                             : 'browser',
                                         'data-default_payment_accounts' => $default_location->default_payment_accounts ?? '',
                                     ]) !!}
+                                    {!! Form::hidden('pos_sell_list_invoice_key', $pos_sell_list_invoice_key ?? '', ['id' => 'pos_sell_list_invoice_key']) !!}
                                     <!-- sub_type -->
                                     {!! Form::hidden('sub_type', isset($sub_type) ? $sub_type : null) !!}
                                     <input type="hidden" id="item_addition_method"

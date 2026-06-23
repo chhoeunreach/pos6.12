@@ -1559,6 +1559,90 @@ body.lockscreen::-webkit-scrollbar-thumb:hover {
     #featured_products_box > .col-xs-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
 }
 
+/* HR sell list staff box */
+#sell_list_staff_box:empty { display: none; }
+#sell_list_staff_box:not(:empty) {
+    padding: 6px 4px 4px; margin-bottom: 6px;
+    background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
+    border: 1px solid #bae6fd; border-radius: 8px;
+    position: relative; display: flex; flex-wrap: wrap; box-sizing: border-box; width: 100%;
+}
+#sell_list_staff_box:not(:empty)::before {
+    content: '\f0c0  Sell List'; font-family: 'Font Awesome 5 Free', 'FontAwesome'; font-weight: 900;
+    display: block; font-size: 11px; color: #0369a1; margin: 0 4px 4px;
+    letter-spacing: 0.3px; text-transform: uppercase; flex-basis: 100%;
+}
+.sell-list-tabs {
+    width: 100%; display: flex; gap: 4px; margin: 0 4px 6px;
+}
+.sell-list-search-wrap {
+    width: 100%; height: 32px; margin: 0 4px 6px; padding: 0 9px;
+    display: flex; align-items: center; gap: 7px; background: #fff;
+    border: 1px solid #bae6fd; border-radius: 8px; color: #0284c7;
+}
+.sell-list-search {
+    width: 100%; min-width: 0; height: 100%; border: 0; outline: 0;
+    background: transparent; color: #0f172a; font-size: 12px; font-weight: 600;
+}
+.sell-list-search::placeholder {
+    color: #94a3b8; font-weight: 500;
+}
+.sell-list-tab {
+    flex: 1; height: 30px; border: 1px solid #bae6fd; border-radius: 8px;
+    background: #fff; color: #0369a1; font-size: 12px; font-weight: 700;
+}
+.sell-list-tab.is-active {
+    background: #0284c7; border-color: #0284c7; color: #fff;
+}
+.sell-list-added-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; margin-left: 4px; border-radius: 999px;
+    background: rgba(255,255,255,0.25); font-size: 10px;
+}
+.sell-list-pane {
+    width: 100%; display: none; flex-wrap: wrap;
+}
+.sell-list-pane.is-active {
+    display: flex;
+}
+.sell-list-report-row {
+    width: 100%; margin: 0 2px 5px; padding: 7px 8px; background: #fff;
+    border: 1px solid #bae6fd; border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box;
+}
+.sell-list-report-row:hover {
+    border-color: #7dd3fc; background: #f8fdff;
+}
+.sell-list-staff-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    padding-bottom: 6px; border-bottom: 1px solid #e0f2fe;
+}
+.sell-list-avatar-wrap {
+    width: 34px; height: 34px; border-radius: 999px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;
+}
+.sell-list-avatar {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.sell-list-avatar-fallback {
+    font-size: 13px; font-weight: 800;
+}
+.sell-list-add-btn {
+    min-width: 46px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px;
+    background: #0284c7; color: #fff; font-size: 12px; font-weight: 700;
+}
+.sell-list-add-btn:disabled {
+    background: #94a3b8; cursor: default;
+}
+.sell-list-products {
+    margin-top: 6px; display: grid; gap: 4px;
+}
+.sell-list-product-line {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 6px; border-radius: 6px; background: #f8fafc;
+}
+
 /* Drawer panel */
 .pos-drawer-panel {
     width: min(520px, 96vw) !important; padding: 0 !important;
