@@ -394,6 +394,56 @@ class SellPosController extends Controller
             ->with(compact('hr_sell_out_reports'));
     }
 
+    public function getHrSellListDetail($report_id)
+    {
+        $report = DB::connection('hr')
+            ->table('sell_out_reports as sor')
+            ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+            ->where('sor.id', $report_id)
+            ->select(
+                'sor.*',
+                DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                'u.employee_code as staff_code',
+                'u.avatar as staff_avatar'
+            )
+            ->first();
+
+        if (empty($report)) {
+            abort(404);
+        }
+
+        $report->lines = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        $report->photos = DB::connection('hr')
+            ->table('sell_out_report_photos')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        return view('sale_pos.partials.hr_sell_list_detail_modal')
+            ->with(compact('report'));
+    }
+
+    public function getHrStaffAvatar($filename)
+    {
+        $avatar_dir = env('HR_STAFF_AVATAR_PATH', public_path('uploads/avatar'));
+        $avatar_dir = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $avatar_dir);
+        $safe_filename = basename(rawurldecode($filename));
+        $path = rtrim($avatar_dir, '\\/') . DIRECTORY_SEPARATOR . $safe_filename;
+
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+        ]);
+    }
+
     public function copyHrSellListReport($report_id, Request $request)
     {
         if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
@@ -544,7 +594,12 @@ class SellPosController extends Controller
         }
 
         $variation = Variation::join('products as p', 'variations.product_id', '=', 'p.id')
-            ->where('p.name', 'like', '%' . $line->product_name . '%')
+            ->where(function ($q) use ($serial, $line) {
+                $q->where('p.name', 'like', '%' . $line->product_name . '%')
+                  ->orWhere('p.sku', $serial)
+                  ->orWhere('variations.product_keywords', 'like', '%' . $serial . '%')
+                  ->orWhere('variations.name', 'like', '%' . $serial . '%');
+            })
             ->select('variations.id')
             ->first();
 

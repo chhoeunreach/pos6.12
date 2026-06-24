@@ -92,6 +92,21 @@
     </div>
     <div class="modal fade" id="pos_pay_contact_due_modal" tabindex="-1" role="dialog">
     </div>
+    <div class="modal fade hr_sell_list_detail_modal" tabindex="-1" role="dialog">
+    </div>
+    <div class="modal fade hr_sell_list_photo_modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title sell-list-photo-title">Photo</h4>
+                </div>
+                <div class="modal-body text-center">
+                    <img class="sell-list-photo-preview" src="" alt="Sell Out photo">
+                </div>
+            </div>
+        </div>
+    </div>
 
     @include('sale_pos.partials.configure_search_modal')
 

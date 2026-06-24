@@ -1,23 +1,17 @@
 @php
     $staffName = $report->staff_name ?: $report->seller_name;
     $avatar = !empty($report->staff_avatar) ? ltrim($report->staff_avatar, '/') : null;
-    $avatarBase = rtrim(env('HR_APP_URL', config('app.url')), '/');
-    $avatarUrls = $avatar ? [
-        $avatarBase . '/storage/' . $avatar,
-        $avatarBase . '/uploads/' . $avatar,
-        $avatarBase . '/storage/profile/' . $avatar,
-        $avatarBase . '/uploads/profile/' . $avatar,
-    ] : [];
+    $avatarUrl = $avatar ? asset('uploads/avatar/' . rawurlencode($avatar)) : null;
     $visibleLines = $report->lines->filter(fn ($line) => $line->pos_serial_status === $line_status);
 @endphp
 
 <div class="sell-list-report-row no-print" data-report-id="{{ $report->id }}">
     <div class="sell-list-staff-head">
         <div class="sell-list-avatar-wrap">
-            @if (!empty($avatarUrls))
-                <img class="sell-list-avatar" src="{{ $avatarUrls[0] }}" data-fallbacks='@json(array_slice($avatarUrls, 1))' alt="{{ $staffName }}">
+            @if (!empty($avatarUrl))
+                <img class="sell-list-avatar" src="{{ $avatarUrl }}" alt="{{ $staffName }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('tw-hidden');">
             @endif
-            <span class="sell-list-avatar-fallback @if (!empty($avatarUrls)) tw-hidden @endif">{{ strtoupper(mb_substr($staffName ?: 'S', 0, 1)) }}</span>
+            <span class="sell-list-avatar-fallback @if (!empty($avatarUrl)) tw-hidden @endif">{{ strtoupper(mb_substr($staffName ?: 'S', 0, 1)) }}</span>
         </div>
         <div class="tw-min-w-0 tw-flex-1">
             <div class="tw-font-bold tw-text-slate-800 tw-text-xs tw-leading-4 tw-truncate" title="{{ $staffName }}">
@@ -44,9 +38,12 @@
                 @endif
             </div>
         </div>
-        @if (!empty($show_copy_button))
-            <button type="button" class="sell-list-add-btn" data-report-id="{{ $report->id }}">Copy Serial Number</button>
-        @endif
+        <div class="tw-flex tw-items-center tw-gap-1 tw-flex-shrink-0">
+            <button type="button" class="sell-list-detail-btn" data-report-id="{{ $report->id }}">View Detail</button>
+            @if (!empty($show_copy_button))
+                <button type="button" class="sell-list-add-btn" data-report-id="{{ $report->id }}">Copy Serial Number</button>
+            @endif
+        </div>
     </div>
 
     <div class="sell-list-products">

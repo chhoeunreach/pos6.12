@@ -281,6 +281,8 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/pos/get-product-suggestion', [SellPosController::class, 'getProductSuggestion']);
     Route::get('/sells/pos/get-featured-products/{location_id}', [SellPosController::class, 'getFeaturedProducts']);
     Route::get('/sells/pos/get-hr-sell-list/{location_id}', [SellPosController::class, 'getHrSellList']);
+    Route::get('/sells/pos/hr-sell-list-detail/{report_id}', [SellPosController::class, 'getHrSellListDetail']);
+    Route::get('/sells/pos/hr-staff-avatar/{filename}', [SellPosController::class, 'getHrStaffAvatar']);
     Route::post('/sells/pos/copy-hr-sell-list-report/{report_id}', [SellPosController::class, 'copyHrSellListReport']);
     Route::post('/sells/pos/release-hr-sell-list-line', [SellPosController::class, 'releaseHrSellListLine']);
     Route::get('/reset-mapping', [SellController::class, 'resetMapping']);
