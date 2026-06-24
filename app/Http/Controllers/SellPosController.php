@@ -452,6 +452,50 @@ class SellPosController extends Controller
         ]);
     }
 
+    public function getHrSellListPhoto($photo_id)
+    {
+        $photo = DB::connection('hr')
+            ->table('sell_out_report_photos')
+            ->where('id', $photo_id)
+            ->first();
+
+        if (empty($photo)) {
+            abort(404);
+        }
+
+        $relative_path = ltrim($photo->photo_path ?? '', '/\\');
+
+        if ($relative_path === '' || strpos($relative_path, '..') !== false) {
+            abort(404);
+        }
+
+        $relative_path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative_path);
+        $candidate_roots = array_filter([
+            env('HR_SELL_OUT_PHOTO_PATH'),
+            env('HR_STORAGE_PATH'),
+            storage_path('app/public'),
+            public_path('storage'),
+        ]);
+
+        foreach ($candidate_roots as $root) {
+            $root = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $root), '\\/');
+            $path = $root . DIRECTORY_SEPARATOR . $relative_path;
+
+            if (is_file($path)) {
+                return response()->file($path, [
+                    'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]);
+            }
+        }
+
+        if (!empty($photo->photo_url)) {
+            return redirect()->away($photo->photo_url);
+        }
+
+        abort(404);
+    }
+
     public function copyHrSellListReport($report_id, Request $request)
     {
         if (!Schema::hasTable('pos_sell_list_serial_statuses')) {

@@ -83,8 +83,9 @@
                         @foreach ($report->photos as $photo)
                             @php
                                 $photoUrl = $photo->photo_url ?: rtrim(env('HR_APP_URL', config('app.url')), '/') . '/storage/' . ltrim($photo->photo_path, '/');
+                                $ocrPhotoUrl = action([\App\Http\Controllers\SellPosController::class, 'getHrSellListPhoto'], [$photo->id]);
                             @endphp
-                            <button type="button" class="sell-list-photo-thumb" data-photo-url="{{ $photoUrl }}" data-photo-name="{{ $photo->original_name ?: 'Photo' }}">
+                            <button type="button" class="sell-list-photo-thumb" data-photo-url="{{ $ocrPhotoUrl }}" data-photo-fallback-url="{{ $photoUrl }}" data-photo-name="{{ $photo->original_name ?: 'Photo' }}">
                                 <img src="{{ $photoUrl }}" alt="{{ $photo->original_name ?: 'Sell Out photo' }}">
                             </button>
                         @endforeach

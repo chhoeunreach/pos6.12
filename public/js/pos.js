@@ -2178,11 +2178,14 @@ $(document).ready(function() {
 
     $(document).on('click', '.sell-list-photo-thumb', function(){
         var photoUrl = $(this).data('photo-url');
+        var fallbackUrl = $(this).data('photo-fallback-url') || photoUrl;
         var photoName = $(this).data('photo-name') || 'Photo';
         var $modal = $('.hr_sell_list_photo_modal');
 
         $modal.find('.sell-list-photo-title').text(photoName);
-        $modal.find('.sell-list-photo-preview').attr('src', photoUrl);
+        $modal.find('.sell-list-photo-preview')
+            .attr('src', photoUrl)
+            .attr('data-fallback-url', fallbackUrl);
         $modal.modal('show');
     });
 

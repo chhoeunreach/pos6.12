@@ -1757,6 +1757,55 @@ body.lockscreen::-webkit-scrollbar-thumb:hover {
     max-width: 100%; max-height: 75vh; object-fit: contain;
     border-radius: 8px; background: #f8fafc;
 }
+.sell-list-ocr-layout {
+    display: flex; gap: 14px; align-items: stretch;
+}
+.sell-list-ocr-image-panel {
+    flex: 1 1 52%; min-width: 0; display: flex; align-items: center; justify-content: center;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;
+}
+.sell-list-ocr-result-panel {
+    flex: 1 1 48%; min-width: 280px;
+}
+.sell-list-ocr-status {
+    min-height: 20px; margin-bottom: 8px; font-size: 12px; font-weight: 700;
+}
+.sell-list-ocr-progress-wrap {
+    height: 16px; margin-bottom: 10px;
+}
+.sell-list-ocr-progress-bar {
+    line-height: 16px; font-size: 11px; font-weight: 700;
+}
+.sell-list-ocr-text {
+    resize: vertical; font-family: Consolas, Menlo, Monaco, monospace; font-size: 12px;
+}
+.sell-list-serial-section label {
+    display: block; margin-bottom: 6px;
+}
+.sell-list-serials {
+    display: grid; gap: 6px; max-height: 160px; overflow-y: auto;
+}
+.sell-list-serial-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.sell-list-serial-row code {
+    color: #0f172a; background: transparent; padding: 0; white-space: normal; word-break: break-word;
+}
+@media (max-width: 767px) {
+    .sell-list-ocr-layout {
+        display: block;
+    }
+    .sell-list-ocr-image-panel {
+        margin-bottom: 12px;
+    }
+    .sell-list-ocr-result-panel {
+        min-width: 0;
+    }
+    .sell-list-photo-preview {
+        max-height: 45vh;
+    }
+}
 
 /* Drawer panel */
 .pos-drawer-panel {

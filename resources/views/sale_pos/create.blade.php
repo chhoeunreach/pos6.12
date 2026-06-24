@@ -101,8 +101,39 @@
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                     <h4 class="modal-title sell-list-photo-title">Photo</h4>
                 </div>
-                <div class="modal-body text-center">
-                    <img class="sell-list-photo-preview" src="" alt="Sell Out photo">
+                <div class="modal-body">
+                    <div class="sell-list-ocr-layout">
+                        <div class="sell-list-ocr-image-panel">
+                            <img class="sell-list-photo-preview" src="" alt="Sell Out photo">
+                        </div>
+                        <div class="sell-list-ocr-result-panel">
+                            <div class="sell-list-ocr-status text-muted">
+                                Open a photo to extract text.
+                            </div>
+                            <div class="progress sell-list-ocr-progress-wrap" style="display:none;">
+                                <div class="progress-bar progress-bar-striped active sell-list-ocr-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%;">
+                                    0%
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>OCR Result</label>
+                                <textarea class="form-control sell-list-ocr-text" rows="8" readonly placeholder="Detected text will appear here..."></textarea>
+                            </div>
+                            <div class="sell-list-serial-section">
+                                <label>Detected Serials</label>
+                                <div class="sell-list-serials text-muted">No serials detected yet.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary sell-list-copy-text-btn">
+                        <i class="fa fa-copy"></i> Copy Text
+                    </button>
+                    <button type="button" class="btn btn-success sell-list-copy-first-serial-btn" disabled>
+                        <i class="fa fa-barcode"></i> Copy Serial
+                    </button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
                 </div>
             </div>
         </div>
@@ -127,6 +158,7 @@
 @stop
 @section('javascript')
     <script src="{{ asset('js/pos.js?v=' . $asset_v . '&m=' . filemtime(public_path('js/pos.js'))) }}"></script>
+    <script src="{{ asset('js/sell-out-ocr.js?v=' . $asset_v . '&m=' . (file_exists(public_path('js/sell-out-ocr.js')) ? filemtime(public_path('js/sell-out-ocr.js')) : time())) }}"></script>
     <script src="{{ asset('js/printer.js?v=' . $asset_v) }}"></script>
     <script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>
     <script src="{{ asset('js/opening_stock.js?v=' . $asset_v) }}"></script>
