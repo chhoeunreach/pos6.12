@@ -285,6 +285,8 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/pos/hr-staff-avatar/{filename}', [SellPosController::class, 'getHrStaffAvatar']);
     Route::post('/sells/pos/copy-hr-sell-list-report/{report_id}', [SellPosController::class, 'copyHrSellListReport']);
     Route::post('/sells/pos/release-hr-sell-list-line', [SellPosController::class, 'releaseHrSellListLine']);
+    Route::post('/sells/pos/add-hr-sell-list-line', [SellPosController::class, 'addHrSellListLine']);
+    Route::post('/sells/pos/resolve-hr-line-product', [SellPosController::class, 'resolveHrLineProduct']);
     Route::get('/reset-mapping', [SellController::class, 'resetMapping']);
     // pos display screen route
     Route::get('/customer-display', [SellPosController::class, 'posDisplay'])->name('pos_display');

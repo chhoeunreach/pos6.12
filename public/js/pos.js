@@ -1866,15 +1866,19 @@ $(document).ready(function() {
         var $root = $(this).closest('.pos-sidebar-root');
         var $box = $root.length ? $root.find('#featured_products_box') : $('#featured_products_box');
         var $sellListBox = $root.length ? $root.find('#sell_list_staff_box') : $('#sell_list_staff_box');
+        var $productItems = $root.length ? $root.find('#product_list_items') : $('#product_list_items');
         var emptyHtml = ($root.length ? $root.find('#featured_empty_state_template') : $('#featured_empty_state_template')).html() || '';
         if ($.trim($box.html()) === '') {
             $box.html(emptyHtml);
         }
         if (!$box.is(':visible')) {
             $sellListBox.hide();
+            $productItems.hide();
             $box.css('display', 'flex').hide().fadeIn();
         } else {
-            $box.fadeOut();
+            $box.fadeOut(function() {
+                $productItems.show();
+            });
         }
     });
 
@@ -1882,12 +1886,46 @@ $(document).ready(function() {
         var $root = $(this).closest('.pos-sidebar-root');
         var $box = $root.length ? $root.find('#sell_list_staff_box') : $('#sell_list_staff_box');
         var $featuredBox = $root.length ? $root.find('#featured_products_box') : $('#featured_products_box');
+        var $productItems = $root.length ? $root.find('#product_list_items') : $('#product_list_items');
 
         if (!$box.is(':visible')) {
             $featuredBox.hide();
+            $productItems.hide();
             $box.css('display', 'flex').hide().fadeIn();
         } else {
-            $box.fadeOut();
+            $box.fadeOut(function() {
+                $productItems.show();
+            });
+        }
+    });
+
+    /* Filter toggle — init daterangepicker on first open */
+    $(document).on('click', '.sell-list-filter-btn', function(){
+        var $btn = $(this);
+        var $body = $btn.closest('#sell_list_staff_box').find('.sell-list-filter-body');
+        $btn.toggleClass('is-open');
+        $body.slideToggle(150);
+
+        var $dr = $body.find('.sell-list-filter-daterange');
+        if ($dr.length && !$dr.data('daterangepicker')) {
+            $dr.daterangepicker(
+                $.extend(true, {}, dateRangeSettings, {
+                    startDate: moment(),
+                    endDate: moment(),
+                }),
+                function(start, end) {
+                    $dr.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
+                    $body.find('.sell-list-filter-date-from').val(start.format('YYYY-MM-DD'));
+                    $body.find('.sell-list-filter-date-to').val(end.format('YYYY-MM-DD'));
+                    get_hr_sell_list();
+                }
+            );
+            $dr.on('cancel.daterangepicker', function(ev, picker) {
+                $dr.val('');
+                $body.find('.sell-list-filter-date-from').val('');
+                $body.find('.sell-list-filter-date-to').val('');
+                get_hr_sell_list();
+            });
         }
     });
 
@@ -1902,44 +1940,221 @@ $(document).ready(function() {
         $box.find('.sell-list-pane-' + target).addClass('is-active');
     });
 
-    $(document).on('click', '.sell-list-add-btn', function(){
+    /* Copy All button: report-level, copies ALL active serials one by one */
+    $(document).on('click', '.sell-list-copy-all-btn', function(){
         var $btn = $(this);
-        var $box = $btn.closest('#sell_list_staff_box');
-        var reportId = $btn.data('report-id');
+        var $reportRow = $btn.closest('.sell-list-report-row');
+        var $activeLines = $reportRow.find('.sell-list-product-line[data-status="active"]');
         var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!$activeLines.length) {
+            toastr.error('No active serials to copy.');
+            return;
+        }
+
+        var lines = [];
+        $activeLines.each(function() {
+            var $line = $(this);
+            var rawSerial = $.trim($line.data('serial') || '');
+            lines.push({
+                serial: rawSerial.replace(/[^a-zA-Z0-9]/g, ''),
+                lineId: $line.data('line-id'),
+                unitPrice: parseFloat($line.data('unit-price')) || 0,
+            });
+        });
 
         $btn.prop('disabled', true).text('Copying...');
 
+        var phone = $.trim($reportRow.find('.tw-text-[10px]').first().text().split('/')[0].trim());
+        if (phone) {
+            $('textarea[name="sale_note"]').val(phone);
+        }
+
+        var total = lines.length;
+        var done = 0;
+        var stopped = false;
+
+        function process_next(index) {
+            if (stopped) return;
+
+            if (index >= lines.length) {
+                $btn.prop('disabled', false).text('Copy');
+                get_hr_sell_list();
+                if (done === total) {
+                    toastr.success('All ' + total + ' serials copied to cart.');
+                } else {
+                    toastr.warning(done + ' of ' + total + ' copied. Check search field for remaining.');
+                }
+                return;
+            }
+
+            var line = lines[index];
+
+            if (!line.serial) {
+                process_next(index + 1);
+                return;
+            }
+
+            $('input#search_product').val(line.serial).trigger($.Event('keydown', { keyCode: 37 }));
+
+            $.getJSON('/sells/pos/resolve-hr-line-product', {
+                line_id: line.lineId,
+                serial_number: line.serial,
+                location_id: $('input#location_id').val(),
+            }, function(data) {
+                if (data.success && data.auto_add && data.row_data) {
+                    pos_add_product_row_from_data(data.row_data);
+
+                    var $row = $('#pos_table tbody tr.product_row').last();
+                    if ($row.length) {
+                        var rowIndex = $row.data('row_index');
+
+                        var noteSelector = 'textarea[name="products[' + rowIndex + '][sell_line_note]"]';
+                        $(noteSelector).val(line.serial);
+
+                        $row.attr('data-hr-serial', line.serial);
+                        $row.attr('data-hr-line-id', line.lineId);
+                        $row.find('td').first().append('<input type="hidden" class="hr_sell_list_serial" name="products[' + rowIndex + '][hr_sell_list_serial]" value="' + line.serial + '">');
+
+                        if (line.unitPrice && !isNaN(line.unitPrice)) {
+                            __write_number($row.find('input.pos_unit_price_inc_tax'), line.unitPrice);
+                            __write_number($row.find('input.pos_unit_price'), line.unitPrice);
+                            $row.find('input.pos_unit_price_inc_tax').trigger('change');
+                        }
+
+                        saveFormDataToLocalStorage();
+
+                        $('#search_product').val('');
+                        var ac = $('#search_product').data('ui-autocomplete');
+                        if (ac) { ac.cache = {}; ac.term = ''; }
+
+                        done++;
+                    }
+
+                    process_next(index + 1);
+                } else {
+                    stopped = true;
+                    $btn.prop('disabled', false).text('Copy');
+                    toastr.error((data.serial || line.serial) + ': product not found. Serial left in search field for manual search.');
+                    get_hr_sell_list();
+                }
+            });
+        }
+
+        process_next(0);
+    });
+
+    /* Add All button: report-level, marks ALL active serials as added */
+    $(document).on('click', '.sell-list-add-all-btn', function(){
+        var $btn = $(this);
+        var $reportRow = $btn.closest('.sell-list-report-row');
+        var $activeLines = $reportRow.find('.sell-list-product-line[data-status="active"]');
+        var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!invoiceKey) {
+            toastr.error('Missing invoice key. Please refresh POS.');
+            return;
+        }
+
+        if (!$activeLines.length) {
+            toastr.error('No active serials to add.');
+            return;
+        }
+
+        $btn.prop('disabled', true).text('...');
+
+        var total = $activeLines.length;
+        var done = 0;
+        var errors = [];
+
+        function add_next(index) {
+            if (index >= $activeLines.length) {
+                $btn.prop('disabled', false).text('Add to');
+                get_hr_sell_list();
+                if (errors.length) {
+                    toastr.warning(done + ' added, ' + errors.length + ' errors.');
+                } else {
+                    toastr.success('All ' + total + ' marked as added.');
+                }
+                return;
+            }
+
+            var $line = $activeLines.eq(index);
+            var lineId = $line.data('line-id');
+            var serial = $.trim($line.data('serial') || '');
+
+            if (!lineId) {
+                add_next(index + 1);
+                return;
+            }
+
+            $.ajax({
+                method: 'POST',
+                url: '/sells/pos/add-hr-sell-list-line',
+                dataType: 'json',
+                data: {
+                    line_id: lineId,
+                    serial_number: serial,
+                    invoice_key: invoiceKey,
+                },
+                success: function(result) {
+                    if (result.success) {
+                        done++;
+                    } else {
+                        errors.push(result.msg || 'Line ' + lineId + ' failed.');
+                    }
+                    add_next(index + 1);
+                },
+                error: function() {
+                    errors.push('Line ' + lineId + ' request failed.');
+                    add_next(index + 1);
+                },
+            });
+        }
+
+        add_next(0);
+    });
+
+    /* Add to button: per-line, marks serial as added without adding to cart */
+    $(document).on('click', '.sell-list-add-to-btn', function(){
+        var $btn = $(this);
+        var lineId = $btn.data('line-id');
+        var serial = $.trim($btn.data('serial') || '');
+        var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!invoiceKey) {
+            toastr.error('Missing invoice key. Please refresh POS.');
+            return;
+        }
+
+        if (!lineId) {
+            toastr.error('Missing line ID.');
+            return;
+        }
+
+        $btn.prop('disabled', true).text('...');
+
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/copy-hr-sell-list-report/' + reportId,
+            url: '/sells/pos/add-hr-sell-list-line',
             dataType: 'json',
             data: {
+                line_id: lineId,
+                serial_number: serial,
                 invoice_key: invoiceKey,
             },
             success: function(result) {
-                if (!result.success) {
-                    toastr.error(result.msg || 'Unable to copy serial number.');
-                    return;
-                }
-
-                if (result.warnings && result.warnings.length) {
-                    toastr.warning(result.warnings.join('<br>'));
-                }
-
-                if (result.lines && result.lines.length) {
-                    process_hr_lines_sequential(result.lines, 0, function() {
-                        get_hr_sell_list();
-                    });
-                } else {
+                if (result.success) {
+                    toastr.success(serial ? serial + ' marked as added.' : 'Marked as added.');
                     get_hr_sell_list();
+                } else {
+                    toastr.error(result.msg || 'Unable to mark as added.');
+                    $btn.prop('disabled', false).text('Add to');
                 }
             },
             error: function() {
-                toastr.error('Unable to copy serial number.');
-            },
-            complete: function() {
-                $btn.prop('disabled', false).text('Copy Serial Number');
+                toastr.error('Unable to mark as added.');
+                $btn.prop('disabled', false).text('Add to');
             },
         });
     });
@@ -2063,10 +2278,17 @@ function get_hr_sell_list() {
         return;
     }
 
+    var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
+    var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
+
     $.ajax({
         method: 'GET',
         url: '/sells/pos/get-hr-sell-list/' + location_id,
         dataType: 'html',
+        data: {
+            date_from: dateFrom,
+            date_to: dateTo,
+        },
         success: function(result) {
             $box.html(result);
         },
@@ -2079,8 +2301,12 @@ function filter_sell_list_rows($box) {
 
     $rows.each(function() {
         var $row = $(this);
+        if (search === '') {
+            $row.show();
+            return;
+        }
         var rowText = $row.text().toLowerCase();
-        $row.toggle(search === '' || rowText.indexOf(search) !== -1);
+        $row.toggle(rowText.indexOf(search) !== -1);
     });
 }
 

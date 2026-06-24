@@ -1632,12 +1632,96 @@ body.lockscreen::-webkit-scrollbar-thumb:hover {
     min-width: 46px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px;
     background: #0284c7; color: #fff; font-size: 12px; font-weight: 700;
 }
-.sell-list-detail-btn {
-    min-width: 42px; height: 28px; padding: 0 8px; border: 1px solid #bae6fd; border-radius: 7px;
-    background: #fff; color: #0369a1; font-size: 12px; font-weight: 700;
-}
 .sell-list-add-btn:disabled {
     background: #94a3b8; cursor: default;
+}
+.sell-list-copy-all-btn,
+.sell-list-add-all-btn,
+.sell-list-detail-btn {
+    min-width: 56px; height: 30px; padding: 0 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 0.01em;
+    transition: all .18s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    border: 0; outline: none; line-height: 1; position: relative;
+}
+.sell-list-copy-all-btn:focus-visible,
+.sell-list-add-all-btn:focus-visible,
+.sell-list-detail-btn:focus-visible {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
+}
+.sell-list-copy-all-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.sell-list-copy-all-btn:hover {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    box-shadow: 0 4px 10px rgba(37,99,235,.4), inset 0 1px 0 rgba(255,255,255,.15);
+    transform: translateY(-1px);
+}
+.sell-list-copy-all-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.1);
+}
+.sell-list-copy-all-btn:disabled {
+    background: #cbd5e1; color: #94a3b8; box-shadow: none; cursor: default; transform: none;
+}
+.sell-list-add-all-btn {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(5,150,105,.3), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.sell-list-add-all-btn:hover {
+    background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+    box-shadow: 0 4px 10px rgba(5,150,105,.4), inset 0 1px 0 rgba(255,255,255,.15);
+    transform: translateY(-1px);
+}
+.sell-list-add-all-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(5,150,105,.3), inset 0 1px 0 rgba(255,255,255,.1);
+}
+.sell-list-add-all-btn:disabled {
+    background: #cbd5e1; color: #94a3b8; box-shadow: none; cursor: default; transform: none;
+}
+.sell-list-detail-btn {
+    background: #fff; color: #475569;
+    border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.sell-list-detail-btn:hover {
+    background: #f8fafc; border-color: #cbd5e1; color: #1e293b;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+    transform: translateY(-1px);
+}
+.sell-list-detail-btn:active {
+    background: #f1f5f9; transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.sell-list-filter-toggle {
+    padding: 2px 6px 0;
+}
+.sell-list-filter-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: none; border: 0; cursor: pointer;
+    font-size: 11px; font-weight: 700; color: #64748b; padding: 3px 6px;
+    border-radius: 5px; transition: background .15s;
+}
+.sell-list-filter-btn:hover { background: #f1f5f9; color: #334155; }
+.sell-list-filter-chevron { transition: transform .2s; }
+.sell-list-filter-btn.is-open .sell-list-filter-chevron { transform: rotate(180deg); }
+.sell-list-filter-body {
+    padding: 6px 8px 8px; border-bottom: 1px solid #e2e8f0;
+}
+.sell-list-filter-row {
+    display: flex; gap: 8px; margin-bottom: 6px;
+}
+.sell-list-filter-field {
+    flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.sell-list-filter-field label {
+    font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em;
+}
+.sell-list-filter-daterange {
+    width: 100%; height: 30px; padding: 0 8px; font-size: 12px; cursor: pointer;
 }
 .sell-list-products {
     margin-top: 6px; display: grid; gap: 4px;

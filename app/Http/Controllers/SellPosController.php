@@ -306,7 +306,7 @@ class SellPosController extends Controller
             ));
     }
 
-    private function getHrSellOutReports($location_id = null)
+    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null)
     {
         try {
             $location_name = null;
@@ -336,6 +336,12 @@ class SellPosController extends Controller
                         $query->where('sor.branch_name', $location_name)
                             ->orWhereRaw("? LIKE CONCAT('%', sor.branch_name, '%')", [$location_name]);
                     });
+                })
+                ->when(!empty($date_from), function ($query) use ($date_from) {
+                    $query->where('sor.created_at', '>=', $date_from . ' 00:00:00');
+                })
+                ->when(!empty($date_to), function ($query) use ($date_to) {
+                    $query->where('sor.created_at', '<=', $date_to . ' 23:59:59');
                 })
                 ->orderBy('sor.invoice_no', 'asc')
                 ->limit(50)
@@ -386,9 +392,11 @@ class SellPosController extends Controller
         }
     }
 
-    public function getHrSellList($location_id)
+    public function getHrSellList($location_id, Request $request)
     {
-        $hr_sell_out_reports = $this->getHrSellOutReports($location_id);
+        $date_from = $request->input('date_from');
+        $date_to = $request->input('date_to');
+        $hr_sell_out_reports = $this->getHrSellOutReports($location_id, $date_from, $date_to);
 
         return view('sale_pos.partials.hr_sell_list_staff')
             ->with(compact('hr_sell_out_reports'));
@@ -667,6 +675,77 @@ class SellPosController extends Controller
         ]);
     }
 
+    public function addHrSellListLine(Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 0, 'msg' => 'Database table not found. Please run migrations.'];
+        }
+
+        $line_id = $request->input('line_id');
+        $serial = $request->input('serial_number');
+        $invoice_key = $request->input('invoice_key');
+
+        if (empty($line_id) || empty($invoice_key)) {
+            return ['success' => 0, 'msg' => 'Missing required parameters.'];
+        }
+
+        $line = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('id', $line_id)
+            ->first();
+
+        if (empty($line)) {
+            return ['success' => 0, 'msg' => 'Sell Out line not found.'];
+        }
+
+        $existing = DB::table('pos_sell_list_serial_statuses')
+            ->where('hr_sell_out_report_line_id', $line_id)
+            ->first();
+
+        if (!empty($existing) && $existing->status !== 'active') {
+            return ['success' => 0, 'msg' => ($serial ?: 'Serial') . ' is already ' . $existing->status . '.', 'line_id' => $line_id];
+        }
+
+        $this->setHrSerialStatus($line, 'added', $invoice_key, null, 'manually_added');
+
+        return ['success' => 1, 'line_id' => $line_id];
+    }
+
+    public function resolveHrLineProduct(Request $request)
+    {
+        $line_id = $request->input('line_id');
+        $serial = $request->input('serial_number');
+        $location_id = $request->input('location_id');
+
+        if (empty($line_id) || empty($serial)) {
+            return ['success' => 0, 'msg' => 'Missing parameters.'];
+        }
+
+        $line = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('id', $line_id)
+            ->first();
+
+        if (empty($line)) {
+            return ['success' => 0, 'msg' => 'Line not found in HR.'];
+        }
+
+        $variation_id = $this->resolveHrLineVariationId($line, $serial);
+
+        if (empty($variation_id)) {
+            return ['success' => 0, 'msg' => 'Product not found for serial: ' . $serial, 'serial' => $serial];
+        }
+
+        $row_data = $this->productUtil->getPosProductRow($variation_id, $location_id);
+        $row_data['variation_id'] = $variation_id;
+
+        return [
+            'success' => 1,
+            'auto_add' => true,
+            'row_data' => $row_data,
+        ];
+    }
+
     private function attachHrSerialStatusesToTransaction($transaction, $products, $invoice_key = null)
     {
         if (empty($invoice_key) || !Schema::hasTable('pos_sell_list_serial_statuses')) {
@@ -679,14 +758,21 @@ class SellPosController extends Controller
             ->unique()
             ->values();
 
-        if ($status_ids->isEmpty()) {
-            return;
+        $query = DB::table('pos_sell_list_serial_statuses')
+            ->where('invoice_key', $invoice_key);
+
+        if ($status_ids->isNotEmpty()) {
+            $query->whereIn('id', $status_ids->all());
+        } else {
+            $query->where('status', 'added')
+                ->whereNull('transaction_id');
         }
 
-        $statuses = DB::table('pos_sell_list_serial_statuses')
-            ->whereIn('id', $status_ids->all())
-            ->where('invoice_key', $invoice_key)
-            ->get();
+        $statuses = $query->get();
+
+        if ($statuses->isEmpty()) {
+            return;
+        }
 
         foreach ($statuses as $status) {
             $sell_line = TransactionSellLine::where('transaction_id', $transaction->id)
