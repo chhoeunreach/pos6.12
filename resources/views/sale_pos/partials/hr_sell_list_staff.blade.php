@@ -1,6 +1,8 @@
 @php
     $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
     $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
+    $defaultDateFrom = $default_date_from ?? \Carbon\Carbon::now()->format('Y-m-d');
+    $defaultDateTo = $default_date_to ?? \Carbon\Carbon::now()->format('Y-m-d');
 @endphp
 
 <div class="sell-list-filter-toggle">
@@ -15,8 +17,23 @@
         <div class="sell-list-filter-field">
             <label>Date Range</label>
             <input type="text" class="sell-list-filter-daterange form-control" readonly placeholder="Select date range...">
-            <input type="hidden" class="sell-list-filter-date-from" value="">
-            <input type="hidden" class="sell-list-filter-date-to" value="">
+            <input type="hidden" class="sell-list-filter-date-from" value="{{ $defaultDateFrom }}">
+            <input type="hidden" class="sell-list-filter-date-to" value="{{ $defaultDateTo }}">
+        </div>
+    </div>
+    <div class="sell-list-filter-row">
+        <div class="sell-list-filter-field">
+            <label>Sell Type</label>
+            <select class="sell-list-filter-sell-type form-control">
+                <option value="លក់">លក់ (Default)</option>
+                @if (!empty($sell_types))
+                    @foreach ($sell_types as $type)
+                        @if ($type !== 'លក់')
+                            <option value="{{ $type }}">{{ $type }}</option>
+                        @endif
+                    @endforeach
+                @endif
+            </select>
         </div>
     </div>
 </div>

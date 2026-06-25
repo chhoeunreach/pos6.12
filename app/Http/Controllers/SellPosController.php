@@ -253,7 +253,11 @@ class SellPosController extends Controller
             $pos_sell_list_invoice_key = (string) Str::uuid();
             request()->session()->put('pos_sell_list_invoice_key', $pos_sell_list_invoice_key);
         }
-        $hr_sell_out_reports = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null);
+        $default_sell_type = 'លក់';
+        $default_date_from = \Carbon::now()->format('Y-m-d');
+        $default_date_to = \Carbon::now()->format('Y-m-d');
+        $hr_sell_out_reports = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
+        $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -297,6 +301,10 @@ class SellPosController extends Controller
                 'featured_products',
                 'pos_sell_list_invoice_key',
                 'hr_sell_out_reports',
+                'default_sell_type',
+                'default_date_from',
+                'default_date_to',
+                'sell_types',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
@@ -306,7 +314,7 @@ class SellPosController extends Controller
             ));
     }
 
-    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null)
+    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null)
     {
         try {
             $location_name = null;
@@ -326,11 +334,14 @@ class SellPosController extends Controller
                     'sor.branch_name',
                     'sor.total_amount',
                     'sor.created_at',
+                    'sor.service_type',
                     DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
                     'u.employee_code as staff_code',
                     'u.avatar as staff_avatar'
                 )
-                ->where('sor.service_type', 'លក់')
+                ->when(!empty($sell_type), function ($query) use ($sell_type) {
+                    $query->where('sor.service_type', $sell_type);
+                })
                 ->when(!empty($location_name), function ($query) use ($location_name) {
                     $query->where(function ($query) use ($location_name) {
                         $query->where('sor.branch_name', $location_name)
@@ -394,12 +405,20 @@ class SellPosController extends Controller
 
     public function getHrSellList($location_id, Request $request)
     {
-        $date_from = $request->input('date_from');
-        $date_to = $request->input('date_to');
-        $hr_sell_out_reports = $this->getHrSellOutReports($location_id, $date_from, $date_to);
+        $date_from = $request->input('date_from', \Carbon::now()->format('Y-m-d'));
+        $date_to = $request->input('date_to', \Carbon::now()->format('Y-m-d'));
+        $sell_type = $request->input('sell_type', 'លក់');
+        $hr_sell_out_reports = $this->getHrSellOutReports($location_id, $date_from, $date_to, $sell_type);
+
+        $default_date_from = $date_from;
+        $default_date_to = $date_to;
+        $sell_types = collect();
+        if (!empty($location_id)) {
+            $sell_types = $this->getHrSellListServiceTypes($location_id);
+        }
 
         return view('sale_pos.partials.hr_sell_list_staff')
-            ->with(compact('hr_sell_out_reports'));
+            ->with(compact('hr_sell_out_reports', 'sell_types', 'default_date_from', 'default_date_to'));
     }
 
     public function getHrSellListDetail($report_id)
@@ -434,6 +453,53 @@ class SellPosController extends Controller
 
         return view('sale_pos.partials.hr_sell_list_detail_modal')
             ->with(compact('report'));
+    }
+
+    public function getHrSellListServiceTypes($location_id)
+    {
+        try {
+            $location_name = optional(BusinessLocation::find($location_id))->name;
+
+            $query = DB::connection('hr')
+                ->table('sell_out_reports')
+                ->select('service_type')
+                ->distinct()
+                ->orderBy('service_type');
+
+            if (!empty($location_name)) {
+                $query->where(function ($q) use ($location_name) {
+                    $q->where('branch_name', $location_name)
+                        ->orWhereRaw("? LIKE CONCAT('%', branch_name, '%')", [$location_name]);
+                });
+            }
+
+            return $query->get()->pluck('service_type');
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell list service types: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function updateHrSellListServiceType(Request $request)
+    {
+        $report_id = $request->input('report_id');
+        $service_type = $request->input('service_type');
+
+        if (empty($report_id) || empty($service_type)) {
+            return response()->json(['success' => 0, 'msg' => 'Missing required fields.']);
+        }
+
+        try {
+            DB::connection('hr')
+                ->table('sell_out_reports')
+                ->where('id', $report_id)
+                ->update(['service_type' => $service_type]);
+
+            return response()->json(['success' => 1, 'msg' => 'Sell type updated successfully.']);
+        } catch (\Exception $e) {
+            \Log::warning('Unable to update sell list service type: ' . $e->getMessage());
+            return response()->json(['success' => 0, 'msg' => 'Failed to update sell type.']);
+        }
     }
 
     public function getHrStaffAvatar($filename)
@@ -511,7 +577,6 @@ class SellPosController extends Controller
             ->table('sell_out_reports as sor')
             ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
             ->where('sor.id', $report_id)
-            ->where('sor.service_type', 'លក់')
             ->select('sor.*', 'u.employee_code as staff_code')
             ->first();
 

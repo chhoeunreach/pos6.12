@@ -33,7 +33,14 @@
                 <div class="col-sm-6">
                     <strong>Customer:</strong> {{ $report->customer_name ?: '-' }}<br>
                     <strong>Phone:</strong> {{ $report->customer_phone ?: '-' }}<br>
-                    <strong>Total:</strong> {{ number_format((float) $report->total_amount, 2) }}
+                    <strong>Total:</strong> {{ number_format((float) $report->total_amount, 2) }}<br>
+                    <strong>Sell Type:</strong>
+                    <span class="sell-type-display">{{ $report->service_type ?? 'លក់' }}</span>
+                    <button type="button" class="btn btn-xs btn-link sell-type-edit-btn" data-report-id="{{ $report->id }}" style="padding:0 4px; vertical-align:baseline;">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <select class="form-control sell-type-edit-select" style="display:none; width:auto; display:inline-block; height:auto; padding:0 4px; font-size:12px; width:120px;" data-report-id="{{ $report->id }}">
+                    </select>
                 </div>
             </div>
 

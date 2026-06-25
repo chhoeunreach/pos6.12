@@ -37,6 +37,9 @@
                     <span class="tw-text-slate-300">/</span> {{ $report->customer_name }}
                 @endif
             </div>
+            <div class="tw-text-[9px] tw-text-slate-400 tw-leading-3">
+                {{ @format_datetime($report->created_at) }}
+            </div>
         </div>
 
         <div class="tw-flex tw-items-center tw-gap-1 tw-flex-shrink-0">

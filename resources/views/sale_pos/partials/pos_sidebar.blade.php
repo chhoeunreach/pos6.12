@@ -203,7 +203,7 @@
     <div class="col-md-12" style="padding: 0;">
         <div id="product_list_body" class="eq-height-row tw-max-h-[calc(100vh_-_229px)] tw-overflow-y-auto tw-overflow-x-hidden" style="padding-right: 4px;">
             <div id="sell_list_staff_box" style="display: none;">
-                @include('sale_pos.partials.hr_sell_list_staff', ['hr_sell_out_reports' => $hr_sell_out_reports ?? collect()])
+                @include('sale_pos.partials.hr_sell_list_staff', ['hr_sell_out_reports' => $hr_sell_out_reports ?? collect(), 'sell_types' => $sell_types ?? collect(), 'default_date_from' => $default_date_from ?? '', 'default_date_to' => $default_date_to ?? ''])
             </div>
             <div id="featured_products_box" style="display: none;">
                 @if (!empty($featured_products))

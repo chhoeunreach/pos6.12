@@ -1912,6 +1912,7 @@ $(document).ready(function() {
                 $.extend(true, {}, dateRangeSettings, {
                     startDate: moment(),
                     endDate: moment(),
+                    autoApply: true,
                 }),
                 function(start, end) {
                     $dr.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
@@ -1938,6 +1939,77 @@ $(document).ready(function() {
         $tab.addClass('is-active');
         $box.find('.sell-list-pane').removeClass('is-active');
         $box.find('.sell-list-pane-' + target).addClass('is-active');
+    });
+
+    /* Sell type filter change */
+    $(document).on('change', '.sell-list-filter-sell-type', function(){
+        get_hr_sell_list();
+    });
+
+    /* Sell type edit button in detail modal */
+    $(document).on('click', '.sell-type-edit-btn', function(){
+        var $btn = $(this);
+        var reportId = $btn.data('report-id');
+        var $display = $btn.closest('.col-sm-6').find('.sell-type-display');
+        var $select = $btn.closest('.col-sm-6').find('.sell-type-edit-select');
+        var currentValue = $display.text().trim();
+
+        if ($select.is(':visible')) {
+            return;
+        }
+
+        $select.empty();
+        $.ajax({
+            method: 'GET',
+            url: '/sells/pos/hr-sell-list-service-types/' + $('#location_id').val(),
+            dataType: 'json',
+            success: function(types) {
+                $.each(types, function(i, type) {
+                    var $opt = $('<option>').val(type).text(type);
+                    if (type === currentValue) {
+                        $opt.prop('selected', true);
+                    }
+                    $select.append($opt);
+                });
+                $display.hide();
+                $btn.hide();
+                $select.show().focus();
+            },
+        });
+    });
+
+    /* Sell type save on select change */
+    $(document).on('change', '.sell-type-edit-select', function(){
+        var $select = $(this);
+        var reportId = $select.data('report-id');
+        var newValue = $select.val();
+        var $container = $select.closest('.col-sm-6');
+
+        $.ajax({
+            method: 'POST',
+            url: '/sells/pos/hr-sell-list-update-service-type',
+            data: {
+                report_id: reportId,
+                service_type: newValue,
+            },
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.success) {
+                    toastr.success(resp.msg);
+                    $container.find('.sell-type-display').text(newValue).show();
+                    $select.hide();
+                    $container.find('.sell-type-edit-btn').show();
+                } else {
+                    toastr.error(resp.msg);
+                }
+            },
+            error: function() {
+                toastr.error('Failed to update sell type.');
+                $container.find('.sell-type-edit-select').hide();
+                $container.find('.sell-type-display').show();
+                $container.find('.sell-type-edit-btn').show();
+            },
+        });
     });
 
     /* Copy All button: report-level, copies ALL active serials one by one */
@@ -2283,6 +2355,7 @@ function get_hr_sell_list() {
 
     var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
     var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
+    var sellType = $box.find('.sell-list-filter-sell-type').val() || 'លក់';
 
     $.ajax({
         method: 'GET',
@@ -2291,6 +2364,7 @@ function get_hr_sell_list() {
         data: {
             date_from: dateFrom,
             date_to: dateTo,
+            sell_type: sellType,
         },
         success: function(result) {
             $box.html(result);
@@ -2513,6 +2587,14 @@ function pos_insert_product_row(result, insert_after_row) {
     $('input#product_row_count').val(parseInt(product_row) + 1);
     var this_row = $inserted_row.filter('tr.product_row').first();
     pos_each_row(this_row);
+
+    // Set added-at timestamp on the product row for tooltip display
+    var now = new Date();
+    var pad = function(n) { return n.toString().padStart(2, '0'); };
+    var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    this_row.attr('data-added-at', now.toISOString());
+    this_row.find('.pos-product-name').attr('title', 'Added: ' + dateStr + ' ' + timeStr);
 
     //For initial discount if present
     var line_total = __read_number(this_row.find('input.pos_line_total'));

@@ -40,12 +40,12 @@
 			<div style="min-width:0;flex:1;">
 				@if( ($edit_price || $edit_discount) && empty($is_direct_sell) )
 				<div title="@lang('lang_v1.pos_edit_product_price_help')">
-				<span class="text-link text-info tw-cursor-pointer tw-font-semibold tw-text-[13px] tw-leading-snug tw-block tw-truncate md:tw-truncate" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" data-toggle="modal" data-target="#row_edit_product_price_modal_{{$row_count}}">
+				<span class="pos-product-name text-link text-info tw-cursor-pointer tw-font-semibold tw-text-[13px] tw-leading-snug tw-block tw-truncate md:tw-truncate" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" data-toggle="modal" data-target="#row_edit_product_price_modal_{{$row_count}}">
 					{!! $product_name !!} &nbsp;<i class="fa fa-info-circle"></i>
 				</span>
 				</div>
 				@else
-					<span class="tw-font-semibold tw-text-[13px] tw-leading-snug tw-block" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{!! $product_name !!}</span>
+					<span class="pos-product-name tw-font-semibold tw-text-[13px] tw-leading-snug tw-block" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{!! $product_name !!}</span>
 				@endif
 				<div class="tw-text-[11px] tw-text-slate-400 tw-leading-[1.3] tw-truncate">{{ $product_sku_brand }}@if($product->enable_stock) &nbsp;·&nbsp; {{ @num_format($product->qty_available) }} {{$product->unit}}@endif</div>
 			</div>
