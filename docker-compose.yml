@@ -1,14 +1,105 @@
 services:
   app:
-    image: php:8.3-apache
-    container_name: pos612_app
-    ports:
-      - "8000:80"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ultimate_app
+    env_file:
+      - .env
     volumes:
-      - ./:/var/www/html
-    working_dir: /var/www/html
-    command: >
-      bash -c "echo 'ServerName localhost' >> /etc/apache2/apache2.conf
-      && sed -i 's#DocumentRoot /var/www/html#DocumentRoot /var/www/html/public#g' /etc/apache2/sites-available/000-default.conf
-      && a2enmod rewrite
-      && apache2-foreground"
+      - ./.env:/var/www/.env:ro
+    ports:
+      - "8081:80"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ultimate_pos
+      DB_USERNAME: root
+      DB_PASSWORD: secret
+      ACCESSORY_DB_HOST: mysql
+      ACCESSORY_DB_PASSWORD: secret
+      SERVICE_DB_HOST: mysql
+      SERVICE_DB_PASSWORD: secret
+      DB_LOAN_HOST: mysql
+      DB_LOAN_PASSWORD: secret
+      HR_DB_HOST: mysql
+      HR_DB_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: null
+      QUEUE_CONNECTION: redis
+      CACHE_DRIVER: redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ultimate_queue
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/var/www/.env:ro
+    command: php artisan queue:work redis --queue=default,imports,exports --sleep=3 --tries=3 --timeout=900
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ultimate_pos
+      DB_USERNAME: root
+      DB_PASSWORD: secret
+      ACCESSORY_DB_HOST: mysql
+      ACCESSORY_DB_PASSWORD: secret
+      SERVICE_DB_HOST: mysql
+      SERVICE_DB_PASSWORD: secret
+      DB_LOAN_HOST: mysql
+      DB_LOAN_PASSWORD: secret
+      HR_DB_HOST: mysql
+      HR_DB_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: null
+      QUEUE_CONNECTION: redis
+      CACHE_DRIVER: redis
+    depends_on:
+      app:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: ultimate_mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: ultimate_pos
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ultimate_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:

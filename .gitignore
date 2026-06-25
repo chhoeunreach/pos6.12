@@ -6,14 +6,16 @@
 Homestead.json
 Homestead.yaml
 npm-debug.log
-.env
-.env.*
+.env*
 !.env.example
+.phpunit.result.cache
 
 # User uploads
 /public/uploads/*
 !/public/uploads/.gitignore
 /public/modules/service/v7/uploads/*
+/Modules/*/Public/*/uploads/*
+!/Modules/*/Public/*/uploads/.gitignore
 
 # Module storage (exports, imports)
 /Modules/*/storage/exports/*
@@ -33,6 +35,11 @@ npm-debug.log
 /storage/framework/testing/*
 /storage/framework/tmp/*
 /storage/logs/*
+/storage/*.key
+/storage/app/loan-management/prepared-imports/*
+!/storage/app/loan-management/prepared-imports/.gitignore
+/storage/app/notification-temp/*
+!/storage/app/notification-temp/.gitignore
 /storage/app/temp/*
 !/storage/app/temp/.gitignore
 /storage/debugbar/
@@ -51,6 +58,7 @@ npm-debug.log
 *.sql
 *.bak
 *.backup
+*.pkg
 
 # OS/editor noise
 .DS_Store

@@ -1,19 +1,24 @@
-FROM php:8.3-fpm
+FROM php:8.3-fpm-bookworm
 
 RUN apt-get update && apt-get install -y \
     git curl zip unzip libpng-dev libonig-dev libxml2-dev libzip-dev nginx \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+    wkhtmltopdf fontconfig fonts-dejavu-core \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /var/www
 WORKDIR /var/www
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
-    composer install --no-dev --no-interaction --optimize-autoloader 2>&1 | tail -5
+    mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views storage/logs bootstrap/cache && \
+    chmod -R 775 storage bootstrap/cache && \
+    composer install --no-interaction --optimize-autoloader
 
-RUN chmod -R 775 storage bootstrap/cache && \
-    chown -R www-data:www-data storage bootstrap/cache && \
+RUN chown -R www-data:www-data storage bootstrap/cache && \
     rm -f /etc/nginx/sites-enabled/*; \
-    rm -f /var/www/.env; \
     php artisan config:clear 2>/dev/null; \
     php artisan route:clear 2>/dev/null; \
     rm -rf /var/www/storage/framework/cache/data 2>/dev/null; \
