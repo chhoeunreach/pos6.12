@@ -23,7 +23,6 @@ RUN printf "# Managed by Kubernetes env vars - see deployment-ultimate.yaml\n" >
     chown www-data:www-data /var/www/.env && \
     chown -R www-data:www-data storage bootstrap/cache && \
     rm -f /etc/nginx/sites-enabled/*; \
-    php artisan route:cache 2>/dev/null; \
     php artisan view:cache 2>/dev/null; \
     php artisan event:cache 2>/dev/null; \
     rm -rf /var/www/storage/framework/cache/data 2>/dev/null; \
