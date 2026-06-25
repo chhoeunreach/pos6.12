@@ -153,8 +153,38 @@
         notifySuccess(successMessage);
     }
 
+    function loadImageToBlob(imageUrl, fallbackUrl) {
+        return new Promise(function (resolve, reject) {
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function () {
+                var canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob(function (blob) {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error('Canvas toBlob failed'));
+                    }
+                }, 'image/png');
+            };
+            img.onerror = function () {
+                if (fallbackUrl && imageUrl !== fallbackUrl) {
+                    loadImageToBlob(fallbackUrl, null).then(resolve).catch(reject);
+                } else {
+                    reject(new Error('Image load failed'));
+                }
+            };
+            img.src = imageUrl;
+        });
+    }
+
     function runOcr($modal, imageUrl) {
         var runId = activeOcrRun;
+        var fallbackUrl = $modal.find('.sell-list-photo-preview').attr('data-fallback-url');
 
         loadTesseract()
             .then(function (Tesseract) {
@@ -162,20 +192,26 @@
                     return null;
                 }
 
-                return Tesseract.recognize(imageUrl, 'eng', {
-                    logger: function (message) {
-                        if (runId !== activeOcrRun) {
-                            return;
-                        }
+                return loadImageToBlob(imageUrl, fallbackUrl).then(function (blob) {
+                    if (runId !== activeOcrRun) {
+                        return null;
+                    }
 
-                        if (message && message.status) {
-                            setStatus($modal, 'Reading text from image... ' + message.status, false);
-                        }
+                    return Tesseract.recognize(blob, 'eng', {
+                        logger: function (message) {
+                            if (runId !== activeOcrRun) {
+                                return;
+                            }
 
-                        if (message && typeof message.progress === 'number') {
-                            setProgress($modal, message.progress * 100);
-                        }
-                    },
+                            if (message && message.status) {
+                                setStatus($modal, 'Reading text from image... ' + message.status, false);
+                            }
+
+                            if (message && typeof message.progress === 'number') {
+                                setProgress($modal, message.progress * 100);
+                            }
+                        },
+                    });
                 });
             })
             .then(function (result) {
@@ -204,13 +240,18 @@
 
     $(document).on('shown.bs.modal', '.hr_sell_list_photo_modal', function () {
         var $modal = $(this);
-        var imageUrl = $modal.find('.sell-list-photo-preview').attr('src');
+        var $img = $modal.find('.sell-list-photo-preview');
+        var imageUrl = $img.attr('src');
 
         resetOcrUi($modal);
 
         if (!imageUrl) {
             setStatus($modal, 'No image found.', true);
             return;
+        }
+
+        if (!$img[0].complete) {
+            setStatus($modal, 'Loading image...', false);
         }
 
         runOcr($modal, imageUrl);
