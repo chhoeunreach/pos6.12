@@ -493,29 +493,48 @@ $(document).ready(function() {
     });
 
     //If change in unit price update price including tax and line total
-    $('table#pos_table tbody').on('change', 'input.pos_unit_price', function() {
-        var unit_price = __read_number($(this));
-        var tr = $(this).parents('tr');
+    // and keep all sibling pos_unit_price inputs (inline row + modal) in sync.
+    $('table#pos_table tbody, .row_edit_product_price_model').on(
+        'change input',
+        'input.pos_unit_price',
+        function() {
+            var $changed = $(this);
+            var unit_price = __read_number($changed);
 
-        //calculate discounted unit price
-        var discounted_unit_price = calculate_discounted_unit_price(tr);
+            //Find the product row (works for both inline and modal context)
+            var tr = $changed.closest('tr.product_row');
+            if (!tr.length) {
+                tr = $changed.parents('tr.product_row');
+            }
 
-        var tax_rate = tr
-            .find('select.tax_id')
-            .find(':selected')
-            .data('rate');
-        var quantity = __read_number(tr.find('input.pos_quantity'));
+            //calculate discounted unit price
+            var discounted_unit_price = calculate_discounted_unit_price(tr);
 
-        var unit_price_inc_tax = __add_percent(discounted_unit_price, tax_rate);
-        var line_total = quantity * unit_price_inc_tax;
+            var tax_rate = tr
+                .find('select.tax_id')
+                .find(':selected')
+                .data('rate');
+            var quantity = __read_number(tr.find('input.pos_quantity'));
 
-        __write_number(tr.find('input.pos_unit_price_inc_tax'), unit_price_inc_tax);
-        __write_number(tr.find('input.pos_line_total'), line_total);
-        tr.find('span.pos_line_total_text').text(__currency_trans_from_en(line_total, true));
-        pos_each_row(tr);
-        pos_total_row();
-        round_row_to_iraqi_dinnar(tr);
-    });
+            var unit_price_inc_tax = __add_percent(discounted_unit_price, tax_rate);
+            var line_total = quantity * unit_price_inc_tax;
+
+            __write_number(tr.find('input.pos_unit_price_inc_tax'), unit_price_inc_tax);
+            __write_number(tr.find('input.pos_line_total'), line_total);
+            tr.find('span.pos_line_total_text').text(__currency_trans_from_en(line_total, true));
+            pos_each_row(tr);
+            pos_total_row();
+            round_row_to_iraqi_dinnar(tr);
+
+            //Sync value into every sibling pos_unit_price input on this row
+            // (the inline field under Quantity + the field inside the modal).
+            // This makes them behave as ONE field — typing in either one updates both.
+            var sync_targets = tr.find('input.pos_unit_price').not($changed);
+            sync_targets.each(function() {
+                __write_number($(this), unit_price);
+            });
+        }
+    );
 
     //If change in tax rate then update unit price according to it.
     $('table#pos_table tbody').on('change', 'select.tax_id', function() {
@@ -560,6 +579,11 @@ $(document).ready(function() {
 
         pos_each_row(tr);
         pos_total_row();
+
+        //Sync value into the row edit product price modal (if present)
+        tr.find('.row_edit_product_price_model input.pos_unit_price').each(function() {
+            __write_number($(this), unit_price);
+        });
     });
 
     //Change max quantity rule if lot number changes
@@ -653,44 +677,29 @@ $(document).ready(function() {
         }
     );
 
+    //Keep the row edit product price modal in sync with the inline row inputs
+    $(document).on('show.bs.modal', '.row_edit_product_price_model', function() {
+        var modal = $(this);
+        var tr = modal.closest('tr.product_row');
+        if (!tr.length) {
+            return;
+        }
+        var inline_inputs = tr.find('input.pos_unit_price').not(modal.find('input.pos_unit_price'));
+        inline_inputs.each(function() {
+            var val = __read_number($(this));
+            modal.find('input.pos_unit_price').each(function() {
+                __write_number($(this), val);
+            });
+        });
+    });
+
     //Remove row on click on remove row
     $('table#pos_table tbody').on('click', '.pos_remove_row', function() {
         var $row = $(this).parents('tr');
         release_hr_sell_list_line_from_row($row);
-        $row.next('.pos-add-below-row').remove();
         $row.remove();
         pos_total_row();
         pos_sync_empty_state();
-    });
-
-    $('table#pos_table tbody').on('click', '.pos_add_product_below', function() {
-        var $row = $(this).closest('tr.product_row');
-        var row_index = $row.data('row_index');
-        var $existing = $row.next('.pos-add-below-row');
-
-        $('table#pos_table tbody .pos-add-below-row').not($existing).remove();
-
-        if ($existing.length) {
-            $existing.remove();
-            return;
-        }
-
-        var colspan = $row.children('td').length;
-        var placeholder = $('#search_product').attr('placeholder') || '';
-        var addRow = '' +
-            '<tr class="pos-add-below-row" data-anchor_row_index="' + row_index + '">' +
-                '<td colspan="' + colspan + '" class="!tw-border-0 !tw-px-2 !tw-py-2">' +
-                    '<div class="tw-flex tw-items-center tw-gap-2 tw-rounded tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-2">' +
-                        '<i class="fa fa-plus text-primary"></i>' +
-                        '<input type="text" class="form-control pos_add_below_search" autocomplete="off" placeholder="' + placeholder + '">' +
-                    '</div>' +
-                '</td>' +
-            '</tr>';
-
-        $row.after(addRow);
-        var $input = $row.next('.pos-add-below-row').find('.pos_add_below_search');
-        init_pos_add_below_search($input, $row);
-        $input.focus();
     });
 
     //Cancel the invoice (delegated so both mobile + desktop Cancel buttons fire the same handler)

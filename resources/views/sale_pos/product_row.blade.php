@@ -3,6 +3,11 @@
 	$multiplier = 1;
 
 	$action = !empty($action) ? $action : '';
+	$hide_tax = 'hide';
+	if(session()->get('business.enable_inline_tax') == 1){
+		$hide_tax = '';
+	}
+	$can_edit_price_inline = auth()->user()->can('edit_product_price_from_sale_screen');
 @endphp
 
 @foreach($sub_units as $key => $value)
@@ -198,7 +203,7 @@
 	@endif
 	</td>
 
-	<td class="v-center">
+	<td class="v-center pos-qty-cell">
 		{{-- If edit then transaction sell lines will be present --}}
 		@if(!empty($product->transaction_sell_lines_id))
 			<input type="hidden" name="products[{{$row_count}}][transaction_sell_lines_id]" class="form-control" value="{{$product->transaction_sell_lines_id}}">
@@ -206,10 +211,10 @@
 
 		<input type="hidden" name="products[{{$row_count}}][product_id]" class="form-control product_id" value="{{$product->product_id}}">
 
-		<input type="hidden" value="{{$product->variation_id}}" 
+		<input type="hidden" value="{{$product->variation_id}}"
 			name="products[{{$row_count}}][variation_id]" class="row_variation_id">
 
-		<input type="hidden" value="{{$product->enable_stock}}" 
+		<input type="hidden" value="{{$product->enable_stock}}"
 			name="products[{{$row_count}}][enable_stock]">
 		
 		@if(empty($product->quantity_ordered))
@@ -242,7 +247,6 @@
         	@endif
         @endforeach
 		<div class="input-group input-number">
-			<span class="input-group-btn !tw-hidden md:!tw-table-cell"><button type="button" class="btn quantity-down !tw-text-red-600 active:tw-scale-95 tw-transition-transform !tw-border-slate-300 !tw-px-3 tw-inline-flex tw-items-center tw-justify-center tw-leading-none"><i class="fa fa-minus"></i></button></span>
 			<input type="text" data-min="1"
 				class="form-control pos_quantity input_number mousetrap input_quantity tw-text-center tw-font-bold !tw-w-full md:!tw-w-auto"
 				value="{{@format_quantity($product->quantity_ordered)}}" name="products[{{$row_count}}][quantity]" data-allow-overselling="@if(empty($pos_settings['allow_overselling'])){{'false'}}@else{{'true'}}@endif"
@@ -260,37 +264,44 @@
 					data-msg_max_default="@lang('validation.custom-messages.quantity_not_available', ['qty'=> $product->formatted_qty_available, 'unit' => $product->unit  ])"
 				@endif
 			>
-			<span class="input-group-btn !tw-hidden md:!tw-table-cell"><button type="button" class="btn quantity-up !tw-text-emerald-600 active:tw-scale-95 tw-transition-transform !tw-border-slate-300 !tw-px-3 tw-inline-flex tw-items-center tw-justify-center tw-leading-none"><i class="fa fa-plus"></i></button></span>
 		</div>
-		
-		<input type="hidden" name="products[{{$row_count}}][product_unit_id]" value="{{$product->unit_id}}">
-		@if(count($sub_units) > 1)
-			<select name="products[{{$row_count}}][sub_unit_id]" class="form-control input-sm sub_unit">
-                @foreach($sub_units as $key => $value)
-                    <option value="{{$key}}" data-multiplier="{{$value['multiplier']}}" data-unit_name="{{$value['name']}}" data-allow_decimal="{{$value['allow_decimal']}}" @if(!empty($product->sub_unit_id) && $product->sub_unit_id == $key) selected @endif>
-                        {{$value['name']}}
-                    </option>
-                @endforeach
-           </select>
-		@elseif(count($sub_units) == 1)
-			@php $_su_key = array_key_first($sub_units); $_su = $sub_units[$_su_key]; @endphp
-			<input type="hidden" name="products[{{$row_count}}][sub_unit_id]" value="{{$_su_key}}">
-			<span class="pos-unit-label tw-inline-block tw-text-[11px] tw-font-medium tw-text-[#64748b] tw-mt-0.5 tw-leading-[1.2] tw-whitespace-nowrap">{{$_su['name']}}</span>
-		@else
-			<span class="pos-unit-label tw-inline-block tw-text-[11px] tw-font-medium tw-text-[#64748b] tw-mt-0.5 tw-leading-[1.2] tw-whitespace-nowrap">{{$product->unit}}</span>
-		@endif
+
+		@php
+			//Inline sub_unit label inside the Quantity cell (kept compact)
+			$_inline_sub_unit_html = '';
+			if(count($sub_units) > 1){
+				ob_start();
+				?>
+				<select name="products[{{$row_count}}][sub_unit_id]" class="form-control input-sm sub_unit tw-mt-1">
+					@foreach($sub_units as $key => $value)
+						<option value="{{$key}}" data-multiplier="{{$value['multiplier']}}" data-unit_name="{{$value['name']}}" data-allow_decimal="{{$value['allow_decimal']}}" @if(!empty($product->sub_unit_id) && $product->sub_unit_id == $key) selected @endif>
+							{{$value['name']}}
+						</option>
+					@endforeach
+				</select>
+				<?php
+				$_inline_sub_unit_html = ob_get_clean();
+			} elseif(count($sub_units) == 1){
+				$_su_key = array_key_first($sub_units); $_su = $sub_units[$_su_key];
+				$_inline_sub_unit_html = '<input type="hidden" name="products['.$row_count.'][sub_unit_id]" value="'.$_su_key.'"><span class="pos-unit-label tw-inline-block tw-text-[11px] tw-font-medium tw-text-[#64748b] tw-mt-0.5 tw-leading-[1.2] tw-whitespace-nowrap">'.$_su['name'].'</span>';
+			} else {
+				$_inline_sub_unit_html = '<span class="pos-unit-label tw-inline-block tw-text-[11px] tw-font-medium tw-text-[#64748b] tw-mt-0.5 tw-leading-[1.2] tw-whitespace-nowrap">'.$product->unit.'</span>';
+			}
+		@endphp
+		{!! $_inline_sub_unit_html !!}
 
 		@if(!empty($product->second_unit))
             <br>
             <span style="white-space: nowrap;">
             @lang('lang_v1.quantity_in_second_unit', ['unit' => $product->second_unit])*:</span><br>
-            <input type="text" 
-            name="products[{{$row_count}}][secondary_unit_quantity]" 
+            <input type="text"
+            name="products[{{$row_count}}][secondary_unit_quantity]"
             value="{{@format_quantity($product->secondary_unit_quantity)}}"
             class="form-control input-sm input_number"
             required>
         @endif
 
+		<input type="hidden" name="products[{{$row_count}}][product_unit_id]" value="{{$product->unit_id}}">
 		<input type="hidden" class="base_unit_multiplier" name="products[{{$row_count}}][base_unit_multiplier]" value="{{$multiplier}}">
 
 		<input type="hidden" class="hidden_base_unit_sell_price" value="{{$product->default_sell_price / $multiplier}}">
@@ -386,6 +397,23 @@
 		</td>
 
 	@else
+		@php
+			$_inline_unit_price_val = !empty($product->unit_price_before_discount) ? $product->unit_price_before_discount : $product->default_sell_price;
+			if(!empty($so_line) && $action !== 'edit') {
+				$_inline_unit_price_val = $so_line->unit_price_before_discount;
+			}
+		@endphp
+		<td class="v-center pos-unit-price-cell">
+			<input type="text" name="products[{{$row_count}}][unit_price]"
+				class="form-control pos_unit_price input_number mousetrap tw-text-center tw-font-semibold tw-leading-[1.4] !tw-py-1.5 !tw-px-2"
+				value="{{@num_format($_inline_unit_price_val)}}"
+				@if(!$can_edit_price_inline) readonly @endif
+				@if(!empty($pos_settings['enable_msp'])) data-rule-min-value="{{$_inline_unit_price_val}}" data-msg-min-value="{{__('lang_v1.minimum_selling_price_error_msg', ['price' => @num_format($_inline_unit_price_val)])}}" @endif>
+
+			@if(!empty($last_sell_line))
+				<small class="text-muted tw-block tw-mt-1">@lang('lang_v1.prev_unit_price'): @format_currency($last_sell_line->unit_price_before_discount)</small>
+			@endif
+		</td>
 		@if(!empty($pos_settings['inline_service_staff']))
 			<td>
 				<div class="form-group">
@@ -396,7 +424,7 @@
 			</td>
 		@endif
 	@endif
-	<td class="{{$hide_tax}}">
+	<td class="{{$hide_tax}} v-center">
 		<input type="text" style="width: auto" name="products[{{$row_count}}][unit_price_inc_tax]" class="form-control pos_unit_price_inc_tax input_number" value="{{@num_format($unit_price_inc_tax)}}" @if(!$edit_price) readonly @endif @if(!empty($pos_settings['enable_msp'])) data-rule-min-value="{{$unit_price_inc_tax}}" data-msg-min-value="{{__('lang_v1.minimum_selling_price_error_msg', ['price' => @num_format($unit_price_inc_tax)])}}" @endif>
 	</td>
 	@if(!empty($common_settings['enable_product_warranty']) && !empty($is_direct_sell))
@@ -404,7 +432,7 @@
 			{!! Form::select("products[$row_count][warranty_id]", $warranties, $warranty_id, ['placeholder' => __('messages.please_select'), 'class' => 'form-control']); !!}
 		</td>
 	@endif
-	<td class="text-center">
+	<td class="text-center v-center">
 		@php
 			$subtotal_type = !empty($pos_settings['is_pos_subtotal_editable']) ? 'text' : 'hidden';
 
@@ -414,9 +442,6 @@
 	</td>
 	<td class="text-center v-center">
 		<div class="tw-flex tw-items-center tw-justify-center tw-gap-1">
-			<button type="button" class="pos_add_product_below tw-w-8 tw-h-8 tw-rounded-full tw-bg-blue-100 tw-text-blue-600 hover:tw-bg-blue-200 active:tw-scale-95 tw-transition-transform tw-inline-flex tw-items-center tw-justify-center tw-border-0 tw-cursor-pointer" aria-label="Add product below">
-				<i class="fa fa-plus" aria-hidden="true"></i>
-			</button>
 			<button type="button" class="pos_remove_row tw-w-8 tw-h-8 tw-rounded-full tw-bg-red-100 tw-text-red-600 hover:tw-bg-red-200 active:tw-scale-95 tw-transition-transform tw-inline-flex tw-items-center tw-justify-center tw-border-0 tw-cursor-pointer" aria-label="Remove item">
 				<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>
 			</button>
