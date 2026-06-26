@@ -1121,6 +1121,7 @@ $(document).ready(function() {
                 d.brand_id = $('#brand').val();
                 d.unit_id = $('#unit').val();
                 d.only_mfg_products = $('#only_mfg_products').length && $('#only_mfg_products').is(':checked') ? 1 : 0;
+                d.stock_status = $('#stock_status').val();
             },
         },
         columns: [
@@ -1144,7 +1145,7 @@ $(document).ready(function() {
     });
 
     if ($('table#lot_report').length == 1) {
-        $('#location_id, #category_id, #sub_category_id, #unit, #brand').change(function() {
+        $('#location_id, #category_id, #sub_category_id, #unit, #brand, #stock_status').change(function() {
             lot_report.ajax.reload();
         });
     }

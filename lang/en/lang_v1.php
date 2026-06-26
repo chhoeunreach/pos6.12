@@ -1596,5 +1596,8 @@ return [
     'previous_balance_due' => 'Previous balance due',
     'previous_balance_due_help' => 'Shows customer balance before this sale (excludes current sale due).',
     'show_previous_balance_due' => 'Show previous balance due',
+    'current_stock_status' => 'Current Stock Status',
+    'positive' => 'Positive',
+    'negative' => 'Negative',
 
 ];

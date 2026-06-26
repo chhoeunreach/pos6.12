@@ -57,6 +57,12 @@
                         </div>
                     </div>
                 @endif
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('stock_status', __('lang_v1.current_stock_status') . ':') !!}
+                        {!! Form::select('stock_status', ['' => __('messages.all'), 'positive' => __('lang_v1.positive'), 'negative' => __('lang_v1.negative')], null, ['class' => 'form-control select2', 'style' => 'width:100%', 'id' => 'stock_status']); !!}
+                    </div>
+                </div>
                 {!! Form::close() !!}
             @endcomponent
         </div>

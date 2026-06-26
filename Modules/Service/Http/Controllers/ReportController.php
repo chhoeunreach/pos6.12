@@ -3389,7 +3389,16 @@ class ReportController extends Controller
 
             $only_mfg_products = request()->get('only_mfg_products', 0);
             if (! empty($only_mfg_products)) {
-                $query->where('purchase.type', 'production_purchase');
+                $query->where('t.type', 'production_purchase');
+            }
+
+            $stock_status = $request->input('stock_status');
+            if (! empty($stock_status)) {
+                if ($stock_status == 'positive') {
+                    $query->having('stock', '>', 0);
+                } elseif ($stock_status == 'negative') {
+                    $query->having('stock', '<', 0);
+                }
             }
 
             return Datatables::of($query)
