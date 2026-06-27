@@ -51,6 +51,7 @@
                 <br/>
                 <small><i><span class="dsp_label"></span></i></small>
                 </th>
+                <th>Product Keywords</th>
                 <th>@lang('lang_v1.variation_images')</th>
                 <th><button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-accent add_variation_value_row">+</button></th>
             </tr>
@@ -95,6 +96,9 @@
                         {!! Form::text($array_name . '[' . $row_index .'][' . $variation_array_name . '][' . $variation_row_index . '][default_sell_price]', @num_format($variation->default_sell_price), ['class' => 'form-control input-sm variable_dsp input_number', 'placeholder' => __('product.exc_of_tax'), 'required']); !!}
 
                         {!! Form::text($array_name . '[' . $row_index .'][' . $variation_array_name . '][' . $variation_row_index . '][sell_price_inc_tax]', @num_format($variation->sell_price_inc_tax), ['class' => 'form-control input-sm variable_dsp_inc_tax input_number', 'placeholder' => __('product.inc_of_tax'), 'required']); !!}
+                    </td>
+                    <td>
+                        {!! Form::text($array_name . '[' . $row_index . '][' . $variation_array_name . '][' . $variation_row_index . '][product_keywords]', $variation->product_keywords ?? null, ['class' => 'form-control input-sm', 'placeholder' => 'Keywords (comma separated)']); !!}
                     </td>
                     <td class="variation-image-cell">
                         @php 

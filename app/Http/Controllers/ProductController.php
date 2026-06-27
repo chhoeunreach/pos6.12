@@ -70,23 +70,9 @@ class ProductController extends Controller
         $is_woocommerce = $this->moduleUtil->isModuleInstalled('Woocommerce');
 
         if (request()->ajax()) {
-            if ((int) request()->input('length') === -1) {
-                @ini_set('memory_limit', '2048M');
-                @set_time_limit(0);
-            }
-
             //Filter by location
             $location_id = request()->get('location_id', null);
-            $location_ids = is_array($location_id) ? $location_id : [$location_id];
-            $location_ids = array_values(array_filter($location_ids, function ($id) {
-                return $id !== null && $id !== '';
-            }));
             $permitted_locations = auth()->user()->permitted_locations();
-            $filter_by_locations = ! empty($location_ids) && ! in_array('none', $location_ids);
-
-            if ($filter_by_locations && $permitted_locations != 'all') {
-                $location_ids = array_values(array_intersect($location_ids, $permitted_locations));
-            }
 
             $query = Product::with(['media'])
                 ->leftJoin('brands', 'products.brand_id', '=', 'brands.id')
@@ -95,11 +81,9 @@ class ProductController extends Controller
                 ->leftJoin('categories as c2', 'products.sub_category_id', '=', 'c2.id')
                 ->leftJoin('tax_rates', 'products.tax', '=', 'tax_rates.id')
                 ->join('variations as v', 'v.product_id', '=', 'products.id')
-                ->leftJoin('variation_location_details as vld', function ($join) use ($permitted_locations, $filter_by_locations, $location_ids) {
+                ->leftJoin('variation_location_details as vld', function ($join) use ($permitted_locations) {
                     $join->on('vld.variation_id', '=', 'v.id');
-                    if ($filter_by_locations) {
-                        $join->whereIn('vld.location_id', $location_ids);
-                    } elseif ($permitted_locations != 'all') {
+                    if ($permitted_locations != 'all') {
                         $join->whereIn('vld.location_id', $permitted_locations);
                     }
                 })
@@ -107,15 +91,13 @@ class ProductController extends Controller
                 ->where('products.business_id', $business_id)
                 ->where('products.type', '!=', 'modifier');
 
-            if ($filter_by_locations) {
-                if (! empty($location_ids)) {
-                    $query->whereHas('product_locations', function ($query) use ($location_ids) {
-                        $query->whereIn('product_locations.location_id', $location_ids);
+            if (! empty($location_id) && $location_id != 'none') {
+                if ($permitted_locations == 'all' || in_array($location_id, $permitted_locations)) {
+                    $query->whereHas('product_locations', function ($query) use ($location_id) {
+                        $query->where('product_locations.location_id', '=', $location_id);
                     });
-                } else {
-                    $query->whereRaw('0 = 1');
                 }
-            } elseif (in_array('none', $location_ids)) {
+            } elseif ($location_id == 'none') {
                 $query->doesntHave('product_locations');
             } else {
                 if ($permitted_locations != 'all') {
@@ -180,17 +162,6 @@ class ProductController extends Controller
             $unit_id = request()->get('unit_id', null);
             if (! empty($unit_id)) {
                 $products->where('products.unit_id', $unit_id);
-            }
-
-            $product_keywords = trim((string) request()->get('product_keywords', ''));
-            if ($product_keywords !== '') {
-                $products->where(function ($query) use ($product_keywords) {
-                    $query->where('products.name', 'like', "%{$product_keywords}%")
-                        ->orWhere('products.sku', 'like', "%{$product_keywords}%")
-                        ->orWhere('products.product_custom_field1', 'like', "%{$product_keywords}%")
-                        ->orWhere('v.sub_sku', 'like', "%{$product_keywords}%")
-                        ->orWhere('v.product_keywords', 'like', "%{$product_keywords}%");
-                });
             }
 
             $tax_id = request()->get('tax_id', null);
@@ -323,11 +294,9 @@ class ProductController extends Controller
                 )
                 ->filterColumn('products.sku', function ($query, $keyword) {
                     $query->whereHas('variations', function ($q) use ($keyword) {
-                        $q->where('sub_sku', 'like', "%{$keyword}%")
-                            ->orWhere('product_keywords', 'like', "%{$keyword}%");
+                        $q->where('sub_sku', 'like', "%{$keyword}%");
                     })
-                    ->orWhere('products.sku', 'like', "%{$keyword}%")
-                    ->orWhere('products.product_custom_field1', 'like', "%{$keyword}%");
+                    ->orWhere('products.sku', 'like', "%{$keyword}%");
                 })
                 ->setRowAttr([
                     'data-href' => function ($row) {
@@ -542,7 +511,7 @@ class ProductController extends Controller
             }
 
             if ($product->type == 'single') {
-                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('single_dpp'), $request->input('single_dpp_inc_tax'), $request->input('profit_percent'), $request->input('single_dsp'), $request->input('single_dsp_inc_tax'), [], $request->input('product_keywords'));
+                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('single_dpp'), $request->input('single_dpp_inc_tax'), $request->input('profit_percent'), $request->input('single_dsp'), $request->input('single_dsp_inc_tax'));
             } elseif ($product->type == 'variable') {
                 if (! empty($request->input('product_variation'))) {
                     $input_variations = $request->input('product_variation');
@@ -567,7 +536,7 @@ class ProductController extends Controller
                     }
                 }
 
-                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('item_level_purchase_price_total'), $request->input('purchase_price_inc_tax'), $request->input('profit_percent'), $request->input('selling_price'), $request->input('selling_price_inc_tax'), $combo_variations, $request->input('product_keywords'));
+                $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('item_level_purchase_price_total'), $request->input('purchase_price_inc_tax'), $request->input('profit_percent'), $request->input('selling_price'), $request->input('selling_price_inc_tax'), $combo_variations);
             }
 
             //Add product racks details.
@@ -833,7 +802,7 @@ class ProductController extends Controller
             $product->product_locations()->sync($product_locations);
 
             if ($product->type == 'single') {
-                $single_data = $request->only(['single_variation_id', 'single_dpp', 'single_dpp_inc_tax', 'single_dsp_inc_tax', 'profit_percent', 'single_dsp', 'product_keywords']);
+                $single_data = $request->only(['single_variation_id', 'single_dpp', 'single_dpp_inc_tax', 'single_dsp_inc_tax', 'profit_percent', 'single_dsp']);
                 $variation = Variation::find($single_data['single_variation_id']);
 
                 $variation->sub_sku = $product->sku;
@@ -842,7 +811,6 @@ class ProductController extends Controller
                 $variation->profit_percent = $this->productUtil->num_uf($single_data['profit_percent']);
                 $variation->default_sell_price = $this->productUtil->num_uf($single_data['single_dsp']);
                 $variation->sell_price_inc_tax = $this->productUtil->num_uf($single_data['single_dsp_inc_tax']);
-                $variation->product_keywords = $single_data['product_keywords'] ?? null;
                 $variation->save();
 
                 Media::uploadMedia($product->business_id, $variation, $request, 'variation_images');
@@ -884,7 +852,6 @@ class ProductController extends Controller
                 $variation->default_sell_price = $this->productUtil->num_uf($request->input('selling_price'));
                 $variation->sell_price_inc_tax = $this->productUtil->num_uf($request->input('selling_price_inc_tax'));
                 $variation->combo_variations = $combo_variations;
-                $variation->product_keywords = $request->input('product_keywords');
                 $variation->save();
             }
 
@@ -1095,7 +1062,8 @@ class ProductController extends Controller
                     $html .= '<option value="'.$sub_category->id.'">'.$sub_category->name.'</option>';
                 }
             }
-            return response()->json($html);
+            echo $html;
+            exit;
         }
     }
 
@@ -1151,10 +1119,9 @@ class ProductController extends Controller
 
                 $variation_id = $product_deatails['variations'][0]->id;
                 $profit_percent = $product_deatails['variations'][0]->profit_percent;
-                $product_keywords = $product_deatails['variations'][0]->product_keywords ?? null;
 
                 return view('product.partials.combo_product_form_part')
-                ->with(compact('combo_variations', 'profit_percent', 'action', 'variation_id', 'product_keywords'));
+                ->with(compact('combo_variations', 'profit_percent', 'action', 'variation_id'));
             }
         }
     }
@@ -1288,90 +1255,22 @@ class ProductController extends Controller
             $price_group_id = request()->input('price_group', '');
             $product_types = request()->get('product_types', []);
 
-            $search_fields = request()->get('search_fields', ['name', 'sku', 'product_custom_field1']);
+            $search_fields = request()->get('search_fields', ['name', 'sku']);
             if (in_array('sku', $search_fields)) {
                 $search_fields[] = 'sub_sku';
-                $search_fields[] = 'product_keywords';
-                $search_fields[] = 'product_custom_field1';
             }
-            $search_fields = array_unique($search_fields);
 
             $result = $this->productUtil->filterProduct($business_id, $search_term, $location_id, $not_for_selling, $price_group_id, $product_types, $search_fields, $check_qty);
-
-            // Stock Transfer enhancement: when searching by lot number, return per-lot rows so the UI can preselect the lot.
-            if (! empty($location_id)
-                && ! empty($search_term)
-                && in_array('lot', $search_fields, true)
-                && (int) request()->input('group_by_purchase_line', 0) === 1
-            ) {
-                $lot_rows = \App\PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
-                    ->join('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
-                    ->join('products as p', 'v.product_id', '=', 'p.id')
-                    ->leftJoin('units as U', 'p.unit_id', '=', 'U.id')
-                    ->where('p.business_id', $business_id)
-                    ->where('t.location_id', $location_id)
-                    ->where('p.type', '!=', 'modifier')
-                    ->whereNotNull('purchase_lines.lot_number')
-                    ->where('purchase_lines.lot_number', 'like', '%' . $search_term . '%')
-                    ->whereRaw('(purchase_lines.quantity - purchase_lines.quantity_sold - purchase_lines.quantity_adjusted - purchase_lines.quantity_returned - purchase_lines.mfg_quantity_used) > 0')
-                    ->select([
-                        'p.id as product_id',
-                        'p.name',
-                        'p.type',
-                        'p.enable_stock',
-                        'v.id as variation_id',
-                        'v.name as variation',
-                        \DB::raw('(purchase_lines.quantity - purchase_lines.quantity_sold - purchase_lines.quantity_adjusted - purchase_lines.quantity_returned - purchase_lines.mfg_quantity_used) as qty_available'),
-                        'v.sell_price_inc_tax as selling_price',
-                        'v.sub_sku',
-                        'v.product_keywords',
-                        'U.short_name as unit',
-                        'purchase_lines.id as purchase_line_id',
-                        'purchase_lines.lot_number',
-                    ])
-                    ->orderBy('qty_available', 'desc')
-                    ->limit(25)
-                    ->get();
-
-                // Escape to match existing util behavior
-                $lot_rows->transform(function ($item) {
-                    $item->name = e($item->name);
-                    $item->variation = e($item->variation);
-                    $item->sub_sku = e($item->sub_sku);
-                    $item->is_lot_row = true;
-                    return $item;
-                });
-
-                // If lot matches exist, return ONLY per-lot rows (so autocomplete doesn't show duplicates).
-                // If no lot matches, fall back to normal product results.
-                if ($lot_rows->isNotEmpty()) {
-                    return json_encode($lot_rows->unique('purchase_line_id')->values());
-                }
-
-                return json_encode($result);
-            }
 
             // If only one result and location_id is provided (POS context), auto-fetch the product row
             if (count($result) == 1 && !empty($location_id) && request()->get('auto_add_single', false)) {
                 
                 $variation_id = $result[0]->variation_id;
-                $purchase_line_id = null;
-
-                if (! empty($result[0]->purchase_line_id) && ! empty($result[0]->lot_number)) {
-                    $lot_number = strtolower(trim((string) $result[0]->lot_number));
-                    $term = strtolower(trim((string) $search_term));
-
-                    if ($term !== '' && strpos($lot_number, $term) !== false) {
-                        $purchase_line_id = $result[0]->purchase_line_id;
-                        request()->merge(['purchase_line_id' => $purchase_line_id]);
-                    }
-                }
                         
                 $row_data = $this->productUtil->getPosProductRow($variation_id, $location_id);
                 
                 // Add variation_id to row_data for duplicate checking
                 $row_data['variation_id'] = $variation_id;
-                $row_data['purchase_line_id'] = $purchase_line_id;
                 
                 return json_encode([
                     'auto_add' => true,
@@ -1450,7 +1349,6 @@ class ProductController extends Controller
                     $query->where('products.name', 'like', '%'.$term.'%');
                     $query->orWhere('sku', 'like', '%'.$term.'%');
                     $query->orWhere('sub_sku', 'like', '%'.$term.'%');
-                    $query->orWhere('product_custom_field1', 'like', '%'.$term.'%');
                 });
             }
 
@@ -1470,7 +1368,6 @@ class ProductController extends Controller
                     DB::raw('CONCAT(products.name, " - ", products.sku) as text')
                 )
                     ->orderBy('products.name')
-                    ->limit(50)
                     ->get();
 
             return json_encode($products);
@@ -1513,9 +1410,11 @@ class ProductController extends Controller
             $count = $query2->count();
         }
         if ($count == 0) {
-            return response()->json(['valid' => true]);
+            echo 'true';
+            exit;
         } else {
-            return response()->json(['valid' => false]);
+            echo 'false';
+            exit;
         }
     }
 
@@ -1542,9 +1441,11 @@ class ProductController extends Controller
         //check in variation table if $count = 0
         
         if ($count == 0) {
-            return response()->json(['valid' => true]);
+            echo 'true';
+            exit;
         } else {
-            return response()->json(['valid' => false]);
+            echo 'false';
+            exit;
         }
     }
 
@@ -1717,9 +1618,7 @@ class ProductController extends Controller
                 $request->input('single_dpp_inc_tax'),
                 $request->input('profit_percent'),
                 $request->input('single_dsp'),
-                $request->input('single_dsp_inc_tax'),
-                [],
-                $request->input('product_keywords')
+                $request->input('single_dsp_inc_tax')
             );
 
             if ($product->enable_stock == 1 && ! empty($request->input('opening_stock'))) {

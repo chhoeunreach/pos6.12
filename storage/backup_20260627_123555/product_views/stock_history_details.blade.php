@@ -102,10 +102,10 @@
 				<tr>
 					<td>{{$history['type_label']}}</td>
 					@if($history['quantity_change'] > 0 )
-						<td class="text-success"> +<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['quantity_change']}}">{{$history['quantity_change']}}</span>
+						<td class="text-success"> +<span class="display_currency" data-is_quantity="true">{{$history['quantity_change']}}</span>
 						</td>
 					@else
-						<td class="text-danger"><span class="display_currency text-danger" data-is_quantity="true" data-orig-value="{{$history['quantity_change']}}">{{$history['quantity_change']}}</span>
+						<td class="text-danger"><span class="display_currency text-danger" data-is_quantity="true">{{$history['quantity_change']}}</span>
 						</td>
 					@endif
 
@@ -113,24 +113,24 @@
 						@if($history['quantity_change'] > 0 )
 							<td class="text-success">
 								@if(!empty($history['purchase_secondary_unit_quantity']))
-									+<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['purchase_secondary_unit_quantity']}}">{{$history['purchase_secondary_unit_quantity']}}</span> {{$stock_details['second_unit']}}
+									+<span class="display_currency" data-is_quantity="true">{{$history['purchase_secondary_unit_quantity']}}</span> {{$stock_details['second_unit']}}
 								@endif
 							</td>
 						@else
 							<td class="text-danger">
 								@if(!empty($history['sell_secondary_unit_quantity']))
-									-<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['sell_secondary_unit_quantity']}}">{{$history['sell_secondary_unit_quantity']}}</span> {{$stock_details['second_unit']}}
+									-<span class="display_currency" data-is_quantity="true">{{$history['sell_secondary_unit_quantity']}}</span> {{$stock_details['second_unit']}}
 								@endif
 							</td>
 						@endif
 					@endif
 					<td>
-						<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['stock']}}">{{$history['stock']}}</span>
+						<span class="display_currency" data-is_quantity="true">{{$history['stock']}}</span>
 					</td>
 					@if(!empty($common_settings['enable_secondary_unit']))
 						<td>
 							@if(!empty($stock_details['second_unit']))
-								<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['stock_in_second_unit']}}">{{$history['stock_in_second_unit']}}</span> {{$stock_details['second_unit']}}
+								<span class="display_currency" data-is_quantity="true">{{$history['stock_in_second_unit']}}</span> {{$stock_details['second_unit']}}
 							@endif
 						</td>
 					@endif

@@ -68,6 +68,9 @@
 
         {!! Form::text($name . '[' . $variation_index . '][variations][' . $value_index . '][sell_price_inc_tax]', $default, ['class' => 'form-control input-sm variable_dsp_inc_tax input_number', 'placeholder' => __('product.inc_of_tax'), 'required']); !!}
     </td>
+    <td>
+        {!! Form::text($name . '[' . $variation_index . '][variations][' . $value_index . '][product_keywords]', null, ['class' => 'form-control input-sm', 'placeholder' => 'Keywords (comma separated)']); !!}
+    </td>
     <td class="variation-image-cell">
         <div class="variation-image-upload">
             {{-- Hidden file input --}}

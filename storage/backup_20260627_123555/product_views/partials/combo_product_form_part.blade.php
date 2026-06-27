@@ -79,6 +79,10 @@
 
 				{!! Form::hidden('selling_price_inc_tax', @num_format(0), ['class' => 'input_number mousetrap', 'id' => 'selling_price_inc_tax']) !!}
 			</div>
+			<div class="col-sm-4">
+				{!! Form::label('product_keywords', 'Product Keywords:') !!}
+				{!! Form::text('product_keywords', $product_keywords ?? null, ['class' => 'form-control input-sm', 'placeholder' => 'Enter keywords (comma separated)']) !!}
+			</div>
 		</div>
 	</div>
 </div>

@@ -20,6 +20,7 @@
           <th>@lang('product.default_purchase_price')</th>
           <th>@lang('product.profit_percent') @show_tooltip(__('tooltip.profit_percent'))</th>
           <th>@lang('product.default_selling_price')</th>
+          <th>Product Keywords</th>
           <th>@lang('lang_v1.product_image')</th>
         </tr>
         @foreach($product_deatails->variations as $variation )
@@ -54,6 +55,10 @@
                         {!! Form::text('single_dsp', @num_format($variation->default_sell_price), ['class' => 'form-control input-sm dsp input_number', 'placeholder' => __('product.exc_of_tax'), 'id' => 'single_dsp', 'required']); !!}
 
                         {!! Form::text('single_dsp_inc_tax', @num_format($variation->sell_price_inc_tax), ['class' => 'form-control input-sm hide input_number', 'placeholder' => __('product.inc_of_tax'), 'id' => 'single_dsp_inc_tax', 'required']); !!}
+                    </td>
+                    <td>
+                        {!! Form::label('product_keywords', 'Product Keywords:') !!}
+                        {!! Form::text('product_keywords', $variation->product_keywords ?? null, ['class' => 'form-control input-sm', 'placeholder' => 'Enter keywords (comma separated)']); !!}
                     </td>
                     <td>
                         @php 

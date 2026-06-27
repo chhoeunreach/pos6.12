@@ -1,6 +1,34 @@
 @extends('layouts.app')
 @section('title', __('sale.products'))
 
+@section('css')
+    <style>
+        /* Reusable single-line truncation utility */
+        .text-ellipsis {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        /* Cell wrapper so ellipsis works even with an action button */
+        .upos-ellipsis-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        /* Keep the view button from stretching the cell */
+        .upos-ellipsis-cell .upos-view-product-details {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+    </style>
+@endsection
+
 @section('content')
 
     <!-- Content Header (Page header) -->
@@ -83,27 +111,24 @@
                     <div class="col-md-3" id="location_filter">
                         <div class="form-group">
                             {!! Form::label('location_id', __('purchase.business_location') . ':') !!}
-                            {!! Form::select('location_id', $business_locations, null, [
+                            {!! Form::select('location_id[]', $business_locations, null, [
                                 'class' => 'form-control select2',
                                 'style' => 'width:100%',
+                                'id' => 'location_id',
+                                'multiple' => 'multiple',
                                 'placeholder' => __('lang_v1.all'),
                             ]) !!}
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <br>
                         <div class="form-group">
-                            {!! Form::select(
-                                'active_state',
-                                ['active' => __('business.is_active'), 'inactive' => __('lang_v1.inactive')],
-                                null,
-                                [
-                                    'class' => 'form-control select2',
-                                    'style' => 'width:100%',
-                                    'id' => 'active_state',
-                                    'placeholder' => __('lang_v1.all'),
-                                ],
-                            ) !!}
+                            {!! Form::label('product_list_filter_stock_status', 'Stock status:') !!}
+                            {!! Form::select('stock_status', ['positive' => 'Positive', 'negative' => 'Negative'], null, [
+                                'class' => 'form-control select2',
+                                'style' => 'width:100%',
+                                'id' => 'product_list_filter_stock_status',
+                                'placeholder' => __('lang_v1.all'),
+                            ]) !!}
                         </div>
                     </div>
 
@@ -212,6 +237,33 @@
             aria-labelledby="gridSystemModalLabel">
         </div>
 
+        {{-- List Products: View full Product + Business Locations (table-only UI) --}}
+        <div class="modal fade" id="product_list_details_modal" tabindex="-1" role="dialog" aria-labelledby="productListDetailsModalLabel">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        <h4 class="modal-title" id="productListDetailsModalLabel">@lang('messages.view')</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="control-label">@lang('sale.product'):</label>
+                            <div id="product_list_details_modal_product" class="tw-font-semibold"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="control-label">@lang('purchase.business_location'):</label>
+                            <div id="product_list_details_modal_locations"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         @if ($is_woocommerce)
             @include('product.partials.toggle_woocommerce_sync_modal')
         @endif
@@ -227,10 +279,34 @@
     <script src="{{ asset('js/opening_stock.js?v=' . $asset_v) }}"></script>
     <script type="text/javascript">
         $(document).ready(function() {
+            var upos_view_label = @json(__('messages.view'));
+
+            function upos_get_text_from_html(html) {
+                // Convert HTML (returned by server-side datatables) to plain text safely
+                return $('<div>').html(html || '').text().replace(/\s+/g, ' ').trim();
+            }
+
+            function upos_escape_html(text) {
+                return $('<div>').text(text || '').html();
+            }
+
+            function upos_truncate_text(text, limit) {
+                var t = (text || '').toString();
+                if (!limit || t.length <= limit) {
+                    return t;
+                }
+                return t.substring(0, limit) + '...';
+            }
+
             product_table = $('#product_table').DataTable({
                 processing: true,
                 serverSide: true,
                 fixedHeader:false,
+                deferRender: true,
+                aLengthMenu: [
+                    [25, 50, 100, 200, 500, 1000, -1],
+                    [25, 50, 100, 200, 500, 1000, LANG.all],
+                ],
                 aaSorting: [
                     [3, 'asc']
                 ],
@@ -245,7 +321,6 @@
                         d.brand_id = $('#product_list_filter_brand_id').val();
                         d.unit_id = $('#product_list_filter_unit_id').val();
                         d.tax_id = $('#product_list_filter_tax_id').val();
-                        d.active_state = $('#active_state').val();
                         d.not_for_selling = $('#not_for_selling').is(':checked');
                         d.location_id = $('#location_id').val();
                         if ($('#repair_model_id').length == 1) {
@@ -278,11 +353,50 @@
                     },
                     {
                         data: 'product',
-                        name: 'products.name'
+                        name: 'products.name',
+                        render: function(data, type, row, meta) {
+                            var full_product_text = upos_get_text_from_html(data);
+                            // Keep full text for export/filter/sort; truncate only for display
+                            if (type !== 'display') {
+                                return full_product_text;
+                            }
+
+                            var display_product_text = upos_truncate_text(full_product_text, 50);
+                            var product_title_html = upos_escape_html(full_product_text);
+                            var product_display_html = upos_escape_html(display_product_text);
+
+                            return '<span class="text-ellipsis" title="' + product_title_html + '">' + product_display_html + '</span>';
+                        }
                     },
                     {
                         data: 'product_locations',
-                        name: 'product_locations'
+                        name: 'product_locations',
+                        render: function(data, type, row, meta) {
+                            var full_locations_text = upos_get_text_from_html(data);
+                            var full_product_text = upos_get_text_from_html(row.product);
+
+                            // Keep full text for export/filter/sort; truncate only for display
+                            if (type !== 'display') {
+                                return full_locations_text;
+                            }
+
+                            var display_locations_text = upos_truncate_text(full_locations_text, 50);
+
+                            var locations_title_html = upos_escape_html(full_locations_text);
+                            var locations_display_html = upos_escape_html(display_locations_text);
+                            var product_html = upos_escape_html(full_product_text);
+
+                            return (
+                                '<div class="upos-ellipsis-cell">' +
+                                    '<span class="text-ellipsis" title="' + locations_title_html + '">' + locations_display_html + '</span>' +
+                                    '<button type="button" class="btn btn-xs btn-default upos-view-product-details" ' +
+                                        'data-product="' + product_html + '" ' +
+                                        'data-locations="' + locations_title_html + '">' +
+                                        upos_escape_html(upos_view_label) +
+                                    '</button>' +
+                                '</div>'
+                            );
+                        }
                     },
                     @can('view_purchase_price')
                         {
@@ -374,22 +488,6 @@
                     __currency_convert_recursively($('#product_table'));
                 },
             });
-            // Convert loaded product images to base64 so they appear in the PDF.
-            product_table.buttons('.buttons-pdf').action(function(e, dt, button, config) {
-                if ($(dt.table().node()).hasClass('hide-footer')) config.footer = false;
-                window._pdfImageCache = window._pdfImageCache || {};
-                $('#product_table tbody img.product-thumbnail-small').each(function() {
-                    if (!this.complete || !this.naturalWidth || window._pdfImageCache[this.src]) return;
-                    try {
-                        var c = document.createElement('canvas');
-                        c.width = c.height = 50;
-                        c.getContext('2d').drawImage(this, 0, 0, 50, 50);
-                        window._pdfImageCache[this.src] = c.toDataURL('image/jpeg', 0.8);
-                    } catch (ex) {}
-                });
-                $.fn.dataTable.ext.buttons.pdfHtml5.action.call(this, e, dt, button, config);
-            });
-
             // Array to track the ids of the details displayed rows
             var detailRows = [];
 
@@ -422,6 +520,33 @@
 
             $('#opening_stock_modal').on('hidden.bs.modal', function(e) {
                 product_table.ajax.reload();
+            });
+
+            $(document).on('click', '.upos-view-product-details', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var product = $(this).attr('data-product') || '';
+                var locations = $(this).attr('data-locations') || '';
+
+                $('#product_list_details_modal_product').text($('<div>').html(product).text());
+
+                var locations_text = $('<div>').html(locations).text().trim();
+                if (locations_text.length) {
+                    var parts = locations_text.split(',').map(function(p) {
+                        return p.trim();
+                    }).filter(Boolean);
+
+                    var $list = $('<ul class="list-unstyled" style="margin-bottom:0;"></ul>');
+                    parts.forEach(function(p) {
+                        $list.append($('<li>').text(p));
+                    });
+                    $('#product_list_details_modal_locations').empty().append($list);
+                } else {
+                    $('#product_list_details_modal_locations').html('<span class="text-muted">--</span>');
+                }
+
+                $('#product_list_details_modal').modal('show');
             });
 
             $('table#product_table tbody').on('click', 'a.delete-product', function(e) {
@@ -546,7 +671,7 @@
             });
 
             $(document).on('change',
-                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #active_state, #repair_model_id',
+                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #repair_model_id',
                 function() {
                     if ($("#product_list_tab").hasClass('active')) {
                         product_table.ajax.reload();
@@ -556,6 +681,12 @@
                         stock_report_table.ajax.reload();
                     }
                 });
+
+            $(document).on('change', '#product_list_filter_stock_status', function() {
+                if ($("#product_stock_report").hasClass('active')) {
+                    stock_report_table.ajax.reload();
+                }
+            });
 
             $(document).on('ifChanged', '#not_for_selling, #woocommerce_enabled', function() {
                 if ($("#product_list_tab").hasClass('active')) {
@@ -728,6 +859,85 @@
                             searchable: false
                         });
                     }
+
+                    var stock_report_copy_cell_data = function(data, node) {
+                        var $node = $(node);
+                        var $quantity_element = $node.find('[data-is_quantity="true"]');
+
+                        if ($quantity_element.length) {
+                            return $quantity_element.attr('data-orig-value');
+                        }
+
+                        var value = $node.length ? $node.text() : data;
+                        value = value == null ? '' : String(value).replace(/<[^>]*>/g, '');
+
+                        if (typeof __currency_symbol !== 'undefined' && __currency_symbol) {
+                            value = value.split(__currency_symbol).join('');
+                        }
+
+                        return $.trim(value);
+                    };
+
+                    var stock_report_copy_button = {
+                        extend: 'copy',
+                        text: '<i class="fa fa-files-o" aria-hidden="true"></i> ' + LANG.copy,
+                        className: 'tw-dw-btn-xs  tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        header: false,
+                        footer: false,
+                        title: null,
+                        messageTop: null,
+                        messageBottom: null,
+                        exportOptions: {
+                            columns: ':visible',
+                            modifier: {
+                                search: 'applied',
+                                order: 'applied',
+                                page: 'all'
+                            },
+                            format: {
+                                body: function(data, row, column, node) {
+                                    return stock_report_copy_cell_data(data, node);
+                                }
+                            }
+                        },
+                        action: function(e, dt, button, config) {
+                            var button_context = this;
+                            var page_info = dt.page.info();
+                            var original_length = dt.page.len();
+
+                            var copy_all_visible_rows = function() {
+                                $.fn.dataTable.ext.buttons.copyHtml5.action.call(
+                                    button_context,
+                                    e,
+                                    dt,
+                                    button,
+                                    config
+                                );
+                            };
+
+                            if (dt.settings()[0].oFeatures.bServerSide && original_length !== -1) {
+                                dt.one('draw', function() {
+                                    copy_all_visible_rows();
+                                    dt.one('draw', function() {
+                                        dt.page(Math.floor(page_info.start / original_length)).draw('page');
+                                    });
+                                    dt.page.len(original_length).draw();
+                                });
+                                dt.page.len(-1).draw();
+                            } else {
+                                copy_all_visible_rows();
+                            }
+                        }
+                    };
+
+                    var stock_report_buttons = $.extend(true, [], $.fn.dataTable.defaults.buttons || []);
+                    for (var button_index = 0; button_index < stock_report_buttons.length; button_index++) {
+                        if (stock_report_buttons[button_index].extend == 'copy' || stock_report_buttons[button_index].extend == 'copyHtml5') {
+                            stock_report_buttons[button_index] = stock_report_copy_button;
+                            break;
+                        }
+                    }
+
                     stock_report_table = $('#stock_report_table').DataTable({
                         order: [
                             [1, 'asc']
@@ -738,6 +948,7 @@
                         scrollX: true,
                         scrollCollapse: true,
                         fixedHeader:false,
+                        buttons: stock_report_buttons,
                         ajax: {
                             url: '/reports/stock-report',
                             data: function(d) {
@@ -746,8 +957,8 @@
                                 d.brand_id = $('#product_list_filter_brand_id').val();
                                 d.unit_id = $('#product_list_filter_unit_id').val();
                                 d.type = $('#product_list_filter_type').val();
-                                d.active_state = $('#active_state').val();
                                 d.not_for_selling = $('#not_for_selling').is(':checked');
+                                d.stock_status = $('#product_list_filter_stock_status').val();
                                 if ($('#repair_model_id').length == 1) {
                                     d.repair_model_id = $('#repair_model_id').val();
                                 }

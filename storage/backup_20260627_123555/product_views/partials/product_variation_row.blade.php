@@ -42,6 +42,7 @@
                 <small><i><span class="dsp_label"></span></i></small>
                     <!-- &nbsp;&nbsp;<b><i class="fa fa-info-circle" aria-hidden="true" data-toggle="popover" data-html="true" data-trigger="hover" data-content="<p class='text-primary'>Drag the mouse over the table cells to copy input values</p>" data-placement="top"></i></b> -->
                 </th>
+                <th>Product Keywords</th>
                 <th>@lang('lang_v1.variation_images')</th>
                 <th><button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-accent add_variation_value_row">+</button></th>
             </tr>
@@ -82,6 +83,9 @@
                     {!! Form::text('product_variation[' . $row_index .'][variations][0][default_sell_price]', $default, ['class' => 'form-control input-sm variable_dsp input_number', 'placeholder' => __('product.exc_of_tax'), 'required']); !!}
 
                      {!! Form::text('product_variation[' . $row_index .'][variations][0][sell_price_inc_tax]', $default, ['class' => 'form-control input-sm variable_dsp_inc_tax input_number', 'placeholder' => __('product.inc_of_tax'), 'required']); !!}
+                </td>
+                <td>
+                    {!! Form::text('product_variation[' . $row_index . '][variations][0][product_keywords]', null, ['class' => 'form-control input-sm', 'placeholder' => 'Keywords (comma separated)']); !!}
                 </td>
                 <td class="variation-image-cell">
                     <div class="variation-image-upload">
