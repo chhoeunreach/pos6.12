@@ -71,7 +71,10 @@ class ProductController extends Controller
 
         if (request()->ajax()) {
             //Filter by location
-            $location_id = request()->get('location_id', null);
+            $location_ids = request()->get('location_id', []);
+            if (!is_array($location_ids)) {
+                $location_ids = $location_ids !== null && $location_ids !== '' ? [$location_ids] : [];
+            }
             $permitted_locations = auth()->user()->permitted_locations();
 
             $query = Product::with(['media'])
@@ -91,14 +94,20 @@ class ProductController extends Controller
                 ->where('products.business_id', $business_id)
                 ->where('products.type', '!=', 'modifier');
 
-            if (! empty($location_id) && $location_id != 'none') {
-                if ($permitted_locations == 'all' || in_array($location_id, $permitted_locations)) {
-                    $query->whereHas('product_locations', function ($query) use ($location_id) {
-                        $query->where('product_locations.location_id', '=', $location_id);
-                    });
+            if (! empty($location_ids)) {
+                if ($location_ids === ['none']) {
+                    $query->doesntHave('product_locations');
+                } else {
+                    $filter_locs = $location_ids;
+                    if ($permitted_locations != 'all') {
+                        $filter_locs = array_intersect($filter_locs, $permitted_locations);
+                    }
+                    if (! empty($filter_locs)) {
+                        $query->whereHas('product_locations', function ($q) use ($filter_locs) {
+                            $q->whereIn('product_locations.location_id', $filter_locs);
+                        });
+                    }
                 }
-            } elseif ($location_id == 'none') {
-                $query->doesntHave('product_locations');
             } else {
                 if ($permitted_locations != 'all') {
                     $query->whereHas('product_locations', function ($query) use ($permitted_locations) {
@@ -179,6 +188,13 @@ class ProductController extends Controller
             $not_for_selling = request()->get('not_for_selling', null);
             if ($not_for_selling == 'true') {
                 $products->ProductNotForSales();
+            }
+
+            $stock_status = request()->get('stock_status', null);
+            if ($stock_status == 'positive') {
+                $products->havingRaw('SUM(vld.qty_available) > 0');
+            } elseif ($stock_status == 'negative') {
+                $products->havingRaw('SUM(vld.qty_available) < 0');
             }
 
             $woocommerce_enabled = request()->get('woocommerce_enabled', 0);

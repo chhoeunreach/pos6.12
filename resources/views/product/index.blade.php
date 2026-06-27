@@ -83,9 +83,25 @@
                     <div class="col-md-3" id="location_filter">
                         <div class="form-group">
                             {!! Form::label('location_id', __('purchase.business_location') . ':') !!}
-                            {!! Form::select('location_id', $business_locations, null, [
+                            {!! Form::select('location_id[]', $business_locations, null, [
                                 'class' => 'form-control select2',
                                 'style' => 'width:100%',
+                                'id' => 'location_id',
+                                'multiple' => 'multiple',
+                                'data-placeholder' => __('lang_v1.all'),
+                            ]) !!}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            {!! Form::label('stock_status', __('report.stock_status') . ':') !!}
+                            {!! Form::select('stock_status', [
+                                'positive' => __('report.positive_stock'),
+                                'negative' => __('report.negative_stock'),
+                            ], null, [
+                                'class' => 'form-control select2',
+                                'style' => 'width:100%',
+                                'id' => 'product_list_filter_stock_status',
                                 'placeholder' => __('lang_v1.all'),
                             ]) !!}
                         </div>
@@ -161,7 +177,7 @@
                                 @if ($is_admin)
 
                                     <a class="tw-dw-btn tw-bg-gradient-to-r tw-from-indigo-600 tw-to-blue-500 tw-font-bold tw-text-white tw-border-none tw-rounded-full pull-right tw-m-2"
-                                        href="{{ action([\App\Http\Controllers\ProductController::class, 'downloadExcel']) }}">
+                                        href="{{ action([\App\Http\Controllers\ProductController::class, 'downloadExcel']) }}?{{ http_build_query(array_filter(request()->only(['location_id','category_id','brand_id','unit_id','tax_id','type','active_state','stock_status','not_for_selling']))) }}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round"
@@ -246,6 +262,7 @@
                         d.unit_id = $('#product_list_filter_unit_id').val();
                         d.tax_id = $('#product_list_filter_tax_id').val();
                         d.active_state = $('#active_state').val();
+                        d.stock_status = $('#product_list_filter_stock_status').val();
                         d.not_for_selling = $('#not_for_selling').is(':checked');
                         d.location_id = $('#location_id').val();
                         if ($('#repair_model_id').length == 1) {
@@ -546,7 +563,7 @@
             });
 
             $(document).on('change',
-                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #active_state, #repair_model_id',
+                '#product_list_filter_type, #product_list_filter_category_id, #product_list_filter_brand_id, #product_list_filter_unit_id, #product_list_filter_tax_id, #location_id, #active_state, #repair_model_id, #product_list_filter_stock_status',
                 function() {
                     if ($("#product_list_tab").hasClass('active')) {
                         product_table.ajax.reload();
@@ -747,6 +764,7 @@
                                 d.unit_id = $('#product_list_filter_unit_id').val();
                                 d.type = $('#product_list_filter_type').val();
                                 d.active_state = $('#active_state').val();
+                                d.stock_status = $('#product_list_filter_stock_status').val();
                                 d.not_for_selling = $('#not_for_selling').is(':checked');
                                 if ($('#repair_model_id').length == 1) {
                                     d.repair_model_id = $('#repair_model_id').val();

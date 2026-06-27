@@ -43,6 +43,9 @@ npm-debug.log
 /storage/app/temp/*
 !/storage/app/temp/.gitignore
 /storage/debugbar/
+/storage/backup_*/
+/storage/diag_*.php
+/storage/app/temp/mpdf/
 
 # Local tools config
 /.codex/
@@ -75,3 +78,5 @@ response*.json
 test_query*.php
 tmp_loan_check.php
 .tmp_check_loan_cols.php
+query
+PsySH/

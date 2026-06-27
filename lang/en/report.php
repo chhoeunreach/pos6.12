@@ -82,4 +82,7 @@ return [
     'total_stock_transfered' => 'Total Stock Transferred',
     'total_transfer_value' => 'Total Transfer Value',
     'receive_by' => 'Receive By',
-];
+        'stock_status' => 'Stock Status',
+        'positive_stock' => 'Positive stock',
+        'negative_stock' => 'Negative stock',
+    ];

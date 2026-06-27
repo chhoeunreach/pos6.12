@@ -13,8 +13,13 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, WithCustom
     public function query()
     {
         $business_id = request()->session()->get('user.business_id');
+        $stock_status = request()->get('stock_status');
 
-        return Product::where('business_id', $business_id)
+        $query = Product::where('products.business_id', $business_id)
+            ->leftJoin('variations as v', 'v.product_id', '=', 'products.id')
+            ->leftJoin('variation_location_details as vld', function ($join) {
+                $join->on('vld.variation_id', '=', 'v.id');
+            })
             ->with([
                 'brand',
                 'unit',
@@ -26,7 +31,30 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, WithCustom
                 'rack_details',
                 'product_locations',
             ])
-            ->select('products.*');
+            ->select('products.*')
+            ->groupBy('products.id');
+
+        $location_ids = request()->get('location_id', []);
+        if (!is_array($location_ids)) {
+            $location_ids = $location_ids !== null && $location_ids !== '' ? [$location_ids] : [];
+        }
+        if (! empty($location_ids)) {
+            if ($location_ids === ['none']) {
+                $query->doesntHave('product_locations');
+            } else {
+                $query->whereHas('product_locations', function ($q) use ($location_ids) {
+                    $q->whereIn('product_locations.location_id', $location_ids);
+                });
+            }
+        }
+
+        if ($stock_status === 'positive') {
+            $query->havingRaw('COALESCE(SUM(vld.qty_available), 0) > 0');
+        } elseif ($stock_status === 'negative') {
+            $query->havingRaw('COALESCE(SUM(vld.qty_available), 0) < 0');
+        }
+
+        return $query;
     }
 
     public function headings(): array

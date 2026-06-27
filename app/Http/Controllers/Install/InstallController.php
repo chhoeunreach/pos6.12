@@ -265,7 +265,7 @@ class InstallController extends Controller
         DB::statement('SET default_storage_engine=INNODB;');
         Artisan::call('migrate:fresh', ['--force' => true]);
         Artisan::call('db:seed', ['--force' => true]);
-        //Artisan::call('storage:link');
+        Artisan::call('passport:install', ['--force' => true]);
     }
 
     public function installAlternate(Request $request)
