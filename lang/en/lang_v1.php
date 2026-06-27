@@ -772,6 +772,7 @@ return [
     'admin_role_location_permission_help' => 'Admin can access all locations',
     'edit_product_price_from_pos_screen' => 'Edit product price from POS screen',
     'edit_product_discount_from_pos_screen' => 'Edit product discount from POS screen',
+    'download_template' => 'Download template file',
     'download_template_file' => 'Download template file',
     'types_of_service' => 'Types of service',
     'add_type_of_service' => 'Add type of service',

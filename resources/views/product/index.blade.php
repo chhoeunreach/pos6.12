@@ -236,6 +236,44 @@
     </section>
     <!-- /.content -->
 
+    <div class="modal fade" id="upos_product_locations_modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">@lang('purchase.business_location')</h4>
+                </div>
+                <div class="modal-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+@endsection
+
+@section('css')
+    <style>
+        .text-ellipsis {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+        .upos-ellipsis-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+        .upos-ellipsis-cell .upos-view-product-details {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+    </style>
 @endsection
 
 @section('javascript')
@@ -281,6 +319,12 @@
                     "targets": [0, 1, 2],
                     "orderable": false,
                     "searchable": false
+                }, {
+                    "targets": [1],
+                    "width": "70px"
+                }, {
+                    "targets": [4],
+                    "width": "200px"
                 }],
                 columns: [{
                         data: 'mass_delete'
@@ -299,7 +343,21 @@
                     },
                     {
                         data: 'product_locations',
-                        name: 'product_locations'
+                        name: 'product_locations',
+                        render: function(data, type, row, meta) {
+                            var text = data ? $('<div>').html(data).text() : '';
+                            if (type !== 'display') {
+                                return text;
+                            }
+                            var truncated = text.length > 50 ? text.substring(0, 50) + '...' : text;
+                            var escapedText = $('<span>').text(text).html();
+                            var escapedTruncated = $('<span>').text(truncated).html();
+                            var escapedProduct = row.product ? $('<span>').text($('<div>').html(row.product).text()).html() : '';
+                            return '<div class="upos-ellipsis-cell">' +
+                                '<span class="text-ellipsis" title="' + escapedText + '">' + escapedTruncated + '</span>' +
+                                (text.length > 50 ? '<button type="button" class="btn btn-xs btn-default upos-view-product-details" data-product="' + escapedProduct + '" data-locations="' + escapedText + '">' + '@lang("messages.view")' + '</button>' : '') +
+                                '</div>';
+                        }
                     },
                     @can('view_purchase_price')
                         {
@@ -875,6 +933,17 @@
                 $('input#selected_products').val('');
                 swal('@lang('lang_v1.no_row_selected')');
             }
+        });
+
+        $(document).on('click', '.upos-view-product-details', function(e) {
+            var product = $(this).data('product');
+            var locations = $(this).data('locations');
+            var modal = $('#upos_product_locations_modal');
+            modal.find('.modal-body').html(
+                '<p><strong>@lang("sale.product"):</strong> ' + $('<span>').text(product).html() + '</p>' +
+                '<p><strong>@lang("purchase.business_location"):</strong> ' + $('<span>').text(locations).html() + '</p>'
+            );
+            modal.modal('show');
         });
 
         $(document).on('submit', 'form#edit_product_location_form', function(e) {
