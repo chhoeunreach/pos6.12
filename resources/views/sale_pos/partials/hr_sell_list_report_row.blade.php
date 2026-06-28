@@ -78,7 +78,7 @@
             @php
                 $primarySerial = trim($line->serial_number ?: $line->imei ?: $line->imei2 ?: $line->primary_identifier ?: $line->sku ?: '');
             @endphp
-            <div class="sell-list-product-line" data-line-id="{{ $line->id }}" data-status="{{ $line->pos_serial_status }}" data-serial="{{ $primarySerial }}" data-unit-price="{{ $line->unit_price }}">
+            <div class="sell-list-product-line" data-line-id="{{ $line->id }}" data-status="{{ $line->pos_serial_status }}" data-serial="{{ $primarySerial }}" data-unit-price="{{ (float)$line->unit_price }}">
                 <div class="tw-min-w-0 tw-flex-1">
                     <div class="tw-text-xs tw-font-semibold tw-text-slate-700 tw-leading-4 tw-truncate">
                         {{ $line->product_name }}

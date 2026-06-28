@@ -70,6 +70,11 @@ class ProductController extends Controller
         $is_woocommerce = $this->moduleUtil->isModuleInstalled('Woocommerce');
 
         if (request()->ajax()) {
+            if ((int) request()->input('length') === -1) {
+                @ini_set('memory_limit', '2048M');
+                @set_time_limit(0);
+            }
+
             //Filter by location
             $location_ids = request()->get('location_id', []);
             if (!is_array($location_ids)) {

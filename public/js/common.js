@@ -387,8 +387,8 @@ $(document).ready(function () {
         dom: '<"row margin-bottom-20 text-center"<"col-sm-1"l><"col-sm-8"B><"col-sm-3"f> r>tip',
         buttons: buttons,
         aLengthMenu: [
-            [25, 50, 100, 200, 500, 1000, -1],
-            [25, 50, 100, 200, 500, 1000, LANG.all],
+            [25, 50, 100, 200, 500, 1000],
+            [25, 50, 100, 200, 500, 1000],
         ],
         iDisplayLength: __default_datatable_page_entries,
         language: {

@@ -291,6 +291,11 @@
                 scrollY: "75vh",
                 scrollX: true,
                 scrollCollapse: true,
+                deferRender: true,
+                aLengthMenu: [
+                    [25, 50, 100, 200, 500, 1000, -1],
+                    [25, 50, 100, 200, 500, 1000, LANG.all],
+                ],
                 "ajax": {
                     "url": "/products",
                     "data": function(d) {
@@ -449,6 +454,7 @@
                     __currency_convert_recursively($('#product_table'));
                 },
             });
+
             // Convert loaded product images to base64 so they appear in the PDF.
             product_table.buttons('.buttons-pdf').action(function(e, dt, button, config) {
                 if ($(dt.table().node()).hasClass('hide-footer')) config.footer = false;

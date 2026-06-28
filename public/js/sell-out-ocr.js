@@ -281,4 +281,24 @@
     $(document).on('click', '.sell-list-copy-serial-btn', function () {
         copyText($(this).attr('data-serial'), 'Serial copied successfully');
     });
+    /* ───────────────────────────────────────────────
+     * Sell Out → POS Price Sync
+     * Stores clicked line prices for the copy-all
+     * handler in pos.js to consume from data attributes.
+     * ─────────────────────────────────────────────── */
+
+    $(document).on('click', '.sell-list-copy-all-btn', function() {
+        var $reportRow = $(this).closest('.sell-list-report-row');
+        $reportRow.find('.sell-list-product-line[data-status="active"]').each(function() {
+            var $line = $(this);
+            var price = $line.attr('data-unit-price');
+            if (!price || isNaN(parseFloat(price))) {
+                var pt = $line.find('.tw-text-xs.tw-font-bold.tw-text-slate-800').text().replace(/,/g, '').trim();
+                price = parseFloat(pt);
+                if (!isNaN(price)) {
+                    $line.attr('data-unit-price', price);
+                }
+            }
+        });
+    });
 })(jQuery);

@@ -1121,7 +1121,15 @@ $(document).ready(function() {
     });
 
     $(document).on('shown.bs.modal', '.row_edit_product_price_model', function() {
-        $('.row_edit_product_price_model')
+        var $modal = $(this);
+        var $modalRow = $modal.closest('tr.product_row');
+        var pendingPrice = $modalRow.data('hr-set-price');
+        if (pendingPrice !== undefined && !isNaN(pendingPrice)) {
+            $modal.find('input.pos_unit_price').each(function() {
+                __write_number($(this), pendingPrice);
+            });
+        }
+        $modal
             .find('input')
             .filter(':visible:first')
             .focus()
@@ -1901,6 +1909,7 @@ $(document).ready(function() {
             $featuredBox.hide();
             $productItems.hide();
             $box.css('display', 'flex').hide().fadeIn();
+            get_hr_sell_list(true);
         } else {
             $box.fadeOut(function() {
                 $productItems.show();
@@ -2037,10 +2046,15 @@ $(document).ready(function() {
         $activeLines.each(function() {
             var $line = $(this);
             var rawSerial = $.trim($line.data('serial') || '');
+            var price = parseFloat($line.attr('data-unit-price'));
+            if (isNaN(price)) {
+                var priceText = $line.find('.tw-text-xs.tw-font-bold.tw-text-slate-800').text().trim();
+                price = parseFloat(priceText.replace(/,/g, ''));
+            }
             lines.push({
                 serial: rawSerial.replace(/[^a-zA-Z0-9]/g, ''),
                 lineId: $line.data('line-id'),
-                unitPrice: parseFloat($line.data('unit-price')) || 0,
+                unitPrice: price,
             });
         });
 
@@ -2105,10 +2119,17 @@ $(document).ready(function() {
                         $row.attr('data-hr-line-id', line.lineId);
                         $row.find('td').first().append('<input type="hidden" class="hr_sell_list_serial" name="products[' + rowIndex + '][hr_sell_list_serial]" value="' + line.serial + '">');
 
-                        if (line.unitPrice && !isNaN(line.unitPrice)) {
-                            __write_number($row.find('input.pos_unit_price_inc_tax'), line.unitPrice);
-                            __write_number($row.find('input.pos_unit_price'), line.unitPrice);
-                            $row.find('input.pos_unit_price_inc_tax').trigger('change');
+                        if (!isNaN(line.unitPrice)) {
+                            var $unitPriceInput = $row.find('input.pos_unit_price');
+                            console.log('HR_PRICE: setting pos_unit_price to', line.unitPrice, 'input found:', $unitPriceInput.length);
+                            $unitPriceInput.val(__number_f(line.unitPrice, false));
+                            $unitPriceInput.trigger('change');
+
+                            var modalId = '#row_edit_product_price_modal_' + rowIndex;
+                            var $priceModal = $row.closest('body').find(modalId);
+                            if ($priceModal.length && $priceModal.hasClass('in')) {
+                                $priceModal.find('input.pos_unit_price').val(__number_f(line.unitPrice, false));
+                            }
                         }
 
                         saveFormDataToLocalStorage();
@@ -2307,6 +2328,14 @@ $(document).ready(function() {
         }
     }, 60000);
 
+    /* Auto-refresh sell list every 30 seconds when visible (silent = only update panes, no flicker) */
+    setInterval(function () {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length && $box.is(':visible')) {
+            get_hr_sell_list(true);
+        }
+    }, 30000);
+
     set_search_fields();
 });
 
@@ -2359,7 +2388,7 @@ function get_featured_products() {
     }
 }
 
-function get_hr_sell_list() {
+function get_hr_sell_list(silent) {
     var $box = $('#sell_list_staff_box');
     if ($box.length === 0) {
         return;
@@ -2374,6 +2403,12 @@ function get_hr_sell_list() {
     var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
     var sellType = $box.find('.sell-list-filter-sell-type').val() || 'លក់';
 
+    /* Save state before refresh */
+    var savedSearch = $box.find('.sell-list-search').val();
+    var savedActiveTab = $box.find('.sell-list-tab.is-active').data('target');
+    var $scrollContainer = $box.find('.sell-list-pane.is-active');
+    var savedScroll = $scrollContainer.length ? $scrollContainer.scrollTop() : 0;
+
     $.ajax({
         method: 'GET',
         url: '/sells/pos/get-hr-sell-list/' + location_id,
@@ -2384,7 +2419,32 @@ function get_hr_sell_list() {
             sell_type: sellType,
         },
         success: function(result) {
-            $box.html(result);
+            if (silent) {
+                /* Only update pane contents to avoid flickering filter/search/tabs */
+                var $newHtml = $('<div>').html(result);
+                $box.find('.sell-list-pane-active').html($newHtml.find('.sell-list-pane-active').html());
+                $box.find('.sell-list-pane-added').html($newHtml.find('.sell-list-pane-added').html());
+                $box.find('.sell-list-added-count').html($newHtml.find('.sell-list-added-count').html());
+            } else {
+                $box.html(result);
+            }
+            /* Restore search text and filter */
+            if (savedSearch) {
+                $box.find('.sell-list-search').val(savedSearch);
+                filter_sell_list_rows($box);
+            }
+            /* Restore active tab */
+            if (savedActiveTab) {
+                $box.find('.sell-list-tab').removeClass('is-active');
+                $box.find('.sell-list-tab[data-target="' + savedActiveTab + '"]').addClass('is-active');
+                $box.find('.sell-list-pane').removeClass('is-active');
+                $box.find('.sell-list-pane-' + savedActiveTab).addClass('is-active');
+            }
+            /* Restore scroll */
+            var $newScrollContainer = $box.find('.sell-list-pane.is-active');
+            if ($newScrollContainer.length) {
+                $newScrollContainer.scrollTop(savedScroll);
+            }
         },
     });
 }

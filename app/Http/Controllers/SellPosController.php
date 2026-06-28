@@ -2356,14 +2356,10 @@ class SellPosController extends Controller
             $query->where('transactions.sub_type', null);
         }
 
-        // Retrieve the limit for displaying recent transactions from the configuration
-        $limit = config('constants.pos_recent_transactions_display_limit', 10);
-        
         $transactions = $query->orderBy('transactions.created_at', 'desc')
             ->groupBy('transactions.id')
             ->select('transactions.*')
             ->with(['contact', 'table'])
-            ->limit($limit)
             ->get();
 
         return view('sale_pos.partials.recent_transactions')
