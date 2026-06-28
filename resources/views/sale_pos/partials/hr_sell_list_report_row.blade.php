@@ -3,9 +3,16 @@
     $avatar = !empty($report->staff_avatar) ? ltrim($report->staff_avatar, '/') : null;
     $avatarUrl = $avatar ? asset('uploads/avatar/' . rawurlencode($avatar)) : null;
     $visibleLines = $report->lines->filter(fn ($line) => $line->pos_serial_status === $line_status);
+    $rowStaffCode = $report->staff_code ?? '';
+    $rowSellerName = $report->seller_name ?? '';
+    $rowCustomerPhone = $report->customer_phone ?? '';
 @endphp
 
-<div class="sell-list-report-row no-print" data-report-id="{{ $report->id }}">
+<div class="sell-list-report-row no-print" data-report-id="{{ $report->id }}"
+     data-staff-code="{{ $rowStaffCode }}"
+     data-staff-name="{{ $staffName }}"
+     data-seller-name="{{ $rowSellerName }}"
+     data-customer-phone="{{ $rowCustomerPhone }}">
     <div class="tw-flex tw-items-center tw-gap-2 tw-mb-1">
         <div class="tw-flex tw-items-center tw-gap-1.5 tw-flex-shrink-0 tw-min-w-0 tw-max-w-[35%]">
             <div class="sell-list-avatar-wrap tw-flex-shrink-0">

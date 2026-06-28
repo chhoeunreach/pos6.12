@@ -2046,9 +2046,17 @@ $(document).ready(function() {
 
         $btn.prop('disabled', true).text('Copying...');
 
-        var phone = $.trim($reportRow.find('.tw-text-[10px]').first().text().split('/')[0].trim());
+        var staffCode = $reportRow.data('staff-code');
+        if (staffCode) {
+            var staffNumber = String(staffCode).replace(/[^0-9]/g, '').replace(/^0+/, '');
+            if (staffNumber) {
+                $('textarea[name="sale_note"]').val(staffNumber);
+            }
+        }
+
+        var phone = $reportRow.data('customer-phone');
         if (phone) {
-            $('textarea[name="sale_note"]').val(phone);
+            $('textarea[name="staff_note"]').val($.trim(String(phone)));
         }
 
         var total = lines.length;
