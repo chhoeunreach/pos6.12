@@ -1936,6 +1936,7 @@ $(document).ready(function() {
                     $dr.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
                     $body.find('.sell-list-filter-date-from').val(start.format('YYYY-MM-DD'));
                     $body.find('.sell-list-filter-date-to').val(end.format('YYYY-MM-DD'));
+                    reset_hr_sell_list_pages();
                     get_hr_sell_list();
                 }
             );
@@ -1943,6 +1944,7 @@ $(document).ready(function() {
                 $dr.val('');
                 $body.find('.sell-list-filter-date-from').val('');
                 $body.find('.sell-list-filter-date-to').val('');
+                reset_hr_sell_list_pages();
                 get_hr_sell_list();
             });
         }
@@ -1961,6 +1963,7 @@ $(document).ready(function() {
 
     /* Sell type filter change */
     $(document).on('change', '.sell-list-filter-sell-type', function(){
+        reset_hr_sell_list_pages();
         get_hr_sell_list();
     });
 
@@ -2121,14 +2124,27 @@ $(document).ready(function() {
 
                         if (!isNaN(line.unitPrice)) {
                             var $unitPriceInput = $row.find('input.pos_unit_price');
-                            console.log('HR_PRICE: setting pos_unit_price to', line.unitPrice, 'input found:', $unitPriceInput.length);
-                            $unitPriceInput.val(__number_f(line.unitPrice, false));
+                            var $unitPriceIncTax = $row.find('input.pos_unit_price_inc_tax');
+
+                            /* __write_number formats the value per the page currency
+                               (thousands/decimal separators) so POS reads it back correctly. */
+                            __write_number($unitPriceInput, line.unitPrice);
                             $unitPriceInput.trigger('change');
+                            if ($unitPriceIncTax.length) {
+                                __write_number($unitPriceIncTax, line.unitPrice);
+                                $unitPriceIncTax.trigger('change');
+                            }
 
                             var modalId = '#row_edit_product_price_modal_' + rowIndex;
                             var $priceModal = $row.closest('body').find(modalId);
                             if ($priceModal.length && $priceModal.hasClass('in')) {
-                                $priceModal.find('input.pos_unit_price').val(__number_f(line.unitPrice, false));
+                                __write_number($priceModal.find('input.pos_unit_price'), line.unitPrice);
+                            }
+
+                            /* pos_total_row recalculates line subtotal and invoice totals,
+                               matching the behaviour of manual price edits. */
+                            if (typeof pos_total_row === 'function') {
+                                pos_total_row();
                             }
                         }
 
@@ -2332,6 +2348,10 @@ $(document).ready(function() {
     setInterval(function () {
         var $box = $('#sell_list_staff_box');
         if ($box.length && $box.is(':visible')) {
+            var $loader = $box.find('.sell-list-pane.is-active .sell-list-pane-loader');
+            if ($loader.length && $loader.data('loading')) {
+                return;
+            }
             get_hr_sell_list(true);
         }
     }, 30000);
@@ -2388,6 +2408,109 @@ function get_featured_products() {
     }
 }
 
+function reset_hr_sell_list_pages() {
+    var $box = $('#sell_list_staff_box');
+    if ($box.length === 0) {
+        return;
+    }
+    $box.find('.sell-list-page-active').val(1);
+    $box.find('.sell-list-page-added').val(1);
+    /* "Show all" mode — no more pages to load. */
+    $box.find('.sell-list-has-more-active').val(0);
+    $box.find('.sell-list-has-more-added').val(0);
+    $box.find('.sell-list-pane-loader').hide();
+    $box.find('.sell-list-pane-end').show();
+}
+
+function append_hr_sell_list_page() {
+    var $box = $('#sell_list_staff_box');
+    if ($box.length === 0) {
+        return;
+    }
+
+    var location_id = $('#location_id').val();
+    if (!location_id) {
+        return;
+    }
+
+    var $activePane = $box.find('.sell-list-pane.is-active');
+    if ($activePane.length === 0) {
+        return;
+    }
+
+    var target = $activePane.hasClass('sell-list-pane-added') ? 'added' : 'active';
+    var $pageInput = $box.find('.sell-list-page-' + target);
+    var $hasMoreInput = $box.find('.sell-list-has-more-' + target);
+    var $loader = $activePane.find('.sell-list-pane-loader');
+    var $end = $activePane.find('.sell-list-pane-end');
+
+    if ($hasMoreInput.length && $hasMoreInput.val() === '0') {
+        return;
+    }
+
+    if ($loader.data('loading')) {
+        return;
+    }
+
+    var page = parseInt($pageInput.val() || '1', 10);
+    page = isNaN(page) ? 1 : page;
+    var nextPage = page + 1;
+
+    var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
+    var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
+    var sellType = $box.find('.sell-list-filter-sell-type').val() || 'លក់';
+
+    $loader.data('loading', 1).show();
+    $end.hide();
+
+    $.ajax({
+        method: 'GET',
+        url: '/sells/pos/get-hr-sell-list/' + location_id,
+        dataType: 'json',
+        data: {
+            date_from: dateFrom,
+            date_to: dateTo,
+            sell_type: sellType,
+            page: nextPage,
+            append: 1,
+        },
+        success: function(data) {
+            $loader.data('loading', 0);
+            $loader.hide();
+
+            if (!data || !data.success) {
+                return;
+            }
+
+            $pageInput.val(data.page || nextPage);
+            $hasMoreInput.val(data.has_more ? 1 : 0);
+
+            var htmlKey = target === 'added' ? 'added_html' : 'active_html';
+            var html = data[htmlKey] || '';
+
+            if (html && html.trim() !== '') {
+                var $firstEmpty = $activePane.find('.sell-list-empty').first();
+                if ($firstEmpty.length) {
+                    $firstEmpty.before(html);
+                } else {
+                    $activePane.append(html);
+                }
+            }
+
+            if (data.has_more) {
+                $loader.show();
+            } else {
+                $end.show();
+            }
+        },
+        error: function() {
+            $loader.data('loading', 0);
+            $loader.hide();
+        },
+    });
+}
+
+
 function get_hr_sell_list(silent) {
     var $box = $('#sell_list_staff_box');
     if ($box.length === 0) {
@@ -2417,16 +2540,54 @@ function get_hr_sell_list(silent) {
             date_from: dateFrom,
             date_to: dateTo,
             sell_type: sellType,
+            /* 0 = "show all" — server returns every match, no pagination needed. */
+            per_page: 0,
         },
         success: function(result) {
             if (silent) {
                 /* Only update pane contents to avoid flickering filter/search/tabs */
                 var $newHtml = $('<div>').html(result);
-                $box.find('.sell-list-pane-active').html($newHtml.find('.sell-list-pane-active').html());
-                $box.find('.sell-list-pane-added').html($newHtml.find('.sell-list-pane-added').html());
+                var $newActive = $newHtml.find('.sell-list-pane-active');
+                var $newAdded = $newHtml.find('.sell-list-pane-added');
+                var $currentActive = $box.find('.sell-list-pane-active');
+                var $currentAdded = $box.find('.sell-list-pane-added');
+
+                /* Silent refresh preserves the user's currently-loaded pages:
+                   - For rows already in the pane, update them in place (or skip if identical).
+                   - Append any rows that are new (e.g. a report created in the last 30s). */
+                var mergePane = function($newPane, $currentPane) {
+                    var existingIds = {};
+                    $currentPane.find('.sell-list-report-row').each(function() {
+                        existingIds[$(this).data('report-id')] = $(this);
+                    });
+                    var appendedAny = false;
+                    $newPane.find('.sell-list-report-row').each(function() {
+                        var $newRow = $(this);
+                        var id = $newRow.data('report-id');
+                        if (existingIds[id]) {
+                            existingIds[id].replaceWith($newRow);
+                        } else {
+                            $currentPane.append($newRow);
+                            appendedAny = true;
+                        }
+                    });
+                    /* Reset loader/end markers but keep the rows */
+                    $currentPane.find('.sell-list-empty, .sell-list-pane-loader, .sell-list-pane-end').remove();
+                    $currentPane.append($newPane.children('.sell-list-empty, .sell-list-pane-loader, .sell-list-pane-end'));
+                    return appendedAny;
+                };
+                mergePane($newActive, $currentActive);
+                mergePane($newAdded, $currentAdded);
+
                 $box.find('.sell-list-added-count').html($newHtml.find('.sell-list-added-count').html());
+                $box.find('.sell-list-active-count').html($newHtml.find('.sell-list-active-count').html());
+
+                /* The user's loaded page counter stays put — we only refresh the first page
+                   in place. has_more is preserved from the current inputs (new data wouldn't
+                   add new pages that didn't already exist). */
             } else {
                 $box.html(result);
+                reset_hr_sell_list_pages();
             }
             /* Restore search text and filter */
             if (savedSearch) {
@@ -3577,9 +3738,20 @@ $('table#pos_table tbody').on('change', 'input.pos_line_total', function() {
 });
 
 $('div#product_list_body').on('scroll', function() {
+    var $body = $(this);
+    var $sellBox = $body.find('#sell_list_staff_box');
+    if ($sellBox.length && $sellBox.is(':visible')) {
+        if ($body.scrollTop() + $body.innerHeight() >= $body[0].scrollHeight - 80) {
+            append_hr_sell_list_page();
+        }
+        return;
+    }
 
-
-    if ($(this).scrollTop() + $(this).innerHeight() >= $(this)[0].scrollHeight) {
+    if ($body.scrollTop() + $body.innerHeight() >= $body[0].scrollHeight - 200) {
+        var $loader = $body.find('.product_pagination_loader');
+        if ($loader.length && $loader.is(':visible')) {
+            return;
+        }
         var page = parseInt($('#suggestion_page').val());
         page += 1;
         $('#suggestion_page').val(page);

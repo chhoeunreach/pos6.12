@@ -192,8 +192,8 @@
                 <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
             </svg>
             <span class="tw-truncate">Sell List</span>
-            @if (!empty($hr_sell_out_reports) && count($hr_sell_out_reports) > 0)
-                <span class="tw-dw-badge tw-dw-badge-sm tw-bg-sky-50 tw-border-sky-100 tw-text-sky-700 tw-font-bold tw-text-[11px] group-hover:tw-bg-white group-hover:tw-border-sky-200 tw-transition-colors">{{ count($hr_sell_out_reports) }}</span>
+            @if (!empty($hr_sell_out_reports_total) && $hr_sell_out_reports_total > 0)
+                <span class="tw-dw-badge tw-dw-badge-sm tw-bg-sky-50 tw-border-sky-100 tw-text-sky-700 tw-font-bold tw-text-[11px] group-hover:tw-bg-white group-hover:tw-border-sky-200 tw-transition-colors">{{ number_format((int) $hr_sell_out_reports_total) }}</span>
             @endif
         </button>
     </div>

@@ -43,29 +43,52 @@
     <input type="text" class="sell-list-search" placeholder="Search by serial, phone, invoice...">
 </div>
 
+<div class="sell-list-pane-header">
+    <span class="sell-list-pane-header-icon"><i class="fa fa-users tw-text-sky-600"></i></span>
+    <span class="sell-list-pane-header-title">Sell Out</span>
+    <span class="sell-list-pane-header-source">data from HR</span>
+</div>
+
 <div class="sell-list-tabs">
-    <button type="button" class="sell-list-tab is-active" data-target="active">Active</button>
-    <button type="button" class="sell-list-tab" data-target="added">Added <span class="sell-list-added-count">{{ $addedReports->count() }}</span></button>
+    <button type="button" class="sell-list-tab is-active" data-target="active">Active <span class="sell-list-tab-count sell-list-active-count">{{ $activeReports->count() }}</span></button>
+    <button type="button" class="sell-list-tab" data-target="added">Added <span class="sell-list-tab-count sell-list-added-count">{{ $addedReports->count() }}</span></button>
 </div>
 
 <div class="sell-list-pane sell-list-pane-active is-active">
-    @forelse ($activeReports as $report)
-        @include('sale_pos.partials.hr_sell_list_report_row', ['report' => $report, 'line_status' => 'active', 'show_copy_button' => true])
-    @empty
-        <div class="tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
+    @include('sale_pos.partials.hr_sell_list_rows', ['reports' => $activeReports, 'line_status' => 'active', 'show_copy_button' => true])
+    @if ($activeReports->isEmpty())
+        <div class="sell-list-empty tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
             <i class="fa fa-info-circle"></i>
             <span>No active Sell Out records found.</span>
         </div>
-    @endforelse
+    @endif
+    <div class="sell-list-pane-loader tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-2 tw-px-3 tw-text-sky-700 tw-text-xs" style="display:none;">
+        <i class="fa fa-spinner fa-spin"></i> <span>Loading more…</span>
+    </div>
+    <div class="sell-list-pane-end tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-2 tw-px-3 tw-text-slate-400 tw-text-xs" style="display:none;">
+        <i class="fa fa-check-circle"></i> <span>End of list.</span>
+    </div>
 </div>
 
 <div class="sell-list-pane sell-list-pane-added">
-    @forelse ($addedReports as $report)
-        @include('sale_pos.partials.hr_sell_list_report_row', ['report' => $report, 'line_status' => 'added', 'show_copy_button' => false])
-    @empty
-        <div class="sell-list-added-empty tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
+    @include('sale_pos.partials.hr_sell_list_rows', ['reports' => $addedReports, 'line_status' => 'added', 'show_copy_button' => false])
+    @if ($addedReports->isEmpty())
+        <div class="sell-list-empty tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
             <i class="fa fa-info-circle"></i>
             <span>No added records yet.</span>
         </div>
-    @endforelse
+    @endif
+    <div class="sell-list-pane-loader tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-2 tw-px-3 tw-text-sky-700 tw-text-xs" style="display:none;">
+        <i class="fa fa-spinner fa-spin"></i> <span>Loading more…</span>
+    </div>
+    <div class="sell-list-pane-end tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-2 tw-px-3 tw-text-slate-400 tw-text-xs" style="display:none;">
+        <i class="fa fa-check-circle"></i> <span>End of list.</span>
+    </div>
 </div>
+
+<input type="hidden" class="sell-list-page-active" value="{{ $page ?? 1 }}">
+<input type="hidden" class="sell-list-page-added" value="{{ $page ?? 1 }}">
+<input type="hidden" class="sell-list-has-more-active" value="{{ !empty($has_more) ? 1 : 0 }}">
+<input type="hidden" class="sell-list-has-more-added" value="{{ !empty($has_more) ? 1 : 0 }}">
+<input type="hidden" class="sell-list-per-page" value="{{ $per_page ?? 50 }}">
+<input type="hidden" class="sell-list-total" value="{{ $total ?? 0 }}">

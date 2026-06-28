@@ -12,8 +12,12 @@
      data-staff-code="{{ $rowStaffCode }}"
      data-staff-name="{{ $staffName }}"
      data-seller-name="{{ $rowSellerName }}"
-     data-customer-phone="{{ $rowCustomerPhone }}">
+     data-customer-phone="{{ $rowCustomerPhone }}"
+     data-row-index="{{ $row_index ?? $loop->iteration ?? 1 }}">
     <div class="tw-flex tw-items-center tw-gap-2 tw-mb-1">
+        <div class="tw-flex tw-items-center tw-justify-center tw-flex-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-sky-100 tw-text-sky-700 tw-text-[11px] tw-font-bold" title="Row #{{ $row_index ?? $loop->iteration ?? 1 }}">
+            {{ $row_index ?? $loop->iteration ?? 1 }}
+        </div>
         <div class="tw-flex tw-items-center tw-gap-1.5 tw-flex-shrink-0 tw-min-w-0 tw-max-w-[35%]">
             <div class="sell-list-avatar-wrap tw-flex-shrink-0">
                 @if (!empty($avatarUrl))

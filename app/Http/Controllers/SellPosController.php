@@ -256,7 +256,10 @@ class SellPosController extends Controller
         $default_sell_type = 'លក់';
         $default_date_from = \Carbon::now()->format('Y-m-d');
         $default_date_to = \Carbon::now()->format('Y-m-d');
-        $hr_sell_out_reports = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
+        $hr_sell_out_reports_data = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
+        $hr_sell_out_reports = $hr_sell_out_reports_data['reports'];
+        $hr_sell_out_reports_has_more = $hr_sell_out_reports_data['has_more'];
+        $hr_sell_out_reports_total = $hr_sell_out_reports_data['total'];
         $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
 
         //pos screen view from module
@@ -301,6 +304,8 @@ class SellPosController extends Controller
                 'featured_products',
                 'pos_sell_list_invoice_key',
                 'hr_sell_out_reports',
+                'hr_sell_out_reports_has_more',
+                'hr_sell_out_reports_total',
                 'default_sell_type',
                 'default_date_from',
                 'default_date_to',
@@ -314,7 +319,7 @@ class SellPosController extends Controller
             ));
     }
 
-    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null)
+    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50)
     {
         try {
             $location_name = null;
@@ -322,7 +327,12 @@ class SellPosController extends Controller
                 $location_name = optional(BusinessLocation::find($location_id))->name;
             }
 
-            $reports = DB::connection('hr')
+            $page = max(1, (int) $page);
+            /* Allow "show all" mode: per_page <= 0 (or >= 100000) disables pagination. */
+            $per_page = (int) $per_page;
+            $showAll = $per_page <= 0 || $per_page >= 100000;
+
+            $base = DB::connection('hr')
                 ->table('sell_out_reports as sor')
                 ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
                 ->select(
@@ -354,12 +364,28 @@ class SellPosController extends Controller
                 ->when(!empty($date_to), function ($query) use ($date_to) {
                     $query->where('sor.created_at', '<=', $date_to . ' 23:59:59');
                 })
-                ->orderBy('sor.invoice_no', 'asc')
-                ->limit(50)
-                ->get();
+                ->orderBy('sor.invoice_no', 'asc');
+
+            $total = (clone $base)->count();
+
+            $reports = (clone $base);
+            if (!$showAll) {
+                $reports = $reports
+                    ->skip(($page - 1) * $per_page)
+                    ->take($per_page);
+            }
+            $reports = $reports->get();
+
+            $has_more = $showAll ? false : (($page * $per_page) < $total);
 
             if ($reports->isEmpty()) {
-                return $reports;
+                return [
+                    'reports' => $reports,
+                    'has_more' => false,
+                    'total' => $total,
+                    'page' => $page,
+                    'per_page' => $per_page,
+                ];
             }
 
             $lines = DB::connection('hr')
@@ -378,7 +404,7 @@ class SellPosController extends Controller
                     ->keyBy('hr_sell_out_report_line_id');
             }
 
-            return $reports->map(function ($report) use ($lines, $statuses) {
+            $reports = $reports->map(function ($report) use ($lines, $statuses) {
                 $report->lines = $lines->get($report->id, collect())->map(function ($line) use ($statuses) {
                     $status = $statuses->get($line->id);
                     $line->pos_serial_status = !empty($status) ? $status->status : 'active';
@@ -396,10 +422,24 @@ class SellPosController extends Controller
 
                 return $report;
             });
+
+            return [
+                'reports' => $reports,
+                'has_more' => $has_more,
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $per_page,
+            ];
         } catch (\Exception $e) {
             \Log::warning('Unable to load HR sell out reports for POS screen: ' . $e->getMessage());
 
-            return collect();
+            return [
+                'reports' => collect(),
+                'has_more' => false,
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $per_page,
+            ];
         }
     }
 
@@ -408,7 +448,44 @@ class SellPosController extends Controller
         $date_from = $request->input('date_from', \Carbon::now()->format('Y-m-d'));
         $date_to = $request->input('date_to', \Carbon::now()->format('Y-m-d'));
         $sell_type = $request->input('sell_type', 'លក់');
-        $hr_sell_out_reports = $this->getHrSellOutReports($location_id, $date_from, $date_to, $sell_type);
+        $page = (int) $request->input('page', 1);
+        $per_page = (int) $request->input('per_page', 50);
+        $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
+
+        $data = $this->getHrSellOutReports($location_id, $date_from, $date_to, $sell_type, $page, $per_page);
+        $hr_sell_out_reports = $data['reports'];
+        $has_more = $data['has_more'];
+        $total = $data['total'];
+
+        if ($append) {
+            $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
+            $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
+
+            /* When appending page N+1, the visible row index should continue from where the
+               current page ended (rows already in the DOM are 1..page*per_page). */
+            $activeStart = (($page - 1) * $per_page);
+            $addedStart = (($page - 1) * $per_page);
+
+            return response()->json([
+                'success' => true,
+                'page' => $page,
+                'per_page' => $per_page,
+                'total' => $total,
+                'has_more' => $has_more,
+                'active_html' => view('sale_pos.partials.hr_sell_list_rows', [
+                    'reports' => $activeReports,
+                    'line_status' => 'active',
+                    'show_copy_button' => true,
+                    'row_index' => $activeStart,
+                ])->render(),
+                'added_html' => view('sale_pos.partials.hr_sell_list_rows', [
+                    'reports' => $addedReports,
+                    'line_status' => 'added',
+                    'show_copy_button' => false,
+                    'row_index' => $addedStart,
+                ])->render(),
+            ]);
+        }
 
         $default_date_from = $date_from;
         $default_date_to = $date_to;
@@ -418,7 +495,7 @@ class SellPosController extends Controller
         }
 
         return view('sale_pos.partials.hr_sell_list_staff')
-            ->with(compact('hr_sell_out_reports', 'sell_types', 'default_date_from', 'default_date_to'));
+            ->with(compact('hr_sell_out_reports', 'sell_types', 'default_date_from', 'default_date_to', 'has_more', 'page', 'per_page', 'total'));
     }
 
     public function getHrSellListDetail($report_id)
