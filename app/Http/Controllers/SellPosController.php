@@ -494,8 +494,32 @@ class SellPosController extends Controller
             $sell_types = $this->getHrSellListServiceTypes($location_id);
         }
 
-        return view('sale_pos.partials.hr_sell_list_staff')
-            ->with(compact('hr_sell_out_reports', 'sell_types', 'default_date_from', 'default_date_to', 'has_more', 'page', 'per_page', 'total'));
+        $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
+        $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
+
+        /* If the client asked for JSON (always now), return the rendered partial + total
+           so the JS can either replace the box or merge in place. */
+        $html = view('sale_pos.partials.hr_sell_list_staff', [
+            'hr_sell_out_reports' => $hr_sell_out_reports,
+            'sell_types' => $sell_types,
+            'default_date_from' => $default_date_from,
+            'default_date_to' => $default_date_to,
+            'has_more' => $has_more,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total' => $total,
+        ])->render();
+
+        return response()->json([
+            'success' => true,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total' => $total,
+            'has_more' => $has_more,
+            'html' => $html,
+            'active_count' => $activeReports->count(),
+            'added_count' => $addedReports->count(),
+        ]);
     }
 
     public function getHrSellListDetail($report_id)

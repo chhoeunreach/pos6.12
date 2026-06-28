@@ -1606,6 +1606,29 @@ body.lockscreen::-webkit-scrollbar-thumb:hover {
     font-size: 10px; font-weight: 600; color: #0369a1;
     background: #fff; padding: 2px 8px; border-radius: 999px; border: 1px solid #bae6fd;
 }
+.sell-list-total-banner {
+    width: 100%; margin: 4px 0 6px; padding: 6px 10px;
+    background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+    color: #fff; border-radius: 8px; font-size: 12px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.sell-list-total-banner-row {
+    display: flex; align-items: center; justify-content: space-between;
+}
+.sell-list-total-banner-label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 600; letter-spacing: 0.2px;
+}
+.sell-list-total-banner-value {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 28px; height: 22px; padding: 0 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.22); font-weight: 800; font-size: 12px;
+}
+.sell-list-total-banner-detail {
+    width: 100%; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.18);
+    display: flex; flex-direction: column; gap: 3px;
+}
+.sell-list-total-banner.is-open .sell-list-total-banner-detail { display: flex; }
 
 .sell-list-tab {
     flex: 1; height: 30px; border: 1px solid #bae6fd; border-radius: 8px;

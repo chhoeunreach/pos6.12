@@ -1433,7 +1433,10 @@ $(document).ready(function() {
             );
         }
         get_featured_products();
+        reset_hr_sell_list_pages();
         get_hr_sell_list();
+        /* Refresh the sidebar Sell List badge to the new location's total. */
+        refresh_sell_list_sidebar_badge();
     });
 
 // Active filter is shown as a second line INSIDE the matching Category / Brand
@@ -1966,6 +1969,27 @@ $(document).ready(function() {
         reset_hr_sell_list_pages();
         get_hr_sell_list();
     });
+
+    /* Sell List → expand/collapse the totals banner */
+    $(document).on('click', '.sell-list-total-banner', function(){
+        $(this).toggleClass('is-open');
+    });
+
+    /* After any HR sell list refresh, sync the sidebar Sell List badge. */
+    function refresh_sell_list_sidebar_badge() {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length === 0) {
+            return;
+        }
+        var total = parseInt($box.find('.sell-list-total').val() || '0', 10);
+        if (isNaN(total)) {
+            total = 0;
+        }
+        var formatted = total.toLocaleString ? total.toLocaleString() : String(total);
+        $('.sell-list-sidebar-badge').text(formatted);
+    }
+    /* Run once on page load so the badge matches whatever the server seeded. */
+    refresh_sell_list_sidebar_badge();
 
     /* Sell type edit button in detail modal */
     $(document).on('click', '.sell-type-edit-btn', function(){
@@ -2535,7 +2559,7 @@ function get_hr_sell_list(silent) {
     $.ajax({
         method: 'GET',
         url: '/sells/pos/get-hr-sell-list/' + location_id,
-        dataType: 'html',
+        dataType: 'json',
         data: {
             date_from: dateFrom,
             date_to: dateTo,
@@ -2543,7 +2567,9 @@ function get_hr_sell_list(silent) {
             /* 0 = "show all" — server returns every match, no pagination needed. */
             per_page: 0,
         },
-        success: function(result) {
+        success: function(data) {
+            var result = data.html || '';
+
             if (silent) {
                 /* Only update pane contents to avoid flickering filter/search/tabs */
                 var $newHtml = $('<div>').html(result);
@@ -2582,12 +2608,26 @@ function get_hr_sell_list(silent) {
                 $box.find('.sell-list-added-count').html($newHtml.find('.sell-list-added-count').html());
                 $box.find('.sell-list-active-count').html($newHtml.find('.sell-list-active-count').html());
 
+                /* Keep the totals banner + sidebar badge in sync with the refreshed data. */
+                var $newTotal = $newHtml.find('.sell-list-total-total').html();
+                var $newActive = $newHtml.find('.sell-list-total-active').html();
+                var $newAdded = $newHtml.find('.sell-list-total-added').html();
+                var $newRange = $newHtml.find('.sell-list-total-daterange').html();
+                if ($newTotal !== undefined) { $box.find('.sell-list-total-total').html($newTotal); }
+                if ($newActive !== undefined) { $box.find('.sell-list-total-active').html($newActive); }
+                if ($newAdded !== undefined) { $box.find('.sell-list-total-added').html($newAdded); }
+                if ($newRange !== undefined) { $box.find('.sell-list-total-daterange').html($newRange); }
+                var $newTotalInput = $newHtml.find('.sell-list-total').val();
+                if ($newTotalInput !== undefined) { $box.find('.sell-list-total').val($newTotalInput); }
+                refresh_sell_list_sidebar_badge();
+
                 /* The user's loaded page counter stays put — we only refresh the first page
                    in place. has_more is preserved from the current inputs (new data wouldn't
                    add new pages that didn't already exist). */
             } else {
                 $box.html(result);
                 reset_hr_sell_list_pages();
+                refresh_sell_list_sidebar_badge();
             }
             /* Restore search text and filter */
             if (savedSearch) {

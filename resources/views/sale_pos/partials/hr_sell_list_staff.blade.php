@@ -49,6 +49,27 @@
     <span class="sell-list-pane-header-source">data from HR</span>
 </div>
 
+<div class="sell-list-total-banner" title="Click to expand">
+    <div class="sell-list-total-banner-row">
+        <span class="sell-list-total-banner-label"><i class="fa fa-list"></i> Total Sell Out</span>
+        <span class="sell-list-total-banner-value sell-list-total-total">{{ number_format((float)($total ?? 0)) }}</span>
+    </div>
+    <div class="sell-list-total-banner-detail" style="display:none;">
+        <div class="sell-list-total-banner-row">
+            <span class="sell-list-total-banner-label"><i class="fa fa-circle text-sky-600"></i> Active</span>
+            <span class="sell-list-total-banner-value sell-list-total-active">{{ number_format((float)($activeReports->count())) }}</span>
+        </div>
+        <div class="sell-list-total-banner-row">
+            <span class="sell-list-total-banner-label"><i class="fa fa-circle text-emerald-600"></i> Added</span>
+            <span class="sell-list-total-banner-value sell-list-total-added">{{ number_format((float)($addedReports->count())) }}</span>
+        </div>
+        <div class="sell-list-total-banner-row">
+            <span class="sell-list-total-banner-label"><i class="fa fa-clock-o"></i> Date range</span>
+            <span class="sell-list-total-banner-value sell-list-total-daterange">{{ $defaultDateFrom }} ~ {{ $defaultDateTo }}</span>
+        </div>
+    </div>
+</div>
+
 <div class="sell-list-tabs">
     <button type="button" class="sell-list-tab is-active" data-target="active">Active <span class="sell-list-tab-count sell-list-active-count">{{ $activeReports->count() }}</span></button>
     <button type="button" class="sell-list-tab" data-target="added">Added <span class="sell-list-tab-count sell-list-added-count">{{ $addedReports->count() }}</span></button>
