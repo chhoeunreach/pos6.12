@@ -1661,6 +1661,13 @@ body.lockscreen::-webkit-scrollbar-thumb:hover {
 .sell-list-report-row:hover {
     border-color: #7dd3fc; background: #f8fdff;
 }
+.sell-list-row-index-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; width: 22px; height: 22px;
+    border-radius: 999px; background: #e0f2fe; color: #0369a1;
+    font-size: 11px; font-weight: 800;
+    border: 1px solid #bae6fd; line-height: 1;
+}
 .sell-list-staff-head {
     display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
     padding-bottom: 6px; border-bottom: 1px solid #e0f2fe;

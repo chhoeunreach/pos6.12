@@ -82,7 +82,7 @@ class ProductController extends Controller
             }
             $permitted_locations = auth()->user()->permitted_locations();
 
-            $query = Product::with(['media'])
+            $query = Product::with(['media', 'product_locations'])
                 ->leftJoin('brands', 'products.brand_id', '=', 'brands.id')
                 ->join('units', 'products.unit_id', '=', 'units.id')
                 ->leftJoin('categories as c1', 'products.category_id', '=', 'c1.id')
@@ -118,8 +118,6 @@ class ProductController extends Controller
                     $query->whereHas('product_locations', function ($query) use ($permitted_locations) {
                         $query->whereIn('product_locations.location_id', $permitted_locations);
                     });
-                } else {
-                    $query->with('product_locations');
                 }
             }
 

@@ -44,7 +44,7 @@
 </div>
 
 <div class="sell-list-pane-header">
-    <span class="sell-list-pane-header-icon"><i class="fa fa-users tw-text-sky-600"></i></span>
+    <span class="sell-list-pane-header-icon"><i class="fa fa-users"></i></span>
     <span class="sell-list-pane-header-title">Sell Out</span>
     <span class="sell-list-pane-header-source">data from HR</span>
 </div>
@@ -56,11 +56,11 @@
     </div>
     <div class="sell-list-total-banner-detail" style="display:none;">
         <div class="sell-list-total-banner-row">
-            <span class="sell-list-total-banner-label"><i class="fa fa-circle text-sky-600"></i> Active</span>
+            <span class="sell-list-total-banner-label"><i class="fa fa-circle"></i> Active</span>
             <span class="sell-list-total-banner-value sell-list-total-active">{{ number_format((float)($activeReports->count())) }}</span>
         </div>
         <div class="sell-list-total-banner-row">
-            <span class="sell-list-total-banner-label"><i class="fa fa-circle text-emerald-600"></i> Added</span>
+            <span class="sell-list-total-banner-label"><i class="fa fa-circle"></i> Added</span>
             <span class="sell-list-total-banner-value sell-list-total-added">{{ number_format((float)($addedReports->count())) }}</span>
         </div>
         <div class="sell-list-total-banner-row">

@@ -293,8 +293,8 @@
                 scrollCollapse: true,
                 deferRender: true,
                 aLengthMenu: [
-                    [25, 50, 100, 200, 500, 1000, -1],
-                    [25, 50, 100, 200, 500, 1000, LANG.all],
+                    [25, 50, 100, 200, 500, 1000, 2000, -1],
+                    [25, 50, 100, 200, 500, 1000, 2000, LANG.all],
                 ],
                 "ajax": {
                     "url": "/products",
