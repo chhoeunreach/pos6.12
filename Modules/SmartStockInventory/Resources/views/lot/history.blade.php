@@ -1,8 +1,8 @@
 @extends('smartstockinventory::layouts.master')
 
-@section('title', __('lang_v1.lot_history') . ' - ' . $lot)
+@section('page_title', __('lang_v1.lot_history') . ' - ' . $lot)
 
-@section('content')
+@section('module_content')
 
 <section class="content-header">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">{{ __('lang_v1.lot_history') }}: {{ $lot }}</h1>
@@ -118,9 +118,11 @@
     </div>
 </section>
 
+<div class="modal fade view_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel"></div>
+
 @endsection
 
-@section('javascript')
+@section('module_js')
 <script>
     $(document).ready(function() {
         $('#lot_history_date_filter').daterangepicker(dateRangeSettings, function(start, end) {
@@ -155,6 +157,8 @@
                 { data: 'qty_in', name: 'qty_in', searchable: false },
                 { data: 'qty_out', name: 'qty_out', searchable: false },
                 { data: 'notes', name: 'notes', searchable: false },
+                { data: 'transaction_id', name: 'transaction_id', visible: false, searchable: false },
+                { data: 'transaction_type', name: 'transaction_type', visible: false, searchable: false },
             ],
         });
 

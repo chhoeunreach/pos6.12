@@ -113,7 +113,7 @@ class LotController extends BaseSmartStockController
                     return '--';
                 })
                 ->editColumn('lot_number', function ($row) {
-                    return '<a href="' . ssi_route('ssi.lot.history', $row->lot_number) . '" target="_blank">' . e($row->lot_number) . '</a>';
+                    return '<a href="javascript:void(0)" class="lot-history-link" data-lot=" . e($row->lot_number) . "" target="_blank">' . e($row->lot_number) . '</a>';
                 })
                 ->addColumn('action', function ($row) {
                     return '<a class="btn btn-xs btn-info" href="' . ssi_route('ssi.lot.history', $row->lot_number) . '" target="_blank"><i class="fa fa-history"></i> History</a>';
@@ -227,6 +227,8 @@ class LotController extends BaseSmartStockController
             $purchaseMovements = $purchaseMovements->select([
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'purchase' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
                 DB::raw('v.sub_sku as sku'),
@@ -259,6 +261,8 @@ class LotController extends BaseSmartStockController
             $sellMovements = $sellMovements->select([
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'sell' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
                 DB::raw('v.sub_sku as sku'),
@@ -291,6 +295,8 @@ class LotController extends BaseSmartStockController
             $adjustmentMovements = $adjustmentMovements->select([
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'adjustment' as movement_type"),
+                DB::raw('t.id as transaction_id'),
+                DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
                 DB::raw('v.sub_sku as sku'),
@@ -319,6 +325,28 @@ class LotController extends BaseSmartStockController
             $movements = DB::query()->fromSub($movementUnion, 'lot_movements');
 
             return DataTables::of($movements)
+                ->addColumn('transaction_id', function ($row) {
+                    return (int) ($row->transaction_id ?? 0);
+                })
+                ->addColumn('transaction_type', function ($row) {
+                    return (string) ($row->transaction_type ?? '');
+                })
+                ->editColumn('ref_no', function ($row) {
+                    $refNo = (string) ($row->ref_no ?? '');
+                    if ($refNo === '') {
+                        return '--';
+                    }
+
+                    $txId = (int) ($row->transaction_id ?? 0);
+                    $txType = (string) ($row->transaction_type ?? '');
+                    $viewUrl = $this->resolveTransactionUrl($txType, $txId);
+
+                    if ($viewUrl === null) {
+                        return e($refNo);
+                    }
+
+                    return '<a href="#" class="btn-modal" data-href="' . e($viewUrl) . '" data-container=".view_modal" title="' . e($refNo) . '">' . e($refNo) . '</a>';
+                })
                 ->editColumn('movement_date', function ($row) {
                     return $this->util->format_date($row->movement_date, true);
                 })
@@ -346,7 +374,7 @@ class LotController extends BaseSmartStockController
                     }
                     return '--';
                 })
-                ->rawColumns(['qty_in', 'qty_out'])
+                ->rawColumns(['qty_in', 'qty_out', 'ref_no'])
                 ->make(true);
         }
 
@@ -386,6 +414,23 @@ class LotController extends BaseSmartStockController
         $currentStock = ($stockQty->total_purchased ?? 0) - ($stockQty->total_sold ?? 0) - ($stockQty->total_adjusted ?? 0);
 
         return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock'));
+    }
+
+    private function resolveTransactionUrl(string $transactionType, int $transactionId): ?string
+    {
+        if ($transactionId <= 0) {
+            return null;
+        }
+
+        return match ($transactionType) {
+            'sell', 'production_sell' => ssi_url('/sells/' . $transactionId),
+            'sell_return' => ssi_url('/sell-return/' . $transactionId),
+            'purchase', 'opening_stock', 'production_purchase' => ssi_url('/purchases/' . $transactionId),
+            'purchase_return' => ssi_url('/purchase-return/' . $transactionId),
+            'stock_adjustment' => ssi_url('/stock-adjustments/' . $transactionId),
+            'sell_transfer', 'purchase_transfer', 'sell_transfer_pending' => ssi_url('/stock-transfers/' . $transactionId),
+            default => null,
+        };
     }
 
     private function lotFilters(Request $request): array

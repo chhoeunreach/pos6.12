@@ -1,0 +1,15 @@
+// Lot History Modal
+$(document).on('click', ".lot-history-link, .lot-history-btn", function(e) {
+    e.preventDefault();
+    var lot = $(this).data("lot");
+    var modal = $("#lotHistoryModal");
+    modal.find(".modal-title").text("Lot History for " + lot);
+    var iframe = $("<iframe>", {
+        src: "{{ ssi_route('ssi.lot.history', '__LOT__') }}".replace('__LOT__', lot),
+        width: "100%",
+        height: "500px",
+        frameborder: 0
+    });
+    modal.find("#lotHistoryModalBody").empty().append(iframe);
+    modal.modal("show");
+});
