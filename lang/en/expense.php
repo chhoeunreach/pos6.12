@@ -35,5 +35,6 @@ return [
     'expense_for_help' => 'Choose the user (email/username) for which expense is related to  (Optional)',
     'import_expense' => 'Import expense',
     'date_format_instruction' => 'Expense date time format should be "Y-m-d H:i:s" (2020-07-15 17:45:32)',
+    'category_parent' => 'Parent Category',
 
 ];
