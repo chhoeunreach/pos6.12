@@ -1970,6 +1970,12 @@ $(document).ready(function() {
         get_hr_sell_list();
     });
 
+    /* Branch filter change */
+    $(document).on('change', '.sell-list-filter-branch', function(){
+        reset_hr_sell_list_pages();
+        get_hr_sell_list();
+    });
+
     /* Sell List → expand/collapse the totals banner */
     $(document).on('click', '.sell-list-total-banner', function(){
         $(this).toggleClass('is-open');
@@ -2483,6 +2489,7 @@ function append_hr_sell_list_page() {
     var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
     var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
     var sellType = $box.find('.sell-list-filter-sell-type').val() || 'លក់';
+    var branchLocationId = $box.find('.sell-list-filter-branch').val() || '';
 
     $loader.data('loading', 1).show();
     $end.hide();
@@ -2495,6 +2502,7 @@ function append_hr_sell_list_page() {
             date_from: dateFrom,
             date_to: dateTo,
             sell_type: sellType,
+            branch_location_id: branchLocationId,
             page: nextPage,
             append: 1,
         },
@@ -2549,6 +2557,7 @@ function get_hr_sell_list(silent) {
     var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
     var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
     var sellType = $box.find('.sell-list-filter-sell-type').val() || 'លក់';
+    var branchLocationId = $box.find('.sell-list-filter-branch').val() || '';
 
     /* Save state before refresh */
     var savedSearch = $box.find('.sell-list-search').val();
@@ -2564,6 +2573,7 @@ function get_hr_sell_list(silent) {
             date_from: dateFrom,
             date_to: dateTo,
             sell_type: sellType,
+            branch_location_id: branchLocationId,
             /* 0 = "show all" — server returns every match, no pagination needed. */
             per_page: 0,
         },

@@ -23,6 +23,19 @@
     </div>
     <div class="sell-list-filter-row">
         <div class="sell-list-filter-field">
+            <label>Branch</label>
+            <select class="sell-list-filter-branch form-control">
+                <option value="">All Branches</option>
+                @if (!empty($business_locations))
+                    @foreach ($business_locations as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                @endif
+            </select>
+        </div>
+    </div>
+    <div class="sell-list-filter-row">
+        <div class="sell-list-filter-field">
             <label>Sell Type</label>
             <select class="sell-list-filter-sell-type form-control">
                 <option value="លក់">លក់ (Default)</option>

@@ -452,7 +452,10 @@ class SellPosController extends Controller
         $per_page = (int) $request->input('per_page', 50);
         $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
 
-        $data = $this->getHrSellOutReports($location_id, $date_from, $date_to, $sell_type, $page, $per_page);
+        $branch_location_id = $request->input('branch_location_id');
+        $filter_location_id = !empty($branch_location_id) ? $branch_location_id : $location_id;
+
+        $data = $this->getHrSellOutReports($filter_location_id, $date_from, $date_to, $sell_type, $page, $per_page);
         $hr_sell_out_reports = $data['reports'];
         $has_more = $data['has_more'];
         $total = $data['total'];
@@ -490,8 +493,14 @@ class SellPosController extends Controller
         $default_date_from = $date_from;
         $default_date_to = $date_to;
         $sell_types = collect();
-        if (!empty($location_id)) {
-            $sell_types = $this->getHrSellListServiceTypes($location_id);
+        if (!empty($filter_location_id)) {
+            $sell_types = $this->getHrSellListServiceTypes($filter_location_id);
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $business_locations = [];
+        if (!empty($business_id)) {
+            $business_locations = BusinessLocation::forDropdown($business_id, false, false);
         }
 
         $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
@@ -508,6 +517,7 @@ class SellPosController extends Controller
             'page' => $page,
             'per_page' => $per_page,
             'total' => $total,
+            'business_locations' => $business_locations,
         ])->render();
 
         return response()->json([
