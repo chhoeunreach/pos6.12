@@ -25,10 +25,10 @@
         <div class="sell-list-filter-field">
             <label>Branch</label>
             <select class="sell-list-filter-branch form-control">
-                <option value="">All Branches</option>
+                @php $defaultHrBranch = $default_hr_branch ?? ''; @endphp
                 @if (!empty($hr_branches))
                     @foreach ($hr_branches as $branch)
-                        <option value="{{ $branch }}">{{ $branch }}</option>
+                        <option value="{{ $branch }}" {{ $branch === $defaultHrBranch ? 'selected' : '' }}>{{ $branch }}</option>
                     @endforeach
                 @endif
             </select>

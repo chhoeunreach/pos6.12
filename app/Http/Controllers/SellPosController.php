@@ -262,6 +262,7 @@ class SellPosController extends Controller
         $hr_sell_out_reports_total = $hr_sell_out_reports_data['total'];
         $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
         $hr_branches = $this->getHrSellListBranches();
+        $default_hr_branch = !empty($default_location) ? ($this->getHrBranchGroupNames($default_location->id)[0] ?? '') : '';
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -312,6 +313,7 @@ class SellPosController extends Controller
                 'default_date_to',
                 'sell_types',
                 'hr_branches',
+                'default_hr_branch',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
@@ -483,6 +485,10 @@ class SellPosController extends Controller
         $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
 
         $branch_name = $request->input('branch_name', '');
+        if (empty($branch_name)) {
+            $defaultNames = $this->getHrBranchGroupNames($location_id);
+            $branch_name = $defaultNames[0] ?? '';
+        }
 
         $data = $this->getHrSellOutReports(null, $date_from, $date_to, $sell_type, $page, $per_page, $branch_name);
         $hr_sell_out_reports = $data['reports'];
@@ -535,6 +541,8 @@ class SellPosController extends Controller
 
         /* If the client asked for JSON (always now), return the rendered partial + total
            so the JS can either replace the box or merge in place. */
+        $default_hr_branch = $this->getHrBranchGroupNames($location_id)[0] ?? '';
+
         $html = view('sale_pos.partials.hr_sell_list_staff', [
             'hr_sell_out_reports' => $hr_sell_out_reports,
             'sell_types' => $sell_types,
@@ -545,6 +553,7 @@ class SellPosController extends Controller
             'per_page' => $per_page,
             'total' => $total,
             'hr_branches' => $hr_branches,
+            'default_hr_branch' => $default_hr_branch,
         ])->render();
 
         return response()->json([
