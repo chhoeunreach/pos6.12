@@ -38,10 +38,10 @@
         <div class="sell-list-filter-field">
             <label>Sell Type</label>
             <select class="sell-list-filter-sell-type form-control">
-                <option value="លក់">លក់ (Default)</option>
+                <option value="លក់">Sell / លក់</option>
                 @if (!empty($sell_types))
                     @foreach ($sell_types as $type)
-                        @if ($type !== 'លក់')
+                        @if (!in_array($type, ['sell', 'លក់']))
                             <option value="{{ $type }}">{{ $type }}</option>
                         @endif
                     @endforeach

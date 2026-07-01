@@ -354,7 +354,11 @@ class SellPosController extends Controller
                     'u.avatar as staff_avatar'
                 )
                 ->when(!empty($sell_type), function ($query) use ($sell_type) {
-                    $query->where('sor.service_type', $sell_type);
+                    if (in_array($sell_type, ['sell', 'លក់'])) {
+                        $query->whereIn('sor.service_type', ['sell', 'លក់']);
+                    } else {
+                        $query->where('sor.service_type', $sell_type);
+                    }
                 })
                 ->when(!empty($location_name), function ($query) use ($location_name) {
                     $query->where(function ($query) use ($location_name) {
@@ -457,9 +461,8 @@ class SellPosController extends Controller
         $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
 
         $branch_name = $request->input('branch_name', '');
-        $filter_location_id = !empty($branch_name) ? null : $location_id;
 
-        $data = $this->getHrSellOutReports($filter_location_id, $date_from, $date_to, $sell_type, $page, $per_page, $branch_name);
+        $data = $this->getHrSellOutReports(null, $date_from, $date_to, $sell_type, $page, $per_page, $branch_name);
         $hr_sell_out_reports = $data['reports'];
         $has_more = $data['has_more'];
         $total = $data['total'];
@@ -499,8 +502,8 @@ class SellPosController extends Controller
         $sell_types = collect();
         if (!empty($branch_name)) {
             $sell_types = $this->getHrSellListServiceTypes(null, $branch_name);
-        } elseif (!empty($filter_location_id)) {
-            $sell_types = $this->getHrSellListServiceTypes($filter_location_id);
+        } else {
+            $sell_types = $this->getHrSellListServiceTypes(null);
         }
 
         $hr_branches = $this->getHrSellListBranches();

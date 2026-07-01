@@ -2458,10 +2458,7 @@ function append_hr_sell_list_page() {
         return;
     }
 
-    var location_id = $('#location_id').val();
-    if (!location_id) {
-        return;
-    }
+    var location_id = $('#location_id').val() || '0';
 
     var $activePane = $box.find('.sell-list-pane.is-active');
     if ($activePane.length === 0) {
@@ -2549,10 +2546,7 @@ function get_hr_sell_list(silent) {
         return;
     }
 
-    var location_id = $('#location_id').val();
-    if (!location_id) {
-        return;
-    }
+    var location_id = $('#location_id').val() || '0';
 
     var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
     var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
