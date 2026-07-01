@@ -393,6 +393,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('get-expense-sub-categories', [ExpenseCategoryController::class, 'getSubCategories']);
 
     //Expense Categories...
+    Route::get('expense-categories/download-template', [ExpenseCategoryController::class, 'downloadTemplate']);
     Route::get('expense-categories/export', [ExpenseCategoryController::class, 'export']);
     Route::post('expense-categories/import-preview', [ExpenseCategoryController::class, 'importPreview']);
     Route::post('expense-categories/import-confirm', [ExpenseCategoryController::class, 'importConfirm']);

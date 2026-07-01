@@ -71,7 +71,11 @@
                             <div class="form-group">
                                 <label>@lang('messages.file'):</label>
                                 <input type="file" class="form-control" id="exp_cat_import_file" accept=".csv,.xlsx,.xls">
-                                <p class="help-block">@lang('lang_v1.download_template') → fill → upload. (CSV/XLSX)</p>
+                                <p class="help-block">
+                                    <a href="{{ action([\App\Http\Controllers\ExpenseCategoryController::class, 'downloadTemplate']) }}">
+                                        <i class="fa fa-download"></i> @lang('lang_v1.download_template')
+                                    </a> → fill → upload. (CSV/XLSX)
+                                </p>
                             </div>
                         </div>
                     </div>

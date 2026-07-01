@@ -244,6 +244,21 @@ class ExpenseCategoryController extends Controller
         return response($html);
     }
 
+    public function downloadTemplate()
+    {
+        $columns = ['name', 'code', 'parent_category'];
+
+        $filename = 'expense_categories_template_' . date('Ymd_His') . '.csv';
+
+        $callback = function () use ($columns) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $columns);
+            fclose($out);
+        };
+
+        return response()->streamDownload($callback, $filename, ['Content-Type' => 'text/csv']);
+    }
+
     public function export(Request $request)
     {
         if (! (auth()->user()->can('expense.add') || auth()->user()->can('expense.edit'))) {
