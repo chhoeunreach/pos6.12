@@ -321,14 +321,39 @@ class SellPosController extends Controller
             ));
     }
 
+    private function getHrBranchGroupNames($location_id)
+    {
+        $location = BusinessLocation::find($location_id);
+        if (empty($location)) {
+            return [];
+        }
+
+        $code = $location->location_id;
+        $group = config("hr.location_group_map.{$code}");
+
+        if (!empty($group)) {
+            return [$group];
+        }
+
+        $location_name = $location->name;
+        $groupNames = array_unique(array_values(config('hr.location_group_map', [])));
+        foreach ($groupNames as $groupName) {
+            if (!empty($groupName) && str_starts_with($location_name, $groupName)) {
+                return [$groupName];
+            }
+        }
+
+        return [$location_name];
+    }
+
     private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50, $branch_name = null)
     {
         try {
-            $location_name = null;
+            $searchNames = [];
             if (!empty($branch_name)) {
-                $location_name = $branch_name;
+                $searchNames = [$branch_name];
             } elseif (!empty($location_id)) {
-                $location_name = optional(BusinessLocation::find($location_id))->name;
+                $searchNames = $this->getHrBranchGroupNames($location_id);
             }
 
             $page = max(1, (int) $page);
@@ -360,11 +385,8 @@ class SellPosController extends Controller
                         $query->where('sor.service_type', $sell_type);
                     }
                 })
-                ->when(!empty($location_name), function ($query) use ($location_name) {
-                    $query->where(function ($query) use ($location_name) {
-                        $query->where('sor.branch_name', $location_name)
-                            ->orWhereRaw("? LIKE CONCAT('%', sor.branch_name, '%')", [$location_name]);
-                    });
+                ->when(!empty($searchNames), function ($query) use ($searchNames) {
+                    $query->whereIn('sor.branch_name', $searchNames);
                 })
                 ->when(!empty($date_from), function ($query) use ($date_from) {
                     $query->where('sor.created_at', '>=', $date_from . ' 00:00:00');
@@ -574,11 +596,11 @@ class SellPosController extends Controller
     public function getHrSellListServiceTypes($location_id, $branch_name = null)
     {
         try {
-            $location_name = null;
+            $searchNames = [];
             if (!empty($branch_name)) {
-                $location_name = $branch_name;
+                $searchNames = [$branch_name];
             } elseif (!empty($location_id)) {
-                $location_name = optional(BusinessLocation::find($location_id))->name;
+                $searchNames = $this->getHrBranchGroupNames($location_id);
             }
 
             $query = DB::connection('hr')
@@ -587,11 +609,8 @@ class SellPosController extends Controller
                 ->distinct()
                 ->orderBy('service_type');
 
-            if (!empty($location_name)) {
-                $query->where(function ($q) use ($location_name) {
-                    $q->where('branch_name', $location_name)
-                        ->orWhereRaw("? LIKE CONCAT('%', branch_name, '%')", [$location_name]);
-                });
+            if (!empty($searchNames)) {
+                $query->whereIn('branch_name', $searchNames);
             }
 
             return $query->get()->pluck('service_type');
