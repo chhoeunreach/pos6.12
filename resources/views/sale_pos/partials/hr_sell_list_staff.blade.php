@@ -26,9 +26,9 @@
             <label>Branch</label>
             <select class="sell-list-filter-branch form-control">
                 <option value="">All Branches</option>
-                @if (!empty($business_locations))
-                    @foreach ($business_locations as $id => $name)
-                        <option value="{{ $id }}">{{ $name }}</option>
+                @if (!empty($hr_branches))
+                    @foreach ($hr_branches as $branch)
+                        <option value="{{ $branch }}">{{ $branch }}</option>
                     @endforeach
                 @endif
             </select>

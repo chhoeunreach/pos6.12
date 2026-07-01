@@ -261,6 +261,7 @@ class SellPosController extends Controller
         $hr_sell_out_reports_has_more = $hr_sell_out_reports_data['has_more'];
         $hr_sell_out_reports_total = $hr_sell_out_reports_data['total'];
         $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
+        $hr_branches = $this->getHrSellListBranches();
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -310,6 +311,7 @@ class SellPosController extends Controller
                 'default_date_from',
                 'default_date_to',
                 'sell_types',
+                'hr_branches',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
@@ -319,11 +321,13 @@ class SellPosController extends Controller
             ));
     }
 
-    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50)
+    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50, $branch_name = null)
     {
         try {
             $location_name = null;
-            if (!empty($location_id)) {
+            if (!empty($branch_name)) {
+                $location_name = $branch_name;
+            } elseif (!empty($location_id)) {
                 $location_name = optional(BusinessLocation::find($location_id))->name;
             }
 
@@ -452,10 +456,10 @@ class SellPosController extends Controller
         $per_page = (int) $request->input('per_page', 50);
         $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
 
-        $branch_location_id = $request->input('branch_location_id');
-        $filter_location_id = !empty($branch_location_id) ? $branch_location_id : $location_id;
+        $branch_name = $request->input('branch_name', '');
+        $filter_location_id = !empty($branch_name) ? null : $location_id;
 
-        $data = $this->getHrSellOutReports($filter_location_id, $date_from, $date_to, $sell_type, $page, $per_page);
+        $data = $this->getHrSellOutReports($filter_location_id, $date_from, $date_to, $sell_type, $page, $per_page, $branch_name);
         $hr_sell_out_reports = $data['reports'];
         $has_more = $data['has_more'];
         $total = $data['total'];
@@ -493,15 +497,13 @@ class SellPosController extends Controller
         $default_date_from = $date_from;
         $default_date_to = $date_to;
         $sell_types = collect();
-        if (!empty($filter_location_id)) {
+        if (!empty($branch_name)) {
+            $sell_types = $this->getHrSellListServiceTypes(null, $branch_name);
+        } elseif (!empty($filter_location_id)) {
             $sell_types = $this->getHrSellListServiceTypes($filter_location_id);
         }
 
-        $business_id = request()->session()->get('user.business_id');
-        $business_locations = [];
-        if (!empty($business_id)) {
-            $business_locations = BusinessLocation::forDropdown($business_id, false, false);
-        }
+        $hr_branches = $this->getHrSellListBranches();
 
         $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
         $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
@@ -517,7 +519,7 @@ class SellPosController extends Controller
             'page' => $page,
             'per_page' => $per_page,
             'total' => $total,
-            'business_locations' => $business_locations,
+            'hr_branches' => $hr_branches,
         ])->render();
 
         return response()->json([
@@ -566,10 +568,15 @@ class SellPosController extends Controller
             ->with(compact('report'));
     }
 
-    public function getHrSellListServiceTypes($location_id)
+    public function getHrSellListServiceTypes($location_id, $branch_name = null)
     {
         try {
-            $location_name = optional(BusinessLocation::find($location_id))->name;
+            $location_name = null;
+            if (!empty($branch_name)) {
+                $location_name = $branch_name;
+            } elseif (!empty($location_id)) {
+                $location_name = optional(BusinessLocation::find($location_id))->name;
+            }
 
             $query = DB::connection('hr')
                 ->table('sell_out_reports')
@@ -587,6 +594,24 @@ class SellPosController extends Controller
             return $query->get()->pluck('service_type');
         } catch (\Exception $e) {
             \Log::warning('Unable to load HR sell list service types: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function getHrSellListBranches()
+    {
+        try {
+            return DB::connection('hr')
+                ->table('sell_out_reports')
+                ->select('branch_name')
+                ->whereNotNull('branch_name')
+                ->where('branch_name', '!=', '')
+                ->distinct()
+                ->orderBy('branch_name')
+                ->get()
+                ->pluck('branch_name');
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell list branches: ' . $e->getMessage());
             return collect();
         }
     }
