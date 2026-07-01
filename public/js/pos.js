@@ -132,6 +132,18 @@ $(document).ready(function() {
         if ($('#types_of_service_id').length && $('#types_of_service_id').val()) {
             $('#types_of_service_id').change();
         }
+
+        var $hrBranchMap = $('#hr_location_branch_map');
+        if ($hrBranchMap.length) {
+            var map = {};
+            try { map = JSON.parse($hrBranchMap.val() || '{}'); } catch(e) {}
+            var newLocId = $(this).val();
+            var hrBranch = map[newLocId] || '';
+            var $branchFilter = $('.sell-list-filter-branch');
+            if ($branchFilter.length) {
+                $branchFilter.val(hrBranch);
+            }
+        }
     });
 
     //get customer

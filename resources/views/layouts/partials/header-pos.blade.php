@@ -49,6 +49,7 @@
                     @else
                     {{ $transaction->location->name }}
                     @endif
+                    <input type="hidden" id="hr_location_branch_map" value="{{ json_encode($hr_location_branch_map ?? []) }}">
                 </div>
                 <div
                     class="tw-hidden md:tw-flex tw-items-center tw-gap-1.5 tw-bg-[#646EE4] hover:tw-bg-[#414aac] tw-h-10 tw-px-3 tw-rounded-md">

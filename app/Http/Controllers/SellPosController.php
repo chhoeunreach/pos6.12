@@ -263,6 +263,16 @@ class SellPosController extends Controller
         $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
         $hr_branches = $this->getHrSellListBranches();
         $default_hr_branch = !empty($default_location) ? ($this->getHrBranchGroupNames($default_location->id)[0] ?? '') : '';
+        $hr_location_branch_map = [];
+        foreach ($business_locations as $locId => $locName) {
+            $loc = BusinessLocation::find($locId);
+            if ($loc) {
+                $names = $this->getHrBranchGroupNames($loc->id);
+                if (!empty($names[0])) {
+                    $hr_location_branch_map[$locId] = $names[0];
+                }
+            }
+        }
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -314,6 +324,7 @@ class SellPosController extends Controller
                 'sell_types',
                 'hr_branches',
                 'default_hr_branch',
+                'hr_location_branch_map',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
