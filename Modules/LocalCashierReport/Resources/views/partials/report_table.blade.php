@@ -1,4 +1,4 @@
-<div class="box box-solid" style="font-family: {{ $khmerFontFamily ?? "'Noto Sans Khmer', sans-serif" }};">
+<div class="box box-solid" style="font-family: {{ $khmerFontFamily ?? "'KhmerFont', 'Noto Sans Khmer', sans-serif" }};">
     <div class="box-body table-responsive">
         @if(!empty($isPdf))
             <h3 style="margin:0 0 10px 0;">Local Cashier Report</h3>

@@ -2,6 +2,15 @@
 @section('title', 'Local Cashier Report')
 
 @section('content')
+<style>
+    @font-face {
+        font-family: 'KhmerFont';
+        src: url('{{ asset("fonts/khmer/NotoSansKhmer-Regular.ttf") }}') format('truetype'),
+             url('{{ asset("fonts/khmer/KhmerOSbattambang.ttf") }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+    }
+</style>
 <section class="content-header no-print">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Local Cashier Report</h1>
     @php
@@ -1226,6 +1235,15 @@
                         @php
                             $expenseLocations = $expenseRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
                             $expenseCashiers = $expenseRows->pluck('created_by_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                            $staticPaymentAmount = function ($row, $column) {
+                                $payments = (array) data_get($row, 'payments', []);
+                                $sources = (array) data_get($column, 'source_methods', []);
+                                $amount = 0.0;
+                                foreach ($sources as $source) {
+                                    $amount += (float) ($payments[$source] ?? 0);
+                                }
+                                return $amount;
+                            };
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_expenses_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_expenses_detail_table_filters">
@@ -1276,8 +1294,8 @@
                                         <th class="all-sale-location-column">Location</th>
                                         <th>Category</th>
                                         <th>Payment Status</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                        @foreach($staticPaymentColumns as $column)
+                                            <th class="text-right">{{ $column['label'] ?? '' }}</th>
                                         @endforeach
                                         <th class="text-right">Amount</th>
                                         <th class="text-right">Paid</th>
@@ -1305,8 +1323,8 @@
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['category_name'] }}</td>
                                             <td>{{ ucfirst($row['payment_status']) }}</td>
-                                            @foreach($report['payment_columns'] as $method)
-                                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                            @foreach($staticPaymentColumns as $column)
+                                                <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
                                             @endforeach
                                             <td class="text-right">{{ $fmt($row['amount']) }}</td>
                                             <td class="text-right">{{ $fmt($row['paid']) }}</td>
@@ -1317,12 +1335,15 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
+                                        @php
+                                            $expensePaymentStaticTotals = [];
+                                            foreach ($staticPaymentColumns as $column) {
+                                                $expensePaymentStaticTotals[$column['key'] ?? ''] = $expenseRows->sum(fn ($row) => $staticPaymentAmount($row, $column));
+                                            }
+                                        @endphp
                                         <th colspan="8" class="text-right">Total</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            @php
-                                                $expensePaymentTotal = $expenseRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
-                                            @endphp
-                                            <th class="text-right">{{ $fmt($expensePaymentTotal) }}</th>
+                                        @foreach($staticPaymentColumns as $column)
+                                            <th class="text-right">{{ $fmt($expensePaymentStaticTotals[$column['key'] ?? ''] ?? 0) }}</th>
                                         @endforeach
                                         <th class="text-right">{{ $fmt($expenseRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
                                         <th class="text-right">{{ $fmt($expenseRows->sum(fn ($row) => (float) ($row['paid'] ?? 0))) }}</th>

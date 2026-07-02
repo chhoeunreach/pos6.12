@@ -17,7 +17,7 @@ return [
         'invoice_count' => 'Invoice Count',
         'sold_quantity' => 'Sold Quantity',
     ],
-    'khmer_font_family' => "'Noto Sans Khmer', 'Khmer OS', 'Battambang', sans-serif",
+    'khmer_font_family' => "'KhmerFont', 'Noto Sans Khmer', 'Khmer OS', 'Battambang', sans-serif",
     'all_sale_static_payment_columns' => [
         ['key' => 'cash',         'label' => 'Cash',     'source_methods' => ['cash']],
         ['key' => 'wing',         'label' => 'Wing',     'source_methods' => ['custom_pay_1']],

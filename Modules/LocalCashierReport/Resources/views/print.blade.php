@@ -4,6 +4,13 @@
     <meta charset="utf-8">
     <title>Local Cashier Report</title>
     <style>
+        @font-face {
+            font-family: 'KhmerFont';
+            src: url('{{ asset("fonts/khmer/NotoSansKhmer-Regular.ttf") }}') format('truetype'),
+                 url('{{ asset("fonts/khmer/KhmerOSbattambang.ttf") }}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
         body { font-family: {!! $khmerFontFamily !!}; font-size: 14px; color: #111; }
         h2, h3, h4 { margin: 0 0 8px; }
         .meta { margin-bottom: 6px; }
