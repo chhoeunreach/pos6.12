@@ -434,7 +434,7 @@ class PurchaseController extends Controller
             ];
         }
 
-        return redirect('purchases')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     private function getPurchaseLinesFromRequest(Request $request)
@@ -780,7 +780,7 @@ class PurchaseController extends Controller
             return back()->with('status', $output);
         }
 
-        return redirect('purchases')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

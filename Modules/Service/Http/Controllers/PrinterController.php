@@ -109,7 +109,7 @@ class PrinterController extends Controller
             ];
         }
 
-        return redirect('printers')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -184,7 +184,7 @@ class PrinterController extends Controller
             ];
         }
 
-        return redirect('printers')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

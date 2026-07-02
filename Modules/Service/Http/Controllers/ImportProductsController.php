@@ -733,10 +733,10 @@ class ImportProductsController extends Controller
                 'msg' => $e->getMessage(),
             ];
 
-            return redirect('service/import-products')->with('notification', $output);
+            return redirect()->action([static::class, 'index'])->with('notification', $output);
         }
 
-        return redirect('service/import-products')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     private function calculateVariationPrices($dpp_exc_tax, $dpp_inc_tax, $selling_price, $tax_amount, $tax_type, $margin)

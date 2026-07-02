@@ -176,7 +176,7 @@ class RoleController extends Controller
             ];
         }
 
-        return redirect('roles')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -303,7 +303,7 @@ class RoleController extends Controller
             ];
         }
 
-        return redirect('roles')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

@@ -103,7 +103,7 @@ class UserController extends Controller
             ];
         }
 
-        return redirect('user/profile')->with('status', $output);
+        return redirect()->action([static::class, 'getProfile'])->with('status', $output);
     }
 
     /**
@@ -142,6 +142,6 @@ class UserController extends Controller
             ];
         }
 
-        return redirect('user/profile')->with('status', $output);
+        return redirect()->action([static::class, 'getProfile'])->with('status', $output);
     }
 }

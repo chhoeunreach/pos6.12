@@ -202,10 +202,10 @@ class ImportOpeningStockController extends Controller
                 'msg' => 'Message:'.$e->getMessage(),
             ];
 
-            return redirect('import-opening-stock')->with('notification', $output);
+            return redirect()->action([static::class, 'index'])->with('notification', $output);
         }
 
-        return redirect('import-opening-stock')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

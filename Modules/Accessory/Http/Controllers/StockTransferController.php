@@ -373,7 +373,7 @@ class StockTransferController extends Controller
             ];
         }
 
-        return redirect('stock-transfers')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -883,7 +883,7 @@ class StockTransferController extends Controller
             ];
         }
 
-        return redirect('stock-transfers')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

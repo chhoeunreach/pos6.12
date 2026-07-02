@@ -386,6 +386,6 @@ class OpeningStockController extends Controller
             return $output;
         }
 
-        return redirect('products')->with('status', $output);
+        return redirect()->action([\Modules\Accessory\Http\Controllers\ProductController::class, 'index'])->with('status', $output);
     }
 }

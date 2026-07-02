@@ -392,10 +392,10 @@ class SellingPriceGroupController extends Controller
                 'msg' => $e->getMessage(),
             ];
 
-            return redirect('update-product-price')->with('notification', $output);
+            return redirect()->action([static::class, 'updateProductPrice'])->with('notification', $output);
         }
 
-        return redirect('update-product-price')->with('status', $output);
+        return redirect()->action([static::class, 'updateProductPrice'])->with('status', $output);
     }
 
     /**

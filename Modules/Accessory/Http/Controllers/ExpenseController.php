@@ -411,7 +411,7 @@ class ExpenseController extends Controller
             return $output;
         }
 
-        return redirect('expenses')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -516,7 +516,7 @@ class ExpenseController extends Controller
             ];
         }
 
-        return redirect('expenses')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -881,10 +881,10 @@ class ExpenseController extends Controller
                 'msg' => $e->getMessage(),
             ];
 
-            return redirect('import-expense')->with('notification', $output);
+            return redirect()->action([static::class, 'importExpense'])->with('notification', $output);
         }
 
-        return redirect('import-expense')->with('status', $output);
+        return redirect()->action([static::class, 'importExpense'])->with('status', $output);
 
     }
 

@@ -158,7 +158,7 @@ class CombinedPurchaseReturnController extends Controller
             ];
         }
 
-        return redirect('purchase-return')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -359,7 +359,7 @@ class CombinedPurchaseReturnController extends Controller
             ];
         }
 
-        return redirect('purchase-return')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

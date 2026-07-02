@@ -124,7 +124,7 @@ class InvoiceLayoutController extends Controller
             ];
         }
 
-        return redirect('invoice-schemes')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -247,7 +247,7 @@ class InvoiceLayoutController extends Controller
             ];
         }
 
-        return redirect('invoice-schemes')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     private function getDesigns()

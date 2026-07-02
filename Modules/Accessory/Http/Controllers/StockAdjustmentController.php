@@ -267,7 +267,7 @@ class StockAdjustmentController extends Controller
             ];
         }
 
-        return redirect('stock-adjustments')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

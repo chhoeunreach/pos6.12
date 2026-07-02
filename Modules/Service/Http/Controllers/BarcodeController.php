@@ -114,7 +114,7 @@ class BarcodeController extends Controller
             ];
         }
 
-        return redirect('barcodes')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -188,7 +188,7 @@ class BarcodeController extends Controller
             ];
         }
 
-        return redirect('barcodes')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**

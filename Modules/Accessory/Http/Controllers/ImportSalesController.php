@@ -201,12 +201,12 @@ class ImportSalesController extends Controller
 
             @unlink($file_path);
 
-            return redirect('import-sales')->with('notification', $output);
+            return redirect()->action([static::class, 'index'])->with('notification', $output);
         }
 
         @unlink($file_path);
 
-        return redirect('import-sales')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     private function __importSales($formated_data, $business_id, $location_id)
@@ -580,6 +580,6 @@ class ImportSalesController extends Controller
             ];
         }
 
-        return redirect('import-sales')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 }

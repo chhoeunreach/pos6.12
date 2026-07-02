@@ -152,7 +152,7 @@ class ManageUserController extends Controller
             ];
         }
 
-        return redirect('users')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -377,7 +377,7 @@ class ManageUserController extends Controller
             ];
         }
 
-        return redirect('users')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     private function getAdmins()

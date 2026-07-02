@@ -50,7 +50,7 @@
                 <br><br>
                 <div class="row">
                     <div class="col-sm-4">
-                        <a href="{{ asset('files/import_contacts_csv_template.xls') }}" class="tw-dw-btn tw-dw-btn-success tw-text-white" download><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
+                        <a href="{{ asset('modules/accessory/v7/files/import_contacts_csv_template.xls') }}" class="tw-dw-btn tw-dw-btn-success tw-text-white" download><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
                     </div>
                 </div>
             @endcomponent

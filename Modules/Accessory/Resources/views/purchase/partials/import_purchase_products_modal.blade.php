@@ -14,7 +14,7 @@
 						<div id="import_product_dz" class="dropzone"></div>
 					</div>
 					<div class="col-md-12 mt-10">
-						<a href="{{ asset('files/import_purchase_products_template.xls') }}" class="tw-dw-btn tw-dw-btn-success tw-text-white" download><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
+						<a href="{{ asset('modules/accessory/v7/files/import_purchase_products_template.xls') }}" class="tw-dw-btn tw-dw-btn-success tw-text-white" download><i class="fa fa-download"></i> @lang('lang_v1.download_template_file')</a>
 					</div>
 				</div>
 				<div class="row">

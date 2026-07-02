@@ -564,7 +564,7 @@ class ProductController extends Controller
                 'msg' => __('messages.something_went_wrong'),
             ];
 
-            return redirect('products')->with('status', $output);
+            return redirect()->action([static::class, 'index'])->with('status', $output);
         }
 
         if ($request->input('submit_type') == 'submit_n_add_opening_stock') {
@@ -580,7 +580,7 @@ class ProductController extends Controller
             )->with('status', $output);
         }
 
-        return redirect('products')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -899,7 +899,7 @@ class ProductController extends Controller
             )->with('status', $output);
         }
 
-        return redirect('products')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
@@ -1889,7 +1889,7 @@ class ProductController extends Controller
             )->with('status', $output);
         }
 
-        return redirect('products')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     public function viewGroupPrice($id)
@@ -2261,7 +2261,7 @@ class ProductController extends Controller
             ];
         }
 
-        return redirect('products')->with('status', $output);
+        return redirect()->action([static::class, 'index'])->with('status', $output);
     }
 
     /**
