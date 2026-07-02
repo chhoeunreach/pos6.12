@@ -20,7 +20,7 @@ function accessory_pos_url(path) {
 }
 
 function accessory_sync_selected_location($select) {
-    $select = $select || $('select[name="select_location_id"]').first();
+    $select = $select || $('select[name="select_location_id"]').last();
     if (!$select.length) {
         return;
     }
@@ -34,8 +34,8 @@ function accessory_sync_selected_location($select) {
     $('input#location_id').attr('data-default_payment_accounts', $selected.data('default_payment_accounts'));
 }
 
-function accessory_reload_all_products_for_selected_location() {
-    accessory_sync_selected_location();
+function accessory_reload_all_products_for_selected_location($select) {
+    accessory_sync_selected_location($select);
     global_p_category_id = null;
     global_brand_id = null;
     $('input#suggestion_page').val(1);
@@ -240,7 +240,7 @@ $(document).ready(function() {
             $('#types_of_service_id').change();
         }
 
-        accessory_reload_all_products_for_selected_location();
+        accessory_reload_all_products_for_selected_location($(this));
         reset_hr_sell_list_pages();
         get_hr_sell_list();
         if (typeof refresh_sell_list_sidebar_badge === 'function') {
@@ -3278,7 +3278,7 @@ function set_default_customer() {
 
 //Set the location and initialize printer
 function set_location() {
-    var $select = $('select[name="select_location_id"]').first();
+    var $select = $('select[name="select_location_id"]').last();
     if ($select.length) {
         $('input#location_id').val($select.val());
         $('input#location_id').data(
@@ -3692,7 +3692,7 @@ $(document).on('click', '.service_modal_btn', function(e) {
 });
 
 $(document).on('change', '.payment_types_dropdown', function(e) {
-    var $locSelect = $('select[name="select_location_id"]').first();
+    var $locSelect = $('select[name="select_location_id"]').last();
     var default_accounts = $locSelect.length ? 
                 $locSelect.find(':selected')
                 .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
