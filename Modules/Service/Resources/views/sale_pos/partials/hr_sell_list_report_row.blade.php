@@ -48,8 +48,11 @@
                     <span class="tw-text-slate-300">/</span> {{ $report->customer_name }}
                 @endif
             </div>
-            <div class="tw-text-[9px] tw-text-slate-400 tw-leading-3">
+            <div class="tw-text-[9px] tw-text-slate-400 tw-leading-3 tw-flex tw-items-center tw-justify-center tw-gap-1 tw-flex-wrap">
                 {{ @format_datetime($report->created_at) }}
+                @if (!empty($report->service_type))
+                    <span class="tw-inline-block tw-px-1 tw-py-0.5 tw-rounded tw-bg-sky-50 tw-text-sky-700 tw-font-medium tw-text-[9px] tw-leading-none">{{ $report->service_type }}</span>
+                @endif
             </div>
         </div>
 
