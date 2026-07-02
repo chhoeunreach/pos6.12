@@ -19,14 +19,15 @@ function service_pos_url(path) {
     return prefix + '/' + path.replace(/^\/+/, '');
 }
 
-function service_sync_selected_location() {
-    if ($('select#select_location_id').length !== 1) {
+function service_sync_selected_location($select) {
+    $select = $select || $('select[name="select_location_id"]').last();
+    if (!$select.length) {
         return;
     }
 
-    var $selected = $('select#select_location_id').find(':selected');
+    var $selected = $select.find(':selected');
 
-    $('input#location_id').val($('select#select_location_id').val());
+    $('input#location_id').val($select.val());
     $('input#location_id').data('receipt_printer_type', $selected.data('receipt_printer_type'));
     $('input#location_id').data('default_payment_accounts', $selected.data('default_payment_accounts'));
     $('input#location_id').attr('data-receipt_printer_type', $selected.data('receipt_printer_type'));
@@ -45,8 +46,8 @@ function pos_filter_all_label(kind) {
     return 'All';
 }
 
-function service_reload_all_products_for_selected_location() {
-    service_sync_selected_location();
+function service_reload_all_products_for_selected_location($select) {
+    service_sync_selected_location($select);
     global_p_category_id = null;
     global_brand_id = null;
     $('input#suggestion_page').val(1);
@@ -207,9 +208,9 @@ $(document).ready(function() {
         initialize_printer();
     }
 
-    $('select#select_location_id').change(function() {
-        service_sync_selected_location();
-        reset_pos_form();
+    $('select[name="select_location_id"]').on('change', function() {
+        service_sync_selected_location($(this));
+        clear_pos_cart();
         pos_reset_product_filters();
 
         var default_price_group = $(this).find(':selected').data('default_price_group')
@@ -251,7 +252,7 @@ $(document).ready(function() {
             $('#types_of_service_id').change();
         }
 
-        service_reload_all_products_for_selected_location();
+        service_reload_all_products_for_selected_location($(this));
         reset_hr_sell_list_pages();
         get_hr_sell_list();
         if (typeof refresh_sell_list_sidebar_badge === 'function') {
@@ -3247,6 +3248,37 @@ function isValidPosForm() {
     return flag;
 }
 
+function clear_pos_cart(){
+	$('tr.product_row, tr.pos-product-group-summary').remove();
+	pos_product_group_collapsed = {};
+	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount, span#loyalty_amount_display').text(0);
+	$('span.total_payable_span, span.total_paying, span.balance_due').text(0);
+	$('#modal_payment').find('.remove_payment_row').each( function(){
+		$(this).closest('.payment_row').remove();
+	});
+	if ($('#is_credit_sale').length) {
+		$('#is_credit_sale').val(0);
+	}
+	__write_number($('input#discount_amount'), $('input#discount_amount').data('default'));
+	$('input#discount_type').val($('input#discount_type').data('default'));
+	$('input#tax_rate_id').val($('input#tax_rate_id').data('default'));
+	__write_number($('input#tax_calculation_amount'), $('input#tax_calculation_amount').data('default'));
+	$('select.payment_types_dropdown').val('cash').trigger('change');
+	__write_number($('input#shipping_charges'), $('input#shipping_charges').data('default'));
+	$('input#shipping_details').val($('input#shipping_details').data('default'));
+	$('input#shipping_address, input#shipping_status, input#delivered_to').val('');
+	if($('input#is_recurring').length > 0){
+		$('input#is_recurring').iCheck('update');
+	};
+	if($('input#is_kitchen_order').length > 0){
+		$('input#is_kitchen_order').iCheck('update');
+	};
+	if($('#invoice_layout_id').length > 0){
+		$('#invoice_layout_id').trigger('change');
+	};
+	$('span#round_off_text').text(0);
+}
+
 function reset_pos_form(){
 
 	//If on edit page then redirect to Add POS page
@@ -3390,26 +3422,21 @@ function set_default_customer() {
 
 //Set the location and initialize printer
 function set_location() {
-    if ($('select#select_location_id').length == 1) {
-        $('input#location_id').val($('select#select_location_id').val());
+    var $select = $('select[name="select_location_id"]').last();
+    if ($select.length) {
+        $('input#location_id').val($select.val());
         $('input#location_id').data(
             'receipt_printer_type',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('receipt_printer_type')
+            $select.find(':selected').data('receipt_printer_type')
         );
         $('input#location_id').data(
             'default_payment_accounts',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_payment_accounts')
+            $select.find(':selected').data('default_payment_accounts')
         );
 
         $('input#location_id').attr(
             'data-default_price_group',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_price_group')
+            $select.find(':selected').data('default_price_group')
         );
     }
 
@@ -3809,9 +3836,9 @@ $(document).on('click', '.service_modal_btn', function(e) {
 });
 
 $(document).on('change', '.payment_types_dropdown', function(e) {
-    var default_accounts = $('select#select_location_id').length ? 
-                $('select#select_location_id')
-                .find(':selected')
+    var $locSelect = $('select[name="select_location_id"]').last();
+    var default_accounts = $locSelect.length ? 
+                $locSelect.find(':selected')
                 .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');

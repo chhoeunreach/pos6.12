@@ -2,6 +2,51 @@ var global_brand_id = null;
 var global_p_category_id = null;
 var global_is_clear_local_storage = false;
 
+function accessory_pos_url(path) {
+    if (!path) {
+        return path;
+    }
+
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+
+    var base = (window.accessory_pos_base_url || (window.location.origin + '/accessory')).replace(/\/+$/, '');
+    if (path === '/accessory' || path.indexOf('/accessory/') === 0) {
+        return window.location.origin + path;
+    }
+
+    return base + '/' + path.replace(/^\/+/, '');
+}
+
+function accessory_sync_selected_location($select) {
+    $select = $select || $('select[name="select_location_id"]').last();
+    if (!$select.length) {
+        return;
+    }
+
+    var $selected = $select.find(':selected');
+
+    $('input#location_id').val($select.val());
+    $('input#location_id').data('receipt_printer_type', $selected.data('receipt_printer_type'));
+    $('input#location_id').data('default_payment_accounts', $selected.data('default_payment_accounts'));
+    $('input#location_id').attr('data-receipt_printer_type', $selected.data('receipt_printer_type'));
+    $('input#location_id').attr('data-default_payment_accounts', $selected.data('default_payment_accounts'));
+}
+
+function accessory_reload_all_products_for_selected_location($select) {
+    accessory_sync_selected_location($select);
+    global_p_category_id = null;
+    global_brand_id = null;
+    $('input#suggestion_page').val(1);
+    var location_id = $('input#location_id').val();
+
+    if (location_id !== '' && location_id !== undefined && location_id !== null) {
+        get_product_suggestion_list(null, null, location_id, null);
+    }
+    get_featured_products();
+}
+
 function pos_play_success_sound() {
     var audio = document.getElementById('success-audio');
     if (audio) {
@@ -13,6 +58,120 @@ function pos_sync_empty_state() {
     var hasRows = $('#pos_table tbody .product_row').length > 0;
     $('#pos_table').toggleClass('pos-has-rows', hasRows);
     $('#add_pos_sell_form, #edit_pos_sell_form').toggleClass('pos-has-rows', hasRows);
+}
+
+var pos_product_group_collapsed = {};
+
+function pos_get_row_lot_line_id(row) {
+    var lot_select = $(row).find('select.lot_number');
+    return lot_select.length ? (lot_select.val() || '') : '';
+}
+
+function pos_can_increment_existing_row(row, variation_id, purchase_line_id) {
+    var row_obj = $(row);
+    var row_v_id = row_obj.find('.row_variation_id').val();
+    var enable_sr_no = row_obj.find('.enable_sr_no').val();
+    var modifiers_exist = row_obj.find('input.modifiers_exist').length > 0;
+
+    if (row_v_id != variation_id || enable_sr_no === '1' || modifiers_exist) {
+        return false;
+    }
+
+    var current_lot_line_id = pos_get_row_lot_line_id(row_obj);
+    var new_lot_line_id = purchase_line_id || '';
+
+    if (current_lot_line_id || new_lot_line_id) {
+        return current_lot_line_id == new_lot_line_id;
+    }
+
+    return true;
+}
+
+function pos_product_group_key(row) {
+    var row_obj = $(row);
+    return row_obj.find('.row_variation_id').val() || row_obj.find('.product_id').val() || '';
+}
+
+function pos_refresh_grouped_product_rows() {
+    var tbody = $('#pos_table tbody');
+    tbody.find('tr.pos-product-group-summary').remove();
+
+    var rows = tbody.find('tr.product_row');
+    rows.removeClass('pos-product-group-child').removeAttr('data-pos-group-key').show();
+
+    var groups = {};
+    var group_order = [];
+
+    rows.each(function() {
+        var key = pos_product_group_key(this);
+        if (!key) {
+            return;
+        }
+
+        if (!groups[key]) {
+            groups[key] = [];
+            group_order.push(key);
+        }
+
+        groups[key].push(this);
+    });
+
+    $.each(group_order, function(i, key) {
+        if (groups[key].length < 2) {
+            return;
+        }
+
+        var group_rows = $(groups[key]);
+        var first_row = $(groups[key][0]);
+        var is_collapsed = pos_product_group_collapsed[key] !== false;
+        var total_qty = 0;
+        var total_price = 0;
+        var product_name = $.trim(first_row.find('.pos-product-name').first().text());
+        var product_meta = $.trim(first_row.find('.pos-product-meta').first().text());
+
+        if (!product_name) {
+            product_name = $.trim(first_row.find('td:first').text());
+        }
+
+        group_rows.each(function() {
+            total_qty += __read_number($(this).find('input.pos_quantity'));
+            total_price += __read_number($(this).find('input.pos_line_total'));
+        });
+
+        var summary = $('<tr class="pos-product-group-summary"></tr>').attr('data-pos-group-key', key);
+        var cell = $('<td colspan="100"></td>');
+        var button = $('<button type="button" class="pos-product-group-toggle"></button>')
+            .attr('aria-expanded', is_collapsed ? 'false' : 'true')
+            .append($('<i></i>').addClass(is_collapsed ? 'fa fa-chevron-right' : 'fa fa-chevron-down'));
+        var body = $('<div class="pos-product-group-body"></div>');
+        var title_wrap = $('<div class="pos-product-group-title-wrap"></div>');
+        var title = $('<div class="pos-product-group-title"></div>').text(product_name);
+        var meta = $('<div class="pos-product-group-meta"></div>').text(product_meta);
+        var totals = $('<div class="pos-product-group-totals"></div>')
+            .append($('<span></span>').text('Qty: ' + __number_f(total_qty)))
+            .append($('<span></span>').text('Total: ' + __currency_trans_from_en(total_price, true)));
+
+        title_wrap.append(title);
+        if (product_meta) {
+            title_wrap.append(meta);
+        }
+        body.append(title_wrap).append(totals);
+        cell.append(button).append(body);
+        summary.append(cell);
+        first_row.before(summary);
+
+        var anchor = summary;
+        group_rows.each(function() {
+            var row = $(this);
+            row.addClass('pos-product-group-child').attr('data-pos-group-key', key);
+            anchor.after(row);
+            anchor = row;
+        });
+
+        if (is_collapsed) {
+            group_rows.hide();
+        }
+    });
 }
 $(document).ready(function() {
     pos_sync_empty_state();
@@ -37,8 +196,10 @@ $(document).ready(function() {
         initialize_printer();
     }
 
-    $('select#select_location_id').change(function() {
-        reset_pos_form();
+    $('select[name="select_location_id"]').on('change', function() {
+        accessory_sync_selected_location($(this));
+        clear_pos_cart();
+        pos_reset_product_filters();
 
         var default_price_group = $(this).find(':selected').data('default_price_group')
         if (default_price_group) {
@@ -78,12 +239,19 @@ $(document).ready(function() {
         if ($('#types_of_service_id').length && $('#types_of_service_id').val()) {
             $('#types_of_service_id').change();
         }
+
+        accessory_reload_all_products_for_selected_location($(this));
+        reset_hr_sell_list_pages();
+        get_hr_sell_list();
+        if (typeof refresh_sell_list_sidebar_badge === 'function') {
+            refresh_sell_list_sidebar_badge();
+        }
     });
 
     //get customer
     $('select#customer_id').select2({
         ajax: {
-            url: '/contacts/customers',
+            url: accessory_pos_url('/contacts/customers'),
             dataType: 'json',
             delay: 250,
             data: function(params) {
@@ -228,8 +396,7 @@ $(document).ready(function() {
                         is_serial_no = true;
                     }
                     
-                    $.getJSON(
-                        '/products/list',
+                    $.getJSON(accessory_pos_url('/products/list'),
                         {
                             price_group: price_group,
                             location_id: $('input#location_id').val(),
@@ -401,6 +568,12 @@ $(document).ready(function() {
     }
 
     init_lot_number_select2($('table#pos_table tbody'));
+
+    $('table#pos_table tbody').on('click', '.pos-product-group-toggle', function() {
+        var key = $(this).closest('tr.pos-product-group-summary').data('pos-group-key');
+        pos_product_group_collapsed[key] = pos_product_group_collapsed[key] === false;
+        pos_refresh_grouped_product_rows();
+    });
 
     //Update line total and check for quantity not greater than max quantity
     $('table#pos_table tbody').on('change', 'input.pos_quantity', function() {
@@ -832,7 +1005,7 @@ $(document).ready(function() {
         var location_id = $('input#location_id').val();
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get_payment_row',
+            url: accessory_pos_url('/sells/pos/get_payment_row'),
             data: { row_index: row_index, location_id: location_id },
             dataType: 'html',
             success: function(result) {
@@ -936,6 +1109,7 @@ $(document).ready(function() {
                     dataType: 'json',
                     success: function(result) {
                         if (result.success == 1) {
+                            notify_loan_module_pos_saved(result);
                             if (result.whatsapp_link) {
                                 window.open(result.whatsapp_link);
                             }
@@ -1068,7 +1242,7 @@ $(document).ready(function() {
             rules: {
                 contact_id: {
                     remote: {
-                        url: '/contacts/check-contacts-id',
+                        url: accessory_pos_url('/contacts/check-contacts-id'),
                         type: 'post',
                         data: {
                             contact_id: function() {
@@ -1201,7 +1375,7 @@ $(document).ready(function() {
         rules: {
             invoice_no: {
                 remote: {
-                    url: '/sell/check-invoice-number',
+                    url: accessory_pos_url('/sell/check-invoice-number'),
                     type: 'post',
                     data: {
                         invoice_no: function() {
@@ -1317,7 +1491,7 @@ $(document).ready(function() {
         device_model_id
     );
     
-    $('select#select_location_id').on('change', function(e) {
+    $('select[name="select_location_id"]').on('change', function(e) {
         $('input#suggestion_page').val(1);
         var location_id = $('input#location_id').val();
         if (location_id != '' || location_id != undefined) {
@@ -1329,6 +1503,12 @@ $(document).ready(function() {
             );
         }
         get_featured_products();
+        reset_hr_sell_list_pages();
+        get_hr_sell_list();
+        /* Refresh the sidebar Sell List badge to the new location's total. */
+        if (typeof refresh_sell_list_sidebar_badge === 'function') {
+            refresh_sell_list_sidebar_badge();
+        }
     });
 
 // Active filter is shown as a second line INSIDE the matching Category / Brand
@@ -1349,6 +1529,33 @@ $(document).ready(function() {
         }
         $names.text(name);
         $rows.addClass('is-active');
+    }
+
+    function pos_filter_all_label(kind) {
+        if (kind === 'category') {
+            return $('.pos-card-grid-categories').data('label-all') || 'All';
+        }
+
+        if (kind === 'brand') {
+            return $('.product_brand[data-value="all"]').data('name') || 'All';
+        }
+
+        return 'All';
+    }
+
+    function pos_reset_product_filters() {
+        global_p_category_id = null;
+        global_brand_id = null;
+
+        pos_set_filter_chip('category', pos_filter_all_label('category'));
+        pos_set_filter_chip('brand', pos_filter_all_label('brand'));
+
+        $('.pos-subcat-strip').remove();
+        $('.pos-card.cat, .pos-card.brand').removeClass('is-active');
+        $('.main-category[data-value="all"] .pos-card.cat').addClass('is-active');
+        $('.product_brand[data-value="all"] .pos-card.brand').addClass('is-active');
+        $('.tw-dw-drawer-toggle').prop('checked', false);
+        $('input#suggestion_page').val(1);
     }
 
     // Re-trigger the staggered card entrance each time a drawer opens.
@@ -1777,15 +1984,482 @@ $(document).ready(function() {
     $(document).on('click', '#show_featured_products', function(){
         var $root = $(this).closest('.pos-sidebar-root');
         var $box = $root.length ? $root.find('#featured_products_box') : $('#featured_products_box');
+        var $sellListBox = $root.length ? $root.find('#sell_list_staff_box') : $('#sell_list_staff_box');
+        var $productItems = $root.length ? $root.find('#product_list_items') : $('#product_list_items');
         var emptyHtml = ($root.length ? $root.find('#featured_empty_state_template') : $('#featured_empty_state_template')).html() || '';
         if ($.trim($box.html()) === '') {
             $box.html(emptyHtml);
         }
         if (!$box.is(':visible')) {
+            $sellListBox.hide();
+            $productItems.hide();
             $box.css('display', 'flex').hide().fadeIn();
         } else {
-            $box.fadeOut();
+            $box.fadeOut(function() {
+                $productItems.show();
+            });
         }
+    });
+
+    $(document).on('click', '#show_sell_list_staff', function(){
+        var $root = $(this).closest('.pos-sidebar-root');
+        var $box = $root.length ? $root.find('#sell_list_staff_box') : $('#sell_list_staff_box');
+        var $featuredBox = $root.length ? $root.find('#featured_products_box') : $('#featured_products_box');
+        var $productItems = $root.length ? $root.find('#product_list_items') : $('#product_list_items');
+
+        if (!$box.is(':visible')) {
+            $featuredBox.hide();
+            $productItems.hide();
+            $box.css('display', 'flex').hide().fadeIn();
+            get_hr_sell_list(true);
+        } else {
+            $box.fadeOut(function() {
+                $productItems.show();
+            });
+        }
+    });
+
+    /* Filter toggle — init daterangepicker on first open */
+    $(document).on('click', '.sell-list-filter-btn', function(){
+        var $btn = $(this);
+        var $body = $btn.closest('#sell_list_staff_box').find('.sell-list-filter-body');
+        $btn.toggleClass('is-open');
+        $body.slideToggle(150);
+
+        var $dr = $body.find('.sell-list-filter-daterange');
+        if ($dr.length && !$dr.data('daterangepicker')) {
+            $dr.daterangepicker(
+                $.extend(true, {}, dateRangeSettings, {
+                    startDate: moment(),
+                    endDate: moment(),
+                    autoApply: true,
+                }),
+                function(start, end) {
+                    $dr.val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
+                    $body.find('.sell-list-filter-date-from').val(start.format('YYYY-MM-DD'));
+                    $body.find('.sell-list-filter-date-to').val(end.format('YYYY-MM-DD'));
+                    reset_hr_sell_list_pages();
+                    get_hr_sell_list();
+                }
+            );
+            $dr.on('cancel.daterangepicker', function(ev, picker) {
+                $dr.val('');
+                $body.find('.sell-list-filter-date-from').val('');
+                $body.find('.sell-list-filter-date-to').val('');
+                reset_hr_sell_list_pages();
+                get_hr_sell_list();
+            });
+        }
+    });
+
+    $(document).on('click', '.sell-list-tab', function(){
+        var $tab = $(this);
+        var target = $tab.data('target');
+        var $box = $tab.closest('#sell_list_staff_box');
+
+        $box.find('.sell-list-tab').removeClass('is-active');
+        $tab.addClass('is-active');
+        $box.find('.sell-list-pane').removeClass('is-active');
+        $box.find('.sell-list-pane-' + target).addClass('is-active');
+    });
+
+    /* Sell type filter change */
+    $(document).on('change', '.sell-list-filter-sell-type', function(){
+        reset_hr_sell_list_pages();
+        get_hr_sell_list();
+    });
+
+    /* Branch filter change */
+    $(document).on('change', '.sell-list-filter-branch', function(){
+        reset_hr_sell_list_pages();
+        get_hr_sell_list();
+    });
+
+    /* Sell List → expand/collapse the totals banner */
+    $(document).on('click', '.sell-list-total-banner', function(){
+        $(this).toggleClass('is-open');
+    });
+
+    /* After any HR sell list refresh, sync the sidebar Sell List badge. */
+    function refresh_sell_list_sidebar_badge() {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length === 0) {
+            return;
+        }
+        var total = parseInt($box.find('.sell-list-total').val() || '0', 10);
+        if (isNaN(total)) {
+            total = 0;
+        }
+        var formatted = total.toLocaleString ? total.toLocaleString() : String(total);
+        $('.sell-list-sidebar-badge').text(formatted);
+    }
+    /* Run once on page load so the badge matches whatever the server seeded. */
+    refresh_sell_list_sidebar_badge();
+
+    /* Sell type edit button in detail modal */
+    $(document).on('click', '.sell-type-edit-btn', function(){
+        var $btn = $(this);
+        var reportId = $btn.data('report-id');
+        var $display = $btn.closest('.col-sm-6').find('.sell-type-display');
+        var $select = $btn.closest('.col-sm-6').find('.sell-type-edit-select');
+        var currentValue = $display.text().trim();
+
+        if ($select.is(':visible')) {
+            return;
+        }
+
+        $select.empty();
+        $.ajax({
+            method: 'GET',
+            url: accessory_pos_url('/sells/pos/hr-sell-list-service-types/') + $('#location_id').val(),
+            dataType: 'json',
+            success: function(types) {
+                $.each(types, function(i, type) {
+                    var $opt = $('<option>').val(type).text(type);
+                    if (type === currentValue) {
+                        $opt.prop('selected', true);
+                    }
+                    $select.append($opt);
+                });
+                $display.hide();
+                $btn.hide();
+                $select.show().focus();
+            },
+        });
+    });
+
+    /* Sell type save on select change */
+    $(document).on('change', '.sell-type-edit-select', function(){
+        var $select = $(this);
+        var reportId = $select.data('report-id');
+        var newValue = $select.val();
+        var $container = $select.closest('.col-sm-6');
+
+        $.ajax({
+            method: 'POST',
+            url: accessory_pos_url('/sells/pos/hr-sell-list-update-service-type'),
+            data: {
+                report_id: reportId,
+                service_type: newValue,
+            },
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.success) {
+                    toastr.success(resp.msg);
+                    $container.find('.sell-type-display').text(newValue).show();
+                    $select.hide();
+                    $container.find('.sell-type-edit-btn').show();
+                } else {
+                    toastr.error(resp.msg);
+                }
+            },
+            error: function() {
+                toastr.error('Failed to update sell type.');
+                $container.find('.sell-type-edit-select').hide();
+                $container.find('.sell-type-display').show();
+                $container.find('.sell-type-edit-btn').show();
+            },
+        });
+    });
+
+    /* Copy All button: report-level, copies ALL active serials one by one */
+    $(document).on('click', '.sell-list-copy-all-btn', function(){
+        var $btn = $(this);
+        var $reportRow = $btn.closest('.sell-list-report-row');
+        var $activeLines = $reportRow.find('.sell-list-product-line[data-status="active"]');
+        var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!$activeLines.length) {
+            toastr.error('No active serials to copy.');
+            return;
+        }
+
+        var lines = [];
+        $activeLines.each(function() {
+            var $line = $(this);
+            var rawSerial = $.trim($line.data('serial') || '');
+            var price = parseFloat($line.attr('data-unit-price'));
+            if (isNaN(price)) {
+                var priceText = $line.find('.tw-text-xs.tw-font-bold.tw-text-slate-800').text().trim();
+                price = parseFloat(priceText.replace(/,/g, ''));
+            }
+            lines.push({
+                serial: rawSerial.replace(/[^a-zA-Z0-9]/g, ''),
+                lineId: $line.data('line-id'),
+                unitPrice: price,
+            });
+        });
+
+        $btn.prop('disabled', true).text('Copying...');
+
+        var staffCode = $reportRow.data('staff-code');
+        if (staffCode) {
+            var staffNumber = String(staffCode).replace(/[^0-9]/g, '').replace(/^0+/, '');
+            if (staffNumber) {
+                $('textarea[name="sale_note"]').val(staffNumber);
+            }
+        }
+
+        var phone = $reportRow.data('customer-phone');
+        if (phone) {
+            $('textarea[name="staff_note"]').val($.trim(String(phone)));
+        }
+
+        var total = lines.length;
+        var done = 0;
+        var stopped = false;
+
+        function process_next(index) {
+            if (stopped) return;
+
+            if (index >= lines.length) {
+                $btn.prop('disabled', false).text('Copy');
+                get_hr_sell_list();
+                if (done === total) {
+                    toastr.success('All ' + total + ' serials copied to cart.');
+                } else {
+                    toastr.warning(done + ' of ' + total + ' copied. Check search field for remaining.');
+                }
+                return;
+            }
+
+            var line = lines[index];
+
+            if (!line.serial) {
+                process_next(index + 1);
+                return;
+            }
+
+            $('input#search_product').val(line.serial).trigger($.Event('keydown', { keyCode: 37 }));
+
+            $.getJSON(accessory_pos_url('/sells/pos/resolve-hr-line-product'), {
+                line_id: line.lineId,
+                serial_number: line.serial,
+                location_id: $('input#location_id').val(),
+            }, function(data) {
+                if (data.success && data.auto_add && data.row_data) {
+                    pos_add_product_row_from_data(data.row_data);
+
+                    var $row = $('#pos_table tbody tr.product_row').last();
+                    if ($row.length) {
+                        var rowIndex = $row.data('row_index');
+
+                        var noteSelector = 'textarea[name="products[' + rowIndex + '][sell_line_note]"]';
+                        $(noteSelector).val(line.serial);
+
+                        $row.attr('data-hr-serial', line.serial);
+                        $row.attr('data-hr-line-id', line.lineId);
+                        $row.find('td').first().append('<input type="hidden" class="hr_sell_list_serial" name="products[' + rowIndex + '][hr_sell_list_serial]" value="' + line.serial + '">');
+
+                        if (!isNaN(line.unitPrice)) {
+                            var $unitPriceInput = $row.find('input.pos_unit_price');
+                            var $unitPriceIncTax = $row.find('input.pos_unit_price_inc_tax');
+
+                            /* __write_number formats the value per the page currency
+                               (thousands/decimal separators) so POS reads it back correctly. */
+                            __write_number($unitPriceInput, line.unitPrice);
+                            $unitPriceInput.trigger('change');
+                            if ($unitPriceIncTax.length) {
+                                __write_number($unitPriceIncTax, line.unitPrice);
+                                $unitPriceIncTax.trigger('change');
+                            }
+
+                            var modalId = '#row_edit_product_price_modal_' + rowIndex;
+                            var $priceModal = $row.closest('body').find(modalId);
+                            if ($priceModal.length && $priceModal.hasClass('in')) {
+                                __write_number($priceModal.find('input.pos_unit_price'), line.unitPrice);
+                            }
+
+                            /* pos_total_row recalculates line subtotal and invoice totals,
+                               matching the behaviour of manual price edits. */
+                            if (typeof pos_total_row === 'function') {
+                                pos_total_row();
+                            }
+                        }
+
+                        saveFormDataToLocalStorage();
+
+                        $('#search_product').val('');
+                        var ac = $('#search_product').data('ui-autocomplete');
+                        if (ac) { ac.cache = {}; ac.term = ''; }
+
+                        done++;
+                    }
+
+                    process_next(index + 1);
+                } else {
+                    stopped = true;
+                    $btn.prop('disabled', false).text('Copy');
+                    toastr.error((data.serial || line.serial) + ': product not found. Serial left in search field for manual search.');
+                    get_hr_sell_list();
+                }
+            });
+        }
+
+        process_next(0);
+    });
+
+    /* Add All button: report-level, marks ALL active serials as added */
+    $(document).on('click', '.sell-list-add-all-btn', function(){
+        var $btn = $(this);
+        var $reportRow = $btn.closest('.sell-list-report-row');
+        var $activeLines = $reportRow.find('.sell-list-product-line[data-status="active"]');
+        var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!invoiceKey) {
+            toastr.error('Missing invoice key. Please refresh POS.');
+            return;
+        }
+
+        if (!$activeLines.length) {
+            toastr.error('No active serials to add.');
+            return;
+        }
+
+        $btn.prop('disabled', true).text('...');
+
+        var total = $activeLines.length;
+        var done = 0;
+        var errors = [];
+
+        function add_next(index) {
+            if (index >= $activeLines.length) {
+                $btn.prop('disabled', false).text('Add to');
+                get_hr_sell_list();
+                if (errors.length) {
+                    toastr.warning(done + ' added, ' + errors.length + ' errors.');
+                } else {
+                    toastr.success('All ' + total + ' marked as added.');
+                }
+                return;
+            }
+
+            var $line = $activeLines.eq(index);
+            var lineId = $line.data('line-id');
+            var serial = $.trim($line.data('serial') || '');
+
+            if (!lineId) {
+                add_next(index + 1);
+                return;
+            }
+
+            $.ajax({
+                method: 'POST',
+                url: accessory_pos_url('/sells/pos/add-hr-sell-list-line'),
+                dataType: 'json',
+                data: {
+                    line_id: lineId,
+                    serial_number: serial,
+                    invoice_key: invoiceKey,
+                },
+                success: function(result) {
+                    if (result.success) {
+                        done++;
+                    } else {
+                        errors.push(result.msg || 'Line ' + lineId + ' failed.');
+                    }
+                    add_next(index + 1);
+                },
+                error: function() {
+                    errors.push('Line ' + lineId + ' request failed.');
+                    add_next(index + 1);
+                },
+            });
+        }
+
+        add_next(0);
+    });
+
+    /* Add to button: per-line, marks serial as added without adding to cart */
+    $(document).on('click', '.sell-list-add-to-btn', function(){
+        var $btn = $(this);
+        var lineId = $btn.data('line-id');
+        var serial = $.trim($btn.data('serial') || '');
+        var invoiceKey = $('#pos_sell_list_invoice_key').val();
+
+        if (!invoiceKey) {
+            toastr.error('Missing invoice key. Please refresh POS.');
+            return;
+        }
+
+        if (!lineId) {
+            toastr.error('Missing line ID.');
+            return;
+        }
+
+        $btn.prop('disabled', true).text('...');
+
+        $.ajax({
+            method: 'POST',
+            url: accessory_pos_url('/sells/pos/add-hr-sell-list-line'),
+            dataType: 'json',
+            data: {
+                line_id: lineId,
+                serial_number: serial,
+                invoice_key: invoiceKey,
+            },
+            success: function(result) {
+                if (result.success) {
+                    toastr.success(serial ? serial + ' marked as added.' : 'Marked as added.');
+                    get_hr_sell_list();
+                } else {
+                    toastr.error(result.msg || 'Unable to mark as added.');
+                    $btn.prop('disabled', false).text('Add to');
+                }
+            },
+            error: function() {
+                toastr.error('Unable to mark as added.');
+                $btn.prop('disabled', false).text('Add to');
+            },
+        });
+    });
+
+    $(document).on('click', '.sell-list-detail-btn', function(){
+        var reportId = $(this).data('report-id');
+        var $modal = $('.hr_sell_list_detail_modal');
+
+        $.ajax({
+            method: 'GET',
+            url: accessory_pos_url('/sells/pos/hr-sell-list-detail/') + reportId,
+            dataType: 'html',
+            success: function(html) {
+                $modal.html(html).modal('show');
+            },
+            error: function() {
+                toastr.error('Unable to load Sell List detail.');
+            },
+        });
+    });
+
+    $(document).on('click', '.sell-list-photo-thumb', function(){
+        var photoUrl = $(this).data('photo-url');
+        var fallbackUrl = $(this).data('photo-fallback-url') || photoUrl;
+        var photoName = $(this).data('photo-name') || 'Photo';
+        var $modal = $('.hr_sell_list_photo_modal');
+
+        $modal.find('.sell-list-photo-title').text(photoName);
+        $modal.find('.sell-list-photo-preview')
+            .attr('src', photoUrl)
+            .attr('data-fallback-url', fallbackUrl);
+        $modal.modal('show');
+    });
+
+    $(document).on('input', '.sell-list-search', function(){
+        filter_sell_list_rows($(this).closest('#sell_list_staff_box'));
+    });
+
+    $(document).on('error', '.sell-list-avatar', function(){
+        var $img = $(this);
+        var fallbacks = $img.data('fallbacks') || [];
+
+        if (fallbacks.length) {
+            $img.data('fallbacks', fallbacks.slice(1));
+            $img.attr('src', fallbacks[0]);
+            return;
+        }
+
+        $img.hide();
+        $img.siblings('.sell-list-avatar-fallback').removeClass('tw-hidden');
     });
     validate_discount_field();
     set_payment_type_dropdown();
@@ -1798,6 +2472,18 @@ $(document).ready(function() {
             $('span.curr_datetime').html(__current_datetime());
         }
     }, 60000);
+
+    /* Auto-refresh sell list every 30 seconds when visible (silent = only update panes, no flicker) */
+    setInterval(function () {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length && $box.is(':visible')) {
+            var $loader = $box.find('.sell-list-pane.is-active .sell-list-pane-loader');
+            if ($loader.length && $loader.data('loading')) {
+                return;
+            }
+            get_hr_sell_list(true);
+        }
+    }, 30000);
 
     set_search_fields();
 });
@@ -1837,7 +2523,7 @@ function get_featured_products() {
     if (location_id) {
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get-featured-products/' + location_id,
+            url: accessory_pos_url('/sells/pos/get-featured-products/') + location_id,
             dataType: 'html',
             success: function(result) {
                 $box.html(result ? result : emptyHtml);
@@ -1859,7 +2545,9 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
     var $items_container = $('div#product_list_items').length ? $('div#product_list_items') : $('div#product_list_body');
 
     if (url == null) {
-        url = '/sells/pos/get-product-suggestion';
+        url = accessory_pos_url('/sells/pos/get-product-suggestion');
+    } else {
+        url = accessory_pos_url(url);
     }
     $('#suggestion_page_loader').fadeIn(700);
     var page = $('input#suggestion_page').val();
@@ -1897,7 +2585,7 @@ function get_recent_transactions(status, element_obj) {
     var transaction_sub_type = $("#transaction_sub_type").val();
     $.ajax({
         method: 'GET',
-        url: '/sells/pos/get-recent-transactions',
+        url: accessory_pos_url('/sells/pos/get-recent-transactions'),
         data: { status: status , transaction_sub_type: transaction_sub_type},
         dataType: 'html',
         success: function(result) {
@@ -2009,19 +2697,9 @@ function pos_add_product_row_from_data(result) {
             $('#pos_table tbody')
                 .find('tr')
                 .each(function() {
-                    var row_v_id = $(this).find('.row_variation_id').val();
-                    var enable_sr_no = $(this).find('.enable_sr_no').val();
-                    var modifiers_exist = false;
-                    if ($(this).find('input.modifiers_exist').length > 0) {
-                        modifiers_exist = true;
-                    }
-                    
-                    if (
-                        row_v_id == variation_id &&
-                        enable_sr_no !== '1' &&
-                        !modifiers_exist &&
-                        !is_added
-                    ) {
+                    var purchase_line_id = result.purchase_line_id || result.lot_no_line_id || null;
+
+                    if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                         add_new_row = false;
                         is_added = true;
                         
@@ -2075,23 +2753,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         $('#pos_table tbody')
             .find('tr')
             .each(function() {
-                var row_v_id = $(this)
-                    .find('.row_variation_id')
-                    .val();
-                var enable_sr_no = $(this)
-                    .find('.enable_sr_no')
-                    .val();
-                var modifiers_exist = false;
-                if ($(this).find('input.modifiers_exist').length > 0) {
-                    modifiers_exist = true;
-                }
-
-                if (
-                    row_v_id == variation_id &&
-                    enable_sr_no !== '1' &&
-                    !modifiers_exist &&
-                    !is_added
-                ) {
+                if (!is_added && pos_can_increment_existing_row(this, variation_id, purchase_line_id)) {
                     add_via_ajax = false;
                     is_added = true;
 
@@ -2166,7 +2828,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
         
         $.ajax({
             method: 'GET',
-            url: '/sells/pos/get_product_row/' + variation_id + '/' + location_id,
+            url: accessory_pos_url('/sells/pos/get_product_row/') + variation_id + '/' + location_id,
             async: false,
             data: {
                 product_row: product_row,
@@ -2228,7 +2890,7 @@ function pos_each_row(row_obj) {
 function pos_total_row() {
     var total_quantity = 0;
     var price_total = get_subtotal();
-    $('table#pos_table tbody tr').each(function() {
+    $('table#pos_table tbody tr.product_row').each(function() {
         total_quantity = total_quantity + __read_number($(this).find('input.pos_quantity'));
     });
 
@@ -2253,6 +2915,7 @@ function pos_total_row() {
     }
     // store on any update
     saveFormDataToLocalStorage();
+    pos_refresh_grouped_product_rows();
 
 }
 
@@ -2441,6 +3104,37 @@ function isValidPosForm() {
     return flag;
 }
 
+function clear_pos_cart(){
+	$('tr.product_row, tr.pos-product-group-summary').remove();
+	pos_product_group_collapsed = {};
+	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount, span#loyalty_amount_display').text(0);
+	$('span.total_payable_span, span.total_paying, span.balance_due').text(0);
+	$('#modal_payment').find('.remove_payment_row').each( function(){
+		$(this).closest('.payment_row').remove();
+	});
+	if ($('#is_credit_sale').length) {
+		$('#is_credit_sale').val(0);
+	}
+	__write_number($('input#discount_amount'), $('input#discount_amount').data('default'));
+	$('input#discount_type').val($('input#discount_type').data('default'));
+	$('input#tax_rate_id').val($('input#tax_rate_id').data('default'));
+	__write_number($('input#tax_calculation_amount'), $('input#tax_calculation_amount').data('default'));
+	$('select.payment_types_dropdown').val('cash').trigger('change');
+	__write_number($('input#shipping_charges'), $('input#shipping_charges').data('default'));
+	$('input#shipping_details').val($('input#shipping_details').data('default'));
+	$('input#shipping_address, input#shipping_status, input#delivered_to').val('');
+	if($('input#is_recurring').length > 0){
+		$('input#is_recurring').iCheck('update');
+	};
+	if($('input#is_kitchen_order').length > 0){
+		$('input#is_kitchen_order').iCheck('update');
+	};
+	if($('#invoice_layout_id').length > 0){
+		$('#invoice_layout_id').trigger('change');
+	};
+	$('span#round_off_text').text(0);
+}
+
 function reset_pos_form(){
 
 	//If on edit page then redirect to Add POS page
@@ -2465,7 +3159,8 @@ function reset_pos_form(){
 	set_default_customer();
 	set_location();
 
-	$('tr.product_row').remove();
+	$('tr.product_row, tr.pos-product-group-summary').remove();
+    pos_product_group_collapsed = {};
 	$('span.total_quantity, span.price_total, span#total_discount, span#order_tax, span#total_payable, span#shipping_charges_amount, span#loyalty_amount_display').text(0);
 	$('span.total_payable_span', 'span.total_paying', 'span.balance_due').text(0);
 
@@ -2583,26 +3278,21 @@ function set_default_customer() {
 
 //Set the location and initialize printer
 function set_location() {
-    if ($('select#select_location_id').length == 1) {
-        $('input#location_id').val($('select#select_location_id').val());
+    var $select = $('select[name="select_location_id"]').last();
+    if ($select.length) {
+        $('input#location_id').val($select.val());
         $('input#location_id').data(
             'receipt_printer_type',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('receipt_printer_type')
+            $select.find(':selected').data('receipt_printer_type')
         );
         $('input#location_id').data(
             'default_payment_accounts',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_payment_accounts')
+            $select.find(':selected').data('default_payment_accounts')
         );
 
         $('input#location_id').attr(
             'data-default_price_group',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_price_group')
+            $select.find(':selected').data('default_price_group')
         );
     }
 
@@ -2819,7 +3509,7 @@ function getCustomerRewardPoints() {
 
     $.ajax({
         method: 'POST',
-        url: '/sells/pos/get-reward-details',
+        url: accessory_pos_url('/sells/pos/get-reward-details'),
         data: { 
             customer_id: customer_id
         },
@@ -2940,7 +3630,7 @@ $(document).on('change', '#types_of_service_id', function(){
     if(types_of_service_id) {
         $.ajax({
             method: 'POST',
-            url: '/sells/pos/get-types-of-service-details',
+            url: accessory_pos_url('/sells/pos/get-types-of-service-details'),
             data: { 
                 types_of_service_id: types_of_service_id,
                 location_id: location_id
@@ -3002,19 +3692,19 @@ $(document).on('click', '.service_modal_btn', function(e) {
 });
 
 $(document).on('change', '.payment_types_dropdown', function(e) {
-    var default_accounts = $('select#select_location_id').length ? 
-                $('select#select_location_id')
-                .find(':selected')
+    var $locSelect = $('select[name="select_location_id"]').last();
+    var default_accounts = $locSelect.length ? 
+                $locSelect.find(':selected')
                 .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');
     if (payment_type && payment_type != 'advance') {
-        var default_account = default_accounts && default_accounts[payment_type]['account'] ? 
+        var default_account = default_accounts && default_accounts[payment_type] && default_accounts[payment_type]['account'] ?
             default_accounts[payment_type]['account'] : '';
         var row_index = payment_row.find('.payment_row_index').val();
 
         var account_dropdown = payment_row.find('select#account_' + row_index);
-        if (account_dropdown.length && default_accounts) {
+        if (account_dropdown.length && default_accounts && default_accounts[payment_type]) {
             account_dropdown.val(default_account);
             account_dropdown.change();
         }
@@ -3225,7 +3915,7 @@ function get_sales_orders() {
         var customer_id = $('select#customer_id').val();
         var location_id = $('input#location_id').val();
         $.ajax({
-            url: '/get-sales-orders/' + customer_id + '?location_id=' + location_id,
+            url: accessory_pos_url('/get-sales-orders/' + customer_id + '?location_id=' + location_id),
             dataType: 'json',
             success: function(data) {
                 $('#sales_order_ids').select2('destroy').empty().select2({data: data});
@@ -3246,7 +3936,7 @@ $("#sales_order_ids").on("select2:select", function (e) {
     var location_id = $('input#location_id').val();
     $.ajax({
         method: 'GET',
-        url: '/get-sales-order-lines',
+        url: accessory_pos_url('/get-sales-order-lines'),
         async: false,
         data: {
             product_row: product_row,
@@ -3339,7 +4029,7 @@ $("#sales_order_ids").on("select2:unselect", function (e) {
 
 $(document).on('click', '#add_expense', function(){
     $.ajax({
-        url: '/expenses/create',
+        url: accessory_pos_url('/expenses/create'),
         data: { 
             location_id: $('#select_location_id').val()
         },
@@ -3395,7 +4085,7 @@ $(document).on('click', '#pos-receive-customer-payment', function() {
         return;
     }
     $.ajax({
-        url: '/payments/pay-contact-due/' + customer_id + '?type=sell',
+        url: accessory_pos_url('/payments/pay-contact-due/' + customer_id + '?type=sell'),
         dataType: 'html',
         success: function(result) {
             $('#pos_pay_contact_due_modal').html(result);
@@ -3593,6 +4283,23 @@ $(document).on('ifChanged', 'input[name="search_fields[]"]', function(event) {
     localStorage.setItem('pos_search_fields', search_fields);
 });
 
+function notify_loan_module_pos_saved(result) {
+    if (!window.parent || window.parent === window || !result || result.success != 1) {
+        return;
+    }
+
+    try {
+        window.parent.postMessage({
+            type: 'loan-pos-sale-saved',
+            transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
+            invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
+            receipt: result.receipt || null
+        }, window.location.origin);
+    } catch (e) {
+        // Keep POS save flow alive even if the parent frame blocks the message.
+    }
+}
+
 function set_search_fields() {
     if ($('input[name="search_fields[]"]').length == 0) {
         return false;
@@ -3694,7 +4401,7 @@ $(document).on('change', '#res_waiter_id', function(e){
             if (inputValue !== null) {
                     $.ajax({
                         method: 'get',
-                        url: '/modules/data/check-staff-pin',
+                        url: accessory_pos_url('/modules/data/check-staff-pin'),
                         dataType: 'json',
                         data: {
                         service_staff_pin: inputValue,
