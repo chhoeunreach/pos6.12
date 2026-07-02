@@ -62,9 +62,10 @@ class MobileAccessoryController extends Controller
         try {
             DB::connection('mysql')->beginTransaction();
 
-            $data = $request->only(['name', 'sku', 'model', 'price', 'cost', 'description']);
+            $data = $request->only(['name', 'sku', 'model', 'price', 'cost', 'description', 'is_active']);
             $data['business_id'] = $business_id;
             $data['created_by'] = $user_id;
+            $data['is_active'] = $data['is_active'] ?? true;
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
@@ -99,7 +100,7 @@ class MobileAccessoryController extends Controller
         try {
             DB::connection('mysql')->beginTransaction();
 
-            $data = $request->only(['name', 'sku', 'model', 'price', 'cost', 'description']);
+            $data = $request->only(['name', 'sku', 'model', 'price', 'cost', 'description', 'is_active']);
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
