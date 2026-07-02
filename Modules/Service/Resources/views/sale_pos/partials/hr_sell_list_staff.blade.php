@@ -89,7 +89,7 @@
 </div>
 
 <div class="sell-list-pane sell-list-pane-active is-active">
-    @include('sale_pos.partials.hr_sell_list_rows', ['reports' => $activeReports, 'line_status' => 'active', 'show_copy_button' => true])
+    @include('service::sale_pos.partials.hr_sell_list_rows', ['reports' => $activeReports, 'line_status' => 'active', 'show_copy_button' => true])
     @if ($activeReports->isEmpty())
         <div class="sell-list-empty tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
             <i class="fa fa-info-circle"></i>
@@ -105,7 +105,7 @@
 </div>
 
 <div class="sell-list-pane sell-list-pane-added">
-    @include('sale_pos.partials.hr_sell_list_rows', ['reports' => $addedReports, 'line_status' => 'added', 'show_copy_button' => false])
+    @include('service::sale_pos.partials.hr_sell_list_rows', ['reports' => $addedReports, 'line_status' => 'added', 'show_copy_button' => false])
     @if ($addedReports->isEmpty())
         <div class="sell-list-empty tw-w-full tw-flex tw-items-center tw-justify-center tw-gap-2 tw-py-3 tw-px-3 tw-text-sky-800 tw-text-xs md:tw-text-sm">
             <i class="fa fa-info-circle"></i>

@@ -30,6 +30,25 @@
 
                             {{-- <div class="box box-solid mb-12 @if (!isMobile()) mb-40 @endif"> --}}
                                 <div class="box-body pb-0">
+                                    @if(count($business_locations) > 0)
+                                    <div class="row">
+                                        <div class="col-sm-3">
+                                            <div class="form-group">
+                                                <div class="input-group">
+                                                    <span class="input-group-addon">
+                                                        <i class="fa fa-map-marker"></i>
+                                                    </span>
+                                                    {!! Form::select('select_location_id', $business_locations, $default_location->id ?? null, ['class' => 'form-control input-sm',
+                                                    'id' => 'select_location_id',
+                                                    'required', 'autofocus'], $bl_attributes); !!}
+                                                    <span class="input-group-addon">
+                                                        @show_tooltip(__('tooltip.sale_location'))
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @endif
                                     {!! Form::hidden('location_id', $default_location->id ?? null, [
                                         'id' => 'location_id',
                                         'data-receipt_printer_type' => !empty($default_location->receipt_printer_type)
@@ -37,6 +56,7 @@
                                             : 'browser',
                                         'data-default_payment_accounts' => $default_location->default_payment_accounts ?? '',
                                     ]) !!}
+                                    {!! Form::hidden('pos_sell_list_invoice_key', $pos_sell_list_invoice_key ?? '', ['id' => 'pos_sell_list_invoice_key']) !!}
                                     <!-- sub_type -->
                                     {!! Form::hidden('sub_type', isset($sub_type) ? $sub_type : null) !!}
                                     <input type="hidden" id="item_addition_method"
@@ -90,6 +110,52 @@
     <div class="modal fade" id="expense_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel">
     </div>
     <div class="modal fade" id="pos_pay_contact_due_modal" tabindex="-1" role="dialog">
+    </div>
+    <div class="modal fade hr_sell_list_detail_modal" tabindex="-1" role="dialog">
+    </div>
+    <div class="modal fade hr_sell_list_photo_modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title sell-list-photo-title">Photo</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="sell-list-ocr-layout">
+                        <div class="sell-list-ocr-image-panel">
+                            <img class="sell-list-photo-preview" src="" alt="Sell Out photo">
+                        </div>
+                        <div class="sell-list-ocr-result-panel">
+                            <div class="sell-list-ocr-status text-muted">
+                                Open a photo to extract text.
+                            </div>
+                            <div class="progress sell-list-ocr-progress-wrap" style="display:none;">
+                                <div class="progress-bar progress-bar-striped active sell-list-ocr-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%;">
+                                    0%
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>OCR Result</label>
+                                <textarea class="form-control sell-list-ocr-text" rows="8" readonly placeholder="Detected text will appear here..."></textarea>
+                            </div>
+                            <div class="sell-list-serial-section">
+                                <label>Detected Serials</label>
+                                <div class="sell-list-serials text-muted">No serials detected yet.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary sell-list-copy-text-btn">
+                        <i class="fa fa-copy"></i> Copy Text
+                    </button>
+                    <button type="button" class="btn btn-success sell-list-copy-first-serial-btn" disabled>
+                        <i class="fa fa-barcode"></i> Copy Serial
+                    </button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     @include('accessory::sale_pos.partials.configure_search_modal')

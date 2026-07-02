@@ -1,5 +1,5 @@
 @forelse ($reports as $report)
-    @include('sale_pos.partials.hr_sell_list_report_row', [
+    @include('accessory::sale_pos.partials.hr_sell_list_report_row', [
         'report' => $report,
         'line_status' => $line_status,
         'show_copy_button' => $show_copy_button,

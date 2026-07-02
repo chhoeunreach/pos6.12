@@ -23,6 +23,25 @@
 				<div class="tw-w-full @if(empty($pos_settings['hide_product_suggestion'])) lg:tw-w-[60%]  @else lg:tw-w-[100%] @endif" style="padding:0;">
 					<div class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-rounded-2xl tw-bg-white" style="padding:0;overflow:hidden;height:100%;">
 						<div class="box-body pb-0">
+							@if(count($business_locations) > 0)
+							<div class="row">
+								<div class="col-sm-3">
+								    <div class="form-group">
+								        <div class="input-group">
+								            <span class="input-group-addon">
+								                <i class="fa fa-map-marker"></i>
+								            </span>
+								            {!! Form::select('select_location_id', $business_locations, $default_location->id ?? $transaction->location_id ?? null, ['class' => 'form-control input-sm',
+								            'id' => 'select_location_id',
+								            'required'], $bl_attributes); !!}
+								            <span class="input-group-addon">
+								                @show_tooltip(__('tooltip.sale_location'))
+								            </span>
+								        </div>
+								    </div>
+								</div>
+							</div>
+							@endif
 							{!! Form::hidden('location_id', $transaction->location_id, ['id' => 'location_id', 'data-receipt_printer_type' => !empty($location_printer_type) ? $location_printer_type : 'browser', 'data-default_payment_accounts' => $transaction->location->default_payment_accounts]); !!}
 							<!-- sub_type -->
 							{!! Form::hidden('sub_type', isset($sub_type) ? $sub_type : null) !!}
