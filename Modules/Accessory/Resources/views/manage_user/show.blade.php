@@ -152,7 +152,7 @@
         $(document).ready( function(){
             $('#user_id').change( function() {
                 if ($(this).val()) {
-                    window.location = "{{url('/users')}}/" + $(this).val();
+                    window.location = "{{ route('accessory.users.index') }}/" + $(this).val();
                 }
             });
         });

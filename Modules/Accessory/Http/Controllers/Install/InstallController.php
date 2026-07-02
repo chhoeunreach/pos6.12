@@ -361,7 +361,7 @@ class InstallController extends Controller
                 'msg' => 'Updated Succesfully to version '.$this->appVersion.' !!',
             ];
 
-            return redirect('login')->with('status', $output);
+            return redirect()->route('accessory.login')->with('status', $output);
         } catch (Exception $e) {
             DB::rollBack();
             exit($e->getMessage());

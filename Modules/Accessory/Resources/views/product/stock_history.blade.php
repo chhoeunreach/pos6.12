@@ -81,7 +81,7 @@
                 },
             }).on('select2:select', function (e) {
                 var data = e.params.data;
-                window.location.href = "{{url('/')}}/products/stock-history/" + data.id
+                window.location.href = "{{ config('app.url') }}/{{ trim(config('accessory.route_prefix', 'accessory-pos'), '/') }}/products/stock-history/" + data.id
             });
         });
 

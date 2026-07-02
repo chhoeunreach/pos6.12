@@ -3,7 +3,6 @@
 namespace Modules\Accessory\Http\Controllers\Auth;
 
 use Modules\Accessory\Http\Controllers\Controller;
-use App\Providers\RouteServiceProvider;
 use App\Utils\BusinessUtil;
 use App\Utils\ModuleUtil;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
@@ -13,25 +12,7 @@ use App\Rules\ReCaptcha;
 
 class LoginController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | Login Controller
-    |--------------------------------------------------------------------------
-    |
-    | This controller handles authenticating users for the application and
-    | redirecting them to your home screen. The controller uses a trait
-    | to conveniently provide its functionality to your applications.
-    |
-    */
-
     use AuthenticatesUsers;
-
-    /**
-     * Where to redirect users after login.
-     *
-     * @var string
-     */
-    protected $redirectTo = RouteServiceProvider::HOME;
 
     /**
      * All Utils instance.
@@ -74,7 +55,7 @@ class LoginController extends Controller
         request()->session()->flush();
         \Auth::logout();
 
-        return redirect('/login');
+        return redirect()->route('accessory.login');
     }
 
     /**
@@ -92,7 +73,7 @@ class LoginController extends Controller
         if (! $user->business->is_active) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect()->route('accessory.login')
               ->with(
                   'status',
                   ['success' => 0, 'msg' => __('lang_v1.business_inactive')]
@@ -100,7 +81,7 @@ class LoginController extends Controller
         } elseif ($user->status != 'active') {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect()->route('accessory.login')
               ->with(
                   'status',
                   ['success' => 0, 'msg' => __('lang_v1.user_inactive')]
@@ -108,7 +89,7 @@ class LoginController extends Controller
         } elseif (! $user->allow_login) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect()->route('accessory.login')
                 ->with(
                     'status',
                     ['success' => 0, 'msg' => __('lang_v1.login_not_allowed')]
@@ -116,7 +97,7 @@ class LoginController extends Controller
         } elseif (($user->user_type == 'user_customer') && ! $this->moduleUtil->hasThePermissionInSubscription($user->business_id, 'crm_module')) {
             \Auth::logout();
 
-            return redirect('/login')
+            return redirect()->route('accessory.login')
                 ->with(
                     'status',
                     ['success' => 0, 'msg' => __('lang_v1.business_dont_have_crm_subscription')]
@@ -128,14 +109,14 @@ class LoginController extends Controller
     {
         $user = \Auth::user();
         if (! $user->can('dashboard.data') && $user->can('sell.create')) {
-            return '/pos/create';
+            return action([\Modules\Accessory\Http\Controllers\SellPosController::class, 'create']);
         }
 
         if ($user->user_type == 'user_customer') {
-            return 'contact/contact-dashboard';
+            return action([\Modules\Accessory\Http\Controllers\ContactController::class, 'show'], [$user->id]);
         }
 
-        return '/home';
+        return route('accessory.home');
     }
 
     public function validateLogin(Request $request)

@@ -90,7 +90,7 @@ class BusinessController extends Controller
     public function getRegister()
     {
         if (! config('constants.allow_registration')) {
-            return redirect('/');
+            return redirect()->route('accessory.home');
         }
 
         $currencies = $this->businessUtil->allCurrencies();
@@ -125,7 +125,7 @@ class BusinessController extends Controller
     public function postRegister(Request $request)
     {
         if (! config('constants.allow_registration')) {
-            return redirect('/');
+            return redirect()->route('accessory.home');
         }
 
         try {
@@ -246,7 +246,7 @@ class BusinessController extends Controller
                 'msg' => __('business.business_created_succesfully'),
             ];
 
-            return redirect('login')->with('status', $output);
+            return redirect()->route('accessory.login')->with('status', $output);
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
