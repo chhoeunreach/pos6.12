@@ -20,9 +20,9 @@
 	@endif
 
 	$(document).ready( function() {
-		if ($('#job_sheet_location_id').length && $('select#select_location_id').length) {
-			$('select#select_location_id').val($('#job_sheet_location_id').val());
-			$('select#select_location_id').trigger('change');
+		if ($('#job_sheet_location_id').length && $('select[name="select_location_id"]').length) {
+			$('select[name="select_location_id"]').first().val($('#job_sheet_location_id').val());
+			$('select[name="select_location_id"]').first().trigger('change');
 		}
 
 		$("#product_service_div").removeClass('hide');

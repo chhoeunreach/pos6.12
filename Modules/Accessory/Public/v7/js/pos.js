@@ -19,14 +19,15 @@ function accessory_pos_url(path) {
     return base + '/' + path.replace(/^\/+/, '');
 }
 
-function accessory_sync_selected_location() {
-    if ($('select#select_location_id').length !== 1) {
+function accessory_sync_selected_location($select) {
+    $select = $select || $('select[name="select_location_id"]').first();
+    if (!$select.length) {
         return;
     }
 
-    var $selected = $('select#select_location_id').find(':selected');
+    var $selected = $select.find(':selected');
 
-    $('input#location_id').val($('select#select_location_id').val());
+    $('input#location_id').val($select.val());
     $('input#location_id').data('receipt_printer_type', $selected.data('receipt_printer_type'));
     $('input#location_id').data('default_payment_accounts', $selected.data('default_payment_accounts'));
     $('input#location_id').attr('data-receipt_printer_type', $selected.data('receipt_printer_type'));
@@ -195,8 +196,8 @@ $(document).ready(function() {
         initialize_printer();
     }
 
-    $('select#select_location_id').change(function() {
-        accessory_sync_selected_location();
+    $('select[name="select_location_id"]').on('change', function() {
+        accessory_sync_selected_location($(this));
         clear_pos_cart();
         pos_reset_product_filters();
 
@@ -1490,7 +1491,7 @@ $(document).ready(function() {
         device_model_id
     );
     
-    $('select#select_location_id').on('change', function(e) {
+    $('select[name="select_location_id"]').on('change', function(e) {
         $('input#suggestion_page').val(1);
         var location_id = $('input#location_id').val();
         if (location_id != '' || location_id != undefined) {
@@ -3277,26 +3278,21 @@ function set_default_customer() {
 
 //Set the location and initialize printer
 function set_location() {
-    if ($('select#select_location_id').length == 1) {
-        $('input#location_id').val($('select#select_location_id').val());
+    var $select = $('select[name="select_location_id"]').first();
+    if ($select.length) {
+        $('input#location_id').val($select.val());
         $('input#location_id').data(
             'receipt_printer_type',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('receipt_printer_type')
+            $select.find(':selected').data('receipt_printer_type')
         );
         $('input#location_id').data(
             'default_payment_accounts',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_payment_accounts')
+            $select.find(':selected').data('default_payment_accounts')
         );
 
         $('input#location_id').attr(
             'data-default_price_group',
-            $('select#select_location_id')
-                .find(':selected')
-                .data('default_price_group')
+            $select.find(':selected').data('default_price_group')
         );
     }
 
@@ -3696,9 +3692,9 @@ $(document).on('click', '.service_modal_btn', function(e) {
 });
 
 $(document).on('change', '.payment_types_dropdown', function(e) {
-    var default_accounts = $('select#select_location_id').length ? 
-                $('select#select_location_id')
-                .find(':selected')
+    var $locSelect = $('select[name="select_location_id"]').first();
+    var default_accounts = $locSelect.length ? 
+                $locSelect.find(':selected')
                 .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');

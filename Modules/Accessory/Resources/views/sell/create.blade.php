@@ -948,8 +948,9 @@
 		    });
 
 		    $(document).on('change', '#prefer_payment_method', function(e) {
-			    var default_accounts = $('select#select_location_id').length ? 
-			                $('select#select_location_id')
+			    var default_accounts = $('select[name="select_location_id"]').length ? 
+			                $('select[name="select_location_id"]')
+			                .first()
 			                .find(':selected')
 			                .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
 			    var payment_type = $(this).val();

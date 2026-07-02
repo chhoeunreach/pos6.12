@@ -2,7 +2,7 @@ $(document).ready(function() {
     //If location is set then show tables.
     getLocationTables($('input#location_id').val());
 
-    $('select#select_location_id').change(function() {
+    $('select[name="select_location_id"]').on('change', function() {
         var location_id = $(this).val();
         getLocationTables(location_id);
     });

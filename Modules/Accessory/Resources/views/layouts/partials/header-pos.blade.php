@@ -35,7 +35,7 @@
                                 'select_location_id',
                                 $business_locations,
                                 $default_location->id ?? null,
-                                ['class' => 'form-control input-sm', 'id' => 'select_location_id', 'required', 'autofocus'],
+                                ['class' => 'form-control input-sm', 'id' => 'select_header_location_id', 'required', 'autofocus'],
                                 $bl_attributes,
                             ) !!}
                         @else
