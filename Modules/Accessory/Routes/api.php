@@ -163,8 +163,8 @@ Route::group([], function () {
     Route::get('mobile/payment-methods', [SettingsController::class, 'paymentMethods']);
     Route::get('mobile/business', [SettingsController::class, 'business']);
 
-    // Accessories CRUD (main database via explicit mysql connection)
-    Route::prefix('mobile/accessories')->group(function () {
+    // Accessories CRUD (main database, bypass accessory.database middleware)
+    Route::prefix('mobile/accessories')->withoutMiddleware('accessory.database')->group(function () {
         Route::get('/', [MobileAccessoryController::class, 'index']);
         Route::get('{id}', [MobileAccessoryController::class, 'show']);
         Route::post('/', [MobileAccessoryController::class, 'store']);
