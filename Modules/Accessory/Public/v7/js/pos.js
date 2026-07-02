@@ -2080,6 +2080,124 @@ $(document).ready(function() {
         $(this).toggleClass('is-open');
     });
 
+    function reset_hr_sell_list_pages() {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length === 0) {
+            return;
+        }
+        $box.find('.sell-list-page-active').val(1);
+        $box.find('.sell-list-page-added').val(1);
+        $box.find('.sell-list-has-more-active').val(0);
+        $box.find('.sell-list-has-more-added').val(0);
+        $box.find('.sell-list-pane-loader').hide();
+        $box.find('.sell-list-pane-end').show();
+    }
+
+    function get_hr_sell_list(silent) {
+        var $box = $('#sell_list_staff_box');
+        if ($box.length === 0) {
+            return;
+        }
+        var location_id = $('#location_id').val() || '0';
+        var dateFrom = $box.find('.sell-list-filter-date-from').val() || '';
+        var dateTo = $box.find('.sell-list-filter-date-to').val() || '';
+        var sellType = $box.find('.sell-list-filter-sell-type').val() || 'សម្ភារ';
+        var branchName = $box.find('.sell-list-filter-branch').val() || '';
+        var savedSearch = $box.find('.sell-list-search').val();
+        var savedActiveTab = $box.find('.sell-list-tab.is-active').data('target');
+        var $scrollContainer = $box.find('.sell-list-pane.is-active');
+        var savedScroll = $scrollContainer.length ? $scrollContainer.scrollTop() : 0;
+        $.ajax({
+            method: 'GET',
+            url: window.accessory_pos_base_url + '/sells/pos/get-hr-sell-list/' + location_id,
+            dataType: 'json',
+            data: {
+                date_from: dateFrom,
+                date_to: dateTo,
+                sell_type: sellType,
+                branch_name: branchName,
+                per_page: 0,
+            },
+            success: function(data) {
+                var result = data.html || '';
+                if (silent) {
+                    var $newHtml = $('<div>').html(result);
+                    var $newActive = $newHtml.find('.sell-list-pane-active');
+                    var $newAdded = $newHtml.find('.sell-list-pane-added');
+                    var $currentActive = $box.find('.sell-list-pane-active');
+                    var $currentAdded = $box.find('.sell-list-pane-added');
+                    var mergePane = function($newPane, $currentPane) {
+                        var existingIds = {};
+                        $currentPane.find('.sell-list-report-row').each(function() {
+                            existingIds[$(this).data('report-id')] = $(this);
+                        });
+                        var appendedAny = false;
+                        $newPane.find('.sell-list-report-row').each(function() {
+                            var $newRow = $(this);
+                            var id = $newRow.data('report-id');
+                            if (existingIds[id]) {
+                                existingIds[id].replaceWith($newRow);
+                            } else {
+                                $currentPane.append($newRow);
+                                appendedAny = true;
+                            }
+                        });
+                        $currentPane.find('.sell-list-empty, .sell-list-pane-loader, .sell-list-pane-end').remove();
+                        $currentPane.append($newPane.children('.sell-list-empty, .sell-list-pane-loader, .sell-list-pane-end'));
+                        return appendedAny;
+                    };
+                    mergePane($newActive, $currentActive);
+                    mergePane($newAdded, $currentAdded);
+                    $box.find('.sell-list-added-count').html($newHtml.find('.sell-list-added-count').html());
+                    $box.find('.sell-list-active-count').html($newHtml.find('.sell-list-active-count').html());
+                    var $newTotal = $newHtml.find('.sell-list-total-total').html();
+                    var $newActiveTot = $newHtml.find('.sell-list-total-active').html();
+                    var $newAddedTot = $newHtml.find('.sell-list-total-added').html();
+                    var $newRange = $newHtml.find('.sell-list-total-daterange').html();
+                    if ($newTotal !== undefined) { $box.find('.sell-list-total-total').html($newTotal); }
+                    if ($newActiveTot !== undefined) { $box.find('.sell-list-total-active').html($newActiveTot); }
+                    if ($newAddedTot !== undefined) { $box.find('.sell-list-total-added').html($newAddedTot); }
+                    if ($newRange !== undefined) { $box.find('.sell-list-total-daterange').html($newRange); }
+                    var $newTotalInput = $newHtml.find('.sell-list-total').val();
+                    if ($newTotalInput !== undefined) { $box.find('.sell-list-total').val($newTotalInput); }
+                    refresh_sell_list_sidebar_badge();
+                } else {
+                    $box.html(result);
+                    reset_hr_sell_list_pages();
+                    refresh_sell_list_sidebar_badge();
+                }
+                if (savedSearch) {
+                    $box.find('.sell-list-search').val(savedSearch);
+                    filter_sell_list_rows($box);
+                }
+                if (savedActiveTab) {
+                    $box.find('.sell-list-tab').removeClass('is-active');
+                    $box.find('.sell-list-tab[data-target="' + savedActiveTab + '"]').addClass('is-active');
+                    $box.find('.sell-list-pane').removeClass('is-active');
+                    $box.find('.sell-list-pane-' + savedActiveTab).addClass('is-active');
+                }
+                var $newScrollContainer = $box.find('.sell-list-pane.is-active');
+                if ($newScrollContainer.length) {
+                    $newScrollContainer.scrollTop(savedScroll);
+                }
+            },
+        });
+    }
+
+    function filter_sell_list_rows($box) {
+        var search = ($box.find('.sell-list-search').val() || '').toLowerCase();
+        var $rows = $box.find('.sell-list-report-row');
+        $rows.each(function() {
+            var $row = $(this);
+            if (search === '') {
+                $row.show();
+                return;
+            }
+            var rowText = $row.text().toLowerCase();
+            $row.toggle(rowText.indexOf(search) !== -1);
+        });
+    }
+
     /* After any HR sell list refresh, sync the sidebar Sell List badge. */
     function refresh_sell_list_sidebar_badge() {
         var $box = $('#sell_list_staff_box');

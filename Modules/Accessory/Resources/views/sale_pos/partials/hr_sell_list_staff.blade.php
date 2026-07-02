@@ -38,14 +38,11 @@
         <div class="sell-list-filter-field">
             <label>Sell Type</label>
             <select class="sell-list-filter-sell-type form-control">
-                <option value="លក់">Sell / លក់</option>
-                @if (!empty($sell_types))
-                    @foreach ($sell_types as $type)
-                        @if (!in_array($type, ['sell', 'លក់']))
-                            <option value="{{ $type }}">{{ $type }}</option>
-                        @endif
-                    @endforeach
-                @endif
+                @forelse ($sell_types as $type)
+                    <option value="{{ $type }}" {{ $type === 'សម្ភារ' ? 'selected' : '' }}>{{ $type }}</option>
+                @empty
+                    <option value="">No types</option>
+                @endforelse
             </select>
         </div>
     </div>

@@ -253,7 +253,7 @@ class SellPosController extends Controller
             $pos_sell_list_invoice_key = (string) Str::uuid();
             request()->session()->put('pos_sell_list_invoice_key', $pos_sell_list_invoice_key);
         }
-        $default_sell_type = 'លក់';
+        $default_sell_type = 'សម្ភារ';
         $default_date_from = \Carbon::now()->format('Y-m-d');
         $default_date_to = \Carbon::now()->format('Y-m-d');
         $hr_sell_out_reports_data = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
