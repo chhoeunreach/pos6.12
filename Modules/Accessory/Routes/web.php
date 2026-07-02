@@ -240,6 +240,16 @@ Route::middleware(['setData', 'auth', 'accessory.database', 'language', 'timezon
     Route::get('/sells/pos/get-recent-transactions', [SellPosController::class, 'getRecentTransactions']);
     Route::get('/sells/pos/get-product-suggestion', [SellPosController::class, 'getProductSuggestion']);
     Route::get('/sells/pos/get-featured-products/{location_id}', [SellPosController::class, 'getFeaturedProducts']);
+    Route::get('/sells/pos/get-hr-sell-list/{location_id}', [SellPosController::class, 'getHrSellList']);
+    Route::get('/sells/pos/hr-sell-list-detail/{report_id}', [SellPosController::class, 'getHrSellListDetail']);
+    Route::get('/sells/pos/hr-sell-list-service-types/{location_id}', [SellPosController::class, 'getHrSellListServiceTypes']);
+    Route::post('/sells/pos/hr-sell-list-update-service-type', [SellPosController::class, 'updateHrSellListServiceType']);
+    Route::get('/sells/pos/hr-sell-list-photo/{photo_id}', [SellPosController::class, 'getHrSellListPhoto']);
+    Route::get('/sells/pos/hr-staff-avatar/{filename}', [SellPosController::class, 'getHrStaffAvatar']);
+    Route::post('/sells/pos/copy-hr-sell-list-report/{report_id}', [SellPosController::class, 'copyHrSellListReport']);
+    Route::post('/sells/pos/release-hr-sell-list-line', [SellPosController::class, 'releaseHrSellListLine']);
+    Route::post('/sells/pos/add-hr-sell-list-line', [SellPosController::class, 'addHrSellListLine']);
+    Route::post('/sells/pos/resolve-hr-line-product', [SellPosController::class, 'resolveHrLineProduct']);
     Route::get('/reset-mapping', [SellController::class, 'resetMapping']);
     // pos display screen route
     Route::get('/customer-display', [SellPosController::class, 'posDisplay'])->name('pos_display');

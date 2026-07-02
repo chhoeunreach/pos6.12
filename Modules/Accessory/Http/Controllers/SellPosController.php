@@ -56,6 +56,7 @@ use App\Variation;
 use App\Warranty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Razorpay\Api\Api;
@@ -159,7 +160,7 @@ class SellPosController extends Controller
     {
         $business_id = request()->session()->get('user.business_id');
 
-        if (!(auth()->user()->can('superadmin') || auth()->user()->can('sell.create'))) {
+        if (!(auth()->user()->can('superadmin') || auth()->user()->can('sell.create') || ($this->moduleUtil->hasThePermissionInSubscription($business_id, 'repair_module') && auth()->user()->can('repair.create')))) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -170,7 +171,8 @@ class SellPosController extends Controller
             return $this->moduleUtil->quotaExpiredResponse('invoices', $business_id, action([\Modules\Accessory\Http\Controllers\SellPosController::class, 'index']));
         }
 
-        $sub_type = null;
+        //like:repair
+        $sub_type = request()->get('sub_type');
 
         //Check if there is a open register, if no then redirect to Create Register screen.
         if ($this->cashRegisterUtil->countOpenedRegister() == 0) {
@@ -246,6 +248,31 @@ class SellPosController extends Controller
         $default_datetime = $this->businessUtil->format_date('now', true);
 
         $featured_products = !empty($default_location) ? $default_location->getFeaturedProducts() : [];
+        $pos_sell_list_invoice_key = request()->session()->get('pos_sell_list_invoice_key');
+        if (empty($pos_sell_list_invoice_key)) {
+            $pos_sell_list_invoice_key = (string) Str::uuid();
+            request()->session()->put('pos_sell_list_invoice_key', $pos_sell_list_invoice_key);
+        }
+        $default_sell_type = 'លក់';
+        $default_date_from = \Carbon::now()->format('Y-m-d');
+        $default_date_to = \Carbon::now()->format('Y-m-d');
+        $hr_sell_out_reports_data = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
+        $hr_sell_out_reports = $hr_sell_out_reports_data['reports'];
+        $hr_sell_out_reports_has_more = $hr_sell_out_reports_data['has_more'];
+        $hr_sell_out_reports_total = $hr_sell_out_reports_data['total'];
+        $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
+        $hr_branches = $this->getHrSellListBranches();
+        $default_hr_branch = !empty($default_location) ? ($this->getHrBranchGroupNames($default_location->id)[0] ?? '') : '';
+        $hr_location_branch_map = [];
+        foreach ($business_locations as $locId => $locName) {
+            $loc = BusinessLocation::find($locId);
+            if ($loc) {
+                $names = $this->getHrBranchGroupNames($loc->id);
+                if (!empty($names[0])) {
+                    $hr_location_branch_map[$locId] = $names[0];
+                }
+            }
+        }
 
         //pos screen view from module
         $pos_module_data = $this->getAccessoryModuleData($this->moduleUtil, 'get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -287,6 +314,17 @@ class SellPosController extends Controller
                 'shipping_statuses',
                 'default_datetime',
                 'featured_products',
+                'pos_sell_list_invoice_key',
+                'hr_sell_out_reports',
+                'hr_sell_out_reports_has_more',
+                'hr_sell_out_reports_total',
+                'default_sell_type',
+                'default_date_from',
+                'default_date_to',
+                'sell_types',
+                'hr_branches',
+                'default_hr_branch',
+                'hr_location_branch_map',
                 'sub_type',
                 'pos_module_data',
                 'invoice_schemes',
@@ -294,6 +332,754 @@ class SellPosController extends Controller
                 'invoice_layouts',
                 'users',
             ));
+    }
+
+    private function getHrBranchGroupNames($location_id)
+    {
+        $location = BusinessLocation::find($location_id);
+        if (empty($location)) {
+            return [];
+        }
+
+        $code = $location->location_id;
+        $group = config("hr.location_group_map.{$code}");
+
+        if (!empty($group)) {
+            return [$group];
+        }
+
+        $location_name = $location->name;
+        $groupNames = array_unique(array_values(config('hr.location_group_map', [])));
+        foreach ($groupNames as $groupName) {
+            if (!empty($groupName) && str_starts_with($location_name, $groupName)) {
+                return [$groupName];
+            }
+        }
+
+        return [$location_name];
+    }
+
+    private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50, $branch_name = null)
+    {
+        try {
+            $searchNames = [];
+            if (!empty($branch_name)) {
+                $searchNames = [$branch_name];
+            } elseif (!empty($location_id)) {
+                $searchNames = $this->getHrBranchGroupNames($location_id);
+            }
+
+            $page = max(1, (int) $page);
+            /* Allow "show all" mode: per_page <= 0 (or >= 100000) disables pagination. */
+            $per_page = (int) $per_page;
+            $showAll = $per_page <= 0 || $per_page >= 100000;
+
+            $base = DB::connection('hr')
+                ->table('sell_out_reports as sor')
+                ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+                ->select(
+                    'sor.id',
+                    'sor.invoice_no',
+                    'sor.customer_phone',
+                    'sor.customer_name',
+                    'sor.seller_name',
+                    'sor.branch_name',
+                    'sor.total_amount',
+                    'sor.created_at',
+                    'sor.service_type',
+                    DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                    'u.employee_code as staff_code',
+                    'u.avatar as staff_avatar'
+                )
+                ->when(!empty($sell_type), function ($query) use ($sell_type) {
+                    if (in_array($sell_type, ['sell', 'លក់'])) {
+                        $query->whereIn('sor.service_type', ['sell', 'លក់']);
+                    } else {
+                        $query->where('sor.service_type', $sell_type);
+                    }
+                })
+                ->when(!empty($searchNames), function ($query) use ($searchNames) {
+                    $query->whereIn('sor.branch_name', $searchNames);
+                })
+                ->when(!empty($date_from), function ($query) use ($date_from) {
+                    $query->where('sor.created_at', '>=', $date_from . ' 00:00:00');
+                })
+                ->when(!empty($date_to), function ($query) use ($date_to) {
+                    $query->where('sor.created_at', '<=', $date_to . ' 23:59:59');
+                })
+                ->orderBy('sor.invoice_no', 'asc');
+
+            $total = (clone $base)->count();
+
+            $reports = (clone $base);
+            if (!$showAll) {
+                $reports = $reports
+                    ->skip(($page - 1) * $per_page)
+                    ->take($per_page);
+            }
+            $reports = $reports->get();
+
+            $has_more = $showAll ? false : (($page * $per_page) < $total);
+
+            if ($reports->isEmpty()) {
+                return [
+                    'reports' => $reports,
+                    'has_more' => false,
+                    'total' => $total,
+                    'page' => $page,
+                    'per_page' => $per_page,
+                ];
+            }
+
+            $lines = DB::connection('hr')
+                ->table('sell_out_report_lines')
+                ->whereIn('sell_out_report_id', $reports->pluck('id')->all())
+                ->orderBy('id')
+                ->get()
+                ->groupBy('sell_out_report_id');
+
+            $line_ids = $lines->flatten(1)->pluck('id')->all();
+            $statuses = collect();
+            if (!empty($line_ids) && Schema::hasTable('pos_sell_list_serial_statuses')) {
+                $statuses = DB::table('pos_sell_list_serial_statuses')
+                    ->whereIn('hr_sell_out_report_line_id', $line_ids)
+                    ->get()
+                    ->keyBy('hr_sell_out_report_line_id');
+            }
+
+            $reports = $reports->map(function ($report) use ($lines, $statuses) {
+                $report->lines = $lines->get($report->id, collect())->map(function ($line) use ($statuses) {
+                    $status = $statuses->get($line->id);
+                    $line->pos_serial_status = !empty($status) ? $status->status : 'active';
+                    $line->pos_serial_status_id = !empty($status) ? $status->id : null;
+                    $line->pos_serial_invoice_key = !empty($status) ? $status->invoice_key : null;
+
+                    return $line;
+                });
+                $report->has_active_lines = $report->lines->contains(function ($line) {
+                    return $line->pos_serial_status === 'active';
+                });
+                $report->has_added_lines = $report->lines->contains(function ($line) {
+                    return $line->pos_serial_status === 'added';
+                });
+
+                return $report;
+            });
+
+            return [
+                'reports' => $reports,
+                'has_more' => $has_more,
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $per_page,
+            ];
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell out reports for POS screen: ' . $e->getMessage());
+
+            return [
+                'reports' => collect(),
+                'has_more' => false,
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $per_page,
+            ];
+        }
+    }
+
+    public function getHrSellList($location_id, Request $request)
+    {
+        $date_from = $request->input('date_from', \Carbon::now()->format('Y-m-d'));
+        $date_to = $request->input('date_to', \Carbon::now()->format('Y-m-d'));
+        $sell_type = $request->input('sell_type', 'លក់');
+        $page = (int) $request->input('page', 1);
+        $per_page = (int) $request->input('per_page', 50);
+        $append = filter_var($request->input('append', false), FILTER_VALIDATE_BOOLEAN);
+
+        $branch_name = $request->input('branch_name', '');
+        if (empty($branch_name)) {
+            $defaultNames = $this->getHrBranchGroupNames($location_id);
+            $branch_name = $defaultNames[0] ?? '';
+        }
+
+        $data = $this->getHrSellOutReports(null, $date_from, $date_to, $sell_type, $page, $per_page, $branch_name);
+        $hr_sell_out_reports = $data['reports'];
+        $has_more = $data['has_more'];
+        $total = $data['total'];
+
+        if ($append) {
+            $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
+            $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
+
+            /* When appending page N+1, the visible row index should continue from where the
+               current page ended (rows already in the DOM are 1..page*per_page). */
+            $activeStart = (($page - 1) * $per_page);
+            $addedStart = (($page - 1) * $per_page);
+
+            return response()->json([
+                'success' => true,
+                'page' => $page,
+                'per_page' => $per_page,
+                'total' => $total,
+                'has_more' => $has_more,
+                'active_html' => view('accessory::sale_pos.partials.hr_sell_list_rows', [
+                    'reports' => $activeReports,
+                    'line_status' => 'active',
+                    'show_copy_button' => true,
+                    'row_index' => $activeStart,
+                ])->render(),
+                'added_html' => view('accessory::sale_pos.partials.hr_sell_list_rows', [
+                    'reports' => $addedReports,
+                    'line_status' => 'added',
+                    'show_copy_button' => false,
+                    'row_index' => $addedStart,
+                ])->render(),
+            ]);
+        }
+
+        $default_date_from = $date_from;
+        $default_date_to = $date_to;
+        $sell_types = collect();
+        if (!empty($branch_name)) {
+            $sell_types = $this->getHrSellListServiceTypes(null, $branch_name);
+        } else {
+            $sell_types = $this->getHrSellListServiceTypes(null);
+        }
+
+        $hr_branches = $this->getHrSellListBranches();
+
+        $activeReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_active_lines));
+        $addedReports = $hr_sell_out_reports->filter(fn ($report) => !empty($report->has_added_lines));
+
+        /* If the client asked for JSON (always now), return the rendered partial + total
+           so the JS can either replace the box or merge in place. */
+        $default_hr_branch = $this->getHrBranchGroupNames($location_id)[0] ?? '';
+
+        $html = view('accessory::sale_pos.partials.hr_sell_list_staff', [
+            'hr_sell_out_reports' => $hr_sell_out_reports,
+            'sell_types' => $sell_types,
+            'default_date_from' => $default_date_from,
+            'default_date_to' => $default_date_to,
+            'has_more' => $has_more,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total' => $total,
+            'hr_branches' => $hr_branches,
+            'default_hr_branch' => $default_hr_branch,
+        ])->render();
+
+        return response()->json([
+            'success' => true,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total' => $total,
+            'has_more' => $has_more,
+            'html' => $html,
+            'active_count' => $activeReports->count(),
+            'added_count' => $addedReports->count(),
+        ]);
+    }
+
+    public function getHrSellListDetail($report_id)
+    {
+        $report = DB::connection('hr')
+            ->table('sell_out_reports as sor')
+            ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+            ->where('sor.id', $report_id)
+            ->select(
+                'sor.*',
+                DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                'u.employee_code as staff_code',
+                'u.avatar as staff_avatar'
+            )
+            ->first();
+
+        if (empty($report)) {
+            abort(404);
+        }
+
+        $report->lines = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        $report->photos = DB::connection('hr')
+            ->table('sell_out_report_photos')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        return view('accessory::sale_pos.partials.hr_sell_list_detail_modal')
+            ->with(compact('report'));
+    }
+
+    public function getHrSellListServiceTypes($location_id, $branch_name = null)
+    {
+        try {
+            $searchNames = [];
+            if (!empty($branch_name)) {
+                $searchNames = [$branch_name];
+            } elseif (!empty($location_id)) {
+                $searchNames = $this->getHrBranchGroupNames($location_id);
+            }
+
+            $query = DB::connection('hr')
+                ->table('sell_out_reports')
+                ->select('service_type')
+                ->distinct()
+                ->orderBy('service_type');
+
+            if (!empty($searchNames)) {
+                $query->whereIn('branch_name', $searchNames);
+            }
+
+            return $query->get()->pluck('service_type');
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell list service types: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function getHrSellListBranches()
+    {
+        try {
+            return DB::connection('hr')
+                ->table('sell_out_reports')
+                ->select('branch_name')
+                ->whereNotNull('branch_name')
+                ->where('branch_name', '!=', '')
+                ->distinct()
+                ->orderBy('branch_name')
+                ->get()
+                ->pluck('branch_name');
+        } catch (\Exception $e) {
+            \Log::warning('Unable to load HR sell list branches: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    public function updateHrSellListServiceType(Request $request)
+    {
+        $report_id = $request->input('report_id');
+        $service_type = $request->input('service_type');
+
+        if (empty($report_id) || empty($service_type)) {
+            return response()->json(['success' => 0, 'msg' => 'Missing required fields.']);
+        }
+
+        try {
+            DB::connection('hr')
+                ->table('sell_out_reports')
+                ->where('id', $report_id)
+                ->update(['service_type' => $service_type]);
+
+            return response()->json(['success' => 1, 'msg' => 'Sell type updated successfully.']);
+        } catch (\Exception $e) {
+            \Log::warning('Unable to update sell list service type: ' . $e->getMessage());
+            return response()->json(['success' => 0, 'msg' => 'Failed to update sell type.']);
+        }
+    }
+
+    public function getHrStaffAvatar($filename)
+    {
+        $avatar_dir = env('HR_STAFF_AVATAR_PATH', public_path('uploads/avatar'));
+        $avatar_dir = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $avatar_dir);
+        $safe_filename = basename(rawurldecode($filename));
+        $path = rtrim($avatar_dir, '\\/') . DIRECTORY_SEPARATOR . $safe_filename;
+
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+        ]);
+    }
+
+    public function getHrSellListPhoto($photo_id)
+    {
+        $photo = DB::connection('hr')
+            ->table('sell_out_report_photos')
+            ->where('id', $photo_id)
+            ->first();
+
+        if (empty($photo)) {
+            abort(404);
+        }
+
+        $relative_path = ltrim($photo->photo_path ?? '', '/\\');
+
+        if ($relative_path === '' || strpos($relative_path, '..') !== false) {
+            abort(404);
+        }
+
+        $relative_path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative_path);
+        $candidate_roots = array_filter([
+            env('HR_SELL_OUT_PHOTO_PATH'),
+            env('HR_STORAGE_PATH'),
+            storage_path('app/public'),
+            public_path('storage'),
+        ]);
+
+        foreach ($candidate_roots as $root) {
+            $root = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $root), '\\/');
+            $path = $root . DIRECTORY_SEPARATOR . $relative_path;
+
+            if (is_file($path)) {
+                return response()->file($path, [
+                    'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+                    'Cache-Control' => 'public, max-age=86400',
+                ]);
+            }
+        }
+
+        if (!empty($photo->photo_url)) {
+            return redirect()->away($photo->photo_url);
+        }
+
+        abort(404);
+    }
+
+    public function copyHrSellListReport($report_id, Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 0, 'msg' => 'Please run database migrations for Sell List serial status.'];
+        }
+
+        $invoice_key = $request->input('invoice_key');
+        if (empty($invoice_key)) {
+            return ['success' => 0, 'msg' => 'Missing invoice key. Please refresh POS and try again.'];
+        }
+
+        $report = DB::connection('hr')
+            ->table('sell_out_reports as sor')
+            ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+            ->where('sor.id', $report_id)
+            ->select('sor.*', 'u.employee_code as staff_code')
+            ->first();
+
+        if (empty($report)) {
+            return ['success' => 0, 'msg' => 'Sell Out record not found.'];
+        }
+
+        $lines = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('sell_out_report_id', $report_id)
+            ->orderBy('id')
+            ->get();
+
+        $copied = [];
+        $warnings = [];
+
+        foreach ($lines as $line) {
+            $serial = $this->getHrLineSerial($line);
+            if (empty($serial)) {
+                $warnings[] = $line->product_name . ': no serial number found.';
+                continue;
+            }
+
+            $existing_for_invoice = DB::table('pos_sell_list_serial_statuses')
+                ->where('serial_number', $serial)
+                ->where('invoice_key', $invoice_key)
+                ->where('status', 'added')
+                ->first();
+
+            if (!empty($existing_for_invoice)) {
+                $warnings[] = $serial . ' already added to this invoice.';
+                continue;
+            }
+
+            $status = DB::table('pos_sell_list_serial_statuses')
+                ->where('hr_sell_out_report_line_id', $line->id)
+                ->first();
+
+            if (!empty($status) && $status->status !== 'active') {
+                $warnings[] = $serial . ' is already ' . $status->status . '.';
+                continue;
+            }
+
+            $completed_sale = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+                ->where('t.status', 'final')
+                ->where('transaction_sell_lines.sell_line_note', 'like', '%' . $serial . '%')
+                ->select('t.invoice_no')
+                ->first();
+
+            if (!empty($completed_sale)) {
+                $warnings[] = $serial . ' already exists in completed sale ' . $completed_sale->invoice_no . '.';
+            }
+
+            $variation_id = $this->resolveHrLineVariationId($line, $serial);
+            if (empty($variation_id)) {
+                $warnings[] = $serial . ': product not found in POS.';
+                continue;
+            }
+
+            $status_id = $this->setHrSerialStatus($line, 'added', $invoice_key, null, 'copied_to_pos');
+
+            $copied[] = [
+                'status_id' => $status_id,
+                'hr_line_id' => $line->id,
+                'variation_id' => $variation_id,
+                'serial' => $serial,
+                'unit_price' => (float) $line->unit_price,
+                'phone' => $report->customer_phone,
+                'staff_number' => $report->staff_code ?: $report->seller_name,
+            ];
+        }
+
+        if (empty($copied)) {
+            return ['success' => 0, 'msg' => implode("\n", $warnings) ?: 'No active serial numbers available.'];
+        }
+
+        return ['success' => 1, 'lines' => $copied, 'warnings' => $warnings];
+    }
+
+    public function releaseHrSellListLine(Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 1];
+        }
+
+        $status_id = $request->input('status_id');
+        $invoice_key = $request->input('invoice_key');
+
+        $status = DB::table('pos_sell_list_serial_statuses')
+            ->where('id', $status_id)
+            ->where('invoice_key', $invoice_key)
+            ->first();
+
+        if (empty($status) || !empty($status->transaction_id)) {
+            return ['success' => 1];
+        }
+
+        DB::table('pos_sell_list_serial_statuses')
+            ->where('id', $status->id)
+            ->update([
+                'status' => 'active',
+                'invoice_key' => null,
+                'released_at' => \Carbon::now(),
+                'updated_at' => \Carbon::now(),
+            ]);
+
+        $this->recordHrSerialStatusHistory($status->id, $status->status, 'active', $invoice_key, null, 'removed_from_pos');
+
+        return ['success' => 1];
+    }
+
+    private function getHrLineSerial($line)
+    {
+        foreach (['serial_number', 'imei', 'imei2', 'primary_identifier', 'sku'] as $field) {
+            if (!empty($line->{$field})) {
+                return trim($line->{$field});
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveHrLineVariationId($line, $serial)
+    {
+        if (!empty($line->variation_id) && Variation::where('id', $line->variation_id)->exists()) {
+            return $line->variation_id;
+        }
+
+        $variation = Variation::where('sub_sku', $serial)->first();
+        if (!empty($variation)) {
+            return $variation->id;
+        }
+
+        $variation = Variation::join('products as p', 'variations.product_id', '=', 'p.id')
+            ->where(function ($q) use ($serial, $line) {
+                $q->where('p.name', 'like', '%' . $line->product_name . '%')
+                  ->orWhere('p.sku', $serial)
+                  ->orWhere('variations.product_keywords', 'like', '%' . $serial . '%')
+                  ->orWhere('variations.name', 'like', '%' . $serial . '%');
+            })
+            ->select('variations.id')
+            ->first();
+
+        return !empty($variation) ? $variation->id : null;
+    }
+
+    private function setHrSerialStatus($line, $status, $invoice_key = null, $transaction_id = null, $reason = null)
+    {
+        $serial = $this->getHrLineSerial($line);
+        $existing = DB::table('pos_sell_list_serial_statuses')
+            ->where('hr_sell_out_report_line_id', $line->id)
+            ->first();
+        $now = \Carbon::now();
+
+        if (empty($existing)) {
+            $status_id = DB::table('pos_sell_list_serial_statuses')->insertGetId([
+                'hr_sell_out_report_id' => $line->sell_out_report_id,
+                'hr_sell_out_report_line_id' => $line->id,
+                'serial_number' => $serial,
+                'status' => $status,
+                'invoice_key' => $invoice_key,
+                'transaction_id' => $transaction_id,
+                'created_by' => auth()->id(),
+                'added_at' => $status === 'added' ? $now : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $from_status = null;
+        } else {
+            $status_id = $existing->id;
+            $from_status = $existing->status;
+            DB::table('pos_sell_list_serial_statuses')
+                ->where('id', $status_id)
+                ->update([
+                    'status' => $status,
+                    'invoice_key' => $invoice_key,
+                    'transaction_id' => $transaction_id,
+                    'added_at' => $status === 'added' ? ($existing->added_at ?: $now) : $existing->added_at,
+                    'released_at' => $status === 'active' ? $now : $existing->released_at,
+                    'updated_at' => $now,
+                ]);
+        }
+
+        $this->recordHrSerialStatusHistory($status_id, $from_status, $status, $invoice_key, $transaction_id, $reason);
+
+        return $status_id;
+    }
+
+    private function recordHrSerialStatusHistory($status_id, $from_status, $to_status, $invoice_key = null, $transaction_id = null, $reason = null)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_status_histories')) {
+            return;
+        }
+
+        DB::table('pos_sell_list_serial_status_histories')->insert([
+            'serial_status_id' => $status_id,
+            'from_status' => $from_status,
+            'to_status' => $to_status,
+            'invoice_key' => $invoice_key,
+            'transaction_id' => $transaction_id,
+            'changed_by' => auth()->id(),
+            'reason' => $reason,
+            'created_at' => \Carbon::now(),
+            'updated_at' => \Carbon::now(),
+        ]);
+    }
+
+    public function addHrSellListLine(Request $request)
+    {
+        if (!Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return ['success' => 0, 'msg' => 'Database table not found. Please run migrations.'];
+        }
+
+        $line_id = $request->input('line_id');
+        $serial = $request->input('serial_number');
+        $invoice_key = $request->input('invoice_key');
+
+        if (empty($line_id) || empty($invoice_key)) {
+            return ['success' => 0, 'msg' => 'Missing required parameters.'];
+        }
+
+        $line = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('id', $line_id)
+            ->first();
+
+        if (empty($line)) {
+            return ['success' => 0, 'msg' => 'Sell Out line not found.'];
+        }
+
+        $existing = DB::table('pos_sell_list_serial_statuses')
+            ->where('hr_sell_out_report_line_id', $line_id)
+            ->first();
+
+        if (!empty($existing) && $existing->status !== 'active') {
+            return ['success' => 0, 'msg' => ($serial ?: 'Serial') . ' is already ' . $existing->status . '.', 'line_id' => $line_id];
+        }
+
+        $this->setHrSerialStatus($line, 'added', $invoice_key, null, 'manually_added');
+
+        return ['success' => 1, 'line_id' => $line_id];
+    }
+
+    public function resolveHrLineProduct(Request $request)
+    {
+        $line_id = $request->input('line_id');
+        $serial = $request->input('serial_number');
+        $location_id = $request->input('location_id');
+
+        if (empty($line_id) || empty($serial)) {
+            return ['success' => 0, 'msg' => 'Missing parameters.'];
+        }
+
+        $line = DB::connection('hr')
+            ->table('sell_out_report_lines')
+            ->where('id', $line_id)
+            ->first();
+
+        if (empty($line)) {
+            return ['success' => 0, 'msg' => 'Line not found in HR.'];
+        }
+
+        $variation_id = $this->resolveHrLineVariationId($line, $serial);
+
+        if (empty($variation_id)) {
+            return ['success' => 0, 'msg' => 'Product not found for serial: ' . $serial, 'serial' => $serial];
+        }
+
+        $row_data = $this->productUtil->getPosProductRow($variation_id, $location_id);
+        $row_data['variation_id'] = $variation_id;
+
+        return [
+            'success' => 1,
+            'auto_add' => true,
+            'row_data' => $row_data,
+        ];
+    }
+
+    private function attachHrSerialStatusesToTransaction($transaction, $products, $invoice_key = null)
+    {
+        if (empty($invoice_key) || !Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return;
+        }
+
+        $status_ids = collect($products)
+            ->pluck('hr_sell_list_serial_status_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $query = DB::table('pos_sell_list_serial_statuses')
+            ->where('invoice_key', $invoice_key);
+
+        if ($status_ids->isNotEmpty()) {
+            $query->whereIn('id', $status_ids->all());
+        } else {
+            $query->where('status', 'added')
+                ->whereNull('transaction_id');
+        }
+
+        $statuses = $query->get();
+
+        if ($statuses->isEmpty()) {
+            return;
+        }
+
+        foreach ($statuses as $status) {
+            $sell_line = TransactionSellLine::where('transaction_id', $transaction->id)
+                ->where('sell_line_note', 'like', '%' . $status->serial_number . '%')
+                ->orderByDesc('id')
+                ->first();
+
+            DB::table('pos_sell_list_serial_statuses')
+                ->where('id', $status->id)
+                ->update([
+                    'status' => 'added',
+                    'transaction_id' => $transaction->id,
+                    'transaction_sell_line_id' => !empty($sell_line) ? $sell_line->id : null,
+                    'updated_at' => \Carbon::now(),
+                ]);
+
+            $this->recordHrSerialStatusHistory($status->id, $status->status, 'added', $invoice_key, $transaction->id, 'invoice_saved');
+        }
+
+        request()->session()->forget('pos_sell_list_invoice_key');
     }
 
     /**
@@ -497,6 +1283,7 @@ class SellPosController extends Controller
                 Media::uploadMedia($business_id, $transaction, $request, 'shipping_documents', false, 'shipping_document');
 
                 $this->transactionUtil->createOrUpdateSellLines($transaction, $input['products'], $input['location_id']);
+                $this->attachHrSerialStatusesToTransaction($transaction, $input['products'], $request->input('pos_sell_list_invoice_key'));
 
                 $change_return['amount'] = $input['change_return'] ?? 0;
                 $change_return['is_return'] = 1;
@@ -512,25 +1299,30 @@ class SellPosController extends Controller
                 //Check for final and do some processing.
                 if ($input['status'] == 'final') {
                     if (!$is_direct_sale) {
-                        //set service staff timer
+                        $product_ids = collect($input['products'])->pluck('product_id')->unique()->filter()->values()->toArray();
+                        $staff_ids = collect($input['products'])->pluck('res_service_staff_id')->unique()->filter()->values()->toArray();
+                        $products_batch = !empty($product_ids) ? Product::whereIn('id', $product_ids)->get()->keyBy('id') : collect();
+                        $staff_batch = !empty($staff_ids) ? User::whereIn('id', $staff_ids)->get()->keyBy('id') : collect();
+
                         foreach ($input['products'] as $product_line) {
                             if (!empty($product_line['res_service_staff_id'])) {
-                                $product = Product::find($product_line['product_id']);
+                                $product = $products_batch->get($product_line['product_id']);
 
-                                if (!empty($product->preparation_time_in_minutes)) {
-                                    $service_staff = User::find($product_line['res_service_staff_id']);
+                                if (!empty($product) && !empty($product->preparation_time_in_minutes)) {
+                                    $service_staff = $staff_batch->get($product_line['res_service_staff_id']);
 
-                                    $base_time = \Carbon::parse($transaction->transaction_date);
+                                    if (!empty($service_staff)) {
+                                        $base_time = \Carbon::parse($transaction->transaction_date);
 
-                                    //if already assigned set base time as available_at
-                                    if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
-                                        $base_time = \Carbon::parse($service_staff->available_at);
+                                        if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
+                                            $base_time = \Carbon::parse($service_staff->available_at);
+                                        }
+
+                                        $total_minutes = $product->preparation_time_in_minutes * $this->transactionUtil->num_uf($product_line['quantity']);
+
+                                        $service_staff->available_at = $base_time->addMinutes($total_minutes);
+                                        $service_staff->save();
                                     }
-
-                                    $total_minutes = $product->preparation_time_in_minutes * $this->transactionUtil->num_uf($product_line['quantity']);
-
-                                    $service_staff->available_at = $base_time->addMinutes($total_minutes);
-                                    $service_staff->save();
                                 }
                             }
                         }
@@ -629,6 +1421,7 @@ class SellPosController extends Controller
                 if (!$is_direct_sale) {
                     if ($input['status'] == 'draft') {
                         $msg = trans('sale.draft_added');
+                        $print_invoice = true;
 
                         if ($input['is_quotation'] == 1) {
                             $msg = trans('lang_v1.quotation_added');
@@ -649,9 +1442,13 @@ class SellPosController extends Controller
 
                 if ($print_invoice) {
                     $receipt = $this->receiptContent($business_id, $input['location_id'], $transaction->id, null, false, true, $invoice_layout_id);
+                    if (is_array($receipt)) {
+                        $receipt['transaction_id'] = $transaction->id;
+                        $receipt['invoice_no'] = $transaction->invoice_no ?? null;
+                    }
                 }
 
-                $output = ['success' => 1, 'msg' => $msg, 'receipt' => $receipt];
+                $output = ['success' => 1, 'msg' => $msg, 'receipt' => $receipt, 'transaction_id' => $transaction->id, 'invoice_no' => $transaction->invoice_no ?? null];
 
                 if (!empty($whatsapp_link)) {
                     $output['whatsapp_link'] = $whatsapp_link;
@@ -700,7 +1497,7 @@ class SellPosController extends Controller
                     ->action([\Modules\Accessory\Http\Controllers\SalesOrderController::class, 'index'])
                     ->with('status', $output);
             } else {
-                if (!in_array('Repair', config('accessory.excluded_main_modules', []), true) && !empty($input['sub_type']) && $input['sub_type'] == 'repair') {
+                if (!empty($input['sub_type']) && $input['sub_type'] == 'repair') {
                     $redirect_url = $input['print_label'] == 1 ? action([\Modules\Repair\Http\Controllers\RepairController::class, 'printLabel'], [$transaction->id]) : action([\Modules\Repair\Http\Controllers\RepairController::class, 'index']);
 
                     return redirect($redirect_url)
@@ -814,7 +1611,9 @@ class SellPosController extends Controller
         $business_id = request()->session()->get('user.business_id');
 
         if (!(auth()->user()->can('superadmin') || auth()->user()->can('sell.update')
-            || auth()->user()->can('edit_pos_payment'))) {
+            || auth()->user()->can('edit_pos_payment')
+            || ($this->moduleUtil->hasThePermissionInSubscription($business_id, 'repair_module') &&
+                auth()->user()->can('repair.update')))) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -864,7 +1663,7 @@ class SellPosController extends Controller
         $location_id = $transaction->location_id;
         $business_location = BusinessLocation::find($location_id);
         $payment_types = $this->productUtil->payment_types($business_location, true);
-        $location_printer_type = $business_location->receipt_printer_type;
+        $location_printer_type = ! empty($business_location) ? $business_location->receipt_printer_type : null;
         $sell_details = TransactionSellLine::join(
             'products AS p',
             'transaction_sell_lines.product_id',
@@ -929,11 +1728,12 @@ class SellPosController extends Controller
                 //qty_available not added when negative to avoid max quanity getting decreased in edit and showing error in max quantity validation
                 DB::raw('IF(vld.qty_available > 0, vld.qty_available + transaction_sell_lines.quantity, transaction_sell_lines.quantity) AS qty_available')
             )
+            ->with(['variations.media', 'product.modifier_sets', 'modifiers', 'children'])
             ->get();
         if (!empty($sell_details)) {
             foreach ($sell_details as $key => $value) {
-                $variation = Variation::with('media')->findOrFail($value->variation_id);
-                $sell_details[$key]->media = $variation->media;
+                $variation = $value->variations;
+                $sell_details[$key]->media = ! empty($variation) ? $variation->media : null;
 
                 //If modifier or combo sell line then unset
                 if (!empty($sell_details[$key]->parent_sell_line_id)) {
@@ -972,9 +1772,7 @@ class SellPosController extends Controller
 
                     if ($this->transactionUtil->isModuleEnabled('modifiers')) {
                         //Add modifier details to sel line details
-                        $sell_line_modifiers = TransactionSellLine::where('parent_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
-                            ->where('children_type', 'modifier')
-                            ->get();
+                        $sell_line_modifiers = $value->modifiers;
                         $modifiers_ids = [];
                         if (count($sell_line_modifiers) > 0) {
                             $sell_details[$key]->modifiers = $sell_line_modifiers;
@@ -985,18 +1783,15 @@ class SellPosController extends Controller
                         $sell_details[$key]->modifiers_ids = $modifiers_ids;
 
                         //add product modifier sets for edit
-                        $this_product = Product::find($sell_details[$key]->product_id);
-                        if (count($this_product->modifier_sets) > 0) {
+                        $this_product = $value->product;
+                        if (! empty($this_product) && count($this_product->modifier_sets) > 0) {
                             $sell_details[$key]->product_ms = $this_product->modifier_sets;
                         }
                     }
 
                     //Get details of combo items
                     if ($sell_details[$key]->product_type == 'combo') {
-                        $sell_line_combos = TransactionSellLine::where('parent_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
-                            ->where('children_type', 'combo')
-                            ->get()
-                            ->toArray();
+                        $sell_line_combos = ! empty($sell_details[$key]->children) ? $sell_details[$key]->children->toArray() : [];
                         if (!empty($sell_line_combos)) {
                             $sell_details[$key]->combo_products = $sell_line_combos;
                         }
@@ -1086,7 +1881,7 @@ class SellPosController extends Controller
         $shipping_statuses = $this->transactionUtil->shipping_statuses();
 
         $warranties = $this->productUtil->getWarrantiesForDropdown();
-        $sub_type = null;
+        $sub_type = request()->get('sub_type');
 
         //pos screen view from module
         $pos_module_data = $this->getAccessoryModuleData($this->moduleUtil, 'get_pos_screen_view', ['sub_type' => $sub_type]);
@@ -1328,36 +2123,44 @@ class SellPosController extends Controller
 
                 //update service staff timer
                 if (!$is_direct_sale && $transaction->status == 'final') {
+                    $product_ids = collect($input['products'])->pluck('product_id')->unique()->filter()->values()->toArray();
+                    $staff_ids = collect($input['products'])->pluck('res_service_staff_id')->unique()->filter()->values()->toArray();
+                    $sell_line_ids = collect($input['products'])->pluck('transaction_sell_lines_id')->unique()->filter()->values()->toArray();
+                    $products_batch = !empty($product_ids) ? Product::whereIn('id', $product_ids)->get()->keyBy('id') : collect();
+                    $staff_batch = !empty($staff_ids) ? User::whereIn('id', $staff_ids)->get()->keyBy('id') : collect();
+                    $sell_lines_batch = !empty($sell_line_ids) ? TransactionSellLine::whereIn('id', $sell_line_ids)->get()->keyBy('id') : collect();
+
                     foreach ($input['products'] as $product_line) {
                         if (!empty($product_line['res_service_staff_id'])) {
-                            $product = Product::find($product_line['product_id']);
+                            $product = $products_batch->get($product_line['product_id']);
 
-                            if (!empty($product->preparation_time_in_minutes)) {
+                            if (!empty($product) && !empty($product->preparation_time_in_minutes)) {
                                 //if quantity not increase skip line
                                 $quantity = $this->transactionUtil->num_uf($product_line['quantity']);
                                 if (!empty($product_line['transaction_sell_lines_id'])) {
-                                    $sl = TransactionSellLine::find($product_line['transaction_sell_lines_id']);
+                                    $sl = $sell_lines_batch->get($product_line['transaction_sell_lines_id']);
 
-                                    if ($sl->quantity >= $quantity && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
+                                    if (!empty($sl) && $sl->quantity >= $quantity && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
                                         continue;
                                     }
 
                                     //if same service staff assigned quantity is only increased quantity
-                                    if ($sl->res_service_staff_id == $product_line['res_service_staff_id']) {
+                                    if (!empty($sl) && $sl->res_service_staff_id == $product_line['res_service_staff_id']) {
                                         $quantity = $quantity - $sl->quantity;
                                     }
                                 }
 
-                                $service_staff = User::find($product_line['res_service_staff_id']);
+                                $service_staff = $staff_batch->get($product_line['res_service_staff_id']);
 
-                                $base_time = \Carbon::parse($transaction->transaction_date);
-                                //is transaction date is past take base time as now
-                                if ($base_time->lt(\Carbon::now())) {
-                                    $base_time = \Carbon::now();
-                                }
+                                if (!empty($service_staff)) {
+                                    $base_time = \Carbon::parse($transaction->transaction_date);
+                                    //is transaction date is past take base time as now
+                                    if ($base_time->lt(\Carbon::now())) {
+                                        $base_time = \Carbon::now();
+                                    }
 
-                                //if already assigned set base time as available_at
-                                if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
+                                    //if already assigned set base time as available_at
+                                    if (!empty($service_staff->available_at) && \Carbon::parse($service_staff->available_at)->gt(\Carbon::now())) {
                                     $base_time = \Carbon::parse($service_staff->available_at);
                                 }
 
@@ -1368,6 +2171,8 @@ class SellPosController extends Controller
                             }
                         }
                     }
+                }
+
                 }
 
                 //Update Sell lines
@@ -1472,6 +2277,11 @@ class SellPosController extends Controller
 
                 if ($input['status'] == 'draft' && $input['is_quotation'] == 0) {
                     $msg = trans('sale.draft_added');
+                    if (!$is_direct_sale && $can_print_invoice) {
+                        $receipt = $this->receiptContent($business_id, $input['location_id'], $transaction->id, null, false, true, $invoice_layout_id);
+                    } else {
+                        $receipt = '';
+                    }
                 } elseif ($input['status'] == 'draft' && $input['is_quotation'] == 1) {
                     $msg = trans('lang_v1.quotation_updated');
                     if (!$is_direct_sale && $can_print_invoice) {
@@ -1520,7 +2330,7 @@ class SellPosController extends Controller
                         ->with('status', $output);
                 }
             } else {
-                if (!in_array('Repair', config('accessory.excluded_main_modules', []), true) && !empty($transaction->sub_type) && $transaction->sub_type == 'repair') {
+                if (!empty($transaction->sub_type) && $transaction->sub_type == 'repair') {
                     return redirect()
                         ->action([\Modules\Repair\Http\Controllers\RepairController::class, 'index'])
                         ->with('status', $output);
@@ -1724,14 +2534,10 @@ class SellPosController extends Controller
             $query->where('transactions.sub_type', null);
         }
 
-        // Retrieve the limit for displaying recent transactions from the configuration
-        $limit = config('constants.pos_recent_transactions_display_limit', 10);
-        
         $transactions = $query->orderBy('transactions.created_at', 'desc')
             ->groupBy('transactions.id')
             ->select('transactions.*')
             ->with(['contact', 'table'])
-            ->limit($limit)
             ->get();
 
         return view('accessory::sale_pos.partials.recent_transactions')
@@ -1952,9 +2758,9 @@ class SellPosController extends Controller
             $title = $transaction->business->name . ' | ' . $transaction->invoice_no;
 
             return view('accessory::sale_pos.partials.show_invoice')
-                ->with(compact('receipt', 'title', 'payment_link'));
+                ->with(compact('receipt', 'title', 'payment_link', 'transaction'));
         } else {
-            exit(__('messages.something_went_wrong'));
+            return response()->json(['success' => false, 'msg' => __('messages.something_went_wrong')]);
         }
     }
 
@@ -1984,7 +2790,7 @@ class SellPosController extends Controller
             return view('accessory::sale_pos.partials.guest_payment_form')
                 ->with(compact('transaction', 'title', 'pos_settings', 'total_payable', 'total_payable_formatted', 'date_formatted', 'total_amount', 'total_paid', 'business_details'));
         } else {
-            exit(__('messages.something_went_wrong'));
+            return response()->json(['success' => false, 'msg' => __('messages.something_went_wrong')]);
         }
     }
 
@@ -2484,7 +3290,7 @@ class SellPosController extends Controller
             $price_group_name = $price_group->name;
         }
 
-        $modal_html = view('accessory::types_of_service.pos_form_modal')
+        $modal_html = view('types_of_service.pos_form_modal')
             ->with(compact('types_of_service'))->render();
 
         return $this->respond([
@@ -3028,5 +3834,3 @@ class SellPosController extends Controller
         }
     }
 }
-
-

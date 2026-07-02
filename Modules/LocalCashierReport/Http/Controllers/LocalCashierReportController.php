@@ -42,6 +42,7 @@ class LocalCashierReportController extends Controller
             'qtyTypes' => config('localcashierreport.qty_types'),
             'currencySymbol' => $this->currencySymbol(),
             'khmerFontFamily' => config('localcashierreport.khmer_font_family'),
+            'staticPaymentColumns' => $this->getStaticPaymentColumns(),
             'report' => $report,
         ]);
     }
@@ -93,6 +94,7 @@ class LocalCashierReportController extends Controller
             'selectedLocations' => $selectedLocations,
             'currencySymbol' => $this->currencySymbol(),
             'khmerFontFamily' => config('localcashierreport.khmer_font_family'),
+            'staticPaymentColumns' => $this->getStaticPaymentColumns(),
             'report' => $report,
         ]);
     }
@@ -2085,10 +2087,26 @@ class LocalCashierReportController extends Controller
 
     private function buildPaymentColumns(array $methodsWithAmount, array $paymentTypes): array
     {
-        $common = config('localcashierreport.common_payment_method_keys', ['cash', 'custom_pay_1', 'custom_pay_2', 'custom_pay_3', 'custom_pay_4', 'card', 'other']);
-        $columns = array_values(array_unique(array_merge($common, $methodsWithAmount)));
+        return array_keys($paymentTypes);
+    }
 
-        return array_values(array_filter($columns, fn ($m) => array_key_exists($m, $paymentTypes) || in_array($m, $methodsWithAmount, true)));
+    private function getStaticPaymentColumns(): array
+    {
+        $columns = config('localcashierreport.all_sale_static_payment_columns', []);
+
+        return is_array($columns) ? $columns : [];
+    }
+
+    private function resolveStaticPaymentAmount(array $row, array $column): float
+    {
+        $payments = (array) ($row['payments'] ?? []);
+        $sources = (array) ($column['source_methods'] ?? []);
+        $amount = 0.0;
+        foreach ($sources as $source) {
+            $amount += (float) ($payments[$source] ?? 0);
+        }
+
+        return $amount;
     }
 
     private function currencySymbol(): string

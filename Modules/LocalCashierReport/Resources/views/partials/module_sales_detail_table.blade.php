@@ -3,6 +3,16 @@
     $saleRowsForFilters = collect($rows ?? []);
     $allSaleLocations = $saleRowsForFilters->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
     $allSaleCashiers = $saleRowsForFilters->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+    $staticPaymentColumns = $staticPaymentColumns ?? (isset($report) ? (array) data_get($report, 'static_payment_columns', []) : []);
+    $staticPaymentAmount = function ($row, $column) {
+        $payments = (array) data_get($row, 'payments', []);
+        $sources = (array) data_get($column, 'source_methods', []);
+        $amount = 0.0;
+        foreach ($sources as $source) {
+            $amount += (float) ($payments[$source] ?? 0);
+        }
+        return $amount;
+    };
     $shortPaymentLabel = function ($method, $label) {
         $method = (string) $method;
         $label = trim((string) $label);
@@ -100,9 +110,15 @@
                     <th class="text-right">Line Total</th>
                     <th class="text-right">Discount</th>
                 @endif
-                @foreach($report['payment_columns'] as $method)
-                    <th class="text-right">{{ $isAllSaleTable ? $shortPaymentLabel($method, $report['payment_labels'][$method] ?? $method) : ($report['payment_labels'][$method] ?? $method) }}</th>
-                @endforeach
+                @if($isAllSaleTable)
+                    @foreach($staticPaymentColumns as $column)
+                        <th class="text-right">{{ $column['label'] ?? '' }}</th>
+                    @endforeach
+                @else
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $isAllSaleTable ? $shortPaymentLabel($method, $report['payment_labels'][$method] ?? $method) : ($report['payment_labels'][$method] ?? $method) }}</th>
+                    @endforeach
+                @endif
                 <th class="text-right">{{ $isAllSaleTable ? 'Paid' : 'Total Paid' }}</th>
                 <th class="text-right">Due</th>
                 @if($isAllSaleTable)
@@ -193,9 +209,15 @@
                         <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
                         <td class="text-right">{{ is_null($row['discount'] ?? null) ? '' : $fmt($row['discount']) }}</td>
                     @endif
-                    @foreach($report['payment_columns'] as $method)
-                        <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
-                    @endforeach
+                    @if($isAllSaleTable)
+                        @foreach($staticPaymentColumns as $column)
+                            <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
+                        @endforeach
+                    @else
+                        @foreach($report['payment_columns'] as $method)
+                            <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                        @endforeach
+                    @endif
                     <td class="text-right">{{ $fmt($row['paid']) }}</td>
                     <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
                     @if($isAllSaleTable)
@@ -214,9 +236,16 @@
         </tbody>
         @php
             $saleRows = collect($rows ?? []);
-            $paymentTotals = [];
-            foreach ($report['payment_columns'] as $method) {
-                $paymentTotals[$method] = $saleRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+            if ($isAllSaleTable) {
+                $paymentTotals = [];
+                foreach ($staticPaymentColumns as $column) {
+                    $paymentTotals[$column['key'] ?? ''] = $saleRows->sum(fn ($row) => $staticPaymentAmount($row, $column));
+                }
+            } else {
+                $paymentTotals = [];
+                foreach ($report['payment_columns'] as $method) {
+                    $paymentTotals[$method] = $saleRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+                }
             }
         @endphp
         <tfoot>
@@ -230,9 +259,15 @@
                     <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['line_total'] ?? 0))) }}</th>
                     <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['discount'] ?? 0))) }}</th>
                 @endif
-                @foreach($report['payment_columns'] as $method)
-                    <th class="text-right">{{ $fmt($paymentTotals[$method] ?? 0) }}</th>
-                @endforeach
+                @if($isAllSaleTable)
+                    @foreach($staticPaymentColumns as $column)
+                        <th class="text-right">{{ $fmt($paymentTotals[$column['key'] ?? ''] ?? 0) }}</th>
+                    @endforeach
+                @else
+                    @foreach($report['payment_columns'] as $method)
+                        <th class="text-right">{{ $fmt($paymentTotals[$method] ?? 0) }}</th>
+                    @endforeach
+                @endif
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['paid'] ?? 0))) }}</th>
                 <th class="text-right @if($saleRows->sum(fn ($row) => (float) ($row['due'] ?? 0)) < 0) due-negative @endif">
                     {{ $fmt($saleRows->sum(fn ($row) => (float) ($row['due'] ?? 0))) }}
