@@ -5218,6 +5218,25 @@ class TransactionUtil extends Util
                         $join->on('tsl_agg.transaction_id', '=', 'transactions.id');
                     }
                 )
+                // Pre-aggregate payment totals per transaction — avoids correlated subquery
+                ->leftJoinSub(
+                    DB::table('transaction_payments')
+                        ->selectRaw('transaction_id, SUM(IF(is_return = 1, -1 * amount, amount)) as total_paid')
+                        ->groupBy('transaction_id'),
+                    'tp_agg',
+                    function ($join) {
+                        $join->on('tp_agg.transaction_id', '=', 'transactions.id');
+                    }
+                )
+                ->leftJoinSub(
+                    DB::table('transaction_payments')
+                        ->selectRaw('transaction_id, SUM(amount) as return_paid')
+                        ->groupBy('transaction_id'),
+                    'tp_return_agg',
+                    function ($join) {
+                        $join->on('tp_return_agg.transaction_id', '=', 'SR.id');
+                    }
+                )
                 ->select(
                     'transactions.id',
                     'transactions.transaction_date',
@@ -5258,12 +5277,10 @@ class TransactionUtil extends Util
                     'transactions.custom_field_4',
                     DB::raw('DATE_FORMAT(transactions.transaction_date, "%Y/%m/%d") as sale_date'),
                     DB::raw("CONCAT(COALESCE(u.surname, ''),' ',COALESCE(u.first_name, ''),' ',COALESCE(u.last_name,'')) as added_by"),
-                    DB::raw('(SELECT SUM(IF(TP.is_return = 1,-1*TP.amount,TP.amount)) FROM transaction_payments AS TP WHERE
-                        TP.transaction_id=transactions.id) as total_paid'),
+                    DB::raw('COALESCE(tp_agg.total_paid, 0) as total_paid'),
                     'bl.name as business_location',
                     DB::raw('COUNT(SR.id) as return_exists'),
-                    DB::raw('(SELECT SUM(TP2.amount) FROM transaction_payments AS TP2 WHERE
-                        TP2.transaction_id=SR.id ) as return_paid'),
+                    DB::raw('COALESCE(tp_return_agg.return_paid, 0) as return_paid'),
                     DB::raw('COALESCE(SR.final_total, 0) as amount_return'),
                     'SR.id as return_transaction_id',
                     'tos.name as types_of_service_name',

@@ -265,12 +265,9 @@ class SellPosController extends Controller
         $default_hr_branch = !empty($default_location) ? ($this->getHrBranchGroupNames($default_location->id)[0] ?? '') : '';
         $hr_location_branch_map = [];
         foreach ($business_locations as $locId => $locName) {
-            $loc = BusinessLocation::find($locId);
-            if ($loc) {
-                $names = $this->getHrBranchGroupNames($loc->id);
-                if (!empty($names[0])) {
-                    $hr_location_branch_map[$locId] = $names[0];
-                }
+            $names = $this->getHrBranchGroupNames($locId);
+            if (!empty($names[0])) {
+                $hr_location_branch_map[$locId] = $names[0];
             }
         }
 
@@ -336,8 +333,14 @@ class SellPosController extends Controller
 
     private function getHrBranchGroupNames($location_id)
     {
+        static $cache = [];
+        if (array_key_exists($location_id, $cache)) {
+            return $cache[$location_id];
+        }
+
         $location = BusinessLocation::find($location_id);
         if (empty($location)) {
+            $cache[$location_id] = [];
             return [];
         }
 
@@ -345,6 +348,7 @@ class SellPosController extends Controller
         $group = config("hr.location_group_map.{$code}");
 
         if (!empty($group)) {
+            $cache[$location_id] = [$group];
             return [$group];
         }
 
@@ -352,10 +356,12 @@ class SellPosController extends Controller
         $groupNames = array_unique(array_values(config('hr.location_group_map', [])));
         foreach ($groupNames as $groupName) {
             if (!empty($groupName) && str_starts_with($location_name, $groupName)) {
+                $cache[$location_id] = [$groupName];
                 return [$groupName];
             }
         }
 
+        $cache[$location_id] = [$location_name];
         return [$location_name];
     }
 
@@ -771,41 +777,69 @@ class SellPosController extends Controller
         $copied = [];
         $warnings = [];
 
+        $serials = [];
         foreach ($lines as $line) {
             $serial = $this->getHrLineSerial($line);
+            if (!empty($serial)) {
+                $serials[$line->id] = $serial;
+            }
+        }
+
+        $allStatuses = DB::table('pos_sell_list_serial_statuses')
+            ->whereIn('hr_sell_out_report_line_id', array_keys($serials))
+            ->get()
+            ->keyBy('hr_sell_out_report_line_id');
+
+        $invoiceSerials = DB::table('pos_sell_list_serial_statuses')
+            ->whereIn('serial_number', array_values($serials))
+            ->where('invoice_key', $invoice_key)
+            ->where('status', 'added')
+            ->pluck('serial_number')
+            ->flip();
+
+        $soldSerials = collect();
+        if (!empty($serials)) {
+            $soldRows = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+                ->where('t.status', 'final')
+                ->where(function ($q) use ($serials) {
+                    foreach ($serials as $s) {
+                        $q->orWhere('transaction_sell_lines.sell_line_note', 'like', '%' . $s . '%');
+                    }
+                })
+                ->select('t.invoice_no', 'transaction_sell_lines.sell_line_note')
+                ->get();
+            foreach ($soldRows as $row) {
+                $soldSerials[$row->invoice_no] = $row->sell_line_note;
+            }
+        }
+
+        foreach ($lines as $line) {
+            $serial = $serials[$line->id] ?? null;
             if (empty($serial)) {
                 $warnings[] = $line->product_name . ': no serial number found.';
                 continue;
             }
 
-            $existing_for_invoice = DB::table('pos_sell_list_serial_statuses')
-                ->where('serial_number', $serial)
-                ->where('invoice_key', $invoice_key)
-                ->where('status', 'added')
-                ->first();
-
-            if (!empty($existing_for_invoice)) {
+            if (isset($invoiceSerials[$serial])) {
                 $warnings[] = $serial . ' already added to this invoice.';
                 continue;
             }
 
-            $status = DB::table('pos_sell_list_serial_statuses')
-                ->where('hr_sell_out_report_line_id', $line->id)
-                ->first();
-
+            $status = $allStatuses->get($line->id);
             if (!empty($status) && $status->status !== 'active') {
                 $warnings[] = $serial . ' is already ' . $status->status . '.';
                 continue;
             }
 
-            $completed_sale = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
-                ->where('t.status', 'final')
-                ->where('transaction_sell_lines.sell_line_note', 'like', '%' . $serial . '%')
-                ->select('t.invoice_no')
-                ->first();
-
-            if (!empty($completed_sale)) {
-                $warnings[] = $serial . ' already exists in completed sale ' . $completed_sale->invoice_no . '.';
+            $soldInvoice = null;
+            foreach ($soldSerials as $inv => $notes) {
+                if (str_contains($notes, $serial)) {
+                    $soldInvoice = $inv;
+                    break;
+                }
+            }
+            if (!empty($soldInvoice)) {
+                $warnings[] = $serial . ' already exists in completed sale ' . $soldInvoice . '.';
             }
 
             $variation_id = $this->resolveHrLineVariationId($line, $serial);
@@ -879,12 +913,20 @@ class SellPosController extends Controller
 
     private function resolveHrLineVariationId($line, $serial)
     {
+        static $cache = [];
+        $cacheKey = $line->id . '|' . $serial;
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
         if (!empty($line->variation_id) && Variation::where('id', $line->variation_id)->exists()) {
+            $cache[$cacheKey] = $line->variation_id;
             return $line->variation_id;
         }
 
         $variation = Variation::where('sub_sku', $serial)->first();
         if (!empty($variation)) {
+            $cache[$cacheKey] = $variation->id;
             return $variation->id;
         }
 
@@ -898,7 +940,9 @@ class SellPosController extends Controller
             ->select('variations.id')
             ->first();
 
-        return !empty($variation) ? $variation->id : null;
+        $result = !empty($variation) ? $variation->id : null;
+        $cache[$cacheKey] = $result;
+        return $result;
     }
 
     private function setHrSerialStatus($line, $status, $invoice_key = null, $transaction_id = null, $reason = null)
@@ -1061,11 +1105,21 @@ class SellPosController extends Controller
             return;
         }
 
+        $sellLines = TransactionSellLine::where('transaction_id', $transaction->id)
+            ->get()
+            ->keyBy(function ($sl) {
+                return $sl->sell_line_note;
+            });
+
         foreach ($statuses as $status) {
-            $sell_line = TransactionSellLine::where('transaction_id', $transaction->id)
-                ->where('sell_line_note', 'like', '%' . $status->serial_number . '%')
-                ->orderByDesc('id')
-                ->first();
+            $sell_line = null;
+            $serial = $status->serial_number;
+            foreach ($sellLines as $note => $sl) {
+                if (!empty($note) && str_contains($note, $serial)) {
+                    $sell_line = $sl;
+                    break;
+                }
+            }
 
             DB::table('pos_sell_list_serial_statuses')
                 ->where('id', $status->id)
