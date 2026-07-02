@@ -21,6 +21,7 @@ use App\VariationLocationDetails;
 use App\VariationTemplate;
 use App\VariationValueTemplate;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProductUtil extends Util
 {
@@ -1254,7 +1255,7 @@ class ProductUtil extends Util
             $purchase_line->purchase_price = ($this->num_uf($data['purchase_price'], $currency_details) * $exchange_rate) / $multiplier;
             $purchase_line->purchase_price_inc_tax = ($this->num_uf($data['purchase_price_inc_tax'], $currency_details) * $exchange_rate) / $multiplier;
             $purchase_line->item_tax = ($this->num_uf($data['item_tax'], $currency_details) * $exchange_rate) / $multiplier;
-            $purchase_line->tax_id = $data['purchase_line_tax_id'];
+            $purchase_line->tax_id = ! empty($data['purchase_line_tax_id']) ? $data['purchase_line_tax_id'] : null;
             $purchase_line->lot_number = ! empty($data['lot_number']) ? $data['lot_number'] : null;
             $purchase_line->mfg_date = ! empty($data['mfg_date']) ? $this->uf_date($data['mfg_date']) : null;
             $purchase_line->exp_date = ! empty($data['exp_date']) ? $this->uf_date($data['exp_date']) : null;
@@ -1661,11 +1662,14 @@ class ProductUtil extends Util
         }
 
         //Include search
+        // Guard: skip variations.product_keywords column if missing from DB
+        $hasProductKeywords = Schema::hasColumn('variations', 'product_keywords');
+
         if (! empty($search_term)) {
 
             //Search with like condition
             if ($search_type == 'like') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', 'like', '%'.$search_term.'%');
                     }
@@ -1689,11 +1693,11 @@ class ProductUtil extends Util
                         });
                     }
 
-                    if (in_array('product_keywords', $search_fields)) {
+                    if (in_array('product_keywords', $search_fields) && $hasProductKeywords) {
                         $query->orWhere('variations.product_keywords', 'like', '%'.$search_term.'%');
                     }
 
-                    if (in_array('product_custom_field1', $search_fields) || in_array('product_keywords', $search_fields)) {
+                    if (in_array('product_custom_field1', $search_fields) || (in_array('product_keywords', $search_fields) && $hasProductKeywords)) {
                         $query->orWhere('product_custom_field1', 'like', '%'.$search_term.'%');
                     }
                     if (in_array('product_custom_field2', $search_fields)) {
@@ -1710,7 +1714,7 @@ class ProductUtil extends Util
 
             //Search with exact condition
             if ($search_type == 'exact') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', $search_term);
                     }
@@ -1734,11 +1738,11 @@ class ProductUtil extends Util
                         });
                     }
 
-                    if (in_array('product_keywords', $search_fields)) {
+                    if (in_array('product_keywords', $search_fields) && $hasProductKeywords) {
                         $query->orWhere('variations.product_keywords', $search_term);
                     }
 
-                    if (in_array('product_custom_field1', $search_fields) || in_array('product_keywords', $search_fields)) {
+                    if (in_array('product_custom_field1', $search_fields) || (in_array('product_keywords', $search_fields) && $hasProductKeywords)) {
                         $query->orWhere('product_custom_field1', $search_term);
                     }
                 });
@@ -1754,19 +1758,24 @@ class ProductUtil extends Util
             $query->ForLocation($location_id);
         }
 
-        $query->select(
-                'products.id as product_id',
-                'products.name',
-                'products.type',
-                'products.enable_stock',
-                'variations.id as variation_id',
-                'variations.name as variation',
-                'VLD.qty_available',
-                'variations.sell_price_inc_tax as selling_price',
-                'variations.sub_sku',
-                'variations.product_keywords',
-                'U.short_name as unit'
-            );
+        $selectColumns = [
+            'products.id as product_id',
+            'products.name',
+            'products.type',
+            'products.enable_stock',
+            'variations.id as variation_id',
+            'variations.name as variation',
+            'VLD.qty_available',
+            'variations.sell_price_inc_tax as selling_price',
+            'variations.sub_sku',
+            'U.short_name as unit',
+        ];
+
+        if ($hasProductKeywords) {
+            $selectColumns[] = 'variations.product_keywords';
+        }
+
+        $query->select($selectColumns);
 
         if (! empty($price_group_id)) {
             $query->addSelect(DB::raw('IF (VGP.price_type = "fixed", VGP.price_inc_tax, VGP.price_inc_tax * variations.sell_price_inc_tax / 100) as variation_group_price'));

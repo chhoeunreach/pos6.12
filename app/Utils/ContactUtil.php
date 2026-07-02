@@ -89,6 +89,11 @@ class ContactUtil extends Util
 
     public function createNewContact($input)
     {
+        // Ensure 'type' is always set – the column has no default value and cannot be null.
+        if (empty($input['type'])) {
+            $input['type'] = 'customer';
+        }
+
         //Check Contact id
         $count = 0;
         if (! empty($input['contact_id'])) {
