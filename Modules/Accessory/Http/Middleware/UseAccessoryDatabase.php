@@ -102,7 +102,6 @@ class UseAccessoryDatabase
         try {
             $this->ensureFallbackBusiness($accessory, $businessId, $mainUser->id);
             $this->syncModuleState($main, $accessory, $businessId);
-            $this->copyBusinessLocations($main, $accessory, $businessId);
 
             $this->copyRowById($main, $accessory, 'users', $mainUser->id, [
                 'business_id' => $businessId,
