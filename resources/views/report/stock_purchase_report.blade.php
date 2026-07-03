@@ -114,8 +114,8 @@
                 }
             },
             columns: [
-                { data: 'transaction_date', name: 't.transaction_date' },
-                { data: 'ref_no', name: 't.ref_no' },
+                { data: 'transaction_date', name: 't.transaction_date', type: 'date' },
+                { data: 'ref_no', name: 't.ref_no', type: 'text' },
                 { data: 'supplier', name: 'c.name' },
                 { data: 'phone', name: 'c.mobile' },
                 { data: 'lot_number', name: 'purchase_lines.lot_number' },

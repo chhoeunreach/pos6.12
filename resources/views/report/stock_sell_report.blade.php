@@ -101,8 +101,8 @@
                 }
             },
             columns: [
-                { data: 'transaction_date', name: 't.transaction_date' },
-                { data: 'invoice_no', name: 't.invoice_no' },
+                { data: 'transaction_date', name: 't.transaction_date', type: 'date' },
+                { data: 'invoice_no', name: 't.invoice_no', type: 'text' },
                 { data: 'i_t', name: 't.additional_notes', orderable: false },
                 { data: 'customer', name: 'c.name' },
                 { data: 'phone', name: 'c.mobile' },
