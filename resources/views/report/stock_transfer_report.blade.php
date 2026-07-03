@@ -79,6 +79,7 @@
                         <thead>
                             <tr>
                                 <th>@lang('messages.date')</th>
+                                <th>@lang('lang_v1.lot_number')</th>
                                 <th>@lang('product.sku')</th>
                                 <th>@lang('sale.product')</th>
                                 <th>@lang('lang_v1.quantity')</th>

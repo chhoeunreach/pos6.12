@@ -4815,6 +4815,7 @@ class ReportController extends Controller
                     'product_variations.id'
                 )
                 ->leftJoin('users as sender', 'transactions.created_by', '=', 'sender.id')
+                ->leftJoin('purchase_lines', 'transaction_sell_lines.lot_no_line_id', '=', 'purchase_lines.id')
                 ->where('transactions.business_id', $business_id)
                 ->where('transactions.type', 'sell_transfer');
 
@@ -4858,6 +4859,7 @@ class ReportController extends Controller
 
             $query->select(
                 DB::raw('DATE_FORMAT(transactions.transaction_date, "%Y-%m-%d") as transaction_date'),
+                'purchase_lines.lot_number as lot_number',
                 'variations.sub_sku as sku',
                 DB::raw("IF(products.type='variable', CONCAT(products.name, ' - ', COALESCE(product_variations.name, ''), ' - ', variations.name), products.name) as product_name"),
                 'transaction_sell_lines.quantity as qty',

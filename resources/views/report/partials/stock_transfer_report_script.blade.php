@@ -30,6 +30,7 @@ $(document).ready(function() {
         },
         columns: [
             { data: 'transaction_date', name: 'transaction_date' },
+            { data: 'lot_number', name: 'purchase_lines.lot_number' },
             { data: 'sku', name: 'sku' },
             { data: 'product_name', name: 'product_name' },
             { data: 'qty', name: 'qty' },
