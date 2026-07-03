@@ -317,6 +317,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/reports/purchase-report', [ReportController::class, 'purchaseReport']);
     Route::get('/reports/sale-report', [ReportController::class, 'saleReport']);
     Route::get('/reports/stock-sell-report', [ReportController::class, 'stockSellReport']);
+    Route::get('/reports/stock-purchase-report', [ReportController::class, 'stockPurchaseReport']);
     Route::get('/reports/service-staff-report', [ReportController::class, 'getServiceStaffReport']);
     Route::get('/reports/service-staff-line-orders', [ReportController::class, 'serviceStaffLineOrders']);
     Route::get('/reports/table-report', [ReportController::class, 'getTableReport']);

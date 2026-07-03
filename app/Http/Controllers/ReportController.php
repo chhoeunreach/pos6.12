@@ -4137,6 +4137,161 @@ class ReportController extends Controller
             ->with(compact('business_locations', 'customers'));
     }
 
+    public function stockPurchaseReport()
+    {
+        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('purchase.view') && ! auth()->user()->can('purchase.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+
+        if (request()->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $payments = DB::table('transaction_payments')
+                ->select(
+                    'transaction_id',
+                    DB::raw("SUM(IF(method = 'cash', IF(is_return = 1, -1 * amount, amount), 0)) as cash"),
+                    DB::raw("SUM(IF(method = 'custom_pay_1', IF(is_return = 1, -1 * amount, amount), 0)) as wing"),
+                    DB::raw("SUM(IF(method = 'custom_pay_2', IF(is_return = 1, -1 * amount, amount), 0)) as aba"),
+                    DB::raw("SUM(IF(method = 'custom_pay_3', IF(is_return = 1, -1 * amount, amount), 0)) as acleda"),
+                    DB::raw("SUM(IF(method IN ('custom_pay_4', 'custom_pay_5'), IF(is_return = 1, -1 * amount, amount), 0)) as true_money"),
+                    DB::raw("SUM(IF(method = 'card', IF(is_return = 1, -1 * amount, amount), 0)) as card"),
+                    DB::raw("SUM(IF(method = 'other', IF(is_return = 1, -1 * amount, amount), 0)) as other"),
+                    DB::raw("SUM(IF(method = 'custom_pay_6', IF(is_return = 1, -1 * amount, amount), 0)) as voido"),
+                    DB::raw("SUM(IF(method = 'custom_pay_7', IF(is_return = 1, -1 * amount, amount), 0)) as monthly"),
+                    DB::raw('SUM(IF(is_return = 1, -1 * amount, amount)) as paid')
+                )
+                ->whereNull('parent_id')
+                ->groupBy('transaction_id');
+
+            $purchases = PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
+                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('products as p', 'purchase_lines.product_id', '=', 'p.id')
+                ->leftJoin('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
+                ->leftJoinSub($payments, 'tp', function ($join) {
+                    $join->on('tp.transaction_id', '=', 't.id');
+                })
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'purchase')
+                ->where('t.status', 'received')
+                ->select(
+                    'purchase_lines.id',
+                    't.id as transaction_id',
+                    't.transaction_date',
+                    't.ref_no',
+                    't.final_total',
+                    't.payment_status',
+                    'c.name as supplier',
+                    'c.supplier_business_name',
+                    'c.mobile as phone',
+                    'bl.name as location',
+                    'p.name as product',
+                    'v.sub_sku as sku',
+                    'purchase_lines.quantity',
+                    'purchase_lines.purchase_price_inc_tax as purchase_price',
+                    DB::raw('(purchase_lines.quantity * purchase_lines.purchase_price_inc_tax) as subtotal'),
+                    DB::raw('COALESCE(tp.cash, 0) as cash'),
+                    DB::raw('COALESCE(tp.wing, 0) as wing'),
+                    DB::raw('COALESCE(tp.aba, 0) as aba'),
+                    DB::raw('COALESCE(tp.acleda, 0) as acleda'),
+                    DB::raw('COALESCE(tp.true_money, 0) as true_money'),
+                    DB::raw('COALESCE(tp.card, 0) as card'),
+                    DB::raw('COALESCE(tp.other, 0) as other'),
+                    DB::raw('COALESCE(tp.voido, 0) as voido'),
+                    DB::raw('COALESCE(tp.monthly, 0) as monthly'),
+                    DB::raw('COALESCE(tp.paid, 0) as paid'),
+                    DB::raw('(t.final_total - COALESCE(tp.paid, 0)) as due')
+                );
+
+            if ($permitted_locations != 'all') {
+                $purchases->whereIn('t.location_id', $permitted_locations);
+            }
+
+            if (! empty(request()->input('location_id'))) {
+                $location_id = request()->input('location_id');
+                if (is_array($location_id)) {
+                    $location_id = array_values(array_filter($location_id, function ($id) {
+                        return $id !== 'all';
+                    }));
+
+                    if (! empty($location_id)) {
+                        $purchases->whereIn('t.location_id', $location_id);
+                    }
+                } elseif ($location_id !== 'all') {
+                    $purchases->where('t.location_id', $location_id);
+                }
+            }
+
+            if (! empty(request()->input('supplier_id'))) {
+                $purchases->where('t.contact_id', request()->input('supplier_id'));
+            }
+
+            if (! empty(request()->input('payment_status'))) {
+                $purchases->where('t.payment_status', request()->input('payment_status'));
+            }
+
+            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
+                $purchases->whereDate('t.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+            }
+
+            return Datatables::of($purchases)
+                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('quantity', function ($row) {
+                    return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
+                })
+                ->editColumn('purchase_price', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                })
+                ->editColumn('subtotal', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->subtotal.'">'.$row->subtotal.'</span>';
+                })
+                ->editColumn('cash', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->cash.'">'.$row->cash.'</span>';
+                })
+                ->editColumn('wing', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->wing.'">'.$row->wing.'</span>';
+                })
+                ->editColumn('aba', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->aba.'">'.$row->aba.'</span>';
+                })
+                ->editColumn('acleda', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->acleda.'">'.$row->acleda.'</span>';
+                })
+                ->editColumn('true_money', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->true_money.'">'.$row->true_money.'</span>';
+                })
+                ->editColumn('card', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->card.'">'.$row->card.'</span>';
+                })
+                ->editColumn('other', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->other.'">'.$row->other.'</span>';
+                })
+                ->editColumn('voido', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->voido.'">'.$row->voido.'</span>';
+                })
+                ->editColumn('monthly', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->monthly.'">'.$row->monthly.'</span>';
+                })
+                ->editColumn('paid', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->paid.'">'.$row->paid.'</span>';
+                })
+                ->editColumn('due', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
+                })
+                ->rawColumns(['quantity', 'purchase_price', 'subtotal', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+        $suppliers = Contact::suppliersDropdown($business_id, false);
+
+        return view('report.stock_purchase_report')
+            ->with(compact('business_locations', 'suppliers'));
+    }
+
     /**
      * Calculates stock values
      *

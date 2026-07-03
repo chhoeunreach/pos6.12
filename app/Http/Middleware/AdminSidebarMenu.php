@@ -621,6 +621,11 @@ class AdminSidebarMenu
                                 'Stock Sell Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'stock-sell-report']
                             );
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'stockPurchaseReport']),
+                                'Stock Purchase Report',
+                                ['icon' => '', 'active' => request()->segment(2) == 'stock-purchase-report']
+                            );
                             if (session('business.enable_product_expiry') == 1) {
                                 $sub->url(
                                     action([\App\Http\Controllers\ReportController::class, 'getStockExpiryReport']),
