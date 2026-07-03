@@ -1359,11 +1359,10 @@ $(document).ready(function() {
                     },
                 },
                 submitHandler: function(form) {
-                    e.preventDefault();
                     var data = $(form).serialize();
 
                     $.ajax({
-                        method: 'POST',
+                        method: $(form).attr('method'),
                         url: $(form).attr('action'),
                         dataType: 'json',
                         data: data,
