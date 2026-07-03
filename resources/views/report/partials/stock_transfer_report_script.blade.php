@@ -51,7 +51,7 @@ $(document).ready(function() {
             { data: 'transaction_date', name: 'transactions.transaction_date', type: 'date' },
             { data: 'lot_number', name: 'purchase_lines.lot_number' },
             { data: 'sku', name: 'variations.sub_sku' },
-            { data: 'product_name', name: 'product_name', searchable: false, orderable: false, width: '200px' },
+            { data: 'product_name', name: 'product_name', searchable: false, orderable: false, width: '300px' },
             { data: 'qty', name: 'transaction_sell_lines.quantity', className: 'text-right' },
             { data: 'location_from', name: 'l1.name' },
             { data: 'location_to', name: 'l2.name' },
