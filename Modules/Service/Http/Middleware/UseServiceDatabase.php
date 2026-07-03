@@ -103,6 +103,7 @@ class UseServiceDatabase
 
         try {
             $this->ensureFallbackBusiness($service, $businessId, $mainUser->id);
+            $this->copyBusinessLocations($main, $service, $businessId);
 
             $this->copyRowById($main, $service, 'users', $mainUser->id, [
                 'business_id' => $businessId,
@@ -215,6 +216,7 @@ class UseServiceDatabase
             return;
         }
 
+        $service->table('business_locations')->where('business_id', $businessId)->delete();
         $locations = $main->table('business_locations')->where('business_id', $businessId)->get();
         foreach ($locations as $location) {
             $this->copyRow($service, 'business_locations', (array) $location);

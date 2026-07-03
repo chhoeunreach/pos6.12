@@ -327,9 +327,40 @@ class ManageUserController extends Controller
 
             $user->update($user_data);
             $role_id = $request->input('role');
+            if (! empty($role_id)) {
+                $roleExists = Role::where('id', $role_id)->exists();
+                if (! $roleExists) {
+                    $mainRole = DB::connection('mysql')->table('roles')->where('id', $role_id)->first();
+                    if ($mainRole) {
+                        $roleData = (array) $mainRole;
+                        $roleData['business_id'] = $business_id;
+                        if (! empty($roleData['name']) && str_contains($roleData['name'], '#')) {
+                            $roleData['name'] = preg_replace('/#\d+$/', '#' . $business_id, $roleData['name']);
+                        }
+                        $existingRole = Role::where('name', $roleData['name'])
+                            ->where('guard_name', $roleData['guard_name'] ?? 'web')
+                            ->where('business_id', $business_id)
+                            ->first();
+                        if ($existingRole) {
+                            $role_id = $existingRole->id;
+                        } else {
+                            $newRole = new Role();
+                            $newRole->name = $roleData['name'];
+                            $newRole->guard_name = $roleData['guard_name'] ?? 'web';
+                            $newRole->business_id = $business_id;
+                            $newRole->save();
+                            $role_id = $newRole->id;
+                        }
+                    }
+                }
+                $roleExists = Role::where('id', $role_id)->exists();
+                if (! $roleExists) {
+                    $role_id = null;
+                }
+            }
             $user_role = $user->roles->first();
             $previous_role = ! empty($user_role->id) ? $user_role->id : 0;
-            if ($previous_role != $role_id) {
+            if (! empty($role_id) && $previous_role != $role_id) {
                 $is_admin = $this->moduleUtil->is_admin($user);
                 $all_admins = $this->getAdmins();
                 //If only one admin then can not change role

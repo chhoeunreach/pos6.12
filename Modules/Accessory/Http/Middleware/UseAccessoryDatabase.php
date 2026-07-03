@@ -102,6 +102,7 @@ class UseAccessoryDatabase
         try {
             $this->ensureFallbackBusiness($accessory, $businessId, $mainUser->id);
             $this->syncModuleState($main, $accessory, $businessId);
+            $this->copyBusinessLocations($main, $accessory, $businessId);
 
             $this->copyRowById($main, $accessory, 'users', $mainUser->id, [
                 'business_id' => $businessId,
@@ -214,6 +215,7 @@ class UseAccessoryDatabase
             return;
         }
 
+        $accessory->table('business_locations')->where('business_id', $businessId)->delete();
         $locations = $main->table('business_locations')->where('business_id', $businessId)->get();
         foreach ($locations as $location) {
             $this->copyRow($accessory, 'business_locations', (array) $location);
