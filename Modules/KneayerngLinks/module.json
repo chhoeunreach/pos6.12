@@ -1,0 +1,14 @@
+{
+    "name": "KneayerngLinks",
+    "alias": "kneayernglinks",
+    "description": "Module to add external links to top navigation bar",
+    "keywords": ["pos", "accessory", "services"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\KneayerngLinks\\Providers\\KneayerngLinksServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

@@ -2,6 +2,8 @@
 
 namespace App;
 
+declare(strict_types=1);
+
 use DB;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
