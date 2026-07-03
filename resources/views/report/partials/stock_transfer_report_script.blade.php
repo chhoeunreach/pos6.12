@@ -1,6 +1,25 @@
-<script src="{{ asset('js/report.js?v=' . $asset_v) }}"></script>
 <script>
 $(document).ready(function() {
+    if ($('#st_report_date_range').length == 1) {
+        var drpSettings = $.extend(true, {}, dateRangeSettings, {
+            startDate: moment().subtract(3, 'months'),
+            endDate: moment()
+        });
+        $('#st_report_date_range').daterangepicker(drpSettings, function(start, end) {
+            $('#st_report_date_range').val(
+                start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+            );
+            stock_transfer_report_table.ajax.reload();
+        });
+        $('#st_report_date_range').val(
+            moment().subtract(3, 'months').format(moment_date_format) + ' ~ ' + moment().format(moment_date_format)
+        );
+        $('#st_report_date_range').on('cancel.daterangepicker', function(ev, picker) {
+            $('#st_report_date_range').val('');
+            stock_transfer_report_table.ajax.reload();
+        });
+    }
+
     var stock_transfer_report_table = $('#stock_transfer_report_table').DataTable({
         processing: true,
         serverSide: true,
@@ -56,26 +75,6 @@ $(document).ready(function() {
     $(document).on('change', '#st_report_location_from, #st_report_location_to, #st_report_sender', function() {
         stock_transfer_report_table.ajax.reload();
     });
-
-    if ($('#st_report_date_range').length == 1) {
-        var drpSettings = $.extend(true, {}, dateRangeSettings, {
-            startDate: moment().subtract(3, 'months'),
-            endDate: moment()
-        });
-        $('#st_report_date_range').daterangepicker(drpSettings, function(start, end) {
-            $('#st_report_date_range').val(
-                start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
-            );
-            stock_transfer_report_table.ajax.reload();
-        });
-        $('#st_report_date_range').val(
-            moment().subtract(3, 'months').format(moment_date_format) + ' ~ ' + moment().format(moment_date_format)
-        );
-        $('#st_report_date_range').on('cancel.daterangepicker', function(ev, picker) {
-            $('#st_report_date_range').val('');
-            stock_transfer_report_table.ajax.reload();
-        });
-    }
 
     $('#copy_table_btn').click(function() {
         var table = $('#stock_transfer_report_table');
