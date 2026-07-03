@@ -73,6 +73,10 @@ Route::middleware([
     Route::get('/lot/history/{lot}', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'history'])->name('ssi.lot.history');
     Route::post('/lot/update', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'updateLot'])->name('ssi.lot.update');
 
+    Route::get('/stock-reports/sell', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockSellReport'])->name('ssi.report.stock_sell');
+    Route::get('/stock-reports/purchase', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockPurchaseReport'])->name('ssi.report.stock_purchase');
+    Route::get('/stock-reports/transfer', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockTransferReport'])->name('ssi.report.stock_transfer');
+
     Route::get('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'index'])->name('ssi.settings.index');
     Route::post('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'update'])->name('ssi.settings.update');
     Route::post('/settings/test-telegram', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'testTelegram'])->name('ssi.settings.test_telegram');

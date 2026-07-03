@@ -10,6 +10,7 @@ use Modules\SmartStockInventory\Http\Controllers\LotController;
 use Modules\SmartStockInventory\Http\Controllers\MismatchController;
 use Modules\SmartStockInventory\Http\Controllers\MovementController;
 use Modules\SmartStockInventory\Http\Controllers\SettingsController;
+use Modules\SmartStockInventory\Http\Controllers\StockReportController;
 use Modules\SmartStockInventory\Http\Controllers\VerificationController;
 
 Route::middleware(['web', 'auth'])->prefix('smart-stock-inventory')->group(function () {
@@ -82,6 +83,10 @@ Route::middleware([
     Route::get('/lot/export', [LotController::class, 'export'])->name('ssi.lot.export');
     Route::get('/lot/history/{lot}', [LotController::class, 'history'])->name('ssi.lot.history');
     Route::post('/lot/update', [LotController::class, 'updateLot'])->name('ssi.lot.update');
+
+    Route::get('/stock-reports/sell', [StockReportController::class, 'stockSellReport'])->name('ssi.report.stock_sell');
+    Route::get('/stock-reports/purchase', [StockReportController::class, 'stockPurchaseReport'])->name('ssi.report.stock_purchase');
+    Route::get('/stock-reports/transfer', [StockReportController::class, 'stockTransferReport'])->name('ssi.report.stock_transfer');
 
     Route::get('/settings', [SettingsController::class, 'index'])->name('ssi.settings.index');
     Route::post('/settings', [SettingsController::class, 'update'])->name('ssi.settings.update');
