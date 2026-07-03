@@ -84,7 +84,7 @@ class DataController extends Controller
     {
         $user = auth()->user();
         $hasSuperAdminAccess = $this->hasSuperAdminAccess($user);
-        if (! $this->isReachAdmin() || (! $hasSuperAdminAccess && ! $user->can('stock_inventory.view'))) {
+        if (! $this->isReachAdmin() && ! $hasSuperAdminAccess && ! $user->can('stock_inventory.view')) {
             return;
         }
 
