@@ -2,7 +2,7 @@
 $(document).ready(function() {
     if ($('#st_report_date_range').length == 1) {
         var drpSettings = $.extend(true, {}, dateRangeSettings, {
-            startDate: moment().subtract(3, 'months'),
+            startDate: moment(),
             endDate: moment()
         });
         $('#st_report_date_range').daterangepicker(drpSettings, function(start, end) {
@@ -12,7 +12,7 @@ $(document).ready(function() {
             stock_transfer_report_table.ajax.reload();
         });
         $('#st_report_date_range').val(
-            moment().subtract(3, 'months').format(moment_date_format) + ' ~ ' + moment().format(moment_date_format)
+            moment().format(moment_date_format) + ' ~ ' + moment().format(moment_date_format)
         );
         $('#st_report_date_range').on('cancel.daterangepicker', function(ev, picker) {
             $('#st_report_date_range').val('');
