@@ -107,6 +107,13 @@ class DataController extends Controller
                     if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.report')) {
                         $sub->url(ssi_route('ssi.count.reports'), 'Inventory Reports', ['icon' => 'fa fa-bar-chart']);
                     }
+                    if ($hasSuperAdminAccess || auth()->user()->can('stock_report.view')) {
+                        $sub->url(url('/reports/stock-sell-report'), 'Stock Sell Report', ['icon' => 'fa fa-file-text-o', 'active' => request()->is('reports/stock-sell-report')]);
+                        $sub->url(url('/reports/stock-purchase-report'), 'Stock Purchase Report', ['icon' => 'fa fa-file-text-o', 'active' => request()->is('reports/stock-purchase-report')]);
+                        if (\Nwidart\Modules\Facades\Module::has('stock_transfers') && \Nwidart\Modules\Facades\Module::isEnabled('stock_transfers')) {
+                            $sub->url(url('/reports/stock-transfer-report'), 'Stock Transfer Report', ['icon' => 'fa fa-file-text-o', 'active' => request()->is('reports/stock-transfer-report')]);
+                        }
+                    }
                     if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.settings')) {
                         $sub->url(ssi_route('ssi.settings.index'), 'Settings', ['icon' => 'fa fa-cogs']);
                     }

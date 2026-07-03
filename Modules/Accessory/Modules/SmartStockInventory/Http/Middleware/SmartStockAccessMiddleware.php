@@ -26,11 +26,7 @@ class SmartStockAccessMiddleware
         $isReachAdmin = $this->isReachAdmin($user);
         $staffAllowedRoutes = (array) config('smartstockinventory.staff_allowed_routes', []);
 
-        if (! $isReachAdmin) {
-            if (! in_array($routeName, $staffAllowedRoutes, true)) {
-                abort(403, 'Unauthorized action.');
-            }
-
+        if (! $isReachAdmin && in_array($routeName, $staffAllowedRoutes, true)) {
             if (! $this->isAssignedCounter($request, (int) $user->id)) {
                 abort(403, 'You are not assigned for this inventory counting session.');
             }

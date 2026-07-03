@@ -23,6 +23,11 @@
                 ['label' => 'Lot Management', 'url' => $ssiRoute('ssi.lot.index'), 'active' => ['smart-stock-inventory/lot']],
                 ['label' => 'Fix Logs', 'url' => $ssiRoute('ssi.fix_logs'), 'active' => ['smart-stock-inventory/fix-logs']],
                 ['label' => 'Inventory Reports', 'url' => $ssiRoute('ssi.count.reports'), 'active' => ['smart-stock-inventory/count/reports']],
+                ['label' => 'Stock Sell Report', 'url' => $moduleUrl('/reports/stock-sell-report'), 'active' => ['reports/stock-sell-report']],
+                ['label' => 'Stock Purchase Report', 'url' => $moduleUrl('/reports/stock-purchase-report'), 'active' => ['reports/stock-purchase-report']],
+                @if(\Nwidart\Modules\Facades\Module::has('stock_transfers') && \Nwidart\Modules\Facades\Module::isEnabled('stock_transfers'))
+                ['label' => 'Stock Transfer Report', 'url' => $moduleUrl('/reports/stock-transfer-report'), 'active' => ['reports/stock-transfer-report']],
+                @endif
                 ['label' => 'Settings', 'url' => $ssiRoute('ssi.settings.index'), 'active' => ['smart-stock-inventory/settings']],
             ],
         ],
