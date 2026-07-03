@@ -109,7 +109,6 @@
 
 @stop
 @section('module_js')
-@include('report.partials.stock_transfer_report_script')
 <script>
 $(document).ready(function() {
     if ($('#st_report_date_range').length == 1) {
@@ -132,6 +131,9 @@ $(document).ready(function() {
         });
     }
 
+    if ($.fn.DataTable.isDataTable('#stock_transfer_report_table')) {
+        $('#stock_transfer_report_table').DataTable().destroy();
+    }
     stock_transfer_report_table = $('#stock_transfer_report_table').DataTable({
         processing: true,
         serverSide: true,
