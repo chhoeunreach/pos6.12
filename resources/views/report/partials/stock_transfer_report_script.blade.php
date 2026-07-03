@@ -80,12 +80,6 @@ $(document).ready(function() {
         var table = $('#stock_transfer_report_table');
         var data = '';
 
-        table.find('thead tr th').each(function(i) {
-            if (i > 0) data += '\t';
-            data += $(this).text().trim();
-        });
-        data += '\n';
-
         table.find('tbody tr').each(function() {
             $(this).find('td').each(function(i) {
                 if (i > 0) data += '\t';
