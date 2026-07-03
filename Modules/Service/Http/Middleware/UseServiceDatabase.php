@@ -103,6 +103,7 @@ class UseServiceDatabase
 
         try {
             $this->ensureFallbackBusiness($service, $businessId, $mainUser->id);
+            $this->copyServiceLocations($main, $service, $businessId);
 
             $this->copyRowById($main, $service, 'users', $mainUser->id, [
                 'business_id' => $businessId,
@@ -209,16 +210,64 @@ class UseServiceDatabase
         }
     }
 
-    private function copyBusinessLocations($main, $service, int $businessId): void
+    private function copyServiceLocations($main, $service, int $businessId): void
     {
         if (! $this->hasTable($main, 'business_locations') || ! $this->hasTable($service, 'business_locations')) {
             return;
         }
 
+        $branchIds = [
+            'កម្ពុជាក្រោម' => 1,
+            'វីអាយភី' => 4,
+            'សាខាកាប់គោ' => 8,
+            'សាខាអ៊ីអន' => 10,
+            'ស្តុកធំ' => 12,
+        ];
+
+        $mapping = [
+            ['name' => 'កម្ពុជាក្រោម-ជួសជុល', 'loc_id' => 'BL0060', 'branch' => 'កម្ពុជាក្រោម', 'type' => 'ជួសជុល'],
+            ['name' => 'កម្ពុជាក្រោម-អ៊ុត', 'loc_id' => 'BL0061', 'branch' => 'កម្ពុជាក្រោម', 'type' => 'អ៊ុត'],
+            ['name' => 'វីអាយភី-ជួសជុល', 'loc_id' => 'BL0062', 'branch' => 'វីអាយភី', 'type' => 'ជួសជុល'],
+            ['name' => 'វីអាយភី-អ៊ុត', 'loc_id' => 'BL0063', 'branch' => 'វីអាយភី', 'type' => 'អ៊ុត'],
+            ['name' => 'វីអាយភី-ការហ្វេរ', 'loc_id' => 'BL0064', 'branch' => 'វីអាយភី', 'type' => 'ការហ្វេរ'],
+            ['name' => 'សាខាកាប់គោ-ជួសជុល', 'loc_id' => 'BL0065', 'branch' => 'សាខាកាប់គោ', 'type' => 'ជួសជុល'],
+            ['name' => 'សាខាកាប់គោ-អ៊ុត', 'loc_id' => 'BL0066', 'branch' => 'សាខាកាប់គោ', 'type' => 'អ៊ុត'],
+            ['name' => 'សាខាអ៊ីអន-ជួសជុល', 'loc_id' => 'BL0067', 'branch' => 'សាខាអ៊ីអន', 'type' => 'ជួសជុល'],
+            ['name' => 'សាខាអ៊ីអន-អ៊ុត', 'loc_id' => 'BL0068', 'branch' => 'សាខាអ៊ីអន', 'type' => 'ការហ្វេរ'],
+            ['name' => 'ស្តុកធំ-ជួសជុល', 'loc_id' => 'BL0069', 'branch' => 'ស្តុកធំ', 'type' => 'ជួសជុល'],
+            ['name' => 'ស្តុកធំ-អ៊ុត', 'loc_id' => 'BL0070', 'branch' => 'ស្តុកធំ', 'type' => 'អ៊ុត'],
+        ];
+
         $service->table('business_locations')->where('business_id', $businessId)->delete();
-        $locations = $main->table('business_locations')->where('business_id', $businessId)->get();
-        foreach ($locations as $location) {
-            $this->copyRow($service, 'business_locations', (array) $location);
+
+        $id = 1;
+        foreach ($mapping as $item) {
+            $branchId = $branchIds[$item['branch']] ?? 1;
+            $mainLoc = $main->table('business_locations')->where('id', $branchId)->first();
+            $landmark = $mainLoc->landmark ?? '';
+
+            $service->table('business_locations')->insert([
+                'id' => $id,
+                'business_id' => $businessId,
+                'name' => $item['name'],
+                'location_id' => $item['loc_id'],
+                'landmark' => $landmark,
+                'country' => $mainLoc->country ?? '',
+                'state' => $mainLoc->state ?? '',
+                'city' => $mainLoc->city ?? '',
+                'zip_code' => $mainLoc->zip_code ?? '',
+                'invoice_scheme_id' => 1,
+                'sale_invoice_scheme_id' => 1,
+                'invoice_layout_id' => 1,
+                'sale_invoice_layout_id' => 1,
+                'selling_price_group_id' => null,
+                'is_active' => 1,
+                'custom_field1' => $item['branch'],
+                'custom_field2' => $item['type'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $id++;
         }
     }
 
