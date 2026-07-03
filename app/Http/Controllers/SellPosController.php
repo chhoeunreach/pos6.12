@@ -256,20 +256,25 @@ class SellPosController extends Controller
         $default_sell_type = 'លក់';
         $default_date_from = \Carbon::now()->format('Y-m-d');
         $default_date_to = \Carbon::now()->format('Y-m-d');
+        $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
+        $hr_branches = $this->getHrSellListBranches();
+        $location_mapping = !empty($default_location) ? $this->getHrBranchGroupNames($default_location->id) : ['', ''];
+        $default_hr_branch = $location_mapping[0] ?? '';
+        $default_sell_type = $location_mapping[1] ?? '';
+        $hr_location_branch_map = [];
+        foreach ($business_locations as $locId => $locName) {
+            $names = $this->getHrBranchGroupNames($locId);
+            if (!empty($names[0]) || !empty($names[1])) {
+                $hr_location_branch_map[$locId] = [
+                    'branch' => $names[0] ?? '',
+                    'sell_type' => $names[1] ?? '',
+                ];
+            }
+        }
         $hr_sell_out_reports_data = $this->getHrSellOutReports(!empty($default_location) ? $default_location->id : null, $default_date_from, $default_date_to, $default_sell_type);
         $hr_sell_out_reports = $hr_sell_out_reports_data['reports'];
         $hr_sell_out_reports_has_more = $hr_sell_out_reports_data['has_more'];
         $hr_sell_out_reports_total = $hr_sell_out_reports_data['total'];
-        $sell_types = !empty($default_location) ? $this->getHrSellListServiceTypes($default_location->id) : collect();
-        $hr_branches = $this->getHrSellListBranches();
-        $default_hr_branch = !empty($default_location) ? ($this->getHrBranchGroupNames($default_location->id)[0] ?? '') : '';
-        $hr_location_branch_map = [];
-        foreach ($business_locations as $locId => $locName) {
-            $names = $this->getHrBranchGroupNames($locId);
-            if (!empty($names[0])) {
-                $hr_location_branch_map[$locId] = $names[0];
-            }
-        }
 
         //pos screen view from module
         $pos_module_data = $this->moduleUtil->getModuleData('get_pos_screen_view', ['sub_type' => $sub_type, 'job_sheet_id' => request()->get('job_sheet_id')]);
@@ -340,39 +345,48 @@ class SellPosController extends Controller
 
         $location = BusinessLocation::find($location_id);
         if (empty($location)) {
-            $cache[$location_id] = [];
-            return [];
+            $cache[$location_id] = ['', ''];
+            return ['', ''];
         }
 
         $code = $location->location_id;
         $group = config("hr.location_group_map.{$code}");
 
-        if (!empty($group)) {
-            $cache[$location_id] = [$group];
-            return [$group];
+        if (is_array($group) && count($group) >= 2) {
+            $cache[$location_id] = [$group[0], $group[1]];
+            return [$group[0], $group[1]];
+        }
+        if (is_string($group) && $group !== '') {
+            $cache[$location_id] = [$group, ''];
+            return [$group, ''];
         }
 
         $location_name = $location->name;
-        $groupNames = array_unique(array_values(config('hr.location_group_map', [])));
-        foreach ($groupNames as $groupName) {
-            if (!empty($groupName) && str_starts_with($location_name, $groupName)) {
-                $cache[$location_id] = [$groupName];
-                return [$groupName];
+        $map = config('hr.location_group_map', []);
+        foreach ($map as $branch => $entry) {
+            if (is_array($entry) && str_starts_with($location_name, $branch)) {
+                $cache[$location_id] = [$branch, $entry[1] ?? ''];
+                return [$branch, $entry[1] ?? ''];
             }
         }
 
-        $cache[$location_id] = [$location_name];
-        return [$location_name];
+        $cache[$location_id] = [$location_name, ''];
+        return [$location_name, ''];
     }
 
     private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50, $branch_name = null)
     {
         try {
             $searchNames = [];
+            $resolvedSellType = $sell_type;
             if (!empty($branch_name)) {
                 $searchNames = [$branch_name];
             } elseif (!empty($location_id)) {
-                $searchNames = $this->getHrBranchGroupNames($location_id);
+                $names = $this->getHrBranchGroupNames($location_id);
+                $searchNames = !empty($names[0]) ? [$names[0]] : [];
+                if (empty($resolvedSellType) && !empty($names[1])) {
+                    $resolvedSellType = $names[1];
+                }
             }
 
             $page = max(1, (int) $page);
@@ -397,11 +411,11 @@ class SellPosController extends Controller
                     'u.employee_code as staff_code',
                     'u.avatar as staff_avatar'
                 )
-                ->when(!empty($sell_type), function ($query) use ($sell_type) {
-                    if (in_array($sell_type, ['sell', 'លក់'])) {
+                ->when(!empty($resolvedSellType), function ($query) use ($resolvedSellType) {
+                    if (in_array($resolvedSellType, ['sell', 'លក់'])) {
                         $query->whereIn('sor.service_type', ['sell', 'លក់']);
                     } else {
-                        $query->where('sor.service_type', $sell_type);
+                        $query->where('sor.service_type', $resolvedSellType);
                     }
                 })
                 ->when(!empty($searchNames), function ($query) use ($searchNames) {
@@ -626,7 +640,8 @@ class SellPosController extends Controller
             if (!empty($branch_name)) {
                 $searchNames = [$branch_name];
             } elseif (!empty($location_id)) {
-                $searchNames = $this->getHrBranchGroupNames($location_id);
+                $names = $this->getHrBranchGroupNames($location_id);
+                $searchNames = !empty($names[0]) ? [$names[0]] : [];
             }
 
             $query = DB::connection('hr')
@@ -2898,7 +2913,9 @@ class SellPosController extends Controller
             $paid_amount = $this->transactionUtil->getTotalPaid($transaction->id);
             $total_payable = $transaction->final_total - $paid_amount;
 
-            $pay_function = 'pay_' . $request->gateway;
+            $allowed_gateways = ['razorpay', 'stripe', 'paypal', 'pesapal', 'paystack', 'myfatoorah'];
+            $gateway = in_array($request->gateway, $allowed_gateways) ? $request->gateway : 'stripe';
+            $pay_function = 'pay_' . $gateway;
 
             $payment_id = $this->$pay_function($transaction, $total_payable, $request);
 
@@ -3641,7 +3658,7 @@ class SellPosController extends Controller
             ->with(compact('receipt_details', 'location_details', 'is_email_attachment'))
             ->render();
 
-        $mpdf = new \Mpdf\Mpdf(['tempDir' => public_path('uploads/temp'),
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => storage_path('app/temp/mpdf'),
             'mode' => 'utf-8',
             'autoScriptToLang' => true,
             'autoLangToFont' => true,
@@ -3680,7 +3697,7 @@ class SellPosController extends Controller
             ->with(compact('receipt_details', 'location_details', 'sub_status'))
             ->render();
         $pdf_name = (!empty($sub_status) && $sub_status == 'proforma') ? __('lang_v1.proforma_invoice') : 'QUOTATION';
-        $mpdf = new \Mpdf\Mpdf(['tempDir' => public_path('uploads/temp'),
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => storage_path('app/temp/mpdf'),
             'mode' => 'utf-8',
             'autoScriptToLang' => true,
             'autoLangToFont' => true,
@@ -3719,7 +3736,7 @@ class SellPosController extends Controller
             ->with(compact('receipt_details', 'location_details'))
             ->render();
 
-        $mpdf = new \Mpdf\Mpdf(['tempDir' => public_path('uploads/temp'),
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => storage_path('app/temp/mpdf'),
             'mode' => 'utf-8',
             'autoScriptToLang' => true,
             'autoLangToFont' => true,

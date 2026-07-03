@@ -489,9 +489,9 @@ class PurchaseController extends Controller
      */
     public function show($id)
     {
-        // if (!auth()->user()->can('purchase.view')) {
-        //     abort(403, 'Unauthorized action.');
-        // }
+        if (!auth()->user()->can('purchase.view')) {
+            abort(403, 'Unauthorized action.');
+        }
 
         $business_id = request()->session()->get('user.business_id');
         $taxes = TaxRate::where('business_id', $business_id)

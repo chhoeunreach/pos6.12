@@ -1,6 +1,6 @@
-var global_brand_id = null;
-var global_p_category_id = null;
-var global_is_clear_local_storage = false;
+let global_brand_id = null;
+let global_p_category_id = null;
+let global_is_clear_local_storage = false;
 
 function pos_play_success_sound() {
     var audio = document.getElementById('success-audio');
@@ -138,10 +138,16 @@ $(document).ready(function() {
             var map = {};
             try { map = JSON.parse($hrBranchMap.val() || '{}'); } catch(e) {}
             var newLocId = $(this).val();
-            var hrBranch = map[newLocId] || '';
+            var entry = map[newLocId] || {};
+            var hrBranch = (typeof entry === 'string') ? entry : (entry.branch || '');
+            var hrSellType = (typeof entry === 'string') ? '' : (entry.sell_type || '');
             var $branchFilter = $('.sell-list-filter-branch');
             if ($branchFilter.length) {
                 $branchFilter.val(hrBranch);
+            }
+            var $sellTypeFilter = $('.sell-list-filter-sell-type');
+            if ($sellTypeFilter.length) {
+                $sellTypeFilter.val(hrSellType);
             }
         }
     });
@@ -335,7 +341,9 @@ $(document).ready(function() {
                                 response(data.products || data);
                             }
                         }
-                    );
+                    ).fail(function() {
+                        console.error('Product search failed');
+                    });
                 },
                 minLength: 2,
                 response: function(event, ui) {
@@ -760,6 +768,10 @@ $(document).ready(function() {
                     toastr.error(result.msg);
                 }
             },
+            error: function() {
+                enable_pos_form_actions();
+                toastr.error('Failed to save draft');
+            },
         });
     });
 
@@ -799,6 +811,10 @@ $(document).ready(function() {
                 } else {
                     toastr.error(result.msg);
                 }
+            },
+            error: function() {
+                enable_pos_form_actions();
+                toastr.error('Failed to save quotation');
             },
         });
     });
@@ -963,6 +979,9 @@ $(document).ready(function() {
                     $('#payment_row_index').val(parseInt(row_index) + 1);
                 }
             },
+            error: function() {
+                toastr.error('Failed to add payment row');
+            },
         });
     });
 
@@ -1061,6 +1080,10 @@ $(document).ready(function() {
                         }
 
                         enable_pos_form_actions();
+                    },
+                    error: function() {
+                        enable_pos_form_actions();
+                        toastr.error('Failed to finalize invoice');
                     },
                 });
             }
@@ -1239,6 +1262,9 @@ $(document).ready(function() {
                         checkMobileAndSubmitQuick(form);
                     }
                 },
+                error: function() {
+                    checkMobileAndSubmitQuick(form);
+                },
             });
         } else {
             // If no tax number, proceed to mobile check
@@ -1278,6 +1304,9 @@ $(document).ready(function() {
                 } else {
                     submitQuickContactForm(form);
                 }
+            },
+            error: function() {
+                submitQuickContactForm(form);
             },
         });
     }
@@ -1746,6 +1775,9 @@ $(document).ready(function() {
                     clearBtn: true,
                 });
             },
+            error: function() {
+                toastr.error('Failed to load quick add product form');
+            },
         });
     });
 
@@ -1857,12 +1889,10 @@ $(document).ready(function() {
             suffixKeyCodes: [13], // enter-key expected at the end of a scan
             reactToPaste: true, // Compatibility to built-in scanners in paste-mode (as opposed to keyboard-mode)
             onScan: function(sCode, iQty) {
-                console.log('Scanned: ' + iQty + 'x ' + sCode); 
                 $('input#weighing_scale_barcode').val(sCode);
                 $('button#weighing_scale_submit').trigger('click');
             },
             onScanError: function(oDebug) {
-                console.log(oDebug); 
             },
             minLength: 2
             // onKeyDetect: function(iKeyCode){ // output all potentially relevant key events - great for debugging!
@@ -2206,6 +2236,11 @@ $(document).ready(function() {
                     toastr.error((data.serial || line.serial) + ': product not found. Serial left in search field for manual search.');
                     get_hr_sell_list();
                 }
+            }).fail(function() {
+                stopped = true;
+                $btn.prop('disabled', false).text('Copy');
+                toastr.error('Failed to resolve HR line product');
+                get_hr_sell_list();
             });
         }
 
@@ -2758,6 +2793,9 @@ function process_hr_lines_sequential(lines, index, onComplete) {
         }
 
         process_hr_lines_sequential(lines, index + 1, onComplete);
+    }).fail(function() {
+        toastr.error('Failed to search product for ' + line.serial);
+        process_hr_lines_sequential(lines, index + 1, onComplete);
     });
 }
 
@@ -2798,6 +2836,9 @@ function release_hr_sell_list_line_from_row($row) {
         success: function() {
             get_hr_sell_list();
         },
+        error: function() {
+            console.error('Failed to release HR sell list line');
+        },
     });
 }
 
@@ -2836,6 +2877,9 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
             $items_container.append(result);
             $('#suggestion_page_loader').fadeOut(700);
         },
+        error: function() {
+            $('#suggestion_page_loader').fadeOut(700);
+        },
     });
 }
 
@@ -2853,6 +2897,9 @@ function get_recent_transactions(status, element_obj) {
         success: function(result) {
             element_obj.html(result);
             __currency_convert_recursively(element_obj);
+        },
+        error: function() {
+            console.error('Failed to get recent transactions');
         },
     });
 }
@@ -2961,7 +3008,9 @@ function init_pos_add_below_search($input, $anchor_row) {
                         response(data.products || data);
                     }
                 }
-            );
+            ).fail(function() {
+                response([]);
+            });
         },
         minLength: 2,
         response: function(event, ui) {
@@ -3080,9 +3129,10 @@ function pos_add_product_row_from_data(result, insert_after_row) {
         // If item_addtn_method != 0, check for duplicate products
         if (item_addtn_method != 0 && variation_id) {
             var is_added = false;
+            var $pos_table_body = $('#pos_table tbody');
             
             // Search for variation id in each row of pos table
-            $('#pos_table tbody')
+            $pos_table_body
                 .find('tr')
                 .each(function() {
                     var purchase_line_id = result.purchase_line_id || result.lot_no_line_id || null;
@@ -3146,7 +3196,7 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
                     is_added = true;
 
                     //Increment product quantity
-                    qty_element = $(this).find('.pos_quantity');
+                    var qty_element = $(this).find('.pos_quantity');
                     var qty = __read_number(qty_element);
                     __write_number(qty_element, qty + 1);
                     qty_element.change();
@@ -3244,6 +3294,9 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
                             .select();
                     }
                 }
+            },
+            error: function() {
+                toastr.error('Failed to get product row');
             },
         });
     }
@@ -3474,18 +3527,18 @@ function calculate_balance_due() {
 }
 
 function isValidPosForm() {
-    flag = true;
+    var flag = true;
     $('span.error').remove();
 
     if ($('select#customer_id').val() == null) {
         flag = false;
-        error = '<span class="error">' + LANG.required + '</span>';
+        var error = '<span class="error">' + LANG.required + '</span>';
         $(error).insertAfter($('select#customer_id').parent('div'));
     }
 
     if ($('tr.product_row').length == 0) {
         flag = false;
-        error = '<span class="error">' + LANG.no_products + '</span>';
+        var error = '<span class="error">' + LANG.no_products + '</span>';
         $(error).insertAfter($('input#search_product').parent('div'));
     }
 
@@ -3864,6 +3917,9 @@ $(document).on('click', '.print-invoice-link', function(e) {
             }
 
         },
+        error: function() {
+            toastr.error('Failed to print invoice');
+        },
     });
 });
 
@@ -3891,6 +3947,9 @@ function getCustomerRewardPoints() {
             $('#rp_redeemed_modal').data('max_points', result.points);
             updateRedeemedAmount();
             $('#rp_redeemed_amount').change()
+        },
+        error: function() {
+            console.error('Failed to get reward details');
         },
     });
 }
@@ -4036,6 +4095,9 @@ $(document).on('change', '#types_of_service_id', function(){
 
                 $('.types_of_service_modal').modal('show');
             },
+            error: function() {
+                console.error('Failed to get types of service details');
+            },
         });
     } else {
         $('.types_of_service_modal').html('');
@@ -4083,11 +4145,11 @@ $(document).on('change', '.payment_types_dropdown', function(e) {
     }
 
     //Validate max amount and disable account if advance 
-    amount_element = payment_row.find('.payment-amount');
-    account_dropdown = payment_row.find('.account-dropdown');
+    var amount_element = payment_row.find('.payment-amount');
+    var account_dropdown = payment_row.find('.account-dropdown');
     if (payment_type == 'advance') {
-        max_value = $('#advance_balance').val();
-        msg = $('#advance_balance').data('error-msg');
+        var max_value = $('#advance_balance').val();
+        var msg = $('#advance_balance').data('error-msg');
         amount_element.rules('add', {
             'max-value': max_value,
             messages: {
@@ -4142,8 +4204,8 @@ $(document).on('change', '#recur_interval_type', function() {
 });
 
 function validate_discount_field() {
-    discount_element = $('#discount_amount_modal');
-    discount_type_element = $('#discount_type_modal');
+    var discount_element = $('#discount_amount_modal');
+    var discount_type_element = $('#discount_type_modal');
 
     if ($('#add_sell_form').length || $('#edit_sell_form').length) {
         discount_element = $('#discount_amount');
@@ -4298,6 +4360,9 @@ function get_sales_orders() {
                 });
                 pos_total_row();
             },
+            error: function() {
+                console.error('Failed to get sales orders');
+            },
         });
     }
 }
@@ -4359,6 +4424,9 @@ $("#sales_order_ids").on("select2:select", function (e) {
                     .select();
             }
         },
+        error: function() {
+            toastr.error('Failed to load sales order lines');
+        },
     });
 });
 
@@ -4410,6 +4478,9 @@ $(document).on('click', '#add_expense', function(){
             $('#expense_modal').html(result);
             $('#expense_modal').modal('show');
         },
+        error: function() {
+            toastr.error('Failed to load expense form');
+        },
     });
 });
 
@@ -4446,6 +4517,9 @@ $(document).on('submit', 'form#add_expense_modal_form', function(e) {
             } else {
                 toastr.error(result.msg);
             }
+        },
+        error: function() {
+            toastr.error('Failed to save expense');
         },
     });
 });
@@ -4516,12 +4590,18 @@ $(document).on('click', '#pos-receive-customer-payment', function() {
                         } else {
                             toastr.error(result.msg);
                         }
+                    },
+                    error: function() {
+                        toastr.error('Failed to submit payment');
                     }
                 });
             });
 
             $modal.modal('show');
-        }
+        },
+        error: function() {
+            toastr.error('Failed to load payment form');
+        },
     });
 });
 
@@ -4542,6 +4622,9 @@ function get_contact_due(id) {
                 $('.contact_due_text').find('span').text('');
                 $('.contact_due_text').addClass('hide');
             }
+        },
+        error: function() {
+            console.error('Failed to get contact due');
         },
     });
 }
@@ -4577,6 +4660,9 @@ function submitQuickContactForm(form) {
                 toastr.error(result.msg);
             }
         },
+        error: function() {
+            toastr.error('Failed to submit contact form');
+        },
     });
 }
 
@@ -4594,6 +4680,9 @@ $(document).on('click', '#send_for_sell_return', function(e) {
                 } else {
                     toastr.error(result.msg);
                 }
+            },
+            error: function() {
+                toastr.error('Failed to validate invoice for return');
             },
         });
     }
@@ -4616,6 +4705,9 @@ $(document).on('click', '#send_for_sell_return', function(e) {
                     } else {
                         toastr.error(result.msg);
                     }
+                },
+                error: function() {
+                    toastr.error('Failed to validate invoice');
                 },
             });
         }
@@ -4642,6 +4734,9 @@ $(document).on('click', '#send_for_sell_return', function(e) {
                 } else {
                     toastr.error(result.msg);
                 }
+            },
+            error: function() {
+                toastr.error('Failed to change service staff');
             },
         });
     });
@@ -4707,6 +4802,9 @@ $(document).on('click', 'button.pause_resume_timer', function(e){
         success: function(result) {
             loadServiceStaffAvailability(false);
         },
+        error: function() {
+            $('.view_modal').find('.overlay').addClass('hide');
+        },
     });
 })
 
@@ -4719,6 +4817,9 @@ $(document).on('click', '.mark_as_available', function(e){
         dataType: 'json',
         success: function(result) {
             loadServiceStaffAvailability(false);
+        },
+        error: function() {
+            $('.view_modal').find('.overlay').addClass('hide');
         },
     });
 })
@@ -4741,6 +4842,9 @@ function loadServiceStaffAvailability(show = true) {
                     loadServiceStaffAvailability(false);
                 }, 60000);
             }
+        },
+        error: function() {
+            console.error('Failed to load service staff availability');
         },
     });
 }
@@ -4789,6 +4893,10 @@ $(document).on('change', '#res_waiter_id', function(e){
                                 toastr.success(LANG.authentication_successfull);
                             }
                         },
+                        error: function() {
+                            toastr.error(LANG.authentication_failed);
+                            $("#res_waiter_id").val('');
+                        },
                     });
             } else {
                 // Handle the "Cancel" action
@@ -4822,10 +4930,6 @@ function saveFormDataToLocalStorage() {
         global_is_clear_local_storage = false;
         return false; // Exit the function early if global_is_clear_local_storage was true
     }
-
-    // var storedArrayData = JSON.parse(localStorage.getItem("pos_form_data_array"));
-
-    // console.log("All data afer clear:", storedArrayData);
 
     let form = $('form#add_pos_sell_form'); // Select the form by ID
     // Check if the form exists in the DOM

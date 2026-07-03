@@ -22,8 +22,8 @@
 <head>
     <!-- Tell the browser to be responsive to screen width -->
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-        name="viewport">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
@@ -34,6 +34,50 @@
 
     @include('layouts.partials.extracss')
 
+    <style>
+        body.sidebar-collapse .side-bar:not(.small-view-side-active) {
+            display: none !important;
+        }
+        .loan-management-page #main_app_header {
+            display: none !important;
+        }
+        .small-view-side-active {
+            display: flex !important;
+            flex-direction: column;
+            z-index: 1000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+        }
+        .overlay {
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: none;
+            z-index: 20;
+        }
+        .tw-dw-btn.tw-dw-btn-xs.tw-dw-btn-outline {
+            width: max-content;
+            margin: 2px;
+        }
+        #scrollable-container{
+            position:relative;
+        }
+        @media print {
+            #scrollable-container {
+                overflow: visible !important;
+                height: auto !important;
+            }
+            .side-bar,
+            .thetop > aside {
+                display: none !important;
+            }
+        }
+    </style>
 </head>
 <body
     class="tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100 @if ($request->segment(1) == 'loan-management') loan-management-page @endif @if ($pos_layout) hold-transition lockscreen @else hold-transition skin-@if (!empty(session('business.theme_color'))){{ session('business.theme_color') }}@else{{ 'blue-light' }} @endif sidebar-mini @endif" >
@@ -92,7 +136,7 @@
                     @include('layouts.partials.footer_pos')
                 @endif
             </div>
-            <div class='scrolltop no-print'>
+            <div class='scrolltop no-print' aria-label="Scroll to top">
                 <div class='scroll icon'><i class="fas fa-angle-up"></i></div>
             </div>
 
@@ -138,66 +182,6 @@
                 @includeIf($additional_view)
             @endforeach
         @endif
-        <div>
-
-            <div class="overlay tw-hidden"></div>
-        </div>
+        <div class="overlay tw-hidden"></div>
 </body>
-<style>
-    body.sidebar-collapse .side-bar:not(.small-view-side-active) {
-        display: none !important;
-    }
-
-    .loan-management-page #main_app_header {
-        display: none !important;
-    }
-
-    @media print {
-        #scrollable-container {
-            overflow: visible !important;
-            height: auto !important;
-        }
-        
-        /* Hide side menu */
-        .side-bar,
-        .thetop > aside {
-            display: none !important;
-        }
-    }
-</style>
-<style>
-    .small-view-side-active {
-        display: flex !important;
-        flex-direction: column;
-        z-index: 1000;
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-    }
-    .overlay {
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.8);
-        position: fixed;
-        top: 0;
-        left: 0;
-        display: none;
-        z-index: 20;
-    }
-
-    .tw-dw-btn.tw-dw-btn-xs.tw-dw-btn-outline {
-        width: max-content;
-        margin: 2px;
-    }
-
-    #scrollable-container{
-        position:relative;
-    }
-    
-
-
-
-</style>
-
 </html>

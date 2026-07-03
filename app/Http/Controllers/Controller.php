@@ -97,7 +97,7 @@ class Controller extends BaseController
      */
     public function getMpdf($orientation = 'P')
     {
-        $mpdf = new \Mpdf\Mpdf(['tempDir' => public_path('uploads/temp'),
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => storage_path('app/temp/mpdf'),
             'mode' => 'utf-8',
             'autoScriptToLang' => true,
             'autoLangToFont' => true,

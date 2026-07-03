@@ -814,12 +814,12 @@ class ContactController extends Controller
         }
 
         if (! auth()->user()->can('supplier.view') && auth()->user()->can('supplier.view_own')) {
-            if ($contact->created_by != auth()->user()->id & ! in_array($contact->id, $user_contacts)) {
+            if ($contact->created_by != auth()->user()->id && ! in_array($contact->id, $user_contacts)) {
                 abort(403, 'Unauthorized action.');
             }
         }
         if (! auth()->user()->can('customer.view') && auth()->user()->can('customer.view_own')) {
-            if ($contact->created_by != auth()->user()->id & ! in_array($contact->id, $user_contacts)) {
+            if ($contact->created_by != auth()->user()->id && ! in_array($contact->id, $user_contacts)) {
                 abort(403, 'Unauthorized action.');
             }
         }
@@ -1433,12 +1433,12 @@ class ContactController extends Controller
         }
 
         if (! auth()->user()->can('supplier.view') && auth()->user()->can('supplier.view_own')) {
-            if ($contact->created_by != auth()->user()->id & ! in_array($contact->id, $user_contacts)) {
+            if ($contact->created_by != auth()->user()->id && ! in_array($contact->id, $user_contacts)) {
                 abort(403, 'Unauthorized action.');
             }
         }
         if (! auth()->user()->can('customer.view') && auth()->user()->can('customer.view_own')) {
-            if ($contact->created_by != auth()->user()->id & ! in_array($contact->id, $user_contacts)) {
+            if ($contact->created_by != auth()->user()->id && ! in_array($contact->id, $user_contacts)) {
                 abort(403, 'Unauthorized action.');
             }
         }

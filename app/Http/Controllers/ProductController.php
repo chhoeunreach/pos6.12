@@ -71,7 +71,6 @@ class ProductController extends Controller
 
         if (request()->ajax()) {
             if ((int) request()->input('length') === -1) {
-                @ini_set('memory_limit', '2048M');
                 @set_time_limit(0);
             }
 
@@ -1494,20 +1493,18 @@ class ProductController extends Controller
             $count = $query2->count();
         }
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 
      /**
-     * Checks if product name already exists.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
+      * Checks if product name already exists.
+      *
+      * @param  \Illuminate\Http\Request  $request
+      * @return \Illuminate\Http\Response
+      */
     public function checkProductName(Request $request)
     {
         $business_id = $request->session()->get('user.business_id');
@@ -1525,11 +1522,9 @@ class ProductController extends Controller
         //check in variation table if $count = 0
         
         if ($count == 0) {
-            echo 'true';
-            exit;
+            return response()->json(true);
         } else {
-            echo 'false';
-            exit;
+            return response()->json(false);
         }
     }
 

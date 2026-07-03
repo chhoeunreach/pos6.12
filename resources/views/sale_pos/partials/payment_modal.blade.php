@@ -202,7 +202,10 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">@lang('messages.close')</button>
-                <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white" id="pos-save">@lang('sale.finalize_payment')</button>
+                <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white" id="pos-save">
+                    <span class="loading-spinner tw-hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                    <span class="btn-text">@lang('sale.finalize_payment')</span>
+                </button>
             </div>
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
@@ -292,7 +295,10 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white" id="pos-save-card">@lang('sale.finalize_payment')</button>
+                <button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white" id="pos-save-card">
+                    <span class="loading-spinner tw-hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                    <span class="btn-text">@lang('sale.finalize_payment')</span>
+                </button>
             </div>
         </div>
     </div>

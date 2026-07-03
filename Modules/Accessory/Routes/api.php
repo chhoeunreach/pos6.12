@@ -14,6 +14,7 @@ use App\Http\Controllers\MobileApi\SettingsController;
 use App\Http\Controllers\MobileApi\StockController;
 use App\Http\Controllers\MobileApi\SupplierController;
 use Modules\Accessory\Http\Controllers\MobileAccessoryController;
+use Modules\Accessory\Http\Controllers\MobileAccessoryPurchaseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -171,5 +172,14 @@ Route::group([], function () {
         Route::put('{id}', [MobileAccessoryController::class, 'update']);
         Route::delete('{id}', [MobileAccessoryController::class, 'destroy']);
         Route::post('{id}/image', [MobileAccessoryController::class, 'imageUpload']);
+    });
+
+    // Accessory Purchases CRUD (main database, bypass accessory.database middleware)
+    Route::prefix('mobile/accessory-purchases')->withoutMiddleware('accessory.database')->group(function () {
+        Route::get('/', [MobileAccessoryPurchaseController::class, 'index']);
+        Route::get('{id}', [MobileAccessoryPurchaseController::class, 'show']);
+        Route::post('/', [MobileAccessoryPurchaseController::class, 'store']);
+        Route::put('{id}', [MobileAccessoryPurchaseController::class, 'update']);
+        Route::delete('{id}', [MobileAccessoryPurchaseController::class, 'destroy']);
     });
 });

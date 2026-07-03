@@ -31,7 +31,7 @@ class SetSessionData
                 'business_id' => $user->business_id,
                 'language' => $user->language,
             ];
-            $business = Cache::remember("business_{$user->business_id}", 3600, function () use ($user) {
+            $business = Cache::remember("business_{$user->business_id}", 300, function () use ($user) {
                 return Business::findOrFail($user->business_id);
             });
 

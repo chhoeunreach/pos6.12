@@ -120,25 +120,42 @@ class ServiceBootstrapSeeder extends Seeder
             ]
         );
 
-        $connection->table('business_locations')->updateOrInsert(
-            ['id' => 1],
-            [
-                'business_id' => 1,
-                'location_id' => 'SV-1',
-                'name' => 'Service',
-                'landmark' => null,
-                'country' => 'Cambodia',
-                'state' => 'Phnom Penh',
-                'city' => 'Phnom Penh',
-                'zip_code' => '12000',
-                'invoice_scheme_id' => 1,
-                'invoice_layout_id' => 1,
-                'receipt_printer_type' => 'browser',
-                'is_active' => 1,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
+        $serviceLocations = [
+            ['id' => 1, 'location_id' => 'SV-1', 'name' => 'Service', 'sell_type' => ''],
+            ['id' => 2, 'location_id' => 'BL0060', 'name' => 'កម្ពុជាក្រោម-ជួសជុល', 'sell_type' => 'ជួសជុល'],
+            ['id' => 3, 'location_id' => 'BL0061', 'name' => 'កម្ពុជាក្រោម-អ៊ុត', 'sell_type' => 'អ៊ុត'],
+            ['id' => 4, 'location_id' => 'BL0062', 'name' => 'វីអាយភី-ជួសជុល', 'sell_type' => 'ជួសជុល'],
+            ['id' => 5, 'location_id' => 'BL0063', 'name' => 'វីអាយភី-អ៊ុត', 'sell_type' => 'អ៊ុត'],
+            ['id' => 6, 'location_id' => 'BL0064', 'name' => 'វីអាយភី-ការហ្វេរ', 'sell_type' => 'ការហ្វេរ'],
+            ['id' => 7, 'location_id' => 'BL0065', 'name' => 'សាខាកាប់គោ-ជួសជុល', 'sell_type' => 'ជួសជុល'],
+            ['id' => 8, 'location_id' => 'BL0066', 'name' => 'សាខាកាប់គោ-អ៊ុត', 'sell_type' => 'អ៊ុត'],
+            ['id' => 9, 'location_id' => 'BL0067', 'name' => 'សាខាអ៊ីអន-ជួសជុល', 'sell_type' => 'ជួសជុល'],
+            ['id' => 10, 'location_id' => 'BL0068', 'name' => 'សាខាអ៊ីអន-ការហ្វេរ', 'sell_type' => 'ការហ្វេរ'],
+            ['id' => 11, 'location_id' => 'BL0069', 'name' => 'ស្តុកធំ-ជួសជុល', 'sell_type' => 'ជួសជុល'],
+            ['id' => 12, 'location_id' => 'BL0070', 'name' => 'ស្តុកធំ-អ៊ុត', 'sell_type' => 'អ៊ុត'],
+        ];
+
+        foreach ($serviceLocations as $loc) {
+            $connection->table('business_locations')->updateOrInsert(
+                ['id' => $loc['id']],
+                [
+                    'business_id' => 1,
+                    'location_id' => $loc['location_id'],
+                    'name' => $loc['name'],
+                    'landmark' => null,
+                    'country' => 'Cambodia',
+                    'state' => 'Phnom Penh',
+                    'city' => 'Phnom Penh',
+                    'zip_code' => '12000',
+                    'invoice_scheme_id' => 1,
+                    'invoice_layout_id' => 1,
+                    'receipt_printer_type' => 'browser',
+                    'is_active' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]
+            );
+        }
 
         $connection->table('contacts')->updateOrInsert(
             ['id' => 1],

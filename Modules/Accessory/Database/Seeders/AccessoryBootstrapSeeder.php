@@ -119,25 +119,39 @@ class AccessoryBootstrapSeeder extends Seeder
             ]
         );
 
-        $connection->table('business_locations')->updateOrInsert(
-            ['id' => 1],
-            [
-                'business_id' => 1,
-                'location_id' => 'AS-1',
-                'name' => 'Accessory',
-                'landmark' => null,
-                'country' => 'Cambodia',
-                'state' => 'Phnom Penh',
-                'city' => 'Phnom Penh',
-                'zip_code' => '12000',
-                'invoice_scheme_id' => 1,
-                'invoice_layout_id' => 1,
-                'receipt_printer_type' => 'browser',
-                'is_active' => 1,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
+        $accessoryLocations = [
+            ['id' => 1, 'location_id' => 'AS-1', 'name' => 'Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 2, 'location_id' => 'BL0041', 'name' => 'កម្ពុជាក្រោម-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 3, 'location_id' => 'BL0042', 'name' => 'កម្ពុជាក្រោម-Accessory-ស្តុកធំ', 'sell_type' => 'សម្ភារ'],
+            ['id' => 4, 'location_id' => 'BL0043', 'name' => 'វីអាយភី-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 5, 'location_id' => 'BL0044', 'name' => 'វីអាយភី-Accessory-mart', 'sell_type' => 'សម្ភារ'],
+            ['id' => 6, 'location_id' => 'BL0045', 'name' => 'វីអាយភី-Accessory-ស្តុកធំ', 'sell_type' => 'សម្ភារ'],
+            ['id' => 7, 'location_id' => 'BL0046', 'name' => 'សាខាកាប់គោ-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 8, 'location_id' => 'BL0047', 'name' => 'សាខាអ៊ីអន-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 9, 'location_id' => 'BL0048', 'name' => 'ស្តុកធំ-Accessory', 'sell_type' => 'សម្ភារ'],
+        ];
+
+        foreach ($accessoryLocations as $loc) {
+            $connection->table('business_locations')->updateOrInsert(
+                ['id' => $loc['id']],
+                [
+                    'business_id' => 1,
+                    'location_id' => $loc['location_id'],
+                    'name' => $loc['name'],
+                    'landmark' => null,
+                    'country' => 'Cambodia',
+                    'state' => 'Phnom Penh',
+                    'city' => 'Phnom Penh',
+                    'zip_code' => '12000',
+                    'invoice_scheme_id' => 1,
+                    'invoice_layout_id' => 1,
+                    'receipt_printer_type' => 'browser',
+                    'is_active' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]
+            );
+        }
 
         $connection->table('contacts')->updateOrInsert(
             ['id' => 1],
