@@ -14,7 +14,7 @@
 <section class="content-header no-print">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Local Cashier Report</h1>
     @php
-        $baseQuery = request()->query();
+        $baseQuery = array_diff_key(request()->query(), array_flip(['location_ids', 'user_ids', 'payment_methods', 'payment_status', 'customer_group', 'brand_ids', 'start_date', 'end_date', 'qty_type']));
         $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain']);
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
         $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);

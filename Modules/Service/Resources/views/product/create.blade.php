@@ -391,6 +391,7 @@
 @php
     $service_product_js = module_path('Service', 'Public/v7/js/product.js');
 @endphp
+<script src="{{ asset('js/image-compressor.js?v=' . $asset_v) }}"></script>
 <script>
     window.service_product_base_url = @json(url(config('service.route_prefix', 'service') . '/products'));
 </script>

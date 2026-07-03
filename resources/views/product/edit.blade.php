@@ -386,6 +386,7 @@
 @endsection
 
 @section('javascript')
+  <script src="{{ asset('js/image-compressor.js?v=' . $asset_v) }}"></script>
   <script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>
   <script type="text/javascript">
     $(document).ready( function(){

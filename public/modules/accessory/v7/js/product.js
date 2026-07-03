@@ -771,3 +771,47 @@ $(document).on('change', '.variation-file-input', function() {
         $preview.hide();
     }
 });
+
+// ---- Image compression on file select ----
+$(document).on('change', '#upload_image', function () {
+    var input = this;
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    if (file.size < 1024 * 50) return;
+    var $label = $(input).closest('.form-group').find('label[for="image"]');
+    var origText = $label.html();
+    $label.html(origText + ' <span class="text-info"><i class="fa fa-refresh fa-spin"></i> compressing...</span>');
+    ImageCompressor.compress(file, { maxWidth: 800, maxHeight: 800, quality: 0.85 }).then(function (cf) {
+        $label.html(origText);
+        var dt = new DataTransfer();
+        dt.items.add(cf);
+        Object.defineProperty(input, 'files', {
+            get: function () { return dt.files; },
+            configurable: true
+        });
+    });
+});
+
+$(document).on('change', '.variation_images', function () {
+    var input = this;
+    if (!input.files || !input.files.length) return;
+    var files = Array.prototype.slice.call(input.files);
+    var needsCompress = files.some(function (f) { return f.size >= 1024 * 50; });
+    if (!needsCompress) return;
+    var $btn = $(input).closest('.variation-image-upload').find('.variation-upload-btn');
+    var origBtnHtml = $btn.html();
+    $btn.html('<i class="fa fa-refresh fa-spin"></i>');
+    var promises = files.map(function (f) {
+        return ImageCompressor.compress(f, { maxWidth: 800, maxHeight: 800, quality: 0.85 });
+    });
+    Promise.all(promises).then(function (cfiles) {
+        $btn.html(origBtnHtml);
+        var dt = new DataTransfer();
+        cfiles.forEach(function (f) { dt.items.add(f); });
+        Object.defineProperty(input, 'files', {
+            get: function () { return dt.files; },
+            configurable: true
+        });
+        $(input).trigger('change');
+    });
+});
