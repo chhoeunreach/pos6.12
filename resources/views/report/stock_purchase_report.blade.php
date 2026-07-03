@@ -44,6 +44,7 @@
                         <th>Ref No</th>
                         <th>Supplier</th>
                         <th>Phone</th>
+                        <th>Lot</th>
                         <th>SKU</th>
                         <th>Product</th>
                         <th class="text-right">Qty</th>
@@ -117,6 +118,7 @@
                 { data: 'ref_no', name: 't.ref_no' },
                 { data: 'supplier', name: 'c.name' },
                 { data: 'phone', name: 'c.mobile' },
+                { data: 'lot_number', name: 'purchase_lines.lot_number' },
                 { data: 'sku', name: 'v.sub_sku' },
                 { data: 'product', name: 'p.name' },
                 { data: 'quantity', name: 'purchase_lines.quantity', className: 'text-right' },

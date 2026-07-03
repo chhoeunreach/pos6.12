@@ -4189,6 +4189,7 @@ class ReportController extends Controller
                     'bl.name as location',
                     'p.name as product',
                     'v.sub_sku as sku',
+                    'purchase_lines.lot_number',
                     'purchase_lines.quantity',
                     'purchase_lines.purchase_price_inc_tax as purchase_price',
                     DB::raw('(purchase_lines.quantity * purchase_lines.purchase_price_inc_tax) as subtotal'),
