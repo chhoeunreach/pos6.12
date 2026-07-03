@@ -40,9 +40,11 @@
                         <th class="text-right">Wing</th>
                         <th class="text-right">ABA</th>
                         <th class="text-right">Acleda</th>
-                        <th class="text-right">True</th>
+                        <th class="text-right">TRUE</th>
                         <th class="text-right">Card</th>
                         <th class="text-right">Other</th>
+                        <th class="text-right">វ៉ៃដូ</th>
+                        <th class="text-right">បង់ប្រចាំខែ</th>
                         <th class="text-right">Paid</th>
                         <th class="text-right">Due</th>
                         <th>Location</th>
@@ -119,6 +121,8 @@
                 { data: 'true_money', name: 'true_money', searchable: false, className: 'text-right' },
                 { data: 'card', name: 'card', searchable: false, className: 'text-right' },
                 { data: 'other', name: 'other', searchable: false, className: 'text-right' },
+                { data: 'voido', name: 'voido', searchable: false, className: 'text-right' },
+                { data: 'monthly', name: 'monthly', searchable: false, className: 'text-right' },
                 { data: 'paid', name: 'paid', searchable: false, className: 'text-right' },
                 { data: 'due', name: 'due', searchable: false, className: 'text-right' },
                 { data: 'location', name: 'bl.name' },

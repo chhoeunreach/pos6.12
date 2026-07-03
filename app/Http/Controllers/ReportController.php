@@ -3924,9 +3924,11 @@ class ReportController extends Controller
                     DB::raw("SUM(IF(method = 'custom_pay_1', IF(is_return = 1, -1 * amount, amount), 0)) as wing"),
                     DB::raw("SUM(IF(method = 'custom_pay_2', IF(is_return = 1, -1 * amount, amount), 0)) as aba"),
                     DB::raw("SUM(IF(method = 'custom_pay_3', IF(is_return = 1, -1 * amount, amount), 0)) as acleda"),
-                    DB::raw("SUM(IF(method = 'custom_pay_4', IF(is_return = 1, -1 * amount, amount), 0)) as true_money"),
+                    DB::raw("SUM(IF(method IN ('custom_pay_4', 'custom_pay_5'), IF(is_return = 1, -1 * amount, amount), 0)) as true_money"),
                     DB::raw("SUM(IF(method = 'card', IF(is_return = 1, -1 * amount, amount), 0)) as card"),
                     DB::raw("SUM(IF(method = 'other', IF(is_return = 1, -1 * amount, amount), 0)) as other"),
+                    DB::raw("SUM(IF(method = 'custom_pay_6', IF(is_return = 1, -1 * amount, amount), 0)) as voido"),
+                    DB::raw("SUM(IF(method = 'custom_pay_7', IF(is_return = 1, -1 * amount, amount), 0)) as monthly"),
                     DB::raw('SUM(IF(is_return = 1, -1 * amount, amount)) as paid')
                 )
                 ->whereNull('parent_id')
@@ -4017,6 +4019,8 @@ class ReportController extends Controller
                     DB::raw('COALESCE(tp.true_money, 0) as true_money'),
                     DB::raw('COALESCE(tp.card, 0) as card'),
                     DB::raw('COALESCE(tp.other, 0) as other'),
+                    DB::raw('COALESCE(tp.voido, 0) as voido'),
+                    DB::raw('COALESCE(tp.monthly, 0) as monthly'),
                     DB::raw('COALESCE(tp.paid, 0) as paid'),
                     DB::raw('(t.final_total - COALESCE(tp.paid, 0)) as due')
                 );
@@ -4110,13 +4114,19 @@ class ReportController extends Controller
                 ->editColumn('other', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->other.'">'.$row->other.'</span>';
                 })
+                ->editColumn('voido', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->voido.'">'.$row->voido.'</span>';
+                })
+                ->editColumn('monthly', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->monthly.'">'.$row->monthly.'</span>';
+                })
                 ->editColumn('paid', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->paid.'">'.$row->paid.'</span>';
                 })
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'paid', 'due'])
+                ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->make(true);
         }
 
