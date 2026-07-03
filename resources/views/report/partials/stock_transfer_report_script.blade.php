@@ -57,7 +57,7 @@ $(document).ready(function() {
             { data: 'location_to', name: 'l2.name' },
             { data: 'invoice', name: 'transactions.ref_no' },
             { data: 'sender_by', name: 'sender_by', searchable: false },
-            { data: 'note', name: 'transactions.additional_notes' },
+            { data: 'note', name: 'transactions.additional_notes', className: 'all' },
         ],
         footerCallback: function(row, data, start, end, display) {
             var api = this.api();
