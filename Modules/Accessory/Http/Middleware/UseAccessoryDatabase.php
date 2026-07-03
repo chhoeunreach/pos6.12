@@ -102,7 +102,6 @@ class UseAccessoryDatabase
         try {
             $this->ensureFallbackBusiness($accessory, $businessId, $mainUser->id);
             $this->syncModuleState($main, $accessory, $businessId);
-            $this->copyAccessoryLocations($main, $accessory, $businessId);
 
             $this->copyRowById($main, $accessory, 'users', $mainUser->id, [
                 'business_id' => $businessId,
@@ -209,61 +208,16 @@ class UseAccessoryDatabase
         }
     }
 
-    private function copyAccessoryLocations($main, $accessory, int $businessId): void
+    private function copyBusinessLocations($main, $accessory, int $businessId): void
     {
         if (! $this->hasTable($main, 'business_locations') || ! $this->hasTable($accessory, 'business_locations')) {
             return;
         }
 
-        $branchIds = [
-            'កម្ពុជាក្រោម' => 1,
-            'វីអាយភី' => 4,
-            'សាខាកាប់គោ' => 8,
-            'សាខាអ៊ីអន' => 10,
-            'ស្តុកធំ' => 12,
-        ];
-
-        $mapping = [
-            ['name' => 'កម្ពុជាក្រោម-Accessory', 'loc_id' => 'BL0041', 'branch' => 'កម្ពុជាក្រោម', 'type' => 'សម្ភារ'],
-            ['name' => 'កម្ពុជាក្រោម-Accessory-ស្តុកធំ', 'loc_id' => 'BL0042', 'branch' => 'កម្ពុជាក្រោម', 'type' => 'សម្ភារ'],
-            ['name' => 'វីអាយភី-Accessory', 'loc_id' => 'BL0043', 'branch' => 'វីអាយភី', 'type' => 'សម្ភារ'],
-            ['name' => 'វីអាយភី-Accessory-mart', 'loc_id' => 'BL0044', 'branch' => 'វីអាយភី', 'type' => 'សម្ភារ'],
-            ['name' => 'វីអាយភី-Accessory-ស្តុកធំ', 'loc_id' => 'BL0045', 'branch' => 'វីអាយភី', 'type' => 'សម្ភារ'],
-            ['name' => 'សាខាកាប់គោ-Accessory', 'loc_id' => 'BL0046', 'branch' => 'សាខាកាប់គោ', 'type' => 'សម្ភារ'],
-            ['name' => 'សាខាអ៊ីអន-Accessory', 'loc_id' => 'BL0047', 'branch' => 'សាខាអ៊ីអន', 'type' => 'សម្ភារ'],
-            ['name' => 'ស្តុកធំ-Accessory', 'loc_id' => 'BL0048', 'branch' => 'ស្តុកធំ', 'type' => 'សម្ភារ'],
-        ];
-
         $accessory->table('business_locations')->where('business_id', $businessId)->delete();
-
-        $id = 1;
-        foreach ($mapping as $item) {
-            $branchId = $branchIds[$item['branch']] ?? 1;
-            $mainLoc = $main->table('business_locations')->where('id', $branchId)->first();
-            $landmark = $mainLoc->landmark ?? '';
-
-            $accessory->table('business_locations')->insert([
-                'id' => $id,
-                'business_id' => $businessId,
-                'name' => $item['name'],
-                'location_id' => $item['loc_id'],
-                'landmark' => $landmark,
-                'country' => $mainLoc->country ?? '',
-                'state' => $mainLoc->state ?? '',
-                'city' => $mainLoc->city ?? '',
-                'zip_code' => $mainLoc->zip_code ?? '',
-                'invoice_scheme_id' => 1,
-                'sale_invoice_scheme_id' => 1,
-                'invoice_layout_id' => 1,
-                'sale_invoice_layout_id' => 1,
-                'selling_price_group_id' => null,
-                'is_active' => 1,
-                'custom_field1' => $item['branch'],
-                'custom_field2' => $item['type'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            $id++;
+        $locations = $main->table('business_locations')->where('business_id', $businessId)->get();
+        foreach ($locations as $location) {
+            $this->copyRow($accessory, 'business_locations', (array) $location);
         }
     }
 
