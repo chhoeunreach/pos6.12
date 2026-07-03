@@ -103,7 +103,6 @@ class UseServiceDatabase
 
         try {
             $this->ensureFallbackBusiness($service, $businessId, $mainUser->id);
-            $this->copyBusinessLocations($main, $service, $businessId);
 
             $this->copyRowById($main, $service, 'users', $mainUser->id, [
                 'business_id' => $businessId,
