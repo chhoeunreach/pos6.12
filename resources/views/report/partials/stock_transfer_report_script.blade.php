@@ -48,16 +48,16 @@ $(document).ready(function() {
             }
         },
         columns: [
-            { data: 'transaction_date', name: 'transaction_date' },
+            { data: 'transaction_date', name: 'transactions.transaction_date', type: 'date' },
             { data: 'lot_number', name: 'purchase_lines.lot_number' },
-            { data: 'sku', name: 'sku' },
-            { data: 'product_name', name: 'product_name' },
-            { data: 'qty', name: 'qty' },
-            { data: 'location_from', name: 'location_from' },
-            { data: 'location_to', name: 'location_to' },
-            { data: 'invoice', name: 'invoice' },
-            { data: 'sender_by', name: 'sender_by' },
-            { data: 'note', name: 'note', className: 'all' },
+            { data: 'sku', name: 'variations.sub_sku' },
+            { data: 'product_name', name: 'product_name', searchable: false, orderable: false },
+            { data: 'qty', name: 'transaction_sell_lines.quantity', className: 'text-right' },
+            { data: 'location_from', name: 'l1.name' },
+            { data: 'location_to', name: 'l2.name' },
+            { data: 'invoice', name: 'transactions.ref_no' },
+            { data: 'sender_by', name: 'sender_by', searchable: false },
+            { data: 'note', name: 'transactions.additional_notes' },
         ],
         footerCallback: function(row, data, start, end, display) {
             var api = this.api();
