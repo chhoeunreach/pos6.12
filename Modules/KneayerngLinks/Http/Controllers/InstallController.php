@@ -47,15 +47,6 @@ class InstallController extends Controller
     {
         $this->authorizeModuleManagement();
 
-        if ($this->isInstalled()) {
-            return redirect()
-                ->action([ModulesIndexController::class, 'index'])
-                ->with('status', [
-                    'success' => 1,
-                    'msg' => $this->moduleDisplayName . ' module is already installed.',
-                ]);
-        }
-
         try {
             DB::beginTransaction();
 
@@ -68,19 +59,17 @@ class InstallController extends Controller
                 'success' => 1,
                 'msg' => $this->moduleDisplayName . ' module installed successfully',
             ];
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             DB::rollBack();
-            \Log::emergency('File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
+            \Log::error('File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
 
             $output = [
-                'success' => false,
+                'success' => 0,
                 'msg' => $e->getMessage(),
             ];
         }
 
-        return redirect()
-            ->action([ModulesIndexController::class, 'index'])
-            ->with('status', $output);
+        return response()->json($output);
     }
 
     public function uninstall()
