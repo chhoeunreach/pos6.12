@@ -53,11 +53,6 @@ return [
             'key' => env('ABLY_KEY'),
         ],
 
-        'redis' => [
-            'driver' => 'redis',
-            'connection' => 'default',
-        ],
-
         'log' => [
             'driver' => 'log',
         ],
