@@ -76,6 +76,9 @@ Route::middleware([
     Route::get('/stock-reports/sell', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockSellReport'])->name('ssi.report.stock_sell');
     Route::get('/stock-reports/purchase', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockPurchaseReport'])->name('ssi.report.stock_purchase');
     Route::get('/stock-reports/transfer', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockTransferReport'])->name('ssi.report.stock_transfer');
+    Route::get('/stock-reports/adjustment', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockAdjustmentReport'])->name('ssi.report.stock_adjustment');
+    Route::get('/stock-reports/sell-return', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockSellReturnReport'])->name('ssi.report.stock_sell_return');
+    Route::get('/stock-reports/purchaser-return', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockPurchaserReturnReport'])->name('ssi.report.stock_purchaser_return');
 
     Route::get('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'index'])->name('ssi.settings.index');
     Route::post('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'update'])->name('ssi.settings.update');
