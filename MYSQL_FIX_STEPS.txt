@@ -1,0 +1,20 @@
+MYSQL CRASH AFTER RESTART - QUICK FIX STEPS
+=============================================
+
+When MySQL won't start and shows "service did not report an error" (NET HELPMSG 3534):
+
+STEP 1: Open PowerShell as Administrator
+
+STEP 2: Kill stuck zombie MySQL processes
+   Stop-Process -Name "mysqld" -Force
+
+STEP 3: Start MySQL service
+   net start MySQL
+
+STEP 4: Verify it's running
+   Get-Process mysqld
+
+=============================================
+PREVENTION: Set MySQL to Manual start in Laragon
+   Laragon -> Right-click -> MySQL -> Service/Startup -> Manual
+   Then always start MySQL from within Laragon, not at Windows boot.

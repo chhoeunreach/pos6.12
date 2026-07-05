@@ -48,6 +48,7 @@
                         <th class="text-right">Due</th>
                         <th>Location</th>
                         <th>Customer Group Name</th>
+                        <th>User Name</th>
                     </tr>
                 </thead>
             </table>
@@ -125,6 +126,7 @@
                 { data: 'due', name: 'due', searchable: false, className: 'text-right' },
                 { data: 'location', name: 'bl.name' },
                 { data: 'customer_group', name: 'tcg.name' },
+                { data: 'user_name', name: 'u.surname' },
             ],
             fnDrawCallback: function() {
                 __currency_convert_recursively($('#stock_sell_report_table'));

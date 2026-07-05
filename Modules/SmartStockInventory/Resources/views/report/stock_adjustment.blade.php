@@ -93,7 +93,7 @@
                 { data: 'previous_qty', name: 'previous_qty', searchable: false, className: 'text-right' },
                 { data: 'adjusted_qty', name: 'adjusted_qty', searchable: false, className: 'text-right' },
                 { data: 'difference', name: 'difference', searchable: false, className: 'text-right' },
-                { data: 'reason', name: 'reason', type: 'text' },
+                { data: 'reason', name: 't.additional_notes', type: 'text' },
                 { data: 'adjusted_by', name: 'adjusted_by', type: 'text' },
                 { data: 'note', name: 't.additional_notes', type: 'text' }
             ],

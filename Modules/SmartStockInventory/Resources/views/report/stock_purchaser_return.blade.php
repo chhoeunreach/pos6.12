@@ -103,7 +103,7 @@
                 { data: 'quantity', name: 'purchase_lines.quantity', className: 'text-right', searchable: false },
                 { data: 'purchase_price', name: 'purchase_lines.purchase_price_inc_tax', className: 'text-right' },
                 { data: 'total', name: 'total', searchable: false, className: 'text-right' },
-                { data: 'reason', name: 't.reason', type: 'text' },
+                { data: 'reason', name: 't.additional_notes', type: 'text' },
                 { data: 'location', name: 'bl.name', type: 'text' }
             ],
             fnDrawCallback: function() {

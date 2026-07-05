@@ -4,10 +4,14 @@ namespace Modules\SmartStockInventory\Http\Controllers;
 
 use App\BusinessLocation;
 use App\Contact;
+use App\Product;
 use App\PurchaseLine;
+use App\StockAdjustmentLine;
+use App\Transaction;
 use App\TransactionSellLine;
 use App\User;
 use App\Utils\TransactionUtil;
+use App\Variation;
 use Datatables;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -92,6 +96,7 @@ class StockReportController extends Controller
                 ->leftJoin('purchase_lines as lot_pl', 'transaction_sell_lines.lot_no_line_id', '=', 'lot_pl.id')
                 ->leftJoin('customer_groups as tcg', 't.customer_group_id', '=', 'tcg.id')
                 ->leftJoin('customer_groups as ccg', 'c.customer_group_id', '=', 'ccg.id')
+                ->leftJoin('users as u', 't.created_by', '=', 'u.id')
                 ->leftJoinSub($payments, 'tp', function ($join) {
                     $join->on('tp.transaction_id', '=', 't.id');
                 })
@@ -138,7 +143,8 @@ class StockReportController extends Controller
                     DB::raw('COALESCE(tp.voido, 0) as voido'),
                     DB::raw('COALESCE(tp.monthly, 0) as monthly'),
                     DB::raw('COALESCE(tp.paid, 0) as paid'),
-                    DB::raw('(t.final_total - COALESCE(tp.paid, 0)) as due')
+                    DB::raw('(t.final_total - COALESCE(tp.paid, 0)) as due'),
+                    DB::raw("CONCAT(COALESCE(u.surname, ''),' ',COALESCE(u.first_name, ''),' ',COALESCE(u.last_name,'')) as user_name")
                 );
 
             if ($permitted_locations != 'all') {
@@ -529,5 +535,258 @@ class StockReportController extends Controller
 
         return view('smartstockinventory::report.stock_transfer')
             ->with(compact('business_locations', 'users'));
+    }
+
+    public function stockPurchaserReturnReport(Request $request)
+    {
+        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('purchase.view') && ! auth()->user()->can('purchase.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $purchase_returns = PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
+                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('products as p', 'purchase_lines.product_id', '=', 'p.id')
+                ->leftJoin('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'purchase_return')
+                ->select(
+                    DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
+                    't.ref_no',
+                    'c.name as supplier',
+                    'c.mobile as phone',
+                    'v.sub_sku as sku',
+                    'p.name as product',
+                    'purchase_lines.quantity',
+                    'purchase_lines.purchase_price_inc_tax as purchase_price',
+                    DB::raw('(purchase_lines.quantity * purchase_lines.purchase_price_inc_tax) as total'),
+                    DB::raw('COALESCE(t.additional_notes, "") as reason'),
+                    'bl.name as location'
+                );
+
+            if ($permitted_locations != 'all') {
+                $purchase_returns->whereIn('t.location_id', $permitted_locations);
+            }
+
+            if (! auth()->user()->can('purchase.view') && auth()->user()->can('view_own_purchase')) {
+                $purchase_returns->where('t.created_by', request()->session()->get('user.id'));
+            }
+
+            if (! empty(request()->input('location_id'))) {
+                $location_id = request()->input('location_id');
+                if (is_array($location_id)) {
+                    $location_id = array_values(array_filter($location_id, function ($id) {
+                        return $id !== 'all';
+                    }));
+                    if (! empty($location_id)) {
+                        $purchase_returns->whereIn('t.location_id', $location_id);
+                    }
+                } elseif ($location_id !== 'all') {
+                    $purchase_returns->where('t.location_id', $location_id);
+                }
+            }
+
+            if (! empty(request()->input('supplier_id'))) {
+                $purchase_returns->where('t.contact_id', request()->input('supplier_id'));
+            }
+
+            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
+                $purchase_returns->whereDate('t.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+            }
+
+            return Datatables::of($purchase_returns)
+                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('quantity', function ($row) {
+                    return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
+                })
+                ->editColumn('purchase_price', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                })
+                ->editColumn('total', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
+                })
+                ->rawColumns(['quantity', 'purchase_price', 'total'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+        $suppliers = Contact::suppliersDropdown($business_id, false);
+
+        return view('smartstockinventory::report.stock_purchaser_return')
+            ->with(compact('business_locations', 'suppliers'));
+    }
+
+    public function stockSellReturnReport(Request $request)
+    {
+        if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $sell_returns = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('products as p', 'transaction_sell_lines.product_id', '=', 'p.id')
+                ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell_return')
+                ->whereNull('transaction_sell_lines.parent_sell_line_id')
+                ->select(
+                    DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
+                    't.invoice_no',
+                    DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
+                    'c.mobile as phone',
+                    'v.sub_sku as sku',
+                    'p.name as product',
+                    'transaction_sell_lines.quantity',
+                    'transaction_sell_lines.unit_price_before_discount as unit_price',
+                    DB::raw('(transaction_sell_lines.quantity * transaction_sell_lines.unit_price_before_discount) as total'),
+                    DB::raw('COALESCE(t.additional_notes, "") as reason'),
+                    'bl.name as location'
+                );
+
+            if ($permitted_locations != 'all') {
+                $sell_returns->whereIn('t.location_id', $permitted_locations);
+            }
+
+            if (! auth()->user()->can('direct_sell.view') && auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping', 'view_commission_agent_sell', 'access_commission_agent_shipping'])) {
+                $sell_returns->where(function ($query) {
+                    if (auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping'])) {
+                        $query->where('t.created_by', request()->session()->get('user.id'));
+                    }
+                    if (auth()->user()->hasAnyPermission(['view_commission_agent_sell', 'access_commission_agent_shipping'])) {
+                        $query->orWhere('t.commission_agent', request()->session()->get('user.id'));
+                    }
+                });
+            }
+
+            if (! empty(request()->input('location_id'))) {
+                $location_id = request()->input('location_id');
+                if (is_array($location_id)) {
+                    $location_id = array_values(array_filter($location_id, function ($id) {
+                        return $id !== 'all';
+                    }));
+                    if (! empty($location_id)) {
+                        $sell_returns->whereIn('t.location_id', $location_id);
+                    }
+                } elseif ($location_id !== 'all') {
+                    $sell_returns->where('t.location_id', $location_id);
+                }
+            }
+
+            if (! empty(request()->input('customer_id'))) {
+                $sell_returns->where('t.contact_id', request()->input('customer_id'));
+            }
+
+            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
+                $sell_returns->whereDate('t.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+            }
+
+            return Datatables::of($sell_returns)
+                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('quantity', function ($row) {
+                    return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
+                })
+                ->editColumn('unit_price', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->unit_price.'">'.$row->unit_price.'</span>';
+                })
+                ->editColumn('total', function ($row) {
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
+                })
+                ->rawColumns(['quantity', 'unit_price', 'total'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+        $customers = Contact::customersDropdown($business_id, false);
+
+        return view('smartstockinventory::report.stock_sell_return')
+            ->with(compact('business_locations', 'customers'));
+    }
+
+    public function stockAdjustmentReport(Request $request)
+    {
+        if (! auth()->user()->can('stock_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $permitted_locations = auth()->user()->permitted_locations();
+
+            $adjustments = StockAdjustmentLine::join('transactions as t', 'stock_adjustment_lines.transaction_id', '=', 't.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('products as p', 'stock_adjustment_lines.product_id', '=', 'p.id')
+                ->leftJoin('variations as v', 'stock_adjustment_lines.variation_id', '=', 'v.id')
+                ->leftJoin('users as u', 't.created_by', '=', 'u.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'stock_adjustment')
+                ->select(
+                    DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
+                    't.ref_no as invoice_no',
+                    'v.sub_sku as sku',
+                    'p.name as product',
+                    DB::raw('0 as previous_qty'),
+                    'stock_adjustment_lines.quantity as adjusted_qty',
+                    'stock_adjustment_lines.quantity as difference',
+                    DB::raw('COALESCE(t.additional_notes, "") as reason'),
+                    DB::raw("CONCAT(COALESCE(u.surname, ''),' ',COALESCE(u.first_name, ''),' ',COALESCE(u.last_name,'')) as adjusted_by"),
+                    't.additional_notes as note'
+                );
+
+            if ($permitted_locations != 'all') {
+                $adjustments->whereIn('t.location_id', $permitted_locations);
+            }
+
+            if (! empty(request()->input('location_id'))) {
+                $location_id = request()->input('location_id');
+                if (is_array($location_id)) {
+                    $location_id = array_values(array_filter($location_id, function ($id) {
+                        return $id !== 'all';
+                    }));
+                    if (! empty($location_id)) {
+                        $adjustments->whereIn('t.location_id', $location_id);
+                    }
+                } elseif ($location_id !== 'all') {
+                    $adjustments->where('t.location_id', $location_id);
+                }
+            }
+
+            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
+                $adjustments->whereDate('t.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+            }
+
+            return Datatables::of($adjustments)
+                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('adjusted_qty', function ($row) {
+                    return '<span data-orig-value="'.$row->adjusted_qty.'">'.$this->transactionUtil->num_f($row->adjusted_qty, false).'</span>';
+                })
+                ->editColumn('difference', function ($row) {
+                    return '<span data-orig-value="'.$row->difference.'">'.$this->transactionUtil->num_f($row->difference, false).'</span>';
+                })
+                ->editColumn('previous_qty', function ($row) {
+                    return '<span data-orig-value="'.$row->previous_qty.'">'.$this->transactionUtil->num_f($row->previous_qty, false).'</span>';
+                })
+                ->rawColumns(['adjusted_qty', 'difference', 'previous_qty'])
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false);
+
+        return view('smartstockinventory::report.stock_adjustment')
+            ->with(compact('business_locations'));
     }
 }

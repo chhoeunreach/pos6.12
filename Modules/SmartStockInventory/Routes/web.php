@@ -80,6 +80,11 @@ Route::middleware([
     Route::get('/stock-reports/sell-return', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockSellReturnReport'])->name('ssi.report.stock_sell_return');
     Route::get('/stock-reports/purchaser-return', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockPurchaserReturnReport'])->name('ssi.report.stock_purchaser_return');
 
+    Route::get('/hr-sell-list', ['\Modules\SmartStockInventory\Http\Controllers\HrSellListReportController', 'index'])->name('ssi.report.hr_sell_list');
+    Route::get('/hr-sell-list/detail/{report_id}', ['\Modules\SmartStockInventory\Http\Controllers\HrSellListReportController', 'getDetail'])->name('ssi.report.hr_sell_list_detail');
+    Route::get('/hr-sell-list/photo/{photo_id}', ['\Modules\SmartStockInventory\Http\Controllers\HrSellListReportController', 'getPhoto'])->name('ssi.report.hr_sell_list_photo');
+    Route::get('/hr-sell-list/service-types', ['\Modules\SmartStockInventory\Http\Controllers\HrSellListReportController', 'getServiceTypes'])->name('ssi.report.hr_sell_list_service_types');
+
     Route::get('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'index'])->name('ssi.settings.index');
     Route::post('/settings', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'update'])->name('ssi.settings.update');
     Route::post('/settings/test-telegram', ['\Modules\SmartStockInventory\Http\Controllers\SettingsController', 'testTelegram'])->name('ssi.settings.test_telegram');

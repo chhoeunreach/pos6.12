@@ -68,7 +68,6 @@
                 <thead>
                     <tr>
                         <th>Cashier/User</th>
-                        <th>Full Name</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                         @endforeach
@@ -134,12 +133,11 @@
                         @endforeach
                         <th class="text-right">Total Payment</th>
                     </tr>
-</thead>
-            <tbody>
-                @foreach($report['rows_by_location'] ?? []) as $row)
-                    <tr class="row-sale">
-                        <td class="name-main">{{ $row['location_name'] }}</td>
-                        <td class="name-main">{{ $row['cashier_full_name'] ?? $row['cashier_name'] }}</td>
+                </thead>
+                <tbody>
+                    @foreach(($report['rows_by_location'] ?? []) as $row)
+                        <tr class="row-sale">
+                            <td class="name-main">{{ $row['location_name'] }}</td>
                             <td class="text-right">{{ $fmt($row['total'] ?? null) }}</td>
                             @foreach($report['payment_columns'] as $method)
                                 <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
@@ -202,7 +200,6 @@
                 <thead>
                     <tr>
                         <th>Cashier/User</th>
-                        <th>Full Name</th>
                         <th>Business Location (Qty)</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>

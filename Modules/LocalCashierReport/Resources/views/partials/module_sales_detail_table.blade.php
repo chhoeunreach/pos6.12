@@ -104,7 +104,6 @@
                 <th>{{ $isAllSaleTable ? 'Product' : 'Product Name' }}</th>
                 <th class="text-right">{{ $isAllSaleTable ? 'Qty' : 'Quantity' }}</th>
                 <th class="text-right">{{ $isAllSaleTable ? 'Price' : 'Unit Price' }}</th>
-                <th class="text-right">Full Name</th>
                 @if($isAllSaleTable)
                     <th class="text-right">Total</th>
                 @else
@@ -157,7 +156,31 @@
                         : $fullDate;
                 @endphp
                 <tr class="{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-customer-row' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-customer-row' : 'normal-customer-row') }}">
-                    <td class="date-cell">{{ $fullDate }}</td>
+                    <td>
+                        @if($isAllSaleTable && ($viewUrl || $editUrl))
+                            <span class="date-action-wrap">
+                                <span class="date-action-text" title="{{ $fullDate }}">{{ $displayDate }}</span>
+                                <span class="date-action-popover">
+                                    @if($viewUrl)
+                                        <a class="date-action-pill btn-modal"
+                                           href="#"
+                                           data-href="{{ $viewUrl }}"
+                                           data-container=".view_modal"
+                                           title="View">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                    @endif
+                                    @if($editUrl)
+                                        <a class="date-action-pill date-action-edit" href="{{ $editUrl }}" target="_blank" title="Edit">
+                                            <i class="fas fa-pen"></i> Edit
+                                        </a>
+                                    @endif
+                                </span>
+                            </span>
+                        @else
+                            <span title="{{ $fullDate }}">{{ $displayDate }}</span>
+                        @endif
+                    </td>
                     <td>{{ $row['invoice_no'] }}</td>
                     <td>{{ $row['i_t'] ?? '-' }}</td>
                     @unless($isAllSaleTable)
@@ -180,7 +203,6 @@
                     <td>{{ $row['product_name'] }}</td>
                     <td class="text-right">{{ is_null($row['quantity'] ?? null) ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
                     <td class="text-right">{{ is_null($row['unit_price'] ?? null) ? '' : $fmt($row['unit_price']) }}</td>
-                    <td>{{ $row['cashier_full_name'] ?? $row['cashier_name'] }}</td>
                     @if($isAllSaleTable)
                         <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
                     @else
@@ -228,7 +250,7 @@
         @endphp
         <tfoot>
             <tr class="detail-total-row">
-                <th colspan="{{ $isAllSaleTable ? 8 : 9 }}" class="text-right">Total</th>
+                <th colspan="{{ $isAllSaleTable ? 7 : 8 }}" class="text-right">Total</th>
                 <th class="text-right">{{ rtrim(rtrim(number_format($saleRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['unit_price'] ?? 0))) }}</th>
                 @if($isAllSaleTable)

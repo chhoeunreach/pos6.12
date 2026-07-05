@@ -103,7 +103,7 @@
                 { data: 'quantity', name: 'transaction_sell_lines.quantity', className: 'text-right', searchable: false },
                 { data: 'unit_price', name: 'transaction_sell_lines.unit_price_before_discount', className: 'text-right' },
                 { data: 'total', name: 'total', searchable: false, className: 'text-right' },
-                { data: 'reason', name: 't.reason', type: 'text' },
+                { data: 'reason', name: 't.additional_notes', type: 'text' },
                 { data: 'location', name: 'bl.name', type: 'text' }
             ],
             fnDrawCallback: function() {
