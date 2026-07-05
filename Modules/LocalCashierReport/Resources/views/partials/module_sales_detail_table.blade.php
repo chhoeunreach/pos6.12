@@ -104,6 +104,7 @@
                 <th>{{ $isAllSaleTable ? 'Product' : 'Product Name' }}</th>
                 <th class="text-right">{{ $isAllSaleTable ? 'Qty' : 'Quantity' }}</th>
                 <th class="text-right">{{ $isAllSaleTable ? 'Price' : 'Unit Price' }}</th>
+                <th class="text-right">Full Name</th>
                 @if($isAllSaleTable)
                     <th class="text-right">Total</th>
                 @else
@@ -179,6 +180,7 @@
                     <td>{{ $row['product_name'] }}</td>
                     <td class="text-right">{{ is_null($row['quantity'] ?? null) ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
                     <td class="text-right">{{ is_null($row['unit_price'] ?? null) ? '' : $fmt($row['unit_price']) }}</td>
+                    <td>{{ $row['cashier_full_name'] ?? $row['cashier_name'] }}</td>
                     @if($isAllSaleTable)
                         <td class="text-right">{{ is_null($row['line_total'] ?? null) ? '' : $fmt($row['line_total']) }}</td>
                     @else
@@ -226,7 +228,7 @@
         @endphp
         <tfoot>
             <tr class="detail-total-row">
-                <th colspan="{{ $isAllSaleTable ? 7 : 8 }}" class="text-right">Total</th>
+                <th colspan="{{ $isAllSaleTable ? 8 : 9 }}" class="text-right">Total</th>
                 <th class="text-right">{{ rtrim(rtrim(number_format($saleRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['unit_price'] ?? 0))) }}</th>
                 @if($isAllSaleTable)
