@@ -88,6 +88,11 @@ return [
             'driver' => 'octane',
         ],
 
+        'redis' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_CONNECTION', 'default'),
+        ],
+
     ],
 
     /*
