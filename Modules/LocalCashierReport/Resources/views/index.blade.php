@@ -346,7 +346,6 @@
         <table class="table sheet-table">
             <thead>
                 <tr>
-                    <th>User/Cashier</th>
                     <th>Business Location (Qty)</th>
                     <th class="text-right">Total Price</th>
                     @foreach($report['payment_columns'] as $method)
@@ -387,19 +386,11 @@
                     @endphp
                     @if($lastDashboardCustomerGroup !== $dashboardCustomerGroup)
                         <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'Collection Payment' ? 'loan-payment-separator' : ($dashboardCustomerGroup === 'Customer Payment' ? 'customer-payment-separator' : 'normal-separator'))) }}">
-                            <td colspan="{{ 5 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
                         </tr>
                         @php $lastDashboardCustomerGroup = $dashboardCustomerGroup; @endphp
                     @endif
                         <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Collection Payment' ? 'loan-payment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Customer Payment' ? 'customer-payment-breakdown-row' : 'normal-breakdown-row'))) }}">
-                            <td class="name-main cashier-group-breakdown-name">
-                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
-                                    {{ $customerGroupRow['cashier_name'] ?? 'N/A' }}
-                                </a>
-                                <a class="qty-badge qty-badge-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
-                                    (Qty: {{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})
-                                </a>
-                            </td>
                             <td class="name-main">
                                 {{ $customerGroupRow['location_qty_text'] ?? '-' }}
                             </td>
@@ -433,7 +424,7 @@
                         @if($isLastNormalDashboardGroup)
                             @foreach($moduleDashboardRows as $moduleDashboardRow)
                                 <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
-                                    <td class="name-main cashier-group-breakdown-name" colspan="2">
+                                    <td class="name-main cashier-group-breakdown-name">
                                         <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
                                             {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
                                         </a>
@@ -460,14 +451,14 @@
                 @empty
                     @if(empty($moduleDashboardRows))
                         <tr>
-                            <td colspan="{{ 5 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
                         </tr>
                     @endif
                 @endforelse
                 @if(! $hasNormalDashboardGroup)
                     @foreach($moduleDashboardRows as $moduleDashboardRow)
                         <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
-                            <td class="name-main cashier-group-breakdown-name" colspan="2">
+                            <td class="name-main cashier-group-breakdown-name">
                                 <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
                                     {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
                                 </a>
@@ -494,7 +485,7 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th colspan="2" class="text-right">Grand Total</th>
+                    <th class="text-right">Grand Total</th>
                     <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
@@ -504,7 +495,7 @@
                 </tr>
                 @if(($filters['style_mode'] ?? 'sheet') === 'classic_plain')
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Expenses</th>
+                        <th class="text-right">Expenses</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
@@ -513,7 +504,7 @@
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Actual Income</th>
+                        <th class="text-right">Actual Income</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
