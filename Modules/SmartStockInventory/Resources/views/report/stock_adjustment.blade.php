@@ -28,7 +28,9 @@
                 <thead>
                     <tr>
                         <th>Date</th>
+                        <th>Location</th>
                         <th>Invoice No</th>
+                        <th>Lot Number</th>
                         <th>SKU</th>
                         <th>Product</th>
                         <th class="text-right">Previous Qty</th>
@@ -87,9 +89,11 @@
             },
             columns: [
                 { data: 'date', name: 't.transaction_date', type: 'date' },
+                { data: 'location', name: 'bl.name', type: 'text' },
                 { data: 'invoice_no', name: 't.ref_no', type: 'text' },
+                { data: 'lot_number', name: 'purchase_lines.lot_number', type: 'text' },
                 { data: 'sku', name: 'v.sub_sku', type: 'text' },
-                { data: 'product', name: 'p.name', type: 'text' },
+                { data: 'product', name: 'v.name', type: 'text' },
                 { data: 'previous_qty', name: 'previous_qty', searchable: false, className: 'text-right' },
                 { data: 'adjusted_qty', name: 'adjusted_qty', searchable: false, className: 'text-right' },
                 { data: 'difference', name: 'difference', searchable: false, className: 'text-right' },

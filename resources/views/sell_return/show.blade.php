@@ -28,6 +28,9 @@
             <tr class="bg-green">
                 <th>#</th>
                 <th>@lang('product.product_name')</th>
+                @if(session('business.enable_lot_number'))
+                    <th>@lang('lang_v1.lot_number')</th>
+                @endif
                 <th>@lang('sale.unit_price')</th>
                 <th>@lang('lang_v1.return_quantity')</th>
                 <th>@lang('lang_v1.return_subtotal')</th>
@@ -60,6 +63,9 @@
                     - {{ $sell_line->variations->name}}
                   @endif
                 </td>
+                @if(session('business.enable_lot_number'))
+                    <td>{{ $sell_line->lot_details->lot_number ?? '--' }}</td>
+                @endif
                 <td><span class="display_currency" data-currency_symbol="true">{{ $sell_line->unit_price_inc_tax }}</span></td>
                 <td>{{@format_quantity($sell_line->quantity_returned)}} {{$unit_name}}</td>
                 <td>

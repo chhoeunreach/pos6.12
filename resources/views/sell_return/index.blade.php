@@ -97,7 +97,7 @@
                 }
             },
             columnDefs: [ {
-                "targets": [7, 8],
+                "targets": @if(session('business.enable_lot_number')) [8, 9] @else [7, 8] @endif,
                 "orderable": false,
                 "searchable": false
             } ],
@@ -105,6 +105,9 @@
                 { data: 'transaction_date', name: 'transaction_date'  },
                 { data: 'invoice_no', name: 'invoice_no'},
                 { data: 'parent_sale', name: 'T1.invoice_no'},
+                @if(session('business.enable_lot_number'))
+                { data: 'lot_numbers', name: 'lot_numbers', orderable: false, searchable: false },
+                @endif
                 { data: 'name', name: 'contacts.name'},
                 { data: 'business_location', name: 'bl.name'},
                 { data: 'payment_status', name: 'payment_status'},

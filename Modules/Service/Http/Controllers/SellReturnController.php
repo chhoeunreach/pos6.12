@@ -345,7 +345,7 @@ class SellReturnController extends Controller
         }
 
         $sell = Transaction::where('business_id', $business_id)
-            ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit'])
+            ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
             ->find($id);
 
         foreach ($sell->sell_lines as $key => $value) {
@@ -400,6 +400,7 @@ class SellReturnController extends Controller
                 $output = ['success' => 1,
                     'msg' => __('lang_v1.success'),
                     'receipt' => $receipt,
+                    'redirect_url' => action([\Modules\Service\Http\Controllers\SellReturnController::class, 'index']),
                 ];
             }
         } catch (\Exception $e) {

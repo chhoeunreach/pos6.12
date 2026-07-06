@@ -34,6 +34,11 @@ $(document).ready(function() {
                             if (result.receipt.is_enabled) {
                                 pos_print(result.receipt);
                             }
+                            if (result.redirect_url) {
+                                setTimeout(function() {
+                                    window.location = result.redirect_url;
+                                }, 2000);
+                            }
                         } else {
                             toastr.error(result.msg);
                         }

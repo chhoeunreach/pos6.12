@@ -95,7 +95,8 @@ class SellReturnController extends Controller
                     'bl.name as business_location',
                     'T1.invoice_no as parent_sale',
                     'T1.id as parent_sale_id',
-                    DB::raw('SUM(TP.amount) as amount_paid')
+                    DB::raw('SUM(TP.amount) as amount_paid'),
+                    DB::raw("(SELECT GROUP_CONCAT(DISTINCT pl.lot_number SEPARATOR ', ') FROM transaction_sell_lines tsl LEFT JOIN purchase_lines pl ON tsl.lot_no_line_id = pl.id WHERE tsl.transaction_id = T1.id AND pl.lot_number IS NOT NULL AND pl.lot_number != '') as lot_numbers")
                 );
 
             $permitted_locations = auth()->user()->permitted_locations();
@@ -291,6 +292,14 @@ class SellReturnController extends Controller
                             return '';
                         }
                     }])
+                ->editColumn('lot_numbers', function ($row) {
+                    $business_id = request()->session()->get('user.business_id');
+                    $business = \App\Business::find($business_id);
+                    if (empty($business->enable_lot_number)) {
+                        return '';
+                    }
+                    return $row->lot_numbers ?? '--';
+                })
                 ->rawColumns(['final_total', 'action', 'parent_sale', 'payment_status', 'payment_due', 'name', 'zatca_status'])
                 ->make(true);
         }
@@ -345,7 +354,7 @@ class SellReturnController extends Controller
         }
 
         $sell = Transaction::where('business_id', $business_id)
-            ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit'])
+            ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
             ->find($id);
 
         foreach ($sell->sell_lines as $key => $value) {
@@ -400,6 +409,7 @@ class SellReturnController extends Controller
                 $output = ['success' => 1,
                     'msg' => __('lang_v1.success'),
                     'receipt' => $receipt,
+                    'redirect_url' => action([\App\Http\Controllers\SellReturnController::class, 'index']),
                 ];
             }
         } catch (\Exception $e) {
@@ -445,6 +455,7 @@ class SellReturnController extends Controller
                 'sell_lines.sub_unit',
                 'sell_lines.product',
                 'sell_lines.product.unit',
+                'sell_lines.lot_details',
                 'location'
             );
 

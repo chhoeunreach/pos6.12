@@ -5,6 +5,9 @@
                 <th>@lang('messages.date')</th>
                 <th>@lang('sale.invoice_no')</th>
                 <th>@lang('lang_v1.parent_sale')</th>
+                @if(session('business.enable_lot_number'))
+                    <th>@lang('lang_v1.lot_number')</th>
+                @endif
                 <th>@lang('sale.customer_name')</th>
                 <th>@lang('sale.location')</th>
                 <th>@lang('purchase.payment_status')</th>
@@ -15,7 +18,7 @@
         </thead>
         <tfoot>
             <tr class="bg-gray font-17 text-center footer-total">
-                <td colspan="5"><strong>@lang('sale.total'):</strong></td>
+                <td colspan="6"><strong>@lang('sale.total'):</strong></td>
                 <td id="footer_payment_status_count_sr"></td>
                 <td><span class="display_currency" id="footer_sell_return_total" data-currency_symbol ="true"></span></td>
                 <td><span class="display_currency" id="footer_total_due_sr" data-currency_symbol ="true"></span></td>

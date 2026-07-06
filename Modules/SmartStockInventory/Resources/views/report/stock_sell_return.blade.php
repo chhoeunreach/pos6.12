@@ -37,6 +37,7 @@
                         <th>Invoice No</th>
                         <th>Customer</th>
                         <th>Phone</th>
+                        <th>Lot Number</th>
                         <th>SKU</th>
                         <th>Product</th>
                         <th class="text-right">Qty Returned</th>
@@ -98,6 +99,7 @@
                 { data: 'invoice_no', name: 't.ref_no', type: 'text' },
                 { data: 'customer', name: 'c.name', type: 'text' },
                 { data: 'phone', name: 'c.mobile', type: 'text' },
+                { data: 'lot_number', name: 'purchase_lines.lot_number', type: 'text' },
                 { data: 'sku', name: 'v.sub_sku', type: 'text' },
                 { data: 'product', name: 'p.name', type: 'text' },
                 { data: 'quantity', name: 'transaction_sell_lines.quantity', className: 'text-right', searchable: false },

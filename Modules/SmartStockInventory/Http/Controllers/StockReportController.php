@@ -560,6 +560,7 @@ class StockReportController extends Controller
                     't.ref_no',
                     'c.name as supplier',
                     'c.mobile as phone',
+                    'purchase_lines.lot_number as lot_number',
                     'v.sub_sku as sku',
                     'p.name as product',
                     'purchase_lines.quantity',
@@ -638,6 +639,7 @@ class StockReportController extends Controller
                 ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
                 ->leftJoin('products as p', 'transaction_sell_lines.product_id', '=', 'p.id')
                 ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
+                ->leftJoin('purchase_lines', 'transaction_sell_lines.lot_no_line_id', '=', 'purchase_lines.id')
                 ->where('t.business_id', $business_id)
                 ->where('t.type', 'sell_return')
                 ->whereNull('transaction_sell_lines.parent_sell_line_id')
@@ -646,6 +648,7 @@ class StockReportController extends Controller
                     't.invoice_no',
                     DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
                     'c.mobile as phone',
+                    'purchase_lines.lot_number as lot_number',
                     'v.sub_sku as sku',
                     'p.name as product',
                     'transaction_sell_lines.quantity',
@@ -731,13 +734,16 @@ class StockReportController extends Controller
                 ->leftJoin('products as p', 'stock_adjustment_lines.product_id', '=', 'p.id')
                 ->leftJoin('variations as v', 'stock_adjustment_lines.variation_id', '=', 'v.id')
                 ->leftJoin('users as u', 't.created_by', '=', 'u.id')
+                ->leftJoin('purchase_lines', 'stock_adjustment_lines.lot_no_line_id', '=', 'purchase_lines.id')
                 ->where('t.business_id', $business_id)
                 ->where('t.type', 'stock_adjustment')
                 ->select(
                     DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
+                    'bl.name as location',
                     't.ref_no as invoice_no',
+                    'purchase_lines.lot_number as lot_number',
                     'v.sub_sku as sku',
-                    'p.name as product',
+                    DB::raw("CONCAT(COALESCE(p.name, ''), ' ', COALESCE(v.name, '')) as product"),
                     DB::raw('0 as previous_qty'),
                     'stock_adjustment_lines.quantity as adjusted_qty',
                     'stock_adjustment_lines.quantity as difference',
