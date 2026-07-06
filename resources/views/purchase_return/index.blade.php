@@ -114,7 +114,7 @@
                     },
                 },
                 columnDefs: [{
-                    "targets": [7, 8],
+                    "targets": [8, 9],
                     "orderable": false,
                     "searchable": false
                 }],
@@ -129,6 +129,11 @@
                     {
                         data: 'parent_purchase',
                         name: 'T.ref_no'
+                    },
+                    {
+                        data: 'lot_numbers',
+                        name: 'lot_numbers',
+                        searchable: false
                     },
                     {
                         data: 'location_name',

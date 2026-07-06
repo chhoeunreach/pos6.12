@@ -548,34 +548,36 @@ class StockReportController extends Controller
         if ($request->ajax()) {
             $permitted_locations = auth()->user()->permitted_locations();
 
-            $purchase_returns = PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
-                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
-                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+            $purchase_returns = Transaction::where('transactions.type', 'purchase_return')
+                ->leftJoin('transactions as parent_pur', 'transactions.return_parent_id', '=', 'parent_pur.id')
+                ->leftJoin('purchase_lines', 'parent_pur.id', '=', 'purchase_lines.transaction_id')
+                ->leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 'transactions.location_id', '=', 'bl.id')
                 ->leftJoin('products as p', 'purchase_lines.product_id', '=', 'p.id')
                 ->leftJoin('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
-                ->where('t.business_id', $business_id)
-                ->where('t.type', 'purchase_return')
+                ->where('transactions.business_id', $business_id)
+                ->where('purchase_lines.quantity_returned', '>', 0)
                 ->select(
-                    DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
-                    't.ref_no',
+                    DB::raw('DATE_FORMAT(transactions.transaction_date, "%Y-%m-%d") as date'),
+                    DB::raw("COALESCE(transactions.invoice_no, transactions.ref_no) as ref_no"),
                     'c.name as supplier',
                     'c.mobile as phone',
                     'purchase_lines.lot_number as lot_number',
                     'v.sub_sku as sku',
-                    'p.name as product',
-                    'purchase_lines.quantity',
+                    DB::raw("CONCAT(COALESCE(p.name, ''), ' ', COALESCE(v.name, '')) as product"),
+                    'purchase_lines.quantity_returned as quantity',
                     'purchase_lines.purchase_price_inc_tax as purchase_price',
-                    DB::raw('(purchase_lines.quantity * purchase_lines.purchase_price_inc_tax) as total'),
-                    DB::raw('COALESCE(t.additional_notes, "") as reason'),
+                    DB::raw('(purchase_lines.quantity_returned * purchase_lines.purchase_price_inc_tax) as total'),
+                    DB::raw('COALESCE(transactions.additional_notes, "") as reason'),
                     'bl.name as location'
                 );
 
             if ($permitted_locations != 'all') {
-                $purchase_returns->whereIn('t.location_id', $permitted_locations);
+                $purchase_returns->whereIn('transactions.location_id', $permitted_locations);
             }
 
             if (! auth()->user()->can('purchase.view') && auth()->user()->can('view_own_purchase')) {
-                $purchase_returns->where('t.created_by', request()->session()->get('user.id'));
+                $purchase_returns->where('transactions.created_by', request()->session()->get('user.id'));
             }
 
             if (! empty(request()->input('location_id'))) {
@@ -585,20 +587,20 @@ class StockReportController extends Controller
                         return $id !== 'all';
                     }));
                     if (! empty($location_id)) {
-                        $purchase_returns->whereIn('t.location_id', $location_id);
+                        $purchase_returns->whereIn('transactions.location_id', $location_id);
                     }
                 } elseif ($location_id !== 'all') {
-                    $purchase_returns->where('t.location_id', $location_id);
+                    $purchase_returns->where('transactions.location_id', $location_id);
                 }
             }
 
             if (! empty(request()->input('supplier_id'))) {
-                $purchase_returns->where('t.contact_id', request()->input('supplier_id'));
+                $purchase_returns->where('transactions.contact_id', request()->input('supplier_id'));
             }
 
             if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
-                $purchase_returns->whereDate('t.transaction_date', '>=', request()->input('start_date'))
-                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+                $purchase_returns->whereDate('transactions.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('transactions.transaction_date', '<=', request()->input('end_date'));
             }
 
             return Datatables::of($purchase_returns)
@@ -634,41 +636,42 @@ class StockReportController extends Controller
         if ($request->ajax()) {
             $permitted_locations = auth()->user()->permitted_locations();
 
-            $sell_returns = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
-                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
-                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+            $sell_returns = Transaction::where('transactions.type', 'sell_return')
+                ->leftJoin('transactions as parent_sell', 'transactions.return_parent_id', '=', 'parent_sell.id')
+                ->leftJoin('transaction_sell_lines', 'parent_sell.id', '=', 'transaction_sell_lines.transaction_id')
+                ->leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+                ->leftJoin('business_locations as bl', 'transactions.location_id', '=', 'bl.id')
                 ->leftJoin('products as p', 'transaction_sell_lines.product_id', '=', 'p.id')
                 ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
                 ->leftJoin('purchase_lines', 'transaction_sell_lines.lot_no_line_id', '=', 'purchase_lines.id')
-                ->where('t.business_id', $business_id)
-                ->where('t.type', 'sell_return')
-                ->whereNull('transaction_sell_lines.parent_sell_line_id')
+                ->where('transactions.business_id', $business_id)
+                ->where('transaction_sell_lines.quantity_returned', '>', 0)
                 ->select(
-                    DB::raw('DATE_FORMAT(t.transaction_date, "%Y-%m-%d") as date'),
-                    't.invoice_no',
+                    DB::raw('DATE_FORMAT(transactions.transaction_date, "%Y-%m-%d") as date'),
+                    DB::raw("COALESCE(transactions.invoice_no, transactions.ref_no) as invoice_no"),
                     DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
                     'c.mobile as phone',
                     'purchase_lines.lot_number as lot_number',
                     'v.sub_sku as sku',
-                    'p.name as product',
-                    'transaction_sell_lines.quantity',
+                    DB::raw("CONCAT(COALESCE(p.name, ''), ' ', COALESCE(v.name, '')) as product"),
+                    'transaction_sell_lines.quantity_returned as quantity',
                     'transaction_sell_lines.unit_price_before_discount as unit_price',
-                    DB::raw('(transaction_sell_lines.quantity * transaction_sell_lines.unit_price_before_discount) as total'),
-                    DB::raw('COALESCE(t.additional_notes, "") as reason'),
+                    DB::raw('(transaction_sell_lines.quantity_returned * transaction_sell_lines.unit_price_before_discount) as total'),
+                    DB::raw('COALESCE(transactions.additional_notes, "") as reason'),
                     'bl.name as location'
                 );
 
             if ($permitted_locations != 'all') {
-                $sell_returns->whereIn('t.location_id', $permitted_locations);
+                $sell_returns->whereIn('transactions.location_id', $permitted_locations);
             }
 
             if (! auth()->user()->can('direct_sell.view') && auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping', 'view_commission_agent_sell', 'access_commission_agent_shipping'])) {
                 $sell_returns->where(function ($query) {
                     if (auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping'])) {
-                        $query->where('t.created_by', request()->session()->get('user.id'));
+                        $query->where('transactions.created_by', request()->session()->get('user.id'));
                     }
                     if (auth()->user()->hasAnyPermission(['view_commission_agent_sell', 'access_commission_agent_shipping'])) {
-                        $query->orWhere('t.commission_agent', request()->session()->get('user.id'));
+                        $query->orWhere('transactions.commission_agent', request()->session()->get('user.id'));
                     }
                 });
             }
@@ -680,20 +683,20 @@ class StockReportController extends Controller
                         return $id !== 'all';
                     }));
                     if (! empty($location_id)) {
-                        $sell_returns->whereIn('t.location_id', $location_id);
+                        $sell_returns->whereIn('transactions.location_id', $location_id);
                     }
                 } elseif ($location_id !== 'all') {
-                    $sell_returns->where('t.location_id', $location_id);
+                    $sell_returns->where('transactions.location_id', $location_id);
                 }
             }
 
             if (! empty(request()->input('customer_id'))) {
-                $sell_returns->where('t.contact_id', request()->input('customer_id'));
+                $sell_returns->where('transactions.contact_id', request()->input('customer_id'));
             }
 
             if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
-                $sell_returns->whereDate('t.transaction_date', '>=', request()->input('start_date'))
-                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
+                $sell_returns->whereDate('transactions.transaction_date', '>=', request()->input('start_date'))
+                    ->whereDate('transactions.transaction_date', '<=', request()->input('end_date'));
             }
 
             return Datatables::of($sell_returns)

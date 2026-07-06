@@ -49,6 +49,7 @@
               <tr class="bg-green">
                   <th>#</th>
                   <th>@lang('product.product_name')</th>
+                  <th>@lang('lang_v1.lot_number')</th>
                   <th>@lang('sale.unit_price')</th>
                   <th>@lang('lang_v1.return_quantity')</th>
                   <th>@lang('lang_v1.return_subtotal')</th>
@@ -78,6 +79,7 @@
                       - {{ $purchase_line->variations->name}}
                     @endif
                   </td>
+                  <td>{{ $purchase_line->lot_number ?? '--' }}</td>
                   <td><span class="display_currency" data-currency_symbol="true">{{ $purchase_line->purchase_price_inc_tax }}</span></td>
                   <td>{{@format_quantity($purchase_line->quantity_returned)}} {{$unit_name}}</td>
                   <td>

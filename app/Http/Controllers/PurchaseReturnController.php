@@ -81,7 +81,8 @@ class PurchaseReturnController extends Controller
                         'transactions.return_parent_id',
                         'BS.name as location_name',
                         'T.ref_no as parent_purchase',
-                        DB::raw('SUM(TP.amount) as amount_paid')
+                        DB::raw('SUM(TP.amount) as amount_paid'),
+                        DB::raw("(SELECT GROUP_CONCAT(COALESCE(pl.lot_number, '') SEPARATOR ', ') FROM purchase_lines AS pl WHERE pl.transaction_id = COALESCE(transactions.return_parent_id, transactions.id) AND pl.quantity_returned > 0) as lot_numbers")
                     )
                     ->groupBy('transactions.id');
 

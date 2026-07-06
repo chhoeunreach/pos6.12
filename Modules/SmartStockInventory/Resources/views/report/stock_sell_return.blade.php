@@ -95,17 +95,17 @@
                 }
             },
             columns: [
-                { data: 'date', name: 't.transaction_date', type: 'date' },
-                { data: 'invoice_no', name: 't.ref_no', type: 'text' },
+                { data: 'date', name: 'transactions.transaction_date', type: 'date' },
+                { data: 'invoice_no', name: 'transactions.invoice_no', type: 'text' },
                 { data: 'customer', name: 'c.name', type: 'text' },
                 { data: 'phone', name: 'c.mobile', type: 'text' },
                 { data: 'lot_number', name: 'purchase_lines.lot_number', type: 'text' },
                 { data: 'sku', name: 'v.sub_sku', type: 'text' },
-                { data: 'product', name: 'p.name', type: 'text' },
-                { data: 'quantity', name: 'transaction_sell_lines.quantity', className: 'text-right', searchable: false },
+                { data: 'product', name: 'v.name', type: 'text' },
+                { data: 'quantity', name: 'transaction_sell_lines.quantity_returned', className: 'text-right', searchable: false },
                 { data: 'unit_price', name: 'transaction_sell_lines.unit_price_before_discount', className: 'text-right' },
                 { data: 'total', name: 'total', searchable: false, className: 'text-right' },
-                { data: 'reason', name: 't.additional_notes', type: 'text' },
+                { data: 'reason', name: 'transactions.additional_notes', type: 'text' },
                 { data: 'location', name: 'bl.name', type: 'text' }
             ],
             fnDrawCallback: function() {
