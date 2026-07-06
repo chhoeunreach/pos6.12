@@ -346,6 +346,7 @@
         <table class="table sheet-table">
             <thead>
                 <tr>
+                    <th>User/Cashier</th>
                     <th>Business Location (Qty)</th>
                     <th class="text-right">Total Price</th>
                     @foreach($report['payment_columns'] as $method)
@@ -357,44 +358,50 @@
             </thead>
             <tbody>
                 @php
-                    $dashboardLocationGroupRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($row) {
-                        return collect($row['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($row) {
-                            $customerGroupRow['display_location_id'] = (int) ($row['location_id'] ?? 0);
-                            $customerGroupRow['display_location_name'] = $row['location_name'] ?? '-';
+                    $dashboardCashierGroupRows = collect($report['rows'] ?? [])->flatMap(function ($cashierRow) {
+                        return collect($cashierRow['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($cashierRow) {
+                            $customerGroupRow['cashier_id'] = (int) ($cashierRow['cashier_id'] ?? 0);
+                            $customerGroupRow['cashier_name'] = (string) ($cashierRow['cashier_name'] ?? 'N/A');
                             return $customerGroupRow;
                         });
                     })->sortBy(function ($customerGroupRow) {
                         $name = trim((string) ($customerGroupRow['name'] ?? 'លក់'));
-                        $groupSort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'Collection Payment' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
-                        return sprintf('%02d-%s', $groupSort, $customerGroupRow['display_location_name'] ?? '');
+                        $groupSort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'Collection Payment' => 4, 'Customer Payment' => 5][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
+                        return sprintf('%02d-%s-%s', $groupSort, $customerGroupRow['cashier_name'] ?? '', $customerGroupRow['location_qty_text'] ?? '');
                     })->values();
-                    $dashboardDueTotal = $dashboardLocationGroupRows
+                    $dashboardDueTotal = $dashboardCashierGroupRows
                         ->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
                         ->sum(fn ($row) => (float) ($row['due'] ?? 0));
-                    $hasNormalDashboardGroup = $dashboardLocationGroupRows
+                    $hasNormalDashboardGroup = $dashboardCashierGroupRows
                         ->contains(fn ($row) => (int) ($row['sort'] ?? 0) === 1);
                     $lastDashboardCustomerGroup = null;
                 @endphp
-                @forelse($dashboardLocationGroupRows as $customerGroupRow)
+                @forelse($dashboardCashierGroupRows as $customerGroupRow)
                     @php
                         $dashboardCustomerGroup = (string) ($customerGroupRow['name'] ?? 'លក់');
                         $dashboardDetailQuery = array_merge(request()->query(), [
                             'style_mode' => 'classic_plain',
-                            'location_ids' => [(int) ($customerGroupRow['display_location_id'] ?? 0)],
+                            'user_ids' => [(int) ($customerGroupRow['cashier_id'] ?? 0)],
                             'customer_group' => $dashboardCustomerGroup,
                         ]);
                     @endphp
                     @if($lastDashboardCustomerGroup !== $dashboardCustomerGroup)
-                        <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'Collection Payment' ? 'loan-payment-separator' : 'normal-separator')) }}">
-                            <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
+                        <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'Collection Payment' ? 'loan-payment-separator' : ($dashboardCustomerGroup === 'Customer Payment' ? 'customer-payment-separator' : 'normal-separator'))) }}">
+                            <td colspan="{{ 5 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
                         </tr>
                         @php $lastDashboardCustomerGroup = $dashboardCustomerGroup; @endphp
                     @endif
-                        <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Collection Payment' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
+                        <tr class="cashier-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Collection Payment' ? 'loan-payment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Customer Payment' ? 'customer-payment-breakdown-row' : 'normal-breakdown-row'))) }}">
                             <td class="name-main cashier-group-breakdown-name">
-                                <a class="summary-link customer-group-breakdown-location" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
-                                    {{ $customerGroupRow['display_location_name'] ?? '-' }} ({{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})
+                                <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    {{ $customerGroupRow['cashier_name'] ?? 'N/A' }}
                                 </a>
+                                <a class="qty-badge qty-badge-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                    (Qty: {{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})
+                                </a>
+                            </td>
+                            <td class="name-main">
+                                {{ $customerGroupRow['location_qty_text'] ?? '-' }}
                             </td>
                             <td class="text-right">
                                 <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($dashboardDetailQuery) . '#local_cashier_sales_detail_table' }}">
@@ -419,14 +426,14 @@
                             </td>
                         </tr>
                         @php
-                            $nextDashboardCustomerGroup = $dashboardLocationGroupRows->get($loop->index + 1);
+                            $nextDashboardCustomerGroup = $dashboardCashierGroupRows->get($loop->index + 1);
                             $isLastNormalDashboardGroup = (int) ($customerGroupRow['sort'] ?? 0) === 1
                                 && (int) data_get($nextDashboardCustomerGroup, 'sort', 0) !== 1;
                         @endphp
                         @if($isLastNormalDashboardGroup)
                             @foreach($moduleDashboardRows as $moduleDashboardRow)
                                 <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
-                                    <td class="name-main cashier-group-breakdown-name">
+                                    <td class="name-main cashier-group-breakdown-name" colspan="2">
                                         <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
                                             {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
                                         </a>
@@ -453,14 +460,14 @@
                 @empty
                     @if(empty($moduleDashboardRows))
                         <tr>
-                            <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                            <td colspan="{{ 5 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
                         </tr>
                     @endif
                 @endforelse
                 @if(! $hasNormalDashboardGroup)
                     @foreach($moduleDashboardRows as $moduleDashboardRow)
                         <tr class="cashier-group-breakdown-row normal-breakdown-row module-dashboard-breakdown-row">
-                            <td class="name-main cashier-group-breakdown-name">
+                            <td class="name-main cashier-group-breakdown-name" colspan="2">
                                 <a class="summary-link local-detail-tab-link" href="{{ $moduleDashboardRow['tab_target'] }}" data-target-tab="{{ $moduleDashboardRow['tab_target'] }}">
                                     {{ $moduleDashboardRow['label'] }} ({{ rtrim(rtrim(number_format((float) ($moduleDashboardRow['qty_total'] ?? 0), 2), '0'), '.') }})
                                 </a>
@@ -487,7 +494,7 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th class="text-right">Grand Total</th>
+                    <th colspan="2" class="text-right">Grand Total</th>
                     <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
@@ -497,7 +504,7 @@
                 </tr>
                 @if(($filters['style_mode'] ?? 'sheet') === 'classic_plain')
                     <tr class="row-summary">
-                        <th class="text-right">Expenses</th>
+                        <th colspan="2" class="text-right">Expenses</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
@@ -506,7 +513,7 @@
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">Actual Income</th>
+                        <th colspan="2" class="text-right">Actual Income</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
@@ -895,6 +902,7 @@
                             <th class="all-sale-location-column">Location</th>
                             <th>Customer</th>
                             <th>Group</th>
+                            <th>Lot</th>
                             <th>SKU</th>
                             <th>Product Name</th>
                             <th class="text-right">Quantity</th>
@@ -906,7 +914,7 @@
                                 <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                             @endforeach
                             <th class="text-right">Due</th>
-                            <th class="never-visible all-sale-cashier-column">Cashier</th>
+                            <th class="all-sale-cashier-column">User/Cashier</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -916,6 +924,7 @@
                                     <td></td>
                                     <td class="group-separator-label">{{ $row['customer_group_name'] ?? 'លក់' }}</td>
                                     <td class="group-separator-note">{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'Installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'AEON' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'Collection payment' : 'Sale')) }}</td>
+                                    <td></td>
                                     <td></td>
                                     <td></td>
                                     <td></td>
@@ -971,6 +980,7 @@
                                         {{ $row['customer_group_name'] ?? 'លក់' }}
                                     </span>
                                 </td>
+                                <td>{{ $row['lot_number'] ?? '-' }}</td>
                                 <td>{{ $row['sku'] }}</td>
                                 <td>{{ $row['product_name'] }}</td>
                                 <td class="text-right">{{ is_null($row['quantity'] ?? null) ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
@@ -996,7 +1006,7 @@
                         @endphp
                         <tfoot>
                             <tr class="detail-total-row">
-                                <th colspan="9" class="text-right">Total</th>
+                                <th colspan="10" class="text-right">Total</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                                 <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['unit_price'] ?? 0))) }}</th>
                                 <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['line_total'] ?? 0))) }}</th>

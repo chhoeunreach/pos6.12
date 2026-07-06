@@ -99,6 +99,7 @@
                 @endif
                 @unless($isAllSaleTable)
                     <th>Group</th>
+                    <th>Lot</th>
                 @endunless
                 <th>SKU</th>
                 <th>{{ $isAllSaleTable ? 'Product' : 'Product Name' }}</th>
@@ -124,9 +125,9 @@
                 @if($isAllSaleTable)
                     <th class="all-sale-location-column">Location</th>
                     <th>Group</th>
-                    <th class="never-visible all-sale-cashier-column">Cashier</th>
+                    <th class="all-sale-cashier-column">User/Cashier</th>
                 @else
-                    <th class="never-visible all-sale-cashier-column">Cashier</th>
+                    <th class="all-sale-cashier-column">User/Cashier</th>
                 @endif
             </tr>
         </thead>
@@ -198,6 +199,7 @@
                                 {{ $row['customer_group_name'] ?? 'លក់' }}
                             </span>
                         </td>
+                        <td>{{ $row['lot_number'] ?? '-' }}</td>
                     @endunless
                     <td>{{ $row['sku'] }}</td>
                     <td>{{ $row['product_name'] }}</td>
@@ -250,7 +252,7 @@
         @endphp
         <tfoot>
             <tr class="detail-total-row">
-                <th colspan="{{ $isAllSaleTable ? 7 : 8 }}" class="text-right">Total</th>
+                <th colspan="{{ $isAllSaleTable ? 7 : 9 }}" class="text-right">Total</th>
                 <th class="text-right">{{ rtrim(rtrim(number_format($saleRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['unit_price'] ?? 0))) }}</th>
                 @if($isAllSaleTable)

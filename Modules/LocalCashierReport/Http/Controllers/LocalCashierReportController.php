@@ -922,6 +922,7 @@ class LocalCashierReportController extends Controller
             ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
             ->leftJoin('products as p', 'p.id', '=', 'tsl.product_id')
             ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
+            ->leftJoin('purchase_lines as pl', 'pl.id', '=', 'tsl.lot_no_line_id')
             ->whereIn('tsl.transaction_id', $transactionIds)
             ->select(
                 'tsl.transaction_id',
@@ -932,6 +933,7 @@ class LocalCashierReportController extends Controller
                 DB::raw('((tsl.quantity * tsl.unit_price_before_discount) - COALESCE(tsl.line_discount_amount,0)) as line_total'),
                 'p.name as product_name',
                 'v.sub_sku',
+                'pl.lot_number',
                 't.id as txn_id',
                 't.transaction_date',
                 't.invoice_no',
@@ -988,6 +990,7 @@ class LocalCashierReportController extends Controller
                 'customer_group_name' => $customerGroupLabel,
                 'customer_group_sort' => $customerGroupSort,
                 'sku' => (string) ($line->sub_sku ?? '-'),
+                'lot_number' => (string) ($line->lot_number ?? '-'),
                 'product_name' => (string) ($line->product_name ?? '-'),
                 'quantity' => (float) $line->quantity,
                 'unit_price' => (float) ($line->unit_price_before_discount ?? $line->unit_price_inc_tax ?? 0),
@@ -1394,6 +1397,7 @@ class LocalCashierReportController extends Controller
                 'brand_id' => isset($line->brand_id) ? (int) $line->brand_id : 0,
                 'brand_name' => (string) ($line->brand_name ?? 'No Brand'),
                 'sku' => (string) ($line->sub_sku ?? '-'),
+                'lot_number' => (string) ($line->lot_number ?? '-'),
                 'product_name' => (string) ($line->product_name ?? '-'),
                 'quantity' => (float) $line->quantity,
                 'unit_price' => (float) ($line->unit_price_before_discount ?? $line->unit_price_inc_tax ?? 0),
