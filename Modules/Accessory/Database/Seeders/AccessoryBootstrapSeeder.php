@@ -126,8 +126,8 @@ class AccessoryBootstrapSeeder extends Seeder
             ['id' => 4, 'location_id' => 'BL0043', 'name' => 'វីអាយភី-Accessory', 'sell_type' => 'សម្ភារ'],
             ['id' => 5, 'location_id' => 'BL0044', 'name' => 'វីអាយភី-Accessory-mart', 'sell_type' => 'សម្ភារ'],
             ['id' => 6, 'location_id' => 'BL0045', 'name' => 'វីអាយភី-Accessory-ស្តុកធំ', 'sell_type' => 'សម្ភារ'],
-            ['id' => 7, 'location_id' => 'BL0046', 'name' => 'សាខាកាប់គោ-Accessory', 'sell_type' => 'សម្ភារ'],
-            ['id' => 8, 'location_id' => 'BL0047', 'name' => 'សាខាអ៊ីអន-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 7, 'location_id' => 'BL0046', 'name' => 'កាប់គោ-Accessory', 'sell_type' => 'សម្ភារ'],
+            ['id' => 8, 'location_id' => 'BL0047', 'name' => 'អ៊ីអន-Accessory', 'sell_type' => 'សម្ភារ'],
             ['id' => 9, 'location_id' => 'BL0048', 'name' => 'ស្តុកធំ-Accessory', 'sell_type' => 'សម្ភារ'],
         ];
 

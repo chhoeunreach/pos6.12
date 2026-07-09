@@ -94,6 +94,7 @@
                     d = __datatable_ajax_callback(d);
                 }
             },
+            lengthMenu: [[10, 25, 50, 500, 1000, 2000, -1], [10, 25, 50, 500, 1000, 2000, "All"]],
             columns: [
                 { data: 'date', name: 'transactions.transaction_date', type: 'date' },
                 { data: 'ref_no', name: 'transactions.ref_no', type: 'text' },

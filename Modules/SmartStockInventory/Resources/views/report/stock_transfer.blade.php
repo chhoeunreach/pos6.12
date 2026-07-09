@@ -151,6 +151,7 @@ $(document).ready(function() {
                 d = __datatable_ajax_callback(d);
             }
         },
+            lengthMenu: [[10, 25, 50, 500, 1000, 2000, -1], [10, 25, 50, 500, 1000, 2000, "All"]],
         columns: [
             { data: 'transaction_date', name: 'transaction_date' },
             { data: 'lot_number', name: 'lot_number' },

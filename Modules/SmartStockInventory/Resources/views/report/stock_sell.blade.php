@@ -99,6 +99,7 @@
                     d = __datatable_ajax_callback(d);
                 }
             },
+            lengthMenu: [[10, 25, 50, 500, 1000, 2000, -1], [10, 25, 50, 500, 1000, 2000, "All"]],
             columns: [
                 { data: 'transaction_date', name: 't.transaction_date', type: 'date' },
                 { data: 'invoice_no', name: 't.invoice_no', type: 'text' },
