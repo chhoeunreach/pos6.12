@@ -51,7 +51,7 @@
 
 <section id="receipt_section" class="print_section"></section>
 
-<div class="modal fade hr_sell_list_photo_modal" tabindex="-1" role="dialog">
+<div class="modal fade hr_sell_list_photo_modal" tabindex="-1" role="dialog" data-backdrop="static" style="z-index: 99999;">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -95,6 +95,10 @@
         </div>
     </div>
 </div>
+<style>
+.hr_sell_list_photo_modal { z-index: 99999 !important; }
+.hr_sell_list_photo_modal + .modal-backdrop { z-index: 99998 !important; }
+</style>
 
 @stop
 @section('module_js')
@@ -178,11 +182,17 @@
             var photoName = $(this).data('photo-name') || 'Photo';
             var $modal = $('.hr_sell_list_photo_modal');
 
+            $('.view_modal').css('z-index', 1050);
+
             $modal.find('.sell-list-photo-title').text(photoName);
             $modal.find('.sell-list-photo-preview')
                 .attr('src', photoUrl)
                 .attr('data-fallback-url', fallbackUrl);
             $modal.modal('show');
+        });
+
+        $('.hr_sell_list_photo_modal').on('hidden.bs.modal', function () {
+            $('.view_modal').css('z-index', '');
         });
     });
 </script>

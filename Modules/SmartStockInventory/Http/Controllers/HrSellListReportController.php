@@ -203,24 +203,44 @@ class HrSellListReportController extends Controller
                 abort(404);
             }
 
-            $photoUrl = $photo->photo_url ?: rtrim(env('HR_APP_URL', config('app.url')), '/') . '/storage/' . ltrim($photo->photo_path, '/');
+            $relative_path = ltrim($photo->photo_path ?? '', '/\\');
 
-            $imageContent = @file_get_contents($photoUrl);
-
-            if ($imageContent === false) {
-                $imageContent = @file_get_contents(rtrim(env('HR_APP_URL', config('app.url')), '/') . '/storage/' . ltrim($photo->photo_path, '/'));
-            }
-
-            if ($imageContent === false) {
+            if ($relative_path === '' || strpos($relative_path, '..') !== false) {
                 abort(404);
             }
 
-            $finfo = new \finfo(FILEINFO_MIME_TYPE);
-            $mimeType = $finfo->buffer($imageContent);
+            $relative_path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative_path);
+            $candidate_roots = array_filter([
+                env('HR_SELL_OUT_PHOTO_PATH'),
+                env('HR_STORAGE_PATH'),
+                storage_path('app/public'),
+                public_path('storage'),
+            ]);
 
-            return response($imageContent, 200)
-                ->header('Content-Type', $mimeType)
-                ->header('Cache-Control', 'public, max-age=86400');
+            foreach ($candidate_roots as $root) {
+                $root = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $root), '\\/');
+                $path = $root . DIRECTORY_SEPARATOR . $relative_path;
+
+                if (is_file($path)) {
+                    return response()->file($path, [
+                        'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+                        'Cache-Control' => 'public, max-age=86400',
+                    ]);
+                }
+            }
+
+            if (!empty($photo->photo_url)) {
+                $imageContent = @file_get_contents($photo->photo_url);
+                if ($imageContent !== false) {
+                    $finfo = new \finfo(FILEINFO_MIME_TYPE);
+                    $mimeType = $finfo->buffer($imageContent);
+                    return response($imageContent, 200)
+                        ->header('Content-Type', $mimeType)
+                        ->header('Cache-Control', 'public, max-age=86400');
+                }
+            }
+
+            abort(404);
         } catch (\Exception $e) {
             \Log::warning('HR photo fetch error: ' . $e->getMessage());
             abort(404);
