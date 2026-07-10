@@ -10,7 +10,7 @@
     @component('components.filters', ['title' => __('report.filters')])
         <div class="col-md-3">
             <div class="form-group">
-                {!! Form::label('hr_sell_list_filter_branch',  __('sale.business_location') . ':') !!}
+                {!! Form::label('hr_sell_list_filter_branch',  __('lang_v1.branch') . ':') !!}
                 {!! Form::select('hr_sell_list_filter_branch', $branches->prepend(__('lang_v1.all'), ''), null, ['class' => 'form-control select2', 'id' => 'hr_sell_list_filter_branch', 'style' => 'width:100%', 'placeholder' => __('lang_v1.all')]); !!}
             </div>
         </div>

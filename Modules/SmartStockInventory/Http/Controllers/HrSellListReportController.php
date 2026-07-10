@@ -58,7 +58,7 @@ class HrSellListReportController extends Controller
                 }
 
                 if (! empty($branch_name)) {
-                    $query->where('sor.branch_name', $branch_name);
+                    $query->whereRaw('TRIM(sor.branch_name) = ?', [$branch_name]);
                 }
 
                 if (! empty($sell_type)) {
@@ -134,16 +134,14 @@ class HrSellListReportController extends Controller
                 ->orderBy('service_type')
                 ->get()
                 ->pluck('service_type');
-
             $branches = DB::connection('hr')
                 ->table('sell_out_reports')
-                ->select('branch_name')
+                ->selectRaw('DISTINCT TRIM(branch_name) as branch_name')
                 ->whereNotNull('branch_name')
                 ->where('branch_name', '!=', '')
-                ->distinct()
                 ->orderBy('branch_name')
                 ->get()
-                ->pluck('branch_name');
+                ->pluck('branch_name', 'branch_name');
         } catch (\Exception $e) {
             \Log::warning('Unable to load HR filters: ' . $e->getMessage());
             $sell_types = collect();
