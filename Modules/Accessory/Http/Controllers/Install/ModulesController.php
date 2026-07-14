@@ -302,7 +302,7 @@ class ModulesController extends Controller
 
         try {
             $request->validate([
-                'module' => 'required|file|mimes:zip|max:10240', // 10MB max
+                'module' => 'required|file|mimes:zip|max:51200', // 50MB max
             ]);
 
             //get zipped file
@@ -318,22 +318,18 @@ class ModulesController extends Controller
 
             //extract the zipped file in given path
             $zip = new ZipArchive();
-            if ($zip->open($module) === true) {
+            if ($zip->open($module->getRealPath()) === true) {
                 $zip->extractTo($path.'/');
                 $zip->close();
 
                 $module_dir = $this->detectUploadedModuleDirectory($existing_modules, $path, $module_name);
-                $data_controller_path = $module_dir . '/Http/Controllers/DataController.php';
                 if (!(file_exists($module_dir . '/composer.json')
                     && file_exists($module_dir . '/module.json')
-                    && file_exists($module_dir . '/Config/config.php')
-                    && file_exists($data_controller_path))
+                    && file_exists($module_dir . '/Config/config.php'))
                 ) {
                     \File::deleteDirectory($module_dir);
                     $output = ['success' => false,
-                        'msg' => __('messages.something_went_wrong'),
-
-                        // 
+                        'msg' => __('lang_v1.pls_upload_valid_zip_file'),
                     ];
                     return redirect()->back()->with(['status' => $output]);
                 }

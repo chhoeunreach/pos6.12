@@ -383,12 +383,12 @@ class ModulesController extends Controller
 
         try {
             $request->validate([
-                'module' => 'required|file|mimes:zip|max:10240', // 10MB max
+                'module' => 'required|file|mimes:zip|max:51200', // 50MB max
             ]);
 
             //get zipped file
             $module = $request->file('module');
-            $module_name = Str::slug(str_replace('.zip', '', $module->getClientOriginalName()));
+            $module_name = pathinfo($module->getClientOriginalName(), PATHINFO_FILENAME);
 
             //check if 'Modules' folder exist or not, if not exist create
             $path = base_path('Modules');
@@ -396,30 +396,32 @@ class ModulesController extends Controller
                 mkdir($path, 0755, true);
             }
 
+            $existing_modules = $this->localModuleDirectories();
+
             //extract the zipped file in given path
             $zip = new ZipArchive();
-            if ($zip->open($module) === true) {
+            if ($zip->open($module->getRealPath()) === true) {
                 $zip->extractTo($path.'/');
                 $zip->close();
 
-                // Check for required files after extraction
-                $module_dir = $path . '/' . $module_name;
-                $data_controller_path = $module_dir . '/Http/Controllers/DataController.php';
-                if (!(file_exists($module_dir . '/module.json')
+                $module_dir = $this->detectUploadedModuleDirectory($existing_modules, $path, $module_name);
+                if (!(file_exists($module_dir . '/composer.json')
+                    && file_exists($module_dir . '/module.json')
                     && file_exists($module_dir . '/Config/config.php')
-                    && file_exists($data_controller_path))
-                ) {
+                )) {
                     \File::deleteDirectory($module_dir);
                     $output = ['success' => false,
-                        'msg' => __('messages.something_went_wrong'),
-
-                        // 
+                        'msg' => __('lang_v1.pls_upload_valid_zip_file'),
                     ];
                     return redirect()->back()->with(['status' => $output]);
                 }
 
+                $module_name = $this->moduleNameFromJson($module_dir) ?: basename($module_dir);
+
                 // Clear module assets cache when new module is uploaded
                 Cache::forget('module_assets');
+                Cache::forget('accessory_module_assets');
+                Cache::forget('service_module_assets');
 
                 // Publish assets for the uploaded module using its name
                 try {
@@ -428,19 +430,72 @@ class ModulesController extends Controller
                     // Fallback to publishing all if targeted signature not supported
                     Artisan::call('module:publish');
                 }
+            } else {
+                $output = ['success' => false,
+                    'msg' => __('lang_v1.pls_upload_valid_zip_file'),
+                ];
+                return redirect()->back()->with(['status' => $output]);
             }
 
             $output = ['success' => true,
                 'msg' => __('lang_v1.success'),
             ];
         } catch (\Exception $e) {
-            \Log::error($e->getMessage());
+            \Log::error('Module upload failed: '.$e->getMessage(), [
+                'file' => $request->file('module')?->getClientOriginalName(),
+            ]);
             $output = ['success' => false,
-                'msg' => __('messages.something_went_wrong'),
+                'msg' => $e->getMessage() ?: __('messages.something_went_wrong'),
             ];
         }
 
         return redirect()->back()->with(['status' => $output]);
+    }
+
+    private function localModuleDirectories(): array
+    {
+        $path = base_path('Modules');
+
+        if (! is_dir($path)) {
+            return [];
+        }
+
+        return array_values(array_filter(glob($path.'/*'), 'is_dir'));
+    }
+
+    private function detectUploadedModuleDirectory(array $existing_modules, string $path, string $fallback_name): string
+    {
+        $current_modules = $this->localModuleDirectories();
+        $new_modules = array_values(array_diff($current_modules, $existing_modules));
+
+        foreach ($new_modules as $module_path) {
+            if (file_exists($module_path.'/module.json')) {
+                return $module_path;
+            }
+        }
+
+        foreach ([$fallback_name, Str::studly($fallback_name), Str::slug($fallback_name)] as $candidate) {
+            $module_path = $path.'/'.$candidate;
+            if (file_exists($module_path.'/module.json')) {
+                return $module_path;
+            }
+        }
+
+        return $path.'/'.$fallback_name;
+    }
+
+    private function moduleNameFromJson(string $module_dir): ?string
+    {
+        $module_json = $module_dir.'/module.json';
+        if (! file_exists($module_json)) {
+            return null;
+        }
+
+        $details = json_decode(file_get_contents($module_json), true);
+
+        return is_array($details) && ! empty($details['name'])
+            ? (string) $details['name']
+            : null;
     }
 
     private function __available_modules()
