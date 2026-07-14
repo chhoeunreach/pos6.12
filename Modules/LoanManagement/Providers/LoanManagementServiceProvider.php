@@ -10,6 +10,7 @@ use Modules\LoanManagement\Console\InstallLoanManagementCommand;
 use Modules\LoanManagement\Console\RunCollectionAutomationCommand;
 use Modules\LoanManagement\Console\TestChatSchemaCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
+use Modules\LoanManagement\Helpers\LoanMenuHelper;
 use Modules\LoanManagement\Http\Middleware\LoanPermissionMiddleware;
 use Modules\LoanManagement\Observers\TransactionInvoicePrefixObserver;
 
@@ -23,6 +24,7 @@ class LoanManagementServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->loadTranslationsFrom(__DIR__ . '/../Resources/lang', 'loanmanagement');
         Transaction::observe(TransactionInvoicePrefixObserver::class);
+        $this->registerGlobalHelpers();
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -81,5 +83,14 @@ class LoanManagementServiceProvider extends ServiceProvider
             'driver' => $driver,
             'provider' => $provider,
         ]);
+    }
+
+    private function registerGlobalHelpers(): void
+    {
+        if (! function_exists('loan_user_can')) {
+            function loan_user_can(string $permission): bool {
+                return LoanMenuHelper::loanUserCan($permission);
+            }
+        }
     }
 }

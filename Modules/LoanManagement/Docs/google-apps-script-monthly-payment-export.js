@@ -9,7 +9,9 @@
  * Output columns match Laravel payment import template:
  * loan_invoice, payment_date, amount, cash_amount,
  * bank_amount, payoff_amount, payment_method,
- * reference_no, received_by, note
+ * payment_type, installment_no, schedule_id,
+ * currency, exchange_rate, penalty_amount,
+ * discount_amount, reference_no, received_by, note
  * =====================================================
  */
 
@@ -48,6 +50,13 @@ var OUTPUT_HEADERS = [
   'bank_amount',
   'payoff_amount',
   'payment_method',
+  'payment_type',
+  'installment_no',
+  'schedule_id',
+  'currency',
+  'exchange_rate',
+  'penalty_amount',
+  'discount_amount',
   'reference_no',
   'received_by',
   'note'
@@ -235,6 +244,13 @@ function pushPaymentRow_(outRows, seenKeys, loanInvoice, paymentDate, amount, ca
     round2_(bankAmount),
     round2_(payoffAmount),
     paymentMethod,
+    'monthly',
+    '',
+    '',
+    'USD',
+    1,
+    0,
+    0,
     referenceNo,
     receivedBy,
     note

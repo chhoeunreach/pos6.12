@@ -69,26 +69,94 @@
 @section('content_body')
 <section class="content-header">
     <h1>Loan Detail #{{ $loanRow->id }}</h1>
-    @can('loan_management.edit')
-    <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
-       class="btn btn-primary">
-        <i class="fa fa-pencil"></i> Edit Loan
-    </a>
-    @endcan
-    <button type="button"
-            class="btn btn-success btn-modal"
-            data-href="{{ route('loan-management.loans.payment.create', $loanRow->id) }}"
-            data-container=".view_modal">
-        <i class="fa fa-money"></i> Add Payment
-    </button>
-    <button type="button"
-            class="btn btn-default btn-modal"
-            data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
-            data-container=".view_modal">
-        <i class="fa fa-print"></i> Print Loan
-    </button>
+    <div class="pull-right d-none d-lg-block">
+        @can('loan_management.edit')
+        <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
+           class="btn btn-primary">
+            <i class="fa fa-pencil"></i> Edit Loan
+        </a>
+        @endcan
+        <button type="button"
+                class="btn btn-success btn-modal"
+                data-href="{{ route('loan-management.loans.payment.create', $loanRow->id) }}"
+                data-container=".view_modal">
+            <i class="fa fa-money"></i> Add Payment
+        </button>
+        <button type="button"
+                class="btn btn-default btn-modal"
+                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
+                data-container=".view_modal">
+            <i class="fa fa-print"></i> Print Loan
+        </button>
+        <a href="{{ route('loan-management.loans.convert-to-pos', $loanRow->id) }}"
+           class="btn btn-warning">
+            <i class="fa fa-exchange"></i> Convert to POS
+        </a>
+    </div>
 </section>
 <section class="content">
+
+{{-- Mobile Loan Info Card --}}
+<div class="lm-mobile-info-card lm-animate-slideUp">
+    <div class="lm-mobile-info-card-title"><i class="fa fa-file-text-o" style="color: #3b82f6;"></i> Loan Information</div>
+    <div class="lm-mobile-info-grid">
+        <div class="lm-mobile-info-item">
+            <small>Loan #</small>
+            <strong>{{ $loanRow->loan_number ?? $loanRow->id }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Status</small>
+            <strong><span class="label label-info" style="font-size: 11px;">{{ ucfirst($loanRow->status ?? 'pending') }}</span></strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Principal</small>
+            <strong>{{ number_format((float)($loanRow->principal_amount ?? 0),2) }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Paid</small>
+            <strong style="color: #16a34a;">{{ number_format((float)($loanRow->paid_amount ?? 0),2) }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Balance</small>
+            <strong style="color: #dc2626;">{{ number_format((float)($loanRow->balance_amount ?? 0),2) }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Customer</small>
+            <strong>{{ $customerName }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Phone</small>
+            <strong>{{ $customerPhone }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Duration</small>
+            <strong>{{ $displayDuration }} mo</strong>
+        </div>
+    </div>
+</div>
+
+{{-- Mobile Customer Card --}}
+<div class="lm-mobile-info-card lm-animate-slideUp" style="animation-delay: .1s;">
+    <div class="lm-mobile-info-card-title"><i class="fa fa-user" style="color: #8b5cf6;"></i> Customer</div>
+    <div class="lm-mobile-info-grid">
+        <div class="lm-mobile-info-item">
+            <small>Name</small>
+            <strong>{{ $customerName }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Phone</small>
+            <strong>{{ $customerPhone }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Address</small>
+            <strong>{{ $customerAddress ?: '-' }}</strong>
+        </div>
+        <div class="lm-mobile-info-item">
+            <small>Collector</small>
+            <strong>{{ $collectorDisplayName ?? '-' }}</strong>
+        </div>
+    </div>
+</div>
 
 <div class="row">
 <div class="col-md-12">
@@ -119,20 +187,6 @@
 </div>
 
 <div class="row">
-<div class="col-md-6">
-<div class="box box-solid">
-<div class="box-header"><h3 class="box-title">Source Sell Snapshot</h3></div>
-<div class="box-body">
-<p><strong>Source Type:</strong> {{ $sourceTypeDisplay ?? '-' }}</p>
-<p><strong>Source Transaction ID:</strong> {{ $sourceTransactionIdDisplay ?? '-' }}</p>
-<p><strong>Source Invoice:</strong> {{ $sourceInvoice }}</p>
-<p><strong>Sell Final Total:</strong> {{ number_format((float)($sourceFinalTotalDisplay ?? 0),2) }}</p>
-<p><strong>Sell Paid:</strong> {{ number_format((float)($sourcePaidDisplay ?? 0),2) }}</p>
-<p><strong>Sell Due:</strong> {{ number_format((float)($sourceDueDisplay ?? 0),2) }}</p>
-<p><strong>Stock Already Deducted:</strong> {{ (isset($loanRow->stock_already_deducted) && (int)$loanRow->stock_already_deducted === 1) ? 'Yes' : 'No' }}</p>
-</div>
-</div>
-</div>
 <div class="col-md-6">
 <div class="box box-solid">
 <div class="box-header"><h3 class="box-title">Customer / Location Snapshot</h3></div>
@@ -174,6 +228,41 @@
 </div>
 
 </section>
+
+{{-- Mobile Sticky Action Bar --}}
+<div class="lm-mobile-action-bar d-lg-none" id="lmLoanActionBar">
+    <div class="lm-mab-info">
+        <div class="lm-mab-balance">
+            <span class="lm-mab-label">Balance</span>
+            <span class="lm-mab-amount">{{ number_format((float)($loanRow->balance_amount ?? 0), 2) }}</span>
+            <span class="lm-mab-currency">{{ $loanRow->currency ?? 'USD' }}</span>
+        </div>
+    </div>
+    <div class="lm-mab-actions">
+        <button type="button"
+                class="lm-mab-btn lm-quick-pay-trigger"
+                data-url="{{ route('loan-management.loans.payment.quick-pay', $loanRow->id) }}"
+                data-loan-id="{{ $loanRow->id }}">
+            <i class="fa fa-money"></i> Pay
+        </button>
+        <button type="button"
+                class="lm-mab-btn lm-mab-btn-outline btn-modal"
+                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
+                data-container=".view_modal">
+            <i class="fa fa-print"></i> Print
+        </button>
+        <a href="{{ route('loan-management.loans.convert-to-pos', $loanRow->id) }}"
+           class="lm-mab-btn lm-mab-btn-outline">
+            <i class="fa fa-exchange"></i> POS
+        </a>
+        @can('loan_management.edit')
+        <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
+           class="lm-mab-btn lm-mab-btn-outline">
+            <i class="fa fa-pencil"></i> Edit
+        </a>
+        @endcan
+    </div>
+</div>
 @endsection
 
 @section('loan_js')

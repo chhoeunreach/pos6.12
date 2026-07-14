@@ -18,7 +18,7 @@
         <li class="treeview">
             <a href="#"><i class="fa fa-credit-card"></i> Loan Operations <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
-                <li><a href="{{ $lmUrl('loan-management.loans.create-from-sell', [], '/loan-management/loans/create-from-sell') }}"><i class="fa fa-plus"></i> New Loans</a></li>
+                <li><a href="{{ $lmUrl('loan-management.loans.create', [], '/loan-management/loans/create') }}"><i class="fa fa-plus"></i> New Loans</a></li>
                 <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'active-loans'], '/loan-management/operations/active-loans') }}"><i class="fa fa-check"></i> Active Loans</a></li>
                 <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'due-today'], '/loan-management/operations/due-today') }}"><i class="fa fa-calendar-check-o"></i> Due Today</a></li>
                 <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'partial-payments'], '/loan-management/operations/partial-payments') }}"><i class="fa fa-adjust"></i> Partial Payments</a></li>

@@ -172,6 +172,215 @@
     .lm-tone-rose { background: linear-gradient(135deg, #be185d, #f43f5e); }
     .lm-tone-orange { background: linear-gradient(135deg, #c2410c, #fb923c); }
     .lm-tone-gray { background: linear-gradient(135deg, #334155, #94a3b8); }
+
+    /* Payment Collection quick search styles */
+    .lm-pay-row td { vertical-align: middle !important; }
+    .lm-pay-due {
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+    }
+    .lm-pay-balance {
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .lm-pay-action {
+        white-space: nowrap;
+    }
+    .lm-pay-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        border: 0;
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(22, 163, 74, .25);
+        transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .lm-pay-btn:hover,
+    .lm-pay-btn:focus {
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, .35);
+        transform: translateY(-1px);
+    }
+    .lm-pay-btn:active {
+        transform: scale(.96);
+    }
+    .lm-pay-more {
+        display: inline-block;
+        margin-left: 4px;
+    }
+    .lm-pay-more .btn {
+        padding: 4px 6px;
+        min-height: auto;
+        border-radius: 6px;
+    }
+    .lm-pay-status {
+        display: inline-block;
+        margin-top: 3px;
+        padding: 1px 6px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        background: #f1f5f9;
+        color: #64748b;
+    }
+    .lm-pay-status--overdue {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    /* Payment Modal Form Styles */
+    .view_modal .modal-content {
+        border: 0;
+        border-radius: 18px;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+        overflow: hidden;
+    }
+    .view_modal .modal-header {
+        background: linear-gradient(135deg, #15314b 0%, #1c5d77 52%, #20a083 100%);
+        color: #fff;
+        border: 0;
+        padding: 18px 22px;
+    }
+    .view_modal .modal-header .modal-title {
+        color: #fff;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .view_modal .modal-header .modal-title .fa {
+        margin-right: 8px;
+        opacity: .85;
+    }
+    .view_modal .modal-header .close {
+        color: #fff;
+        opacity: .8;
+        text-shadow: none;
+    }
+    .view_modal .modal-header .close:hover {
+        opacity: 1;
+    }
+    .view_modal .modal-body {
+        padding: 20px 22px;
+        background: #f8fafc;
+    }
+    .view_modal .modal-body .well {
+        background: #fff;
+        border: 1px solid #e5ecf3;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+    .view_modal .modal-body .well strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+    .view_modal .modal-body .form-group label {
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 4px;
+    }
+    .view_modal .modal-body .form-control,
+    .view_modal .modal-body select.form-control {
+        border: 1px solid #d7e2ee;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 13px;
+        height: auto;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .view_modal .modal-body .form-control:focus,
+    .view_modal .modal-body select.form-control:focus {
+        border-color: #7dd3fc;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+    }
+    .view_modal .modal-body .input-group-addon {
+        border: 1px solid #d7e2ee;
+        border-right: 0;
+        border-radius: 10px 0 0 10px;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 13px;
+        padding: 8px 10px;
+    }
+    .view_modal .modal-body .input-group .form-control {
+        border-left: 0;
+        border-radius: 0 10px 10px 0;
+    }
+    .view_modal .modal-body .box.box-solid.bg-lightgray {
+        background: #fff !important;
+        border: 1px solid #e5ecf3;
+        border-radius: 14px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+        overflow: hidden;
+    }
+    .view_modal .modal-body .box-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #edf2f7;
+        padding: 12px 16px;
+    }
+    .view_modal .modal-body .box-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+    .view_modal .modal-body .box-body {
+        padding: 16px;
+    }
+    .view_modal .modal-body .loan-payment-line {
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .view_modal .modal-body .loan-payment-line:last-child {
+        border-bottom: 0;
+    }
+    .view_modal .modal-body .checkbox label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #0f172a;
+    }
+    .view_modal .modal-body .checkbox input[type="checkbox"] {
+        margin-right: 6px;
+    }
+    .view_modal .modal-body .well-sm {
+        background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+        border: 1px solid #bbf7d0;
+        border-radius: 12px;
+        padding: 12px 16px;
+    }
+    .view_modal .modal-body .well-sm strong {
+        color: #15803d;
+    }
+    .view_modal .modal-footer {
+        background: #f8fafc;
+        border-top: 1px solid #edf2f7;
+        padding: 14px 22px;
+    }
+    .view_modal .modal-footer .btn {
+        border-radius: 10px;
+        font-weight: 700;
+        padding: 8px 20px;
+        font-size: 13px;
+    }
+    .lm-pay-action .btn-modal {
+        cursor: pointer;
+    }
+    .loan-schedule-display {
+        display: block;
+        margin-top: 4px;
+        color: #475569;
+        font-size: 12px;
+    }
+
     .lm-stat-card__label {
         display: block;
         color: #64748b;
@@ -353,6 +562,20 @@
     .lm-quick-trigger:focus {
         background: #e0f2fe !important;
         color: #0369a1 !important;
+    }
+    .lm-quick-box__icon--pay {
+        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+        color: #15803d;
+    }
+    .lm-quick-box__chip--pay {
+        background: #f0fdf4;
+        color: #15803d;
+    }
+    .lm-quick-box--loan {
+        border-color: #bbf7d0;
+    }
+    .lm-quick-box--loan::before {
+        background: rgba(34, 197, 94, 0.12);
     }
     .lm-quick-input .form-control {
         height: 40px;
@@ -1200,6 +1423,569 @@
             border-right: 0;
         }
     }
+
+    /* ============================================================
+       DASHBOARD MOBILE: Tablet (max-width: 992px)
+       ============================================================ */
+    @media (max-width: 992px) {
+        .lm-dashboard-hero-grid {
+            grid-template-columns: 1fr;
+        }
+        .lm-dashboard-title {
+            font-size: 24px;
+        }
+        .lm-dashboard-cards {
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+        }
+        .lm-quick-grid {
+            grid-template-columns: 1fr;
+        }
+        .lm-side-stack {
+            flex-direction: row;
+            gap: 14px;
+        }
+        .lm-side-stack > .lm-dashboard-panel {
+            flex: 1;
+            min-width: 0;
+        }
+    }
+
+    /* ============================================================
+       DASHBOARD MOBILE: Phone (max-width: 767px)
+       ============================================================ */
+    @media (max-width: 767px) {
+        .lm-dashboard {
+            gap: 10px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        /* Tabs: full-width scrollable */
+        .lm-dashboard-tabs {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            justify-content: center;
+        }
+        .lm-dashboard-tab {
+            padding: 8px 14px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        /* Hero */
+        .lm-dashboard-hero {
+            padding: 10px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .lm-dashboard-hero::after {
+            display: none;
+        }
+        .lm-dashboard-hero-grid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        .lm-dashboard-title {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+        .lm-dashboard-subtitle {
+            font-size: 12px;
+            max-width: 100%;
+            display: none;
+        }
+
+        /* Hero metrics: horizontal scroll strip */
+        .lm-hero-metrics {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 2px;
+            scroll-snap-type: x mandatory;
+        }
+        .lm-hero-metric {
+            flex: 0 0 110px;
+            min-width: 110px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            scroll-snap-align: start;
+        }
+        .lm-hero-metric-label {
+            font-size: 9px;
+            margin-bottom: 1px;
+        }
+        .lm-hero-metric-value {
+            font-size: 16px;
+        }
+
+        /* Stat cards: compact full-width inline cards */
+        .lm-dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+        .lm-stat-card {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            min-height: auto;
+            border-radius: 10px;
+        }
+        .lm-stat-card__icon {
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            font-size: 13px;
+            border-radius: 8px;
+        }
+        .lm-stat-card__label {
+            font-size: 10px;
+            line-height: 1.2;
+            margin-bottom: 0;
+        }
+        .lm-stat-card__value {
+            font-size: 16px;
+            margin-top: 0;
+            line-height: 1.1;
+        }
+        .lm-stat-card__meta {
+            display: none;
+        }
+
+        /* Panels */
+        .lm-dashboard-panel {
+            border-radius: 14px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .lm-dashboard-panel__header {
+            padding: 12px 14px 10px;
+            overflow: hidden;
+        }
+        .lm-dashboard-panel__header > div {
+            min-width: 0;
+            flex: 1;
+        }
+        .lm-dashboard-panel__title {
+            font-size: 15px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lm-dashboard-panel__hint {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lm-dashboard-panel__body {
+            padding: 12px 14px 14px;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .lm-dashboard-panel__badge {
+            font-size: 10px;
+            padding: 5px 8px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        /* Quick action grid: full width boxes */
+        .lm-quick-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .lm-quick-box {
+            padding: 14px;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .lm-quick-box::before {
+            display: none;
+        }
+        .lm-quick-box:hover {
+            transform: none;
+        }
+        .lm-quick-box__title {
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lm-quick-box__subtitle {
+            font-size: 12px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .lm-quick-box__meta {
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .lm-quick-box__chip {
+            font-size: 10px;
+            padding: 4px 8px;
+        }
+        .lm-quick-box__footer {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Tables: horizontal scroll */
+        .lm-dashboard-table {
+            min-width: 0;
+            width: 100%;
+        }
+        .lm-pay-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+        .lm-pay-more .btn {
+            padding: 6px 8px;
+        }
+        .lm-table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+        }
+
+        /* Side stack: vertical on phone */
+        .lm-side-stack {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Live charts grid */
+        .lm-live-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .lm-live-chart__canvas {
+            min-height: 180px;
+            padding: 12px;
+        }
+        .lm-live-chart__bar-group {
+            min-width: 44px;
+        }
+        .lm-live-chart__bar {
+            width: 14px;
+        }
+        .lm-live-chart__label {
+            font-size: 10px;
+        }
+        .lm-live-chart__value {
+            font-size: 10px;
+        }
+
+        /* Chat card mobile */
+        .lm-chat-card {
+            border-radius: 18px;
+            padding: 8px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .lm-chat-card::before {
+            display: none;
+        }
+        .lm-chat-card__toolbar {
+            padding: 8px;
+        }
+        .lm-chat-card__title {
+            font-size: 20px;
+        }
+        .lm-chat-card__summary {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .lm-chat-card__summary-value {
+            font-size: 18px;
+        }
+        .lm-chat-card__tabs {
+            padding: 0 8px 10px;
+            gap: 6px;
+        }
+        .lm-chat-card__tab {
+            min-height: 34px;
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+        .lm-chat-card__list {
+            max-height: 400px;
+        }
+        .lm-chat-card__item {
+            grid-template-columns: 50px minmax(0, 1fr) 14px;
+            gap: 10px;
+            padding: 8px;
+        }
+        .lm-chat-card__avatar-wrap,
+        .lm-chat-card__avatar {
+            width: 50px;
+            height: 50px;
+            font-size: 18px;
+        }
+        .lm-chat-card__name {
+            font-size: 14px;
+        }
+        .lm-chat-card__preview {
+            font-size: 12px;
+        }
+        .lm-chat-card__request {
+            grid-template-columns: 48px minmax(0, 1fr) 20px;
+            gap: 10px;
+            padding: 8px;
+        }
+        .lm-chat-card__request-avatar {
+            width: 48px;
+            height: 48px;
+            font-size: 18px;
+        }
+        .lm-chat-card__request-title {
+            font-size: 13px;
+        }
+        .lm-chat-card__request-subtitle {
+            font-size: 11px;
+        }
+
+        /* Dashboard grid panels */
+        .lm-dashboard-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        /* Live chat shell */
+        .lm-live-chat-shell {
+            grid-template-columns: 1fr;
+            min-height: auto;
+            border-radius: 16px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .lm-live-chat-inbox {
+            min-height: 200px;
+            max-height: 320px;
+            border-right: 0;
+            border-bottom: 1px solid #e5edf5;
+        }
+        .lm-live-chat-toolbar {
+            padding: 12px;
+        }
+        .lm-live-chat-toolbar h4 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        .lm-live-chat-search {
+            height: 38px;
+            font-size: 13px;
+        }
+        .lm-live-chat-item {
+            padding: 10px;
+            border-radius: 14px;
+        }
+        .lm-live-chat-avatar {
+            width: 42px;
+            height: 42px;
+            font-size: 15px;
+        }
+        .lm-live-chat-name {
+            font-size: 14px;
+        }
+        .lm-live-chat-preview {
+            font-size: 11px;
+        }
+        .lm-live-chat-main {
+            border-right: 0;
+            min-height: 400px;
+        }
+        .lm-live-chat-mainbar {
+            padding: 12px;
+            flex-wrap: wrap;
+        }
+        .lm-live-chat-main-title {
+            font-size: 16px;
+        }
+        .lm-live-chat-main-actions {
+            width: 100%;
+            margin-top: 8px;
+        }
+        .lm-live-chat-frame {
+            min-height: 350px;
+        }
+        .lm-live-chat-side {
+            padding: 14px;
+        }
+        .lm-live-chat-profile-avatar {
+            width: 64px;
+            height: 64px;
+            font-size: 22px;
+        }
+        .lm-live-chat-profile-name {
+            font-size: 20px;
+        }
+
+        /* Status chart shell */
+        .lm-chart-shell {
+            min-height: 160px;
+        }
+
+        /* Iframe modal */
+        .lm-dashboard-iframe-modal .modal-dialog {
+            width: 100%;
+            margin: 0;
+        }
+        .lm-dashboard-iframe-modal .modal-body {
+            height: 70vh;
+        }
+
+        /* Action buttons: stack on mobile */
+        .lm-action-buttons {
+            flex-direction: column;
+        }
+        .lm-action-btn {
+            width: 100%;
+            justify-content: center;
+            min-height: 36px;
+        }
+    }
+
+    /* ============================================================
+       DASHBOARD MOBILE: Small Phone (max-width: 400px)
+       ============================================================ */
+    @media (max-width: 400px) {
+        .lm-dashboard-hero {
+            padding: 12px;
+        }
+        .lm-dashboard-title {
+            font-size: 19px;
+        }
+        .lm-dashboard-subtitle {
+            font-size: 12px;
+        }
+        .lm-hero-metric {
+            flex: 0 0 100px;
+            min-width: 100px;
+            padding: 5px 6px;
+        }
+        .lm-hero-metric-value {
+            font-size: 14px;
+        }
+        .lm-dashboard-cards {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+        }
+        .lm-stat-card {
+            padding: 6px 8px;
+            gap: 6px;
+        }
+        .lm-stat-card__icon {
+            flex: 0 0 24px;
+            width: 24px;
+            height: 24px;
+            font-size: 11px;
+            border-radius: 6px;
+        }
+        .lm-stat-card__label {
+            font-size: 9px;
+        }
+        .lm-stat-card__value {
+            font-size: 14px;
+        }
+        .lm-quick-box {
+            padding: 12px;
+        }
+        .lm-quick-box__title {
+            font-size: 13px;
+        }
+        .lm-chat-card__title {
+            font-size: 17px;
+        }
+    }
+
+    /* ============================================================
+       DASHBOARD MOBILE: Touch Enhancements
+       ============================================================ */
+    @media (pointer: coarse) {
+        .lm-dashboard-tab {
+            min-height: 44px;
+        }
+        .lm-quick-box:hover {
+            transform: none;
+        }
+        .lm-chat-card__item:hover {
+            transform: none;
+            background: #f0f5ff;
+        }
+        .lm-live-chat-item:hover {
+            transform: none;
+        }
+    }
+
+    /* ============================================================
+       PAYMENT MODAL: Mobile Responsive
+       ============================================================ */
+    @media (max-width: 767px) {
+        .view_modal .modal-content {
+            border-radius: 14px;
+            margin: 8px;
+        }
+        .view_modal .modal-header {
+            padding: 14px 16px;
+        }
+        .view_modal .modal-header .modal-title {
+            font-size: 15px;
+        }
+        .view_modal .modal-body {
+            padding: 14px 16px;
+        }
+        .view_modal .modal-body .well {
+            padding: 10px 12px;
+            border-radius: 10px;
+        }
+        .view_modal .modal-body .loan-payment-line .col-md-3,
+        .view_modal .modal-body .loan-payment-line .col-md-2,
+        .view_modal .modal-body .loan-payment-line .col-md-1 {
+            width: 100%;
+            flex: 0 0 100%;
+            max-width: 100%;
+            margin-bottom: 8px;
+        }
+        .view_modal .modal-body .box-body {
+            padding: 12px;
+        }
+        .view_modal .modal-footer {
+            padding: 12px 16px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .view_modal .modal-footer .btn {
+            flex: 1;
+            min-width: 100px;
+        }
+    }
+
+    /* ============================================================
+       DASHBOARD MOBILE: Safe areas & bottom nav offset
+       ============================================================ */
+    @media (max-width: 767px) {
+        .lm-dashboard-pane {
+            padding-bottom: 8px;
+            overflow: hidden;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .lm-chart-shell {
+            min-height: auto;
+            overflow: hidden;
+        }
+    }
 </style>
 @endsection
 
@@ -1214,7 +2000,7 @@
         <div class="lm-dashboard-hero-grid">
             <div>
                 <h1 class="lm-dashboard-title">Loan Control Center</h1>
-                <p class="lm-dashboard-subtitle">Search installment loans, convert sells into installment plans, monitor overdue customers, and track collection performance from one workspace.</p>
+                <p class="lm-dashboard-subtitle">Manage loans, collect payments, track overdue customers.</p>
             </div>
             <div class="lm-hero-metrics">
                 @foreach($heroMetrics as $metric)
@@ -1245,63 +2031,51 @@
         <div class="lm-dashboard-panel lm-dashboard-panel--feature">
             <div class="lm-dashboard-panel__header">
                 <div>
-                    <h3 class="lm-dashboard-panel__title">Installment Quick Actions</h3>
-                    <p class="lm-dashboard-panel__hint">Fast search for loan operations, quick edits, and sell conversion in one place.</p>
+                    <h3 class="lm-dashboard-panel__title">Quick Actions</h3>
+                    <p class="lm-dashboard-panel__hint">Search loans, collect payment, create new loans.</p>
                 </div>
                 <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 3 smart tools</span>
             </div>
             <div class="lm-dashboard-panel__body">
                 <div class="lm-quick-grid">
                     <div class="lm-quick-box lm-quick-box--loan">
-                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-search"></i></span> Loan Search</h4>
-                        <p class="lm-quick-box__subtitle">Find installment loans by loan number, customer, or phone. Then open detail, edit the loan, print invoice, or add monthly payment.</p>
+                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon lm-quick-box__icon--pay"><i class="fa fa-money"></i></span> Collect Payment</h4>
+                        <p class="lm-quick-box__subtitle">Search by name, phone, or loan # to collect payment.</p>
                         <div class="lm-quick-box__meta">
-                            <span class="lm-quick-box__chip"><i class="fa fa-pencil"></i> Edit</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Print</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-money"></i> Payment</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-user"></i> Customer lookup</span>
+                            <span class="lm-quick-box__chip lm-quick-box__chip--pay"><i class="fa fa-calendar"></i> Due Date</span>
+                            <span class="lm-quick-box__chip lm-quick-box__chip--pay"><i class="fa fa-money"></i> Balance</span>
+                            <span class="lm-quick-box__chip lm-quick-box__chip--pay"><i class="fa fa-check-circle"></i> Quick Pay</span>
                         </div>
                         <div class="form-group lm-quick-input" style="margin-bottom:12px;">
                             <div class="input-group">
                                 <span class="input-group-addon"><i class="fa fa-search"></i></span>
-                                <input type="text" class="form-control" id="loanDashboardQuickSearchInput" placeholder="Search loan #, customer, phone">
+                                <input type="text" class="form-control" id="loanDashboardQuickSearchInput" placeholder="Search loan #, customer name, phone...">
                             </div>
                         </div>
                         <div class="table-responsive lm-table-wrap">
                             <table class="table table-condensed table-bordered lm-dashboard-table lm-mini-table" id="loanDashboardQuickSearchTable">
-                                <thead><tr><th>Loan</th><th>Customer</th><th class="text-right">Balance</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Customer</th><th>Due</th><th class="text-right">Balance</th><th class="text-center">Pay</th></tr></thead>
                                 <tbody data-loan-table="dashboard_quick_search">
-                                    <tr><td colspan="4" class="text-center text-muted">Type to search installment loans.</td></tr>
+                                    <tr><td colspan="4" class="text-center text-muted">Type to search for payment collection.</td></tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="lm-quick-box__footer">Use this for fast payment collection and loan document access.</div>
+                        <div class="lm-quick-box__footer"><i class="fa fa-bolt"></i> Search customer name or phone for fast payment.</div>
                     </div>
 
                     <div class="lm-quick-box lm-quick-box--sell">
-                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-plus-square"></i></span> Create Loan From Sell</h4>
-                        <p class="lm-quick-box__subtitle">Search POS sell invoices and jump straight into the add-installment flow from the dashboard.</p>
+                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-plus-square"></i></span> <a href="{{ route('loan-management.loans.create') }}" style="color:inherit;text-decoration:none;">New Loan</a></h4>
+                        <p class="lm-quick-box__subtitle">Create a loan without POS sell.</p>
                         <div class="lm-quick-box__meta">
-                            <span class="lm-quick-box__chip"><i class="fa fa-shopping-cart"></i> Open POS</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-credit-card"></i> Convert sell</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Auto print</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-user"></i> Select customer</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-shopping-cart"></i> Add items</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-credit-card"></i> Set terms</span>
                         </div>
-                        <div class="form-group lm-quick-input" style="margin-bottom:12px;">
-                            <div class="input-group">
-                                <span class="input-group-addon lm-quick-trigger" id="loanDashboardOpenSellPos" title="Add POS Sell" role="button" tabindex="0"><i class="fa fa-plus-square"></i></span>
-                                <input type="text" class="form-control" id="loanDashboardSellSearchInput" placeholder="Search sell invoice, customer, phone">
-                            </div>
+                        <div class="lm-quick-box__footer">
+                            <a href="{{ route('loan-management.loans.create') }}" class="btn btn-primary btn-sm"><i class="fa fa-plus"></i> Create New Loan</a>
                         </div>
-                        <div class="table-responsive lm-table-wrap">
-                            <table class="table table-condensed table-bordered lm-dashboard-table lm-mini-table" id="loanDashboardSellSearchTable">
-                                <thead><tr><th>Invoice</th><th>Customer</th><th class="text-right">Due</th><th>Action</th></tr></thead>
-                                <tbody data-loan-table="dashboard_sell_search">
-                                    <tr><td colspan="4" class="text-center text-muted">Type to search sells for installment.</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="lm-quick-box__footer">Best for creating installment loans directly from completed POS sales.</div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -1310,7 +2084,7 @@
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Customer Chat</h3>
-                    <p class="lm-dashboard-panel__hint">Recent customer conversations before field collection follow-up.</p>
+                    <p class="lm-dashboard-panel__hint">Recent conversations before field follow-up.</p>
                 </div>
                 <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
             </div>
@@ -1420,7 +2194,7 @@
                 <div class="lm-dashboard-panel__header">
                     <div>
                         <h3 class="lm-dashboard-panel__title">Overdue Customers</h3>
-                        <p class="lm-dashboard-panel__hint">Customers who need immediate follow-up today.</p>
+                        <p class="lm-dashboard-panel__hint">Need immediate follow-up today.</p>
                     </div>
                 </div>
                 <div class="lm-dashboard-panel__body lm-table-wrap">
@@ -1445,7 +2219,7 @@
                 <div class="lm-dashboard-panel__header">
                     <div>
                         <h3 class="lm-dashboard-panel__title">Loan Status Overview</h3>
-                        <p class="lm-dashboard-panel__hint">Quick glance chart placeholder for status mix.</p>
+                        <p class="lm-dashboard-panel__hint">Loan status distribution.</p>
                     </div>
                 </div>
                 <div class="lm-dashboard-panel__body">
@@ -1464,8 +2238,8 @@
         <div class="lm-dashboard-panel">
             <div class="lm-dashboard-panel__header">
                 <div>
-                    <h3 class="lm-dashboard-panel__title">Collection Visit Schedule</h3>
-                    <p class="lm-dashboard-panel__hint">Pending fieldwork and customer follow-up assignments.</p>
+                    <h3 class="lm-dashboard-panel__title">Visit Schedule</h3>
+                    <p class="lm-dashboard-panel__hint">Pending fieldwork assignments.</p>
                 </div>
             </div>
             <div class="lm-dashboard-panel__body lm-table-wrap">
@@ -1491,7 +2265,7 @@
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Collector Performance</h3>
-                    <p class="lm-dashboard-panel__hint">Collection output, assigned loans, and visit activity by collector.</p>
+                    <p class="lm-dashboard-panel__hint">Output, loans, and visits by collector.</p>
                 </div>
             </div>
             <div class="lm-dashboard-panel__body lm-table-wrap">
@@ -1522,8 +2296,8 @@
         <section class="lm-dashboard-panel lm-dashboard-panel--feature">
             <div class="lm-dashboard-panel__header">
                 <div>
-                    <h3 class="lm-dashboard-panel__title">Live Chat Dashboard</h3>
-                    <p class="lm-dashboard-panel__hint">Focus on customer conversations, unread queues, collector handoff, and real-time support activity from one dashboard tab.</p>
+                    <h3 class="lm-dashboard-panel__title">Live Chat</h3>
+                    <p class="lm-dashboard-panel__hint">Conversations, unread queues, and support activity.</p>
                 </div>
                 <span class="lm-live-badge"><span class="lm-live-badge__dot"></span> Auto refresh 30s</span>
             </div>
@@ -1614,7 +2388,6 @@
         var loading = false;
         var timer = null;
         var quickSearchTimer = null;
-        var sellSearchTimer = null;
         var liveTabLoaded = false;
         var liveChatSearchTimer = null;
         var liveChatThreads = [];
@@ -1692,24 +2465,36 @@
                 var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
-                html += '<tr>'
-                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.loan_number) + '</a><span class="lm-row-subtitle">' + esc(row.status) + (row.next_due_date ? ' / Due ' + esc(row.next_due_date) : '') + '</span></td>'
-                    + '<td><a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
-                    + '<td class="text-right">' + money(row.balance_amount) + '</td>'
-                    + '<td class="text-nowrap">'
-                    + '<div class="btn-group lm-action-menu">'
-                    + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
+                var quickPayUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/quick-pay";
+                var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos";
+                var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
+                var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
+                var statusBadge = isOverdue
+                    ? '<span class="lm-pay-status lm-pay-status--overdue">OVERDUE</span>'
+                    : (row.status && String(row.status).toLowerCase() !== 'active' ? '<span class="lm-pay-status">' + esc(row.status) + '</span>' : '');
+                html += '<tr class="lm-pay-row">'
+                    + '<td>'
+                    + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
+                    + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + '</span>'
+                    + statusBadge
+                    + '</td>'
+                    + '<td class="lm-pay-due">' + dueLabel + '</td>'
+                    + '<td class="text-right lm-pay-balance">' + money(row.balance_amount) + '</td>'
+                    + '<td class="text-center lm-pay-action">'
+                    + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> Pay</button>'
+                    + '<div class="lm-pay-more dropdown">'
+                    + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
                     + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
-                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> Detail</button></li>'
-                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit Loan</button></li>'
-                    + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print Loan</button></li>'
-                    + '<li><button type="button" class="btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Add Payment</button></li>'
+                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
+                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
+                    + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button></li>'
+                    + '<li><a href="' + addToPosUrl + '"><i class="fa fa-exchange"></i> Add to POS</a></li>'
                     + '</ul>'
                     + '</div>'
                     + '</td>'
                     + '</tr>';
             });
-            $('[data-loan-table="dashboard_quick_search"]').html(html || '<tr><td colspan="4" class="text-center">No installment loans found.</td></tr>');
+            $('[data-loan-table="dashboard_quick_search"]').html(html || '<tr><td colspan="4" class="text-center">No loans found for this search.</td></tr>');
         }
 
         function runQuickSearch() {
@@ -1729,54 +2514,6 @@
                 })
                 .catch(function () {
                     $('[data-loan-table="dashboard_quick_search"]').html('<tr><td colspan="4" class="text-center text-danger">Search failed.</td></tr>');
-                });
-        }
-
-        function renderSellSearch(rows) {
-            var html = '';
-            (rows || []).forEach(function (row) {
-                var addUrl = "{{ url('loan-management/loans/sell') }}/" + row.id + "/clone";
-                var detailUrl = "{{ action([\App\Http\Controllers\SellController::class, 'show'], ['__ROW_ID__']) }}".replace('__ROW_ID__', encodeURIComponent(row.id));
-                var viewLoanUrl = row.linked_loan_id ? "{{ url('loan-management/loans') }}/" + row.linked_loan_id + "/view?_lm_modal=1" : '';
-                html += '<tr>'
-                    + '<td><a href="#" class="lm-row-title btn-modal" data-container=".view_modal" data-href="' + detailUrl + '">' + esc(row.invoice_no) + '</a><span class="lm-row-subtitle">Total ' + money(row.final_total) + '</span></td>'
-                    + '<td><a href="#" class="lm-row-title btn-modal" data-container=".view_modal" data-href="' + detailUrl + '">' + esc(row.customer_name) + '</a><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
-                    + '<td class="text-right">' + money(row.due_amount) + '</td>'
-                    + '<td class="text-nowrap">'
-                    + '<div class="btn-group lm-action-menu">'
-                    + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
-                    + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">';
-
-                if (row.is_converted && viewLoanUrl) {
-                    html += '<li><button type="button" class="btn-modal" data-container=".view_modal" data-href="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Sell Detail</button></li>';
-                    html += '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + viewLoanUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>';
-                } else {
-                    html += '<li><button type="button" class="btn-modal" data-container=".view_modal" data-href="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Detail</button></li>';
-                    html += '<li><button type="button" class="btn-select-sale" data-id="' + row.id + '"><i class="fa fa-plus"></i> Add Installment</button></li>';
-                }
-
-                html += '</ul></div></td></tr>';
-            });
-            $('[data-loan-table="dashboard_sell_search"]').html(html || '<tr><td colspan="4" class="text-center">No sells found.</td></tr>');
-        }
-
-        function runSellSearch() {
-            var term = $.trim($('#loanDashboardSellSearchInput').val() || '');
-
-            fetch(quickSearchUrl + '?scope=sell&q=' + encodeURIComponent(term), {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-                .then(function (response) { return response.ok ? response.json() : null; })
-                .then(function (res) {
-                    renderSellSearch(res && res.data ? res.data : []);
-                })
-                .catch(function () {
-                    $('[data-loan-table="dashboard_sell_search"]').html('<tr><td colspan="4" class="text-center text-danger">Search failed.</td></tr>');
                 });
         }
 
@@ -2095,10 +2832,6 @@
                 window.clearTimeout(quickSearchTimer);
                 quickSearchTimer = window.setTimeout(runQuickSearch, 250);
             });
-            $('#loanDashboardSellSearchInput').on('input', function () {
-                window.clearTimeout(sellSearchTimer);
-                sellSearchTimer = window.setTimeout(runSellSearch, 250);
-            });
             $('#loanDashboardLiveChatSearch').on('input', function () {
                 window.clearTimeout(liveChatSearchTimer);
                 liveChatSearchTimer = window.setTimeout(renderLiveChatThreads, 160);
@@ -2120,31 +2853,10 @@
                 renderLiveChatThreads();
             });
             runQuickSearch();
-            runSellSearch();
             renderLiveCharts({});
-            $('#loanDashboardOpenSellPos').on('click keydown', function (event) {
-                if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') {
-                    return;
-                }
-                event.preventDefault();
-                if (typeof window.loanManagementOpenSellPos === 'function' && window.loanManagementOpenSellPos()) {
-                    return;
-                }
-                var sharedPosTrigger = $('#loanHeaderOpenSellPos');
-                if (sharedPosTrigger.length) {
-                    sharedPosTrigger.trigger('click');
-                }
-            });
             $(document).on('click', '.js-loan-detail-modal, .js-sell-detail-modal', function (event) {
                 event.preventDefault();
                 openDashboardIframeModal($(this).data('title') || 'Detail', $(this).data('url'));
-            });
-            $(document).on('click', '[data-loan-table="dashboard_sell_search"] .btn-select-sale', function (event) {
-                event.preventDefault();
-                var saleId = $(this).data('id');
-                if (saleId && typeof window.loanManagementOpenAutoInstallment === 'function') {
-                    window.loanManagementOpenAutoInstallment(saleId);
-                }
             });
 
             timer = window.setInterval(refreshLoanDashboard, refreshMs);

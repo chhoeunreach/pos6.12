@@ -39,6 +39,7 @@
     <![endif]-->
 
     <!-- jQuery 2.2.3 -->
+    @include('layouts.partials.disable_unload_listener')
     <script src="{{ asset('js/vendor.js?v=' . $asset_v) }}"></script>
     <script src="{{ asset('js/functions.js?v=' . $asset_v) }}"></script>
     @yield('javascript')

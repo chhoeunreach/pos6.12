@@ -44,6 +44,7 @@ class UpdateLoanCustomerRequest extends FormRequest
             'monthly_income' => 'nullable|numeric',
             'customer_type' => 'nullable|string|max:100',
             'customer_photo_file_id' => 'nullable|integer',
+            'customer_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
             'id_front_file_id' => 'nullable|integer',
             'id_back_file_id' => 'nullable|integer',
             'blacklist_status' => 'nullable|boolean',
@@ -55,4 +56,3 @@ class UpdateLoanCustomerRequest extends FormRequest
         ];
     }
 }
-

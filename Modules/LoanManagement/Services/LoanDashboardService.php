@@ -135,86 +135,6 @@ class LoanDashboardService
         })->all();
     }
 
-    public function searchSellsForDashboard(string $term, int $limit = 10): array
-    {
-        $term = trim($term);
-        $installmentCustomerGroups = ['រំលស់', 'អ៊ីអន'];
-        $paidSub = DB::table('transaction_payments')
-            ->selectRaw('transaction_id, COALESCE(SUM(amount),0) as paid_amount')
-            ->groupBy('transaction_id');
-
-        $query = DB::table('transactions as t')
-            ->leftJoinSub($paidSub, 'tp', function ($join) {
-                $join->on('tp.transaction_id', '=', 't.id');
-            })
-            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
-            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
-            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
-            ->where('t.type', 'sell')
-            ->where('t.status', 'final')
-            ->where(function ($q) use ($installmentCustomerGroups) {
-                $q->whereIn('tcg.name', $installmentCustomerGroups)
-                    ->orWhere(function ($fallback) use ($installmentCustomerGroups) {
-                        $fallback->whereNull('tcg.id')
-                            ->whereIn('ccg.name', $installmentCustomerGroups);
-                    });
-            });
-
-        $query->selectRaw("
-                t.id,
-                t.invoice_no,
-                COALESCE(c.name, '-') as customer_name,
-                COALESCE(c.mobile, '-') as customer_phone,
-                COALESCE(t.final_total, 0) as final_total,
-                COALESCE(tp.paid_amount, 0) as paid_amount,
-                (COALESCE(t.final_total, 0) - COALESCE(tp.paid_amount, 0)) as due_amount
-            ");
-
-        if ($term !== '') {
-            $like = '%'.$term.'%';
-            $query->where(function ($q) use ($like, $term) {
-                $q->where('t.invoice_no', 'like', $like)
-                    ->orWhere('c.name', 'like', $like)
-                    ->orWhere('c.mobile', 'like', $like);
-
-                if (ctype_digit($term)) {
-                    $q->orWhere('t.id', (int) $term);
-                }
-            });
-
-            $query->orderByRaw('CASE WHEN t.invoice_no = ? THEN 0 ELSE 1 END', [$term]);
-        }
-
-        $query->orderByDesc('t.id')
-            ->limit(max(1, min($limit, 25)));
-
-        $rows = $query->get();
-        $linkedLoanIds = [];
-        if ($this->tableExists('loan_sell_transaction_links') && $rows->isNotEmpty()) {
-            $linkedLoanIds = DB::connection($this->connection)->table('loan_sell_transaction_links')
-                ->whereIn('transaction_id', $rows->pluck('id')->all())
-                ->pluck('loan_id', 'transaction_id')
-                ->map(fn ($value) => (int) $value)
-                ->all();
-        }
-
-        return $rows->map(function ($row) use ($linkedLoanIds) {
-            $linkedLoanId = $linkedLoanIds[$row->id] ?? null;
-
-            return [
-                'id' => (int) $row->id,
-                'invoice_no' => $row->invoice_no ?: ('Sell #'.$row->id),
-                'customer_name' => $row->customer_name ?: '-',
-                'customer_phone' => $row->customer_phone ?: '-',
-                'final_total' => round((float) ($row->final_total ?? 0), 2),
-                'paid_amount' => round((float) ($row->paid_amount ?? 0), 2),
-                'due_amount' => round(max(0, (float) ($row->due_amount ?? 0)), 2),
-                'linked_loan_id' => $linkedLoanId,
-                'is_converted' => $linkedLoanId !== null && $linkedLoanId > 0,
-            ];
-        })->all();
-    }
-
     public function getSummaryCards($filters): array
     {
         $cards = [
@@ -225,7 +145,6 @@ class LoanDashboardService
             'total_customers' => 0, 'active_customers' => 0, 'late_customers' => 0, 'follow_up_customers' => 0,
             'blacklist_customers' => 0, 'aba_pending' => 0, 'aba_paid' => 0, 'aba_failed' => 0,
             'collection_visits_today' => 0, 'staff_online' => 0, 'payment_proof_pending' => 0, 'id_card_scan_pending' => 0,
-            'converted_sales' => 0, 'pending_sales_for_installment' => 0,
         ];
 
         if ($this->tableExists('loans')) {
@@ -326,19 +245,6 @@ class LoanDashboardService
         if ($this->tableExists('loan_id_card_scans')) {
             $cards['id_card_scan_pending'] = (int) DB::connection($this->connection)->table('loan_id_card_scans')->where('status', 'pending')->count();
         }
-
-        if ($this->tableExists('loan_sell_transaction_links')) {
-            $cards['converted_sales'] = (int) DB::connection($this->connection)->table('loan_sell_transaction_links')->count();
-        }
-
-        $pendingQ = DB::table('transactions')->where('type', 'sell')->where('status', 'final');
-        if ($this->tableExists('loan_sell_transaction_links')) {
-            $convertedIds = DB::connection($this->connection)->table('loan_sell_transaction_links')->pluck('transaction_id');
-            if ($convertedIds->isNotEmpty()) {
-                $pendingQ->whereNotIn('id', $convertedIds->all());
-            }
-        }
-        $cards['pending_sales_for_installment'] = (int) $pendingQ->count();
 
         return $cards;
     }

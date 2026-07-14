@@ -548,7 +548,7 @@ return new class extends Migration
             $table->string('file_path');
             $table->string('file_type', 20)->nullable();
             $table->unsignedBigInteger('uploaded_by')->nullable()->index();
-            $table->string('status', 20)->default('uploaded')->index();
+            $table->string('status', 30)->default('uploaded')->index();
             $table->text('column_mapping_json')->nullable();
             $table->unsignedInteger('total_rows')->default(0);
             $table->unsignedInteger('valid_rows')->default(0);

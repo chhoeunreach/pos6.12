@@ -335,6 +335,73 @@ class LoanLocationController extends Controller
             ->with('status', ['success' => 1, 'msg' => 'Location print assets updated']);
     }
 
+    public function testTelegram(Request $request, int $location)
+    {
+        abort_if(! $this->tableExists($this->table), 404);
+        $this->ensureTelegramChatColumns();
+
+        $row = DB::connection($this->connection)->table($this->table)->where('id', $location)->first();
+        abort_if(! $row, 404);
+
+        $data = $request->validate([
+            'type' => 'required|in:payment,installment',
+            'chat_id' => 'nullable|string|max:191',
+        ]);
+
+        $type = $data['type'];
+        $chatId = trim((string) ($data['chat_id'] ?? ''));
+        if ($chatId === '') {
+            $chatId = $type === 'payment'
+                ? (string) ($row->telegram_payment_chat_id ?? '')
+                : (string) ($row->telegram_installment_chat_id ?? '');
+        }
+        $chatId = trim($chatId ?: (string) ($row->telegram_chat_id ?? ''));
+
+        if ($chatId === '') {
+            return response()->json([
+                'success' => false,
+                'msg' => 'Please enter a Telegram chat ID first.',
+            ], 422);
+        }
+
+        $label = $type === 'payment' ? 'Payment' : 'Installment';
+        $message = "Loan Management Telegram Test\n"
+            ."Location: ".($row->name ?? ('#'.$location))."\n"
+            ."Channel: ".$label."\n"
+            ."Sent at: ".now()->format('Y-m-d H:i:s');
+
+        try {
+            $result = app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
+                $type === 'payment' ? 'loan_payment' : 'loan_installment',
+                $chatId,
+                $message,
+                [
+                    'reference_type' => 'loan_location_telegram_test',
+                    'reference_id' => $location,
+                    'reference_no' => $row->location_code ?? (string) $location,
+                    'module_type' => $type,
+                ]
+            );
+
+            if (! empty($result['success'])) {
+                return response()->json([
+                    'success' => true,
+                    'msg' => 'Telegram test sent to '.$label.' chat.',
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'msg' => $result['error'] ?? $result['message'] ?? 'Telegram test failed.',
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'msg' => 'Telegram test failed: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
     protected function storeLocationAsset(Request $request, string $field, int $location): string
     {
         $file = $request->file($field);

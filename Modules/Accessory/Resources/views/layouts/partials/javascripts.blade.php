@@ -25,6 +25,7 @@
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js?v=$asset_v"></script>
 <![endif]-->
 
+@include('layouts.partials.disable_unload_listener')
 <script src="{{ asset('modules/accessory/v7/js/vendor.js?v=' . $asset_v) }}"></script>
 
 @if (file_exists(public_path('js/lang/' . session()->get('user.language', config('app.locale')) . '.js')))

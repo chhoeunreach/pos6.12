@@ -4,9 +4,27 @@
 @section('content_body')
 <section class="content-header no-print">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Installment List</h1>
+    <div class="pull-right lm-header-actions-mobile">
+        @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create'))
+            <button type="button" class="btn btn-primary btn-sm lm-standalone-loan-trigger"
+                    data-url="{{ route('loan-management.loans.create-standalone-modal') }}"
+                    data-target="#standaloneLoanModal">
+                <i class="fa fa-plus"></i> <span class="hidden-xs">Create Loan</span> <span class="visible-xs-inline">New</span>
+            </button>
+        @endif
+    </div>
 </section>
 
 <section class="content no-print">
+    <div class="lm-mobile-section-tabs">
+        <a href="{{ route('loan-management.loans') }}" class="active">
+            <i class="fa fa-credit-card"></i> Loans
+        </a>
+        <a href="{{ route('loan-management.monthly-payments.index') }}">
+            <i class="fa fa-money"></i> Collection
+        </a>
+    </div>
+
     @component('components.filters', ['title' => __('report.filters')])
         <div class="col-md-3">
             <div class="form-group">
@@ -23,6 +41,9 @@
     @endcomponent
 
     @component('components.widget', ['class' => 'box-primary', 'title' => 'Installment List'])
+        <div class="lm-mobile-loan-list" id="loan_mobile_list">
+            <div class="text-center text-muted" style="padding: 16px;">Loading loans...</div>
+        </div>
         <table class="table table-bordered table-striped" id="loan_list_table" width="100%">
             <thead>
                 <tr>
@@ -38,6 +59,67 @@
 <script>
 $(document).ready(function(){
     $('.select2').select2();
+    var loanBaseUrl = "{{ url('loan-management/loans') }}";
+
+    function plainText(value) {
+        return $('<div>').html(value || '').text().trim() || '-';
+    }
+
+    function escapeHtml(value) {
+        return $('<div>').text(value || '').html();
+    }
+
+    function mobileLoanCard(row) {
+        var id = row.id || '';
+        var loanNumber = plainText(row.loan_number);
+        var customer = plainText(row.customer_name_snapshot);
+        var phone = plainText(row.customer_phone_snapshot);
+        var date = plainText(row.loan_date);
+        var statusText = plainText(row.status).toLowerCase();
+        var statusClass = statusText.replace(/[^a-z0-9_-]+/g, '-');
+        var location = plainText(row.location_name_snapshot);
+        var collector = plainText(row.collector_name_snapshot);
+        var principal = plainText(row.principal_amount);
+        var paid = plainText(row.paid_amount);
+        var balance = plainText(row.balance_amount);
+        var viewUrl = loanBaseUrl + '/' + id + '/view';
+        var quickPayUrl = loanBaseUrl + '/' + id + '/payment/quick-pay';
+
+        return ''
+            + '<article class="lm-mobile-loan-card">'
+            + '  <div class="lm-mobile-loan-card-header">'
+            + '    <div><div class="lm-mobile-loan-card-title">' + escapeHtml(loanNumber) + '</div><div class="lm-mobile-loan-card-date">' + escapeHtml(date) + '</div></div>'
+            + '    <span class="lm-mobile-loan-card-status status-' + escapeHtml(statusClass) + '">' + escapeHtml(statusText || 'status') + '</span>'
+            + '  </div>'
+            + '  <div class="lm-mobile-loan-card-body">'
+            + '    <div class="lm-mobile-loan-card-row"><span class="label">Customer</span><span class="value">' + escapeHtml(customer) + '</span></div>'
+            + '    <div class="lm-mobile-loan-card-row"><span class="label">Phone</span><span class="value">' + escapeHtml(phone) + '</span></div>'
+            + '    <div class="lm-mobile-loan-card-row"><span class="label">Location</span><span class="value">' + escapeHtml(location) + '</span></div>'
+            + '    <div class="lm-mobile-loan-card-row"><span class="label">Collector</span><span class="value">' + escapeHtml(collector) + '</span></div>'
+            + '  </div>'
+            + '  <div class="lm-mobile-loan-card-balance">'
+            + '    <div class="lm-mobile-loan-card-balance-item"><small>Principal</small><strong>' + escapeHtml(principal) + '</strong></div>'
+            + '    <div class="lm-mobile-loan-card-balance-item paid"><small>Paid</small><strong>' + escapeHtml(paid) + '</strong></div>'
+            + '    <div class="lm-mobile-loan-card-balance-item due"><small>Balance</small><strong>' + escapeHtml(balance) + '</strong></div>'
+            + '  </div>'
+            + '  <div class="lm-mobile-loan-card-actions">'
+            + '    <a href="' + viewUrl + '" class="btn btn-default btn-sm"><i class="fa fa-eye"></i> View</a>'
+            + '    <a href="#" class="btn btn-success btn-sm btn-modal" data-href="' + quickPayUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Pay</a>'
+            + '  </div>'
+            + '</article>';
+    }
+
+    function renderMobileLoanList(rows) {
+        var $list = $('#loan_mobile_list');
+        if (!$list.length) return;
+        if (!rows || !rows.length) {
+            $list.html('<div class="lm-mobile-loan-empty">No loans found.</div>');
+            return;
+        }
+
+        $list.html(rows.map(mobileLoanCard).join(''));
+    }
+
     function setRange(s, e){
         $('#start_date').val(s.format('YYYY-MM-DD'));
         $('#end_date').val(e.format('YYYY-MM-DD'));
@@ -85,7 +167,10 @@ $(document).ready(function(){
             {data:'currency', name:'l.currency'},
             {data:'action', name:'action', orderable:false, searchable:false}
         ],
-        fnDrawCallback: function(){ __currency_convert_recursively($('#loan_list_table')); }
+        fnDrawCallback: function(){
+            __currency_convert_recursively($('#loan_list_table'));
+            renderMobileLoanList(this.api().rows({page: 'current'}).data().toArray());
+        }
     });
 
     $(document).on('change keyup', '#status,#location_name,#collector_name,#customer', function(){

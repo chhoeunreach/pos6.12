@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Modules\LoanManagement\Services\LoanToPosPrefillService;
 use Yajra\DataTables\Facades\DataTables;
 
 class LoanInstallmentListController extends Controller
@@ -628,6 +629,7 @@ class LoanInstallmentListController extends Controller
                 $actions = '<div class="btn-group btn-group-xs" role="group" style="display:flex; flex-wrap:wrap; gap:4px;">';
                 $actions .= '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info btn-flat" title="View loan details"><i class="fa fa-eye"></i> View</a>';
                 $actions .= '<button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-flat btn-modal" title="Print loan"><i class="fa fa-print"></i> Print</button>';
+                $actions .= '<a href="'.route('loan-management.loans.convert-to-pos', $r->id).'" class="btn btn-xs btn-success btn-flat" title="Open POS and copy loan serials"><i class="fa fa-exchange"></i> POS</a>';
                 if ($canEdit) {
                     $actions .= '<a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary btn-flat" title="Edit this loan"><i class="fa fa-pencil"></i> Edit</a>';
                 }
@@ -666,6 +668,23 @@ class LoanInstallmentListController extends Controller
         $autoPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1]);
 
         return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'autoPrintUrl'));
+    }
+
+    public function convertToPos(int $loan, LoanToPosPrefillService $prefillService)
+    {
+        try {
+            $payload = $prefillService->payload($loan);
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('loan-management.loans.view', $loan)
+                ->with('status', ['success' => 0, 'msg' => $e->getMessage()]);
+        }
+
+        $encodedPayload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+
+        return redirect()->route('pos.create', [
+            'loan_pos_prefill' => $encodedPayload,
+        ]);
     }
 
     public function print(int $loan)
@@ -915,6 +934,47 @@ class LoanInstallmentListController extends Controller
         $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
 
         return view('loanmanagement::loans.payments.create', compact(
+            'loanRow',
+            'schedules',
+            'selectedSchedule',
+            'selectedScheduleId',
+            'defaultAmount',
+            'payOffAmount',
+            'paymentTypes',
+            'defaultPaymentMethod'
+        ));
+    }
+
+    public function mobileQuickPay(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_payments'), 404);
+        $this->ensureLoanPaymentTypeColumn();
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $schedules = collect();
+        if ($this->loanTableExists('loan_payment_schedules')) {
+            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
+                ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
+                ->orderBy('id')
+                ->get();
+        }
+
+        $selectedScheduleId = request()->integer('schedule_id') ?: null;
+        $selectedSchedule = $selectedScheduleId ? $schedules->firstWhere('id', $selectedScheduleId) : $schedules->first();
+        $defaultAmount = $selectedSchedule
+            ? (float) ($selectedSchedule->balance_amount ?? $selectedSchedule->amount_balance ?? $selectedSchedule->schedule_amount ?? $selectedSchedule->amount_due ?? 0)
+            : (float) ($loanRow->balance_amount ?? 0);
+        $payOffAmount = $this->calculatePayOffAmount($schedules, $loanRow);
+
+        $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
+        $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
+
+        return view('loanmanagement::loans.payments.mobile_quick_pay', compact(
             'loanRow',
             'schedules',
             'selectedSchedule',

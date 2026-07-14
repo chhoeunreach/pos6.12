@@ -9,7 +9,7 @@
 <section class="content">
     <div class="box box-primary">
         <div class="box-body">
-            <form method="POST" action="{{ route('loan-management.customers.store') }}">
+            <form method="POST" action="{{ route('loan-management.customers.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" name="create_mode" id="create_mode" value="new">
                 @include('loanmanagement::customers.partials.form')

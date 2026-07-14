@@ -93,7 +93,7 @@
                                 $ocrPhotoUrl = action([\App\Http\Controllers\SellPosController::class, 'getHrSellListPhoto'], [$photo->id]);
                             @endphp
                             <button type="button" class="sell-list-photo-thumb" data-photo-url="{{ $ocrPhotoUrl }}" data-photo-fallback-url="{{ $photoUrl }}" data-photo-name="{{ $photo->original_name ?: 'Photo' }}">
-                                <img src="{{ $photoUrl }}" alt="{{ $photo->original_name ?: 'Sell Out photo' }}">
+                                <img src="{{ $ocrPhotoUrl }}" alt="{{ $photo->original_name ?: 'Sell Out photo' }}" onerror="this.src='{{ $photoUrl }}'; this.onerror=null;">
                             </button>
                         @endforeach
                     </div>

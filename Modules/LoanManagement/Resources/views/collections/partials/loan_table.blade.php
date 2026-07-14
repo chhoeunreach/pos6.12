@@ -43,6 +43,9 @@
                             @if(Route::has('loan-management.loans.view'))
                                 <a class="btn btn-xs btn-default" href="{{ route('loan-management.loans.view', $loan->id) }}"><i class="fa fa-eye"></i> View</a>
                             @endif
+                            @if(Route::has('loan-management.loans.convert-to-pos'))
+                                <a class="btn btn-xs btn-success" href="{{ route('loan-management.loans.convert-to-pos', $loan->id) }}"><i class="fa fa-exchange"></i> Add to POS</a>
+                            @endif
                         </td>
                     </tr>
                 @empty

@@ -11,6 +11,7 @@ use ZipArchive;
 class LoanImportExportService
 {
     protected $connection = 'mysql_loan';
+    protected ?int $currentImportUserId = null;
 
     public function importTypes(): array
     {
@@ -83,7 +84,9 @@ class LoanImportExportService
     public function import(string $type, UploadedFile $file, ?int $userId = null, string $duplicateMode = 'skip'): array
     {
         $type = $this->normalizeType($type);
+        $this->currentImportUserId = $userId;
         $this->ensurePaymentTypeColumn();
+        $this->ensureImportBatchStatusColumn();
         $duplicateMode = in_array($duplicateMode, ['skip', 'replace'], true) ? $duplicateMode : 'skip';
         $rows = $this->readImportFile($file, $type);
         $headers = array_shift($rows) ?: [];
@@ -173,6 +176,7 @@ class LoanImportExportService
     {
         $type = $this->normalizeType($type);
         $this->ensurePaymentTypeColumn();
+        $this->ensureImportBatchStatusColumn();
         $rows = $this->readImportFile($file, $type);
         $headers = array_shift($rows) ?: [];
         $headers = array_map(fn ($header) => $this->normalizeHeader($header), $headers);
@@ -190,11 +194,13 @@ class LoanImportExportService
     {
         $duplicateMode = in_array($duplicateMode, ['skip', 'replace'], true) ? $duplicateMode : 'skip';
         $limit = max(1, min(200, $limit));
+        $this->ensureImportBatchStatusColumn();
 
         $batch = $this->importBatch($batchId);
         if (! $batch) {
             throw new \RuntimeException('Import batch was not found.');
         }
+        $this->currentImportUserId = (int) ($batch->uploaded_by ?? 0) ?: null;
 
         if (in_array((string) ($batch->status ?? ''), ['completed', 'completed_with_errors'], true)) {
             return $this->batchProgress($batchId);
@@ -1074,11 +1080,11 @@ class LoanImportExportService
                 'notes' => 'Updates an existing loan schedule with same loan and installment_no when found, otherwise creates one.',
             ],
             'payments' => [
-                'columns' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'reference_no', 'received_by', 'note'],
+                'columns' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
                 'required' => ['loan_invoice', 'payment_date', 'amount'],
-                'optional' => ['cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'reference_no', 'received_by', 'note'],
-                'example' => ['KY-000001', now()->toDateString(), '55.00', '0.00', '50.00', '5.00', 'Bank', 'PAY-KY-000001-'.now()->format('Ymd').'-M1-CASH', 'Admin', 'Monthly installment payment'],
-                'notes' => 'If schedule_id is empty, payment is applied to the oldest unpaid schedule for the loan. Use amount, or split the same total across cash_amount, bank_amount, and payoff_amount. Duplicate payments match by reference_number when provided, otherwise by loan + schedule + payment_type + paid_date + amount + payment_method.',
+                'optional' => ['cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
+                'example' => ['KY-000001', now()->toDateString(), '55.00', '0.00', '50.00', '5.00', 'Bank', 'monthly', '1', '', 'USD', '1', '0.00', '0.00', 'PAY-KY-000001-'.now()->format('Ymd').'-M1-CASH', 'Admin', 'Monthly installment payment'],
+                'notes' => 'If schedule_id is empty, payment is applied to the oldest unpaid schedule for the loan. If amount is blank, it is calculated from cash_amount + bank_amount. payment_type: monthly or loan (payoff). installment_no targets a specific schedule row. penalty_amount and discount_amount adjust the schedule balance. Duplicate payments match by reference_number when provided, otherwise by loan + schedule + payment_type + paid_date + amount + payment_method.',
             ],
             'guarantors' => [
                 'columns' => ['loan_number', 'loan_id', 'customer_id', 'name', 'phone', 'relation', 'address', 'id_number', 'status', 'note'],
@@ -1394,17 +1400,19 @@ class LoanImportExportService
                 ->where('installment_no', (int) $row['installment_no'])
                 ->value('id') ?: null;
         }
-        $amount = $this->decimal($row['amount'] ?? $row['paid_amount'] ?? 0);
-        if ($amount <= 0) {
+        $amountInput = trim((string) ($row['amount'] ?? $row['paid_amount'] ?? ''));
+        $amount = $this->decimal($amountInput);
+        if ($amountInput === '') {
             $amount = $this->decimal($row['cash_amount'] ?? 0)
-                + $this->decimal($row['bank_amount'] ?? 0)
-                + $this->decimal($row['payoff_amount'] ?? 0);
+                + $this->decimal($row['bank_amount'] ?? 0);
         }
         $method = trim((string) ($row['payment_method'] ?? $row['method'] ?? $row['channel'] ?? ''));
         if ($method === '') {
             $method = $this->decimal($row['bank_amount'] ?? 0) > 0 ? 'Bank' : 'Cash';
         }
         $reference = trim((string) ($row['reference_number'] ?? $row['reference_no'] ?? $row['payment_ref_no'] ?? ''));
+        $currency = trim((string) ($row['currency'] ?? ''));
+        $exchangeRate = $this->decimal($row['exchange_rate'] ?? 1);
 
         return [
             'loan_id' => $loanId,
@@ -1417,11 +1425,13 @@ class LoanImportExportService
             'paid_date' => $this->date($row['payment_date'] ?? $row['paid_date'] ?? $row['paid_at'] ?? null),
             'paid_at' => ! empty($row['paid_at']) && strtotime((string) $row['paid_at']) ? date('Y-m-d H:i:s', strtotime((string) $row['paid_at'])) : null,
             'payment_method' => $method,
-            'currency' => $row['currency'] ?? 'USD',
-            'exchange_rate' => $this->decimal($row['exchange_rate'] ?? 1),
+            'currency' => $currency !== '' ? $currency : 'USD',
+            'exchange_rate' => $exchangeRate > 0 ? $exchangeRate : 1,
             'reference_number' => $reference !== '' ? $reference : null,
             'status' => $row['status'] ?? 'confirmed',
-            'received_by' => $row['received_by'] ?? null,
+            'received_by' => trim((string) ($row['received_by'] ?? '')),
+            'penalty_amount' => $this->decimal($row['penalty_amount'] ?? 0),
+            'discount_amount' => $this->decimal($row['discount_amount'] ?? 0),
             'note' => $row['note'] ?? null,
         ];
     }
@@ -1586,8 +1596,13 @@ class LoanImportExportService
     protected function validatePaymentRow(array $row): array
     {
         $errors = [];
-        if (empty($row['loan_id'])) $errors[] = 'loan_id or loan_number is required';
-        if (! empty($row['loan_id']) && ! DB::connection($this->connection)->table('loans')->where('id', $row['loan_id'])->exists()) $errors[] = 'loan not found';
+        if (empty($row['loan_id']) && empty($row['loan_number'])) {
+            $errors[] = 'loan_invoice or loan_id is required';
+        } elseif (empty($row['loan_id'])) {
+            $errors[] = 'loan_invoice "'.$row['loan_number'].'" was not found in loans';
+        } elseif (! DB::connection($this->connection)->table('loans')->where('id', $row['loan_id'])->exists()) {
+            $errors[] = 'loan_id '.$row['loan_id'].' was not found in loans';
+        }
         if ($row['amount'] <= 0) $errors[] = 'amount must be greater than 0';
         if (empty($row['paid_date'])) $errors[] = 'paid_date is required';
         if (! in_array($row['payment_type'] ?? 'monthly', ['loan', 'monthly'], true)) $errors[] = 'payment_type must be loan or monthly';
@@ -1846,6 +1861,11 @@ class LoanImportExportService
         $scheduleId = $row['schedule_id'] ?: $this->oldestOpenScheduleId((int) $loan->id);
         $paidAt = $row['paid_at'] ?: ($row['paid_date'].' '.now()->format('H:i:s'));
         $paymentRef = $row['reference_number'] ?: 'IMP-PAY-'.now()->format('YmdHis').'-'.Str::random(4);
+        $receivedBy = trim((string) ($row['received_by'] ?? ''));
+        $receivedById = ctype_digit($receivedBy) ? (int) $receivedBy : $this->currentImportUserId;
+        $receivedByName = $receivedBy !== '' && ! ctype_digit($receivedBy)
+            ? $receivedBy
+            : $this->userDisplayName($receivedById);
 
         $payload = $this->safeColumns('loan_payments', [
             'payment_number' => $paymentRef,
@@ -1858,14 +1878,16 @@ class LoanImportExportService
             'schedule_id' => $scheduleId,
             'loan_number_snapshot' => $loan->loan_number ?? ($row['loan_number'] ?? null),
             'customer_name_snapshot' => $loan->customer_name_snapshot ?? null,
-            'received_by' => $row['received_by'],
-            'received_by_name_snapshot' => $row['received_by'],
-            'collected_by_name_snapshot' => $row['received_by'],
+            'received_by' => $receivedById,
+            'received_by_name_snapshot' => $receivedByName,
+            'collected_by_name_snapshot' => $receivedByName,
             'channel' => $row['payment_method'],
             'payment_method_snapshot' => $row['payment_method'],
             'amount' => $row['amount'],
             'principal_paid' => $this->paymentPrincipalPart($scheduleId, $row['amount']),
             'interest_paid' => $this->paymentInterestPart($scheduleId, $row['amount']),
+            'penalty_amount' => $row['penalty_amount'] ?? 0,
+            'discount_amount' => $row['discount_amount'] ?? 0,
             'total_paid' => $row['amount'],
             'total_paid_base' => $row['amount'] * max(1, $row['exchange_rate']),
             'base_currency' => $row['currency'],
@@ -2833,6 +2855,13 @@ class LoanImportExportService
             DB::raw('0 as bank_amount'),
             DB::raw('0 as payoff_amount'),
             DB::raw('COALESCE('.$this->sqlColumn('loan_payments', 'p', 'payment_method_snapshot').', '.$this->sqlColumn('loan_payments', 'p', 'channel').") as payment_method"),
+            DB::raw($this->sqlColumn('loan_payments', 'p', 'payment_type').' as payment_type'),
+            DB::raw($hasScheduleJoin ? 's.installment_no' : 'NULL as installment_no'),
+            DB::raw($this->sqlColumn('loan_payments', 'p', 'schedule_id').' as schedule_id'),
+            DB::raw('COALESCE('.$this->sqlColumn('loan_payments', 'p', 'base_currency').', '.$this->sqlColumn('loan_payments', 'p', 'currency').", 'USD') as currency"),
+            DB::raw($this->sqlColumn('loan_payments', 'p', 'exchange_rate', '1').' as exchange_rate'),
+            DB::raw($this->sqlColumn('loan_payments', 'p', 'penalty_amount', '0').' as penalty_amount'),
+            DB::raw($this->sqlColumn('loan_payments', 'p', 'discount_amount', '0').' as discount_amount'),
             DB::raw('COALESCE('.$this->sqlColumn('loan_payments', 'p', 'reference_no').', '.$this->sqlColumn('loan_payments', 'p', 'reference_number').', '.$this->sqlColumn('loan_payments', 'p', 'payment_ref_no').', '.$this->sqlColumn('loan_payments', 'p', 'receipt_number').', '.$this->sqlColumn('loan_payments', 'p', 'payment_number').') as reference_no'),
             DB::raw('COALESCE('.$this->sqlColumn('loan_payments', 'p', 'received_by_name_snapshot').', '.$this->sqlColumn('loan_payments', 'p', 'received_by').') as received_by'),
             DB::raw($this->sqlColumn('loan_payments', 'p', 'note').' as note'),
@@ -2882,8 +2911,8 @@ class LoanImportExportService
             'overdue_loans' => ['id', 'loan_number', 'customer_id', 'customer_name_snapshot', 'customer_phone_snapshot', 'total_amount', 'paid_amount', 'balance_amount', 'days_past_due', 'overdue_bucket', 'collection_status', 'risk_level', 'next_followup_at', 'assigned_collector_id'],
             'collection_report' => ['loan_id', 'loan_invoice', 'customer_name', 'phone', 'collection_status', 'collector_name', 'last_followup_date', 'followup_result', 'contact_attempts', 'overdue_amount', 'next_due_amount', 'next_due_date', 'repossession_status'],
             'customer_loan_history' => ['customer_id', 'customer_code', 'customer_name', 'phone', 'loan_id', 'loan_invoice', 'loan_status', 'sale_date', 'principal_amount', 'total_amount', 'total_paid', 'overdue_amount', 'next_due_date'],
-            'payments' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'reference_no', 'received_by', 'note'],
-            'monthly_collections' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'reference_no', 'received_by', 'note'],
+            'payments' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
+            'monthly_collections' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
             'repossessed_assets' => ['loan_id', 'loan_invoice', 'customer_name', 'phone', 'product_name', 'imei', 'serial_number', 'repossession_status', 'repossession_date', 'repossession_reason', 'collector_name'],
             'monthly_loan_summary' => ['loan_id', 'loan_invoice', 'sale_date', 'customer_name', 'phone', 'principal_amount', 'total_amount', 'total_paid', 'outstanding_principal', 'outstanding_interest', 'loan_status', 'collection_status'],
             'schedules' => ['loan_invoice', 'loan_id', 'installment_no', 'due_date', 'principal', 'interest', 'total', 'status', 'paid_date'],
@@ -3079,6 +3108,41 @@ class LoanImportExportService
         Schema::connection($this->connection)->table('loan_payments', function ($table) {
             $table->string('payment_type', 20)->default('monthly')->after('loan_id');
         });
+    }
+
+    protected function ensureImportBatchStatusColumn(): void
+    {
+        if (! Schema::connection($this->connection)->hasTable('loan_import_batches')
+            || ! Schema::connection($this->connection)->hasColumn('loan_import_batches', 'status')) {
+            return;
+        }
+
+        $column = DB::connection($this->connection)->selectOne("SHOW COLUMNS FROM `loan_import_batches` LIKE 'status'");
+        if ($column && preg_match('/varchar\((\d+)\)/i', (string) $column->Type, $matches) && (int) $matches[1] < 30) {
+            DB::connection($this->connection)->statement(
+                "ALTER TABLE `loan_import_batches` MODIFY `status` varchar(30) NOT NULL DEFAULT 'uploaded'"
+            );
+        }
+    }
+
+    protected function userDisplayName(?int $userId): ?string
+    {
+        if (empty($userId) || ! Schema::hasTable('users')) {
+            return null;
+        }
+
+        $user = DB::table('users')->where('id', $userId)->first(['surname', 'first_name', 'last_name', 'username']);
+        if (! $user) {
+            return null;
+        }
+
+        $name = trim(implode(' ', array_filter([
+            $user->surname ?? '',
+            $user->first_name ?? '',
+            $user->last_name ?? '',
+        ])));
+
+        return $name !== '' ? $name : ($user->username ?? null);
     }
 
     protected function decimal($value): float

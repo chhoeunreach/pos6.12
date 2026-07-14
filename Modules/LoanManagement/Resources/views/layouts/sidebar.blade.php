@@ -11,7 +11,7 @@
             ['label' => 'Due Today', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view'],
             ['label' => 'Partial Payments', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.view'],
             ['label' => 'Closed Accounts', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view'],
-            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create'],
+            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create'],
             ['label' => 'All Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view'],
         ]],
         ['label' => 'Collection Cases', 'icon' => 'fa fa-phone', 'children' => [
@@ -71,15 +71,20 @@
             <span>Loan Management</span>
             <small>Loans & collections</small>
         </div>
+        <button type="button" class="lm-sidebar-close d-lg-none" id="loanSidebarClose"
+                style="margin-left: auto; border: 0; background: none; color: #94a3b8; font-size: 18px; padding: 4px 8px; cursor: pointer; border-radius: 6px;"
+                aria-label="Close sidebar">
+            <i class="fa fa-times"></i>
+        </button>
     </div>
 
     <nav class="lm-menu">
         @foreach($menu as $item)
             @php
                 $children = $item['children'] ?? [];
-                $visibleChildren = collect($children)->filter(fn ($child) => loan_user_can($child['can'] ?? 'loan_management.view'))->values();
+                $visibleChildren = collect($children)->filter(fn ($child) => \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($child['can'] ?? 'loan_management.view'))->values();
                 $isVisible = empty($children)
-                    ? loan_user_can($item['can'] ?? 'loan_management.view')
+                    ? \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($item['can'] ?? 'loan_management.view')
                     : $visibleChildren->isNotEmpty();
                 if (! $isVisible) {
                     continue;

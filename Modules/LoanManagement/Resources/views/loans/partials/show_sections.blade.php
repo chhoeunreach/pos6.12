@@ -78,13 +78,19 @@
                                 class="btn btn-xs btn-primary btn-modal"
                                 data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $s->id]) }}"
                                 data-container=".view_modal">
-                            <i class="fa fa-pencil"></i> Edit
+                            <i class="fa fa-pencil"></i> <span class="hidden-xs">Edit</span>
                         </button>
                         @if(! in_array($s->status ?? '', ['paid', 'completed'], true))
                             <button type="button"
-                                    class="btn btn-xs btn-success btn-modal"
+                                    class="btn btn-xs btn-success btn-modal d-none d-lg-inline-block"
                                     data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loanRow->id, 'schedule_id' => $s->id]) }}"
                                     data-container=".view_modal">
+                                <i class="fa fa-money"></i> Pay
+                            </button>
+                            <button type="button"
+                                    class="btn btn-xs btn-success lm-quick-pay-trigger d-lg-none"
+                                    data-url="{{ route('loan-management.loans.payment.quick-pay', ['loan' => $loanRow->id, 'schedule_id' => $s->id]) }}"
+                                    data-loan-id="{{ $loanRow->id }}">
                                 <i class="fa fa-money"></i> Pay
                             </button>
                         @endif

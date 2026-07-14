@@ -50,7 +50,7 @@
             </div>
         </div>
         <div class="box-body">
-            <form method="POST" action="{{ route('loan-management.customers.update', $customerRow->id) }}">
+            <form method="POST" action="{{ route('loan-management.customers.update', $customerRow->id) }}" enctype="multipart/form-data">
                 @csrf
                 @method('PUT')
                 <input type="hidden" name="create_mode" id="create_mode" value="new">

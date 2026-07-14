@@ -229,19 +229,6 @@
     <div class="row">
         <div class="col-md-6">
             <div class="box box-solid">
-                <div class="box-header with-border"><h3 class="box-title">Source Sell Snapshot</h3></div>
-                <div class="box-body">
-                    <p><strong>Source Type:</strong> {{ $sourceType ?? '-' }}</p>
-                    <p><strong>Source Transaction ID:</strong> {{ $sourceTransactionId ?? '-' }}</p>
-                    <p><strong>Source Invoice:</strong> {{ $sourceInvoice ?? '-' }}</p>
-                    <p><strong>Sell Final Total:</strong> {{ number_format((float) ($sourceFinalTotal ?? 0), 2) }}</p>
-                    <p><strong>Sell Paid:</strong> {{ number_format((float) ($sourcePaid ?? 0), 2) }}</p>
-                    <p><strong>Sell Due:</strong> {{ number_format((float) ($sourceDue ?? 0), 2) }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="box box-solid">
                 <div class="box-header with-border"><h3 class="box-title">Stored Snapshot</h3></div>
                 <div class="box-body">
                     <p><strong>Customer Snapshot:</strong> {{ $loanRow->customer_name_snapshot ?? '-' }}</p>
@@ -605,7 +592,7 @@
                     .prop('disabled', true)
                     .html('<i class="fa fa-spinner fa-spin"></i> Generating...');
 
-                window.jQuery.post("{{ route('loan-management.loans.preview-schedule') }}", form.serialize(), function (res) {
+                window.jQuery.post("{{ route('loan-management.loans.preview-standalone-schedule') }}", form.serialize(), function (res) {
                     var rows = res.data || [];
                     var totalPrincipal = 0;
                     var totalInterest = 0;

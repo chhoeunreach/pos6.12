@@ -15,6 +15,11 @@
         }
         .loan-asset-field { display: flex; gap: 6px; align-items: center; }
         .loan-asset-field input[type="file"] { flex: 1; min-width: 0; }
+        .loan-telegram-test-field { display: flex; gap: 6px; align-items: center; }
+        .loan-telegram-test-field input { flex: 1; min-width: 0; }
+        .loan-telegram-test-status { margin-top: 6px; font-size: 12px; min-height: 16px; }
+        .loan-telegram-test-status.text-success { color: #16a34a; }
+        .loan-telegram-test-status.text-danger { color: #dc2626; }
         .loan-asset-preview { margin-top: 8px; min-height: 48px; }
         .loan-asset-preview img { max-width: 96px; max-height: 64px; border: 1px solid #ddd; border-radius: 4px; padding: 2px; background: #fff; }
         .loan-asset-gallery-grid {
@@ -381,7 +386,13 @@
                         <div class="col-sm-6">
                             <div class="form-group">
                                 <label>Payment Telegram Chat ID</label>
-                                <input type="text" name="telegram_payment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                <div class="loan-telegram-test-field">
+                                    <input type="text" name="telegram_payment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                    <button type="button" class="btn btn-default loan-telegram-test-btn" data-type="payment">
+                                        <i class="fa fa-paper-plane"></i> Test
+                                    </button>
+                                </div>
+                                <div class="loan-telegram-test-status" data-status-for="payment"></div>
                                 <div class="checkbox">
                                     <label>
                                         <input type="checkbox" name="telegram_notify_payment" value="1">
@@ -393,7 +404,13 @@
                         <div class="col-sm-6">
                             <div class="form-group">
                                 <label>Installment Telegram Chat ID</label>
-                                <input type="text" name="telegram_installment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                <div class="loan-telegram-test-field">
+                                    <input type="text" name="telegram_installment_chat_id" class="form-control" value="" placeholder="-100xxxxxxxxxx">
+                                    <button type="button" class="btn btn-default loan-telegram-test-btn" data-type="installment">
+                                        <i class="fa fa-paper-plane"></i> Test
+                                    </button>
+                                </div>
+                                <div class="loan-telegram-test-status" data-status-for="installment"></div>
                                 <div class="checkbox">
                                     <label>
                                         <input type="checkbox" name="telegram_notify_installment" value="1">
@@ -488,6 +505,7 @@
                 form.find('input[name="telegram_installment_chat_id"]').val(button.data('telegram_installment_chat_id') || '');
                 form.find('input[name="telegram_notify_payment"]').prop('checked', Number(button.data('telegram_notify_payment')) === 1);
                 form.find('input[name="telegram_notify_installment"]').prop('checked', Number(button.data('telegram_notify_installment')) === 1);
+                form.find('.loan-telegram-test-status').removeClass('text-success text-danger').text('');
 
                 setPreview($('#logo_preview_shared'), button.data('logo_url') || '', 'Logo');
                 setPreview($('#payment_qr_preview_shared'), button.data('payment_qr_url') || '', 'Payment QR Code');
@@ -530,6 +548,53 @@
 
             $(document).on('change', '.loan-asset-field input[type="file"]', function() {
                 $(this).closest('.form-group').find('input[type="hidden"]').val('');
+            });
+
+            $(document).on('click', '.loan-telegram-test-btn', function() {
+                var button = $(this);
+                var type = button.data('type');
+                var form = $('#loan_location_assets_form');
+                var action = form.attr('action') || '';
+                var locationId = (action.match(/\/locations\/(\d+)\/assets/) || [])[1];
+                var inputName = type === 'payment' ? 'telegram_payment_chat_id' : 'telegram_installment_chat_id';
+                var chatId = form.find('input[name="' + inputName + '"]').val() || '';
+                var status = form.find('.loan-telegram-test-status[data-status-for="' + type + '"]');
+
+                status.removeClass('text-success text-danger').text('Sending test...');
+                button.prop('disabled', true);
+
+                if (!locationId) {
+                    status.addClass('text-danger').text('Please reopen this location and try again.');
+                    button.prop('disabled', false);
+                    return;
+                }
+
+                $.ajax({
+                    method: 'POST',
+                    url: locationBaseUrl + '/' + locationId + '/telegram-test',
+                    data: {
+                        _token: $('meta[name="csrf-token"]').attr('content'),
+                        type: type,
+                        chat_id: chatId
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        status.removeClass('text-danger').addClass('text-success').text(response.msg || 'Telegram test sent.');
+                        if (window.toastr) {
+                            toastr.success(response.msg || 'Telegram test sent.');
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = xhr.responseJSON && xhr.responseJSON.msg ? xhr.responseJSON.msg : 'Telegram test failed.';
+                        status.removeClass('text-success').addClass('text-danger').text(msg);
+                        if (window.toastr) {
+                            toastr.error(msg);
+                        }
+                    },
+                    complete: function() {
+                        button.prop('disabled', false);
+                    }
+                });
             });
         })(jQuery);
     </script>

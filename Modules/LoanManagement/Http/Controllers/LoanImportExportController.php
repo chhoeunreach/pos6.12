@@ -49,11 +49,13 @@ class LoanImportExportController extends Controller
     {
         return view('loanmanagement::tools.import_export', [
             'type' => 'payments',
+            'typeLabelOverride' => 'Monthly Payments',
+            'exportType' => 'monthly_collections',
             'importTypes' => $service->importTypes(),
             'exportTypes' => $service->exportTypes(),
             'templateDetails' => $service->templateDetails('payments'),
             'recentBatches' => $service->recentBatches(20, 'payments'),
-            'recentExports' => $service->recentExports(20, 'payments'),
+            'recentExports' => $service->recentExports(20, 'monthly_collections'),
         ]);
     }
 

@@ -108,11 +108,8 @@ class LoanDashboardController extends Controller
 
     public function quickSearch(Request $request): JsonResponse
     {
-        $scope = trim((string) $request->input('scope', 'loan'));
         $term = trim((string) $request->input('q', ''));
-        $rows = $scope === 'sell'
-            ? $this->service->searchSellsForDashboard($term)
-            : $this->service->searchLoansForDashboard($term);
+        $rows = $this->service->searchLoansForDashboard($term);
 
         return response()->json([
             'success' => true,

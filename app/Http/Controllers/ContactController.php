@@ -19,6 +19,7 @@ use App\Utils\Util;
 use DB;
 use Excel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Activitylog\Models\Activity;
 use Yajra\DataTables\Facades\DataTables;
 use App\Events\ContactCreatedOrModified;
@@ -730,6 +731,7 @@ class ContactController extends Controller
 
             $input = $request->only(['type', 'supplier_business_name',
                 'prefix', 'first_name', 'middle_name', 'last_name', 'tax_number', 'pay_term_number', 'pay_term_type', 'mobile', 'landline', 'alternate_number', 'city', 'state', 'country', 'address_line_1', 'address_line_2', 'customer_group_id', 'zip_code', 'contact_id', 'custom_field1', 'custom_field2', 'custom_field3', 'custom_field4', 'custom_field5', 'custom_field6', 'custom_field7', 'custom_field8', 'custom_field9', 'custom_field10', 'email', 'shipping_address', 'position', 'dob', 'shipping_custom_field_details', 'assigned_to_users', 'land_mark', 'street_name', 'building_number', 'additional_number']);
+            $this->appendCambodiaAddressCodes($request, $input);
 
             $name_array = [];
 
@@ -920,6 +922,7 @@ class ContactController extends Controller
             try {
                 $input = $request->only(['type', 'supplier_business_name', 'prefix', 'first_name', 'middle_name', 'last_name', 'tax_number', 'pay_term_number', 'pay_term_type', 'mobile', 'address_line_1', 'address_line_2', 'zip_code', 'dob', 'alternate_number', 'city', 'state', 'country', 'landline', 'customer_group_id', 'contact_id', 'custom_field1', 'custom_field2', 'custom_field3', 'custom_field4', 'custom_field5', 'custom_field6', 'custom_field7', 'custom_field8', 'custom_field9', 'custom_field10', 'email', 'shipping_address', 'position', 'shipping_custom_field_details', 'export_custom_field_1', 'export_custom_field_2', 'export_custom_field_3', 'export_custom_field_4', 'export_custom_field_5',
                     'export_custom_field_6', 'assigned_to_users', 'land_mark', 'street_name', 'building_number', 'additional_number']);
+                $this->appendCambodiaAddressCodes($request, $input);
 
                 $name_array = [];
 
@@ -976,6 +979,15 @@ class ContactController extends Controller
             }
 
             return $output;
+        }
+    }
+
+    private function appendCambodiaAddressCodes(Request $request, array &$input): void
+    {
+        foreach (['province_code', 'district_code', 'commune_code', 'village_code'] as $field) {
+            if (Schema::hasColumn('contacts', $field)) {
+                $input[$field] = $request->input($field);
+            }
         }
     }
 
@@ -1087,6 +1099,7 @@ class ContactController extends Controller
                 'cg.price_calculation_type',
                 'cg.selling_price_group_id',
                 'shipping_custom_field_details',
+                'id_card_number',
                 'is_export',
                 'export_custom_field_1',
                 'export_custom_field_2',
@@ -1098,6 +1111,11 @@ class ContactController extends Controller
 
             if (request()->session()->get('business.enable_rp') == 1) {
                 $contacts->addSelect('total_rp');
+            }
+            foreach (['province_code', 'district_code', 'commune_code', 'village_code'] as $column) {
+                if (Schema::hasColumn('contacts', $column)) {
+                    $contacts->addSelect('contacts.'.$column);
+                }
             }
             $contacts = $contacts->limit(50)->get();
 

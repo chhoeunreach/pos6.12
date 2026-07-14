@@ -1,7 +1,8 @@
 @extends('loanmanagement::layouts.app')
 
 @php
-    $typeLabel = data_get($importTypes, $type.'.label', ucfirst(str_replace('_', ' ', $type)));
+    $typeLabel = $typeLabelOverride ?? data_get($importTypes, $type.'.label', ucfirst(str_replace('_', ' ', $type)));
+    $exportType = $exportType ?? $type;
 @endphp
 
 @section('title', $typeLabel.' Import Export')
@@ -127,13 +128,13 @@
         <div class="col-md-6">
             <div class="box box-solid">
                 <div class="box-header with-border">
-                    <h3 class="box-title">Export {{ data_get($exportTypes, $type.'.label', $typeLabel) }}</h3>
+                    <h3 class="box-title">Export {{ data_get($exportTypes, $exportType.'.label', $typeLabel) }}</h3>
                 </div>
                 <form method="GET" action="{{ route('loan-management.export.download') }}">
-                    <input type="hidden" name="type" value="{{ $type }}">
+                    <input type="hidden" name="type" value="{{ $exportType }}">
                     <div class="box-body">
                         <div class="alert alert-info">
-                            {{ data_get($exportTypes, $type.'.description', 'Export downloads CSV data for this page.') }}
+                            {{ data_get($exportTypes, $exportType.'.description', 'Export downloads CSV data for this page.') }}
                         </div>
                         <div class="row">
                             <div class="col-sm-6">

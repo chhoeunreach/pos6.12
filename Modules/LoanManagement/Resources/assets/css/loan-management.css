@@ -243,6 +243,9 @@ body.lm-sidebar-collapsed .lm-sidebar {
 }
 body.lm-sidebar-collapsed .lm-main { width: 100%; }
 
+/* ============================================================
+   RESPONSIVE: Tablet (max-width: 992px)
+   ============================================================ */
 @media (max-width: 992px) {
     .lm-sidebar {
         position: absolute;
@@ -253,11 +256,763 @@ body.lm-sidebar-collapsed .lm-main { width: 100%; }
         transform: translateX(-100%);
         margin-left: 0;
         box-shadow: 0 20px 40px rgba(15, 23, 42, .24);
+        z-index: 1001;
     }
 
     .lm-main { width: 100%; }
     body.lm-sidebar-open .lm-sidebar { transform: translateX(0); }
-    .lm-header { flex-wrap: wrap; }
-    .lm-header-right { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
+
+    /* Sidebar overlay backdrop */
+    body.lm-sidebar-open::after {
+        content: '';
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,.35);
+        z-index: 1000;
+    }
+
+    .lm-header { flex-wrap: wrap; padding: 8px 12px; }
+    .lm-header-left { gap: 8px; }
+    .lm-header-right { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
     .lm-quick-menu { order: -1; width: 100%; justify-content: flex-end; }
+    .lm-title { font-size: 15px; }
+    .lm-subtitle { display: none; }
+    .lm-content { padding: 12px; }
+
+    /* Hide verbose header items on tablet */
+    .lm-header .lm-user-meta { display: none; }
+    .lm-header-action span { display: none; }
+    .lm-header-action { padding: 6px 10px; }
+
+    .lm-footer { padding: 10px 12px; font-size: 12px; }
+}
+
+/* ============================================================
+   RESPONSIVE: Mobile (max-width: 576px)
+   ============================================================ */
+@media (max-width: 576px) {
+    /* --- Prevent horizontal overflow --- */
+    .lm-content, .lm-main, #scrollable-container {
+        overflow-x: hidden;
+        max-width: 100%;
+    }
+
+    /* --- Header --- */
+    .lm-header {
+        padding: 6px 10px;
+        min-height: 50px;
+    }
+    .lm-header-left { gap: 6px; }
+    .lm-title { font-size: 14px; }
+    .lm-sidebar-toggle { width: 32px; height: 32px; font-size: 14px; }
+    .lm-header-right { gap: 4px; }
+    .lm-header-action { padding: 5px 8px; font-size: 12px; gap: 4px; border-radius: 6px; }
+    .lm-header-action i { font-size: 14px; }
+    .lm-header-action span { display: none; }
+    .lm-btn-back { font-size: 0; padding: 5px 8px; }
+    .lm-btn-back i { font-size: 14px; margin: 0; }
+
+    /* --- Content --- */
+    .lm-content { padding: 8px; }
+    .lm-workspace .box { border-radius: 8px; }
+    .lm-workspace .box-header { padding: 8px 12px; }
+    .lm-workspace .box-body { padding: 10px 12px; }
+
+    /* --- Tables --- */
+    .table-responsive { border: 0; }
+    .table > thead > tr > th,
+    .table > tbody > tr > td {
+        font-size: 12px;
+        padding: 6px 8px;
+        white-space: nowrap;
+    }
+
+    /* --- Forms --- */
+    .form-group { margin-bottom: 8px; }
+    .form-group label { font-size: 12px; margin-bottom: 3px; }
+    .form-control { font-size: 14px; padding: 7px 10px; height: auto; min-height: 36px; }
+    select.form-control { font-size: 14px; }
+
+    /* Touch targets: minimum 44px */
+    .btn { min-height: 38px; }
+    .btn-sm { min-height: 32px; padding: 5px 10px; font-size: 12px; }
+    .btn-xs { min-height: 28px; padding: 3px 8px; font-size: 11px; }
+
+    /* --- Content Header --- */
+    .content-header h1 { font-size: 18px; }
+    .content-header .pull-right { float: none !important; margin-top: 8px; }
+    .lm-header-actions-mobile { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* --- Footer --- */
+    .lm-footer { flex-direction: column; gap: 4px; text-align: center; padding: 8px 12px; }
+
+    /* --- Widget/Panel --- */
+    .box { border-radius: 8px; }
+    .box-header { padding: 8px 12px; }
+    .box-body { padding: 10px 12px; }
+    .box-title { font-size: 14px; }
+
+    /* --- Filters --- */
+    .filter-content .col-md-3,
+    .filter-content .col-md-4,
+    .filter-content .col-md-6 { width: 100%; margin-bottom: 8px; }
+
+    /* --- Info boxes --- */
+    .info-box { min-height: auto; }
+    .info-box-content { padding: 8px 10px; }
+    .info-box-number { font-size: 18px; }
+    .info-box-text { font-size: 11px; }
+
+    /* --- Scrollable container adjustment --- */
+    #scrollable-container { height: calc(100vh - 50px) !important; }
+
+    /* --- Modal adjustments for mobile --- */
+    .modal-dialog { margin: 8px; width: calc(100% - 16px); }
+    .modal-content { border-radius: 10px; }
+    .modal-header { padding: 10px 14px; }
+    .modal-body { padding: 12px; }
+    .modal-footer { padding: 10px 14px; }
+
+    /* --- Mobile Bottom Navigation Bar --- */
+    .lm-mobile-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border-top: 1px solid var(--lm-border);
+        z-index: 999;
+        padding: 4px 0;
+        padding-bottom: env(safe-area-inset-bottom, 4px);
+        box-shadow: 0 -2px 12px rgba(0,0,0,.06);
+    }
+    .lm-mobile-nav a,
+    .lm-mobile-nav button {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 4px;
+        background: none;
+        border: 0;
+        color: var(--lm-sidebar-muted);
+        font-size: 10px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color .15s;
+        min-height: 50px;
+    }
+    .lm-mobile-nav a i,
+    .lm-mobile-nav button i { font-size: 18px; }
+    .lm-mobile-nav a.active,
+    .lm-mobile-nav button.active { color: var(--lm-primary); }
+    .lm-mobile-nav .lm-mobile-nav-badge {
+        position: absolute;
+        top: 2px;
+        right: 50%;
+        transform: translateX(12px);
+        background: #ef4444;
+        color: #fff;
+        font-size: 9px;
+        min-width: 14px;
+        height: 14px;
+        line-height: 14px;
+        text-align: center;
+        border-radius: 7px;
+        padding: 0 3px;
+    }
+
+    /* Offset content for bottom nav */
+    #scrollable-container { padding-bottom: 58px; }
+
+    /* --- Standalone Loan List --- */
+    #loan_list_table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* --- Content Header Actions --- */
+    .content-header .pull-right .btn { margin-bottom: 4px; }
+}
+
+/* ============================================================
+   RESPONSIVE: Small Mobile (max-width: 380px)
+   ============================================================ */
+@media (max-width: 380px) {
+    .lm-header { padding: 4px 8px; }
+    .lm-title { font-size: 13px; }
+    .lm-content { padding: 6px; }
+    .content-header h1 { font-size: 16px; }
+    .btn { min-height: 36px; font-size: 12px; }
+}
+
+/* ============================================================
+   TOUCH & MOBILE ENHANCEMENTS
+   ============================================================ */
+/* Ensure tap targets are at least 44px on touch */
+@media (pointer: coarse) {
+    .btn { min-height: 44px; }
+    .btn-sm { min-height: 38px; }
+    .form-control { min-height: 40px; }
+    .lm-menu-link, .lm-submenu-link { padding: 12px 14px; }
+    .lm-mobile-nav a, .lm-mobile-nav button { min-height: 52px; }
+}
+
+/* Disable hover effects on touch to prevent sticky states */
+@media (hover: none) {
+    .lm-menu-link:hover, .lm-submenu-link:hover { transform: none; }
+    .btn:hover { box-shadow: none; }
+}
+
+/* Safe area for iPhone notch */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .lm-mobile-nav { padding-bottom: env(safe-area-inset-bottom); }
+    .lm-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
+
+/* Smooth scrolling on mobile */
+@media (max-width: 992px) {
+    .lm-main, .lm-content, #scrollable-container {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+}
+
+/* Print adjustments */
+@media print {
+    .lm-sidebar, .lm-mobile-nav, .lm-header { display: none !important; }
+    #scrollable-container { padding-bottom: 0 !important; height: auto !important; overflow: visible !important; }
+    .lm-main { overflow: visible !important; height: auto !important; }
+}
+
+/* Utility: hide on large screens */
+@media (min-width: 993px) {
+    .d-lg-none { display: none !important; }
+}
+
+/* Visible only on large screens */
+@media (max-width: 992px) {
+    .d-lg-block { display: none !important; }
+}
+
+/* ============================================================
+   MOBILE STICKY ACTION BAR (Loan Detail)
+   ============================================================ */
+.lm-mobile-action-bar {
+    display: none;
+    position: fixed;
+    bottom: 56px;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid var(--lm-border);
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 998;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+}
+.lm-mab-info { margin-bottom: 8px; }
+.lm-mab-balance { display: flex; align-items: baseline; gap: 6px; }
+.lm-mab-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+.lm-mab-amount { font-size: 20px; font-weight: 800; color: #0f172a; }
+.lm-mab-currency { font-size: 12px; color: #94a3b8; }
+.lm-mab-actions { display: flex; gap: 8px; }
+.lm-mab-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    border: 0;
+    cursor: pointer;
+    text-decoration: none;
+    min-height: 44px;
+    transition: all .15s;
+}
+.lm-mab-btn:not(.lm-mab-btn-outline) {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(37,99,235,.25);
+}
+.lm-mab-btn:not(.lm-mab-btn-outline):active { transform: scale(.97); }
+.lm-mab-btn-outline {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+.lm-mab-btn-outline:active { background: #e2e8f0; }
+
+@media (max-width: 576px) {
+    .lm-mobile-action-bar { display: block; }
+    #scrollable-container { padding-bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+
+/* ============================================================
+   MOBILE LOAN CARDS (replaces table rows)
+   ============================================================ */
+.lm-mobile-loan-card {
+    display: none;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.lm-mobile-loan-list {
+    display: none;
+}
+.lm-mobile-section-tabs {
+    display: none;
+}
+.lm-mobile-section-tabs a {
+    flex: 1 1 0;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 8px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+.lm-mobile-section-tabs a.active {
+    background: var(--lm-primary);
+    color: #fff;
+}
+.lm-mobile-loan-empty {
+    padding: 18px 12px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #64748b;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+}
+.lm-mobile-collection-list {
+    display: none;
+}
+.lm-mobile-collection-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .04);
+}
+.lm-mobile-collection-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.lm-mobile-collection-card-title {
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 800;
+    word-break: break-word;
+}
+.lm-mobile-collection-card-date {
+    color: #94a3b8;
+    font-size: 11px;
+    margin-top: 2px;
+}
+.lm-mobile-collection-status {
+    display: inline-flex;
+    max-width: 112px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.3;
+    text-transform: uppercase;
+    text-align: center;
+}
+.lm-mobile-collection-status.status-paid,
+.lm-mobile-collection-status.status-confirmed,
+.lm-mobile-collection-status.status-completed {
+    background: #dcfce7;
+    color: #15803d;
+}
+.lm-mobile-collection-status.status-pending {
+    background: #fef3c7;
+    color: #b45309;
+}
+.lm-mobile-collection-status.status-failed,
+.lm-mobile-collection-status.status-cancelled {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+.lm-mobile-collection-main {
+    padding: 10px 0;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+}
+.lm-mobile-collection-main small,
+.lm-mobile-collection-grid small {
+    display: block;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.lm-mobile-collection-main strong {
+    display: block;
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 800;
+    margin-top: 2px;
+}
+.lm-mobile-collection-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+    padding-top: 10px;
+}
+.lm-mobile-collection-grid span {
+    display: block;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 2px;
+    word-break: break-word;
+}
+.lm-mobile-loan-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+.lm-mobile-loan-card-title { font-weight: 700; font-size: 14px; color: #0f172a; }
+.lm-mobile-loan-card-date { font-size: 11px; color: #94a3b8; }
+.lm-mobile-loan-card-status {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.lm-mobile-loan-card-status.status-active { background: #dcfce7; color: #16a34a; }
+.lm-mobile-loan-card-status.status-pending { background: #fef3c7; color: #d97706; }
+.lm-mobile-loan-card-status.status-completed { background: #dbeafe; color: #2563eb; }
+.lm-mobile-loan-card-status.status-draft { background: #f1f5f9; color: #64748b; }
+.lm-mobile-loan-card-status.status-overdue { background: #fee2e2; color: #dc2626; }
+.lm-mobile-loan-card-body { margin-bottom: 10px; }
+.lm-mobile-loan-card-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+}
+.lm-mobile-loan-card-row .label { color: #94a3b8; }
+.lm-mobile-loan-card-row .value { font-weight: 600; color: #1f2937; }
+.lm-mobile-loan-card-balance {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid #f1f5f9;
+}
+.lm-mobile-loan-card-balance-item { flex: 1; text-align: center; }
+.lm-mobile-loan-card-balance-item small { display: block; font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+.lm-mobile-loan-card-balance-item strong { display: block; font-size: 15px; color: #0f172a; margin-top: 2px; }
+.lm-mobile-loan-card-balance-item.paid strong { color: #16a34a; }
+.lm-mobile-loan-card-balance-item.due strong { color: #dc2626; }
+.lm-mobile-loan-card-actions {
+    display: flex;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid #f1f5f9;
+}
+.lm-mobile-loan-card-actions .btn {
+    flex: 1;
+    min-height: 36px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .lm-mobile-loan-list {
+        display: block;
+    }
+    .lm-mobile-collection-list {
+        display: block;
+    }
+    .lm-mobile-section-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 6px;
+        margin-bottom: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, .04);
+    }
+    .lm-mobile-loan-card {
+        display: block;
+    }
+    #loan_list_table {
+        display: none !important;
+    }
+    #loan_list_table_wrapper .dataTables_filter,
+    #loan_list_table_wrapper .dataTables_length,
+    #loan_list_table_wrapper .dataTables_info {
+        display: none !important;
+    }
+    #loan_list_table_wrapper .dataTables_paginate {
+        float: none;
+        width: 100%;
+        text-align: center;
+        margin-top: 10px;
+    }
+    .lm-mobile-collection-list + .table-responsive {
+        display: none;
+    }
+    .lm-mobile-nav a,
+    .lm-mobile-nav button {
+        min-width: 0;
+        padding-left: 2px;
+        padding-right: 2px;
+        font-size: 9px;
+    }
+    .lm-mobile-nav a i,
+    .lm-mobile-nav button i {
+        font-size: 17px;
+    }
+}
+
+/* ============================================================
+   MOBILE LOAN INFO CARDS (Loan Detail)
+   ============================================================ */
+.lm-mobile-info-card {
+    display: none;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+.lm-mobile-info-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.lm-mobile-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.lm-mobile-info-item {
+    padding: 6px 0;
+}
+.lm-mobile-info-item small { display: block; font-size: 10px; color: #94a3b8; text-transform: uppercase; font-weight: 600; }
+.lm-mobile-info-item strong { display: block; font-size: 13px; color: #1f2937; margin-top: 2px; word-break: break-all; }
+
+@media (max-width: 576px) {
+    .lm-mobile-info-card { display: block; }
+    .box.box-primary,
+    .box.box-solid,
+    .box.box-default { display: none !important; }
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes lm-slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+@keyframes lm-fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes lm-scaleIn {
+    from { transform: scale(.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.lm-animate-slideUp { animation: lm-slideUp .3s ease-out; }
+.lm-animate-fadeIn { animation: lm-fadeIn .2s ease-out; }
+.lm-animate-scaleIn { animation: lm-scaleIn .2s ease-out; }
+
+/* Modal slide-up on mobile */
+@media (max-width: 576px) {
+    .modal.show .modal-dialog,
+    .modal.in .modal-dialog {
+        transform: none;
+    }
+    .modal-backdrop { opacity: .5; }
+    .modal-content { animation: lm-slideUp .3s ease-out; }
+}
+
+/* Toast notification mobile improvements */
+@media (max-width: 576px) {
+    .toast { max-width: calc(100% - 16px); margin: 8px auto; }
+}
+
+/* ============================================================
+   MOBILE DASHBOARD: Shared patterns
+   ============================================================ */
+/* Horizontal scroll strip for metric cards */
+.lm-hscroll-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 4px;
+}
+.lm-hscroll-strip > * {
+    scroll-snap-align: start;
+}
+
+/* Table-to-card mobile transform */
+.lm-mobile-card-row {
+    display: none;
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.lm-mobile-card-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.lm-mobile-card-row-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #0f172a;
+}
+.lm-mobile-card-row-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+.lm-mobile-card-row-item small {
+    display: block;
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.lm-mobile-card-row-item span {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-top: 2px;
+}
+@media (max-width: 576px) {
+    .lm-mobile-card-row { display: block; }
+}
+
+/* Mobile quick-action floating button */
+.lm-mobile-fab {
+    display: none;
+    position: fixed;
+    bottom: 70px;
+    right: 16px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    border: 0;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, .35);
+    z-index: 997;
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform .15s;
+    align-items: center;
+    justify-content: center;
+}
+.lm-mobile-fab:active {
+    transform: scale(.92);
+}
+@media (max-width: 576px) {
+    .lm-mobile-fab { display: flex; }
+}
+
+/* Customer profile photo */
+.lm-customer-photo-uploader {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.lm-customer-photo-preview {
+    width: 96px;
+    height: 96px;
+    flex: 0 0 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #94a3b8;
+    font-size: 38px;
+    overflow: hidden;
+}
+.lm-customer-photo-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.lm-customer-photo-actions {
+    min-width: 0;
+    flex: 1;
+}
+.lm-customer-detail-photo {
+    width: 104px;
+    height: 104px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #94a3b8;
+    font-size: 42px;
+    overflow: hidden;
+}
+.lm-customer-detail-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+@media (max-width: 576px) {
+    .lm-customer-photo-uploader {
+        align-items: flex-start;
+    }
+    .lm-customer-photo-preview,
+    .lm-customer-detail-photo {
+        width: 76px;
+        height: 76px;
+        flex-basis: 76px;
+        font-size: 30px;
+    }
 }

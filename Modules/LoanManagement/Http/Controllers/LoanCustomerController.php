@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Modules\LoanManagement\Http\Requests\StoreLoanCustomerRequest;
 use Modules\LoanManagement\Http\Requests\UpdateLoanCustomerRequest;
 use Modules\LoanManagement\Services\LoanCustomerService;
@@ -53,11 +54,18 @@ class LoanCustomerController extends Controller
     public function store(StoreLoanCustomerRequest $request)
     {
         $data = $request->validated();
+        unset($data['customer_photo']);
+        if ($request->hasFile('customer_photo')) {
+            $data['customer_photo_file_id'] = $this->storeCustomerPhoto($request);
+        }
         $snapshot = [];
         if (($data['create_mode'] ?? 'new') === 'clone' && ! empty($data['main_contact_id'])) {
             $snapshot = $this->getContactSnapshot((int) $data['main_contact_id']) ?? [];
         }
-        $this->customerService->create($data, $snapshot);
+        $customerId = $this->customerService->create($data, $snapshot);
+        if (! empty($data['customer_photo_file_id'])) {
+            $this->attachFileToCustomer((int) $data['customer_photo_file_id'], $customerId);
+        }
         return redirect()->route('loan-management.customers')->with('status', ['success' => 1, 'msg' => 'Loan customer created successfully.']);
     }
 
@@ -65,12 +73,14 @@ class LoanCustomerController extends Controller
     {
         $customerRow = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
         abort_if(! $customerRow, 404);
+        $customerPhotoUrl = $this->customerPhotoUrl($customerRow);
         $latestLocation = Schema::connection($this->connection)->hasTable('loan_customer_location_latest')
             ? DB::connection($this->connection)->table('loan_customer_location_latest')->where('customer_id', $customer)->first()
             : null;
         $relatedData = $this->getCustomerRelatedData($customer);
         return view('loanmanagement::customers.show', array_merge([
             'customerRow' => $customerRow,
+            'customerPhotoUrl' => $customerPhotoUrl,
             'latestLocation' => $latestLocation,
         ], $relatedData));
     }
@@ -79,6 +89,7 @@ class LoanCustomerController extends Controller
     {
         $customerRow = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
         abort_if(! $customerRow, 404);
+        $customerPhotoUrl = $this->customerPhotoUrl($customerRow);
         $latestLocation = Schema::connection($this->connection)->hasTable('loan_customer_location_latest')
             ? DB::connection($this->connection)->table('loan_customer_location_latest')->where('customer_id', $customer)->first()
             : null;
@@ -86,6 +97,7 @@ class LoanCustomerController extends Controller
 
         return view('loanmanagement::customers.edit', array_merge([
             'customerRow' => $customerRow,
+            'customerPhotoUrl' => $customerPhotoUrl,
             'latestLocation' => $latestLocation,
         ], $relatedData));
     }
@@ -93,6 +105,10 @@ class LoanCustomerController extends Controller
     public function update(UpdateLoanCustomerRequest $request, int $customer)
     {
         $data = $request->validated();
+        unset($data['customer_photo']);
+        if ($request->hasFile('customer_photo')) {
+            $data['customer_photo_file_id'] = $this->storeCustomerPhoto($request, $customer);
+        }
         if (! empty($request->input('password'))) {
             $data['password'] = $request->input('password');
         }
@@ -253,6 +269,60 @@ class LoanCustomerController extends Controller
     {
         $columns = Schema::connection($this->connection)->getColumnListing($this->table);
         return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function storeCustomerPhoto(Request $request, ?int $customerId = null): int
+    {
+        abort_unless(Schema::connection($this->connection)->hasTable('loan_files'), 500, 'loan_files table is not available.');
+
+        $file = $request->file('customer_photo');
+        $disk = 'public';
+        $path = $file->store('loan-management/customer-photos/'.date('Y/m'), $disk);
+
+        $payload = [
+            'fileable_type' => 'loan_customer',
+            'fileable_id' => $customerId ?? 0,
+            'category' => 'customer_photo',
+            'disk' => $disk,
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+            'size_bytes' => $file->getSize(),
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $columns = Schema::connection($this->connection)->getColumnListing('loan_files');
+
+        return (int) DB::connection($this->connection)->table('loan_files')->insertGetId(array_intersect_key($payload, array_flip($columns)));
+    }
+
+    protected function customerPhotoUrl(object $customer): ?string
+    {
+        if (empty($customer->customer_photo_file_id) || ! Schema::connection($this->connection)->hasTable('loan_files')) {
+            return null;
+        }
+
+        $file = DB::connection($this->connection)->table('loan_files')->where('id', $customer->customer_photo_file_id)->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return Storage::disk($file->disk ?? 'public')->url($file->path);
+    }
+
+    protected function attachFileToCustomer(int $fileId, int $customerId): void
+    {
+        if (! Schema::connection($this->connection)->hasTable('loan_files')) {
+            return;
+        }
+
+        DB::connection($this->connection)->table('loan_files')->where('id', $fileId)->update(array_intersect_key([
+            'fileable_type' => 'loan_customer',
+            'fileable_id' => $customerId,
+            'updated_at' => now(),
+        ], array_flip(Schema::connection($this->connection)->getColumnListing('loan_files'))));
     }
 
     protected function getCustomerRelatedData(int $customer): array

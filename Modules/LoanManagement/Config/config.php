@@ -19,6 +19,30 @@ return [
         'polling_interval_seconds' => (int) env('LOAN_CHAT_POLLING_INTERVAL', 5),
     ],
     'allow_without_pos_stock' => true,
+    'google_vision' => [
+        'api_key' => env('GOOGLE_CLOUD_VISION_API_KEY', env('GOOGLE_VISION_API_KEY')),
+        'endpoint' => env('GOOGLE_CLOUD_VISION_ENDPOINT', 'https://vision.googleapis.com/v1/images:annotate'),
+        'timeout' => (int) env('GOOGLE_CLOUD_VISION_TIMEOUT', 30),
+    ],
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'organization' => env('OPENAI_ORGANIZATION'),
+        'timeout' => (int) env('OPENAI_TIMEOUT', 45),
+        'id_card_model' => env('OPENAI_ID_CARD_MODEL', 'gpt-4.1-mini'),
+        'product_photo_model' => env('OPENAI_PRODUCT_PHOTO_MODEL', env('OPENAI_ID_CARD_MODEL', 'gpt-4.1-mini')),
+    ],
+    'cambodia_address' => [
+        'endpoint' => env('CAMBODIA_ADDRESS_API_URL', 'https://data.mef.gov.kh/api/v1/public-datasets/pd_68e370856a965e00074a5e7b/json'),
+        'page_size' => (int) env('CAMBODIA_ADDRESS_PAGE_SIZE', 200),
+        'pages_per_request' => (int) env('CAMBODIA_ADDRESS_PAGES_PER_REQUEST', 25),
+        'timeout' => (int) env('CAMBODIA_ADDRESS_TIMEOUT', 30),
+        'verify_ssl' => (bool) env('CAMBODIA_ADDRESS_VERIFY_SSL', true),
+        'retry_after_seconds' => (int) env('CAMBODIA_ADDRESS_RETRY_AFTER_SECONDS', 10),
+        'cache_days' => (int) env('CAMBODIA_ADDRESS_CACHE_DAYS', 7),
+    ],
+    'tesseract' => [
+        'path' => env('TESSERACT_PATH'),
+    ],
     'menu_order' => 38,
     'permissions' => [
         'loan_management.dashboard.view',
@@ -66,9 +90,7 @@ return [
         'loan_management.chat.reply',
         'loan_management.customer_gps.manage',
         'loan_management.setting',
-        'loan_management.sell_list',
-        'loan_management.sell_view',
-        'loan_management.sell_convert',
+
         'loan_management.create_from_sell',
         'loan_management.chat.assign',
         'loan_management.chat.transfer',

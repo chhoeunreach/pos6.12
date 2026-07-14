@@ -6,12 +6,25 @@
 <section class="content">
     <div class="box box-primary"><div class="box-body">
         <div class="row">
-            <div class="col-md-4"><strong>Code:</strong> {{ $customerRow->customer_code ?? '-' }}</div>
-            <div class="col-md-4"><strong>Name:</strong> {{ $customerRow->name ?? '-' }}</div>
-            <div class="col-md-4"><strong>Phone:</strong> {{ $customerRow->phone ?? '-' }}</div>
-            <div class="col-md-4"><strong>Status:</strong> {{ $customerRow->status ?? '-' }}</div>
-            <div class="col-md-4"><strong>Can Login:</strong> {{ !empty($customerRow->can_login) ? 'Yes' : 'No' }}</div>
-            <div class="col-md-4"><strong>GPS Tracking:</strong> {{ !empty($customerRow->allow_gps_tracking) ? 'Enabled' : 'Disabled' }}</div>
+            <div class="col-md-2 col-sm-3">
+                <div class="lm-customer-detail-photo">
+                    @if(!empty($customerPhotoUrl))
+                        <img src="{{ $customerPhotoUrl }}" alt="Customer profile photo">
+                    @else
+                        <i class="fa fa-user"></i>
+                    @endif
+                </div>
+            </div>
+            <div class="col-md-10 col-sm-9">
+                <div class="row">
+                    <div class="col-md-4"><strong>Code:</strong> {{ $customerRow->customer_code ?? '-' }}</div>
+                    <div class="col-md-4"><strong>Name:</strong> {{ $customerRow->name ?? '-' }}</div>
+                    <div class="col-md-4"><strong>Phone:</strong> {{ $customerRow->phone ?? '-' }}</div>
+                    <div class="col-md-4"><strong>Status:</strong> {{ $customerRow->status ?? '-' }}</div>
+                    <div class="col-md-4"><strong>Can Login:</strong> {{ !empty($customerRow->can_login) ? 'Yes' : 'No' }}</div>
+                    <div class="col-md-4"><strong>GPS Tracking:</strong> {{ !empty($customerRow->allow_gps_tracking) ? 'Enabled' : 'Disabled' }}</div>
+                </div>
+            </div>
         </div>
     </div></div>
 

@@ -243,6 +243,7 @@ $(document).ready(function() {
     });
 
     set_default_customer();
+    apply_loan_pos_prefill_from_url();
 
     if ($('#search_product').length) {
         //Add Product
@@ -2796,6 +2797,129 @@ function process_hr_lines_sequential(lines, index, onComplete) {
     }).fail(function() {
         toastr.error('Failed to search product for ' + line.serial);
         process_hr_lines_sequential(lines, index + 1, onComplete);
+    });
+}
+
+function apply_loan_pos_prefill_from_url() {
+    var params = new URLSearchParams(window.location.search || '');
+    var rawPayload = params.get('loan_pos_prefill');
+    if (!rawPayload || !$('#search_product').length) {
+        return;
+    }
+
+    var payload = decode_loan_pos_prefill_payload(rawPayload);
+    if (!payload || !payload.lines || !payload.lines.length) {
+        toastr.error('Loan POS data is invalid.');
+        return;
+    }
+
+    if (payload.customer_id) {
+        var customerName = payload.customer_name || ('Customer #' + payload.customer_id);
+        if (!$('select#customer_id option[value="' + payload.customer_id + '"]').length) {
+            $('select#customer_id').append(
+                $('<option>', { value: payload.customer_id, text: customerName })
+            );
+        }
+        $('select#customer_id').val(payload.customer_id).trigger('change');
+    }
+
+    if (payload.sell_note) {
+        $('textarea[name="sale_note"]').val(payload.sell_note);
+    }
+    if (payload.staff_note) {
+        $('textarea[name="staff_note"]').val(payload.staff_note);
+    }
+
+    process_loan_pos_prefill_lines(payload.lines, 0, function() {
+        toastr.success('Loan data copied to POS.');
+    });
+}
+
+function decode_loan_pos_prefill_payload(rawPayload) {
+    try {
+        var base64 = rawPayload.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+            base64 += '=';
+        }
+
+        return JSON.parse(decodeURIComponent(escape(window.atob(base64))));
+    } catch (e) {
+        try {
+            return JSON.parse(window.atob(rawPayload));
+        } catch (ignored) {
+            return null;
+        }
+    }
+}
+
+function process_loan_pos_prefill_lines(lines, index, onComplete) {
+    if (index >= lines.length) {
+        if (onComplete) onComplete();
+        return;
+    }
+
+    var line = lines[index];
+    var serial = $.trim(line.serial || '');
+    if (!serial || is_hr_serial_already_in_current_invoice(serial)) {
+        process_loan_pos_prefill_lines(lines, index + 1, onComplete);
+        return;
+    }
+
+    $('input#search_product').val(serial);
+
+    $.getJSON('/products/list', {
+        term: serial,
+        location_id: $('input#location_id').val(),
+        not_for_selling: 0,
+        search_fields: ['name', 'sku', 'sub_sku', 'lot'],
+        group_by_purchase_line: true,
+        auto_add_single: true,
+        product_row: $('input#product_row_count').val(),
+        customer_id: $('select#customer_id').val(),
+        is_direct_sell: $('input[name="is_direct_sale"]').length && $('input[name="is_direct_sale"]').val() == 1 ? true : false,
+        is_serial_no: $('input[name="is_serial_no"]').length && $('input[name="is_serial_no"]').val() == 1 ? true : false,
+        is_sales_order: $('#sale_type').length && $('#sale_type').val() == 'sales_order' ? true : false,
+        disable_qty_alert: $('#disable_qty_alert').length ? true : false,
+        is_draft: $('#status') && ($('#status').val() == 'quotation' || $('#status').val() == 'draft') ? true : false,
+    }, function(data) {
+        if (data.auto_add && data.row_data && data.row_data.success) {
+            $('#search_product').val('');
+            var ac = $('#search_product').data('ui-autocomplete');
+            if (ac) {
+                ac.cache = {};
+                ac.term = '';
+            }
+
+            pos_add_product_row_from_data(data.row_data);
+
+            var $row = $('#pos_table tbody tr.product_row').last();
+            if ($row.length) {
+                var rowIndex = $row.data('row_index');
+                $('textarea[name="products[' + rowIndex + '][sell_line_note]"]').val(serial);
+                $row.attr('data-hr-serial', serial);
+                $row.find('td').first().append('<input type="hidden" class="hr_sell_list_serial" name="products[' + rowIndex + '][hr_sell_list_serial]" value="' + serial + '">');
+            }
+
+            if (line.sell_note) {
+                $('textarea[name="sale_note"]').val(line.sell_note);
+            }
+            if (line.staff_note) {
+                $('textarea[name="staff_note"]').val(line.staff_note);
+            }
+
+            pos_total_row();
+            pos_sync_empty_state();
+            saveFormDataToLocalStorage();
+        } else {
+            $('input#search_product').val(serial);
+            toastr.error(serial + ': product not found in POS.');
+        }
+
+        process_loan_pos_prefill_lines(lines, index + 1, onComplete);
+    }).fail(function() {
+        $('input#search_product').val(serial);
+        toastr.error('Failed to search product for ' + serial);
+        process_loan_pos_prefill_lines(lines, index + 1, onComplete);
     });
 }
 

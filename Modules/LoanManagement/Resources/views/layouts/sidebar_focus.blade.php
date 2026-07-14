@@ -64,7 +64,6 @@ document.addEventListener('DOMContentLoaded', function () {
             <ul class="treeview-menu" ${treeMenuStyle([links.installment, links.overdue])}>
                 <li class="${activeClass(links.installment)}"><a href="${links.installment}"><i class="fa fa-money"></i> Installment</a></li>
                 <li class="${activeClass(links.overdue)}"><a href="${links.overdue}"><i class="fa fa-exclamation-triangle"></i> Overdue / Late Payments</a></li>
-                <li><a href="{{ route('loan-management.loans.create-from-sell') }}"><i class="fa fa-plus-circle"></i> Create From Sell (Recommended)</a></li>
             </ul>
         </li>
         <li class="treeview installment-section section-collections ${treeOpenClass([links.monthly, links.gps, links.chat])}" data-section="collections">

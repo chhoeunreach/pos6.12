@@ -64,24 +64,29 @@ Required:
 Supported optional columns:
 
 - `schedule_id`
-- `payment_type`
+- `installment_no` (targets a specific schedule row)
+- `payment_type` (monthly or loan/payoff)
 - `cash_amount`
 - `bank_amount`
 - `payoff_amount` (or `payoff` / `បង់ផ្ដាច់`)
 - `payment_method`
-- `currency`
-- `exchange_rate`
+- `currency` (default USD)
+- `exchange_rate` (default 1)
+- `penalty_amount` (penalty applied with this payment)
+- `discount_amount` (discount applied with this payment)
 - `reference_number`
 - `note`
 
 When `schedule_id` is empty, the importer applies the payment to the oldest open schedule for the loan.
+`installment_no` can be used to target a specific schedule row when `schedule_id` is not provided.
+`penalty_amount` and `discount_amount` are recorded on the payment record for reporting purposes.
 Duplicate monthly payments match by `reference_number` when provided; otherwise they match by `loan_id/loan_number + schedule_id + payment_type + paid_date + amount + payment_method`.
 
 Example:
 
 ```csv
-loan_number,schedule_id,amount,paid_date,payment_method,currency,exchange_rate,reference_number,note
-LN-0001,,55.00,2026-05-19,Cash,USD,1,PAY-EXAMPLE-001,Monthly installment payment
+loan_number,schedule_id,installment_no,amount,paid_date,payment_method,payment_type,currency,exchange_rate,penalty_amount,discount_amount,reference_number,note
+LN-0001,,1,55.00,2026-05-19,Cash,monthly,USD,1,0.00,0.00,PAY-EXAMPLE-001,Monthly installment payment
 ```
 
 ## Export Types
