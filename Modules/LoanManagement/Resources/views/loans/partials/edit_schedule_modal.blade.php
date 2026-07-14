@@ -1,11 +1,13 @@
 @php
-    $principal = (float) ($scheduleRow->principal_amount ?? $scheduleRow->principal_due ?? 0);
-    $interest = (float) ($scheduleRow->interest_amount ?? $scheduleRow->interest_due ?? $scheduleRow->benefit_value ?? 0);
-    $amountDue = (float) ($scheduleRow->schedule_amount ?? $scheduleRow->amount_due ?? ($principal + $interest));
+    $principal = (float) ($scheduleRow->principal_amount ?? $scheduleRow->principal_due ?? $scheduleRow->principal ?? 0);
+    $interest = (float) ($scheduleRow->interest_amount ?? $scheduleRow->interest_due ?? $scheduleRow->interest ?? $scheduleRow->benefit_value ?? 0);
+    $amountDue = (float) ($scheduleRow->schedule_amount ?? $scheduleRow->amount_due ?? $scheduleRow->total ?? ($principal + $interest));
     $paid = (float) ($scheduleRow->paid_amount ?? $scheduleRow->amount_paid ?? $scheduleRow->paid_value ?? 0);
     $balance = (float) ($scheduleRow->balance_amount ?? $scheduleRow->amount_balance ?? max(0, $amountDue - $paid));
     $dueDate = ! empty($scheduleRow->due_date) ? \Carbon\Carbon::parse($scheduleRow->due_date)->format('Y-m-d') : '';
     $status = strtolower((string) ($scheduleRow->status ?? 'unpaid'));
+    $isEmbeddedModal = request()->boolean('_lm_modal');
+    $editRouteParams = ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []);
     $statuses = [
         'auto' => 'Auto',
         'pending' => 'Pending',
@@ -19,8 +21,8 @@
 
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
-        {!! Form::open(['url' => route('loan-management.loans.schedules.update', ['loan' => $loanRow->id, 'schedule' => $scheduleRow->id]), 'method' => 'post', 'id' => 'loan_schedule_update_form']) !!}
-        <input type="hidden" name="return_to" value="{{ url()->previous() }}">
+        {!! Form::open(['url' => route('loan-management.loans.schedules.update', ['loan' => $loanRow->id, 'schedule' => $scheduleRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])), 'method' => 'post', 'id' => 'loan_schedule_update_form']) !!}
+        <input type="hidden" name="return_to" value="{{ route('loan-management.loans.edit', $editRouteParams) }}">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
@@ -31,6 +33,7 @@
         </div>
 
         <div class="modal-body">
+            <div id="loan_schedule_update_error" class="alert alert-danger" style="display:none;"></div>
             <div class="row">
                 <div class="col-md-4">
                     <div class="well well-sm">
@@ -145,6 +148,9 @@ $(function () {
     $form.off('submit.loanScheduleModal').on('submit.loanScheduleModal', function (e) {
         e.preventDefault();
         var $buttons = $form.find('button[type="submit"], .loan-schedule-recalculate');
+        var $errorBox = $('#loan_schedule_update_error');
+
+        $errorBox.hide().empty();
         $buttons.prop('disabled', true);
 
         $.ajax({
@@ -158,16 +164,53 @@ $(function () {
                 }
 
                 $('.view_modal').modal('hide');
-                window.location.href = (res.data && res.data.redirect_url) ? res.data.redirect_url : window.location.href;
-            },
-            error: function (xhr) {
-                if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
-                    var firstKey = Object.keys(xhr.responseJSON.errors)[0];
-                    alert(xhr.responseJSON.errors[firstKey][0] || 'Validation failed');
+                if (res.data && res.data.sections_html && window.parent && window.parent.document) {
+                    var parentSections = window.parent.document.getElementById('loanEditSections');
+                    if (parentSections) {
+                        parentSections.innerHTML = res.data.sections_html;
+                        return;
+                    }
+                }
+
+                if (res.data && res.data.sections_html && document.getElementById('loanEditSections')) {
+                    document.getElementById('loanEditSections').innerHTML = res.data.sections_html;
                     return;
                 }
 
-                alert(xhr.responseJSON?.message || 'Failed to update payment schedule');
+                window.location.href = (res.data && res.data.redirect_url) ? res.data.redirect_url : window.location.href;
+            },
+            error: function (xhr) {
+                var message = 'Failed to update payment schedule';
+                var detail = '';
+
+                if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                    var firstKey = Object.keys(xhr.responseJSON.errors)[0];
+                    message = xhr.responseJSON.errors[firstKey][0] || 'Validation failed';
+                } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                    if (xhr.responseJSON.data && xhr.responseJSON.data.detail) {
+                        detail = xhr.responseJSON.data.detail;
+                    }
+                } else if (xhr.responseText) {
+                    message = $('<div>').html(xhr.responseText).text().trim() || message;
+                    message = message.substring(0, 600);
+                }
+
+                $errorBox
+                    .html(
+                        $('<div>').text(message).html() +
+                        (detail ? '<br><small>' + $('<div>').text(detail).html() + '</small>' : '')
+                    )
+                    .show();
+
+                if (window.toastr) {
+                    toastr.error(message);
+                }
+
+                if (!$errorBox.length) {
+                    alert(message);
+                    return;
+                }
             },
             complete: function () {
                 $buttons.prop('disabled', false);

@@ -1,127 +1,305 @@
-<div class="box box-default">
-    <div class="box-header with-border"><h3 class="box-title">Loan Items</h3></div>
-    <div class="box-body table-responsive">
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Product</th>
-                    <th>SKU</th>
-                    <th>IMEI</th>
-                    <th>Qty</th>
-                    <th>Unit Price</th>
-                    <th>Line Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($loanItems as $item)
+@php
+    $isEmbeddedModal = request()->boolean('_lm_modal');
+@endphp
+
+<div class="box box-default lm-collapsible" data-collapse-key="loan-items">
+    <div class="box-header with-border">
+        <h3 class="box-title">Loan Items</h3>
+        <div class="box-tools pull-right">
+            <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
+                <i class="fa fa-minus"></i>
+            </button>
+        </div>
+    </div>
+    <div class="box-body">
+        <div class="lm-edit-sections-table">
+            <table class="table table-bordered table-striped">
+                <thead>
                     <tr>
-                        <td>{{ $item->id }}</td>
-                        <td>{{ $item->product_name_snapshot ?? '-' }}</td>
-                        <td>{{ $item->sku_snapshot ?? '-' }}</td>
-                        <td>{{ $item->imei_snapshot ?? '-' }}</td>
-                        <td>{{ $item->qty ?? 0 }}</td>
-                        <td>{{ number_format((float) ($item->unit_price ?? 0), 2) }}</td>
-                        <td>{{ number_format((float) ($item->line_total ?? 0), 2) }}</td>
+                        <th>ID</th>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th>IMEI</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Line Total</th>
+                        <th>Action</th>
                     </tr>
-                @empty
-                    <tr><td colspan="7" class="text-center">No loan items found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @forelse($loanItems as $item)
+                        <tr>
+                            <td>{{ $item->id }}</td>
+                            <td>{{ $item->product_name_snapshot ?? '-' }}</td>
+                            <td>{{ $item->sku_snapshot ?? '-' }}</td>
+                            <td>{{ $item->imei_snapshot ?? '-' }}</td>
+                            <td>{{ $item->qty ?? 0 }}</td>
+                            <td>{{ number_format((float) ($item->unit_price ?? 0), 2) }}</td>
+                            <td>{{ number_format((float) ($item->line_total ?? 0), 2) }}</td>
+                            <td>
+                                <button type="button"
+                                        class="btn btn-xs btn-primary lm-btn-modal"
+                                        data-href="{{ route('loan-management.loans.items.edit', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                        data-container=".view_modal">
+                                    <i class="fa fa-pencil"></i> Edit
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="8" class="text-center">No loan items found.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="lm-edit-sections-mobile">
+            @forelse($loanItems as $item)
+                <div class="lm-edit-section-card">
+                    <div class="lm-edit-section-card-header">
+                        <span class="lm-edit-section-card-title">{{ $item->product_name_snapshot ?? 'Item #' . $item->id }}</span>
+                        <small style="color:#94a3b8;">ID: {{ $item->id }}</small>
+                    </div>
+                    <div class="lm-edit-section-card-body">
+                        <div class="lm-edit-section-card-item"><small>SKU</small><span>{{ $item->sku_snapshot ?? '-' }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>IMEI</small><span>{{ $item->imei_snapshot ?? '-' }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Qty</small><span>{{ $item->qty ?? 0 }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Unit Price</small><span>{{ number_format((float) ($item->unit_price ?? 0), 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Line Total</small><span style="font-weight:700;color:#0f172a;">{{ number_format((float) ($item->line_total ?? 0), 2) }}</span></div>
+                    </div>
+                    <div class="lm-edit-section-card-actions">
+                        <button type="button"
+                                class="btn btn-xs btn-primary lm-btn-modal"
+                                data-href="{{ route('loan-management.loans.items.edit', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                data-container=".view_modal">
+                            <i class="fa fa-pencil"></i> Edit
+                        </button>
+                    </div>
+                </div>
+            @empty
+                <div class="lm-edit-section-card">
+                    <div style="text-align:center;color:#94a3b8;padding:12px 0;">No loan items found.</div>
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>
 
-<div class="box box-default">
-    <div class="box-header with-border"><h3 class="box-title">Payment Schedules</h3></div>
-    <div class="box-body table-responsive">
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Due Date</th>
-                    <th>Principal</th>
-                    <th>Interest</th>
-                    <th>Due</th>
-                    <th>Paid</th>
-                    <th>Balance</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($schedules as $schedule)
-                    @php
-                        $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? 0);
-                        $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
-                        $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
-                    @endphp
+<div class="box box-default lm-collapsible" data-collapse-key="payment-schedules">
+    <div class="box-header with-border">
+        <h3 class="box-title">Payment Schedules</h3>
+        <div class="box-tools pull-right">
+            <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
+                <i class="fa fa-minus"></i>
+            </button>
+        </div>
+    </div>
+    <div class="box-body">
+        <div class="lm-edit-sections-table">
+            <table class="table table-bordered table-striped">
+                <thead>
                     <tr>
-                        <td>{{ $schedule->installment_no ?? $schedule->id }}</td>
-                        <td>{{ !empty($schedule->due_date) ? \Carbon\Carbon::parse($schedule->due_date)->format('d-m-Y') : '-' }}</td>
-                        <td>{{ number_format((float) ($schedule->principal_due ?? $schedule->principal_amount ?? 0), 2) }}</td>
-                        <td>{{ number_format((float) ($schedule->interest_due ?? $schedule->interest_amount ?? 0), 2) }}</td>
-                        <td>{{ number_format($due, 2) }}</td>
-                        <td>{{ number_format($paid, 2) }}</td>
-                        <td>{{ number_format($balance, 2) }}</td>
-                        <td>{{ ucfirst($schedule->status ?? 'pending') }}</td>
-                        <td>
-                            <button type="button"
-                                    class="btn btn-xs btn-primary btn-modal"
-                                    data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $schedule->id]) }}"
-                                    data-container=".view_modal">
-                                <i class="fa fa-pencil"></i> Edit
-                            </button>
-                        </td>
+                        <th>#</th>
+                        <th>Due Date</th>
+                        <th>Principal</th>
+                        <th>Interest</th>
+                        <th>Due</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                        <th>Action</th>
                     </tr>
-                @empty
-                    <tr><td colspan="9" class="text-center">No schedules found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @forelse($schedules as $schedule)
+                        @php
+                            $principal = (float) ($schedule->principal_due ?? $schedule->principal_amount ?? $schedule->principal ?? $schedule->installment_value ?? 0);
+                            $interest = (float) ($schedule->interest_due ?? $schedule->interest_amount ?? $schedule->interest ?? 0);
+                            $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? $schedule->total ?? 0);
+                            $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+                            $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
+                            $scheduleStatus = strtolower((string) ($schedule->status ?? 'pending'));
+                            $statusClass = match($scheduleStatus) {
+                                'paid', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                                'partial' => 'color:#d97706;background:#fef3c7;',
+                                'late', 'overdue' => 'color:#dc2626;background:#fee2e2;',
+                                default => 'color:#64748b;background:#f1f5f9;',
+                            };
+                        @endphp
+                        <tr>
+                            <td>{{ $schedule->installment_no ?? $schedule->id }}</td>
+                            <td>{{ !empty($schedule->due_date) ? \Carbon\Carbon::parse($schedule->due_date)->format('d-m-Y') : '-' }}</td>
+                            <td>{{ number_format($principal, 2) }}</td>
+                            <td>{{ number_format($interest, 2) }}</td>
+                            <td>{{ number_format($due, 2) }}</td>
+                            <td>{{ number_format($paid, 2) }}</td>
+                            <td>{{ number_format($balance, 2) }}</td>
+                            <td>
+                                <span class="label" style="{{ $statusClass }}">{{ ucfirst($scheduleStatus) }}</span>
+                            </td>
+                            <td>
+                                <button type="button"
+                                        class="btn btn-xs btn-primary lm-btn-modal"
+                                        data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $schedule->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                        data-container=".view_modal">
+                                    <i class="fa fa-pencil"></i> Edit
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="9" class="text-center">No schedules found.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="lm-edit-sections-mobile">
+            @forelse($schedules as $schedule)
+                @php
+                    $principal = (float) ($schedule->principal_due ?? $schedule->principal_amount ?? $schedule->principal ?? $schedule->installment_value ?? 0);
+                    $interest = (float) ($schedule->interest_due ?? $schedule->interest_amount ?? $schedule->interest ?? 0);
+                    $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? $schedule->total ?? 0);
+                    $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+                    $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
+                    $scheduleStatus = strtolower((string) ($schedule->status ?? 'pending'));
+                    $statusClass = match($scheduleStatus) {
+                        'paid', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                        'partial' => 'color:#d97706;background:#fef3c7;',
+                        'late', 'overdue' => 'color:#dc2626;background:#fee2e2;',
+                        default => 'color:#64748b;background:#f1f5f9;',
+                    };
+                @endphp
+                <div class="lm-edit-section-card">
+                    <div class="lm-edit-section-card-header">
+                        <span class="lm-edit-section-card-title">
+                            #{{ $schedule->installment_no ?? $schedule->id }}
+                            @if(!empty($schedule->due_date))
+                                <span style="color:#94a3b8;font-weight:400;"> &middot; {{ \Carbon\Carbon::parse($schedule->due_date)->format('d-m-Y') }}</span>
+                            @endif
+                        </span>
+                        <span class="label" style="{{ $statusClass }}">{{ ucfirst($scheduleStatus) }}</span>
+                    </div>
+                    <div class="lm-edit-section-card-body">
+                        <div class="lm-edit-section-card-item"><small>Principal</small><span>{{ number_format($principal, 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Interest</small><span>{{ number_format($interest, 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Due</small><span style="font-weight:700;">{{ number_format($due, 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Paid</small><span style="color:#16a34a;">{{ number_format($paid, 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Balance</small><span style="color:{{ $balance > 0 ? '#dc2626' : '#16a34a' }};">{{ number_format($balance, 2) }}</span></div>
+                    </div>
+                    <div class="lm-edit-section-card-actions">
+                        <button type="button"
+                                class="btn btn-xs btn-primary lm-btn-modal"
+                                data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $schedule->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                data-container=".view_modal">
+                            <i class="fa fa-pencil"></i> Edit Schedule
+                        </button>
+                    </div>
+                </div>
+            @empty
+                <div class="lm-edit-section-card">
+                    <div style="text-align:center;color:#94a3b8;padding:12px 0;">No schedules found.</div>
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>
 
-<div class="box box-default">
-    <div class="box-header with-border"><h3 class="box-title">Recent Payments</h3></div>
-    <div class="box-body table-responsive">
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Receipt</th>
-                    <th>Paid Date</th>
-                    <th>Method</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($payments as $payment)
-                    @php
-                        $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #' . $payment->id);
-                        $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
-                        $method = $payment->payment_method_snapshot ?? $payment->channel ?? '-';
-                        $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
-                    @endphp
+<div class="box box-default lm-collapsible is-collapsed" data-collapse-key="recent-payments">
+    <div class="box-header with-border">
+        <h3 class="box-title">Recent Payments</h3>
+        <div class="box-tools pull-right">
+            <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
+                <i class="fa fa-minus"></i>
+            </button>
+        </div>
+    </div>
+    <div class="box-body">
+        <div class="lm-edit-sections-table">
+            <table class="table table-bordered table-striped">
+                <thead>
                     <tr>
-                        <td>{{ $payment->id }}</td>
-                        <td>{{ $receipt }}</td>
-                        <td>{{ !empty($paidDate) ? \Carbon\Carbon::parse($paidDate)->format('d-m-Y') : '-' }}</td>
-                        <td>{{ $method }}</td>
-                        <td>{{ number_format($amount, 2) }}</td>
-                        <td>{{ ucfirst($payment->status ?? 'confirmed') }}</td>
-                        <td>
-                            <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id, 'customer_id' => $backCustomerId]) }}" class="btn btn-xs btn-primary">
-                                <i class="fa fa-pencil"></i> Edit Payment
-                            </a>
-                        </td>
+                        <th>ID</th>
+                        <th>Receipt</th>
+                        <th>Paid Date</th>
+                        <th>Method</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
                     </tr>
-                @empty
-                    <tr><td colspan="7" class="text-center">No payments found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @forelse($payments as $payment)
+                        @php
+                            $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #' . $payment->id);
+                            $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                            $method = $payment->payment_method_snapshot ?? $payment->channel ?? '-';
+                            $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
+                            $paymentStatus = strtolower((string) ($payment->status ?? 'confirmed'));
+                            $pStatusClass = match($paymentStatus) {
+                                'confirmed', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                                'pending' => 'color:#d97706;background:#fef3c7;',
+                                'cancelled', 'failed' => 'color:#dc2626;background:#fee2e2;',
+                                default => 'color:#64748b;background:#f1f5f9;',
+                            };
+                        @endphp
+                        <tr>
+                            <td>{{ $payment->id }}</td>
+                            <td>{{ $receipt }}</td>
+                            <td>{{ !empty($paidDate) ? \Carbon\Carbon::parse($paidDate)->format('d-m-Y') : '-' }}</td>
+                            <td>{{ $method }}</td>
+                            <td>{{ number_format($amount, 2) }}</td>
+                            <td>
+                                <span class="label" style="{{ $pStatusClass }}">{{ ucfirst($paymentStatus) }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id, 'customer_id' => $backCustomerId]) }}" class="btn btn-xs btn-primary">
+                                    <i class="fa fa-pencil"></i> Edit Payment
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="text-center">No payments found.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="lm-edit-sections-mobile">
+            @forelse($payments as $payment)
+                @php
+                    $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #' . $payment->id);
+                    $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                    $method = $payment->payment_method_snapshot ?? $payment->channel ?? '-';
+                    $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
+                    $paymentStatus = strtolower((string) ($payment->status ?? 'confirmed'));
+                    $pStatusClass = match($paymentStatus) {
+                        'confirmed', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                        'pending' => 'color:#d97706;background:#fef3c7;',
+                        'cancelled', 'failed' => 'color:#dc2626;background:#fee2e2;',
+                        default => 'color:#64748b;background:#f1f5f9;',
+                    };
+                @endphp
+                <div class="lm-edit-section-card">
+                    <div class="lm-edit-section-card-header">
+                        <span class="lm-edit-section-card-title">{{ $receipt }}</span>
+                        <span class="label" style="{{ $pStatusClass }}">{{ ucfirst($paymentStatus) }}</span>
+                    </div>
+                    <div class="lm-edit-section-card-body">
+                        <div class="lm-edit-section-card-item"><small>Amount</small><span style="font-weight:700;color:#0f172a;">{{ number_format($amount, 2) }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Method</small><span>{{ $method }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Paid Date</small><span>{{ !empty($paidDate) ? \Carbon\Carbon::parse($paidDate)->format('d-m-Y') : '-' }}</span></div>
+                        <div class="lm-edit-section-card-item"><small>Payment ID</small><span>{{ $payment->id }}</span></div>
+                    </div>
+                    <div class="lm-edit-section-card-actions">
+                        <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id, 'customer_id' => $backCustomerId]) }}" class="btn btn-xs btn-primary">
+                            <i class="fa fa-pencil"></i> Edit Payment
+                        </a>
+                    </div>
+                </div>
+            @empty
+                <div class="lm-edit-section-card">
+                    <div style="text-align:center;color:#94a3b8;padding:12px 0;">No payments found.</div>
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>

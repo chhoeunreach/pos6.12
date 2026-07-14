@@ -371,7 +371,12 @@ body.lm-sidebar-collapsed .lm-main { width: 100%; }
     .modal-content { border-radius: 10px; }
     .modal-header { padding: 10px 14px; }
     .modal-body { padding: 12px; }
-    .modal-footer { padding: 10px 14px; }
+    .modal-footer { padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .modal-footer .pull-left { float: none !important; order: 3; width: 100%; }
+    .modal-footer .pull-left.btn { width: 100%; }
+    .modal-footer button { flex: 1; min-height: 38px; }
+    .modal-body .well { padding: 8px 10px; font-size: 12px; }
+    .modal-body .well strong { font-size: 11px; }
 
     /* --- Mobile Bottom Navigation Bar --- */
     .lm-mobile-nav {
@@ -1014,5 +1019,60 @@ body.lm-sidebar-collapsed .lm-main { width: 100%; }
         height: 76px;
         flex-basis: 76px;
         font-size: 30px;
+    }
+}
+
+/* ============================================================
+   EDIT LOAN PAGE: Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+    .content .row .col-md-3,
+    .content .row .col-md-2,
+    .content .row .col-md-4,
+    .content .row .col-md-6,
+    .content .row .col-md-8,
+    .content .row .col-md-12 {
+        width: 50%;
+        float: left;
+        padding-left: 6px;
+        padding-right: 6px;
+        margin-bottom: 0;
+    }
+    .content .row .col-md-12 {
+        width: 100%;
+    }
+    .content .row .col-md-8 {
+        width: 100%;
+    }
+    .content .row .col-md-2 {
+        width: 33.333%;
+    }
+    .content .box .box-body .row .col-md-2 {
+        width: 50%;
+    }
+}
+@media (max-width: 576px) {
+    .content .row .col-md-3,
+    .content .row .col-md-2,
+    .content .row .col-md-4,
+    .content .row .col-md-6,
+    .content .row .col-md-8,
+    .content .row .col-md-12 {
+        width: 100%;
+        float: none;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .content .box .box-body .row .col-md-2 {
+        width: 50%;
+    }
+    .content .box .box-body .row .col-md-2:nth-child(odd) {
+        clear: none;
+    }
+    .content .box .box-body .row .col-md-2:nth-child(2n+1) {
+        clear: left;
+    }
+    .content .box .box-body .row .col-md-2:last-child {
+        width: 100%;
     }
 }

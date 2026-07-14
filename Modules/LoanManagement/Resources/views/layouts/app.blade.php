@@ -9,6 +9,7 @@
     $loanBadgeCounts = LoanMenuHelper::badgeCounts();
     $pageTitle = trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title').' - LoanManagement' : 'LoanManagement';
     $businessName = Session::get('business.name');
+    $isLoanEmbeddedModal = request()->boolean('_lm_modal');
 @endphp
 
 <!DOCTYPE html>
@@ -29,7 +30,7 @@
     @endif
     @yield('loan_css')
 </head>
-<body class="hold-transition skin-blue-light sidebar-mini loan-management-page tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
+<body class="hold-transition skin-blue-light sidebar-mini loan-management-page {{ $isLoanEmbeddedModal ? 'loan-management-embedded-modal' : '' }} tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
     @if (in_array($request->ip(), $whitelist, true))
         <input type="hidden" id="__is_localhost" value="true">
     @endif
@@ -49,8 +50,13 @@
         <input type="hidden" id="__is_mobile">
     @endif
     @if (session('status'))
-        <input type="hidden" id="status_span" data-status="{{ session('status.success') }}"
-            data-msg="{{ session('status.msg') }}">
+        @php
+            $loanSessionStatus = session('status');
+            $loanSessionStatusSuccess = is_array($loanSessionStatus) ? data_get($loanSessionStatus, 'success', 1) : 1;
+            $loanSessionStatusMessage = is_array($loanSessionStatus) ? data_get($loanSessionStatus, 'msg', 'Saved successfully.') : $loanSessionStatus;
+        @endphp
+        <input type="hidden" id="status_span" data-status="{{ $loanSessionStatusSuccess }}"
+            data-msg="{{ $loanSessionStatusMessage }}">
     @endif
     @if (config('constants.iraqi_selling_price_adjustment'))
         <input type="hidden" id="iraqi_selling_price_adjustment">
@@ -62,25 +68,33 @@
             <div id="app"></div>
             <div class="tw-flex-1 tw-overflow-y-auto tw-h-screen" id="scrollable-container">
                 <div class="lm-app" id="loanManagementApp">
-                    @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
+                    @unless($isLoanEmbeddedModal)
+                        @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
+                    @endunless
 
                     <div class="lm-main" id="loanManagementMain">
-                        @include('loanmanagement::layouts.header')
+                        @unless($isLoanEmbeddedModal)
+                            @include('loanmanagement::layouts.header')
+                        @endunless
 
                         <main class="lm-content">
-                            @include('loanmanagement::layouts.breadcrumb')
+                            @unless($isLoanEmbeddedModal)
+                                @include('loanmanagement::layouts.breadcrumb')
+                            @endunless
                             <div class="container-fluid lm-workspace">
                                 @yield('content_body')
                             </div>
                         </main>
 
-                        @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create'))
+                        @if(!$isLoanEmbeddedModal && \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create'))
                             @include('loanmanagement::layouts.partials.auto_installment_modal')
                         @endif
 
-                        @include('loanmanagement::layouts.footer')
+                        @unless($isLoanEmbeddedModal)
+                            @include('loanmanagement::layouts.footer')
 
-                        @include('loanmanagement::layouts.partials.mobile_nav')
+                            @include('loanmanagement::layouts.partials.mobile_nav')
+                        @endunless
                     </div>
                 </div>
             </div>
