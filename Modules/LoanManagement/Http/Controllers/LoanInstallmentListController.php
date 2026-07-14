@@ -37,6 +37,24 @@ class LoanInstallmentListController extends Controller
         return array_intersect_key($payload, array_flip($columns));
     }
 
+    protected function attachLoanCustomerKhmerName(object $loanRow): object
+    {
+        $loanRow->customer_khmer_name = null;
+
+        if (empty($loanRow->customer_id)
+            || ! $this->loanTableExists('loan_customers')
+            || ! $this->loanTableHasCol('loan_customers', 'khmer_name')) {
+            return $loanRow;
+        }
+
+        $loanRow->customer_khmer_name = DB::connection('mysql_loan')
+            ->table('loan_customers')
+            ->where('id', $loanRow->customer_id)
+            ->value('khmer_name');
+
+        return $loanRow;
+    }
+
     protected function loanTableExists(string $table): bool
     {
         if (! array_key_exists($table, self::$loanTableExistsCache)) {
@@ -629,7 +647,7 @@ class LoanInstallmentListController extends Controller
                 $actions = '<div class="btn-group btn-group-xs" role="group" style="display:flex; flex-wrap:wrap; gap:4px;">';
                 $actions .= '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info btn-flat" title="View loan details"><i class="fa fa-eye"></i> View</a>';
                 $actions .= '<button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-flat btn-modal" title="Print loan"><i class="fa fa-print"></i> Print</button>';
-                $actions .= '<a href="'.route('loan-management.loans.convert-to-pos', $r->id).'" class="btn btn-xs btn-success btn-flat" title="Open POS and copy loan serials"><i class="fa fa-exchange"></i> POS</a>';
+                $actions .= '<button type="button" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn btn-xs btn-success btn-flat btn-modal" title="Open POS and copy loan serials"><i class="fa fa-exchange"></i> POS</button>';
                 if ($canEdit) {
                     $actions .= '<a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary btn-flat" title="Edit this loan"><i class="fa fa-pencil"></i> Edit</a>';
                 }
@@ -663,6 +681,7 @@ class LoanInstallmentListController extends Controller
         abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
+        $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
 
         $printUrl = route('loan-management.loans.print', $loan);
         $autoPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1]);
@@ -670,21 +689,40 @@ class LoanInstallmentListController extends Controller
         return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'autoPrintUrl'));
     }
 
-    public function convertToPos(int $loan, LoanToPosPrefillService $prefillService)
+    public function convertToPos(int $loan, Request $request, LoanToPosPrefillService $prefillService)
     {
         try {
             $payload = $prefillService->payload($loan);
         } catch (\Throwable $e) {
+            if ($request->ajax() || $request->boolean('modal')) {
+                return view('loanmanagement::loans.pos_prefill_modal', [
+                    'error' => $e->getMessage(),
+                    'loanId' => $loan,
+                    'payload' => null,
+                    'posUrl' => null,
+                ]);
+            }
+
             return redirect()
                 ->route('loan-management.loans.view', $loan)
                 ->with('status', ['success' => 0, 'msg' => $e->getMessage()]);
         }
 
         $encodedPayload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
-
-        return redirect()->route('pos.create', [
+        $posUrl = route('pos.create', [
             'loan_pos_prefill' => $encodedPayload,
         ]);
+
+        if ($request->ajax() || $request->boolean('modal')) {
+            return view('loanmanagement::loans.pos_prefill_modal', [
+                'error' => null,
+                'loanId' => $loan,
+                'payload' => $payload,
+                'posUrl' => $posUrl,
+            ]);
+        }
+
+        return redirect()->to($posUrl);
     }
 
     public function print(int $loan)
@@ -692,6 +730,7 @@ class LoanInstallmentListController extends Controller
         abort_if(! $this->loanTableExists('loans'), 404);
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
+        $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
         $sourceInvoiceDisplay = $loanRow->source_invoice_no ?? null;
         $sourceFinalTotalDisplay = $loanRow->sell_final_total_snapshot ?? null;
         $sourcePaidDisplay = $loanRow->sell_paid_amount_snapshot ?? null;

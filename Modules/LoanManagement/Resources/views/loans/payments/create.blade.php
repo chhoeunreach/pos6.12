@@ -1,5 +1,6 @@
 @php
     $loanNumber = $loanRow->loan_number ?? $loanRow->id;
+    $customerName = trim((string) ($loanRow->customer_khmer_name ?? '')) ?: ($loanRow->customer_name_snapshot ?? '-');
     $loanBalance = (float) ($loanRow->balance_amount ?? 0);
     $loanCurrency = $loanRow->currency ?? 'USD';
     $scheduleLabel = null;
@@ -41,7 +42,7 @@
                 <div class="col-md-4">
                     <div class="well">
                         <strong>Loan #:</strong> {{ $loanNumber }}<br>
-                        <strong>Customer:</strong> {{ $loanRow->customer_name_snapshot ?? '-' }}
+                        <strong>Customer:</strong> {{ $customerName }}
                     </div>
                 </div>
                 <div class="col-md-4">

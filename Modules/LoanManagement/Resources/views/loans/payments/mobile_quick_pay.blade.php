@@ -4,7 +4,7 @@
     $loanCurrency = $loanRow->currency ?? 'USD';
     $loanPrincipal = (float) ($loanRow->principal_amount ?? 0);
     $paidAmount = (float) ($loanRow->paid_amount ?? 0);
-    $customerName = $loanRow->customer_name_snapshot ?? '-';
+    $customerName = trim((string) ($loanRow->customer_khmer_name ?? '')) ?: ($loanRow->customer_name_snapshot ?? '-');
     $customerPhone = $loanRow->customer_phone_snapshot ?? '-';
     $payOffAmount = number_format(max(0.01, (float) ($payOffAmount ?? $loanBalance)), 2, '.', '');
     $defaultAmount = number_format(max(0.01, (float) ($defaultAmount ?? $loanBalance)), 2, '.', '');

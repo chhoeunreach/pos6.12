@@ -2466,7 +2466,7 @@
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 var quickPayUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/quick-pay";
-                var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos";
+                var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
                 var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
                 var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
                 var statusBadge = isOverdue
@@ -2488,7 +2488,7 @@
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button></li>'
-                    + '<li><a href="' + addToPosUrl + '"><i class="fa fa-exchange"></i> Add to POS</a></li>'
+                    + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
                     + '</ul>'
                     + '</div>'
                     + '</td>'

@@ -88,10 +88,12 @@
                 data-container=".view_modal">
             <i class="fa fa-print"></i> Print Loan
         </button>
-        <a href="{{ route('loan-management.loans.convert-to-pos', $loanRow->id) }}"
-           class="btn btn-warning">
+        <button type="button"
+           data-href="{{ route('loan-management.loans.convert-to-pos', ['loan' => $loanRow->id, 'modal' => 1]) }}"
+           data-container=".view_modal"
+           class="btn btn-warning btn-modal">
             <i class="fa fa-exchange"></i> Convert to POS
-        </a>
+        </button>
     </div>
 </section>
 <section class="content">
@@ -251,10 +253,12 @@
                 data-container=".view_modal">
             <i class="fa fa-print"></i> Print
         </button>
-        <a href="{{ route('loan-management.loans.convert-to-pos', $loanRow->id) }}"
-           class="lm-mab-btn lm-mab-btn-outline">
+        <button type="button"
+           data-href="{{ route('loan-management.loans.convert-to-pos', ['loan' => $loanRow->id, 'modal' => 1]) }}"
+           data-container=".view_modal"
+           class="lm-mab-btn lm-mab-btn-outline btn-modal">
             <i class="fa fa-exchange"></i> POS
-        </a>
+        </button>
         @can('loan_management.edit')
         <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
            class="lm-mab-btn lm-mab-btn-outline">

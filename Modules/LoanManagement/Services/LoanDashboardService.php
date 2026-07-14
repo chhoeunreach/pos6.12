@@ -74,7 +74,7 @@ class LoanDashboardService
             return [];
         }
 
-        $query = DB::connection($this->connection)->table('loans as l');
+        $query = $this->loanQueryWithCustomer('l');
         $customerNameExpr = $this->loanCustomerNameExpression('l');
         $customerPhoneExpr = $this->loanCustomerPhoneExpression('l');
         $loanNumberExpr = $this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)';
@@ -780,6 +780,15 @@ class LoanDashboardService
 
     protected function loanCustomerNameExpression(string $loanAlias): string
     {
+        if ($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'khmer_name')) {
+            $fallback = $this->columnExists('loans', 'customer_name_snapshot')
+                ? $loanAlias.'.customer_name_snapshot'
+                : ($this->columnExists('loan_customers', 'name')
+                    ? 'c.name'
+                    : 'CONCAT("Customer #", '.$loanAlias.'.customer_id)');
+
+            return 'COALESCE(NULLIF(c.khmer_name, ""), '.$fallback.')';
+        }
         if ($this->columnExists('loans', 'customer_name_snapshot')) {
             return $loanAlias.'.customer_name_snapshot';
         }

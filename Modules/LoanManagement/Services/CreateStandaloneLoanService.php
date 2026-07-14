@@ -635,19 +635,50 @@ class CreateStandaloneLoanService
     {
         $prefix = $this->normalizeLoanInvoicePrefix($this->loanInvoicePrefixForLocation($locationId));
         $prefix = $prefix.Carbon::now()->format('Ymd').'-';
-        $attempt = 0;
+        $nextNumber = $this->nextLoanNumberSequence($prefix);
 
-        do {
-            $candidate = $prefix.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
-            $exists = DB::connection('mysql_loan')->table('loans')->where('loan_number', $candidate)->exists();
-            $attempt++;
-        } while ($exists && $attempt < 10);
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $width = max(2, strlen((string) $nextNumber));
+            $candidate = $prefix.str_pad((string) $nextNumber, $width, '0', STR_PAD_LEFT);
 
-        if ($exists) {
-            $candidate = $prefix.Carbon::now()->format('His').'-'.random_int(10, 99);
+            $exists = DB::connection('mysql_loan')->table('loans')
+                ->where('loan_number', $candidate)
+                ->exists();
+
+            if (! $exists) {
+                return $candidate;
+            }
+
+            $nextNumber++;
         }
 
-        return $candidate;
+        return $prefix.Carbon::now()->format('His');
+    }
+
+    protected function nextLoanNumberSequence(string $prefix): int
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans')
+            || ! Schema::connection('mysql_loan')->hasColumn('loans', 'loan_number')) {
+            return 1;
+        }
+
+        $loanNumbers = DB::connection('mysql_loan')->table('loans')
+            ->where('loan_number', 'like', $prefix.'%')
+            ->pluck('loan_number');
+
+        $max = 0;
+        foreach ($loanNumbers as $loanNumber) {
+            $suffix = Str::after((string) $loanNumber, $prefix);
+
+            // Ignore old random invoice numbers like KY-20260714-647692.
+            if (! preg_match('/^\d{1,4}$/', $suffix)) {
+                continue;
+            }
+
+            $max = max($max, (int) $suffix);
+        }
+
+        return $max + 1;
     }
 
     protected function loanInvoicePrefixForLocation(?int $locationId = null): ?string
