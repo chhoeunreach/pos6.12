@@ -8,16 +8,33 @@
     ] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []));
 @endphp
 
-<div class="box box-default lm-collapsible" data-collapse-key="loan-items">
+<div class="box box-default lm-collapsible" data-collapse-key="loan-items" id="lm-section-loan-items">
     <div class="box-header with-border">
         <h3 class="box-title">Loan Items</h3>
         <div class="box-tools pull-right">
+            <button type="button"
+                    class="btn btn-xs btn-default"
+                    data-toggle="collapse"
+                    data-target="#loanProductReference{{ $loanRow->id }}"
+                    aria-expanded="false"
+                    aria-controls="loanProductReference{{ $loanRow->id }}">
+                <i class="fa fa-eye"></i> View Reference
+            </button>
             <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                 <i class="fa fa-minus"></i>
             </button>
         </div>
     </div>
     <div class="box-body">
+        <div class="collapse" id="loanProductReference{{ $loanRow->id }}" style="margin-bottom:12px;">
+            <div class="lm-edit-snapshot">
+                <div class="lm-edit-snapshot__item"><small>Customer</small><strong>{{ $loanRow->customer_name_snapshot ?? '-' }}</strong></div>
+                <div class="lm-edit-snapshot__item"><small>Phone</small><strong>{{ $loanRow->customer_phone_snapshot ?? '-' }}</strong></div>
+                <div class="lm-edit-snapshot__item"><small>Product</small><strong>{{ $loanRow->product_name_snapshot ?? '-' }}</strong></div>
+                <div class="lm-edit-snapshot__item"><small>IMEI</small><strong>{{ $loanRow->imei_snapshot ?? '-' }}</strong></div>
+                <div class="lm-edit-snapshot__item"><small>Invoice</small><strong>{{ $loanRow->invoice_number_snapshot ?? $loanRow->source_invoice_no ?? '-' }}</strong></div>
+            </div>
+        </div>
         <div class="lm-edit-sections-table">
             <table class="table table-bordered table-striped">
                 <thead>

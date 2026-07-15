@@ -348,6 +348,57 @@
             grid-template-columns: 1fr;
         }
     }
+    .lm-edit-clean .box {
+        border-top: 0;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+        margin-bottom: 16px;
+    }
+    .lm-edit-clean .box-header {
+        padding: 12px 16px;
+    }
+    .lm-edit-clean .box-body {
+        padding: 16px;
+    }
+    .lm-edit-clean .form-group {
+        margin-bottom: 10px;
+    }
+    .lm-edit-clean .row > [class*='col-'] {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    .lm-edit-clean .lm-edit-summary {
+        display: none;
+    }
+    .lm-edit-clean .lm-standard-sections {
+        margin-bottom: 16px;
+    }
+    .lm-edit-clean .lm-standard-card {
+        min-height: 92px;
+        border-radius: 6px;
+        padding: 12px 14px;
+    }
+    .lm-edit-clean .lm-standard-card__head {
+        margin-bottom: 6px;
+    }
+    .lm-edit-clean .lm-standard-card__value {
+        font-size: 15px;
+    }
+    .lm-edit-clean .lm-standard-card__meta {
+        margin-top: 5px;
+    }
+    .lm-edit-clean .lm-edit-box {
+        border-radius: 6px;
+    }
+    .lm-edit-clean .lm-edit-box > .box-header .box-title {
+        font-size: 16px;
+    }
+    .lm-edit-clean .lm-clean-secondary {
+        border-style: dashed;
+        box-shadow: none;
+    }
+    .lm-edit-clean .lm-clean-secondary > .box-header .box-title {
+        color: #64748b;
+    }
 </style>
 @if(request()->boolean('_lm_modal'))
 <style>
@@ -469,7 +520,7 @@
     $reviewBalanceAmount = (float) old('balance_amount', $loanRow->balance_amount ?? 0);
 @endphp
 
-<section class="content">
+<section class="content lm-edit-clean">
     <div class="lm-edit-header">
         <div class="lm-edit-title">
             <h1><i class="fa fa-pencil-square-o"></i> Edit Loan</h1>
@@ -568,7 +619,7 @@
                 {{ $editLocationName ?: ($locationName ?? '-') }}
             </div>
         </a>
-        <a href="#lm-section-products" class="lm-standard-card">
+        <a href="#lm-section-products" class="lm-standard-card" id="loanProductsReferenceLink">
             <div class="lm-standard-card__head">
                 <span class="lm-standard-card__title">Products</span>
                 <i class="fa fa-cubes lm-standard-card__icon"></i>
@@ -576,7 +627,7 @@
             <div class="lm-standard-card__value">{{ $loanRow->product_name_snapshot ?? 'Loan Items' }}</div>
             <div class="lm-standard-card__meta">
                 Items {{ $loanItemsCount ?? 0 }}<br>
-                IMEI {{ $loanRow->imei_snapshot ?? '-' }}
+                Reference in Loan Items
             </div>
         </a>
         <a href="#lm-section-review" class="lm-standard-card">
@@ -683,30 +734,6 @@
                     </div>
                     <div class="col-md-12" style="margin-top: -8px;">
                         <p><strong>Location Address:</strong> <span id="loanLocationAddressText">{{ $locationAddress }}</span></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-12">
-            <div class="box box-solid lm-edit-box lm-collapsible is-collapsed" data-collapse-key="products" id="lm-section-products">
-                <div class="box-header with-border">
-                    <h3 class="box-title">Products</h3>
-                    <div class="box-tools pull-right">
-                        <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
-                            <i class="fa fa-minus"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="box-body">
-                    <div class="lm-edit-snapshot">
-                        <div class="lm-edit-snapshot__item"><small>Customer</small><strong>{{ $loanRow->customer_name_snapshot ?? '-' }}</strong></div>
-                        <div class="lm-edit-snapshot__item"><small>Phone</small><strong>{{ $loanRow->customer_phone_snapshot ?? '-' }}</strong></div>
-                        <div class="lm-edit-snapshot__item"><small>Product</small><strong>{{ $loanRow->product_name_snapshot ?? '-' }}</strong></div>
-                        <div class="lm-edit-snapshot__item"><small>IMEI</small><strong>{{ $loanRow->imei_snapshot ?? '-' }}</strong></div>
-                        <div class="lm-edit-snapshot__item"><small>Invoice</small><strong>{{ $loanRow->invoice_number_snapshot ?? '-' }}</strong></div>
                     </div>
                 </div>
             </div>
@@ -832,7 +859,31 @@
             </div>
         </div>
 
-        <div class="box box-info lm-edit-box lm-collapsible is-collapsed" data-collapse-key="schedule-preview">
+        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="products" id="lm-section-products">
+            <div class="box-header with-border">
+                <h3 class="box-title">Products</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="lm-edit-snapshot">
+                    <div class="lm-edit-snapshot__item"><small>Product</small><strong>{{ $loanRow->product_name_snapshot ?? 'Loan Items' }}</strong></div>
+                    <div class="lm-edit-snapshot__item"><small>Items</small><strong>{{ $loanItemsCount ?? 0 }}</strong></div>
+                    <div class="lm-edit-snapshot__item"><small>IMEI</small><strong>{{ $loanRow->imei_snapshot ?? '-' }}</strong></div>
+                    <div class="lm-edit-snapshot__item"><small>Invoice</small><strong>{{ $loanRow->invoice_number_snapshot ?? $loanRow->source_invoice_no ?? '-' }}</strong></div>
+                </div>
+                <div class="text-right" style="margin-top: 10px;">
+                    <button type="button" class="btn btn-xs btn-default" id="loanProductsSectionReferenceButton">
+                        <i class="fa fa-eye"></i> View Reference
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="box box-info lm-edit-box lm-collapsible is-collapsed lm-clean-secondary" data-collapse-key="schedule-preview">
             <div class="box-header with-border">
                 <h3 class="box-title">Schedule Preview</h3>
                 <div class="box-tools pull-right">
@@ -910,7 +961,7 @@
             </div>
         </div>
 
-        <div class="box box-primary lm-edit-box lm-collapsible is-collapsed" data-collapse-key="collection-workflow">
+        <div class="box box-primary lm-edit-box lm-collapsible is-collapsed lm-clean-secondary" data-collapse-key="collection-workflow">
             <div class="box-header with-border">
                 <h3 class="box-title">Source & Collection Workflow</h3>
                 <div class="box-tools pull-right">
@@ -1041,7 +1092,7 @@
         </div>
     </form>
 
-    <div class="box box-default lm-edit-box lm-collapsible" data-collapse-key="related-loan-data">
+    <div class="box box-default lm-edit-box lm-collapsible is-collapsed lm-clean-secondary" data-collapse-key="related-loan-data">
         <div class="box-header with-border">
             <h3 class="box-title">Related Loan Data</h3>
             <div class="box-tools pull-right">
@@ -1080,11 +1131,61 @@
         var errorDetailsBox = document.getElementById('loanErrorDetailsBox');
         var productTotalBeforeDepositInput = document.getElementById('loanProductTotalBeforeDeposit');
         var regeneratePrincipalButton = document.getElementById('btnRegeneratePrincipalAfterDeposit');
+        var productsReferenceLink = document.getElementById('loanProductsReferenceLink');
+        var productsSectionReferenceButton = document.getElementById('loanProductsSectionReferenceButton');
+        var pendingProductReferenceOpen = false;
 
         function formatMoney(value) {
             var amount = Number(value || 0);
 
             return amount.toFixed(2);
+        }
+
+        function orderPrimaryEditSections() {
+            var form = document.getElementById('loan_edit_form');
+            var invoiceSection = document.getElementById('lm-section-invoice');
+            var customerSection = document.getElementById('lm-section-customer');
+            var customerBlock = customerSection && customerSection.closest ? customerSection.closest('.row') : customerSection;
+
+            if (form && invoiceSection && customerBlock && invoiceSection.nextElementSibling !== customerBlock) {
+                form.insertBefore(invoiceSection, customerBlock);
+            }
+        }
+
+        orderPrimaryEditSections();
+
+        function openProductReference() {
+            var section = document.getElementById('lm-section-loan-items');
+            var reference = document.querySelector('[id^="loanProductReference"]');
+            if (!section || !reference) {
+                return false;
+            }
+
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.collapse) {
+                window.jQuery(reference).collapse('show');
+            } else {
+                reference.classList.add('in');
+                reference.style.display = 'block';
+            }
+
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            pendingProductReferenceOpen = false;
+
+            return true;
+        }
+
+        if (productsReferenceLink) {
+            productsReferenceLink.addEventListener('click', function () {
+                pendingProductReferenceOpen = false;
+            });
+        }
+
+        if (productsSectionReferenceButton) {
+            productsSectionReferenceButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                pendingProductReferenceOpen = true;
+                openProductReference();
+            });
         }
 
         function loanAmountInput(name) {
@@ -1464,6 +1565,9 @@
                 dataType: 'html',
                 success: function (result) {
                     sectionsContainer.innerHTML = result;
+                    if (pendingProductReferenceOpen || window.location.hash === '#lm-section-loan-items') {
+                        openProductReference();
+                    }
                 },
                 error: function () {
                     sectionsContainer.innerHTML = '<div class="alert alert-warning" style="margin-bottom:0;">Unable to load related sections right now.</div>';
