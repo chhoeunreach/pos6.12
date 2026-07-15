@@ -534,7 +534,7 @@ class LoanCreateController extends Controller
             'interest_rate' => 'nullable|numeric|min:0',
             'interest_type' => 'required|in:flat,reducing_balance',
             'duration_months' => 'required|integer|min:1|max:360',
-            'payment_frequency' => 'required|in:monthly,weekly,daily',
+            'payment_frequency' => 'required|in:monthly,weekly,daily,biweekly,quarterly,yearly',
             'first_due_date' => 'required|date',
             'items' => 'nullable|array',
             'items.*.product_name' => 'nullable|string|max:255',

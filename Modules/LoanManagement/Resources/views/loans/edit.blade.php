@@ -513,9 +513,13 @@
     $principalAfterDepositValue = (float) old('principal_amount', $loanRow->principal_amount ?? $loanRow->financed_amount ?? 0);
     $downPaymentValue = (float) old('down_payment', $loanRow->down_payment ?? 0);
     $sourceTotalBeforeDeposit = (float) ($loanRow->sell_final_total_snapshot ?? 0);
-    $productTotalBeforeDeposit = $sourceTotalBeforeDeposit > 0
-        ? $sourceTotalBeforeDeposit
-        : ($principalAfterDepositValue + $downPaymentValue);
+    $loanItemsUnitPriceTotal = (float) ($loanItemsUnitPriceTotal ?? 0);
+    $customerDepositPaymentsAmount = (float) ($customerDepositPaymentsAmount ?? 0);
+    $productTotalBeforeDeposit = $loanItemsUnitPriceTotal > 0
+        ? $loanItemsUnitPriceTotal
+        : ($sourceTotalBeforeDeposit > 0
+            ? $sourceTotalBeforeDeposit
+            : ($principalAfterDepositValue + max($downPaymentValue, $customerDepositPaymentsAmount)));
     $reviewTotalAmount = (float) old('total_amount', $loanRow->total_amount ?? (($loanRow->principal_amount ?? 0) + ($loanRow->interest_amount ?? 0)));
     $reviewBalanceAmount = (float) old('balance_amount', $loanRow->balance_amount ?? 0);
 @endphp
@@ -934,6 +938,7 @@
             <div class="box-body">
                 <div class="row">
                     <input type="hidden" id="loanProductTotalBeforeDeposit" value="{{ number_format($productTotalBeforeDeposit, 2, '.', '') }}">
+                    <input type="hidden" id="loanCustomerDepositPaymentsAmount" value="{{ number_format($customerDepositPaymentsAmount, 2, '.', '') }}">
                     <input type="hidden" name="financed_amount" value="{{ old('financed_amount', $loanRow->financed_amount ?? $loanRow->principal_amount ?? 0) }}">
                     <div class="col-md-3">
                         <div class="form-group">
@@ -1130,6 +1135,7 @@
         var viewErrorLink = document.getElementById('loanViewErrorLink');
         var errorDetailsBox = document.getElementById('loanErrorDetailsBox');
         var productTotalBeforeDepositInput = document.getElementById('loanProductTotalBeforeDeposit');
+        var customerDepositPaymentsAmountInput = document.getElementById('loanCustomerDepositPaymentsAmount');
         var regeneratePrincipalButton = document.getElementById('btnRegeneratePrincipalAfterDeposit');
         var productsReferenceLink = document.getElementById('loanProductsReferenceLink');
         var productsSectionReferenceButton = document.getElementById('loanProductsSectionReferenceButton');
@@ -1243,24 +1249,61 @@
             return Math.max(0, loanAmountValue('principal_amount') + loanAmountValue('down_payment'));
         }
 
+        function currentCustomerDepositPaymentsAmount() {
+            var stored = customerDepositPaymentsAmountInput ? Number(customerDepositPaymentsAmountInput.value || 0) : 0;
+            if (Number.isFinite(stored) && stored > 0) {
+                return stored;
+            }
+
+            return Math.max(0, loanAmountValue('down_payment'));
+        }
+
         function refreshProductTotalBeforeDeposit() {
             if (!productTotalBeforeDepositInput) {
                 return;
             }
 
             productTotalBeforeDepositInput.value = formatMoney(
-                Math.max(0, loanAmountValue('principal_amount') + loanAmountValue('down_payment'))
+                Math.max(0, loanAmountValue('principal_amount') + currentCustomerDepositPaymentsAmount())
             );
         }
 
-        function regeneratePrincipalAfterDeposit() {
+        function calculatedInterestTotal(principal) {
+            var months = Math.max(1, Number(durationMonthsInput && durationMonthsInput.value ? durationMonthsInput.value : (installmentCountInput ? installmentCountInput.value : 1)) || 1);
+            var rate = Math.max(0, Number(loanAmountInput('interest_rate') ? loanAmountInput('interest_rate').value : 0) || 0) / 100;
+            var interestTypeInput = document.querySelector('[name="interest_type"]');
+            var interestType = interestTypeInput ? interestTypeInput.value : 'flat';
+            var remaining = principal;
+            var principalPer = Math.round((principal / months) * 100) / 100;
+            var totalInterest = 0;
+
+            for (var i = 1; i <= months; i++) {
+                var principalPart = i === months ? Math.round(remaining * 100) / 100 : principalPer;
+                totalInterest += interestType === 'reducing_balance'
+                    ? Math.round(remaining * rate * 100) / 100
+                    : Math.round(principal * rate * 100) / 100;
+                remaining = Math.max(0, Math.round((remaining - principalPart) * 100) / 100);
+            }
+
+            return Math.max(0, totalInterest);
+        }
+
+        function regeneratePrincipalAfterDeposit(regenerateInterest) {
             var productTotal = currentProductTotalBeforeDeposit();
-            var downPayment = Math.max(0, loanAmountValue('down_payment'));
-            var principal = Math.max(0, productTotal - downPayment);
+            var depositPayments = currentCustomerDepositPaymentsAmount();
+            var principal = Math.max(0, productTotal - depositPayments);
             var principalInput = loanAmountInput('principal_amount');
+            var downPaymentInput = loanAmountInput('down_payment');
+            var interestInput = loanAmountInput('interest_amount');
 
             if (principalInput) {
                 principalInput.value = formatMoney(principal);
+            }
+            if (downPaymentInput && depositPayments > 0) {
+                downPaymentInput.value = formatMoney(depositPayments);
+            }
+            if (regenerateInterest && interestInput) {
+                interestInput.value = formatMoney(calculatedInterestTotal(principal));
             }
 
             recalculateLoanAmounts();
@@ -1408,21 +1451,15 @@
             }
             input.addEventListener('input', function () {
                 if (field === 'down_payment') {
-                    regeneratePrincipalAfterDeposit();
+                    regeneratePrincipalAfterDeposit(true);
                     return;
-                }
-                if (field === 'principal_amount') {
-                    refreshProductTotalBeforeDeposit();
                 }
                 recalculateLoanAmounts();
             });
             input.addEventListener('change', function () {
                 if (field === 'down_payment') {
-                    regeneratePrincipalAfterDeposit();
+                    regeneratePrincipalAfterDeposit(true);
                     return;
-                }
-                if (field === 'principal_amount') {
-                    refreshProductTotalBeforeDeposit();
                 }
                 recalculateLoanAmounts();
             });
@@ -1431,13 +1468,32 @@
         if (regeneratePrincipalButton) {
             regeneratePrincipalButton.addEventListener('click', function (event) {
                 event.preventDefault();
-                regeneratePrincipalAfterDeposit();
+                regeneratePrincipalAfterDeposit(true);
             });
         }
+
+        [
+            'interest_rate',
+            'interest_type',
+            'installment_count',
+            'duration_months'
+        ].forEach(function (field) {
+            var input = loanAmountInput(field);
+            if (!input) {
+                return;
+            }
+            input.addEventListener('input', function () {
+                regeneratePrincipalAfterDeposit(true);
+            });
+            input.addEventListener('change', function () {
+                regeneratePrincipalAfterDeposit(true);
+            });
+        });
 
         if (previewButton && previewTable && window.jQuery) {
             window.jQuery(previewButton).on('click', function () {
                 syncDurationMonths();
+                regeneratePrincipalAfterDeposit(true);
 
                 var form = window.jQuery(previewButton).closest('form');
                 var tbody = window.jQuery(previewTable).find('tbody').first();
@@ -1482,6 +1538,11 @@
                     footerCells.eq(2).text(formatMoney(totalInterest));
                     footerCells.eq(3).text(formatMoney(totalAmount));
                     footerCells.eq(4).text(formatMoney(totalBalance));
+                    var interestInput = loanAmountInput('interest_amount');
+                    if (interestInput) {
+                        interestInput.value = formatMoney(totalInterest);
+                    }
+                    recalculateLoanAmounts();
                 }).fail(function (xhr) {
                     var message = (xhr.responseJSON && xhr.responseJSON.message)
                         ? xhr.responseJSON.message
@@ -1499,6 +1560,7 @@
         if (updateSchedulesButton && window.jQuery) {
             window.jQuery(updateSchedulesButton).on('click', function () {
                 syncDurationMonths();
+                regeneratePrincipalAfterDeposit(true);
 
                 var button = window.jQuery(updateSchedulesButton);
                 var form = button.closest('form');

@@ -1677,6 +1677,7 @@ class LoanInstallmentListController extends Controller
 
             $data = $request->validate([
                 'principal_amount' => 'required|numeric|min:0.01',
+                'interest_amount' => 'nullable|numeric|min:0',
                 'installment_count' => 'required|integer|min:1|max:1000',
                 'duration_months' => 'nullable|integer|min:1|max:1000',
                 'interest_rate' => 'nullable|numeric|min:0',
@@ -1689,6 +1690,7 @@ class LoanInstallmentListController extends Controller
             $data['installment_count'] = (int) $data['installment_count'];
             $data['interest_type'] = $data['interest_type'] ?? 'flat';
             $data['interest_rate'] = (float) ($data['interest_rate'] ?? 0);
+            $data = $this->recalculateEditScheduleAmounts($loan, $loanRow, $data);
 
             DB::connection('mysql_loan')->transaction(function () use ($loan, $data, $loanRow) {
                 $meta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
@@ -1700,6 +1702,7 @@ class LoanInstallmentListController extends Controller
 
                 DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
                     'principal_amount' => $data['principal_amount'],
+                    'interest_amount' => $data['interest_amount'] ?? ($loanRow->interest_amount ?? 0),
                     'installment_count' => $data['installment_count'],
                     'duration_months' => $data['duration_months'],
                     'interest_rate' => $data['interest_rate'],
@@ -1710,7 +1713,9 @@ class LoanInstallmentListController extends Controller
                     'updated_at' => now(),
                 ]));
 
-                $this->syncLoanSchedulesFromEdit($loan, $data, $loanRow);
+                $scheduleData = $data;
+                unset($scheduleData['interest_amount']);
+                $this->syncLoanSchedulesFromEdit($loan, $scheduleData, $loanRow);
             });
 
             $freshLoanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first() ?: $loanRow;
@@ -1751,6 +1756,43 @@ class LoanInstallmentListController extends Controller
                 ],
             ], 500);
         }
+    }
+
+    protected function recalculateEditScheduleAmounts(int $loan, object $loanRow, array $data): array
+    {
+        $productTotal = $this->loanItemsUnitPriceTotal($loan);
+        if ($productTotal <= 0) {
+            $productTotal = (float) ($loanRow->sell_final_total_snapshot ?? 0);
+        }
+        if ($productTotal <= 0) {
+            $productTotal = (float) ($data['principal_amount'] ?? $loanRow->principal_amount ?? 0)
+                + (float) ($loanRow->down_payment ?? 0);
+        }
+
+        $depositAmounts = $this->loanDepositPaymentCopyAmounts($loan, $loanRow);
+        $depositTotal = round($depositAmounts['cash'] + $depositAmounts['bank'], 2);
+        $principal = max(0.01, round($productTotal - $depositTotal, 2));
+        $months = max(1, (int) ($data['duration_months'] ?? $data['installment_count'] ?? 1));
+        $rate = max(0, (float) ($data['interest_rate'] ?? 0)) / 100;
+        $interestType = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
+            ? $data['interest_type']
+            : 'flat';
+        $interestTotal = 0.0;
+        $remaining = $principal;
+        $principalPer = round($principal / $months, 2);
+
+        for ($i = 1; $i <= $months; $i++) {
+            $principalPart = $i === $months ? round($remaining, 2) : $principalPer;
+            $interestTotal += $interestType === 'reducing_balance'
+                ? round($remaining * $rate, 2)
+                : round($principal * $rate, 2);
+            $remaining = max(0, round($remaining - $principalPart, 2));
+        }
+
+        $data['principal_amount'] = $principal;
+        $data['interest_amount'] = round($interestTotal, 2);
+
+        return $data;
     }
 
     protected function ultimatePosPaymentTypes(object $loanRow): array
@@ -3267,6 +3309,9 @@ class LoanInstallmentListController extends Controller
         $loanItemsCount = $this->countLoanRelatedRows('loan_items', $loan);
         $schedulesCount = $this->countLoanRelatedRows('loan_payment_schedules', $loan);
         $paymentsCount = $this->countLoanPayments($loan);
+        $loanItemsUnitPriceTotal = $this->loanItemsUnitPriceTotal($loan);
+        $depositAmounts = $this->loanDepositPaymentCopyAmounts($loan, $loanRow);
+        $customerDepositPaymentsAmount = round($depositAmounts['cash'] + $depositAmounts['bank'], 2);
 
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
@@ -3288,9 +3333,32 @@ class LoanInstallmentListController extends Controller
             'sourcePaid',
             'sourceDue',
             'loanItemsCount',
+            'loanItemsUnitPriceTotal',
+            'customerDepositPaymentsAmount',
             'schedulesCount',
             'paymentsCount'
         ));
+    }
+
+    protected function loanItemsUnitPriceTotal(int $loan): float
+    {
+        if (! $this->loanTableExists('loan_items')) {
+            return 0.0;
+        }
+
+        return (float) DB::connection('mysql_loan')
+            ->table('loan_items')
+            ->where('loan_id', $loan)
+            ->when($this->loanTableHasCol('loan_items', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->get()
+            ->sum(function ($item) {
+                $lineTotal = (float) ($item->line_total ?? $item->total_price ?? 0);
+                if ($lineTotal > 0) {
+                    return $lineTotal;
+                }
+
+                return (float) ($item->unit_price ?? 0) * max(1, (float) ($item->qty ?? $item->quantity ?? 1));
+            });
     }
 
     public function editSections(int $loan)

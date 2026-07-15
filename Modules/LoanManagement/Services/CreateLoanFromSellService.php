@@ -554,6 +554,9 @@ class CreateLoanFromSellService
         $principal = (float) ($data['principal_amount'] ?? 0);
         $months = max(1, (int) ($data['duration_months'] ?? 1));
         $rate = (float) ($data['interest_rate'] ?? 0) / 100;
+        $interestType = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
+            ? $data['interest_type']
+            : 'flat';
         $firstDue = Carbon::parse($data['first_due_date'] ?? Carbon::today()->addMonth()->toDateString());
         $frequency = $data['payment_frequency'] ?? 'monthly';
 
@@ -563,16 +566,19 @@ class CreateLoanFromSellService
         $flatInterestPer = round($principal * $rate, 2);
 
         for ($i = 1; $i <= $months; $i++) {
-            if ($frequency === 'weekly') {
-                $dueDate = $firstDue->copy()->addWeeks($i - 1)->toDateString();
-            } elseif ($frequency === 'daily') {
-                $dueDate = $firstDue->copy()->addDays($i - 1)->toDateString();
-            } else {
-                $dueDate = $firstDue->copy()->addMonths($i - 1)->toDateString();
-            }
+            $dueDate = match ($frequency) {
+                'daily' => $firstDue->copy()->addDays($i - 1)->toDateString(),
+                'weekly' => $firstDue->copy()->addWeeks($i - 1)->toDateString(),
+                'biweekly' => $firstDue->copy()->addWeeks(($i - 1) * 2)->toDateString(),
+                'quarterly' => $firstDue->copy()->addMonths(($i - 1) * 3)->toDateString(),
+                'yearly' => $firstDue->copy()->addYears($i - 1)->toDateString(),
+                default => $firstDue->copy()->addMonths($i - 1)->toDateString(),
+            };
 
             $principalPart = ($i === $months) ? round($remaining, 2) : $principalPer;
-            $interest = $flatInterestPer;
+            $interest = $interestType === 'reducing_balance'
+                ? round($remaining * $rate, 2)
+                : $flatInterestPer;
             $total = round($principalPart + $interest, 2);
             $remaining = max(0, round($remaining - $principalPart, 2));
 
