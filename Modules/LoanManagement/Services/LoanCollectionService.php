@@ -65,18 +65,23 @@ class LoanCollectionService
 
         $today = Carbon::today()->toDateString();
         $loans = $this->applyFilters(DB::connection($this->connection)->table('loans'), $filters);
+        $hasCollectionStatus = $this->hasLoanColumn('collection_status');
 
         return [
-            'due_today' => (int) (clone $loans)->where('collection_status', 'due_today')->count(),
-            'overdue_accounts' => (int) (clone $loans)->whereIn('collection_status', ['overdue', 'delinquent'])->count(),
-            'skip_customers' => (int) (clone $loans)->where('collection_status', 'skip_customer')->count(),
-            'broken_ptp' => (int) (clone $loans)->where('collection_status', 'broken_ptp')->count(),
-            'field_visits_today' => (int) (clone $loans)->where('field_visit_required', 1)->whereDate('next_followup_at', '<=', $today)->count(),
+            'due_today' => $hasCollectionStatus
+                ? (int) (clone $loans)->where('collection_status', 'due_today')->count()
+                : $this->scheduleLoanCount('=', $today),
+            'overdue_accounts' => $hasCollectionStatus
+                ? (int) (clone $loans)->whereIn('collection_status', ['overdue', 'delinquent'])->count()
+                : $this->scheduleLoanCount('<', $today),
+            'skip_customers' => $hasCollectionStatus ? (int) (clone $loans)->where('collection_status', 'skip_customer')->count() : 0,
+            'broken_ptp' => $hasCollectionStatus ? (int) (clone $loans)->where('collection_status', 'broken_ptp')->count() : 0,
+            'field_visits_today' => $this->fieldVisitsTodayCount($loans, $today),
             'collection_amount_today' => $this->collectionAmountToday(),
-            'recovery_cases' => (int) (clone $loans)->where('collection_status', 'recovery')->count(),
-            'legal_cases' => (int) (clone $loans)->where('collection_status', 'legal')->count(),
-            'high_risk_customers' => (int) (clone $loans)->whereIn('risk_level', ['high_risk', 'critical'])->count(),
-            'repossessions' => (int) (clone $loans)->where('collection_status', 'repossession')->count(),
+            'recovery_cases' => $hasCollectionStatus ? (int) (clone $loans)->where('collection_status', 'recovery')->count() : 0,
+            'legal_cases' => $hasCollectionStatus ? (int) (clone $loans)->where('collection_status', 'legal')->count() : 0,
+            'high_risk_customers' => $this->hasLoanColumn('risk_level') ? (int) (clone $loans)->whereIn('risk_level', ['high_risk', 'critical'])->count() : 0,
+            'repossessions' => $hasCollectionStatus ? (int) (clone $loans)->where('collection_status', 'repossession')->count() : 0,
         ];
     }
 
@@ -88,18 +93,12 @@ class LoanCollectionService
 
         $definition = $this->pageDefinition($slug);
         $query = $this->loanQuery();
-        foreach (($definition['where'] ?? []) as $column => $values) {
-            if (Schema::connection($this->connection)->hasColumn('loans', $column)) {
-                $query->whereIn('l.'.$column, (array) $values);
-            }
-        }
+        $this->applyPageDefinition($query, $slug, $definition);
 
-        return $this->applyFilters($query, $filters, 'l')
-            ->orderByDesc('l.collection_priority')
-            ->orderByDesc('l.days_past_due')
-            ->orderByDesc('l.id')
-            ->paginate(30)
-            ->appends(array_filter($filters));
+        $query = $this->applyFilters($query, $filters, 'l');
+        $this->applyCollectionOrdering($query);
+
+        return $query->paginate(30)->appends(array_filter($filters));
     }
 
     public function reportRows(string $report, array $filters = [])
@@ -192,6 +191,271 @@ class LoanCollectionService
     {
         return DB::connection($this->connection)->table('loans as l')
             ->selectRaw('l.*');
+    }
+
+    protected function applyPageDefinition($query, string $slug, array $definition): void
+    {
+        $statusValues = (array) (($definition['where']['collection_status'] ?? []));
+
+        if (! empty($statusValues)) {
+            $query->where(function ($q) use ($slug, $statusValues) {
+                if ($this->hasLoanColumn('collection_status')) {
+                    $q->whereIn('l.collection_status', $statusValues);
+                }
+
+                $this->orWhereDerivedCollectionPage($q, $slug);
+            });
+
+            return;
+        }
+
+        foreach (($definition['where'] ?? []) as $column => $values) {
+            if ($this->hasLoanColumn($column)) {
+                $query->whereIn('l.'.$column, (array) $values);
+            }
+        }
+
+        match ($slug) {
+            'active-loans' => $this->whereActiveLoans($query),
+            'closed-accounts' => $this->whereClosedAccounts($query),
+            default => null,
+        };
+    }
+
+    protected function orWhereDerivedCollectionPage($query, string $slug): void
+    {
+        match ($slug) {
+            'active-loans' => $this->orWhereActiveLoans($query),
+            'closed-accounts' => $this->orWhereClosedAccounts($query),
+            'overdue-accounts', 'delinquent-accounts', 'recovery-management', 'debt-collection' => $this->orWhereHasSchedule($query, '<', Carbon::today()->toDateString()),
+            'due-today' => $this->orWhereHasSchedule($query, '=', Carbon::today()->toDateString()),
+            'partial-payments' => $this->orWherePartialPayment($query),
+            'promise-to-pay' => $this->orWherePromiseToPay($query, false),
+            'broken-promise' => $this->orWherePromiseToPay($query, true),
+            'field-visit-required' => $this->orWhereFieldVisitRequired($query),
+            default => null,
+        };
+    }
+
+    protected function orWhereActiveLoans($query): void
+    {
+        $query->orWhere(function ($q) {
+            $this->whereActiveLoans($q);
+        });
+    }
+
+    protected function orWhereClosedAccounts($query): void
+    {
+        $query->orWhere(function ($q) {
+            $this->whereClosedAccounts($q);
+        });
+    }
+
+    protected function whereActiveLoans($query): void
+    {
+        if (! $this->hasLoanColumn('status') && ! $this->hasLoanColumn('balance_amount')) {
+            return;
+        }
+
+        $query->where(function ($q) {
+            if ($this->hasLoanColumn('status')) {
+                $q->whereIn('l.status', ['active', 'approved']);
+            }
+
+            if ($this->hasLoanColumn('balance_amount')) {
+                $q->orWhere('l.balance_amount', '>', 0);
+            }
+        });
+    }
+
+    protected function whereClosedAccounts($query): void
+    {
+        if (! $this->hasLoanColumn('status') && ! $this->hasLoanColumn('balance_amount')) {
+            return;
+        }
+
+        $query->where(function ($q) {
+            if ($this->hasLoanColumn('status')) {
+                $q->whereIn('l.status', ['closed', 'completed']);
+            }
+
+            if ($this->hasLoanColumn('balance_amount')) {
+                $q->orWhere('l.balance_amount', '<=', 0);
+            }
+        });
+    }
+
+    protected function orWherePartialPayment($query): void
+    {
+        if ($this->hasLoanColumn('paid_amount') || $this->hasLoanColumn('balance_amount')) {
+            $query->orWhere(function ($q) {
+                if ($this->hasLoanColumn('paid_amount')) {
+                    $q->where('l.paid_amount', '>', 0);
+                }
+
+                if ($this->hasLoanColumn('balance_amount')) {
+                    $q->where('l.balance_amount', '>', 0);
+                }
+            });
+        }
+
+        $this->orWhereHasSchedule($query, null, null, ['partial']);
+    }
+
+    protected function orWherePromiseToPay($query, bool $broken): void
+    {
+        if (! $this->hasLoanColumn('ptp_date')) {
+            return;
+        }
+
+        $query->orWhere(function ($q) use ($broken) {
+            if ($broken) {
+                $q->whereDate('l.ptp_date', '<', Carbon::today()->toDateString());
+                if ($this->hasLoanColumn('ptp_status')) {
+                    $q->where(function ($statusQuery) {
+                        $statusQuery->whereNull('l.ptp_status')
+                            ->orWhereIn('l.ptp_status', ['', 'active', 'broken']);
+                    });
+                }
+            } else {
+                $q->whereDate('l.ptp_date', '>=', Carbon::today()->toDateString());
+                if ($this->hasLoanColumn('ptp_status')) {
+                    $q->where(function ($statusQuery) {
+                        $statusQuery->whereNull('l.ptp_status')
+                            ->orWhereIn('l.ptp_status', ['', 'active']);
+                    });
+                }
+            }
+        });
+    }
+
+    protected function orWhereFieldVisitRequired($query): void
+    {
+        if (! $this->hasLoanColumn('field_visit_required') && ! $this->hasLoanColumn('next_followup_at')) {
+            return;
+        }
+
+        $query->orWhere(function ($q) {
+            if ($this->hasLoanColumn('field_visit_required')) {
+                $q->where('l.field_visit_required', 1);
+            }
+
+            if ($this->hasLoanColumn('next_followup_at')) {
+                $q->orWhereDate('l.next_followup_at', '<=', Carbon::today()->toDateString());
+            }
+        });
+    }
+
+    protected function orWhereHasSchedule($query, ?string $operator, ?string $date, array $statuses = ['pending', 'unpaid', 'partial', 'late']): void
+    {
+        if (! $this->canReadSchedules()) {
+            return;
+        }
+
+        $query->orWhereExists(function ($schedule) use ($operator, $date, $statuses) {
+            $schedule->selectRaw('1')
+                ->from('loan_payment_schedules as s')
+                ->whereColumn('s.loan_id', 'l.id');
+
+            if ($operator !== null && $date !== null) {
+                $schedule->whereDate('s.due_date', $operator, $date);
+            }
+
+            if ($this->hasScheduleColumn('status') && ! empty($statuses)) {
+                $schedule->whereIn('s.status', $statuses);
+            }
+
+            if ($this->hasScheduleColumn('deleted_at')) {
+                $schedule->whereNull('s.deleted_at');
+            }
+        });
+    }
+
+    protected function applyCollectionOrdering($query): void
+    {
+        if ($this->hasLoanColumn('collection_priority')) {
+            $query->orderByDesc('l.collection_priority');
+        }
+
+        if ($this->hasLoanColumn('days_past_due')) {
+            $query->orderByDesc('l.days_past_due');
+        }
+
+        $query->orderByDesc('l.id');
+    }
+
+    protected function scheduleLoanCount(string $operator, string $date): int
+    {
+        if (! $this->canReadSchedules()) {
+            return 0;
+        }
+
+        $query = DB::connection($this->connection)->table('loan_payment_schedules')
+            ->whereDate('due_date', $operator, $date);
+
+        if ($this->hasScheduleColumn('status')) {
+            $query->whereIn('status', ['pending', 'unpaid', 'partial', 'late']);
+        }
+
+        if ($this->hasScheduleColumn('deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return (int) $query->distinct('loan_id')->count('loan_id');
+    }
+
+    protected function fieldVisitsTodayCount($loans, string $today): int
+    {
+        if (! $this->hasLoanColumn('field_visit_required') && ! $this->hasLoanColumn('next_followup_at')) {
+            return 0;
+        }
+
+        $query = clone $loans;
+
+        if ($this->hasLoanColumn('field_visit_required') && $this->hasLoanColumn('next_followup_at')) {
+            return (int) $query->where('field_visit_required', 1)->whereDate('next_followup_at', '<=', $today)->count();
+        }
+
+        if ($this->hasLoanColumn('field_visit_required')) {
+            return (int) $query->where('field_visit_required', 1)->count();
+        }
+
+        return (int) $query->whereDate('next_followup_at', '<=', $today)->count();
+    }
+
+    protected function hasLoanColumn(string $column): bool
+    {
+        return $this->hasColumn('loans', $column);
+    }
+
+    protected function hasScheduleColumn(string $column): bool
+    {
+        return $this->hasColumn('loan_payment_schedules', $column);
+    }
+
+    protected function canReadSchedules(): bool
+    {
+        return $this->hasTable('loan_payment_schedules')
+            && $this->hasScheduleColumn('loan_id')
+            && $this->hasScheduleColumn('due_date');
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        try {
+            return Schema::connection($this->connection)->hasTable($table);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    protected function hasColumn(string $table, string $column): bool
+    {
+        try {
+            return Schema::connection($this->connection)->hasColumn($table, $column);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     protected function applyFilters($query, array $filters, string $alias = '') 

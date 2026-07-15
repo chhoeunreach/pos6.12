@@ -12,6 +12,7 @@
     }
 
     $paymentTypes = $paymentTypes ?? ['cash' => 'Cash'];
+    $isDepositPayment = $isDepositPayment ?? request()->boolean('deposit_payment');
     $defaultPaymentMethod = $defaultPaymentMethod ?? (array_key_exists('cash', $paymentTypes) ? 'cash' : array_key_first($paymentTypes));
     $suggestedPaymentTotal = number_format(max(0.01, (float) $defaultAmount), 2, '.', '');
     $loanBalanceAmount = number_format(max(0.01, $loanBalance), 2, '.', '');
@@ -29,12 +30,15 @@
     <div class="modal-content">
         {!! Form::open(['url' => route('loan-management.loans.payment.store', $loanRow->id), 'method' => 'post', 'id' => 'loan_payment_add_form', 'files' => true]) !!}
         <input type="hidden" name="return_to" value="{{ request('return_to', route('loan-management.dashboard')) }}">
+        @if($isDepositPayment)
+            <input type="hidden" name="deposit_payment" value="1">
+        @endif
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
-                <i class="fa fa-money"></i> Add Loan Payment
+                <i class="fa fa-money"></i> {{ $isDepositPayment ? 'Add Customer Deposit Payment' : 'Add Loan Payment' }}
             </h4>
         </div>
 
@@ -57,7 +61,9 @@
                     <div class="well">
                         <strong>Schedule:</strong>
                         <span class="loan-schedule-display">
-                            @if(! empty($scheduleLabel))
+                            @if($isDepositPayment)
+                                Customer deposit payment
+                            @elseif(! empty($scheduleLabel))
                                 {{ $scheduleLabel }}
                             @else
                                 Auto apply to oldest unpaid
@@ -68,6 +74,7 @@
             </div>
 
             <div class="row payment_row">
+                @if(!$isDepositPayment)
                 <div class="col-sm-12">
                     <div class="form-group">
                         {!! Form::label('schedule_id', 'Monthly Schedule:') !!}
@@ -90,6 +97,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
 
                 <div class="col-md-4">
                     <div class="form-group">
@@ -103,6 +111,7 @@
                     </div>
                 </div>
 
+                @if(!$isDepositPayment)
                 <div class="col-md-4">
                     <div class="checkbox" style="margin-top:30px;">
                         <label>
@@ -111,6 +120,7 @@
                         </label>
                     </div>
                 </div>
+                @endif
 
                 <div class="col-md-4">
                     <div class="well well-sm" style="margin-top:25px;margin-bottom:10px;">
@@ -218,6 +228,7 @@ $(function () {
     var labels = @json($paymentLineLabels);
     var copyInfo = @json($copyInfo ?? []);
     var copyInfoUrl = '{{ route('loan-management.loans.payment.copy-info', $loanRow->id) }}';
+    var isDepositPayment = @json((bool) $isDepositPayment);
 
     if (!copyInfo || Object.keys(copyInfo).length === 0) {
         $.ajax({ url: copyInfoUrl, dataType: 'json' })
@@ -258,12 +269,21 @@ $(function () {
     }
 
     function selectedScheduleBalance() {
+        if (isDepositPayment || !$form.find('[name="schedule_id"]').length) {
+            return suggestedTotal;
+        }
+
         var balance = parseFloat($form.find('[name="schedule_id"] option:selected').data('balance'));
 
         return balance > 0 ? balance : normalLoanBalance;
     }
 
     function updateScheduleDisplay() {
+        if (isDepositPayment) {
+            $form.find('.loan-schedule-display').text('Customer deposit payment');
+            return;
+        }
+
         var $selected = $form.find('[name="schedule_id"] option:selected');
         var text = $.trim($selected.text());
         if (!text) {
@@ -348,6 +368,12 @@ $(function () {
     }
 
     function applyPayTarget() {
+        if (isDepositPayment) {
+            updateLoanPaymentTotal();
+            updateScheduleDisplay();
+            return;
+        }
+
         if ($form.find('.loan-pay-off-option').is(':checked')) {
             previousScheduleId = $form.find('[name="schedule_id"]').val() || previousScheduleId;
             suggestedTotal = payOffBalance;

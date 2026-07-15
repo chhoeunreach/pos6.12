@@ -1088,11 +1088,15 @@ class LoanInstallmentListController extends Controller
                 ->get();
         }
 
-        $selectedScheduleId = request()->integer('schedule_id') ?: null;
+        $isDepositPayment = request()->boolean('deposit_payment');
+        $selectedScheduleId = $isDepositPayment ? null : (request()->integer('schedule_id') ?: null);
         $selectedSchedule = $selectedScheduleId ? $schedules->firstWhere('id', $selectedScheduleId) : $schedules->first();
         $defaultAmount = $selectedSchedule
             ? (float) ($selectedSchedule->balance_amount ?? $selectedSchedule->amount_balance ?? $selectedSchedule->schedule_amount ?? $selectedSchedule->amount_due ?? 0)
             : (float) ($loanRow->balance_amount ?? 0);
+        if ($isDepositPayment) {
+            $defaultAmount = 0.01;
+        }
         $payOffAmount = $this->calculatePayOffAmount($schedules, $loanRow);
 
         $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
@@ -1107,7 +1111,10 @@ class LoanInstallmentListController extends Controller
             'payOffAmount',
             'paymentTypes',
             'defaultPaymentMethod',
-        ) + ['copyInfo' => []]);
+        ) + [
+            'copyInfo' => [],
+            'isDepositPayment' => $isDepositPayment,
+        ]);
     }
 
     public function mobileQuickPay(int $loan)
@@ -1228,6 +1235,7 @@ class LoanInstallmentListController extends Controller
         $payload = $request->validate([
             'schedule_id' => 'nullable|integer|min:1',
             'pay_off' => 'nullable|boolean',
+            'deposit_payment' => 'nullable|boolean',
             'paid_date' => 'required|date',
             'payment_lines' => 'required|array|min:1',
             'payment_lines.*.amount' => 'required|numeric|min:0.01',
@@ -1243,7 +1251,8 @@ class LoanInstallmentListController extends Controller
         $paidDate = $payload['paid_date'];
         $paidAt = $paidDate.' '.now()->format('H:i:s');
         $isPayOff = ! empty($payload['pay_off']);
-        $selectedScheduleId = $isPayOff ? null : ($payload['schedule_id'] ?? null);
+        $isDepositPayment = ! empty($payload['deposit_payment']);
+        $selectedScheduleId = ($isPayOff || $isDepositPayment) ? null : ($payload['schedule_id'] ?? null);
         $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
         $paymentLines = collect($payload['payment_lines'])
             ->map(function ($line) use ($paymentTypes) {
@@ -1280,7 +1289,7 @@ class LoanInstallmentListController extends Controller
         }
 
         try {
-            DB::connection('mysql_loan')->transaction(function () use ($request, $loan, $loanRow, $isPayOff, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
+            DB::connection('mysql_loan')->transaction(function () use ($request, $loan, $loanRow, $isPayOff, $isDepositPayment, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
                 $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
                 if ($userName === '') {
                     $userName = auth()->user()->username ?? null;
@@ -1295,7 +1304,7 @@ class LoanInstallmentListController extends Controller
                         'payment_ref_no' => $paymentRef,
                         'receipt_number' => $receipt,
                         'loan_id' => $loan,
-                        'payment_type' => $isPayOff ? 'loan' : 'monthly',
+                        'payment_type' => ($isPayOff || $isDepositPayment) ? 'loan' : 'monthly',
                         'loan_number_snapshot' => $loanRow->loan_number ?? null,
                         'customer_id' => $loanRow->customer_id ?? 0,
                         'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
@@ -1343,7 +1352,12 @@ class LoanInstallmentListController extends Controller
                     }
                 }
 
-                if ($isPayOff) {
+                if ($isDepositPayment) {
+                    DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+                        'down_payment' => round((float) ($loanRow->down_payment ?? 0) + $totalAmount, 2),
+                        'updated_at' => now(),
+                    ]));
+                } elseif ($isPayOff) {
                     $this->applyLoanPayOffToSchedules($loan, $totalAmount, $paidAt);
                 } else {
                     $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $selectedScheduleId);
@@ -1983,6 +1997,7 @@ class LoanInstallmentListController extends Controller
 
         $frequency = strtolower((string) ($data['payment_frequency'] ?? $loanRow->payment_frequency ?? 'monthly'));
         $interestRate = max(0, (float) ($data['interest_rate'] ?? 0)) / 100;
+        $enteredInterestTotal = max(0, round((float) ($data['interest_amount'] ?? $loanRow->interest_amount ?? 0), 2));
         $interestType = in_array(($data['interest_type'] ?? 'flat'), ['flat', 'reducing_balance'], true)
             ? $data['interest_type']
             : 'flat';
@@ -1991,6 +2006,8 @@ class LoanInstallmentListController extends Controller
         $rows = [];
         $remaining = $principal;
         $principalPer = round($principal / $months, 2);
+        $interestPer = round($enteredInterestTotal / $months, 2);
+        $assignedInterest = 0.0;
         $flatInterestPer = round($principal * $interestRate, 2);
 
         for ($i = 1; $i <= $months; $i++) {
@@ -2004,9 +2021,16 @@ class LoanInstallmentListController extends Controller
             };
 
             $principalPart = $i === $months ? round($remaining, 2) : $principalPer;
-            $interest = $interestType === 'reducing_balance'
-                ? round($remaining * $interestRate, 2)
-                : $flatInterestPer;
+            if (array_key_exists('interest_amount', $data)) {
+                $interest = $i === $months
+                    ? round($enteredInterestTotal - $assignedInterest, 2)
+                    : $interestPer;
+                $assignedInterest = round($assignedInterest + $interest, 2);
+            } else {
+                $interest = $interestType === 'reducing_balance'
+                    ? round($remaining * $interestRate, 2)
+                    : $flatInterestPer;
+            }
             $amountDue = round($principalPart + $interest, 2);
             $remaining = max(0, round($remaining - $principalPart, 2));
 
@@ -2103,11 +2127,19 @@ class LoanInstallmentListController extends Controller
                 ->sum($balanceColumn)
             : $scheduleAmountTotal;
 
+        $penaltyAmount = max(0, round((float) ($data['penalty_amount'] ?? $loanRow->penalty_amount ?? 0), 2));
+        $discountAmount = max(0, round((float) ($data['discount_amount'] ?? $loanRow->discount_amount ?? 0), 2));
+        $paidAmount = max(0, round((float) ($data['paid_amount'] ?? $loanRow->paid_amount ?? 0), 2));
+        $loanTotalAmount = max(0, round($scheduleAmountTotal + $penaltyAmount - $discountAmount, 2));
+        $loanBalanceAmount = max(0, round($loanTotalAmount - $paidAmount, 2));
+
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+            'financed_amount' => $principal,
             'interest_amount' => $scheduleInterestTotal,
-            'total_amount' => $scheduleAmountTotal,
-            'total_payable_amount' => $scheduleAmountTotal,
-            'balance_amount' => round($scheduleBalanceTotal, 2),
+            'total_amount' => $loanTotalAmount,
+            'total_payable_amount' => $loanTotalAmount,
+            'paid_amount' => $paidAmount,
+            'balance_amount' => $loanBalanceAmount,
             'installment_count' => $months,
             'duration_months' => $months,
             'updated_at' => now(),
@@ -2585,7 +2617,124 @@ class LoanInstallmentListController extends Controller
             $payments = $paymentQuery->orderByDesc('id')->limit(20)->get();
         }
 
-        return compact('loanItems', 'schedules', 'payments');
+        $schedulePayments = $this->loadLoanSchedulePayments($loan);
+        $depositPayments = $this->expandPaymentsWithDetailsForPrint(
+            $payments->filter(fn ($payment) => $this->isLoanPaymentRow($payment))->values()
+        );
+        $payments = $this->expandPaymentsWithDetailsForPrint($payments);
+        $schedules = $this->attachPaidPaymentsToSchedules($schedules, $schedulePayments);
+
+        return compact('loanItems', 'schedules', 'payments', 'depositPayments');
+    }
+
+    protected function loadLoanSchedulePayments(int $loan)
+    {
+        if (! $this->loanTableExists('loan_payments')) {
+            return collect();
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan);
+        if ($this->loanTableHasCol('loan_payments', 'schedule_id')) {
+            $query->whereNotNull('schedule_id');
+            if ($this->loanTableHasCol('loan_payments', 'payment_type')) {
+                $query->where(function ($paymentTypeQuery) {
+                    $paymentTypeQuery->whereNull('payment_type')
+                        ->orWhere('payment_type', '')
+                        ->orWhere('payment_type', 'monthly');
+                });
+            }
+        } else {
+            $this->applyMonthlyPaymentFilter($query);
+        }
+        if ($this->loanTableHasCol('loan_payments', 'paid_date')) {
+            $query->orderByDesc('paid_date');
+        } elseif ($this->loanTableHasCol('loan_payments', 'paid_at')) {
+            $query->orderByDesc('paid_at');
+        }
+
+        return $this->expandPaymentsWithDetailsForPrint($query->orderByDesc('id')->get());
+    }
+
+    protected function attachPaidPaymentsToSchedules($schedules, $payments)
+    {
+        if ($schedules->isEmpty() || $payments->isEmpty()) {
+            return $this->normalizeSchedulePaymentStatus($schedules);
+        }
+
+        $paymentsBySchedule = $payments
+            ->filter(fn ($payment) => ! empty($payment->schedule_id))
+            ->groupBy('schedule_id');
+
+        if ($paymentsBySchedule->isEmpty()) {
+            return $this->normalizeSchedulePaymentStatus($schedules);
+        }
+
+        return $this->normalizeSchedulePaymentStatus($schedules->map(function ($schedule) use ($paymentsBySchedule) {
+            $schedulePayments = $paymentsBySchedule->get($schedule->id, collect())->values();
+            if ($schedulePayments->isEmpty()) {
+                $schedule->paid_payments = collect();
+                return $schedule;
+            }
+
+            $paidFromPayments = round((float) $schedulePayments->sum(fn ($payment) => (float) (
+                $payment->amount_base
+                ?? $payment->total_paid_base
+                ?? $payment->total_paid
+                ?? $payment->amount
+                ?? 0
+            )), 2);
+            $storedPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+            $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? $schedule->total ?? 0);
+
+            if ($paidFromPayments > $storedPaid) {
+                $schedule->paid_amount = $paidFromPayments;
+                $schedule->amount_paid = $paidFromPayments;
+            }
+
+            if ($paidFromPayments > 0) {
+                $balance = max(0, round($due - max($storedPaid, $paidFromPayments), 2));
+                $schedule->balance_amount = $balance;
+                $schedule->amount_balance = $balance;
+                if ($balance <= 0) {
+                    $schedule->status = 'paid';
+                } elseif (! in_array(strtolower((string) ($schedule->status ?? '')), ['paid', 'completed'], true)) {
+                    $schedule->status = 'partial';
+                }
+            }
+
+            $schedule->paid_payments = $schedulePayments;
+            $schedule->paid_payment_summary = $schedulePayments
+                ->map(function ($payment) {
+                    $date = $payment->paid_date ?? $payment->paid_at ?? null;
+                    $dateText = $date ? \Carbon\Carbon::parse($date)->format('d-m-Y') : '-';
+                    $method = trim((string) ($payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? ''));
+                    $reference = trim((string) ($payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ''));
+                    $amount = (float) ($payment->amount_base ?? $payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+
+                    return trim($dateText.' · '.($method ?: 'Payment').' · '.number_format($amount, 2).($reference !== '' ? ' · '.$reference : ''));
+                })
+                ->implode("\n");
+
+            return $schedule;
+        }));
+    }
+
+    protected function normalizeSchedulePaymentStatus($schedules)
+    {
+        return $schedules->map(function ($schedule) {
+            $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? $schedule->total ?? 0);
+            $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+            $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? max(0, $due - $paid));
+            $status = strtolower((string) ($schedule->status ?? 'pending'));
+
+            if ($paid > 0 && ($balance <= 0 || ($due > 0 && $paid >= $due))) {
+                $schedule->status = 'paid';
+            } elseif ($paid > 0 && ! in_array($status, ['paid', 'completed'], true)) {
+                $schedule->status = 'partial';
+            }
+
+            return $schedule;
+        });
     }
 
     public function show(int $loan)
@@ -2980,10 +3129,18 @@ class LoanInstallmentListController extends Controller
         $selectedLoanLocation = null;
 
         if ($this->loanTableExists('loan_business_locations')) {
+            $loanLocationSelect = ['id', 'name', 'main_location_id'];
+            $hasLoanLocationAddress = $this->loanTableHasCol('loan_business_locations', 'address');
+            if ($hasLoanLocationAddress) {
+                $loanLocationSelect[] = 'address';
+            } else {
+                $loanLocationSelect[] = DB::raw('NULL as address');
+            }
+
             if (! empty($selectedBusinessLocationId)) {
                 $selectedLoanLocation = DB::connection('mysql_loan')
                     ->table('loan_business_locations')
-                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->select($loanLocationSelect)
                     ->where('id', $selectedBusinessLocationId)
                     ->first();
             }
@@ -2991,7 +3148,7 @@ class LoanInstallmentListController extends Controller
             if (! $selectedLoanLocation && ! empty($locationId)) {
                 $selectedLoanLocation = DB::connection('mysql_loan')
                     ->table('loan_business_locations')
-                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->select($loanLocationSelect)
                     ->where('main_location_id', $locationId)
                     ->orderBy('id')
                     ->first();
@@ -3013,10 +3170,10 @@ class LoanInstallmentListController extends Controller
 
         $locationOptions = collect();
         if ($this->loanTableExists('loan_business_locations')) {
-            $locationOptions = Cache::remember('loan_management.edit_location_options', now()->addMinutes(5), function () {
+            $locationOptions = Cache::remember('loan_management.edit_location_options.'.($hasLoanLocationAddress ? 'with_address' : 'without_address'), now()->addMinutes(5), function () use ($loanLocationSelect) {
                 $query = DB::connection('mysql_loan')
                     ->table('loan_business_locations')
-                    ->select('id', 'name', 'main_location_id', 'address')
+                    ->select($loanLocationSelect)
                     ->orderBy('name');
 
                 if ($this->loanTableHasCol('loan_business_locations', 'deleted_at')) {
@@ -3171,6 +3328,7 @@ class LoanInstallmentListController extends Controller
                 'interest_amount' => 'nullable|numeric|min:0',
                 'total_amount' => 'nullable|numeric|min:0',
                 'paid_amount' => 'nullable|numeric|min:0',
+                'financed_amount' => 'nullable|numeric|min:0',
                 'penalty_amount' => 'nullable|numeric|min:0',
                 'discount_amount' => 'nullable|numeric|min:0',
                 'balance_amount' => 'nullable|numeric|min:0',
@@ -3259,6 +3417,7 @@ class LoanInstallmentListController extends Controller
                 'interest_amount' => $loanRow->interest_amount ?? 0,
                 'total_amount' => $loanRow->total_amount ?? 0,
                 'paid_amount' => $loanRow->paid_amount ?? 0,
+                'financed_amount' => $loanRow->financed_amount ?? ($loanRow->principal_amount ?? 0),
                 'penalty_amount' => $loanRow->penalty_amount ?? 0,
                 'discount_amount' => $loanRow->discount_amount ?? 0,
                 'balance_amount' => $loanRow->balance_amount ?? 0,
@@ -3274,6 +3433,22 @@ class LoanInstallmentListController extends Controller
                     $data[$column] = $fallback;
                 }
             }
+
+            $principalAmount = max(0, round((float) ($data['principal_amount'] ?? 0), 2));
+            $interestAmount = max(0, round((float) ($data['interest_amount'] ?? 0), 2));
+            $penaltyAmount = max(0, round((float) ($data['penalty_amount'] ?? 0), 2));
+            $discountAmount = max(0, round((float) ($data['discount_amount'] ?? 0), 2));
+            $paidAmount = max(0, round((float) ($data['paid_amount'] ?? 0), 2));
+            $totalAmount = max(0, round($principalAmount + $interestAmount + $penaltyAmount - $discountAmount, 2));
+
+            $data['principal_amount'] = $principalAmount;
+            $data['financed_amount'] = $principalAmount;
+            $data['interest_amount'] = $interestAmount;
+            $data['penalty_amount'] = $penaltyAmount;
+            $data['discount_amount'] = $discountAmount;
+            $data['paid_amount'] = $paidAmount;
+            $data['total_amount'] = $totalAmount;
+            $data['balance_amount'] = max(0, round($totalAmount - $paidAmount, 2));
 
             $loanMeta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
             if (array_key_exists('interest_rate', $data)) {

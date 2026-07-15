@@ -154,6 +154,61 @@
         color: #111827;
         overflow-wrap: anywhere;
     }
+    .lm-standard-sections {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .lm-standard-card {
+        display: block;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #fff;
+        padding: 14px 16px;
+        color: #111827;
+        min-height: 118px;
+        text-decoration: none;
+    }
+    .lm-standard-card:hover,
+    .lm-standard-card:focus {
+        border-color: #93c5fd;
+        color: #111827;
+        text-decoration: none;
+        background: #f8fafc;
+    }
+    .lm-standard-card__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .lm-standard-card__title {
+        font-size: 13px;
+        font-weight: 800;
+        color: #1f2937;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+    .lm-standard-card__icon {
+        color: #2563eb;
+        font-size: 15px;
+    }
+    .lm-standard-card__value {
+        font-size: 16px;
+        font-weight: 800;
+        color: #111827;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+    }
+    .lm-standard-card__meta {
+        margin-top: 8px;
+        color: #6b7280;
+        font-size: 12px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
     .lm-edit-footer {
         position: sticky;
         bottom: 0;
@@ -170,13 +225,15 @@
             margin-top: 12px;
         }
         .lm-edit-summary,
-        .lm-edit-snapshot {
+        .lm-edit-snapshot,
+        .lm-standard-sections {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
     @media (max-width: 575px) {
         .lm-edit-summary,
-        .lm-edit-snapshot {
+        .lm-edit-snapshot,
+        .lm-standard-sections {
             grid-template-columns: 1fr;
         }
         .lm-edit-title h1 {
@@ -402,6 +459,14 @@
     $editCustomerPhone = $cleanEditValue($customerPhone);
     $editCustomerAddress = $cleanEditValue($customerAddress);
     $editLocationName = $cleanEditValue($locationName);
+    $principalAfterDepositValue = (float) old('principal_amount', $loanRow->principal_amount ?? $loanRow->financed_amount ?? 0);
+    $downPaymentValue = (float) old('down_payment', $loanRow->down_payment ?? 0);
+    $sourceTotalBeforeDeposit = (float) ($loanRow->sell_final_total_snapshot ?? 0);
+    $productTotalBeforeDeposit = $sourceTotalBeforeDeposit > 0
+        ? $sourceTotalBeforeDeposit
+        : ($principalAfterDepositValue + $downPaymentValue);
+    $reviewTotalAmount = (float) old('total_amount', $loanRow->total_amount ?? (($loanRow->principal_amount ?? 0) + ($loanRow->interest_amount ?? 0)));
+    $reviewBalanceAmount = (float) old('balance_amount', $loanRow->balance_amount ?? 0);
 @endphp
 
 <section class="content">
@@ -480,13 +545,60 @@
         </div>
     </div>
 
+    <div class="lm-standard-sections">
+        <a href="#lm-section-invoice" class="lm-standard-card">
+            <div class="lm-standard-card__head">
+                <span class="lm-standard-card__title">Invoice</span>
+                <i class="fa fa-file-text-o lm-standard-card__icon"></i>
+            </div>
+            <div class="lm-standard-card__value">{{ $loanRow->loan_number ?? $loanRow->id }}</div>
+            <div class="lm-standard-card__meta">
+                Source {{ $sourceInvoice ?: ($loanRow->source_invoice_no ?? '-') }}<br>
+                {{ !empty($loanRow->loan_date) ? \Carbon\Carbon::parse($loanRow->loan_date)->format('d-m-Y') : 'No loan date' }}
+            </div>
+        </a>
+        <a href="#lm-section-customer" class="lm-standard-card">
+            <div class="lm-standard-card__head">
+                <span class="lm-standard-card__title">Customer</span>
+                <i class="fa fa-user-o lm-standard-card__icon"></i>
+            </div>
+            <div class="lm-standard-card__value">{{ $editCustomerName ?: ($customerName ?? '-') }}</div>
+            <div class="lm-standard-card__meta">
+                {{ $editCustomerPhone ?: ($customerPhone ?? '-') }}<br>
+                {{ $editLocationName ?: ($locationName ?? '-') }}
+            </div>
+        </a>
+        <a href="#lm-section-products" class="lm-standard-card">
+            <div class="lm-standard-card__head">
+                <span class="lm-standard-card__title">Products</span>
+                <i class="fa fa-cubes lm-standard-card__icon"></i>
+            </div>
+            <div class="lm-standard-card__value">{{ $loanRow->product_name_snapshot ?? 'Loan Items' }}</div>
+            <div class="lm-standard-card__meta">
+                Items {{ $loanItemsCount ?? 0 }}<br>
+                IMEI {{ $loanRow->imei_snapshot ?? '-' }}
+            </div>
+        </a>
+        <a href="#lm-section-review" class="lm-standard-card">
+            <div class="lm-standard-card__head">
+                <span class="lm-standard-card__title">Review</span>
+                <i class="fa fa-check-square-o lm-standard-card__icon"></i>
+            </div>
+            <div class="lm-standard-card__value">{{ number_format($reviewBalanceAmount, 2) }}</div>
+            <div class="lm-standard-card__meta">
+                Total {{ number_format($reviewTotalAmount, 2) }}<br>
+                Paid {{ number_format((float) ($loanRow->paid_amount ?? 0), 2) }}
+            </div>
+        </a>
+    </div>
+
     <form method="POST" action="{{ route('loan-management.loans.update', $editRouteParams) }}" id="loan_edit_form">
         @csrf
     <div class="row">
         <div class="col-md-12">
-            <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="loan-overview">
+            <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="customer" id="lm-section-customer">
                 <div class="box-header with-border">
-                    <h3 class="box-title">Loan Overview</h3>
+                    <h3 class="box-title">Customer</h3>
                     <div class="box-tools pull-right">
                         <span class="label label-default">Customer & location</span>
                         <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
@@ -579,9 +691,9 @@
 
     <div class="row">
         <div class="col-md-12">
-            <div class="box box-solid lm-edit-box lm-collapsible is-collapsed" data-collapse-key="stored-snapshot">
+            <div class="box box-solid lm-edit-box lm-collapsible is-collapsed" data-collapse-key="products" id="lm-section-products">
                 <div class="box-header with-border">
-                    <h3 class="box-title">Stored Snapshot</h3>
+                    <h3 class="box-title">Products</h3>
                     <div class="box-tools pull-right">
                         <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                             <i class="fa fa-minus"></i>
@@ -601,9 +713,9 @@
         </div>
     </div>
 
-        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="core-loan-fields">
+        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="invoice" id="lm-section-invoice">
             <div class="box-header with-border">
-                <h3 class="box-title">Core Loan Fields</h3>
+                <h3 class="box-title">Invoice</h3>
                 <div class="box-tools pull-right">
                     <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                         <i class="fa fa-minus"></i>
@@ -639,6 +751,13 @@
                             <label>Currency</label>
                             <input type="text" name="currency" class="form-control" value="{{ old('currency', $loanRow->currency ?? 'USD') }}">
                             @error('currency')<span class="lm-field-error">{{ $message }}</span>@enderror
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Source Invoice No</label>
+                            <input type="text" name="source_invoice_no" class="form-control" value="{{ old('source_invoice_no', $loanRow->source_invoice_no ?? '') }}">
+                            @error('source_invoice_no')<span class="lm-field-error">{{ $message }}</span>@enderror
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -752,9 +871,9 @@
             </div>
         </div>
 
-        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="amounts">
+        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="review" id="lm-section-review">
             <div class="box-header with-border">
-                <h3 class="box-title">Amounts</h3>
+                <h3 class="box-title">Review</h3>
                 <div class="box-tools pull-right">
                     <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                         <i class="fa fa-minus"></i>
@@ -763,7 +882,23 @@
             </div>
             <div class="box-body">
                 <div class="row">
-                    <div class="col-md-2"><div class="form-group"><label>Principal</label><input type="number" step="0.01" min="0" name="principal_amount" class="form-control" value="{{ old('principal_amount', $loanRow->principal_amount ?? 0) }}">@error('principal_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
+                    <input type="hidden" id="loanProductTotalBeforeDeposit" value="{{ number_format($productTotalBeforeDeposit, 2, '.', '') }}">
+                    <input type="hidden" name="financed_amount" value="{{ old('financed_amount', $loanRow->financed_amount ?? $loanRow->principal_amount ?? 0) }}">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Principal After Deposit <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" min="0" name="principal_amount" class="form-control" value="{{ old('principal_amount', $loanRow->principal_amount ?? $loanRow->financed_amount ?? 0) }}">
+                                <span class="input-group-btn">
+                                    <button type="button" class="btn btn-default" id="btnRegeneratePrincipalAfterDeposit" title="Regenerate from deposit">
+                                        <i class="fa fa-refresh"></i>
+                                    </button>
+                                </span>
+                            </div>
+                            @error('principal_amount')<span class="lm-field-error">{{ $message }}</span>@enderror
+                            @error('financed_amount')<span class="lm-field-error">{{ $message }}</span>@enderror
+                        </div>
+                    </div>
                     <div class="col-md-2"><div class="form-group"><label>Interest</label><input type="number" step="0.01" min="0" name="interest_amount" class="form-control" value="{{ old('interest_amount', $loanRow->interest_amount ?? 0) }}">@error('interest_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
                     <div class="col-md-2"><div class="form-group"><label>Total</label><input type="number" step="0.01" min="0" name="total_amount" class="form-control" value="{{ old('total_amount', $loanRow->total_amount ?? 0) }}">@error('total_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
                     <div class="col-md-2"><div class="form-group"><label>Paid</label><input type="number" step="0.01" min="0" name="paid_amount" class="form-control" value="{{ old('paid_amount', $loanRow->paid_amount ?? 0) }}">@error('paid_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
@@ -771,7 +906,6 @@
                     <div class="col-md-2"><div class="form-group"><label>Down Payment</label><input type="number" step="0.01" min="0" name="down_payment" class="form-control" value="{{ old('down_payment', $loanRow->down_payment ?? 0) }}">@error('down_payment')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
                     <div class="col-md-2"><div class="form-group"><label>Penalty</label><input type="number" step="0.01" min="0" name="penalty_amount" class="form-control" value="{{ old('penalty_amount', $loanRow->penalty_amount ?? 0) }}">@error('penalty_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
                     <div class="col-md-2"><div class="form-group"><label>Discount</label><input type="number" step="0.01" min="0" name="discount_amount" class="form-control" value="{{ old('discount_amount', $loanRow->discount_amount ?? 0) }}">@error('discount_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-8"><div class="form-group"><label>Source Invoice No</label><input type="text" name="source_invoice_no" class="form-control" value="{{ old('source_invoice_no', $loanRow->source_invoice_no ?? '') }}">@error('source_invoice_no')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
                 </div>
             </div>
         </div>
@@ -944,11 +1078,91 @@
         var previewTable = document.getElementById('loanSchedulePreviewTable');
         var viewErrorLink = document.getElementById('loanViewErrorLink');
         var errorDetailsBox = document.getElementById('loanErrorDetailsBox');
+        var productTotalBeforeDepositInput = document.getElementById('loanProductTotalBeforeDeposit');
+        var regeneratePrincipalButton = document.getElementById('btnRegeneratePrincipalAfterDeposit');
 
         function formatMoney(value) {
             var amount = Number(value || 0);
 
             return amount.toFixed(2);
+        }
+
+        function loanAmountInput(name) {
+            return document.querySelector('[name="' + name + '"]');
+        }
+
+        function loanAmountValue(name) {
+            var input = loanAmountInput(name);
+            var value = input ? Number(input.value || 0) : 0;
+
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function recalculateLoanAmounts() {
+            var principal = Math.max(0, loanAmountValue('principal_amount'));
+            var interest = Math.max(0, loanAmountValue('interest_amount'));
+            var penalty = Math.max(0, loanAmountValue('penalty_amount'));
+            var discount = Math.max(0, loanAmountValue('discount_amount'));
+            var paid = Math.max(0, loanAmountValue('paid_amount'));
+            var total = Math.max(0, principal + interest + penalty - discount);
+            var balance = Math.max(0, total - paid);
+            var totalInput = loanAmountInput('total_amount');
+            var balanceInput = loanAmountInput('balance_amount');
+
+            if (totalInput) {
+                totalInput.value = formatMoney(total);
+            }
+            if (balanceInput) {
+                balanceInput.value = formatMoney(balance);
+            }
+            var financedInput = loanAmountInput('financed_amount');
+            if (financedInput) {
+                financedInput.value = formatMoney(principal);
+            }
+
+            var metricValues = document.querySelectorAll('.lm-edit-metric__value');
+            var metricSubs = document.querySelectorAll('.lm-edit-metric__sub');
+            if (metricValues[0]) {
+                metricValues[0].textContent = formatMoney(principal);
+            }
+            if (metricSubs[0]) {
+                metricSubs[0].textContent = 'Balance ' + formatMoney(balance);
+            }
+            if (metricSubs[1]) {
+                metricSubs[1].textContent = 'Paid ' + formatMoney(paid);
+            }
+        }
+
+        function currentProductTotalBeforeDeposit() {
+            var stored = productTotalBeforeDepositInput ? Number(productTotalBeforeDepositInput.value || 0) : 0;
+            if (Number.isFinite(stored) && stored > 0) {
+                return stored;
+            }
+
+            return Math.max(0, loanAmountValue('principal_amount') + loanAmountValue('down_payment'));
+        }
+
+        function refreshProductTotalBeforeDeposit() {
+            if (!productTotalBeforeDepositInput) {
+                return;
+            }
+
+            productTotalBeforeDepositInput.value = formatMoney(
+                Math.max(0, loanAmountValue('principal_amount') + loanAmountValue('down_payment'))
+            );
+        }
+
+        function regeneratePrincipalAfterDeposit() {
+            var productTotal = currentProductTotalBeforeDeposit();
+            var downPayment = Math.max(0, loanAmountValue('down_payment'));
+            var principal = Math.max(0, productTotal - downPayment);
+            var principalInput = loanAmountInput('principal_amount');
+
+            if (principalInput) {
+                principalInput.value = formatMoney(principal);
+            }
+
+            recalculateLoanAmounts();
         }
 
         function updateLoanDisplay(loan) {
@@ -978,6 +1192,8 @@
             if (durationMonthsInput && Object.prototype.hasOwnProperty.call(loan, 'duration_months')) {
                 durationMonthsInput.value = loan.duration_months || '';
             }
+
+            recalculateLoanAmounts();
 
             var metricValues = document.querySelectorAll('.lm-edit-metric__value');
             var metricSubs = document.querySelectorAll('.lm-edit-metric__sub');
@@ -1075,6 +1291,47 @@
             installmentCountInput.addEventListener('input', syncDurationMonths);
             installmentCountInput.addEventListener('change', syncDurationMonths);
             syncDurationMonths();
+        }
+
+        [
+            'principal_amount',
+            'interest_amount',
+            'paid_amount',
+            'penalty_amount',
+            'discount_amount',
+            'down_payment'
+        ].forEach(function (field) {
+            var input = loanAmountInput(field);
+            if (!input) {
+                return;
+            }
+            input.addEventListener('input', function () {
+                if (field === 'down_payment') {
+                    regeneratePrincipalAfterDeposit();
+                    return;
+                }
+                if (field === 'principal_amount') {
+                    refreshProductTotalBeforeDeposit();
+                }
+                recalculateLoanAmounts();
+            });
+            input.addEventListener('change', function () {
+                if (field === 'down_payment') {
+                    regeneratePrincipalAfterDeposit();
+                    return;
+                }
+                if (field === 'principal_amount') {
+                    refreshProductTotalBeforeDeposit();
+                }
+                recalculateLoanAmounts();
+            });
+        });
+
+        if (regeneratePrincipalButton) {
+            regeneratePrincipalButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                regeneratePrincipalAfterDeposit();
+            });
         }
 
         if (previewButton && previewTable && window.jQuery) {
