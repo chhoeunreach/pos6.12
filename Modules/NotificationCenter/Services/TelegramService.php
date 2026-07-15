@@ -72,6 +72,32 @@ class TelegramService
         }
     }
 
+    public function sendPhoto(string $chatId, string $filePath, ?string $caption = null, ?string $filename = null): array
+    {
+        $chatId = trim($chatId);
+        if ($chatId === '' || $this->botToken === '') {
+            return $this->failure('Telegram not configured or empty chat_id');
+        }
+
+        if (! is_readable($filePath)) {
+            return $this->failure('File not readable: '.$filePath);
+        }
+
+        try {
+            $this->client()->sendPhotoToChat($chatId, $filePath, $caption, $filename);
+
+            return $this->success('sent');
+        } catch (\Exception $e) {
+            Log::error('NotificationCenter Telegram sendPhoto failed', [
+                'chat_id' => $chatId,
+                'file' => $filePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->failure($e->getMessage());
+        }
+    }
+
     public function validateChatId(string $chatId): array
     {
         $chatId = trim($chatId);

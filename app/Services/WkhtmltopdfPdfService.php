@@ -66,21 +66,28 @@ class WkhtmltopdfPdfService
      */
     public function saveViewToPdf(string $view, array $data, string $outputPath, array $options = []): void
     {
+        $this->saveHtmlToPdf(view($view, $data)->render(), $outputPath, $options);
+    }
+
+    /**
+     * Render raw HTML into a PDF file using wkhtmltopdf, with mPDF fallback.
+     */
+    public function saveHtmlToPdf(string $html, string $outputPath, array $options = []): void
+    {
         $dir = dirname($outputPath);
         if (! File::exists($dir)) {
             File::makeDirectory($dir, 0755, true);
         }
 
-        $html = view($view, $data)->render();
         if (! $this->isEnabled()) {
-            $this->saveHtmlWithMpdf($html, $outputPath);
+            $this->saveHtmlWithMpdf($html, $outputPath, $options);
 
             return;
         }
 
         $binary = $this->resolveBinaryPath();
         if (! is_file($binary) || ! is_executable($binary)) {
-            $this->saveHtmlWithMpdf($html, $outputPath);
+            $this->saveHtmlWithMpdf($html, $outputPath, $options);
 
             return;
         }
@@ -116,13 +123,13 @@ class WkhtmltopdfPdfService
             $process->run();
 
             if (! $process->isSuccessful()) {
-                $this->saveHtmlWithMpdf($html, $outputPath);
+                $this->saveHtmlWithMpdf($html, $outputPath, $options);
 
                 return;
             }
 
             if (! File::exists($outputPath) || File::size($outputPath) === 0) {
-                $this->saveHtmlWithMpdf($html, $outputPath);
+                $this->saveHtmlWithMpdf($html, $outputPath, $options);
             }
         } finally {
             if (File::exists($workDir)) {
@@ -134,69 +141,120 @@ class WkhtmltopdfPdfService
     /**
      * Fallback PDF renderer used when wkhtmltopdf is not available.
      */
-    private function saveHtmlWithMpdf(string $html, string $outputPath): void
+    private function saveHtmlWithMpdf(string $html, string $outputPath, array $options = []): void
     {
+        $previousBacktrackLimit = ini_get('pcre.backtrack_limit');
+        $previousRecursionLimit = ini_get('pcre.recursion_limit');
+        $previousMemoryLimit = ini_get('memory_limit');
+        $previousTimeLimit = ini_get('max_execution_time');
+        ini_set('pcre.backtrack_limit', (string) max((int) $previousBacktrackLimit, 50000000));
+        ini_set('pcre.recursion_limit', (string) max((int) $previousRecursionLimit, 50000000));
+        ini_set('memory_limit', $this->largerMemoryLimit($previousMemoryLimit, '512M'));
+        @set_time_limit(max((int) $previousTimeLimit, 180));
+
         $tempDir = storage_path('app/temp/mpdf');
         if (! File::exists($tempDir)) {
             File::makeDirectory($tempDir, 0755, true);
         }
 
-        $config = [
-            'tempDir' => $tempDir,
-            'mode' => 'utf-8',
-            'autoScriptToLang' => true,
-            'autoLangToFont' => true,
-            'autoVietnamese' => true,
-            'autoArabic' => true,
-            'margin_top' => 8,
-            'margin_right' => 8,
-            'margin_bottom' => 8,
-            'margin_left' => 8,
-            'format' => 'A4',
-        ];
+        try {
+            $format = strtoupper((string) ($options['page-size'] ?? $options['format'] ?? 'A4'));
 
-        $fontDirs = $this->existingFontDirectories();
-        if (! empty($fontDirs)) {
-            $defaultConfig = (new \Mpdf\Config\ConfigVariables())->getDefaults();
-            $fontDirs = array_values(array_unique(array_merge($defaultConfig['fontDir'], $fontDirs)));
+            $config = [
+                'tempDir' => $tempDir,
+                'mode' => 'utf-8',
+                'autoScriptToLang' => true,
+                'autoLangToFont' => true,
+                'autoVietnamese' => true,
+                'autoArabic' => true,
+                'margin_top' => 8,
+                'margin_right' => 8,
+                'margin_bottom' => 8,
+                'margin_left' => 8,
+                'format' => $format ?: 'A4',
+            ];
 
-            $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
-            $fontData = $defaultFontConfig['fontdata'];
+            $fontDirs = $this->existingFontDirectories();
+            if (! empty($fontDirs)) {
+                $defaultConfig = (new \Mpdf\Config\ConfigVariables())->getDefaults();
+                $fontDirs = array_values(array_unique(array_merge($defaultConfig['fontDir'], $fontDirs)));
 
-            if ($this->fontFileExists('KhmerOSbattambang.ttf')) {
-                $fontData['khmerosbattambang'] = [
-                    'R' => 'KhmerOSbattambang.ttf',
-                    'useOTL' => 0xFF,
-                ];
-                $config['default_font'] = 'khmerosbattambang';
-            } elseif ($this->fontFileExists('NotoSansKhmer-Regular.ttf')) {
-                $fontData['notosanskhmer'] = [
-                    'R' => 'NotoSansKhmer-Regular.ttf',
-                    'useOTL' => 0xFF,
-                ];
-                $config['default_font'] = 'notosanskhmer';
+                $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
+                $fontData = $defaultFontConfig['fontdata'];
+
+                if ($this->fontFileExists('KhmerOSbattambang.ttf')) {
+                    $fontData['khmerosbattambang'] = [
+                        'R' => 'KhmerOSbattambang.ttf',
+                        'useOTL' => 0xFF,
+                    ];
+                    $config['default_font'] = 'khmerosbattambang';
+                } elseif ($this->fontFileExists('NotoSansKhmer-Regular.ttf')) {
+                    $fontData['notosanskhmer'] = [
+                        'R' => 'NotoSansKhmer-Regular.ttf',
+                        'useOTL' => 0xFF,
+                    ];
+                    $config['default_font'] = 'notosanskhmer';
+                }
+
+                $config['fontDir'] = $fontDirs;
+                $config['fontdata'] = $fontData;
             }
 
-            $config['fontDir'] = $fontDirs;
-            $config['fontdata'] = $fontData;
-        }
+            $mpdf = new \Mpdf\Mpdf($config);
+            $mpdf->useSubstitutions = true;
+            if (! empty($config['default_font'])) {
+                $fontCss = '<style>html, body, * { font-family: ' . $config['default_font'] . ', sans-serif !important; }</style>';
+                if (stripos($html, '</head>') !== false) {
+                    $html = preg_replace('/<\/head>/i', $fontCss . '</head>', $html, 1);
+                } else {
+                    $html = $fontCss . $html;
+                }
+            }
+            $mpdf->WriteHTML($html);
+            $mpdf->Output($outputPath, \Mpdf\Output\Destination::FILE);
 
-        $mpdf = new \Mpdf\Mpdf($config);
-        $mpdf->useSubstitutions = true;
-        if (! empty($config['default_font'])) {
-            $fontCss = '<style>html, body, * { font-family: ' . $config['default_font'] . ', sans-serif !important; }</style>';
-            if (stripos($html, '</head>') !== false) {
-                $html = preg_replace('/<\/head>/i', $fontCss . '</head>', $html, 1);
-            } else {
-                $html = $fontCss . $html;
+            if (! File::exists($outputPath) || File::size($outputPath) === 0) {
+                throw new \RuntimeException('mPDF generated an empty PDF file.');
+            }
+        } finally {
+            if ($previousBacktrackLimit !== false) {
+                ini_set('pcre.backtrack_limit', (string) $previousBacktrackLimit);
+            }
+            if ($previousRecursionLimit !== false) {
+                ini_set('pcre.recursion_limit', (string) $previousRecursionLimit);
+            }
+            if ($previousMemoryLimit !== false) {
+                ini_set('memory_limit', (string) $previousMemoryLimit);
+            }
+            if ($previousTimeLimit !== false) {
+                @set_time_limit((int) $previousTimeLimit);
             }
         }
-        $mpdf->WriteHTML($html);
-        $mpdf->Output($outputPath, \Mpdf\Output\Destination::FILE);
+    }
 
-        if (! File::exists($outputPath) || File::size($outputPath) === 0) {
-            throw new \RuntimeException('mPDF generated an empty PDF file.');
+    private function largerMemoryLimit($current, string $minimum): string
+    {
+        if ($current === false || $current === '' || $current === '-1') {
+            return $current === '-1' ? '-1' : $minimum;
         }
+
+        return $this->memoryToBytes((string) $current) >= $this->memoryToBytes($minimum)
+            ? (string) $current
+            : $minimum;
+    }
+
+    private function memoryToBytes(string $value): int
+    {
+        $value = trim($value);
+        $number = (float) $value;
+        $unit = strtolower(substr($value, -1));
+
+        return match ($unit) {
+            'g' => (int) ($number * 1024 * 1024 * 1024),
+            'm' => (int) ($number * 1024 * 1024),
+            'k' => (int) ($number * 1024),
+            default => (int) $number,
+        };
     }
 
     /**
@@ -264,6 +322,7 @@ class WkhtmltopdfPdfService
     private function existingFontDirectories(): array
     {
         $dirs = [
+            public_path('fonts/khmer'),
             storage_path('fonts'),
             'C:' . DIRECTORY_SEPARATOR . 'Windows' . DIRECTORY_SEPARATOR . 'Fonts',
         ];

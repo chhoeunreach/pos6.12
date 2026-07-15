@@ -55,6 +55,115 @@ class LoanInstallmentListController extends Controller
         return $loanRow;
     }
 
+    protected function buildLoanPaymentCopyInfo(int $loan, object $loanRow): array
+    {
+        $customerRow = null;
+        if ($this->loanTableExists('loan_customers') && ! empty($loanRow->customer_id)) {
+            $customerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanRow->customer_id)->first();
+        }
+
+        $loanItems = collect();
+        if ($this->loanTableExists('loan_items')) {
+            $loanItemQuery = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($loanItemQuery, 'loan_items');
+            $loanItems = $loanItemQuery->orderBy('id')->get();
+        }
+
+        $loanMeta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
+        $depositAmounts = $this->loanDepositPaymentCopyAmounts($loan, $loanRow);
+        $firstDueDate = $loanRow->first_due_date ?? $loanMeta['first_due_date'] ?? null;
+
+        return [
+            'invoice' => $loanRow->source_invoice_no ?? $loanRow->loan_number ?? $loanRow->id,
+            'name_khmer' => trim((string) ($loanRow->customer_khmer_name ?? ''))
+                ?: (trim((string) ($customerRow->khmer_name ?? '')) ?: ($loanRow->customer_name_snapshot ?? '-')),
+            'phone' => $loanRow->customer_phone_snapshot ?? ($customerRow->phone ?? $customerRow->mobile ?? $customerRow->login_phone ?? '-'),
+            'id_card' => $customerRow->id_card_number ?? $customerRow->national_id ?? $customerRow->id_number ?? '-',
+            'village' => $customerRow->village ?? '-',
+            'commune' => $customerRow->commune ?? '-',
+            'district' => $customerRow->district ?? '-',
+            'province' => $customerRow->province ?? '-',
+            'product' => $loanItems->map(fn ($item) => trim((string) ($item->product_name_snapshot ?? $item->product_name ?? '')))->filter()->implode(', ') ?: ($loanRow->product_name_snapshot ?? '-'),
+            'qty' => $loanItems->map(fn ($item) => (string) ($item->qty ?? $item->quantity ?? 1))->filter()->implode(', ') ?: '1',
+            'unit_price' => $loanItems->map(fn ($item) => number_format((float) ($item->unit_price ?? 0), 2, '.', ''))->filter(fn ($value) => (float) $value > 0)->implode(', ') ?: number_format((float) ($loanRow->principal_amount ?? 0), 2, '.', ''),
+            'amount_cash' => $depositAmounts['cash'],
+            'amount_bank' => $depositAmounts['bank'],
+            'first_due' => $firstDueDate ? \Carbon\Carbon::parse($firstDueDate)->format('Y-m-d') : '',
+            'duration_m' => (int) ($loanRow->duration_months ?? $loanRow->installment_count ?? $loanMeta['duration_months'] ?? 0),
+            'interest_percent' => number_format(((float) ($loanRow->interest_rate ?? $loanMeta['interest_rate'] ?? 0)) / 100, 2, '.', ''),
+        ];
+    }
+
+    protected function loanDepositPaymentCopyAmounts(int $loan, object $loanRow): array
+    {
+        $cash = 0.0;
+        $bank = 0.0;
+
+        if ($this->loanTableExists('loan_payments')) {
+            $query = DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($query, 'loan_payments');
+
+            if ($this->loanTableHasCol('loan_payments', 'payment_type')) {
+                $query->whereIn('payment_type', ['loan', 'initial', 'down_payment', 'downpayment', 'deposit']);
+            } elseif ($this->loanTableHasCol('loan_payments', 'schedule_id')) {
+                $query->whereNull('schedule_id');
+            }
+
+            foreach ($query->get() as $payment) {
+                if ($this->loanTableHasCol('loan_payments', 'payment_type') && ! $this->isLoanPaymentRow($payment)) {
+                    continue;
+                }
+
+                if (! $this->loanTableHasCol('loan_payments', 'payment_type') && ! empty($payment->schedule_id)) {
+                    continue;
+                }
+
+                $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $method = strtolower(trim((string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? '')));
+                if ($method === 'cash') {
+                    $cash += $amount;
+                } else {
+                    $bank += $amount;
+                }
+            }
+        }
+
+        if ($cash <= 0 && $bank <= 0 && (float) ($loanRow->down_payment ?? 0) > 0) {
+            $cash = (float) $loanRow->down_payment;
+        }
+
+        return [
+            'cash' => number_format($cash, 2, '.', ''),
+            'bank' => number_format($bank, 2, '.', ''),
+        ];
+    }
+
+    protected function formatLoanPaymentCopyText(array $info): string
+    {
+        return collect([
+            $info['invoice'] ?? '',
+            $info['name_khmer'] ?? '',
+            $info['phone'] ?? '',
+            $info['id_card'] ?? '',
+            $info['village'] ?? '',
+            $info['commune'] ?? '',
+            $info['district'] ?? '',
+            $info['province'] ?? '',
+            $info['product'] ?? '',
+            $info['qty'] ?? '',
+            $info['unit_price'] ?? '',
+            $info['amount_cash'] ?? '0.00',
+            $info['amount_bank'] ?? '0.00',
+            $info['duration_m'] ?? '',
+            $info['interest_percent'] ?? '0.00',
+            $info['first_due'] ?? '',
+        ])->map(fn ($value) => trim((string) $value))->implode(',');
+    }
+
     protected function loanTableExists(string $table): bool
     {
         if (! array_key_exists($table, self::$loanTableExistsCache)) {
@@ -576,6 +685,13 @@ class LoanInstallmentListController extends Controller
         }
         if ($request->filled('customer') && $this->hasCol('customer_name_snapshot')) $q->where('l.customer_name_snapshot', 'like', '%'.$request->customer.'%');
 
+        if ($this->hasCol('loan_date')) {
+            $q->orderByDesc('l.loan_date');
+        } else {
+            $q->orderByDesc('l.created_at');
+        }
+        $q->orderByDesc('l.id');
+
         return DataTables::of($q)
             ->filter(function ($query) use ($request) {
                 $search = trim((string) data_get($request->all(), 'search.value', ''));
@@ -632,8 +748,22 @@ class LoanInstallmentListController extends Controller
             })
             ->editColumn('status', function ($r) {
                 $map = ['draft' => 'default', 'pending' => 'warning', 'approved' => 'info', 'active' => 'primary', 'completed' => 'success', 'rejected' => 'danger', 'cancelled' => 'default', 'defaulted' => 'danger'];
-                $c = $map[$r->status] ?? 'default';
-                return '<span class="label label-'.$c.'">'.ucfirst($r->status).'</span>';
+                $status = strtolower((string) ($r->status ?? 'pending'));
+                $c = $map[$status] ?? 'default';
+                $user = auth()->user();
+                $canApprove = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
+                    && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.approve');
+
+                if (! $canApprove) {
+                    return '<span class="label label-'.$c.'">'.ucfirst($status).'</span>';
+                }
+
+                $options = '';
+                foreach (array_keys($map) as $value) {
+                    $options .= '<option value="'.e($value).'"'.($value === $status ? ' selected' : '').'>'.e(ucfirst($value)).'</option>';
+                }
+
+                return '<select class="form-control input-sm js-loan-status-select loan-status-select status-'.$c.'" data-original-status="'.e($status).'" data-url="'.route('loan-management.loans.status', $r->id).'" style="min-width:120px;">'.$options.'</select>';
             })
             ->addColumn('action', function ($r) {
                 $user = auth()->user();
@@ -641,34 +771,21 @@ class LoanInstallmentListController extends Controller
                     && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.edit');
                 $canDelete = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
                     && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.delete');
-                $canApprove = $user instanceof \Illuminate\Contracts\Auth\Authenticatable
-                    && \Illuminate\Support\Facades\Gate::forUser($user)->allows('loan_management.approve');
 
-                $actions = '<div class="btn-group btn-group-xs" role="group" style="display:flex; flex-wrap:wrap; gap:4px;">';
-                $actions .= '<a href="'.route('loan-management.loans.view', $r->id).'" class="btn btn-xs btn-info btn-flat" title="View loan details"><i class="fa fa-eye"></i> View</a>';
-                $actions .= '<button type="button" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn btn-xs btn-default btn-flat btn-modal" title="Print loan"><i class="fa fa-print"></i> Print</button>';
-                $actions .= '<button type="button" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn btn-xs btn-success btn-flat btn-modal" title="Open POS and copy loan serials"><i class="fa fa-exchange"></i> POS</button>';
+                $actions = '<div class="btn-group btn-group-xs">';
+                $actions .= '<button type="button" class="btn btn-xs btn-primary btn-flat dropdown-toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-ellipsis-v"></i> Action <span class="caret"></span></button>';
+                $actions .= '<ul class="dropdown-menu dropdown-menu-right" role="menu">';
+                $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id).'"><i class="fa fa-eye"></i> View</a></li>';
+                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
+                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-exchange"></i> POS</a></li>';
+                $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
                 if ($canEdit) {
-                    $actions .= '<a href="'.route('loan-management.loans.edit', $r->id).'" class="btn btn-xs btn-primary btn-flat" title="Edit this loan"><i class="fa fa-pencil"></i> Edit</a>';
+                    $actions .= '<li><a href="'.route('loan-management.loans.edit', $r->id).'"><i class="fa fa-pencil"></i> Edit</a></li>';
                 }
                 if ($canDelete && in_array(strtolower((string) $r->status), ['draft', 'pending'])) {
-                    $actions .= '<button type="button" class="btn btn-xs btn-danger btn-flat btn-delete-loan" data-url="'.route('loan-management.loans.destroy', $r->id).'" title="Delete this loan"><i class="fa fa-trash"></i> Delete</button>';
+                    $actions .= '<li><a href="#" class="btn-delete-loan text-red" data-url="'.route('loan-management.loans.destroy', $r->id).'"><i class="fa fa-trash"></i> Delete</a></li>';
                 }
-                if ($canApprove) {
-                    $actions .= '<div class="btn-group btn-group-xs" role="group">
-                        <button type="button" class="btn btn-xs btn-warning btn-flat dropdown-toggle" data-toggle="dropdown" aria-expanded="false" title="Change status"><i class="fa fa-refresh"></i> Status <span class="caret"></span></button>
-                        <ul class="dropdown-menu dropdown-menu-right">
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="pending">Pending</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="approved">Approved</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="active">Active</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="completed">Completed</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="rejected">Rejected</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="cancelled">Cancelled</a></li>
-                            <li><a href="#" class="btn-change-status" data-url="'.route('loan-management.loans.status', $r->id).'" data-status="defaulted">Defaulted</a></li>
-                        </ul>
-                    </div>';
-                }
-                $actions .= '</div>';
+                $actions .= '</ul></div>';
 
                 return $actions;
             })
@@ -747,8 +864,10 @@ class LoanInstallmentListController extends Controller
         }
 
         $customer = (object) [
-            'name' => $loanRow->customer_name_snapshot
-                ?? ($customerRow->name ?? ($customerRow->customer_name ?? ($contact->name ?? '-'))),
+            'name' => trim((string) ($loanRow->customer_khmer_name ?? ''))
+                ?: (trim((string) ($customerRow->khmer_name ?? ''))
+                    ?: ($loanRow->customer_name_snapshot
+                        ?? ($customerRow->name ?? ($customerRow->customer_name ?? ($contact->name ?? '-'))))),
             'mobile' => $loanRow->customer_phone_snapshot
                 ?? ($customerRow->phone ?? ($customerRow->mobile ?? ($customerRow->login_phone ?? ($contact->mobile ?? '-')))),
             'address_line_1' => $loanRow->customer_address_snapshot
@@ -833,9 +952,12 @@ class LoanInstallmentListController extends Controller
 
         $installments = collect();
         if ($this->loanTableExists('loan_payment_schedules')) {
-            $installments = DB::connection('mysql_loan')->table('loan_payment_schedules')
+            $installmentQuery = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
-                ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'installment_no') ? 'installment_no' : 'due_date')
+                ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'installment_no') ? 'installment_no' : 'due_date');
+            $this->excludeDeletedLoanRows($installmentQuery, 'loan_payment_schedules');
+
+            $installments = $installmentQuery
                 ->get()
                 ->map(function ($row, $index) {
                     $principal = (float) ($row->principal_amount ?? 0);
@@ -954,11 +1076,14 @@ class LoanInstallmentListController extends Controller
 
         $schedules = collect();
         if ($this->loanTableExists('loan_payment_schedules')) {
-            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+            $scheduleQuery = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
                 ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
                 ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
-                ->orderBy('id')
+                ->orderBy('id');
+            $this->excludeDeletedLoanRows($scheduleQuery, 'loan_payment_schedules');
+
+            $schedules = $scheduleQuery
                 ->get();
         }
 
@@ -980,8 +1105,8 @@ class LoanInstallmentListController extends Controller
             'defaultAmount',
             'payOffAmount',
             'paymentTypes',
-            'defaultPaymentMethod'
-        ));
+            'defaultPaymentMethod',
+        ) + ['copyInfo' => []]);
     }
 
     public function mobileQuickPay(int $loan)
@@ -995,11 +1120,14 @@ class LoanInstallmentListController extends Controller
 
         $schedules = collect();
         if ($this->loanTableExists('loan_payment_schedules')) {
-            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+            $scheduleQuery = DB::connection('mysql_loan')->table('loan_payment_schedules')
                 ->where('loan_id', $loan)
                 ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
                 ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
-                ->orderBy('id')
+                ->orderBy('id');
+            $this->excludeDeletedLoanRows($scheduleQuery, 'loan_payment_schedules');
+
+            $schedules = $scheduleQuery
                 ->get();
         }
 
@@ -1025,6 +1153,48 @@ class LoanInstallmentListController extends Controller
         ));
     }
 
+    protected function storeLoanPaymentDoc(Request $request, int $loan, int $paymentId, int $lineIndex): void
+    {
+        if (! $this->loanTableExists('loan_files')) {
+            return;
+        }
+
+        $files = $request->file("payment_lines.$lineIndex.payment_docs", []);
+        if (! is_array($files)) {
+            $files = [$files];
+        }
+
+        $legacyFile = $request->file("payment_lines.$lineIndex.payment_doc");
+        if ($legacyFile) {
+            $files[] = $legacyFile;
+        }
+
+        $files = array_values(array_filter($files, fn ($file) => $file && $file->isValid()));
+        if (empty($files)) {
+            return;
+        }
+
+        foreach ($files as $file) {
+            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'file');
+            $filename = 'payment-doc-'.$loan.'-'.$paymentId.'-'.Str::random(10).'.'.$extension;
+            $path = $file->storeAs('loan-payment-docs/'.now()->format('Y/m'), $filename, 'public');
+
+            DB::connection('mysql_loan')->table('loan_files')->insert($this->loanSafeColumns('loan_files', [
+                'fileable_type' => 'loan_payment',
+                'fileable_id' => $paymentId,
+                'category' => 'payment_doc',
+                'disk' => 'public',
+                'path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size_bytes' => $file->getSize(),
+                'uploaded_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+        }
+    }
+
     public function storePayment(Request $request, int $loan)
     {
         abort_if(! $this->loanTableExists('loans'), 404);
@@ -1042,6 +1212,9 @@ class LoanInstallmentListController extends Controller
             'payment_lines.*.method' => 'nullable|string|max:100',
             'payment_lines.*.reference_number' => 'nullable|string|max:191',
             'payment_lines.*.note' => 'nullable|string|max:1000',
+            'payment_lines.*.payment_doc' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
+            'payment_lines.*.payment_docs' => 'nullable|array',
+            'payment_lines.*.payment_docs.*' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
         ]);
 
         $paidDate = $payload['paid_date'];
@@ -1074,101 +1247,138 @@ class LoanInstallmentListController extends Controller
         $returnTo = trim((string) $request->input('return_to', ''));
 
         if ($paymentLines->isEmpty() || $totalAmount <= 0) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Please add at least one payment line.'], 422);
+            }
+
             return redirect()
                 ->back()
                 ->with('status', ['success' => 0, 'msg' => 'Please add at least one payment line.']);
         }
 
-        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $isPayOff, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
-            $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
-            if ($userName === '') {
-                $userName = auth()->user()->username ?? null;
-            }
+        try {
+            DB::connection('mysql_loan')->transaction(function () use ($request, $loan, $loanRow, $isPayOff, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
+                $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
+                if ($userName === '') {
+                    $userName = auth()->user()->username ?? null;
+                }
 
-            foreach ($paymentLines as $line) {
-                $receipt = 'RCP-'.now()->format('YmdHis').'-'.$loan.'-'.random_int(10, 99);
-                $paymentRef = 'PMT-'.strtoupper(Str::random(10));
+                foreach ($paymentLines as $index => $line) {
+                    $receipt = 'RCP-'.now()->format('YmdHis').'-'.$loan.'-'.random_int(10, 99);
+                    $paymentRef = 'PMT-'.strtoupper(Str::random(10));
 
-                $paymentId = DB::connection('mysql_loan')->table('loan_payments')->insertGetId($this->loanSafeColumns('loan_payments', [
-                    'payment_number' => $this->generateUniquePaymentNumber($loan),
-                    'payment_ref_no' => $paymentRef,
-                    'receipt_number' => $receipt,
-                    'loan_id' => $loan,
-                    'payment_type' => $isPayOff ? 'loan' : 'monthly',
-                    'loan_number_snapshot' => $loanRow->loan_number ?? null,
-                    'customer_id' => $loanRow->customer_id ?? 0,
-                    'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
-                    'schedule_id' => $selectedScheduleId,
-                    'received_by' => auth()->id(),
-                    'received_by_name_snapshot' => $userName,
-                    'collected_by_name_snapshot' => $userName,
-                    'channel' => $line['method_name'],
-                    'payment_method_snapshot' => $line['method_name'],
-                    'amount' => $line['amount'],
-                    'total_paid' => $line['amount'],
-                    'total_paid_base' => $line['amount'],
-                    'currency' => $loanRow->currency ?? 'USD',
-                    'base_currency' => $loanRow->currency ?? 'USD',
-                    'exchange_rate' => 1,
-                    'reference_number' => $line['reference_number'],
-                    'paid_date' => $paidDate,
-                    'paid_at' => $paidAt,
-                    'status' => 'confirmed',
-                    'note' => $line['note'],
-                    'created_by' => auth()->id(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]));
-                $createdPaymentIds[] = (int) $paymentId;
-
-                if ($this->loanTableExists('loan_payment_details')) {
-                    DB::connection('mysql_loan')->table('loan_payment_details')->insert($this->loanSafeColumns('loan_payment_details', [
-                        'payment_id' => $paymentId,
-                        'payment_method_id' => null,
+                    $paymentId = DB::connection('mysql_loan')->table('loan_payments')->insertGetId($this->loanSafeColumns('loan_payments', [
+                        'payment_number' => $this->generateUniquePaymentNumber($loan),
+                        'payment_ref_no' => $paymentRef,
+                        'receipt_number' => $receipt,
+                        'loan_id' => $loan,
+                        'payment_type' => $isPayOff ? 'loan' : 'monthly',
+                        'loan_number_snapshot' => $loanRow->loan_number ?? null,
+                        'customer_id' => $loanRow->customer_id ?? 0,
+                        'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
+                        'schedule_id' => $selectedScheduleId,
+                        'received_by' => auth()->id(),
+                        'received_by_name_snapshot' => $userName,
+                        'collected_by_name_snapshot' => $userName,
+                        'channel' => $line['method_name'],
                         'payment_method_snapshot' => $line['method_name'],
-                        'method' => $line['method'],
-                        'currency' => $loanRow->currency ?? 'USD',
                         'amount' => $line['amount'],
+                        'total_paid' => $line['amount'],
+                        'total_paid_base' => $line['amount'],
+                        'currency' => $loanRow->currency ?? 'USD',
+                        'base_currency' => $loanRow->currency ?? 'USD',
                         'exchange_rate' => 1,
-                        'amount_base' => $line['amount'],
                         'reference_number' => $line['reference_number'],
-                        'transaction_no' => $line['reference_number'],
+                        'paid_date' => $paidDate,
+                        'paid_at' => $paidAt,
+                        'status' => 'confirmed',
                         'note' => $line['note'],
-                        'meta_json' => json_encode(['source' => 'loan_detail']),
+                        'created_by' => auth()->id(),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]));
+                    $createdPaymentIds[] = (int) $paymentId;
+                    $this->storeLoanPaymentDoc($request, $loan, (int) $paymentId, (int) $index);
+
+                    if ($this->loanTableExists('loan_payment_details')) {
+                        DB::connection('mysql_loan')->table('loan_payment_details')->insert($this->loanSafeColumns('loan_payment_details', [
+                            'payment_id' => $paymentId,
+                            'payment_method_id' => null,
+                            'payment_method_snapshot' => $line['method_name'],
+                            'method' => $line['method'],
+                            'currency' => $loanRow->currency ?? 'USD',
+                            'amount' => $line['amount'],
+                            'exchange_rate' => 1,
+                            'amount_base' => $line['amount'],
+                            'reference_number' => $line['reference_number'],
+                            'transaction_no' => $line['reference_number'],
+                            'note' => $line['note'],
+                            'meta_json' => json_encode(['source' => 'loan_detail']),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]));
+                    }
                 }
+
+                if ($isPayOff) {
+                    $this->applyLoanPayOffToSchedules($loan, $totalAmount, $paidAt);
+                } else {
+                    $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $selectedScheduleId);
+                }
+                $this->refreshLoanPaymentTotals($loan, $totalAmount);
+            });
+
+            $paymentNotificationLines = $paymentLines->all();
+            app()->terminating(function () use ($loan, $totalAmount, $paymentNotificationLines, $paidDate) {
+                try {
+                    $this->notifyLocationTelegram($loan, 'payment', $totalAmount, $paymentNotificationLines, $paidDate);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('Loan payment saved but Telegram notification failed', [
+                        'loan_id' => $loan,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+
+            if ($request->ajax() || $request->wantsJson()) {
+                $paymentId = $createdPaymentIds[0] ?? null;
+                $redirectUrl = $returnTo !== '' ? $returnTo : route('loan-management.dashboard');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment added successfully',
+                    'data' => [
+                        'payment_id' => $paymentId,
+                        'print_url' => null,
+                        'redirect_url' => $redirectUrl,
+                    ],
+                ]);
             }
 
-            if ($isPayOff) {
-                $this->applyLoanPayOffToSchedules($loan, $totalAmount, $paidAt);
-            } else {
-                $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $selectedScheduleId);
-            }
-            $this->refreshLoanPaymentTotals($loan, $totalAmount);
-        });
+            return redirect()
+                ->route('loan-management.loans.view', $loan)
+                ->with('status', ['success' => 1, 'msg' => 'Payment added successfully']);
 
-        $this->notifyLocationTelegram($loan, 'payment', $totalAmount);
-
-        if ($request->ajax() || $request->wantsJson()) {
-            $paymentId = $createdPaymentIds[0] ?? null;
-            $redirectUrl = $returnTo !== '' ? $returnTo : route('loan-management.dashboard');
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment added successfully',
-                'data' => [
-                    'payment_id' => $paymentId,
-                    'print_url' => route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1, '_lm_direct_print' => 1]),
-                    'redirect_url' => $redirectUrl,
-                ],
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Loan payment store failed', [
+                'loan_id' => $loan,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile().':'.$e->getLine(),
             ]);
-        }
 
-        return redirect()
-            ->route('loan-management.loans.view', $loan)
-            ->with('status', ['success' => 1, 'msg' => 'Payment added successfully']);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment failed: '.$e->getMessage(),
+                ], 500);
+            }
+
+            return back()
+                ->withInput()
+                ->withErrors(['payment_error' => 'Payment failed: '.$e->getMessage()]);
+        }
     }
 
     public function editSchedule(int $loan, int $schedule)
@@ -1398,6 +1608,24 @@ class LoanInstallmentListController extends Controller
                     'schedule_error' => $message.' in '.$detail,
                 ]);
         }
+    }
+
+    public function paymentCopyInfo(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $info = $this->buildLoanPaymentCopyInfo($loan, $this->attachLoanCustomerKhmerName($loanRow));
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'info' => $info,
+                'text' => $this->formatLoanPaymentCopyText($info),
+            ],
+        ]);
     }
 
     public function updateSchedulesFromEdit(Request $request, int $loan)
@@ -1640,7 +1868,20 @@ class LoanInstallmentListController extends Controller
             return;
         }
 
-        $newPaidAmount = (float) ($loanRow->paid_amount ?? 0) + $amount;
+        $paymentAmountColumn = 'total_paid_base';
+        if ($this->loanTableHasCol('loan_payments', 'total_paid_base')) {
+            $paymentAmountColumn = 'total_paid_base';
+        } elseif ($this->loanTableHasCol('loan_payments', 'total_paid')) {
+            $paymentAmountColumn = 'total_paid';
+        } elseif ($this->loanTableHasCol('loan_payments', 'amount')) {
+            $paymentAmountColumn = 'amount';
+        }
+
+        $newPaidAmount = (float) DB::connection('mysql_loan')
+            ->table('loan_payments')
+            ->where('loan_id', $loan)
+            ->sum($paymentAmountColumn);
+
         $scheduleBalance = 0.0;
         $hasScheduleBalance = false;
         if ($this->loanTableExists('loan_payment_schedules')) {
@@ -1655,8 +1896,13 @@ class LoanInstallmentListController extends Controller
                 $hasScheduleBalance = true;
             }
         }
-        $currentBalance = (float) ($loanRow->balance_amount ?? 0);
-        $newBalanceAmount = $hasScheduleBalance ? $scheduleBalance : max(0, $currentBalance - $amount);
+
+        if ($hasScheduleBalance) {
+            $newBalanceAmount = $scheduleBalance;
+        } else {
+            $principal = (float) ($loanRow->principal_amount ?? $loanRow->total_payable_amount ?? 0);
+            $newBalanceAmount = max(0, $principal - $newPaidAmount);
+        }
 
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
             'paid_amount' => $newPaidAmount,
@@ -1844,7 +2090,7 @@ class LoanInstallmentListController extends Controller
         ]));
     }
 
-    protected function notifyLocationTelegram(int $loan, string $event, ?float $amount = null): void
+    public function notifyLocationTelegram(int $loan, string $event, ?float $amount = null, array $paymentLines = [], ?string $paidDate = null): void
     {
         if (! $this->loanTableExists('loans') || ! $this->loanTableExists('loan_business_locations')) {
             return;
@@ -1880,7 +2126,7 @@ class LoanInstallmentListController extends Controller
         }
 
         $message = $event === 'payment'
-            ? "Loan payment received\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nAmount: ".number_format((float) $amount, 2).' '.($loanRow->currency ?? 'USD')."\nBalance: ".number_format((float) ($loanRow->balance_amount ?? 0), 2)
+            ? $this->paymentTelegramMessage($loan, $loanRow, $paymentLines, $paidDate)
             : "Installment loan created\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loanRow->principal_amount ?? $loanRow->total_payable_amount ?? 0), 2).' '.($loanRow->currency ?? 'USD');
 
         app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
@@ -1889,7 +2135,121 @@ class LoanInstallmentListController extends Controller
             $message,
             ['loan_id' => $loan, 'event' => $event, 'amount' => $amount]
         );
+
         $this->logTelegramNotification($loanRow, $location, $event, $message, 'sent', null, $chatId);
+    }
+
+    protected function paymentTelegramMessage(int $loan, object $loanRow, array $paymentLines = [], ?string $paidDate = null): string
+    {
+        return implode("\n", $this->paymentTelegramMessageLines($loan, $loanRow, $paymentLines, $paidDate, true));
+    }
+
+    protected function paymentTelegramMessageLines(int $loan, object $loanRow, array $paymentLines = [], ?string $paidDate = null, bool $includePrintUrl = false): array
+    {
+        $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
+        $scheduleCounts = $this->loanPaymentScheduleCounts($loan, $loanRow);
+        $customerName = trim((string) ($loanRow->customer_khmer_name ?? '')) ?: ($loanRow->customer_name_snapshot ?? '-');
+        $collectorName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
+        if ($collectorName === '') {
+            $collectorName = auth()->user()->username ?? auth()->user()->name ?? '-';
+        }
+
+        $paymentText = $this->paymentTelegramAmountLines($paymentLines);
+
+        $lines = [
+            'កាលបរិច្ឆេទ'.\Carbon\Carbon::parse($paidDate ?: now())->format('m/d/Y'),
+            '',
+            'វិក័យប័ត្រ        :'.($loanRow->source_invoice_no ?? $loanRow->loan_number ?? $loanRow->id),
+            'អតិថិជនឈ្មោះ :'.$customerName,
+            'ចំនួនខែកម្ចី       :'.$scheduleCounts['total'],
+            'ចំនួនខែបានបង់ :'.$scheduleCounts['paid'],
+            'ចំនួនខែនៅខ្វះ   :'.$scheduleCounts['remaining'],
+            $paymentText,
+        ];
+
+        if ($includePrintUrl) {
+            $lines[] = 'វិក្កយបត្របោះពុម្ព: '.route('loan-management.loans.print', ['loan' => $loan], true);
+        }
+
+        $lines[] = 'ដោយ:'.$collectorName;
+
+        return collect($lines)->flatMap(function ($line) {
+            return explode("\n", (string) $line);
+        })->values()->all();
+    }
+
+    protected function loanPaymentScheduleCounts(int $loan, ?object $loanRow = null): array
+    {
+        $total = 0;
+        $paid = 0;
+
+        if ($this->loanTableExists('loan_payment_schedules')) {
+            $query = DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($query, 'loan_payment_schedules');
+
+            $schedules = $query->get();
+            $total = $schedules->count();
+            $paid = $schedules->filter(function ($schedule) {
+                $status = strtolower((string) ($schedule->status ?? ''));
+                $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
+
+                return in_array($status, ['paid', 'completed'], true) || ($status !== '' && $balance <= 0);
+            })->count();
+        }
+
+        return [
+            'total' => $total ?: (int) ($loanRow->installment_count ?? $loanRow->duration_months ?? 0),
+            'paid' => $paid,
+            'remaining' => max(0, ($total ?: (int) ($loanRow->installment_count ?? $loanRow->duration_months ?? 0)) - $paid),
+        ];
+    }
+
+    protected function paymentTelegramAmountLines(array $paymentLines): string
+    {
+        $cash = 0.0;
+        $banks = [];
+
+        foreach ($paymentLines as $line) {
+            $amount = (float) ($line['amount'] ?? 0);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $method = trim((string) ($line['method_name'] ?? $line['method'] ?? ''));
+            $methodKey = strtolower($method);
+            if ($methodKey === 'cash') {
+                $cash += $amount;
+                continue;
+            }
+
+            $displayMethod = $method !== '' ? $method : 'Bank';
+            $banks[$displayMethod] = ($banks[$displayMethod] ?? 0) + $amount;
+        }
+
+        $lines = [];
+        if ($cash > 0) {
+            $lines[] = 'លុយ '.$this->khmerDollarCentText($cash);
+        }
+
+        foreach ($banks as $method => $amount) {
+            $lines[] = 'និង'.$method.' '.$this->khmerDollarCentText($amount);
+        }
+
+        return $lines ? implode("\n", $lines) : 'លុយ 0ដុល្លា00សេន';
+    }
+
+    protected function khmerDollarCentText(float $amount): string
+    {
+        $amount = round(max(0, $amount), 2);
+        $dollars = (int) floor($amount);
+        $cents = (int) round(($amount - $dollars) * 100);
+
+        if ($cents >= 100) {
+            $dollars++;
+            $cents -= 100;
+        }
+
+        return $dollars.'ដុល្លា'.str_pad((string) $cents, 2, '0', STR_PAD_LEFT).'សេន';
     }
 
     protected function telegramChatIdForEvent(object $location, string $event): string
@@ -2276,54 +2636,44 @@ class LoanInstallmentListController extends Controller
         }
 
         $createdByName = $loanRow->created_by_name_snapshot ?? null;
-        if (empty($createdByName) && !empty($loanRow->created_by) && Schema::hasTable('users')) {
+        $collectorDisplayName = $loanRow->collector_name_snapshot ?? null;
+        $collectorUserId = $loanRow->collector_id ?? ($loanRow->assigned_to ?? null);
+
+        $userIdsToResolve = array_filter([
+            (empty($createdByName) && !empty($loanRow->created_by)) ? (int) $loanRow->created_by : null,
+            (empty($collectorDisplayName) && !empty($collectorUserId)) ? (int) $collectorUserId : null,
+        ]);
+
+        $resolvedUserNames = [];
+        if (!empty($userIdsToResolve) && Schema::hasTable('users')) {
             $userCols = Schema::getColumnListing('users');
-            $namePieces = [];
-            if (in_array('first_name', $userCols, true) && in_array('last_name', $userCols, true)) {
-                $u = DB::table('users')->select('first_name', 'last_name')->where('id', $loanRow->created_by)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->first_name), trim((string) $u->last_name)];
-                }
-            } elseif (in_array('username', $userCols, true)) {
-                $u = DB::table('users')->select('username')->where('id', $loanRow->created_by)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->username)];
-                }
-            } elseif (in_array('name', $userCols, true)) {
-                $u = DB::table('users')->select('name')->where('id', $loanRow->created_by)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->name)];
+            $selectCols = array_values(array_intersect(['id', 'first_name', 'last_name', 'username', 'name'], $userCols));
+            if (!empty($selectCols)) {
+                $users = DB::table('users')->select($selectCols)->whereIn('id', $userIdsToResolve)->get();
+                foreach ($users as $u) {
+                    $pieces = [];
+                    if (isset($u->first_name) || isset($u->last_name)) {
+                        $pieces = [trim((string) ($u->first_name ?? '')), trim((string) ($u->last_name ?? ''))];
+                    } elseif (isset($u->username)) {
+                        $pieces = [trim((string) $u->username)];
+                    } elseif (isset($u->name)) {
+                        $pieces = [trim((string) $u->name)];
+                    }
+                    $resolvedUserNames[(int) $u->id] = trim(implode(' ', array_filter($pieces)));
                 }
             }
-            $createdByName = trim(implode(' ', array_filter($namePieces)));
+        }
+
+        if (empty($createdByName) && !empty($loanRow->created_by)) {
+            $createdByName = $resolvedUserNames[(int) $loanRow->created_by] ?? null;
         }
         if (empty($createdByName)) {
             $createdByName = !empty($loanRow->created_by) ? ('User #'.$loanRow->created_by) : '-';
         }
         $createdByName = Str::of((string) $createdByName)->squish()->value();
 
-        $collectorDisplayName = $loanRow->collector_name_snapshot ?? null;
-        $collectorUserId = $loanRow->collector_id ?? ($loanRow->assigned_to ?? null);
-        if (empty($collectorDisplayName) && !empty($collectorUserId) && Schema::hasTable('users')) {
-            $userCols = Schema::getColumnListing('users');
-            $namePieces = [];
-            if (in_array('first_name', $userCols, true) && in_array('last_name', $userCols, true)) {
-                $u = DB::table('users')->select('first_name', 'last_name')->where('id', $collectorUserId)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->first_name), trim((string) $u->last_name)];
-                }
-            } elseif (in_array('username', $userCols, true)) {
-                $u = DB::table('users')->select('username')->where('id', $collectorUserId)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->username)];
-                }
-            } elseif (in_array('name', $userCols, true)) {
-                $u = DB::table('users')->select('name')->where('id', $collectorUserId)->first();
-                if ($u) {
-                    $namePieces = [trim((string) $u->name)];
-                }
-            }
-            $collectorDisplayName = trim(implode(' ', array_filter($namePieces)));
+        if (empty($collectorDisplayName) && !empty($collectorUserId)) {
+            $collectorDisplayName = $resolvedUserNames[(int) $collectorUserId] ?? null;
         }
         if (empty($collectorDisplayName)) {
             $collectorDisplayName = !empty($collectorUserId) ? ('User #'.$collectorUserId) : '-';
@@ -2844,23 +3194,30 @@ class LoanInstallmentListController extends Controller
         ]);
 
         abort_if(! $this->loanTableExists('loans'), 404);
-        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update([
-            'status' => $payload['status'],
-            'updated_at' => now(),
-        ]);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
 
-        if ($this->loanTableExists('loan_status_logs')) {
-            $cols = $this->loanTableColumns('loan_status_logs');
-            $row = [
-                'loan_id' => $loan,
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $payload) {
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update([
                 'status' => $payload['status'],
-                'changed_by' => auth()->id(),
-                'note' => 'Status changed from installment list',
-                'created_at' => now(),
                 'updated_at' => now(),
-            ];
-            DB::connection('mysql_loan')->table('loan_status_logs')->insert(array_intersect_key($row, array_flip($cols)));
-        }
+            ]);
+
+            if ($this->loanTableExists('loan_status_logs')) {
+                $cols = $this->loanTableColumns('loan_status_logs');
+                $row = [
+                    'loan_id' => $loan,
+                    'status' => $payload['status'],
+                    'from_status' => $loanRow->status ?? null,
+                    'to_status' => $payload['status'],
+                    'changed_by' => auth()->id(),
+                    'note' => 'Status changed from installment list',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                DB::connection('mysql_loan')->table('loan_status_logs')->insert(array_intersect_key($row, array_flip($cols)));
+            }
+        });
 
         return response()->json(['success' => true, 'message' => 'Status updated']);
     }

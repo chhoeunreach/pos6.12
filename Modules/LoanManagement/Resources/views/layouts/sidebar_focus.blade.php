@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
         toolsMonthlyImport: "{{ route('loan-management.tools.monthly-import-export') }}",
         toolsLoanImport: "{{ route('loan-management.tools.loan-import-export') }}",
         toolsNotify: "{{ route('loan-management.tools.send-notification') }}",
+        activityLogs: "{{ route('loan-management.activity-logs.index') }}",
         settingsLocations: "{{ route('loan-management.locations.index') }}",
         settingsPaymentMethods: "{{ route('loan-management.settings.payment-methods') }}",
         settingsCurrencies: "{{ route('loan-management.settings.currencies') }}"
@@ -83,12 +84,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 <li class="${activeClass(links.reportsAba)}"><a href="${links.reportsAba}"><i class="fa fa-qrcode"></i> ABA Transactions Report</a></li>
             </ul>
         </li>
-        <li class="treeview installment-section section-tools ${treeOpenClass([links.toolsMonthlyImport, links.toolsLoanImport, links.toolsNotify])}" data-section="tools">
+        <li class="treeview installment-section section-tools ${treeOpenClass([links.toolsMonthlyImport, links.toolsLoanImport, links.toolsNotify, links.activityLogs])}" data-section="tools">
             <a href="#"><i class="fa fa-cogs"></i> <span>Tools</span><i class="fa fa-angle-left pull-right"></i></a>
-            <ul class="treeview-menu" ${treeMenuStyle([links.toolsMonthlyImport, links.toolsLoanImport, links.toolsNotify])}>
+            <ul class="treeview-menu" ${treeMenuStyle([links.toolsMonthlyImport, links.toolsLoanImport, links.toolsNotify, links.activityLogs])}>
                 <li class="${activeClass(links.toolsMonthlyImport)}"><a href="${links.toolsMonthlyImport}"><i class="fa fa-exchange"></i> Monthly Payments Import/Export</a></li>
                 <li class="${activeClass(links.toolsLoanImport)}"><a href="${links.toolsLoanImport}"><i class="fa fa-upload"></i> Loan Import/Export</a></li>
                 <li class="${activeClass(links.toolsNotify)}"><a href="${links.toolsNotify}"><i class="fa fa-bell"></i> Send Notification</a></li>
+                <li class="${activeClass(links.activityLogs)}"><a href="${links.activityLogs}"><i class="fa fa-history"></i> Activity Logs</a></li>
             </ul>
         </li>
         <li class="treeview installment-section section-settings ${treeOpenClass([links.settingsGeneral, links.settingsLocations, links.settingsPaymentMethods, links.settingsCurrencies])}" data-section="settings">

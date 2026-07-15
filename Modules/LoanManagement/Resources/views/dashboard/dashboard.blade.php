@@ -2409,6 +2409,31 @@
             return $('<div>').text(value == null ? '-' : value).html();
         }
 
+        function copyDashboardText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            }
+
+            var deferred = $.Deferred();
+            var textarea = document.createElement('textarea');
+            textarea.value = text || '';
+            textarea.setAttribute('readonly', 'readonly');
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+
+            try {
+                document.execCommand('copy');
+                deferred.resolve();
+            } catch (e) {
+                deferred.reject(e);
+            }
+
+            document.body.removeChild(textarea);
+            return deferred.promise();
+        }
+
         function openDashboardIframeModal(title, url) {
             if (!url || !$('.view_modal').length) {
                 return;
@@ -2467,6 +2492,7 @@
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 var quickPayUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/quick-pay";
                 var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
+                var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
                 var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
                 var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
                 var statusBadge = isOverdue
@@ -2489,6 +2515,7 @@
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
+                    + '<li><button type="button" class="js-copy-loan-payment-info" data-url="' + copyInfoUrl + '"><i class="fa fa-copy"></i> Copy</button></li>'
                     + '</ul>'
                     + '</div>'
                     + '</td>'
@@ -2516,6 +2543,48 @@
                     $('[data-loan-table="dashboard_quick_search"]').html('<tr><td colspan="4" class="text-center text-danger">Search failed.</td></tr>');
                 });
         }
+
+        $(document).on('click', '.js-copy-loan-payment-info', function (event) {
+            event.preventDefault();
+
+            var $button = $(this);
+            var url = $button.data('url');
+            if (!url) {
+                return;
+            }
+
+            $button.prop('disabled', true);
+            fetch(url, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) {
+                    return response.ok ? response.json() : Promise.reject();
+                })
+                .then(function (res) {
+                    var text = res && res.data ? (res.data.text || '') : '';
+                    return copyDashboardText(text);
+                })
+                .then(function () {
+                    if (window.toastr) {
+                        toastr.success('Copied loan information');
+                    }
+                })
+                .catch(function () {
+                    if (window.toastr) {
+                        toastr.error('Unable to copy loan information');
+                    } else {
+                        alert('Unable to copy loan information');
+                    }
+                })
+                .finally(function () {
+                    $button.prop('disabled', false);
+                });
+        });
 
         function renderFollowUps(rows) {
             var html = '';

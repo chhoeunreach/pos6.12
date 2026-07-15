@@ -35,6 +35,23 @@ class TelegramBotService
         return $payload;
     }
 
+    /**
+     * Build payload for sendPhoto.
+     */
+    protected function sendPhotoPayload(string $chat_id, ?string $caption): array
+    {
+        $payload = [
+            'chat_id' => $chat_id,
+            'parse_mode' => 'HTML',
+        ];
+
+        if ($caption !== null && trim($caption) !== '') {
+            $payload['caption'] = $caption;
+        }
+
+        return $payload;
+    }
+
     public function sendMessageToChat(string $chat_id, string $message): void
     {
         $chat_id = trim($chat_id);
@@ -45,7 +62,7 @@ class TelegramBotService
             throw new \RuntimeException('Telegram config error: chat_id is empty');
         }
 
-        $response = Http::timeout(15)->retry(2, 250)->asForm()->post($this->baseUrl() . '/sendMessage', [
+        $response = Http::timeout(5)->retry(1, 250)->asForm()->post($this->baseUrl() . '/sendMessage', [
             'chat_id' => $chat_id,
             'text' => $message,
             'parse_mode' => 'HTML',
@@ -91,6 +108,42 @@ class TelegramBotService
 
         if ($response->failed()) {
             throw new \RuntimeException('Telegram sendDocument failed: HTTP ' . $response->status() . ' - ' . $response->body());
+        }
+    }
+
+    public function sendPhotoToChat(string $chat_id, string $file_path, ?string $caption = null, ?string $filename = null): void
+    {
+        $chat_id = trim($chat_id);
+        if ($this->token === '') {
+            throw new \RuntimeException('Telegram config error: TELEGRAM_BOT_TOKEN is empty');
+        }
+        if ($chat_id === '') {
+            throw new \RuntimeException('Telegram config error: chat_id is empty');
+        }
+
+        $filename = $filename ?: basename($file_path);
+
+        if (! is_readable($file_path)) {
+            throw new \RuntimeException('Telegram sendPhoto failed: file not readable: ' . $file_path);
+        }
+
+        $handle = fopen($file_path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Telegram sendPhoto failed: unable to open file: ' . $file_path);
+        }
+
+        try {
+            $response = Http::timeout(30)->retry(2, 250)->attach(
+                'photo',
+                $handle,
+                $filename
+            )->post($this->baseUrl() . '/sendPhoto', $this->sendPhotoPayload($chat_id, $caption));
+        } finally {
+            fclose($handle);
+        }
+
+        if ($response->failed()) {
+            throw new \RuntimeException('Telegram sendPhoto failed: HTTP ' . $response->status() . ' - ' . $response->body());
         }
     }
 }

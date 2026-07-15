@@ -20,13 +20,14 @@
         'payment_method' => __('lang_v1.payment_method'),
         'amount' => __('sale.amount'),
         'payment_ref_no' => __('account.payment_ref_no'),
+        'payment_doc' => 'Payment Doc',
         'payment_note' => __('lang_v1.payment_note'),
     ];
 @endphp
 
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
-        {!! Form::open(['url' => route('loan-management.loans.payment.store', $loanRow->id), 'method' => 'post', 'id' => 'loan_payment_add_form']) !!}
+        {!! Form::open(['url' => route('loan-management.loans.payment.store', $loanRow->id), 'method' => 'post', 'id' => 'loan_payment_add_form', 'files' => true]) !!}
         <input type="hidden" name="return_to" value="{{ request('return_to', route('loan-management.dashboard')) }}">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
@@ -134,7 +135,7 @@
                         </div>
                         <div class="box-body loan-payment-lines">
                             <div class="row loan-payment-line" data-index="0">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_method', __('lang_v1.payment_method') . ':*') !!}
                                         <div class="input-group">
@@ -145,7 +146,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_amount', __('sale.amount') . ':*') !!}
                                         <div class="input-group">
@@ -156,7 +157,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_reference_number', __('account.payment_ref_no') . ':') !!}
                                         <div class="input-group">
@@ -165,6 +166,13 @@
                                             </span>
                                             <input type="text" name="payment_lines[0][reference_number]" id="payment_lines_0_reference_number" class="form-control">
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        {!! Form::label('payment_lines_0_payment_docs', 'Payment Doc:') !!}
+                                        <input type="file" name="payment_lines[0][payment_docs][]" id="payment_lines_0_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
+                                        <small class="help-block payment-doc-help">Take, upload, or paste multiple files.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -207,6 +215,14 @@ $(function () {
     var payOffBalance = parseFloat(@json($payOffAmount)) || normalLoanBalance;
     var previousScheduleId = $form.find('[name="schedule_id"]').val();
     var labels = @json($paymentLineLabels);
+    var copyInfo = @json($copyInfo ?? []);
+    var copyInfoUrl = '{{ route('loan-management.loans.payment.copy-info', $loanRow->id) }}';
+
+    if (!copyInfo || Object.keys(copyInfo).length === 0) {
+        $.ajax({ url: copyInfoUrl, dataType: 'json' })
+            .done(function (res) { if (res.success && res.data && res.data.info) { copyInfo = res.data.info; } })
+            .fail(function () {});
+    }
 
     function optionsHtml(selected) {
         return Object.keys(paymentTypes).map(function (key) {
@@ -255,6 +271,81 @@ $(function () {
         $form.find('.loan-schedule-display').text(text);
     }
 
+    function moneyText(value) {
+        return (parseFloat(value) || 0).toFixed(2);
+    }
+
+    function paymentCopyAmounts() {
+        var cash = 0;
+        var bank = 0;
+
+        $form.find('.loan-payment-line').each(function () {
+            var amount = parseFloat($(this).find('.payment-line-amount').val()) || 0;
+            var method = String($(this).find('.payment-line-method').val() || '').toLowerCase();
+            var methodText = String($(this).find('.payment-line-method option:selected').text() || '').toLowerCase();
+            var isCash = method.indexOf('cash') !== -1 || methodText.indexOf('cash') !== -1;
+
+            if (isCash) {
+                cash += amount;
+            } else {
+                bank += amount;
+            }
+        });
+
+        return {
+            cash: cash,
+            bank: bank
+        };
+    }
+
+    function loanPaymentCopyText() {
+        return [
+            copyInfo.invoice || '',
+            copyInfo.name_khmer || '',
+            copyInfo.phone || '',
+            copyInfo.id_card || '',
+            copyInfo.village || '',
+            copyInfo.commune || '',
+            copyInfo.district || '',
+            copyInfo.province || '',
+            copyInfo.product || '',
+            copyInfo.qty || '',
+            copyInfo.unit_price || '',
+            copyInfo.amount_cash || '0.00',
+            copyInfo.amount_bank || '0.00',
+            copyInfo.duration_m || '',
+            copyInfo.interest_percent || '0.00',
+            copyInfo.first_due || ''
+        ].map(function (value) {
+            return String(value == null ? '' : value).trim();
+        }).join(',');
+    }
+
+    function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+
+        var deferred = $.Deferred();
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        try {
+            document.execCommand('copy');
+            deferred.resolve();
+        } catch (e) {
+            deferred.reject(e);
+        }
+
+        document.body.removeChild(textarea);
+        return deferred.promise();
+    }
+
     function applyPayTarget() {
         if ($form.find('.loan-pay-off-option').is(':checked')) {
             previousScheduleId = $form.find('[name="schedule_id"]').val() || previousScheduleId;
@@ -279,26 +370,74 @@ $(function () {
         $form.find('.remove-loan-payment-line').prop('disabled', count <= 1);
     }
 
+    function updatePaymentDocHelp($input) {
+        var files = $input[0].files || [];
+        var text = files.length ? files.length + ' file(s) selected' : 'Take, upload, or paste multiple files.';
+        $input.closest('.form-group').find('.payment-doc-help').text(text);
+    }
+
+    function appendFilesToInput(input, files) {
+        if (!input || !files || !files.length || typeof DataTransfer === 'undefined') {
+            return false;
+        }
+
+        var transfer = new DataTransfer();
+        Array.prototype.forEach.call(input.files || [], function (file) {
+            transfer.items.add(file);
+        });
+        Array.prototype.forEach.call(files, function (file) {
+            transfer.items.add(file);
+        });
+        input.files = transfer.files;
+        updatePaymentDocHelp($(input));
+
+        return true;
+    }
+
+    function clipboardFiles(event) {
+        var clipboard = event.originalEvent && event.originalEvent.clipboardData;
+        if (!clipboard) {
+            return [];
+        }
+
+        var files = [];
+        Array.prototype.forEach.call(clipboard.items || [], function (item) {
+            if (item.kind === 'file') {
+                var file = item.getAsFile();
+                if (file) {
+                    files.push(file);
+                }
+            }
+        });
+
+        return files;
+    }
+
     $form.on('click', '.add-loan-payment-line', function () {
         var index = $form.find('.loan-payment-line').length;
         var suggestedAmount = remainingBeforeNewRow().toFixed(2);
         var row = [
             '<div class="row loan-payment-line" data-index="' + index + '">',
-                '<div class="col-md-3"><div class="form-group">',
+                '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_method">' + labels.payment_method + ':*</label>',
                     '<div class="input-group"><span class="input-group-addon"><i class="fas fa-money-bill-alt"></i></span>',
                     '<select name="payment_lines[' + index + '][method]" id="payment_lines_' + index + '_method" class="form-control payment-line-method" style="width:100%;" required>' + optionsHtml(defaultPaymentMethod) + '</select>',
                     '</div></div></div>',
-                '<div class="col-md-3"><div class="form-group">',
+                '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_amount">' + labels.amount + ':*</label>',
                     '<div class="input-group"><span class="input-group-addon"><i class="fas fa-money-bill-alt"></i></span>',
                     '<input type="number" step="0.01" min="0.01" name="payment_lines[' + index + '][amount]" id="payment_lines_' + index + '_amount" class="form-control input_number payment-line-amount" value="' + suggestedAmount + '" required>',
                     '</div></div></div>',
-                '<div class="col-md-3"><div class="form-group">',
+                '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_reference_number">' + labels.payment_ref_no + ':</label>',
                     '<div class="input-group"><span class="input-group-addon"><i class="fa fa-hashtag"></i></span>',
                     '<input type="text" name="payment_lines[' + index + '][reference_number]" id="payment_lines_' + index + '_reference_number" class="form-control">',
                     '</div></div></div>',
+                '<div class="col-md-3"><div class="form-group">',
+                    '<label for="payment_lines_' + index + '_payment_docs">' + labels.payment_doc + ':</label>',
+                    '<input type="file" name="payment_lines[' + index + '][payment_docs][]" id="payment_lines_' + index + '_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>',
+                    '<small class="help-block payment-doc-help">Take, upload, or paste multiple files.</small>',
+                    '</div></div>',
                 '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_note">' + labels.payment_note + ':</label>',
                     '<input type="text" name="payment_lines[' + index + '][note]" id="payment_lines_' + index + '_note" class="form-control">',
@@ -316,6 +455,32 @@ $(function () {
         $(this).closest('.loan-payment-line').remove();
         refreshRemoveButtons();
         updateLoanPaymentTotal();
+    });
+
+    $form.on('change', '.payment-line-doc', function () {
+        updatePaymentDocHelp($(this));
+    });
+
+    $form.on('focus click', '.payment-line-doc', function () {
+        $form.find('.payment-line-doc').removeClass('active-payment-doc-input');
+        $(this).addClass('active-payment-doc-input');
+    });
+
+    $form.on('paste', function (event) {
+        var files = clipboardFiles(event);
+        if (!files.length) {
+            return;
+        }
+
+        var input = $form.find('.payment-line-doc.active-payment-doc-input')[0]
+            || $form.find('.payment-line-doc:visible').last()[0];
+
+        if (appendFilesToInput(input, files)) {
+            event.preventDefault();
+            if (window.toastr) {
+                toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+            }
+        }
     });
 
     $form.on('input change', '.payment-line-amount', updateLoanPaymentTotal);
@@ -338,7 +503,9 @@ $(function () {
         $.ajax({
             url: $form.attr('action'),
             method: 'POST',
-            data: $form.serialize(),
+            data: new FormData($form[0]),
+            processData: false,
+            contentType: false,
             dataType: 'json',
             success: function (res) {
                 if (window.toastr) {

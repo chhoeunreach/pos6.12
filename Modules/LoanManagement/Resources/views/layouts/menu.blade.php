@@ -16,17 +16,6 @@
         <li><a href="{{ $lmUrl('loan-management.dashboard.index', [], '/loan-management/dashboard/main') }}"><i class="fa fa-dashboard"></i> Dashboard</a></li>
 
         <li class="treeview">
-            <a href="#"><i class="fa fa-credit-card"></i> Loan Operations <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-            <ul class="treeview-menu">
-                <li><a href="{{ $lmUrl('loan-management.loans.create', [], '/loan-management/loans/create') }}"><i class="fa fa-plus"></i> New Loans</a></li>
-                <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'active-loans'], '/loan-management/operations/active-loans') }}"><i class="fa fa-check"></i> Active Loans</a></li>
-                <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'due-today'], '/loan-management/operations/due-today') }}"><i class="fa fa-calendar-check-o"></i> Due Today</a></li>
-                <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'partial-payments'], '/loan-management/operations/partial-payments') }}"><i class="fa fa-adjust"></i> Partial Payments</a></li>
-                <li><a href="{{ $lmUrl('loan-management.operations.page', ['page' => 'closed-accounts'], '/loan-management/operations/closed-accounts') }}"><i class="fa fa-lock"></i> Closed Accounts</a></li>
-            </ul>
-        </li>
-
-        <li class="treeview">
             <a href="#"><i class="fa fa-phone"></i> Collection Cases <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 <li><a href="{{ $lmUrl('loan-management.collection.page', ['page' => 'overdue-accounts'], '/loan-management/collection/overdue-accounts') }}"><i class="fa fa-exclamation-triangle"></i> Overdue Accounts @if($badgeOverdue > 0)<span class="label label-danger pull-right">{{ $badgeOverdue }}</span>@endif</a></li>
@@ -77,7 +66,15 @@
                 <li><a href="{{ $lmUrl('loan-management.payments.index', [], '/loan-management/payments/index') }}"><i class="fa fa-dollar"></i> Payments</a></li>
                 <li><a href="{{ $lmUrl('loan-management.payment-history.index', [], '/loan-management/payment-history') }}"><i class="fa fa-history"></i> Payment History</a></li>
                 <li><a href="{{ $lmUrl('loan-management.aba.index', [], '/loan-management/finance/aba-transactions') }}"><i class="fa fa-qrcode"></i> ABA Transactions</a></li>
-                <li><a href="{{ $lmUrl('loan-management.collection.reports', [], '/loan-management/collection-reports') }}"><i class="fa fa-line-chart"></i> Reports</a></li>
+            </ul>
+        </li>
+
+        <li class="treeview">
+            <a href="#"><i class="fa fa-bar-chart"></i> Reports <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
+            <ul class="treeview-menu">
+                <li><a href="{{ $lmUrl('loan-management.reports.index', [], '/loan-management/reports/index') }}"><i class="fa fa-list-alt"></i> Installment Reports</a></li>
+                <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'monthly'], '/loan-management/payments/index?payment_type=monthly') }}"><i class="fa fa-money"></i> Collection Payment Reports</a></li>
+                <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'loan'], '/loan-management/payments/index?payment_type=loan') }}"><i class="fa fa-bank"></i> Deposit Payment Reports</a></li>
             </ul>
         </li>
 
@@ -87,6 +84,7 @@
                 <li><a href="{{ $lmUrl('loan-management.tools.loan-import-export', [], '/loan-management/tools/loan-import-export') }}"><i class="fa fa-file-excel-o"></i> Loan Import/Export</a></li>
                 <li><a href="{{ $lmUrl('loan-management.tools.monthly-import-export', [], '/loan-management/tools/monthly-import-export') }}"><i class="fa fa-exchange"></i> Monthly Payments Import/Export</a></li>
                 <li><a href="{{ $lmUrl('loan-management.gps.index', [], '/loan-management/gps') }}"><i class="fa fa-map"></i> GPS Tracking</a></li>
+                <li><a href="{{ $lmUrl('loan-management.activity-logs.index', [], '/loan-management/tools/activity-logs') }}"><i class="fa fa-history"></i> Activity Logs</a></li>
             </ul>
         </li>
 

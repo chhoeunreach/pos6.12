@@ -29,7 +29,7 @@
             </div>
         </div>
 
-        <form id="lmQuickPayForm" method="POST" action="{{ route('loan-management.loans.payment.store', $loanRow->id) }}">
+        <form id="lmQuickPayForm" method="POST" action="{{ route('loan-management.loans.payment.store', $loanRow->id) }}" enctype="multipart/form-data">
             @csrf
             <input type="hidden" name="return_to" value="{{ url('/loan-management/loans/'.$loanRow->id.'/view') }}">
             <input type="hidden" name="pay_off" id="lmPayPayOff" value="0">
@@ -104,6 +104,11 @@
                         <div class="lm-pay-field">
                             <label>Reference #</label>
                             <input type="text" name="payment_lines[0][reference_number]" class="lm-pay-field-input" placeholder="Ref #">
+                        </div>
+                        <div class="lm-pay-field">
+                            <label>Payment Doc</label>
+                            <input type="file" name="payment_lines[0][payment_docs][]" class="lm-pay-field-input lm-payment-doc-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
+                            <small class="lm-payment-doc-help">Take, upload, or paste multiple files.</small>
                         </div>
                         <div class="lm-pay-field">
                             <label>Note</label>
@@ -208,6 +213,7 @@
     font-size: 14px; outline: none;
 }
 .lm-pay-field-input:focus { border-color: #2563eb; }
+.lm-payment-doc-help { display: block; margin-top: 4px; font-size: 11px; color: #94a3b8; }
 
 .lm-pay-footer {
     padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -282,6 +288,67 @@ $(function() {
         $form.find('#lmPayFooterTotal').text(amount.toFixed(2));
     }
 
+    function updatePaymentDocHelp($input) {
+        var files = $input[0].files || [];
+        var text = files.length ? files.length + ' file(s) selected' : 'Take, upload, or paste multiple files.';
+        $input.closest('.lm-pay-field').find('.lm-payment-doc-help').text(text);
+    }
+
+    function appendFilesToInput(input, files) {
+        if (!input || !files || !files.length || typeof DataTransfer === 'undefined') {
+            return false;
+        }
+
+        var transfer = new DataTransfer();
+        Array.prototype.forEach.call(input.files || [], function(file) {
+            transfer.items.add(file);
+        });
+        Array.prototype.forEach.call(files, function(file) {
+            transfer.items.add(file);
+        });
+        input.files = transfer.files;
+        updatePaymentDocHelp($(input));
+
+        return true;
+    }
+
+    function clipboardFiles(event) {
+        var clipboard = event.originalEvent && event.originalEvent.clipboardData;
+        if (!clipboard) {
+            return [];
+        }
+
+        var files = [];
+        Array.prototype.forEach.call(clipboard.items || [], function(item) {
+            if (item.kind === 'file') {
+                var file = item.getAsFile();
+                if (file) {
+                    files.push(file);
+                }
+            }
+        });
+
+        return files;
+    }
+
+    $form.on('change', '.lm-payment-doc-input', function() {
+        updatePaymentDocHelp($(this));
+    });
+
+    $form.on('paste', function(event) {
+        var files = clipboardFiles(event);
+        if (!files.length) {
+            return;
+        }
+
+        if (appendFilesToInput($form.find('.lm-payment-doc-input')[0], files)) {
+            event.preventDefault();
+            if (window.toastr) {
+                toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+            }
+        }
+    });
+
     // AJAX submit
     $form.off('submit.lmQuickPay').on('submit.lmQuickPay', function(e) {
         e.preventDefault();
@@ -291,7 +358,9 @@ $(function() {
         $.ajax({
             url: $form.attr('action'),
             method: 'POST',
-            data: $form.serialize(),
+            data: new FormData($form[0]),
+            processData: false,
+            contentType: false,
             dataType: 'json',
             success: function(res) {
                 if (window.toastr) toastr.success(res.message || 'Payment saved!');

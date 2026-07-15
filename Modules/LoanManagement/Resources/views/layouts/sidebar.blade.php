@@ -6,12 +6,6 @@
     $menu = [
         ['label' => 'Dashboard', 'icon' => 'fa fa-dashboard', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view'],
         ['label' => 'Loan Operations', 'icon' => 'fa fa-credit-card', 'children' => [
-            ['label' => 'New Loans', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'new-loans'], 'can' => 'loan_management.view'],
-            ['label' => 'Active Loans', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'active-loans'], 'can' => 'loan_management.view'],
-            ['label' => 'Due Today', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view'],
-            ['label' => 'Partial Payments', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.view'],
-            ['label' => 'Closed Accounts', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view'],
-            ['label' => 'Create Loan', 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create'],
             ['label' => 'All Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view'],
         ]],
         ['label' => 'Collection Cases', 'icon' => 'fa fa-phone', 'children' => [
@@ -47,12 +41,17 @@
             ['label' => 'Payments', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'can' => 'loan_management.view'],
             ['label' => 'Payment History', 'icon' => 'fa fa-history', 'route' => 'loan-management.payment-history.index', 'can' => 'loan_management.view'],
             ['label' => 'ABA Transactions', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.aba.index', 'can' => 'loan_management.aba.view'],
-            ['label' => 'Reports', 'icon' => 'fa fa-bar-chart', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view'],
+        ]],
+        ['label' => 'Reports', 'icon' => 'fa fa-bar-chart', 'children' => [
+            ['label' => 'Installment Reports', 'icon' => 'fa fa-list-alt', 'route' => 'loan-management.reports.index', 'can' => 'loan_management.reports.view'],
+            ['label' => 'Collection Payment Reports', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'monthly'], 'can' => 'loan_management.reports.view'],
+            ['label' => 'Deposit Payment Reports', 'icon' => 'fa fa-bank', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'loan'], 'can' => 'loan_management.reports.view'],
         ]],
         ['label' => 'Tools', 'icon' => 'fa fa-wrench', 'children' => [
             ['label' => 'Loan Import/Export', 'route' => 'loan-management.tools.loan-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
             ['label' => 'Monthly Payments Import/Export', 'route' => 'loan-management.tools.monthly-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
             ['label' => 'GPS Tracking', 'route' => 'loan-management.gps.index', 'can' => 'loan_management.gps.view'],
+            ['label' => 'Activity Logs', 'icon' => 'fa fa-history', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.view'],
         ]],
         ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [
             ['label' => 'Locations', 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view'],

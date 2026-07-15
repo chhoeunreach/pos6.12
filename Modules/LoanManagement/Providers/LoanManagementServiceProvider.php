@@ -12,6 +12,7 @@ use Modules\LoanManagement\Console\TestChatSchemaCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
 use Modules\LoanManagement\Helpers\LoanMenuHelper;
 use Modules\LoanManagement\Http\Middleware\LoanPermissionMiddleware;
+use Modules\LoanManagement\Http\Middleware\RecordLoanActivity;
 use Modules\LoanManagement\Observers\TransactionInvoicePrefixObserver;
 
 class LoanManagementServiceProvider extends ServiceProvider
@@ -61,6 +62,7 @@ class LoanManagementServiceProvider extends ServiceProvider
     {
         $router = $this->app->make(Router::class);
         $router->aliasMiddleware('loan.permission', LoanPermissionMiddleware::class);
+        $router->aliasMiddleware('loan.activity', RecordLoanActivity::class);
     }
 
     private function registerCustomerLoanAuth(): void

@@ -97,18 +97,21 @@ class StaffMobileActionController extends Controller
                     if ($remaining <= 0) {
                         break;
                     }
-                    $due = (float) ($s->amount_balance ?? $s->amount_due ?? 0);
+                    $due = (float) ($s->balance_amount ?? $s->amount_balance ?? $s->schedule_amount ?? $s->amount_due ?? 0);
                     if ($due <= 0) {
                         continue;
                     }
                     $applied = min($remaining, $due);
-                    $newPaid = (float) ($s->amount_paid ?? 0) + $applied;
+                    $existingPaid = (float) ($s->paid_amount ?? $s->amount_paid ?? 0);
+                    $newPaid = $existingPaid + $applied;
                     $newBalance = max(0, $due - $applied);
                     $status = $newBalance <= 0 ? 'paid' : 'partial';
 
                     DB::connection($this->conn)->table('loan_payment_schedules')->where('id', $s->id)->update($this->safeColumns('loan_payment_schedules', [
                         'amount_paid' => $newPaid,
+                        'paid_amount' => $newPaid,
                         'amount_balance' => $newBalance,
+                        'balance_amount' => $newBalance,
                         'status' => $status,
                         'paid_at' => $newBalance <= 0 ? $payAt : null,
                         'updated_at' => now(),
@@ -118,9 +121,38 @@ class StaffMobileActionController extends Controller
             }
 
             $loanFresh = DB::connection($this->conn)->table('loans')->where('id', $data['loan_id'])->first();
-            $newPaidAmount = (float) ($loanFresh->paid_amount ?? 0) + $amount;
-            $totalAmount = (float) ($loanFresh->total_amount ?? 0);
-            $newBalanceAmount = max(0, $totalAmount - $newPaidAmount);
+
+            $paymentAmountColumn = 'amount';
+            if (Schema::connection($this->conn)->hasColumn('loan_payments', 'total_paid_base')) {
+                $paymentAmountColumn = 'total_paid_base';
+            } elseif (Schema::connection($this->conn)->hasColumn('loan_payments', 'total_paid')) {
+                $paymentAmountColumn = 'total_paid';
+            }
+            $newPaidAmount = (float) DB::connection($this->conn)
+                ->table('loan_payments')
+                ->where('loan_id', $data['loan_id'])
+                ->sum($paymentAmountColumn);
+
+            $scheduleBalance = 0.0;
+            $hasScheduleBalance = false;
+            if (Schema::connection($this->conn)->hasTable('loan_payment_schedules')) {
+                $balanceQuery = DB::connection($this->conn)->table('loan_payment_schedules')->where('loan_id', $data['loan_id']);
+                if (Schema::connection($this->conn)->hasColumn('loan_payment_schedules', 'balance_amount')) {
+                    $scheduleBalance = (float) $balanceQuery->sum('balance_amount');
+                    $hasScheduleBalance = true;
+                } elseif (Schema::connection($this->conn)->hasColumn('loan_payment_schedules', 'amount_balance')) {
+                    $scheduleBalance = (float) $balanceQuery->sum('amount_balance');
+                    $hasScheduleBalance = true;
+                }
+            }
+
+            if ($hasScheduleBalance) {
+                $newBalanceAmount = $scheduleBalance;
+            } else {
+                $principal = (float) ($loanFresh->principal_amount ?? $loanFresh->total_payable_amount ?? $loanFresh->total_amount ?? 0);
+                $newBalanceAmount = max(0, $principal - $newPaidAmount);
+            }
+
             DB::connection($this->conn)->table('loans')->where('id', $data['loan_id'])->update($this->safeColumns('loans', [
                 'paid_amount' => $newPaidAmount,
                 'balance_amount' => $newBalanceAmount,

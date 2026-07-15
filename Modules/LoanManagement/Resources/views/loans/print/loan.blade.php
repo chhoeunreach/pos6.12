@@ -593,7 +593,7 @@
         <table class="info-table">
             <tr><td class="label">លេខកិច្ចសន្យា</td><td class="value red">{{ $loanRow->loan_number ?? $loanRow->id }}</td></tr>
             <tr><td class="label">Invoice No</td><td class="value">{{ $sourceInvoiceDisplay ?? '-' }}</td></tr>
-            <tr><td class="label">កាលបរិច្ឆេទខ្ចីប្រាក់</td><td class="value">{{ $loanDate }}</td></tr>
+            <tr><td class="label">កាលបរិច្ឆេទទី១</td><td class="value">{{ $firstDueDate ? \Carbon\Carbon::parse($firstDueDate)->format('m-d-Y') : '-' }}</td></tr>
             <tr><td class="label">កាលបរិច្ឆេទបញ្ចប់</td><td class="value">{{ $lastDueDate ? \Carbon\Carbon::parse($lastDueDate)->format('m-d-Y') : '-' }}</td></tr>
         </table>
         <table class="info-table">
@@ -602,7 +602,7 @@
             <tr><td class="label">លេខសម្គាល់</td><td class="value">{{ $customer->custom_field1 ?? '-' }}</td></tr>
         </table>
         <table class="info-table">
-            <tr><td class="label">កាលបរិច្ឆេទទី១</td><td class="value">{{ $firstDueDate ? \Carbon\Carbon::parse($firstDueDate)->format('m-d-Y') : '-' }}</td></tr>
+            <tr><td class="label">កាលបរិច្ឆេទខ្ចីប្រាក់</td><td class="value">{{ $loanDate }}</td></tr>
             <tr><td class="label">អ្នករួមខ្ចី</td><td class="value">{{ $customer->co_borrower ?? '-' }}</td></tr>
             <tr><td class="label">លេខអ្នករួមខ្ចី</td><td class="value">{{ $customer->co_borrower_phone ?? '-' }}</td></tr>
         </table>

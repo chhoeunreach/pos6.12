@@ -5,6 +5,7 @@ use Modules\LoanManagement\Http\Controllers\DashboardController;
 use Modules\LoanManagement\Http\Controllers\AdminCustomerTrackingController;
 use Modules\LoanManagement\Http\Controllers\CambodiaAddressController;
 use Modules\LoanManagement\Http\Controllers\InstallController;
+use Modules\LoanManagement\Http\Controllers\LoanActivityLogController;
 use Modules\LoanManagement\Http\Controllers\LoanCustomerController;
 use Modules\LoanManagement\Http\Controllers\LoanDashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanCreateController;
@@ -16,7 +17,7 @@ use Modules\LoanManagement\Http\Controllers\LoanLocationController;
 use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
 use Modules\LoanManagement\Http\Controllers\SettingsController;
 
-Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])
+Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.activity'])
     ->prefix('loan-management')
     ->group(function () {
         $createLoanPermission = 'loan.permission:loan_management.loans.create|loan_management.create';
@@ -78,6 +79,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/loans/{loan}/payment/quick-pay', [LoanInstallmentListController::class, 'mobileQuickPay'])->name('loan-management.loans.payment.quick-pay')->middleware('can:loan_management.view');
         Route::post('/loans/{loan}/payment', [LoanInstallmentListController::class, 'storePayment'])->name('loan-management.loans.payment.store')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/convert-to-pos', [LoanInstallmentListController::class, 'convertToPos'])->name('loan-management.loans.convert-to-pos')->middleware('can:loan_management.view');
+        Route::get('/loans/{loan}/payment/copy-info', [LoanInstallmentListController::class, 'paymentCopyInfo'])->name('loan-management.loans.payment.copy-info')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/view', [LoanInstallmentListController::class, 'show'])->name('loan-management.loans.view')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/sections/show', [LoanInstallmentListController::class, 'showSections'])->name('loan-management.loans.sections.show')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/edit', [LoanInstallmentListController::class, 'edit'])->name('loan-management.loans.edit')->middleware('can:loan_management.edit');
@@ -175,6 +177,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/tools/monthly-import-export', [LoanImportExportController::class, 'payments'])->name('loan-management.tools.monthly-import-export')->middleware('loan.permission:loan_management.import.view|loan_management.export.view');
         Route::get('/tools/loan-import-export', [LoanImportExportController::class, 'loans'])->name('loan-management.tools.loan-import-export')->middleware('loan.permission:loan_management.import.view|loan_management.export.view');
         Route::get('/tools/send-notification', [DashboardController::class, 'placeholder'])->defaults('page', 'Send Notification')->name('loan-management.tools.send-notification')->middleware('can:loan_management.view');
+        Route::get('/tools/activity-logs', [LoanActivityLogController::class, 'index'])->name('loan-management.activity-logs.index')->middleware('can:loan_management.view');
         Route::get('/settings', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings')->middleware('can:loan_management.view');
         Route::get('/settings/index', [SettingsController::class, 'invoicePrefix'])->name('loan-management.settings.index')->middleware('can:loan_management.view');
         Route::get('/settings/payment-methods', [SettingsController::class, 'paymentMethods'])->name('loan-management.settings.payment-methods')->middleware('can:loan_management.view');

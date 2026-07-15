@@ -69,6 +69,31 @@ $(document).ready(function(){
         return $('<div>').text(value || '').html();
     }
 
+    function copyLoanText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+
+        var deferred = $.Deferred();
+        var textarea = document.createElement('textarea');
+        textarea.value = text || '';
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        try {
+            document.execCommand('copy');
+            deferred.resolve();
+        } catch (e) {
+            deferred.reject(e);
+        }
+
+        document.body.removeChild(textarea);
+        return deferred.promise();
+    }
+
     function mobileLoanCard(row) {
         var id = row.id || '';
         var loanNumber = plainText(row.loan_number);
@@ -126,7 +151,13 @@ $(document).ready(function(){
         $('#sell_list_filter_date_range').val(s.format(moment_date_format) + ' ~ ' + e.format(moment_date_format));
     }
 
-    $('#sell_list_filter_date_range').daterangepicker($.extend(true, {}, dateRangeSettings, {autoUpdateInput: false}), function(s, e){
+    setRange(moment(), moment());
+
+    $('#sell_list_filter_date_range').daterangepicker($.extend(true, {}, dateRangeSettings, {
+        autoUpdateInput: false,
+        startDate: moment(),
+        endDate: moment()
+    }), function(s, e){
         setRange(s, e);
         loanTable.ajax.reload();
     });
@@ -141,6 +172,7 @@ $(document).ready(function(){
     var loanTable = $('#loan_list_table').DataTable({
         processing: true,
         serverSide: true,
+        order: [[1, 'desc']],
         ajax: {
             url: "{{ route('loan-management.loans.list-data') }}",
             data: function(d){
@@ -194,6 +226,65 @@ $(document).ready(function(){
             _token: $('meta[name=\"csrf-token\"]').attr('content'),
             status: $(this).data('status')
         }, function(){ loanTable.ajax.reload(); }).fail(function(){ alert('Failed to update status.'); });
+    });
+
+    $(document).on('change', '.js-loan-status-select', function(){
+        var $select = $(this);
+        var oldStatus = $select.data('original-status') || '';
+        var newStatus = $select.val();
+        var url = $select.data('url');
+
+        if (!url || !newStatus || newStatus === oldStatus) {
+            return;
+        }
+
+        $select.prop('disabled', true);
+        $.post(url, {
+            _token: $('meta[name=\"csrf-token\"]').attr('content'),
+            status: newStatus
+        }, function(){
+            if (window.toastr) {
+                toastr.success('Status updated');
+            }
+            loanTable.ajax.reload(null, false);
+        }).fail(function(){
+            $select.val(oldStatus);
+            if (window.toastr) {
+                toastr.error('Failed to update status');
+            } else {
+                alert('Failed to update status.');
+            }
+        }).always(function(){
+            $select.prop('disabled', false);
+        });
+    });
+
+    $(document).on('click', '.js-copy-loan-payment-info', function(e){
+        e.preventDefault();
+
+        var $button = $(this);
+        var url = $button.data('url');
+        if (!url) return;
+
+        $button.prop('disabled', true);
+        $.getJSON(url)
+            .done(function(res) {
+                $.when(copyLoanText(res && res.data ? (res.data.text || '') : ''))
+                    .done(function() {
+                        if (window.toastr) {
+                            toastr.success('Copied loan information');
+                        }
+                    })
+                    .fail(function() {
+                        alert('Unable to copy loan information');
+                    });
+            })
+            .fail(function() {
+                alert('Unable to copy loan information');
+            })
+            .always(function() {
+                $button.prop('disabled', false);
+            });
     });
 });
 </script>

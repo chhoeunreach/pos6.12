@@ -176,9 +176,9 @@ class LoanPaymentController extends Controller
             } elseif ($newScheduleId) {
                 $this->adjustSchedulePayment($newScheduleId, $newAmount - $oldAmount, $paidAt);
             }
-
-            $this->refreshLoanTotals((int) $row->loan_id);
         });
+
+        $this->refreshLoanTotals((int) $row->loan_id);
 
         return redirect()
             ->route('loan-management.payments.index')
@@ -201,8 +201,9 @@ class LoanPaymentController extends Controller
             }
 
             DB::connection($this->connection)->table('loan_payments')->where('id', $payment)->delete();
-            $this->refreshLoanTotals((int) $row->loan_id);
         });
+
+        $this->refreshLoanTotals((int) $row->loan_id);
 
         return redirect()
             ->route('loan-management.payments.index')
