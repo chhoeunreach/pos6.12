@@ -107,6 +107,8 @@ class SellController extends Controller
                 'sale_type' => $sale_type,
                 'location_id' => request()->input('location_id'),
                 'customer_id' => request()->input('customer_id'),
+                'customer_group_id' => request()->input('customer_group_id'),
+                'customer_group_name' => request()->input('customer_group_name'),
                 'payment_status' => request()->input('payment_status'),
                 'payment_method' => request()->input('payment_method'),
                 'start_date' => request()->input('start_date'),
@@ -1749,6 +1751,24 @@ class SellController extends Controller
         // Customer filter
         if (! empty(request()->customer_id)) {
             $query->where('contacts.id', request()->customer_id);
+        }
+
+        // Customer group filter. Prefer the transaction snapshot, but include
+        // current contact group for older sales where the snapshot is empty.
+        $customer_group_id = request()->input('customer_group_id');
+        if (empty($customer_group_id) && !empty(request()->input('customer_group_name'))) {
+            $customer_group_id = CustomerGroup::where('business_id', $business_id)
+                ->where('name', request()->input('customer_group_name'))
+                ->value('id');
+        }
+        if (! empty($customer_group_id)) {
+            $query->where(function ($q) use ($customer_group_id) {
+                $q->where('transactions.customer_group_id', $customer_group_id)
+                  ->orWhere(function ($qr) use ($customer_group_id) {
+                      $qr->whereNull('transactions.customer_group_id')
+                         ->where('contacts.customer_group_id', $customer_group_id);
+                  });
+            });
         }
 
         // Date range

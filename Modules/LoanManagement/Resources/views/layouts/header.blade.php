@@ -30,6 +30,15 @@
     </div>
 
     <div class="lm-header-right">
+        @if(Route::has('pos.create') && (auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create')))
+            <button type="button"
+                    id="loanHeaderOpenSellPos"
+                    data-pos-url="{{ route('pos.create') }}"
+                    class="btn btn-primary btn-sm lm-header-action">
+                <i class="fa fa-plus-square"></i> <span>POS Sell</span>
+            </button>
+        @endif
+
         @if(Route::has('loan-management.loans.calculator') && \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create'))
             <a href="{{ route('loan-management.loans.calculator', ['_lm_modal' => 1]) }}"
                class="btn btn-default btn-sm lm-header-action js-loan-calculator-modal"

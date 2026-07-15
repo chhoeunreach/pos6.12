@@ -135,6 +135,92 @@ class LoanDashboardService
         })->all();
     }
 
+    public function searchSellsForDashboard(string $term, int $limit = 10): array
+    {
+        $term = trim($term);
+        $installmentCustomerGroups = ['រំលស់', 'អ៊ីអន'];
+
+        if (! Schema::hasTable('transactions') || ! Schema::hasTable('transaction_payments')) {
+            return [];
+        }
+
+        $paidSub = DB::table('transaction_payments')
+            ->selectRaw('transaction_id, COALESCE(SUM(amount),0) as paid_amount')
+            ->groupBy('transaction_id');
+
+        $query = DB::table('transactions as t')
+            ->leftJoinSub($paidSub, 'tp', function ($join) {
+                $join->on('tp.transaction_id', '=', 't.id');
+            })
+            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where(function ($q) use ($installmentCustomerGroups) {
+                $q->whereIn('tcg.name', $installmentCustomerGroups)
+                    ->orWhere(function ($fallback) use ($installmentCustomerGroups) {
+                        $fallback->whereNull('tcg.id')
+                            ->whereIn('ccg.name', $installmentCustomerGroups);
+                    });
+            })
+            ->selectRaw("
+                t.id,
+                t.transaction_date,
+                t.invoice_no,
+                COALESCE(c.name, '-') as customer_name,
+                COALESCE(c.mobile, '-') as customer_phone,
+                COALESCE(t.final_total, 0) as final_total,
+                COALESCE(tp.paid_amount, 0) as paid_amount,
+                (COALESCE(t.final_total, 0) - COALESCE(tp.paid_amount, 0)) as due_amount
+            ");
+
+        if ($term !== '') {
+            $like = '%'.$term.'%';
+            $query->where(function ($q) use ($like, $term) {
+                $q->where('t.invoice_no', 'like', $like)
+                    ->orWhere('c.name', 'like', $like)
+                    ->orWhere('c.mobile', 'like', $like);
+
+                if (ctype_digit($term)) {
+                    $q->orWhere('t.id', (int) $term);
+                }
+            });
+
+            $query->orderByRaw('CASE WHEN t.invoice_no = ? THEN 0 ELSE 1 END', [$term]);
+        }
+
+        $rows = $query->orderByDesc('t.id')
+            ->limit(max(1, min($limit, 25)))
+            ->get();
+
+        $linkedLoanIds = [];
+        if ($this->tableExists('loans') && $this->columnExists('loans', 'source_transaction_id') && $rows->isNotEmpty()) {
+            $linkedLoanIds = DB::connection($this->connection)->table('loans')
+                ->whereIn('source_transaction_id', $rows->pluck('id')->all())
+                ->pluck('id', 'source_transaction_id')
+                ->map(fn ($value) => (int) $value)
+                ->all();
+        }
+
+        return $rows->map(function ($row) use ($linkedLoanIds) {
+            $linkedLoanId = $linkedLoanIds[$row->id] ?? null;
+
+            return [
+                'id' => (int) $row->id,
+                'transaction_date' => $row->transaction_date,
+                'invoice_no' => $row->invoice_no ?: ('Sell #'.$row->id),
+                'customer_name' => $row->customer_name ?: '-',
+                'customer_phone' => $row->customer_phone ?: '-',
+                'final_total' => round((float) ($row->final_total ?? 0), 2),
+                'paid_amount' => round((float) ($row->paid_amount ?? 0), 2),
+                'due_amount' => round(max(0, (float) ($row->due_amount ?? 0)), 2),
+                'linked_loan_id' => $linkedLoanId,
+                'is_converted' => $linkedLoanId !== null && $linkedLoanId > 0,
+            ];
+        })->all();
+    }
+
     public function getSummaryCards($filters): array
     {
         $cards = [

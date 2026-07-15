@@ -89,10 +89,6 @@ class LoanManagementServiceProvider extends ServiceProvider
 
     private function registerGlobalHelpers(): void
     {
-        if (! function_exists('loan_user_can')) {
-            function loan_user_can(string $permission): bool {
-                return LoanMenuHelper::loanUserCan($permission);
-            }
-        }
+        require_once __DIR__.'/../Helpers/global_helpers.php';
     }
 }

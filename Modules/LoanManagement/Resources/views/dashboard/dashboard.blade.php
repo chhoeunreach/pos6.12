@@ -2064,6 +2064,31 @@
                     </div>
 
                     <div class="lm-quick-box lm-quick-box--sell">
+                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-shopping-cart"></i></span> Create Loan From Sell</h4>
+                        <p class="lm-quick-box__subtitle">Search POS sell invoices and create an installment loan from the selected sale.</p>
+                        <div class="lm-quick-box__meta">
+                            <span class="lm-quick-box__chip"><i class="fa fa-shopping-cart"></i> POS sell</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-credit-card"></i> Convert sell</span>
+                            <span class="lm-quick-box__chip"><i class="fa fa-print"></i> Auto print</span>
+                        </div>
+                        <div class="form-group lm-quick-input" style="margin-bottom:12px;">
+                            <div class="input-group">
+                                <span class="input-group-addon lm-quick-trigger" id="loanDashboardOpenSellPos" title="Add POS Sell" role="button" tabindex="0"><i class="fa fa-plus-square"></i></span>
+                                <input type="text" class="form-control" id="loanDashboardSellSearchInput" placeholder="Search sell invoice, customer, phone">
+                            </div>
+                        </div>
+                        <div class="table-responsive lm-table-wrap">
+                            <table class="table table-condensed table-bordered lm-dashboard-table lm-mini-table" id="loanDashboardSellSearchTable">
+                                <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="text-right">Due</th><th>Action</th></tr></thead>
+                                <tbody data-loan-table="dashboard_sell_search">
+                                    <tr><td colspan="5" class="text-center text-muted">Type to search sells for installment.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="lm-quick-box__footer"><a href="{{ route('loan-management.loans.create-from-sell') }}" style="color:inherit;text-decoration:none;"><i class="fa fa-list"></i> Open full sell conversion list</a></div>
+                    </div>
+
+                    <div class="lm-quick-box lm-quick-box--sell">
                         <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-plus-square"></i></span> <a href="{{ route('loan-management.loans.create') }}" style="color:inherit;text-decoration:none;">New Loan</a></h4>
                         <p class="lm-quick-box__subtitle">Create a loan without POS sell.</p>
                         <div class="lm-quick-box__meta">
@@ -2388,6 +2413,7 @@
         var loading = false;
         var timer = null;
         var quickSearchTimer = null;
+        var sellSearchTimer = null;
         var liveTabLoaded = false;
         var liveChatSearchTimer = null;
         var liveChatThreads = [];
@@ -2407,6 +2433,21 @@
 
         function esc(value) {
             return $('<div>').text(value == null ? '-' : value).html();
+        }
+
+        function dashboardDate(value) {
+            if (!value) {
+                return '-';
+            }
+
+            if (typeof moment === 'function') {
+                var date = moment(value);
+                if (date.isValid()) {
+                    return date.format(moment_date_format);
+                }
+            }
+
+            return esc(value);
         }
 
         function copyDashboardText(text) {
@@ -2541,6 +2582,54 @@
                 })
                 .catch(function () {
                     $('[data-loan-table="dashboard_quick_search"]').html('<tr><td colspan="4" class="text-center text-danger">Search failed.</td></tr>');
+                });
+        }
+
+        function renderSellSearch(rows) {
+            var html = '';
+            (rows || []).forEach(function (row) {
+                var detailUrl = "{{ action([\App\Http\Controllers\SellController::class, 'show'], ['__ROW_ID__']) }}".replace('__ROW_ID__', encodeURIComponent(row.id));
+                var viewLoanUrl = row.linked_loan_id ? "{{ url('loan-management/loans') }}/" + row.linked_loan_id + "/view?_lm_modal=1" : '';
+                html += '<tr>'
+                    + '<td>' + dashboardDate(row.transaction_date) + '</td>'
+                    + '<td><a href="#" class="lm-row-title btn-modal" data-container=".view_modal" data-href="' + detailUrl + '">' + esc(row.invoice_no) + '</a><span class="lm-row-subtitle">Total ' + money(row.final_total) + '</span></td>'
+                    + '<td><a href="#" class="lm-row-title btn-modal" data-container=".view_modal" data-href="' + detailUrl + '">' + esc(row.customer_name) + '</a><span class="lm-row-subtitle">' + esc(row.customer_phone) + '</span></td>'
+                    + '<td class="text-right">' + money(row.due_amount) + '</td>'
+                    + '<td class="text-nowrap">'
+                    + '<div class="btn-group lm-action-menu">'
+                    + '<button type="button" class="btn dropdown-toggle lm-action-menu__toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-bars"></i> Actions <span class="caret"></span></button>'
+                    + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">';
+
+                if (row.is_converted && viewLoanUrl) {
+                    html += '<li><button type="button" class="btn-modal" data-container=".view_modal" data-href="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Sell Detail</button></li>';
+                    html += '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + viewLoanUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>';
+                } else {
+                    html += '<li><button type="button" class="btn-modal" data-container=".view_modal" data-href="' + detailUrl + '"><i class="fa fa-file-text-o"></i> Detail</button></li>';
+                    html += '<li><button type="button" class="btn-select-sale" data-id="' + row.id + '"><i class="fa fa-plus"></i> Add Installment</button></li>';
+                }
+
+                html += '</ul></div></td></tr>';
+            });
+            $('[data-loan-table="dashboard_sell_search"]').html(html || '<tr><td colspan="5" class="text-center">No sells found.</td></tr>');
+        }
+
+        function runSellSearch() {
+            var term = $.trim($('#loanDashboardSellSearchInput').val() || '');
+
+            fetch(quickSearchUrl + '?scope=sell&q=' + encodeURIComponent(term), {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (res) {
+                    renderSellSearch(res && res.data ? res.data : []);
+                })
+                .catch(function () {
+                    $('[data-loan-table="dashboard_sell_search"]').html('<tr><td colspan="5" class="text-center text-danger">Search failed.</td></tr>');
                 });
         }
 
@@ -2901,6 +2990,10 @@
                 window.clearTimeout(quickSearchTimer);
                 quickSearchTimer = window.setTimeout(runQuickSearch, 250);
             });
+            $('#loanDashboardSellSearchInput').on('input', function () {
+                window.clearTimeout(sellSearchTimer);
+                sellSearchTimer = window.setTimeout(runSellSearch, 250);
+            });
             $('#loanDashboardLiveChatSearch').on('input', function () {
                 window.clearTimeout(liveChatSearchTimer);
                 liveChatSearchTimer = window.setTimeout(renderLiveChatThreads, 160);
@@ -2922,10 +3015,28 @@
                 renderLiveChatThreads();
             });
             runQuickSearch();
+            runSellSearch();
             renderLiveCharts({});
+            $('#loanDashboardOpenSellPos').on('click keydown', function (event) {
+                if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                event.preventDefault();
+                if (typeof window.loanManagementOpenSellPos === 'function' && window.loanManagementOpenSellPos()) {
+                    return;
+                }
+                window.location.href = "{{ route('loan-management.loans.create-from-sell') }}";
+            });
             $(document).on('click', '.js-loan-detail-modal, .js-sell-detail-modal', function (event) {
                 event.preventDefault();
                 openDashboardIframeModal($(this).data('title') || 'Detail', $(this).data('url'));
+            });
+            $(document).on('click', '[data-loan-table="dashboard_sell_search"] .btn-select-sale', function (event) {
+                event.preventDefault();
+                var saleId = $(this).data('id');
+                if (saleId && typeof window.loanManagementOpenAutoInstallment === 'function') {
+                    window.loanManagementOpenAutoInstallment(saleId);
+                }
             });
 
             timer = window.setInterval(refreshLoanDashboard, refreshMs);

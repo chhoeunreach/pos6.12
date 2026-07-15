@@ -171,8 +171,9 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_payment_docs', 'Payment Doc:') !!}
-                                        <input type="file" name="payment_lines[0][payment_docs][]" id="payment_lines_0_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
-                                        <small class="help-block payment-doc-help">Take, upload, or paste multiple files.</small>
+                                        <textarea name="payment_lines[0][payment_doc_text]" id="payment_lines_0_payment_doc_text" class="form-control payment-line-doc-text" rows="2" placeholder="Write or paste payment document text"></textarea>
+                                        <input type="file" name="payment_lines[0][payment_docs][]" id="payment_lines_0_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" multiple>
+                                        <small class="help-block payment-doc-help">Write text, paste a screenshot/file, or upload multiple files.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -372,7 +373,7 @@ $(function () {
 
     function updatePaymentDocHelp($input) {
         var files = $input[0].files || [];
-        var text = files.length ? files.length + ' file(s) selected' : 'Take, upload, or paste multiple files.';
+        var text = files.length ? files.length + ' file(s) selected' : 'Write text, paste a screenshot/file, or upload multiple files.';
         $input.closest('.form-group').find('.payment-doc-help').text(text);
     }
 
@@ -413,6 +414,11 @@ $(function () {
         return files;
     }
 
+    function clipboardText(event) {
+        var clipboard = event.originalEvent && event.originalEvent.clipboardData;
+        return clipboard ? $.trim(clipboard.getData('text') || '') : '';
+    }
+
     $form.on('click', '.add-loan-payment-line', function () {
         var index = $form.find('.loan-payment-line').length;
         var suggestedAmount = remainingBeforeNewRow().toFixed(2);
@@ -435,8 +441,9 @@ $(function () {
                     '</div></div></div>',
                 '<div class="col-md-3"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_payment_docs">' + labels.payment_doc + ':</label>',
-                    '<input type="file" name="payment_lines[' + index + '][payment_docs][]" id="payment_lines_' + index + '_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>',
-                    '<small class="help-block payment-doc-help">Take, upload, or paste multiple files.</small>',
+                    '<textarea name="payment_lines[' + index + '][payment_doc_text]" id="payment_lines_' + index + '_payment_doc_text" class="form-control payment-line-doc-text" rows="2" placeholder="Write or paste payment document text"></textarea>',
+                    '<input type="file" name="payment_lines[' + index + '][payment_docs][]" id="payment_lines_' + index + '_payment_docs" class="form-control payment-line-doc" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" multiple>',
+                    '<small class="help-block payment-doc-help">Write text, paste a screenshot/file, or upload multiple files.</small>',
                     '</div></div>',
                 '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_note">' + labels.payment_note + ':</label>',
@@ -468,17 +475,27 @@ $(function () {
 
     $form.on('paste', function (event) {
         var files = clipboardFiles(event);
-        if (!files.length) {
+        var text = clipboardText(event);
+
+        if (files.length) {
+            var input = $form.find('.payment-line-doc.active-payment-doc-input')[0]
+            || $form.find('.payment-line-doc:visible').last()[0];
+
+            if (appendFilesToInput(input, files)) {
+                event.preventDefault();
+                if (window.toastr) {
+                    toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+                }
+            }
             return;
         }
 
-        var input = $form.find('.payment-line-doc.active-payment-doc-input')[0]
-            || $form.find('.payment-line-doc:visible').last()[0];
-
-        if (appendFilesToInput(input, files)) {
+        if (text && !$(event.target).is('input, textarea')) {
+            var $text = $form.find('.payment-line-doc-text:visible').last();
+            $text.val($.trim(($text.val() || '') + "\n" + text));
             event.preventDefault();
             if (window.toastr) {
-                toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+                toastr.success('Pasted text added to Payment Doc');
             }
         }
     });

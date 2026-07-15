@@ -126,6 +126,14 @@ class SellPosController extends Controller
 
         $business_locations = BusinessLocation::forDropdown($business_id, false);
         $customers = Contact::customersDropdown($business_id, false);
+        $customer_groups = CustomerGroup::forDropdown($business_id, false);
+        $selected_customer_group_id = request()->input('customer_group_id');
+
+        if (empty($selected_customer_group_id) && !empty(request()->input('customer_group_name'))) {
+            $selected_customer_group_id = CustomerGroup::where('business_id', $business_id)
+                ->where('name', request()->input('customer_group_name'))
+                ->value('id');
+        }
 
         $sales_representative = User::forDropdown($business_id, false, false, true);
 
@@ -148,7 +156,7 @@ class SellPosController extends Controller
 
         $shipping_statuses = $this->transactionUtil->shipping_statuses();
 
-        return view('sale_pos.index')->with(compact('business_locations', 'customers', 'sales_representative', 'is_cmsn_agent_enabled', 'commission_agents', 'service_staffs', 'is_tables_enabled', 'is_service_staff_enabled', 'is_types_service_enabled', 'shipping_statuses'));
+        return view('sale_pos.index')->with(compact('business_locations', 'customers', 'customer_groups', 'selected_customer_group_id', 'sales_representative', 'is_cmsn_agent_enabled', 'commission_agents', 'service_staffs', 'is_tables_enabled', 'is_service_staff_enabled', 'is_types_service_enabled', 'shipping_statuses'));
     }
 
     /**

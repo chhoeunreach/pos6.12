@@ -28,9 +28,13 @@ class DataController extends Controller
 
             ['value' => 'loan_management.loans.view', 'label' => 'Loans - View', 'default' => false],
             ['value' => 'loan_management.loans.create', 'label' => 'Loans - Create Loan', 'default' => false],
+            ['value' => 'loan_management.create_from_sell', 'label' => 'Loans - Create From Sell', 'default' => false],
             ['value' => 'loan_management.loans.edit', 'label' => 'Loans - Edit', 'default' => false],
             ['value' => 'loan_management.loans.approve', 'label' => 'Loans - Approve', 'default' => false],
             ['value' => 'loan_management.loans.reject', 'label' => 'Loans - Reject', 'default' => false],
+            ['value' => 'loan_management.sell_list', 'label' => 'Sell List - View', 'default' => false],
+            ['value' => 'loan_management.sell_view', 'label' => 'Sell List - View Sale Details', 'default' => false],
+            ['value' => 'loan_management.sell_convert', 'label' => 'Sell List - Convert To Loan', 'default' => false],
             ['value' => 'loan_management.customers.view', 'label' => 'Customers - View', 'default' => false],
             ['value' => 'loan_management.customers.create', 'label' => 'Customers - Create', 'default' => false],
             ['value' => 'loan_management.customers.edit', 'label' => 'Customers - Edit', 'default' => false],
@@ -94,13 +98,24 @@ class DataController extends Controller
 
         $scripts = [];
 
-        if ($canOpenLoan && Route::has('loan-management.dashboard')) {
-            $url = route('loan-management.dashboard');
-            $posButton = '<a href="'.$url.'" id="loan_management_pos_header_link" title="Loan Management" class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-rounded-md pull-right"><strong><i class="fa fa-credit-card tw-text-[#646EE4] !tw-text-sm"></i> &nbsp;Loan Management</strong></a>';
+        if ($canOpenLoan && (auth()->user()->can('superadmin') || auth()->user()->can('sell.create')) && Route::has('pos.create')) {
+            $url = route('pos.create');
+            $posButton = '<a href="'.$url.'" id="loanHeaderOpenSellPos" data-pos-url="'.$url.'" title="Add POS Sell" class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-rounded-md pull-right"><strong><i class="fa fa-plus-square tw-text-[#646EE4] !tw-text-sm"></i> &nbsp;POS Sell</strong></a>';
+
+            $scripts[] = '
+                if ($("#pos_header_more_options").length && !$("#loanHeaderOpenSellPos").length) {
+                    $("#pos_header_more_options").prepend('.json_encode($posButton).');
+                }
+            ';
+        }
+
+        if ($canOpenLoan && auth()->user()->can('sell.view') && Route::has('pos.index')) {
+            $url = route('pos.index', ['customer_group_name' => 'រំលស់']);
+            $sellListButton = '<a href="'.$url.'" id="loan_management_pos_header_link" title="List POS - រំលស់" class="tw-shadow-[rgba(17,_17,_26,_0.1)_0px_0px_16px] tw-bg-white hover:tw-bg-white/60 tw-cursor-pointer tw-border-2 tw-w-auto tw-h-auto tw-py-1 tw-px-4 tw-rounded-md pull-right"><strong><i class="fa fa-list tw-text-[#646EE4] !tw-text-sm"></i> &nbsp;List POS រំលស់</strong></a>';
 
             $scripts[] = '
                 if ($("#pos_header_more_options").length && !$("#loan_management_pos_header_link").length) {
-                    $("#pos_header_more_options").prepend('.json_encode($posButton).');
+                    $("#pos_header_more_options").prepend('.json_encode($sellListButton).');
                 }
             ';
         }

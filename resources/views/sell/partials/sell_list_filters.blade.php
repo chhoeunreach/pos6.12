@@ -15,6 +15,14 @@
     </div>
 </div>
 @endif
+@if((empty($only) || in_array('sell_list_filter_customer_group_id', $only)) && !empty($customer_groups))
+<div class="col-md-3">
+    <div class="form-group">
+        {!! Form::label('sell_list_filter_customer_group_id', __('lang_v1.customer_group') . ':') !!}
+        {!! Form::select('sell_list_filter_customer_group_id', $customer_groups, $selected_customer_group_id ?? null, ['class' => 'form-control select2', 'style' => 'width:100%', 'placeholder' => __('lang_v1.all')]); !!}
+    </div>
+</div>
+@endif
 @if(empty($only) || in_array('sell_list_filter_payment_status', $only))
 <div class="col-md-3">
     <div class="form-group">

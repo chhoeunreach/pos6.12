@@ -107,8 +107,9 @@
                         </div>
                         <div class="lm-pay-field">
                             <label>Payment Doc</label>
-                            <input type="file" name="payment_lines[0][payment_docs][]" class="lm-pay-field-input lm-payment-doc-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple>
-                            <small class="lm-payment-doc-help">Take, upload, or paste multiple files.</small>
+                            <textarea name="payment_lines[0][payment_doc_text]" class="lm-pay-field-input lm-payment-doc-text" rows="3" placeholder="Write or paste payment document text"></textarea>
+                            <input type="file" name="payment_lines[0][payment_docs][]" class="lm-pay-field-input lm-payment-doc-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" multiple>
+                            <small class="lm-payment-doc-help">Write text, paste a screenshot/file, or upload multiple files.</small>
                         </div>
                         <div class="lm-pay-field">
                             <label>Note</label>
@@ -290,7 +291,7 @@ $(function() {
 
     function updatePaymentDocHelp($input) {
         var files = $input[0].files || [];
-        var text = files.length ? files.length + ' file(s) selected' : 'Take, upload, or paste multiple files.';
+        var text = files.length ? files.length + ' file(s) selected' : 'Write text, paste a screenshot/file, or upload multiple files.';
         $input.closest('.lm-pay-field').find('.lm-payment-doc-help').text(text);
     }
 
@@ -331,20 +332,35 @@ $(function() {
         return files;
     }
 
+    function clipboardText(event) {
+        var clipboard = event.originalEvent && event.originalEvent.clipboardData;
+        return clipboard ? $.trim(clipboard.getData('text') || '') : '';
+    }
+
     $form.on('change', '.lm-payment-doc-input', function() {
         updatePaymentDocHelp($(this));
     });
 
     $form.on('paste', function(event) {
         var files = clipboardFiles(event);
-        if (!files.length) {
+        var text = clipboardText(event);
+
+        if (files.length) {
+            if (appendFilesToInput($form.find('.lm-payment-doc-input')[0], files)) {
+                event.preventDefault();
+                if (window.toastr) {
+                    toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+                }
+            }
             return;
         }
 
-        if (appendFilesToInput($form.find('.lm-payment-doc-input')[0], files)) {
+        if (text && !$(event.target).is('input, textarea')) {
+            var $text = $form.find('.lm-payment-doc-text');
+            $text.val($.trim(($text.val() || '') + "\n" + text));
             event.preventDefault();
             if (window.toastr) {
-                toastr.success(files.length + ' pasted file(s) added to Payment Doc');
+                toastr.success('Pasted text added to Payment Doc');
             }
         }
     });

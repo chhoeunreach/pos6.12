@@ -8,6 +8,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\LoanManagement\Services\LoanToPosPrefillService;
 use Yajra\DataTables\Facades\DataTables;
@@ -1159,6 +1160,27 @@ class LoanInstallmentListController extends Controller
             return;
         }
 
+        $docText = trim((string) $request->input("payment_lines.$lineIndex.payment_doc_text", ''));
+        if ($docText !== '') {
+            $filename = 'payment-doc-'.$loan.'-'.$paymentId.'-'.Str::random(10).'.txt';
+            $path = 'loan-payment-docs/'.now()->format('Y/m').'/'.$filename;
+            Storage::disk('public')->put($path, $docText);
+
+            DB::connection('mysql_loan')->table('loan_files')->insert($this->loanSafeColumns('loan_files', [
+                'fileable_type' => 'loan_payment',
+                'fileable_id' => $paymentId,
+                'category' => 'payment_doc',
+                'disk' => 'public',
+                'path' => $path,
+                'original_name' => 'payment-doc-note-'.$paymentId.'.txt',
+                'mime_type' => 'text/plain',
+                'size_bytes' => strlen($docText),
+                'uploaded_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+        }
+
         $files = $request->file("payment_lines.$lineIndex.payment_docs", []);
         if (! is_array($files)) {
             $files = [$files];
@@ -1212,9 +1234,10 @@ class LoanInstallmentListController extends Controller
             'payment_lines.*.method' => 'nullable|string|max:100',
             'payment_lines.*.reference_number' => 'nullable|string|max:191',
             'payment_lines.*.note' => 'nullable|string|max:1000',
-            'payment_lines.*.payment_doc' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
+            'payment_lines.*.payment_doc_text' => 'nullable|string|max:5000',
+            'payment_lines.*.payment_doc' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,txt,zip|max:10240',
             'payment_lines.*.payment_docs' => 'nullable|array',
-            'payment_lines.*.payment_docs.*' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
+            'payment_lines.*.payment_docs.*' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx,txt,zip|max:10240',
         ]);
 
         $paidDate = $payload['paid_date'];
@@ -1329,9 +1352,10 @@ class LoanInstallmentListController extends Controller
             });
 
             $paymentNotificationLines = $paymentLines->all();
-            app()->terminating(function () use ($loan, $totalAmount, $paymentNotificationLines, $paidDate) {
+            $paymentNotificationPhotoPaths = $this->paymentTelegramPhotoPaths($createdPaymentIds);
+            app()->terminating(function () use ($loan, $totalAmount, $paymentNotificationLines, $paidDate, $paymentNotificationPhotoPaths) {
                 try {
-                    $this->notifyLocationTelegram($loan, 'payment', $totalAmount, $paymentNotificationLines, $paidDate);
+                    $this->notifyLocationTelegram($loan, 'payment', $totalAmount, $paymentNotificationLines, $paidDate, $paymentNotificationPhotoPaths);
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::error('Loan payment saved but Telegram notification failed', [
                         'loan_id' => $loan,
@@ -2090,7 +2114,69 @@ class LoanInstallmentListController extends Controller
         ]));
     }
 
-    public function notifyLocationTelegram(int $loan, string $event, ?float $amount = null, array $paymentLines = [], ?string $paidDate = null): void
+    protected function paymentTelegramPhotoPaths(array $paymentIds): array
+    {
+        $paymentIds = array_values(array_filter(array_map('intval', $paymentIds)));
+        if (empty($paymentIds) || ! $this->loanTableExists('loan_files')) {
+            return [];
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', 'loan_payment')
+            ->whereIn('fileable_id', $paymentIds)
+            ->where('category', 'payment_doc');
+
+        if ($this->loanTableHasCol('loan_files', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return $query->orderBy('id')
+            ->get()
+            ->filter(fn ($file) => $this->isTelegramPhotoFile($file))
+            ->map(fn ($file) => $this->loanFileAbsolutePath($file))
+            ->filter(fn ($path) => is_string($path) && is_readable($path))
+            ->unique()
+            ->take(5)
+            ->values()
+            ->all();
+    }
+
+    protected function isTelegramPhotoFile(object $file): bool
+    {
+        $mime = strtolower((string) ($file->mime_type ?? ''));
+        if (Str::startsWith($mime, 'image/')) {
+            return true;
+        }
+
+        $extension = strtolower(pathinfo((string) ($file->original_name ?? $file->path ?? ''), PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true);
+    }
+
+    protected function loanFileAbsolutePath(object $file): ?string
+    {
+        $path = trim((string) ($file->path ?? ''));
+        if ($path === '') {
+            return null;
+        }
+
+        if (is_file($path)) {
+            return $path;
+        }
+
+        $disk = trim((string) ($file->disk ?? 'public')) ?: 'public';
+        try {
+            if (Storage::disk($disk)->exists($path)) {
+                return Storage::disk($disk)->path($path);
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
+    public function notifyLocationTelegram(int $loan, string $event, ?float $amount = null, array $paymentLines = [], ?string $paidDate = null, array $photoPaths = []): void
     {
         if (! $this->loanTableExists('loans') || ! $this->loanTableExists('loan_business_locations')) {
             return;
@@ -2129,14 +2215,55 @@ class LoanInstallmentListController extends Controller
             ? $this->paymentTelegramMessage($loan, $loanRow, $paymentLines, $paidDate)
             : "Installment loan created\nLoan: ".($loanRow->loan_number ?? $loanRow->id)."\nCustomer: ".($loanRow->customer_name_snapshot ?? '-')."\nLocation: ".($location->name ?? '-')."\nTotal: ".number_format((float) ($loanRow->principal_amount ?? $loanRow->total_payable_amount ?? 0), 2).' '.($loanRow->currency ?? 'USD');
 
-        app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
-            $event === 'payment' ? 'loan_payment' : 'loan_installment',
-            $chatId,
-            $message,
-            ['loan_id' => $loan, 'event' => $event, 'amount' => $amount]
-        );
+        $moduleType = $event === 'payment' ? 'loan_payment' : 'loan_installment';
+        $sendResult = null;
+
+        if ($event === 'payment' && ! empty($photoPaths)) {
+            $sendResult = $this->sendPaymentTelegramPhotos($chatId, $message, $photoPaths);
+        }
+
+        if (empty($sendResult['success'])) {
+            $sendResult = app(\Modules\NotificationCenter\Services\NotificationService::class)->sendToChat(
+                $moduleType,
+                $chatId,
+                $message,
+                ['loan_id' => $loan, 'event' => $event, 'amount' => $amount]
+            );
+        }
 
         $this->logTelegramNotification($loanRow, $location, $event, $message, 'sent', null, $chatId);
+    }
+
+    protected function sendPaymentTelegramPhotos(string $chatId, string $message, array $photoPaths): array
+    {
+        $telegram = app(\Modules\NotificationCenter\Services\TelegramService::class);
+        $sent = 0;
+        $errors = [];
+
+        foreach (array_values($photoPaths) as $index => $photoPath) {
+            $caption = $index === 0 ? $this->telegramPhotoCaption($message) : null;
+            $result = $telegram->sendPhoto($chatId, $photoPath, $caption, basename($photoPath));
+
+            if (! empty($result['success'])) {
+                $sent++;
+                continue;
+            }
+
+            $errors[] = $result['error'] ?? $result['msg'] ?? 'Photo send failed';
+        }
+
+        return [
+            'success' => $sent > 0,
+            'sent' => $sent,
+            'errors' => $errors,
+        ];
+    }
+
+    protected function telegramPhotoCaption(string $message): string
+    {
+        $message = trim($message);
+
+        return mb_strlen($message) > 1000 ? mb_substr($message, 0, 997).'...' : $message;
     }
 
     protected function paymentTelegramMessage(int $loan, object $loanRow, array $paymentLines = [], ?string $paidDate = null): string

@@ -90,6 +90,10 @@
                             @include('loanmanagement::layouts.partials.auto_installment_modal')
                         @endif
 
+                        @if(!$isLoanEmbeddedModal && (auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create')))
+                            @include('loanmanagement::layouts.partials.sell_pos_modal')
+                        @endif
+
                         @unless($isLoanEmbeddedModal)
                             @include('loanmanagement::layouts.footer')
 
@@ -161,7 +165,8 @@
         <script>
             (function($){
                 var loanPosRoutes = {
-                    previewSchedule: "{{ route('loan-management.loans.preview-standalone-schedule') }}",
+                    previewSchedule: "{{ route('loan-management.loans.preview-schedule') }}",
+                    cloneSellBase: "{{ url('/loan-management/loans/sell') }}",
                     loanViewBase: "{{ url('/loan-management/loans') }}",
                     loanPrintModalBase: "{{ url('/loan-management/loans') }}"
                 };
@@ -514,6 +519,36 @@
                     return baseUrl + separator + '_lm_pos_modal=1&_lm_reload=' + Date.now();
                 }
 
+                function openLoanSellPosModal(posUrl) {
+                    var frame = $('#loanSellPosFrame');
+                    if (!frame.length || !$('#loanSellPosModal').length) {
+                        return false;
+                    }
+
+                    var targetUrl = posUrl || frame.data('pos-url');
+                    if (!targetUrl) {
+                        return false;
+                    }
+
+                    frame.attr('src', buildLoanPosModalUrl(targetUrl));
+                    $('#loanSellPosModal').modal('show');
+                    return true;
+                }
+
+                $(document).on('click', '#loanHeaderOpenSellPos', function(event){
+                    if (openLoanSellPosModal($(this).data('pos-url'))) {
+                        event.preventDefault();
+                    }
+                });
+
+                $('#loanSellPosFrame').on('load', function(){
+                    installPosPrintBridge('loanSellPosFrame');
+                });
+
+                $('#loanSellPosModal').on('shown.bs.modal', function(){
+                    installPosPrintBridge('loanSellPosFrame');
+                });
+
                 $(document).on('click', '.js-open-existing-loan-detail', function(event){
                     event.preventDefault();
                     openLoanDetailFrameModal($(this).data('loan-url'), 'Loan Detail');
@@ -521,6 +556,7 @@
 
                 window.loanManagementOpenAutoInstallment = openAutoInstallment;
                 window.loanManagementDirectPrintUrl = directLoanManagementPrintUrl;
+                window.loanManagementOpenSellPos = openLoanSellPosModal;
                 window.loanManagementOpenPrintModal = openLoanPrintModal;
             })(jQuery);
         </script>

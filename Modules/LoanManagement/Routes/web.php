@@ -9,6 +9,7 @@ use Modules\LoanManagement\Http\Controllers\LoanActivityLogController;
 use Modules\LoanManagement\Http\Controllers\LoanCustomerController;
 use Modules\LoanManagement\Http\Controllers\LoanDashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanCreateController;
+use Modules\LoanManagement\Http\Controllers\LoanFromSellController;
 use Modules\LoanManagement\Http\Controllers\LoanImportExportController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
 use Modules\LoanManagement\Http\Controllers\LoanCollectionController;
@@ -20,7 +21,7 @@ use Modules\LoanManagement\Http\Controllers\SettingsController;
 Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.activity'])
     ->prefix('loan-management')
     ->group(function () {
-        $createLoanPermission = 'loan.permission:loan_management.loans.create|loan_management.create';
+        $createLoanPermission = 'loan.permission:loan_management.create_from_sell|loan_management.loans.create|loan_management.create';
         $managePaymentPermission = 'loan.permission:loan_management.payment|loan_management.payments.create|loan_management.edit';
 
         Route::get('/', function () {
@@ -57,6 +58,15 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/collection-reports/{report}', [LoanCollectionController::class, 'report'])
             ->name('loan-management.collection.report')
             ->middleware('can:loan_management.view');
+
+        Route::get('/loans/create-from-sell', [LoanFromSellController::class, 'index'])->name('loan-management.loans.create-from-sell')->middleware($createLoanPermission);
+        Route::get('/loans/search-sales', [LoanFromSellController::class, 'searchSales'])->name('loan-management.loans.search-sales')->middleware($createLoanPermission);
+        Route::get('/loans/search-sells', [LoanFromSellController::class, 'search'])->name('loan-management.loans.search-sells')->middleware($createLoanPermission);
+        Route::get('/loans/sales/{transaction_id}/clone-data', [LoanFromSellController::class, 'cloneData'])->name('loan-management.loans.sales.clone-data')->middleware($createLoanPermission);
+        Route::get('/loans/sell/{transaction_id}/clone', [LoanFromSellController::class, 'clone'])->name('loan-management.loans.clone-sell')->middleware($createLoanPermission);
+        Route::get('/loans/sell/{transaction_id}/check-duplicate', [LoanFromSellController::class, 'checkDuplicateLoan'])->name('loan-management.loans.check-duplicate')->middleware($createLoanPermission);
+        Route::post('/loans/preview-schedule', [LoanFromSellController::class, 'previewSchedule'])->name('loan-management.loans.preview-schedule')->middleware($createLoanPermission);
+        Route::post('/loans/store-from-sell', [LoanFromSellController::class, 'store'])->name('loan-management.loans.store-from-sell')->middleware($createLoanPermission);
 
         Route::get('/loans/create', [LoanCreateController::class, 'index'])->name('loan-management.loans.create')->middleware($createLoanPermission);
         Route::get('/loans/create-standalone-modal', [LoanCreateController::class, 'modal'])->name('loan-management.loans.create-standalone-modal')->middleware($createLoanPermission);
