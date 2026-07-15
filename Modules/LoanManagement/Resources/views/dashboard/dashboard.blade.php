@@ -11,15 +11,16 @@
         ['key' => 'high_risk_customers', 'label' => 'High Risk Customers', 'icon' => 'fa fa-user-times', 'tone' => 'orange'],
         ['key' => 'repossessions', 'label' => 'Repossessions', 'icon' => 'fa fa-truck', 'tone' => 'gray'],
     ];
-    $heroMetrics = [
-        ['label' => 'Active Loans', 'value' => (int) ($quickCards['active_loans'] ?? 0), 'format' => 'int'],
-        ['label' => 'Late Customers', 'value' => (int) ($quickCards['late_customers'] ?? 0), 'format' => 'int'],
-        ['label' => 'Today Collection', 'value' => (float) ($quickCards['today_collection'] ?? 0), 'format' => 'money'],
-        ['label' => 'Monthly Income', 'value' => (float) ($quickCards['monthly_income'] ?? 0), 'format' => 'money'],
-    ];
     $dashboardBadgeCounts = \Modules\LoanManagement\Helpers\LoanMenuHelper::badgeCounts();
     $dashboardUnreadChats = (int) ($dashboardBadgeCounts['unread_chat'] ?? 0);
     $dashboardPendingVisits = (int) ($dashboardBadgeCounts['pending_visits'] ?? 0);
+    $dashboardOverdue = (int) ($quickCards['overdue_accounts'] ?? 0);
+    $dashboardDueToday = (int) ($quickCards['due_today'] ?? 0);
+    $dashboardBrokenPtp = (int) ($quickCards['broken_ptp'] ?? 0);
+    $dashboardHighRisk = (int) ($quickCards['high_risk_customers'] ?? 0);
+    $dashboardTodayCollection = (float) ($quickCards['today_collection'] ?? ($quickCards['collection_amount_today'] ?? 0));
+    $dashboardMonthlyIncome = (float) ($quickCards['monthly_income'] ?? 0);
+    $dashboardPriorityTotal = $dashboardOverdue + $dashboardDueToday + $dashboardBrokenPtp + $dashboardHighRisk + $dashboardPendingVisits + $dashboardUnreadChats;
 @endphp
 
 @section('loan_css')
@@ -33,22 +34,22 @@
     .lm-dashboard-tabs {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        padding: 6px;
-        border: 1px solid #dbe5f0;
-        border-radius: 999px;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
         background: #fff;
-        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
         align-self: flex-start;
     }
     .lm-dashboard-tab {
         border: 0;
-        border-radius: 999px;
+        border-radius: 8px;
         background: transparent;
         color: #475569;
         font-size: 13px;
         font-weight: 700;
-        padding: 10px 18px;
+        padding: 9px 15px;
         transition: background .18s ease, color .18s ease, transform .18s ease;
     }
     .lm-dashboard-tab:hover {
@@ -56,9 +57,9 @@
         transform: translateY(-1px);
     }
     .lm-dashboard-tab.is-active {
-        background: linear-gradient(135deg, #15314b 0%, #1c5d77 52%, #20a083 100%);
+        background: #0f172a;
         color: #fff;
-        box-shadow: 0 10px 22px rgba(21, 49, 75, 0.2);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
     }
     .lm-dashboard-pane {
         display: none;
@@ -67,6 +68,241 @@
     }
     .lm-dashboard-pane.is-active {
         display: flex;
+    }
+    .lm-admin-brief {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(330px, .9fr);
+        gap: 16px;
+        align-items: stretch;
+    }
+    .lm-admin-command {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at top right, rgba(37, 99, 235, .09), transparent 30%),
+            linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        color: #0f172a;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, .07);
+    }
+    .lm-admin-command::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #2563eb, #14b8a6, #f59e0b);
+        pointer-events: none;
+    }
+    .lm-admin-command__inner {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-height: 100%;
+        padding: 22px 22px 20px;
+    }
+    .lm-admin-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: max-content;
+        max-width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #dbeafe;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0;
+    }
+    .lm-admin-title {
+        margin: 0;
+        color: #0f172a;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0;
+        line-height: 1.15;
+    }
+    .lm-admin-copy {
+        max-width: 720px;
+        margin: 8px 0 0;
+        color: #64748b;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .lm-admin-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 2px;
+    }
+    .lm-admin-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 36px;
+        padding: 8px 12px;
+        border: 1px solid #dbe5ef;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 0 6px 14px rgba(15, 23, 42, .04);
+    }
+    .lm-admin-action:hover,
+    .lm-admin-action:focus {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+        text-decoration: none;
+    }
+    .lm-admin-action.primary {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+    }
+    .lm-admin-action.primary:hover,
+    .lm-admin-action.primary:focus {
+        color: #fff;
+        background: #1d4ed8;
+    }
+    .lm-admin-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: auto;
+    }
+    .lm-admin-metric {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+    }
+    .lm-admin-metric span {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0;
+    }
+    .lm-admin-metric strong {
+        display: block;
+        margin-top: 5px;
+        color: #0f172a;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .lm-admin-priority {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at top right, rgba(239, 68, 68, .08), transparent 28%),
+            #fff;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .06);
+        padding: 16px;
+    }
+    .lm-admin-priority__head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .lm-admin-priority__head h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 800;
+    }
+    .lm-admin-priority__head p {
+        margin: 4px 0 0;
+        color: #64748b;
+        font-size: 12px;
+    }
+    .lm-admin-priority__score {
+        min-width: 56px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: #fef2f2;
+        color: #dc2626;
+        font-size: 20px;
+        font-weight: 800;
+        text-align: center;
+    }
+    .lm-admin-priority-list {
+        display: grid;
+        gap: 8px;
+    }
+    .lm-admin-priority-item {
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 9px;
+        border: 1px solid #edf2f7;
+        border-radius: 9px;
+        color: #0f172a;
+        text-decoration: none;
+        background: rgba(255,255,255,.82);
+    }
+    .lm-admin-priority-item:hover,
+    .lm-admin-priority-item:focus {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #0f172a;
+        text-decoration: none;
+    }
+    .lm-admin-priority-item i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: #f1f5f9;
+        color: #2563eb;
+    }
+    .lm-admin-priority-item strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .lm-admin-priority-item span {
+        display: block;
+        margin-top: 2px;
+        color: #64748b;
+        font-size: 11px;
+    }
+    .lm-admin-priority-count {
+        min-width: 34px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #0f172a;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        text-align: center;
     }
     .lm-dashboard-hero {
         position: relative;
@@ -137,29 +373,35 @@
     }
     .lm-dashboard-cards {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
     }
     .lm-stat-card {
         display: flex;
         align-items: flex-start;
         gap: 12px;
-        min-height: 114px;
-        padding: 16px 18px;
-        border: 1px solid #e5ecf3;
-        border-radius: 16px;
+        min-height: 104px;
+        padding: 14px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
         background: #fff;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .lm-stat-card:hover {
+        transform: translateY(-1px);
+        border-color: #cbd5e1;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
     }
     .lm-stat-card__icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 44px;
-        height: 44px;
-        border-radius: 14px;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
         color: #fff;
-        font-size: 18px;
+        font-size: 16px;
         flex: 0 0 auto;
     }
     .lm-tone-blue { background: linear-gradient(135deg, #2d6cdf, #53a0fd); }
@@ -384,24 +626,24 @@
     .lm-stat-card__label {
         display: block;
         color: #64748b;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0;
     }
     .lm-stat-card__value {
         display: block;
-        margin-top: 8px;
+        margin-top: 7px;
         color: #0f172a;
-        font-size: 28px;
+        font-size: 24px;
         font-weight: 700;
         line-height: 1.05;
     }
     .lm-stat-card__meta {
         display: block;
-        margin-top: 10px;
+        margin-top: 8px;
         color: #94a3b8;
-        font-size: 12px;
+        font-size: 11px;
     }
     .lm-dashboard-grid {
         display: grid;
@@ -1368,8 +1610,12 @@
         .lm-dashboard-grid,
         .lm-dashboard-hero-grid,
         .lm-quick-grid,
-        .lm-live-grid {
+        .lm-live-grid,
+        .lm-admin-brief {
             grid-template-columns: 1fr;
+        }
+        .lm-admin-command__inner {
+            min-height: auto;
         }
         .lm-live-chat-shell {
             grid-template-columns: 280px minmax(0, 1fr);
@@ -1379,6 +1625,40 @@
         }
     }
     @media (max-width: 767px) {
+        .lm-admin-command__inner,
+        .lm-admin-priority {
+            padding: 14px;
+        }
+        .lm-admin-title {
+            font-size: 22px;
+        }
+        .lm-admin-copy {
+            font-size: 13px;
+        }
+        .lm-admin-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .lm-admin-action {
+            width: 100%;
+            padding-left: 8px;
+            padding-right: 8px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .lm-admin-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .lm-admin-metric {
+            padding: 10px;
+        }
+        .lm-admin-metric strong {
+            font-size: 18px;
+        }
+        .lm-admin-priority-item {
+            grid-template-columns: 30px minmax(0, 1fr) auto;
+            gap: 8px;
+        }
         .lm-dashboard-hero {
             padding: 18px;
         }
@@ -1996,19 +2276,94 @@
     </div>
 
     <div class="lm-dashboard-pane is-active" data-dashboard-pane="overview">
-    <section class="lm-dashboard-hero">
-        <div class="lm-dashboard-hero-grid">
-            <div>
-                <h1 class="lm-dashboard-title">Loan Control Center</h1>
-                <p class="lm-dashboard-subtitle">Manage loans, collect payments, track overdue customers.</p>
-            </div>
-            <div class="lm-hero-metrics">
-                @foreach($heroMetrics as $metric)
-                    <div class="lm-hero-metric">
-                        <span class="lm-hero-metric-label">{{ $metric['label'] }}</span>
-                        <span class="lm-hero-metric-value">{{ $metric['format'] === 'money' ? number_format((float) $metric['value'], 2) : (int) $metric['value'] }}</span>
+    <section class="lm-admin-brief">
+        <div class="lm-admin-command">
+            <div class="lm-admin-command__inner">
+                <div>
+                    <span class="lm-admin-kicker"><i class="fa fa-line-chart"></i> Admin Command Dashboard</span>
+                    <h1 class="lm-admin-title">Loan Control Center</h1>
+                    <p class="lm-admin-copy">Review collection pressure, payment activity, customer follow-up, and loan creation from one focused workspace.</p>
+                </div>
+
+                <div class="lm-admin-actions">
+                    @if(Route::has('loan-management.loans.create'))
+                        <a href="{{ route('loan-management.loans.create') }}" class="lm-admin-action primary"><i class="fa fa-plus-circle"></i> New Loan</a>
+                    @endif
+                    @if(Route::has('loan-management.loans.create-from-sell'))
+                        <a href="{{ route('loan-management.loans.create-from-sell') }}" class="lm-admin-action"><i class="fa fa-shopping-cart"></i> Create From POS</a>
+                    @endif
+                    @if(Route::has('loan-management.collection.page'))
+                        <a href="{{ route('loan-management.collection.page', ['page' => 'overdue-accounts']) }}" class="lm-admin-action"><i class="fa fa-phone"></i> Collection Queue</a>
+                    @endif
+                    @if(Route::has('loan-management.loans.calculator'))
+                        <a href="{{ route('loan-management.loans.calculator') }}" class="lm-admin-action"><i class="fa fa-calculator"></i> Calculator</a>
+                    @endif
+                    @if(Route::has('loan-management.reports.index'))
+                        <a href="{{ route('loan-management.reports.index') }}" class="lm-admin-action"><i class="fa fa-bar-chart"></i> Reports</a>
+                    @endif
+                </div>
+
+                <div class="lm-admin-metrics">
+                    <div class="lm-admin-metric">
+                        <span>Today Collection</span>
+                        <strong>{{ number_format($dashboardTodayCollection, 2) }}</strong>
                     </div>
-                @endforeach
+                    <div class="lm-admin-metric">
+                        <span>Monthly Income</span>
+                        <strong>{{ number_format($dashboardMonthlyIncome, 2) }}</strong>
+                    </div>
+                    <div class="lm-admin-metric">
+                        <span>Active Loans</span>
+                        <strong>{{ number_format((int) ($quickCards['active_loans'] ?? 0)) }}</strong>
+                    </div>
+                    <div class="lm-admin-metric">
+                        <span>Late Customers</span>
+                        <strong>{{ number_format((int) ($quickCards['late_customers'] ?? 0)) }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lm-admin-priority">
+            <div class="lm-admin-priority__head">
+                <div>
+                    <h3>Priority Work</h3>
+                    <p>Cases needing manager attention today.</p>
+                </div>
+                <div class="lm-admin-priority__score">{{ number_format($dashboardPriorityTotal) }}</div>
+            </div>
+            <div class="lm-admin-priority-list">
+                @if(Route::has('loan-management.operations.page'))
+                    <a href="{{ route('loan-management.operations.page', ['page' => 'due-today']) }}" class="lm-admin-priority-item">
+                        <i class="fa fa-calendar-check-o"></i>
+                        <span><strong>Due Today</strong><span>Installments scheduled for collection</span></span>
+                        <b class="lm-admin-priority-count">{{ number_format($dashboardDueToday) }}</b>
+                    </a>
+                @endif
+                @if(Route::has('loan-management.collection.page'))
+                    <a href="{{ route('loan-management.collection.page', ['page' => 'overdue-accounts']) }}" class="lm-admin-priority-item">
+                        <i class="fa fa-exclamation-triangle"></i>
+                        <span><strong>Overdue Accounts</strong><span>Accounts past due and unpaid</span></span>
+                        <b class="lm-admin-priority-count">{{ number_format($dashboardOverdue) }}</b>
+                    </a>
+                    <a href="{{ route('loan-management.collection.page', ['page' => 'broken-promise']) }}" class="lm-admin-priority-item">
+                        <i class="fa fa-chain-broken"></i>
+                        <span><strong>Broken PTP</strong><span>Promise-to-pay cases missed</span></span>
+                        <b class="lm-admin-priority-count">{{ number_format($dashboardBrokenPtp) }}</b>
+                    </a>
+                    <a href="{{ route('loan-management.collection.page', ['page' => 'field-visit-required']) }}" class="lm-admin-priority-item">
+                        <i class="fa fa-street-view"></i>
+                        <span><strong>Field Visits</strong><span>Customers requiring field follow-up</span></span>
+                        <b class="lm-admin-priority-count">{{ number_format($dashboardPendingVisits) }}</b>
+                    </a>
+                @endif
+                @if(Route::has('loan-management.risk.page'))
+                    <a href="{{ route('loan-management.risk.page', ['page' => 'high-risk-customers']) }}" class="lm-admin-priority-item">
+                        <i class="fa fa-user-times"></i>
+                        <span><strong>High Risk</strong><span>Customers flagged by risk workflow</span></span>
+                        <b class="lm-admin-priority-count">{{ number_format($dashboardHighRisk) }}</b>
+                    </a>
+                @endif
             </div>
         </div>
     </section>
