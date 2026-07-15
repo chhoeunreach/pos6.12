@@ -2,6 +2,7 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -796,15 +797,101 @@ class LoanCreateController extends Controller
 
     public function calculator()
     {
+        $defaults = [
+            'total_price' => 0,
+            'down_payment' => 0,
+            'interest_rate' => 4,
+            'interest_type' => 'flat',
+            'duration_months' => 12,
+            'first_due_date' => Carbon::today()->addMonth()->toDateString(),
+            'currency' => session('currency.code', 'USD'),
+        ];
+
         if (! empty(request('_lm_modal'))) {
-            return view('loanmanagement::loans.calculator');
+            return view('loanmanagement::loans.calculator', compact('defaults'));
         }
 
-        return view('loanmanagement::loans.calculator');
+        return view('loanmanagement::loans.calculator', compact('defaults'));
     }
 
     public function calculatorPrint(Request $request)
     {
-        return view('loanmanagement::loans.print.calculator');
+        $data = $request->validate([
+            'total_price' => 'nullable|numeric|min:0',
+            'down_payment' => 'nullable|numeric|min:0',
+            'interest_rate' => 'nullable|numeric|min:0',
+            'interest_type' => 'nullable|in:flat,reducing_balance',
+            'duration_months' => 'nullable|integer|min:1|max:360',
+            'first_due_date' => 'nullable|date',
+        ]);
+
+        $totalPrice = round((float) ($data['total_price'] ?? 0), 2);
+        $downPayment = min($totalPrice, round((float) ($data['down_payment'] ?? 0), 2));
+        $principal = max(0, round($totalPrice - $downPayment, 2));
+        $durationMonths = max(1, (int) ($data['duration_months'] ?? 12));
+        $interestRate = (float) ($data['interest_rate'] ?? 4);
+        $interestType = $data['interest_type'] ?? 'flat';
+        $firstDueDate = $data['first_due_date'] ?? Carbon::today()->addMonth()->toDateString();
+
+        $scheduleRows = $principal > 0
+            ? $this->service->previewSchedule([
+                'principal_amount' => $principal,
+                'interest_rate' => $interestRate,
+                'interest_type' => $interestType,
+                'duration_months' => $durationMonths,
+                'payment_frequency' => 'monthly',
+                'first_due_date' => $firstDueDate,
+            ])
+            : collect(range(1, $durationMonths))->map(function ($month) use ($firstDueDate) {
+                return [
+                    'schedule_no' => $month,
+                    'due_date' => Carbon::parse($firstDueDate)->addMonths($month - 1)->toDateString(),
+                    'principal' => 0,
+                    'interest' => 0,
+                    'total' => 0,
+                    'balance' => 0,
+                ];
+            })->all();
+
+        $installments = collect($scheduleRows)->map(function ($row) {
+            return (object) [
+                'installment_number' => $row['schedule_no'],
+                'installmentdate' => $row['due_date'],
+                'installment_value' => $row['principal'],
+                'benefit_value' => $row['interest'],
+                'amount_due' => $row['total'],
+                'balance' => $row['balance'],
+            ];
+        });
+
+        $businessName = session('business.name', 'Loan Management');
+        $printedAt = Carbon::now()->format('d-M-Y H:i:s');
+        $loanDate = Carbon::today()->format('m-d-Y');
+        $loanDateTitle = Carbon::today()->format('d-M-Y');
+        $lastDueDate = optional($installments->last())->installmentdate;
+        $schedulePrincipalTotal = round($installments->sum('installment_value'), 2);
+        $scheduleInterestTotal = round($installments->sum('benefit_value'), 2);
+        $scheduleTotalAmount = round($installments->sum('amount_due'), 2);
+        $downPercent = $totalPrice > 0 ? round($downPayment / $totalPrice * 100, 2) : 0;
+
+        return view('loanmanagement::loans.print.calculator', compact(
+            'businessName',
+            'totalPrice',
+            'downPayment',
+            'principal',
+            'durationMonths',
+            'interestRate',
+            'interestType',
+            'firstDueDate',
+            'lastDueDate',
+            'installments',
+            'printedAt',
+            'loanDate',
+            'loanDateTitle',
+            'schedulePrincipalTotal',
+            'scheduleInterestTotal',
+            'scheduleTotalAmount',
+            'downPercent'
+        ));
     }
 }

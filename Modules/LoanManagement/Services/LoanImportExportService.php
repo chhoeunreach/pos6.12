@@ -1266,7 +1266,7 @@ class LoanImportExportService
         if ($principal <= 0 && $unitPrice > 0) {
             $principal = round($unitPrice * $qty, 2);
         }
-        $interestRate = $this->decimal($row['interest_rate'] ?? 0);
+        $interestRate = $this->importInterestRate($row['interest_rate'] ?? 0);
         $durationMonths = max(1, (int) ($row['duration_months'] ?? $row['installment_count'] ?? $row['total_installment_months'] ?? 1));
         $downPaymentCash = $this->decimal($row['down_payment_cash'] ?? 0);
         $downPaymentBank = $this->decimal($row['down_payment_bank'] ?? 0);
@@ -1446,7 +1446,7 @@ class LoanImportExportService
         if (empty($row['sale_date'])) $errors[] = 'sale_date is required';
         if ($row['principal_amount'] <= 0) $errors[] = 'principal_amount must be greater than 0';
         if (($row['duration_months'] ?? 0) < 1 || ($row['duration_months'] ?? 0) > 360) $errors[] = 'duration_months must be between 1 and 360';
-        if (($row['interest_rate'] ?? 0) < 0 || ($row['interest_rate'] ?? 0) > 100) $errors[] = 'interest_rate must be between 0 and 100';
+        if ($this->importInterestRate($row['interest_rate'] ?? 0) < 0) $errors[] = 'interest_rate must be positive';
         if (! in_array($row['payment_frequency'] ?? 'monthly', ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'], true)) $errors[] = 'payment_frequency is invalid';
         if (empty($row['first_due_date'])) $errors[] = 'first_due_date is required';
         if (! in_array($row['interest_type'] ?? 'flat', ['flat', 'reducing'], true)) $errors[] = 'interest_type must be flat or reducing';
@@ -1620,6 +1620,7 @@ class LoanImportExportService
     protected function storeLoan(array $row, string $duplicateMode = 'skip', ?int $existingLoanId = null): int
     {
         $customerId = $row['customer_id'] ?: $this->firstOrCreateCustomer($row);
+        $interestRate = $this->importInterestRate($row['interest_rate'] ?? 0);
         if ($customerId > 0) {
             $this->updateImportedCustomer($customerId, $row);
         }
@@ -1645,7 +1646,7 @@ class LoanImportExportService
             'source_created_at' => $row['sale_date'],
             'principal_amount' => $row['principal_amount'],
             'interest_amount' => $row['interest_amount'],
-            'interest_rate' => $row['interest_rate'],
+            'interest_rate' => $interestRate,
             'interest_type' => $row['interest_type'],
             'duration_months' => $row['duration_months'],
             'total_amount' => $row['total_amount'],
@@ -1673,7 +1674,7 @@ class LoanImportExportService
             'ptp_amount' => $row['ptp_amount'],
             'note' => $row['note'],
             'meta_json' => json_encode([
-                'interest_rate' => $row['interest_rate'],
+                'interest_rate' => $interestRate,
                 'interest_type' => $row['interest_type'],
                 'imported_customer' => array_intersect_key($row, array_flip([
                     'customer_code', 'khmer_name', 'alternate_phone', 'email', 'id_number', 'gender',
@@ -3148,6 +3149,16 @@ class LoanImportExportService
     protected function decimal($value): float
     {
         return round((float) str_replace(',', '', (string) ($value ?? 0)), 2);
+    }
+
+    protected function importInterestRate($value): float
+    {
+        $rate = $this->decimal($value);
+        if ($rate > 0 && $rate < 1) {
+            $rate *= 100;
+        }
+
+        return round($rate, 2);
     }
 
     protected function date($value): ?string

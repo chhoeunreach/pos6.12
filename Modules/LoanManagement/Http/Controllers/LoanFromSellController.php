@@ -158,7 +158,6 @@ class LoanFromSellController extends Controller
             'downPercent'
         ));
     }
-
     public function search(Request $request): JsonResponse
     {
         $startDate = $request->start_date;

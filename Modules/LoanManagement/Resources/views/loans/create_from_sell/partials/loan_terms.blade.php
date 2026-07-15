@@ -9,7 +9,17 @@
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Loan Date</label><input type="date" name="loan_date" class="form-control" value="{{ date('Y-m-d') }}"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Principal Amount</label><input type="number" step="0.01" id="principal_amount_input" name="principal_amount" class="form-control" value="{{ $sell['defaults']['principal_amount'] }}"></div></div>
         <input type="hidden" id="down_payment_hidden" name="down_payment" value="{{ $sell['defaults']['down_payment'] }}">
-        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Interest Rate</label><input type="number" step="0.01" name="interest_rate" class="form-control" value="{{ isset($sell['defaults']['interest_rate']) && (float)$sell['defaults']['interest_rate'] > 0 ? $sell['defaults']['interest_rate'] : 4 }}"></div></div>
+        <div class="col-sm-6 col-md-3">
+            <div class="form-group">
+                <label>Interest Rate</label>
+                @php
+                    $defaultInterestRate = isset($sell['defaults']['interest_rate']) && (float) $sell['defaults']['interest_rate'] > 0
+                        ? (float) $sell['defaults']['interest_rate']
+                        : 4;
+                @endphp
+                <input type="number" step="0.01" min="0" name="interest_rate" class="form-control" value="{{ old('interest_rate', $defaultInterestRate) }}">
+            </div>
+        </div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Interest Type</label><input type="text" class="form-control" value="Flat" readonly><input type="hidden" name="interest_type" value="flat"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Duration Months</label><input type="number" name="duration_months" class="form-control" min="1" max="360" step="1" required value="{{ old('duration_months', $sell['defaults']['duration_months'] ?? 12) }}"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Payment Frequency</label><select name="payment_frequency" class="form-control"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div></div>

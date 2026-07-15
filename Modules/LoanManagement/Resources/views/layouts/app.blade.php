@@ -294,7 +294,7 @@
                         form.find('#loan_total_due_display').val(due.toFixed(2));
                     }
 
-                    form.find('#principal_amount_input, #payment_amount_input, input[name="interest_rate"], input[name="duration_months"]')
+                    form.find('#principal_amount_input, #payment_amount_input, [name="interest_rate"], input[name="duration_months"]')
                         .off('input.loanAutoInstallment change.loanAutoInstallment')
                         .on('input.loanAutoInstallment change.loanAutoInstallment', updatePaymentSummary);
                     updatePaymentSummary();

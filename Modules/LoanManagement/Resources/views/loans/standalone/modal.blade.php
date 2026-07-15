@@ -768,7 +768,7 @@
                         <div class="mob-grid-2">
                             <div class="mob-field">
                                 <label>Interest %</label>
-                                <input type="number" step="0.01" name="interest_rate" class="mob-input" value="4" min="0">
+                                <input type="number" step="0.01" name="interest_rate" class="mob-input" value="{{ old('interest_rate', 4) }}" min="0">
                             </div>
                             <div class="mob-field">
                                 <label>Interest Type <span class="mob-required">*</span></label>
@@ -999,7 +999,7 @@ function mobPopulateReview() {
     document.getElementById('mobRevCustPhone').textContent = getVal('#modalCustomerPhone') || '-';
 
     var principal = parseFloat(getVal('#modalPrincipalAmount')) || 0;
-    var rate = parseFloat(getVal('input[name="interest_rate"]')) || 0;
+    var rate = parseFloat(getVal('[name="interest_rate"]')) || 0;
     var dur = parseInt(getVal('input[name="duration_months"]')) || 0;
     var freq = getText('select[name="payment_frequency"]');
     var dp = 0;

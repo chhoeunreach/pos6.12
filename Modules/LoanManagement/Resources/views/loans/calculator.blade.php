@@ -508,8 +508,8 @@
             var totalPrice = Math.max(0, numberValue('#calc_total_price'));
             var downPayment = Math.min(totalPrice, Math.max(0, numberValue('#calc_down_payment')));
             var principal = Math.max(0, totalPrice - downPayment);
-            var rate = Math.max(0, numberValue('#calc_interest_rate')) / 100;
             var ratePercent = Math.max(0, numberValue('#calc_interest_rate'));
+            var rate = ratePercent / 100;
             var interestType = $('#calc_interest_type').val() || 'flat';
             var months = Math.max(1, parseInt($('#calc_duration_months').val(), 10) || 1);
             var firstDueValue = $('#calc_first_due_date').val();

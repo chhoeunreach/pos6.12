@@ -33,7 +33,7 @@
         <div class="col-sm-6 col-md-3">
             <div class="form-group">
                 <label>Interest Rate (%)</label>
-                <input type="number" step="0.01" name="interest_rate" class="form-control" value="4" min="0">
+                <input type="number" step="0.01" name="interest_rate" class="form-control" value="{{ old('interest_rate', 4) }}" min="0">
             </div>
         </div>
         <div class="col-sm-6 col-md-3">
