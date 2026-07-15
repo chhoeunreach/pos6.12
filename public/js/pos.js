@@ -155,7 +155,7 @@ $(document).ready(function() {
     //get customer
     $('select#customer_id').select2({
         ajax: {
-            url: '/contacts/customers',
+            url: (typeof base_path !== 'undefined' ? base_path : '') + '/contacts/customers',
             dataType: 'json',
             delay: 250,
             data: function(params) {

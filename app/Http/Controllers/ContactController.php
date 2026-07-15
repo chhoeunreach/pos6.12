@@ -1071,18 +1071,52 @@ class ContactController extends Controller
                 $contacts->onlyCustomers();
             }
 
+            $has_name_parts = Schema::hasColumn('contacts', 'first_name')
+                && Schema::hasColumn('contacts', 'middle_name')
+                && Schema::hasColumn('contacts', 'last_name');
+
             if (! empty($term)) {
-                $contacts->where(function ($query) use ($term) {
-                    $query->where('contacts.name', 'like', '%'.$term.'%')
-                            ->orWhere('supplier_business_name', 'like', '%'.$term.'%')
-                            ->orWhere('mobile', 'like', '%'.$term.'%')
-                            ->orWhere('contacts.contact_id', 'like', '%'.$term.'%');
+                $normalized_term = preg_replace('/\D+/', '', $term);
+                $searchable_columns = [
+                    'contacts.name',
+                    'contacts.supplier_business_name',
+                    'contacts.mobile',
+                    'contacts.contact_id',
+                ];
+                if ($has_name_parts) {
+                    array_push($searchable_columns, 'contacts.first_name', 'contacts.middle_name', 'contacts.last_name');
+                }
+                foreach (['landline', 'alternate_number', 'email', 'tax_number', 'address_line_1', 'address_line_2', 'city', 'state', 'country', 'id_card_number', 'custom_field1', 'custom_field2', 'custom_field3', 'custom_field4', 'custom_field5', 'custom_field6', 'custom_field7', 'custom_field8', 'custom_field9', 'custom_field10'] as $column) {
+                    if (Schema::hasColumn('contacts', $column)) {
+                        $searchable_columns[] = 'contacts.'.$column;
+                    }
+                }
+
+                $contacts->where(function ($query) use ($term, $searchable_columns, $normalized_term, $has_name_parts) {
+                    $query->where('contacts.name', 'like', '%'.$term.'%');
+                    if ($has_name_parts) {
+                        $query->orWhereRaw("TRIM(CONCAT_WS(' ', contacts.first_name, contacts.middle_name, contacts.last_name)) LIKE ?", ['%'.$term.'%']);
+                    }
+                    foreach ($searchable_columns as $column) {
+                        $query->orWhere($column, 'like', '%'.$term.'%');
+                    }
+                    if (! empty($normalized_term)) {
+                        foreach (['mobile', 'landline', 'alternate_number'] as $phone_column) {
+                            if (Schema::hasColumn('contacts', $phone_column)) {
+                                $query->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(contacts.{$phone_column}, ' ', ''), '-', ''), '+', ''), '.', '') LIKE ?", ['%'.$normalized_term.'%']);
+                            }
+                        }
+                    }
                 });
             }
 
+            $contact_display_name = $has_name_parts
+                ? "COALESCE(NULLIF(contacts.name, ''), NULLIF(TRIM(CONCAT_WS(' ', contacts.first_name, contacts.middle_name, contacts.last_name)), ''), contacts.mobile, contacts.contact_id)"
+                : "COALESCE(NULLIF(contacts.name, ''), contacts.mobile, contacts.contact_id)";
+
             $contacts->select(
                 'contacts.id',
-                DB::raw("IF(contacts.contact_id IS NULL OR contacts.contact_id='', contacts.name, CONCAT(contacts.name, ' (', contacts.contact_id, ')')) AS text"),
+                DB::raw("IF(contacts.contact_id IS NULL OR contacts.contact_id='', {$contact_display_name}, CONCAT({$contact_display_name}, ' (', contacts.contact_id, ')')) AS text"),
                 'mobile',
                 'address_line_1',
                 'address_line_2',
@@ -1099,7 +1133,6 @@ class ContactController extends Controller
                 'cg.price_calculation_type',
                 'cg.selling_price_group_id',
                 'shipping_custom_field_details',
-                'id_card_number',
                 'is_export',
                 'export_custom_field_1',
                 'export_custom_field_2',
@@ -1112,7 +1145,7 @@ class ContactController extends Controller
             if (request()->session()->get('business.enable_rp') == 1) {
                 $contacts->addSelect('total_rp');
             }
-            foreach (['province_code', 'district_code', 'commune_code', 'village_code'] as $column) {
+            foreach (['id_card_number', 'province_code', 'district_code', 'commune_code', 'village_code'] as $column) {
                 if (Schema::hasColumn('contacts', $column)) {
                     $contacts->addSelect('contacts.'.$column);
                 }
