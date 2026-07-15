@@ -1666,6 +1666,104 @@ class LoanInstallmentListController extends Controller
         ]);
     }
 
+    public function editWorkflow(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $collectionStatuses = ['new', 'active', 'follow_up', 'ptp', 'overdue', 'escalated', 'recovery', 'closed'];
+        $riskLevels = ['low', 'medium', 'high', 'critical'];
+        $ptpStatuses = ['open', 'kept', 'broken', 'cancelled'];
+        $skipLevels = ['none', 'soft', 'medium', 'hard'];
+
+        return view('loanmanagement::loans.partials.edit_workflow_modal', compact(
+            'loanRow',
+            'collectionStatuses',
+            'riskLevels',
+            'ptpStatuses',
+            'skipLevels'
+        ));
+    }
+
+    public function updateWorkflow(Request $request, int $loan)
+    {
+        try {
+            abort_if(! $this->loanTableExists('loans'), 404);
+
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+            abort_if(! $loanRow, 404);
+
+            $data = $request->validate([
+                'source_type' => 'nullable|string|max:30',
+                'source_created_at' => 'nullable|date',
+                'stock_already_deducted' => 'nullable|boolean',
+                'collection_status' => 'nullable|string|max:50',
+                'risk_level' => 'nullable|string|max:50',
+                'collection_priority' => 'nullable|integer|min:0|max:255',
+                'ptp_date' => 'nullable|date',
+                'ptp_amount' => 'nullable|numeric|min:0',
+                'ptp_note' => 'nullable|string|max:5000',
+                'ptp_status' => 'nullable|string|max:30',
+                'broken_ptp_count' => 'nullable|integer|min:0',
+                'last_contact_at' => 'nullable|date',
+                'last_contact_result' => 'nullable|string|max:100',
+                'next_followup_at' => 'nullable|date',
+                'field_visit_required' => 'nullable|boolean',
+                'skip_level' => 'nullable|string|max:30',
+                'legal_stage' => 'nullable|string|max:100',
+                'recovery_stage' => 'nullable|string|max:100',
+                'repossession_status' => 'nullable|string|max:100',
+                'blacklisted_at' => 'nullable|date',
+                'written_off_at' => 'nullable|date',
+                'assigned_collection_team' => 'nullable|string|max:100',
+                'days_past_due' => 'nullable|integer|min:0',
+                'overdue_bucket' => 'nullable|string|max:30',
+                'contact_attempt_count' => 'nullable|integer|min:0',
+                'last_payment_date' => 'nullable|date',
+                'last_payment_amount' => 'nullable|numeric|min:0',
+                'recovery_score' => 'nullable|integer|min:0|max:65535',
+            ]);
+
+            $data['stock_already_deducted'] = (int) $request->boolean('stock_already_deducted');
+            $data['field_visit_required'] = (int) $request->boolean('field_visit_required');
+
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', array_merge($data, [
+                'updated_at' => now(),
+            ])));
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Source & Collection Workflow updated successfully.',
+                ]);
+            }
+
+            return redirect()
+                ->route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []))
+                ->with('status', ['success' => 1, 'msg' => 'Source & Collection Workflow updated successfully.']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unable to update workflow: '.$e->getMessage(),
+                    'data' => [
+                        'detail' => $e->getFile().':'.$e->getLine(),
+                    ],
+                ], 500);
+            }
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'workflow_error' => 'Unable to update workflow: '.$e->getMessage(),
+                ]);
+        }
+    }
+
     public function updateSchedulesFromEdit(Request $request, int $loan)
     {
         try {
@@ -3530,8 +3628,12 @@ class LoanInstallmentListController extends Controller
             $data['meta_json'] = json_encode($loanMeta, JSON_UNESCAPED_UNICODE);
 
             DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', array_merge($data, [
-                'stock_already_deducted' => (int) $request->boolean('stock_already_deducted'),
-                'field_visit_required' => (int) $request->boolean('field_visit_required'),
+                'stock_already_deducted' => $request->has('stock_already_deducted')
+                    ? (int) $request->boolean('stock_already_deducted')
+                    : (int) ($loanRow->stock_already_deducted ?? 0),
+                'field_visit_required' => $request->has('field_visit_required')
+                    ? (int) $request->boolean('field_visit_required')
+                    : (int) ($loanRow->field_visit_required ?? 0),
                 'updated_at' => now(),
             ])));
 

@@ -623,7 +623,7 @@
                 {{ $editLocationName ?: ($locationName ?? '-') }}
             </div>
         </a>
-        <a href="#lm-section-products" class="lm-standard-card" id="loanProductsReferenceLink">
+        <a href="#lm-section-loan-items" class="lm-standard-card" id="loanProductsReferenceLink">
             <div class="lm-standard-card__head">
                 <span class="lm-standard-card__title">Products</span>
                 <i class="fa fa-cubes lm-standard-card__icon"></i>
@@ -863,30 +863,6 @@
             </div>
         </div>
 
-        <div class="box box-primary lm-edit-box lm-collapsible" data-collapse-key="products" id="lm-section-products">
-            <div class="box-header with-border">
-                <h3 class="box-title">Products</h3>
-                <div class="box-tools pull-right">
-                    <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
-                        <i class="fa fa-minus"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="box-body">
-                <div class="lm-edit-snapshot">
-                    <div class="lm-edit-snapshot__item"><small>Product</small><strong>{{ $loanRow->product_name_snapshot ?? 'Loan Items' }}</strong></div>
-                    <div class="lm-edit-snapshot__item"><small>Items</small><strong>{{ $loanItemsCount ?? 0 }}</strong></div>
-                    <div class="lm-edit-snapshot__item"><small>IMEI</small><strong>{{ $loanRow->imei_snapshot ?? '-' }}</strong></div>
-                    <div class="lm-edit-snapshot__item"><small>Invoice</small><strong>{{ $loanRow->invoice_number_snapshot ?? $loanRow->source_invoice_no ?? '-' }}</strong></div>
-                </div>
-                <div class="text-right" style="margin-top: 10px;">
-                    <button type="button" class="btn btn-xs btn-default" id="loanProductsSectionReferenceButton">
-                        <i class="fa fa-eye"></i> View Reference
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <div class="box box-info lm-edit-box lm-collapsible is-collapsed lm-clean-secondary" data-collapse-key="schedule-preview">
             <div class="box-header with-border">
                 <h3 class="box-title">Schedule Preview</h3>
@@ -966,108 +942,14 @@
             </div>
         </div>
 
-        <div class="box box-primary lm-edit-box lm-collapsible is-collapsed lm-clean-secondary" data-collapse-key="collection-workflow">
-            <div class="box-header with-border">
-                <h3 class="box-title">Source & Collection Workflow</h3>
-                <div class="box-tools pull-right">
-                    <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
-                        <i class="fa fa-minus"></i>
-                    </button>
-                </div>
-            </div>
+        <div class="box box-primary lm-edit-box lm-clean-secondary">
             <div class="box-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Source Type</label>
-                            <input type="text" name="source_type" class="form-control" value="{{ old('source_type', $loanRow->source_type ?? '') }}">
-                            @error('source_type')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Source Created At</label>
-                            <input type="date" name="source_created_at" class="form-control" value="{{ old('source_created_at', !empty($loanRow->source_created_at) ? \Carbon\Carbon::parse($loanRow->source_created_at)->format('Y-m-d') : '') }}">
-                            @error('source_created_at')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Collection Status</label>
-                            <select name="collection_status" class="form-control">
-                                <option value="">Select</option>
-                                @foreach($collectionStatuses as $status)
-                                    <option value="{{ $status }}" {{ old('collection_status', $loanRow->collection_status ?? '') === $status ? 'selected' : '' }}>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>
-                                @endforeach
-                            </select>
-                            @error('collection_status')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Risk Level</label>
-                            <select name="risk_level" class="form-control">
-                                <option value="">Select</option>
-                                @foreach($riskLevels as $risk)
-                                    <option value="{{ $risk }}" {{ old('risk_level', $loanRow->risk_level ?? '') === $risk ? 'selected' : '' }}>{{ ucfirst($risk) }}</option>
-                                @endforeach
-                            </select>
-                            @error('risk_level')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3"><div class="form-group"><label>Collection Priority</label><input type="number" min="0" name="collection_priority" class="form-control" value="{{ old('collection_priority', $loanRow->collection_priority ?? 0) }}">@error('collection_priority')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>PTP Date</label><input type="date" name="ptp_date" class="form-control" value="{{ old('ptp_date', !empty($loanRow->ptp_date) ? \Carbon\Carbon::parse($loanRow->ptp_date)->format('Y-m-d') : '') }}">@error('ptp_date')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>PTP Amount</label><input type="number" step="0.01" min="0" name="ptp_amount" class="form-control" value="{{ old('ptp_amount', $loanRow->ptp_amount ?? 0) }}">@error('ptp_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>PTP Status</label>
-                            <select name="ptp_status" class="form-control">
-                                <option value="">Select</option>
-                                @foreach($ptpStatuses as $status)
-                                    <option value="{{ $status }}" {{ old('ptp_status', $loanRow->ptp_status ?? '') === $status ? 'selected' : '' }}>{{ ucfirst($status) }}</option>
-                                @endforeach
-                            </select>
-                            @error('ptp_status')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3"><div class="form-group"><label>Broken PTP Count</label><input type="number" min="0" name="broken_ptp_count" class="form-control" value="{{ old('broken_ptp_count', $loanRow->broken_ptp_count ?? 0) }}">@error('broken_ptp_count')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Last Contact At</label><input type="date" name="last_contact_at" class="form-control" value="{{ old('last_contact_at', !empty($loanRow->last_contact_at) ? \Carbon\Carbon::parse($loanRow->last_contact_at)->format('Y-m-d') : '') }}">@error('last_contact_at')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Next Followup At</label><input type="date" name="next_followup_at" class="form-control" value="{{ old('next_followup_at', !empty($loanRow->next_followup_at) ? \Carbon\Carbon::parse($loanRow->next_followup_at)->format('Y-m-d') : '') }}">@error('next_followup_at')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3">
-                        <div class="checkbox" style="margin-top: 32px;">
-                            <label><input type="checkbox" name="stock_already_deducted" value="1" {{ old('stock_already_deducted', $loanRow->stock_already_deducted ?? 0) ? 'checked' : '' }}> Stock already deducted</label>
-                        </div>
-                        <div class="checkbox">
-                            <label><input type="checkbox" name="field_visit_required" value="1" {{ old('field_visit_required', $loanRow->field_visit_required ?? 0) ? 'checked' : '' }}> Field visit required</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Skip Level</label>
-                            <select name="skip_level" class="form-control">
-                                <option value="">Select</option>
-                                @foreach($skipLevels as $skip)
-                                    <option value="{{ $skip }}" {{ old('skip_level', $loanRow->skip_level ?? '') === $skip ? 'selected' : '' }}>{{ ucfirst($skip) }}</option>
-                                @endforeach
-                            </select>
-                            @error('skip_level')<span class="lm-field-error">{{ $message }}</span>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3"><div class="form-group"><label>Legal Stage</label><input type="text" name="legal_stage" class="form-control" value="{{ old('legal_stage', $loanRow->legal_stage ?? '') }}">@error('legal_stage')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Recovery Stage</label><input type="text" name="recovery_stage" class="form-control" value="{{ old('recovery_stage', $loanRow->recovery_stage ?? '') }}">@error('recovery_stage')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Repossession Status</label><input type="text" name="repossession_status" class="form-control" value="{{ old('repossession_status', $loanRow->repossession_status ?? '') }}">@error('repossession_status')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Assigned Collection Team</label><input type="text" name="assigned_collection_team" class="form-control" value="{{ old('assigned_collection_team', $loanRow->assigned_collection_team ?? '') }}">@error('assigned_collection_team')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Days Past Due</label><input type="number" min="0" name="days_past_due" class="form-control" value="{{ old('days_past_due', $loanRow->days_past_due ?? 0) }}">@error('days_past_due')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Overdue Bucket</label><input type="text" name="overdue_bucket" class="form-control" value="{{ old('overdue_bucket', $loanRow->overdue_bucket ?? '') }}">@error('overdue_bucket')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Contact Attempt Count</label><input type="number" min="0" name="contact_attempt_count" class="form-control" value="{{ old('contact_attempt_count', $loanRow->contact_attempt_count ?? 0) }}">@error('contact_attempt_count')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Recovery Score</label><input type="number" min="0" name="recovery_score" class="form-control" value="{{ old('recovery_score', $loanRow->recovery_score ?? 0) }}">@error('recovery_score')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Last Payment Date</label><input type="date" name="last_payment_date" class="form-control" value="{{ old('last_payment_date', !empty($loanRow->last_payment_date) ? \Carbon\Carbon::parse($loanRow->last_payment_date)->format('Y-m-d') : '') }}">@error('last_payment_date')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Last Payment Amount</label><input type="number" step="0.01" min="0" name="last_payment_amount" class="form-control" value="{{ old('last_payment_amount', $loanRow->last_payment_amount ?? 0) }}">@error('last_payment_amount')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Blacklisted At</label><input type="date" name="blacklisted_at" class="form-control" value="{{ old('blacklisted_at', !empty($loanRow->blacklisted_at) ? \Carbon\Carbon::parse($loanRow->blacklisted_at)->format('Y-m-d') : '') }}">@error('blacklisted_at')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-3"><div class="form-group"><label>Written Off At</label><input type="date" name="written_off_at" class="form-control" value="{{ old('written_off_at', !empty($loanRow->written_off_at) ? \Carbon\Carbon::parse($loanRow->written_off_at)->format('Y-m-d') : '') }}">@error('written_off_at')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-6"><div class="form-group"><label>Last Contact Result</label><input type="text" name="last_contact_result" class="form-control" value="{{ old('last_contact_result', $loanRow->last_contact_result ?? '') }}">@error('last_contact_result')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                    <div class="col-md-6"><div class="form-group"><label>PTP Note</label><textarea name="ptp_note" class="form-control" rows="2">{{ old('ptp_note', $loanRow->ptp_note ?? '') }}</textarea>@error('ptp_note')<span class="lm-field-error">{{ $message }}</span>@enderror</div></div>
-                </div>
+                <button type="button"
+                        class="btn btn-default btn-modal"
+                        data-href="{{ route('loan-management.loans.workflow.edit', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                        data-container=".view_modal">
+                    <i class="fa fa-sitemap"></i> Source & Collection Workflow
+                </button>
             </div>
         </div>
 
@@ -1138,7 +1020,6 @@
         var customerDepositPaymentsAmountInput = document.getElementById('loanCustomerDepositPaymentsAmount');
         var regeneratePrincipalButton = document.getElementById('btnRegeneratePrincipalAfterDeposit');
         var productsReferenceLink = document.getElementById('loanProductsReferenceLink');
-        var productsSectionReferenceButton = document.getElementById('loanProductsSectionReferenceButton');
         var pendingProductReferenceOpen = false;
 
         function formatMoney(value) {
@@ -1181,13 +1062,7 @@
         }
 
         if (productsReferenceLink) {
-            productsReferenceLink.addEventListener('click', function () {
-                pendingProductReferenceOpen = false;
-            });
-        }
-
-        if (productsSectionReferenceButton) {
-            productsSectionReferenceButton.addEventListener('click', function (event) {
+            productsReferenceLink.addEventListener('click', function (event) {
                 event.preventDefault();
                 pendingProductReferenceOpen = true;
                 openProductReference();
