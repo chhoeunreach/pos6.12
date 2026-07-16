@@ -79,7 +79,7 @@ class LoanLocationController extends Controller
         $this->ensureTelegramChatColumns();
         $this->ensureLocationCrudColumns();
 
-        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'status'];
+        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'telegram_number', 'status'];
         $rows = DB::connection($this->connection)
             ->table($this->table)
             ->when($this->hasColumnCached($this->table, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
@@ -103,8 +103,8 @@ class LoanLocationController extends Controller
 
     public function template()
     {
-        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'status'];
-        $example = ['Phnom Penh Branch', 'PP01', 'KY', 'Street 271, Phnom Penh', '012345678', 'active'];
+        $columns = ['name', 'location_code', 'loan_invoice_prefix', 'address', 'phone', 'telegram_number', 'status'];
+        $example = ['Phnom Penh Branch', 'PP01', 'KY', 'Street 271, Phnom Penh', '012345678', '0717221349', 'active'];
 
         $handle = fopen('php://temp', 'r+');
         fputcsv($handle, $columns);
@@ -531,6 +531,7 @@ class LoanLocationController extends Controller
         $columns = [
             'address' => fn ($table) => $table->text('address')->nullable()->after('loan_invoice_prefix'),
             'phone' => fn ($table) => $table->string('phone', 50)->nullable()->after('address'),
+            'telegram_number' => fn ($table) => $table->string('telegram_number', 50)->nullable()->after('phone'),
             'status' => fn ($table) => $table->string('status', 20)->default('active'),
         ];
 
@@ -552,6 +553,7 @@ class LoanLocationController extends Controller
             'loan_invoice_prefix' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:2000',
             'phone' => 'nullable|string|max:50',
+            'telegram_number' => 'nullable|string|max:50',
             'status' => 'nullable|in:active,inactive',
         ]);
     }
@@ -564,6 +566,7 @@ class LoanLocationController extends Controller
             'loan_invoice_prefix' => $this->cleanLoanInvoicePrefix($data['loan_invoice_prefix'] ?? null),
             'address' => trim((string) ($data['address'] ?? '')) ?: null,
             'phone' => trim((string) ($data['phone'] ?? '')) ?: null,
+            'telegram_number' => trim((string) ($data['telegram_number'] ?? '')) ?: null,
             'status' => $data['status'] ?? 'active',
         ];
     }
@@ -898,6 +901,9 @@ class LoanLocationController extends Controller
             'location_id' => 'location_code',
             'branch_name' => 'name',
             'invoice_prefix' => 'loan_invoice_prefix',
+            'telegram' => 'telegram_number',
+            'telegram_no' => 'telegram_number',
+            'telegram_phone' => 'telegram_number',
         ];
 
         return $aliases[$header] ?? trim((string) $header, '_');
@@ -926,6 +932,7 @@ class LoanLocationController extends Controller
             'loan_invoice_prefix' => $this->cleanLoanInvoicePrefix($row['loan_invoice_prefix'] ?? null),
             'address' => trim((string) ($row['address'] ?? '')) ?: null,
             'phone' => trim((string) ($row['phone'] ?? '')) ?: null,
+            'telegram_number' => trim((string) ($row['telegram_number'] ?? '')) ?: null,
             'status' => in_array(($row['status'] ?? 'active'), ['active', 'inactive'], true) ? $row['status'] : 'active',
         ];
     }

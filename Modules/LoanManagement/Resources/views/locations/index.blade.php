@@ -162,6 +162,7 @@
                         <th>Location ID</th>
                         <th>Address</th>
                         <th>Phone</th>
+                        <th>Telegram Number</th>
                         <th>Loan Invoice Prefix</th>
                         <th>Assets</th>
                         <th>Status</th>
@@ -184,6 +185,7 @@
                             <td>{{ $location->location_code ?? '-' }}</td>
                             <td><span class="text-ellipsis" title="{{ $location->address ?? '' }}">{{ $location->address ?? '-' }}</span></td>
                             <td>{{ $location->phone ?? '-' }}</td>
+                            <td>{{ $location->telegram_number ?? '-' }}</td>
                             <td>
                                 {{ $location->loan_invoice_prefix ?? '-' }}<br>
                                 <small class="text-muted">{{ $invoicePrefixExample }}-{{ date('Ymd') }}-000001</small>
@@ -217,6 +219,7 @@
                                     data-location_code="{{ $location->location_code ?? '' }}"
                                     data-loan_invoice_prefix="{{ $location->loan_invoice_prefix ?? '' }}"
                                     data-phone="{{ $location->phone ?? '' }}"
+                                    data-telegram_number="{{ $location->telegram_number ?? '' }}"
                                     data-status="{{ $location->status ?? 'active' }}"
                                     data-address="{{ $location->address ?? '' }}">
                                     <i class="glyphicon glyphicon-edit"></i> Edit
@@ -250,7 +253,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center text-muted">No locations found.</td>
+                            <td colspan="9" class="text-center text-muted">No locations found.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -291,7 +294,7 @@
                     <div class="modal-body">
                         <div class="alert alert-info">
                             Required column: <code>name</code><br>
-                            Optional columns: <code>location_code</code>, <code>loan_invoice_prefix</code>, <code>address</code>, <code>phone</code>, <code>status</code>
+                            Optional columns: <code>location_code</code>, <code>loan_invoice_prefix</code>, <code>address</code>, <code>phone</code>, <code>telegram_number</code>, <code>status</code>
                         </div>
                         <div class="form-group">
                             <label>Import File</label>
@@ -478,7 +481,7 @@
                         pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
                         order: [[0, 'asc']],
                         columnDefs: [
-                            { targets: [5, 7], orderable: false }
+                            { targets: [6, 8], orderable: false }
                         ]
                     });
                 }
@@ -493,6 +496,7 @@
                 form.find('input[name="location_code"]').val(button.data('location_code') || '');
                 form.find('input[name="loan_invoice_prefix"]').val(button.data('loan_invoice_prefix') || '');
                 form.find('input[name="phone"]').val(button.data('phone') || '');
+                form.find('input[name="telegram_number"]').val(button.data('telegram_number') || '');
                 form.find('select[name="status"]').val(button.data('status') || 'active');
                 form.find('textarea[name="address"]').val(button.data('address') || '');
                 $('#loanLocationEditModalLabel').text('Edit Loan Location: ' + (button.data('name') || ''));

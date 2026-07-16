@@ -807,7 +807,7 @@
             <div class="brand-spacer"></div>
         </div>
         <div class="tagline">
-            លក់ដុំ-រាយ និងសេវាកម្ម | សម្រាប់ព័ត៌មានបង់ប្រាក់ Telegram លេខ 0717221349
+            លក់ដុំ-រាយ និងសេវាកម្ម | សម្រាប់ព័ត៌មានបង់ប្រាក់ Telegram លេខ {{ $telegramNumber ?? '0717221349' }}
         </div>
     </div>
 
@@ -1002,7 +1002,7 @@
                 <td class="text-right bold">$ {{ number_format($schedulePrincipalTotal, 2) }}</td>
                 <td class="text-right bold">$ {{ number_format($scheduleInterestTotal, 2) }}</td>
                 <td class="text-right bold">$ {{ number_format($scheduleTotalAmount, 2) }}</td>
-                <td colspan="4" class="contact-line">សម្រាប់បង់លុយទំនាក់ទំនងតាម Telegram លេខ 0717221349</td>
+                <td colspan="4" class="contact-line">សម្រាប់បង់លុយទំនាក់ទំនងតាម Telegram លេខ {{ $telegramNumber ?? '0717221349' }}</td>
             </tr>
         </tbody>
     </table>

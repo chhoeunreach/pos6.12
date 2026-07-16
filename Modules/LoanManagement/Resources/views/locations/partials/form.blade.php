@@ -31,6 +31,13 @@
     </div>
     <div class="col-sm-6">
         <div class="form-group">
+            <label>Telegram Number:</label>
+            <input type="text" name="telegram_number" class="form-control" placeholder="Telegram number" value="{{ old('telegram_number', $location->telegram_number ?? '') }}">
+        </div>
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-sm-6">
+        <div class="form-group">
             <label>Status:</label>
             @php $status = old('status', $location->status ?? 'active'); @endphp
             <select name="status" class="form-control">

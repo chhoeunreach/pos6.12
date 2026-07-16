@@ -1265,12 +1265,15 @@ class LoanInstallmentListController extends Controller
         $logo = null;
         $paymentQr = null;
         $telegramQr = null;
+        $telegramNumber = null;
         if ($locationRow) {
             $logo = $this->assetFromPublicPath($locationRow->logo_path ?? null);
             $paymentQr = $this->assetFromPublicPath($locationRow->payment_qr_path ?? null);
             $telegramQr = $this->assetFromPublicPath($locationRow->telegram_qr_path ?? null);
+            $telegramNumber = trim((string) ($locationRow->telegram_number ?? '')) ?: null;
         }
         $logo = $logo ?: $this->businessLogoAsset();
+        $telegramNumber = $telegramNumber ?: '0717221349';
 
         return view('loanmanagement::loans.print.loan', compact(
             'loanRow',
@@ -1284,6 +1287,7 @@ class LoanInstallmentListController extends Controller
             'logo',
             'paymentQr',
             'telegramQr',
+            'telegramNumber',
             'createdByName'
         ));
     }
