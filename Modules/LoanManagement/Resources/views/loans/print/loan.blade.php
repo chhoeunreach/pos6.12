@@ -373,6 +373,105 @@
             font-size: 10px;
         }
         .nowrap { white-space: nowrap; }
+        .page.loan-print-compact {
+            padding: 7mm 12mm 5mm;
+        }
+        .loan-print-compact .header {
+            min-height: 20mm;
+        }
+        .loan-print-compact .brand-row {
+            min-height: 17mm;
+        }
+        .loan-print-compact .logo-wrap {
+            width: 24mm;
+            height: 17mm;
+        }
+        .loan-print-compact .logo {
+            max-width: 24mm;
+            max-height: 17mm;
+        }
+        .loan-print-compact .brand-title {
+            font-size: 20px;
+        }
+        .loan-print-compact .tagline {
+            margin-top: 1mm;
+            font-size: 9px;
+        }
+        .loan-print-compact .info-grid {
+            margin-top: 1mm;
+            margin-bottom: 0.8mm;
+        }
+        .loan-print-compact .info-table td {
+            padding: 0.8mm 0;
+            font-size: 10px;
+        }
+        .loan-print-compact .info-table .label {
+            font-size: 10.5px;
+        }
+        .loan-print-compact .address-row {
+            padding: 0.8mm 0 1.6mm;
+        }
+        .loan-print-compact .print-table th,
+        .loan-print-compact .print-table td {
+            padding: 0.55mm 0.7mm;
+            font-size: 8.7px;
+            line-height: 1.08;
+        }
+        .loan-print-compact .schedule-table th,
+        .loan-print-compact .schedule-table td {
+            padding: 0.45mm 0.6mm;
+            font-size: 8.4px;
+            line-height: 1.05;
+        }
+        .loan-print-compact .schedule-table th {
+            font-size: 8.8px;
+        }
+        .loan-print-compact .signature-row {
+            margin-top: 2mm;
+            min-height: 15mm;
+        }
+        .loan-print-compact .signature-name {
+            margin-top: 4mm;
+        }
+        .loan-print-compact .notice {
+            padding: 1.8mm 0;
+            font-size: 9.2px;
+            line-height: 1.25;
+        }
+        .loan-print-compact .notice .title {
+            font-size: 11px;
+        }
+        .loan-print-compact .warranty-line {
+            font-size: 8.6px;
+            line-height: 1.25;
+        }
+        .loan-print-compact .payment-area {
+            padding-top: 2mm;
+            gap: 8mm;
+        }
+        .loan-print-compact .payment-card {
+            min-height: 28mm;
+        }
+        .loan-print-compact .payment-card .caption {
+            font-size: 8.6px;
+            margin-bottom: 1mm;
+        }
+        .loan-print-compact .qr-large {
+            max-width: 28mm;
+            max-height: 28mm;
+        }
+        .loan-print-compact .qr-small {
+            max-width: 22mm;
+            max-height: 22mm;
+        }
+        .loan-print-compact .transfer-number {
+            margin: 2mm 0 1.5mm;
+            font-size: 11px;
+        }
+        .loan-print-compact .printed-date {
+            margin-top: 1.5mm;
+            font-size: 8px;
+        }
 
         @page { size: A4 portrait; margin: 5mm; }
         @media print {
@@ -383,6 +482,9 @@
                 min-height: auto;
                 margin: 0;
                 padding: 5mm 8mm 4mm;
+            }
+            .page.loan-print-compact {
+                padding: 4mm 7mm 3mm;
             }
             .print-table th,
             .print-table td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -398,6 +500,12 @@
             .schedule-table td {
                 padding: 0.8mm 0.8mm;
                 font-size: 9px;
+            }
+            .loan-print-compact .schedule-table th,
+            .loan-print-compact .schedule-table td {
+                padding: 0.35mm 0.5mm;
+                font-size: 8px;
+                line-height: 1.04;
             }
             .contact-line {
                 font-size: 12px;
@@ -483,6 +591,7 @@
     $interestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
     $downPercent = $productTotal > 0 ? ($downPayment / max($productTotal, 1) * 100) : 0;
     $paymentsBySchedule = $payments->groupBy(fn ($payment) => $payment->_print_schedule_id ?? $payment->schedule_id ?? null);
+    $isCompactPrint = $installments->count() >= 10;
     $paymentTypes = [];
     try {
         $paymentTypes = app(\App\Utils\TransactionUtil::class)->payment_types(
@@ -500,12 +609,18 @@
         }
 
         $normalized = strtolower(str_replace([' ', '-', '_'], '', $method));
+        if (strpos($normalized, 'aba') !== false) {
+            return 'ABA';
+        }
+        if (strpos($normalized, 'wing') !== false) {
+            return 'Wing';
+        }
         $knownNames = [
-            'aba' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'ababank' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'abapay' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'wing' => 'វីងវេលុយ (Wing)',
-            'wingmoney' => 'វីងវេលុយ (Wing)',
+            'aba' => 'ABA',
+            'ababank' => 'ABA',
+            'abapay' => 'ABA',
+            'wing' => 'Wing',
+            'wingmoney' => 'Wing',
             'cash' => 'Cash',
         ];
 
@@ -578,7 +693,7 @@
     <span class="copy-status" id="copy_loan_as_image_status"></span>
 </div>
 
-<div class="page">
+<div class="page {{ $isCompactPrint ? 'loan-print-compact' : '' }}">
     <div class="header">
         <div class="brand-row">
             <div class="logo-wrap">
