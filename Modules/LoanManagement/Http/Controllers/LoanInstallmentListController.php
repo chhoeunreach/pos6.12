@@ -971,13 +971,16 @@ class LoanInstallmentListController extends Controller
                     if ($interest <= 0 && $interestDue > 0) {
                         $interest = $interestDue;
                     }
+                    $calculatedDue = round($principal + $interest, 2);
                     $amountDue = (float) ($row->schedule_amount ?? 0);
                     $amountDueAlt = (float) ($row->amount_due ?? 0);
-                    if (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
+                    if ($calculatedDue > 0 && round($amountDue, 2) !== $calculatedDue) {
+                        $amountDue = $calculatedDue;
+                    } elseif (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
                         $amountDue = $amountDueAlt;
                     }
                     if ($amountDue <= 0) {
-                        $amountDue = round($principal + $interest, 2);
+                        $amountDue = $calculatedDue;
                     }
                     $paidAmount = (float) ($row->paid_amount ?? 0);
                     if ($paidAmount <= 0) {
@@ -3184,17 +3187,19 @@ class LoanInstallmentListController extends Controller
             if ($interest <= 0 && $interestDue > 0) {
                 $interest = $interestDue;
             }
+            $calculatedDue = round($principal + $interest, 2);
             $amountDue = (float) ($schedule->schedule_amount ?? 0);
             $amountDueAlt = (float) ($schedule->amount_due ?? 0);
-            if (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
+            if ($calculatedDue > 0 && round($amountDue, 2) !== $calculatedDue) {
+                $amountDue = $calculatedDue;
+            } elseif (($amountDue <= 0 || round($amountDue, 2) === round($principal, 2)) && $amountDueAlt > $amountDue) {
                 $amountDue = $amountDueAlt;
             }
             if ($amountDue <= 0) {
-                $amountDue = round($principal + $interest, 2);
+                $amountDue = $calculatedDue;
             }
             $paid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? $schedule->paid_value ?? 0);
-            $status = strtolower((string) ($schedule->status ?? ''));
-            if (in_array($status, ['paid', 'completed'], true)) {
+            if ($paid <= 0 && in_array(strtolower((string) ($schedule->status ?? '')), ['paid', 'completed'], true)) {
                 $paid = $amountDue;
             }
 

@@ -459,7 +459,7 @@
     $productTotal = $products->sum(fn ($p) => (float) ($p->subtotal ?? ((float) ($p->quantity ?? 1) * (float) ($p->unit_price_inc_tax ?? 0))));
     $schedulePrincipalTotal = $installments->sum(fn ($row) => (float) ($row->installment_value ?? 0));
     $scheduleInterestTotal = $installments->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
-    $scheduleTotalAmount = $installments->sum(fn ($row) => (float) ($row->amount_due ?? ((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0))));
+    $scheduleTotalAmount = $installments->sum(fn ($row) => round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2));
     $downPayment = (float) ($loanRow->down_payment ?? 0);
     $loanAmount = (float) ($loanRow->principal_amount ?? max(0, $productTotal - $downPayment));
     if ($productTotal <= 0 && ($loanAmount > 0 || $downPayment > 0)) {
@@ -725,12 +725,15 @@
         <tbody>
             @forelse($installments as $row)
                 @php
-                    $rowTotal = (float) ($row->amount_due ?? 0);
+                    $rowTotal = round((float) $row->installment_value + (float) $row->benefit_value, 2);
                     if ($rowTotal <= 0) {
-                        $rowTotal = round((float) $row->installment_value + (float) $row->benefit_value, 2);
+                        $rowTotal = (float) ($row->amount_due ?? 0);
                     }
                     $rowPayments = $paymentsBySchedule->get($row->id, collect());
                     $paid = (float) ($row->paid_value ?? $rowPayments->sum(fn ($p) => (float) ($p->total_paid_base ?? $p->amount ?? 0)));
+                    $rowStatus = $paid >= $rowTotal && $rowTotal > 0
+                        ? 'Paid'
+                        : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
                     $paymentDates = $rowPayments
                         ->map(fn ($p) => $p->paid_date ?? $p->paid_at ?? null)
                         ->filter()
@@ -756,7 +759,7 @@
                     <td class="bold nowrap">{!! $paymentDates->implode('<br>') !!}</td>
                     <td class="text-right">{!! $paymentLines->implode(' ') !!}</td>
                     <td class="text-right">{{ $paid > 0 ? '$ '.number_format($paid, 2) : '' }}</td>
-                    <td>{{ ucfirst($row->status ?? '') }}</td>
+                    <td>{{ $rowStatus }}</td>
                 </tr>
             @empty
                 <tr><td colspan="9">No schedule</td></tr>
@@ -827,10 +830,17 @@
 <script>
     function buildLoanImageSvg(target) {
         var rect = target.getBoundingClientRect();
-        var width = Math.ceil(rect.width);
-        var height = Math.ceil(rect.height);
+        var width = Math.ceil(rect.width || target.offsetWidth || 794);
+        var height = Math.round(width * 297 / 210);
         var serializer = new XMLSerializer();
         var clone = target.cloneNode(true);
+        clone.style.width = width + 'px';
+        clone.style.height = height + 'px';
+        clone.style.minHeight = height + 'px';
+        clone.style.margin = '0';
+        clone.style.boxSizing = 'border-box';
+        clone.style.overflow = 'hidden';
+        clone.style.background = '#fff';
         var styles = Array.from(document.querySelectorAll('style'))
             .map(function(styleTag) { return styleTag.textContent || ''; })
             .join('\n');
@@ -838,7 +848,7 @@
         var svg = ''
             + '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
             + '<foreignObject width="100%" height="100%">'
-            + '<div xmlns="http://www.w3.org/1999/xhtml">'
+            + '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;height:' + height + 'px;background:#fff;overflow:hidden;">'
             + '<style>' + styles + '</style>'
             + html
             + '</div>'
@@ -864,6 +874,7 @@
         status.textContent = 'Preparing image...';
 
         try {
+            await waitForLoanPrintAssets();
             var payload = buildLoanImageSvg(target);
             var image = new Image();
             image.decoding = 'async';
