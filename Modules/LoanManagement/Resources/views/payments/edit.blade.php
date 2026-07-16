@@ -23,6 +23,9 @@
         <form method="POST" action="{{ route('loan-management.payments.update', $payment->id) }}">
             @csrf
             @method('PUT')
+            @if(!empty($backCustomerId))
+                <input type="hidden" name="return_to" value="{{ route('loan-management.customers.edit', $backCustomerId) }}">
+            @endif
             <div class="box-body">
                 <div class="row">
                     <div class="col-md-3">

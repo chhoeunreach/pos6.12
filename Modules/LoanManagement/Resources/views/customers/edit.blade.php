@@ -110,6 +110,7 @@
             <h3 class="box-title">Related Loans</h3>
         </div>
         <div class="box-body table-responsive">
+            @php $customerEditReturnUrl = route('loan-management.customers.edit', $customerRow->id); @endphp
             <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
@@ -137,6 +138,18 @@
                                 </a>
                                 <a href="{{ route('loan-management.loans.edit', ['loan' => $loan->id, 'customer_id' => $customerRow->id]) }}" class="btn btn-xs btn-primary">
                                     <i class="fa fa-pencil"></i> Edit
+                                </a>
+                                <a href="#"
+                                   class="btn btn-xs btn-success btn-modal"
+                                   data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loan->id, 'return_to' => $customerEditReturnUrl]) }}"
+                                   data-container=".view_modal">
+                                    <i class="fa fa-money"></i> Add Payment
+                                </a>
+                                <a href="#"
+                                   class="btn btn-xs btn-warning btn-modal"
+                                   data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loan->id, 'deposit_payment' => 1, 'return_to' => $customerEditReturnUrl]) }}"
+                                   data-container=".view_modal">
+                                    <i class="fa fa-plus-circle"></i> Add Deposit
                                 </a>
                             </td>
                         </tr>
@@ -191,6 +204,16 @@
                                 <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id, 'customer_id' => $customerRow->id]) }}" class="btn btn-xs btn-primary">
                                     <i class="fa fa-pencil"></i> Edit
                                 </a>
+                                <form method="POST"
+                                      action="{{ route('loan-management.payments.destroy', ['payment' => $payment->id, 'return_to' => $customerEditReturnUrl]) }}"
+                                      style="display:inline;"
+                                      onsubmit="return confirm('Delete this payment? This will update loan balances and schedules.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-xs btn-danger">
+                                        <i class="fa fa-trash"></i> Delete
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     @empty

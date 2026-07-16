@@ -181,11 +181,11 @@ class LoanPaymentController extends Controller
         $this->refreshLoanTotals((int) $row->loan_id);
 
         return redirect()
-            ->route('loan-management.payments.index')
+            ->to($this->safeReturnTo($request, route('loan-management.payments.index')))
             ->with('status', ['success' => 1, 'msg' => 'Payment updated successfully.']);
     }
 
-    public function destroy(int $payment)
+    public function destroy(Request $request, int $payment)
     {
         $row = $this->paymentRow($payment);
         abort_if(! $row, 404);
@@ -206,7 +206,7 @@ class LoanPaymentController extends Controller
         $this->refreshLoanTotals((int) $row->loan_id);
 
         return redirect()
-            ->route('loan-management.payments.index')
+            ->to($this->safeReturnTo($request, route('loan-management.payments.index')))
             ->with('status', ['success' => 1, 'msg' => 'Payment deleted successfully.']);
     }
 
@@ -565,5 +565,18 @@ class LoanPaymentController extends Controller
     {
         return Schema::connection($this->connection)->hasTable($table)
             && Schema::connection($this->connection)->hasColumn($table, $column);
+    }
+
+    protected function safeReturnTo(Request $request, string $fallback): string
+    {
+        $returnTo = trim((string) $request->input('return_to', $request->query('return_to', '')));
+
+        $allowedPrefix = url('/loan-management');
+        if ($returnTo !== ''
+            && substr($returnTo, 0, strlen($allowedPrefix)) === $allowedPrefix) {
+            return $returnTo;
+        }
+
+        return $fallback;
     }
 }

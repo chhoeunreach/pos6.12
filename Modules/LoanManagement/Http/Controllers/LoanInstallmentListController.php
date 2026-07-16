@@ -1472,7 +1472,7 @@ class LoanInstallmentListController extends Controller
 
         $totalAmount = round((float) $paymentLines->sum('amount'), 2);
         $createdPaymentIds = [];
-        $returnTo = trim((string) $request->input('return_to', ''));
+        $returnTo = $this->safeLoanReturnTo($request, '');
 
         if ($paymentLines->isEmpty() || $totalAmount <= 0) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -1590,7 +1590,7 @@ class LoanInstallmentListController extends Controller
             }
 
             return redirect()
-                ->route('loan-management.loans.view', $loan)
+                ->to($returnTo !== '' ? $returnTo : route('loan-management.loans.view', $loan))
                 ->with('status', ['success' => 1, 'msg' => 'Payment added successfully']);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -1613,6 +1613,19 @@ class LoanInstallmentListController extends Controller
                 ->withInput()
                 ->withErrors(['payment_error' => 'Payment failed: '.$e->getMessage()]);
         }
+    }
+
+    protected function safeLoanReturnTo(Request $request, string $fallback): string
+    {
+        $returnTo = trim((string) $request->input('return_to', $request->query('return_to', '')));
+        $allowedPrefix = url('/loan-management');
+
+        if ($returnTo !== ''
+            && substr($returnTo, 0, strlen($allowedPrefix)) === $allowedPrefix) {
+            return $returnTo;
+        }
+
+        return $fallback;
     }
 
     public function editSchedule(int $loan, int $schedule)
