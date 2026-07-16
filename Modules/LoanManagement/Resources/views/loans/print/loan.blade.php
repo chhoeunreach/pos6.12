@@ -11,8 +11,11 @@
         :root {
             --orange: #ff8a00;
             --light-blue: #7f9bb1;
-            --line: #222;
-            --soft-line: #777;
+            --line: #1f2933;
+            --grid-line: #9aa4ad;
+            --soft-line: #c7ced4;
+            --header-bg: #f4f6f8;
+            --row-alt: #fbfcfd;
         }
         * { box-sizing: border-box; }
         body {
@@ -154,14 +157,13 @@
             line-height: 1.12;
         }
         .print-table th {
-            background: #f6f6f6;
+            background: var(--header-bg);
             font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
         }
         .print-table .dotted td,
         .schedule-table td {
-            border-style: dotted;
-            border-color: #666;
+            border: 1px solid var(--grid-line);
         }
         .print-table .solid td,
         .print-table .solid th {
@@ -170,7 +172,8 @@
         .product-title {
             border-left: 1px solid var(--line);
             border-right: 1px solid var(--line);
-            border-top: 1px solid var(--line);
+            border-top: 1.6px solid var(--orange);
+            background: #fff;
             display: grid;
             grid-template-columns: 1fr 45mm;
             align-items: center;
@@ -215,7 +218,7 @@
         }
         .summary-terms-cell {
             width: 67%;
-            border-right: 1px solid var(--line) !important;
+            border-right: 1px solid var(--soft-line) !important;
             padding: 1.3mm 2mm !important;
         }
         .summary-totals-cell {
@@ -244,7 +247,7 @@
         }
         .print-table .summary-totals td {
             border: 0;
-            border-bottom: 1px solid var(--line);
+            border-bottom: 1px solid var(--soft-line);
             padding: 0.9mm 1.2mm;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
@@ -279,13 +282,18 @@
             font-size: 9px;
         }
         .schedule-table th {
-            background: #f2f2f2;
+            background: var(--header-bg);
             font-size: 9.4px;
             border-top: 1.5px solid var(--line);
             border-bottom: 1.2px solid var(--line);
         }
         .schedule-table tbody tr:nth-child(even) td {
-            background: #fcfcfc;
+            background: var(--row-alt);
+        }
+        .schedule-table tbody tr.schedule-total-row td {
+            background: #fff;
+            border-top: 1.4px solid var(--line);
+            border-bottom: 1px solid var(--line);
         }
         .schedule-table .payment-method-cell {
             color: #222;
@@ -295,28 +303,37 @@
         .schedule-table .payment-date-cell {
             line-height: 1.12;
         }
+        .schedule-table .amount-cell {
+            font-family: 'RobotoBold', Arial, sans-serif;
+            white-space: nowrap;
+        }
+        .schedule-table .status-cell {
+            text-align: center;
+        }
         .status-pill {
             display: inline-block;
             min-width: 11.5mm;
             padding: 0.15mm 0.7mm;
-            border-radius: 2mm;
+            border: 1px solid var(--soft-line);
+            border-radius: 1.5mm;
             font-family: 'RobotoBold', Arial, sans-serif;
             font-size: 7.8px;
             line-height: 1.08;
             text-align: center;
             white-space: nowrap;
+            background: #fff;
         }
         .status-paid {
-            color: #0b6b35;
-            background: #e8f5ee;
+            color: #075e34;
+            border-color: #9cc9ad;
         }
         .status-partial {
             color: #9a5a00;
-            background: #fff3d8;
+            border-color: #d9b76b;
         }
         .status-unpaid {
             color: #444;
-            background: #f1f1f1;
+            border-color: #b7bdc3;
         }
         .contact-line {
             color: blue;
@@ -470,6 +487,7 @@
             min-width: 9.5mm;
             padding: 0.1mm 0.45mm;
             font-size: 7px;
+            border-radius: 1.2mm;
         }
         .loan-print-compact .signature-row {
             margin-top: 1.2mm;
@@ -916,18 +934,18 @@
                 <tr>
                     <td class="bold">{{ $row->installment_number }}</td>
                     <td class="bold nowrap">{{ $row->installmentdate ? \Carbon\Carbon::parse($row->installmentdate)->format('d-m-Y') : '-' }}</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->installment_value, 2) }}</td>
-                    <td class="text-right bold">$ {{ number_format((float) $row->benefit_value, 2) }}</td>
-                    <td class="text-right bold">$ {{ number_format($rowTotal, 2) }}</td>
+                    <td class="text-right amount-cell">$ {{ number_format((float) $row->installment_value, 2) }}</td>
+                    <td class="text-right amount-cell">$ {{ number_format((float) $row->benefit_value, 2) }}</td>
+                    <td class="text-right amount-cell">$ {{ number_format($rowTotal, 2) }}</td>
                     <td class="bold nowrap payment-date-cell">{!! $paymentDates->implode('<br>') !!}</td>
                     <td class="text-center payment-method-cell">{!! $paymentLines->implode('<br>') !!}</td>
-                    <td class="text-right">{{ $paid > 0 ? '$ '.number_format($paid, 2) : '' }}</td>
-                    <td><span class="status-pill {{ $rowStatusClass }}">{{ $rowStatus }}</span></td>
+                    <td class="text-right amount-cell">{{ $paid > 0 ? '$ '.number_format($paid, 2) : '' }}</td>
+                    <td class="status-cell"><span class="status-pill {{ $rowStatusClass }}">{{ $rowStatus }}</span></td>
                 </tr>
             @empty
                 <tr><td colspan="9">No schedule</td></tr>
             @endforelse
-            <tr class="solid">
+            <tr class="solid schedule-total-row">
                 <td colspan="2" class="text-right bold">សរុប</td>
                 <td class="text-right bold">$ {{ number_format($schedulePrincipalTotal, 2) }}</td>
                 <td class="text-right bold">$ {{ number_format($scheduleInterestTotal, 2) }}</td>
