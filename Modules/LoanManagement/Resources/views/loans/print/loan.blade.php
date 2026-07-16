@@ -161,6 +161,7 @@
         .print-table .dotted td,
         .schedule-table td {
             border-style: dotted;
+            border-color: #666;
         }
         .print-table .solid td,
         .print-table .solid th {
@@ -278,7 +279,44 @@
             font-size: 9.4px;
         }
         .schedule-table th {
+            background: #f2f2f2;
             font-size: 10px;
+            border-top: 1.5px solid var(--line);
+            border-bottom: 1.2px solid var(--line);
+        }
+        .schedule-table tbody tr:nth-child(even) td {
+            background: #fcfcfc;
+        }
+        .schedule-table .payment-method-cell {
+            color: #222;
+            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            line-height: 1.12;
+        }
+        .schedule-table .payment-date-cell {
+            line-height: 1.12;
+        }
+        .status-pill {
+            display: inline-block;
+            min-width: 13mm;
+            padding: 0.25mm 0.9mm;
+            border-radius: 2mm;
+            font-family: 'RobotoBold', Arial, sans-serif;
+            font-size: 8.2px;
+            line-height: 1.15;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .status-paid {
+            color: #0b6b35;
+            background: #e8f5ee;
+        }
+        .status-partial {
+            color: #9a5a00;
+            background: #fff3d8;
+        }
+        .status-unpaid {
+            color: #444;
+            background: #f1f1f1;
         }
         .contact-line {
             color: blue;
@@ -421,10 +459,15 @@
         .loan-print-compact .schedule-table td {
             padding: 0.45mm 0.6mm;
             font-size: 8.4px;
-            line-height: 1.05;
+            line-height: 1.08;
         }
         .loan-print-compact .schedule-table th {
             font-size: 8.8px;
+        }
+        .loan-print-compact .status-pill {
+            min-width: 11mm;
+            padding: 0.15mm 0.6mm;
+            font-size: 7.5px;
         }
         .loan-print-compact .signature-row {
             margin-top: 2mm;
@@ -648,7 +691,7 @@
 
                 return $carry;
             }, collect())
-            ->map(fn ($amount, $method) => e($method).'='.number_format($amount, 2))
+            ->map(fn ($amount, $method) => e($method).' $'.number_format($amount, 2))
             ->values();
     };
     $downPaymentLines = collect();
@@ -849,6 +892,9 @@
                     $rowStatus = $paid >= $rowTotal && $rowTotal > 0
                         ? 'Paid'
                         : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
+                    $rowStatusClass = strtolower($rowStatus) === 'paid'
+                        ? 'status-paid'
+                        : (strtolower($rowStatus) === 'partial' ? 'status-partial' : 'status-unpaid');
                     $paymentDates = $rowPayments
                         ->map(fn ($p) => $p->paid_date ?? $p->paid_at ?? null)
                         ->filter()
@@ -859,7 +905,7 @@
                         ->values();
                     $paymentLines = $paymentLinesForPrint($rowPayments);
                     if ($paymentLines->isEmpty() && $paid > 0) {
-                        $paymentLines = collect(['Payment='.number_format($paid, 2)]);
+                        $paymentLines = collect(['Payment $'.number_format($paid, 2)]);
                     }
                     if ($paymentDates->isEmpty() && ! empty($row->paid_at)) {
                         $paymentDates = collect([\Carbon\Carbon::parse($row->paid_at)->format('d-m-Y')]);
@@ -871,10 +917,10 @@
                     <td class="text-right bold">$ {{ number_format((float) $row->installment_value, 2) }}</td>
                     <td class="text-right bold">$ {{ number_format((float) $row->benefit_value, 2) }}</td>
                     <td class="text-right bold">$ {{ number_format($rowTotal, 2) }}</td>
-                    <td class="bold nowrap">{!! $paymentDates->implode('<br>') !!}</td>
-                    <td class="text-right">{!! $paymentLines->implode(' ') !!}</td>
+                    <td class="bold nowrap payment-date-cell">{!! $paymentDates->implode('<br>') !!}</td>
+                    <td class="text-center payment-method-cell">{!! $paymentLines->implode('<br>') !!}</td>
                     <td class="text-right">{{ $paid > 0 ? '$ '.number_format($paid, 2) : '' }}</td>
-                    <td>{{ $rowStatus }}</td>
+                    <td><span class="status-pill {{ $rowStatusClass }}">{{ $rowStatus }}</span></td>
                 </tr>
             @empty
                 <tr><td colspan="9">No schedule</td></tr>
