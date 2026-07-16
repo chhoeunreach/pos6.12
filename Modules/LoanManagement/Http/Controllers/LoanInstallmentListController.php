@@ -84,7 +84,7 @@ class LoanInstallmentListController extends Controller
             'commune' => $customerRow->commune ?? '-',
             'district' => $customerRow->district ?? '-',
             'province' => $customerRow->province ?? '-',
-            'product' => $loanItems->map(fn ($item) => trim((string) ($item->product_name_snapshot ?? $item->product_name ?? '')))->filter()->implode(', ') ?: ($loanRow->product_name_snapshot ?? '-'),
+            'product' => $this->loanCopyProductNames($loanItems, $loanRow),
             'serial_number' => $loanItems->map(fn ($item) => trim((string) ($item->serial_number_snapshot ?? $item->serial_number ?? '')))->filter()->implode(', ') ?: '-',
             'qty' => $loanItems->map(fn ($item) => (string) ($item->qty ?? $item->quantity ?? 1))->filter()->implode(', ') ?: '1',
             'unit_price' => $loanItems->map(fn ($item) => number_format((float) ($item->unit_price ?? 0), 2, '.', ''))->filter(fn ($value) => (float) $value > 0)->implode(', ') ?: number_format((float) ($loanRow->principal_amount ?? 0), 2, '.', ''),
@@ -94,6 +94,191 @@ class LoanInstallmentListController extends Controller
             'duration_m' => (int) ($loanRow->duration_months ?? $loanRow->installment_count ?? $loanMeta['duration_months'] ?? 0),
             'interest_percent' => number_format(((float) ($loanRow->interest_rate ?? $loanMeta['interest_rate'] ?? 0)) / 100, 2, '.', ''),
         ];
+    }
+
+    protected function loanCopyProductNames(\Illuminate\Support\Collection $loanItems, object $loanRow): string
+    {
+        $names = $loanItems->map(function ($item) {
+            $serials = collect([
+                $item->serial_number_snapshot ?? null,
+                $item->serial_number ?? null,
+                $item->imei_snapshot ?? null,
+                $item->imei ?? null,
+            ])
+                ->map(fn ($value) => trim((string) $value))
+                ->filter()
+                ->unique()
+                ->values();
+
+            foreach ($serials as $serial) {
+                $posProduct = $this->posProductNameBySerial($serial);
+                if ($posProduct !== null) {
+                    return $posProduct;
+                }
+            }
+
+            return trim((string) ($item->product_name_snapshot ?? $item->product_name ?? ''));
+        })->filter()->unique()->implode(', ');
+
+        return $names !== '' ? $names : ($loanRow->product_name_snapshot ?? '-');
+    }
+
+    protected function posProductNameBySerial(string $serial): ?string
+    {
+        static $cache = [];
+
+        $serial = trim($serial);
+        if ($serial === '') {
+            return null;
+        }
+
+        if (array_key_exists($serial, $cache)) {
+            return $cache[$serial];
+        }
+
+        return $cache[$serial] = $this->posProductNameFromSmartImei($serial)
+            ?? $this->posProductNameFromSellSerialStatus($serial)
+            ?? $this->posProductNameFromSmartStockInventoryLine($serial)
+            ?? $this->posProductNameFromPurchaseLot($serial)
+            ?? $this->posProductNameFromVariationSku($serial);
+    }
+
+    protected function posProductNameFromSmartImei(string $serial): ?string
+    {
+        if (! Schema::hasTable('smart_imei_histories')) {
+            return null;
+        }
+
+        $query = DB::table('smart_imei_histories as si')
+            ->leftJoin('variations as v', 'v.id', '=', 'si.variation_id')
+            ->leftJoin('products as vp', 'vp.id', '=', 'v.product_id')
+            ->leftJoin('products as p', 'p.id', '=', 'si.product_id')
+            ->where('si.imei', $serial);
+
+        if (Schema::hasColumn('smart_imei_histories', 'business_id') && session('user.business_id')) {
+            $query->where('si.business_id', session('user.business_id'));
+        }
+        if (Schema::hasColumn('smart_imei_histories', 'deleted_at')) {
+            $query->whereNull('si.deleted_at');
+        }
+
+        $row = $query
+            ->selectRaw('COALESCE(NULLIF(p.name, ""), NULLIF(vp.name, "")) as product_name, v.name as variation_name')
+            ->orderByDesc(Schema::hasColumn('smart_imei_histories', 'movement_date') ? 'si.movement_date' : 'si.id')
+            ->first();
+
+        return $this->formatPosProductName($row);
+    }
+
+    protected function posProductNameFromSellSerialStatus(string $serial): ?string
+    {
+        if (! Schema::hasTable('pos_sell_list_serial_statuses')) {
+            return null;
+        }
+
+        $row = DB::table('pos_sell_list_serial_statuses as ps')
+            ->leftJoin('transaction_sell_lines as tsl', 'tsl.id', '=', 'ps.transaction_sell_line_id')
+            ->leftJoin('variations as v', 'v.id', '=', 'tsl.variation_id')
+            ->leftJoin('products as p', 'p.id', '=', 'tsl.product_id')
+            ->where('ps.serial_number', $serial)
+            ->selectRaw('p.name as product_name, v.name as variation_name')
+            ->orderByDesc('ps.id')
+            ->first();
+
+        return $this->formatPosProductName($row);
+    }
+
+    protected function posProductNameFromSmartStockInventoryLine(string $serial): ?string
+    {
+        if (! Schema::hasTable('smart_stock_inventory_lines')) {
+            return null;
+        }
+
+        $serialColumns = collect(['imei', 'lot_number', 'sku'])
+            ->filter(fn ($column) => Schema::hasColumn('smart_stock_inventory_lines', $column))
+            ->values();
+
+        if ($serialColumns->isEmpty()) {
+            return null;
+        }
+
+        $query = DB::table('smart_stock_inventory_lines as sil')
+            ->leftJoin('variations as v', 'v.id', '=', 'sil.variation_id')
+            ->leftJoin('products as p', 'p.id', '=', 'sil.product_id')
+            ->where(function ($query) use ($serial, $serialColumns) {
+                foreach ($serialColumns as $index => $column) {
+                    $method = $index === 0 ? 'where' : 'orWhere';
+                    $query->{$method}('sil.'.$column, $serial);
+                }
+            });
+
+        if (Schema::hasColumn('smart_stock_inventory_lines', 'deleted_at')) {
+            $query->whereNull('sil.deleted_at');
+        }
+
+        $row = $query
+            ->selectRaw('COALESCE(NULLIF(sil.product_name, ""), NULLIF(p.name, "")) as product_name, COALESCE(NULLIF(sil.variation_name, ""), NULLIF(v.name, "")) as variation_name')
+            ->orderByDesc('sil.id')
+            ->first();
+
+        return $this->formatPosProductName($row);
+    }
+
+    protected function posProductNameFromPurchaseLot(string $serial): ?string
+    {
+        if (! Schema::hasTable('purchase_lines') || ! Schema::hasColumn('purchase_lines', 'lot_number')) {
+            return null;
+        }
+
+        $row = DB::table('purchase_lines as pl')
+            ->leftJoin('variations as v', 'v.id', '=', 'pl.variation_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pl.product_id')
+            ->where('pl.lot_number', $serial)
+            ->selectRaw('p.name as product_name, v.name as variation_name')
+            ->orderByDesc('pl.id')
+            ->first();
+
+        return $this->formatPosProductName($row);
+    }
+
+    protected function posProductNameFromVariationSku(string $serial): ?string
+    {
+        if (! Schema::hasTable('variations') || ! Schema::hasTable('products')) {
+            return null;
+        }
+
+        $row = DB::table('variations as v')
+            ->leftJoin('products as p', 'p.id', '=', 'v.product_id')
+            ->where(function ($query) use ($serial) {
+                $query->where('v.sub_sku', $serial);
+                if (Schema::hasColumn('products', 'sku')) {
+                    $query->orWhere('p.sku', $serial);
+                }
+            })
+            ->selectRaw('p.name as product_name, v.name as variation_name')
+            ->orderByDesc('v.id')
+            ->first();
+
+        return $this->formatPosProductName($row);
+    }
+
+    protected function formatPosProductName($row): ?string
+    {
+        if (empty($row)) {
+            return null;
+        }
+
+        $product = trim((string) ($row->product_name ?? ''));
+        if ($product === '') {
+            return null;
+        }
+
+        $variation = trim((string) ($row->variation_name ?? ''));
+        if ($variation !== '' && strcasecmp($variation, 'DUMMY') !== 0 && strcasecmp($variation, $product) !== 0) {
+            return $product.' '.$variation;
+        }
+
+        return $product;
     }
 
     protected function loanDepositPaymentCopyAmounts(int $loan, object $loanRow): array
