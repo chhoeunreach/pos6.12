@@ -628,9 +628,11 @@
 <body>
 @php
     $productTotal = $products->sum(fn ($p) => (float) ($p->subtotal ?? ((float) ($p->quantity ?? 1) * (float) ($p->unit_price_inc_tax ?? 0))));
-    $schedulePrincipalTotal = $installments->sum(fn ($row) => (float) ($row->installment_value ?? 0));
-    $scheduleInterestTotal = $installments->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
-    $scheduleTotalAmount = $installments->sum(fn ($row) => round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2));
+    $fixedScheduleRowCount = 12;
+    $scheduleRowsForPrint = $installments->take($fixedScheduleRowCount)->values();
+    $schedulePrincipalTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->installment_value ?? 0));
+    $scheduleInterestTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
+    $scheduleTotalAmount = $scheduleRowsForPrint->sum(fn ($row) => round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2));
     $downPayment = (float) ($loanRow->down_payment ?? 0);
     $loanAmount = (float) ($loanRow->principal_amount ?? max(0, $productTotal - $downPayment));
     if ($productTotal <= 0 && ($loanAmount > 0 || $downPayment > 0)) {
@@ -654,7 +656,7 @@
     $interestRate = (float) ($loanRow->interest_rate ?? ($loanMeta['interest_rate'] ?? ($loanMeta['raw_import_row']['interest_rate'] ?? 0)));
     $downPercent = $productTotal > 0 ? ($downPayment / max($productTotal, 1) * 100) : 0;
     $paymentsBySchedule = $payments->groupBy(fn ($payment) => $payment->_print_schedule_id ?? $payment->schedule_id ?? null);
-    $isCompactPrint = $installments->count() >= 10;
+    $isCompactPrint = true;
     $paymentTypes = [];
     try {
         $paymentTypes = app(\App\Utils\TransactionUtil::class)->payment_types(
@@ -901,50 +903,63 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($installments as $row)
+            @for($slot = 0; $slot < $fixedScheduleRowCount; $slot++)
                 @php
-                    $rowTotal = round((float) $row->installment_value + (float) $row->benefit_value, 2);
-                    if ($rowTotal <= 0) {
-                        $rowTotal = (float) ($row->amount_due ?? 0);
-                    }
-                    $rowPayments = $paymentsBySchedule->get($row->id, collect());
-                    $paid = (float) ($row->paid_value ?? $rowPayments->sum(fn ($p) => (float) ($p->total_paid_base ?? $p->amount ?? 0)));
-                    $rowStatus = $paid >= $rowTotal && $rowTotal > 0
-                        ? 'Paid'
-                        : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
-                    $rowStatusClass = strtolower($rowStatus) === 'paid'
-                        ? 'status-paid'
-                        : (strtolower($rowStatus) === 'partial' ? 'status-partial' : 'status-unpaid');
-                    $paymentDates = $rowPayments
-                        ->map(fn ($p) => $p->paid_date ?? $p->paid_at ?? null)
-                        ->filter()
-                        ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d').'|'.\Carbon\Carbon::parse($date)->format('d-m-Y'))
-                        ->unique()
-                        ->sort()
-                        ->map(fn ($date) => explode('|', $date, 2)[1] ?? $date)
-                        ->values();
-                    $paymentLines = $paymentLinesForPrint($rowPayments);
-                    if ($paymentLines->isEmpty() && $paid > 0) {
-                        $paymentLines = collect(['Payment $'.number_format($paid, 2)]);
-                    }
-                    if ($paymentDates->isEmpty() && ! empty($row->paid_at)) {
-                        $paymentDates = collect([\Carbon\Carbon::parse($row->paid_at)->format('d-m-Y')]);
+                    $row = $scheduleRowsForPrint->get($slot);
+                    $rowTotal = 0;
+                    $rowPayments = collect();
+                    $paid = 0;
+                    $rowStatus = '';
+                    $rowStatusClass = 'status-unpaid';
+                    $paymentDates = collect();
+                    $paymentLines = collect();
+
+                    if ($row) {
+                        $rowTotal = round((float) $row->installment_value + (float) $row->benefit_value, 2);
+                        if ($rowTotal <= 0) {
+                            $rowTotal = (float) ($row->amount_due ?? 0);
+                        }
+                        $rowPayments = $paymentsBySchedule->get($row->id, collect());
+                        $paid = (float) ($row->paid_value ?? $rowPayments->sum(fn ($p) => (float) ($p->total_paid_base ?? $p->amount ?? 0)));
+                        $rowStatus = $paid >= $rowTotal && $rowTotal > 0
+                            ? 'Paid'
+                            : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
+                        $rowStatusClass = strtolower($rowStatus) === 'paid'
+                            ? 'status-paid'
+                            : (strtolower($rowStatus) === 'partial' ? 'status-partial' : 'status-unpaid');
+                        $paymentDates = $rowPayments
+                            ->map(fn ($p) => $p->paid_date ?? $p->paid_at ?? null)
+                            ->filter()
+                            ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d').'|'.\Carbon\Carbon::parse($date)->format('d-m-Y'))
+                            ->unique()
+                            ->sort()
+                            ->map(fn ($date) => explode('|', $date, 2)[1] ?? $date)
+                            ->values();
+                        $paymentLines = $paymentLinesForPrint($rowPayments);
+                        if ($paymentLines->isEmpty() && $paid > 0) {
+                            $paymentLines = collect(['Payment $'.number_format($paid, 2)]);
+                        }
+                        if ($paymentDates->isEmpty() && ! empty($row->paid_at)) {
+                            $paymentDates = collect([\Carbon\Carbon::parse($row->paid_at)->format('d-m-Y')]);
+                        }
                     }
                 @endphp
                 <tr>
-                    <td class="bold">{{ $row->installment_number }}</td>
-                    <td class="bold nowrap">{{ $row->installmentdate ? \Carbon\Carbon::parse($row->installmentdate)->format('d-m-Y') : '-' }}</td>
-                    <td class="text-right amount-cell">$ {{ number_format((float) $row->installment_value, 2) }}</td>
-                    <td class="text-right amount-cell">$ {{ number_format((float) $row->benefit_value, 2) }}</td>
-                    <td class="text-right amount-cell">$ {{ number_format($rowTotal, 2) }}</td>
+                    <td class="bold">{{ $row->installment_number ?? ($slot + 1) }}</td>
+                    <td class="bold nowrap">{{ ! empty($row?->installmentdate) ? \Carbon\Carbon::parse($row->installmentdate)->format('d-m-Y') : '' }}</td>
+                    <td class="text-right amount-cell">{{ $row ? '$ '.number_format((float) $row->installment_value, 2) : '' }}</td>
+                    <td class="text-right amount-cell">{{ $row ? '$ '.number_format((float) $row->benefit_value, 2) : '' }}</td>
+                    <td class="text-right amount-cell">{{ $row ? '$ '.number_format($rowTotal, 2) : '' }}</td>
                     <td class="bold nowrap payment-date-cell">{!! $paymentDates->implode('<br>') !!}</td>
                     <td class="text-center payment-method-cell">{!! $paymentLines->implode('<br>') !!}</td>
                     <td class="text-right amount-cell">{{ $paid > 0 ? '$ '.number_format($paid, 2) : '' }}</td>
-                    <td class="status-cell"><span class="status-pill {{ $rowStatusClass }}">{{ $rowStatus }}</span></td>
+                    <td class="status-cell">
+                        @if($rowStatus !== '')
+                            <span class="status-pill {{ $rowStatusClass }}">{{ $rowStatus }}</span>
+                        @endif
+                    </td>
                 </tr>
-            @empty
-                <tr><td colspan="9">No schedule</td></tr>
-            @endforelse
+            @endfor
             <tr class="solid schedule-total-row">
                 <td colspan="2" class="text-right bold">សរុប</td>
                 <td class="text-right bold">$ {{ number_format($schedulePrincipalTotal, 2) }}</td>
