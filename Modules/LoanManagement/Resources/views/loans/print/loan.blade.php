@@ -744,7 +744,7 @@
                         ->values();
                     $paymentLines = $paymentLinesForPrint($rowPayments);
                     if ($paymentLines->isEmpty() && $paid > 0) {
-                        $paymentLines = collect([number_format($paid, 2)]);
+                        $paymentLines = collect(['Payment='.number_format($paid, 2)]);
                     }
                     if ($paymentDates->isEmpty() && ! empty($row->paid_at)) {
                         $paymentDates = collect([\Carbon\Carbon::parse($row->paid_at)->format('d-m-Y')]);

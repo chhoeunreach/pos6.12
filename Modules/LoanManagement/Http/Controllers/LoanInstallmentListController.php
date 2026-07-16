@@ -331,10 +331,15 @@ class LoanInstallmentListController extends Controller
         }
 
         $allocated = collect();
+        $assignedAmounts = $assigned->groupBy('_print_schedule_id')->map(function ($rows) {
+            return (float) $rows->sum(fn ($payment) => (float) ($payment->_print_amount ?? $payment->total_paid_base ?? $payment->amount ?? 0));
+        });
         $scheduleRemaining = $installments->mapWithKeys(function ($row) {
             $paid = (float) ($row->paid_value ?? 0);
 
             return [$row->id => max(0, $paid)];
+        })->map(function ($paid, $scheduleId) use ($assignedAmounts) {
+            return max(0, round((float) $paid - (float) ($assignedAmounts[$scheduleId] ?? 0), 2));
         });
 
         foreach ($unassigned as $payment) {
