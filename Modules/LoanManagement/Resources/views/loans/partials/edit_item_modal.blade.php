@@ -7,19 +7,23 @@
     $unitPrice = (float) ($itemRow->unit_price ?? 0);
     $lineTotal = (float) ($itemRow->line_total ?? ($qty * $unitPrice));
     $isEmbeddedModal = request()->boolean('_lm_modal');
+    $isCreate = (bool) ($isCreate ?? false);
     $editRouteParams = ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []);
+    $formUrl = $isCreate
+        ? route('loan-management.loans.items.store', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []))
+        : route('loan-management.loans.items.update', ['loan' => $loanRow->id, 'item' => $itemRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []));
 @endphp
 
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
-        {!! Form::open(['url' => route('loan-management.loans.items.update', ['loan' => $loanRow->id, 'item' => $itemRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])), 'method' => 'post', 'id' => 'loan_item_update_form']) !!}
+        {!! Form::open(['url' => $formUrl, 'method' => 'post', 'id' => 'loan_item_update_form']) !!}
         <input type="hidden" name="return_to" value="{{ route('loan-management.loans.edit', $editRouteParams) }}">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
-                <i class="fa fa-cube"></i> Edit Loan Item
+                <i class="fa fa-cube"></i> {{ $isCreate ? 'Add Loan Item' : 'Edit Loan Item' }}
             </h4>
         </div>
 
@@ -33,7 +37,7 @@
                 </div>
                 <div class="col-md-4">
                     <div class="well well-sm">
-                        <strong>Item ID:</strong> {{ $itemRow->id }}<br>
+                        <strong>Item ID:</strong> {{ $isCreate ? 'New' : $itemRow->id }}<br>
                         <strong>Currency:</strong> {{ $loanRow->currency ?? 'USD' }}
                     </div>
                 </div>
@@ -49,7 +53,7 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         {!! Form::label('product_name_snapshot', 'Product') !!}
-                        <input type="text" name="product_name_snapshot" id="product_name_snapshot" class="form-control" value="{{ $productName }}">
+                        <input type="text" name="product_name_snapshot" id="product_name_snapshot" class="form-control" value="{{ $productName }}" {{ $isCreate ? 'required' : '' }}>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -108,7 +112,7 @@
                 <i class="fa fa-calculator"></i> Auto Total
             </button>
             <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
-                @lang('messages.update')
+                {{ $isCreate ? 'Add Item' : __('messages.update') }}
             </button>
             <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">
                 @lang('messages.close')

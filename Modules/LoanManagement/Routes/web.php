@@ -98,8 +98,11 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/loans/{loan}/workflow', [LoanInstallmentListController::class, 'updateWorkflow'])->name('loan-management.loans.workflow.update')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/update', [LoanInstallmentListController::class, 'update'])->name('loan-management.loans.update')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/schedules/update-from-edit', [LoanInstallmentListController::class, 'updateSchedulesFromEdit'])->name('loan-management.loans.schedules.update-from-edit')->middleware('can:loan_management.edit');
+        Route::get('/loans/{loan}/items/create', [LoanInstallmentListController::class, 'createItem'])->name('loan-management.loans.items.create')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/items', [LoanInstallmentListController::class, 'storeItem'])->name('loan-management.loans.items.store')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/items/{item}/edit', [LoanInstallmentListController::class, 'editItem'])->name('loan-management.loans.items.edit')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/items/{item}', [LoanInstallmentListController::class, 'updateItem'])->name('loan-management.loans.items.update')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/items/{item}/delete', [LoanInstallmentListController::class, 'destroyItem'])->name('loan-management.loans.items.destroy')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/schedules/{schedule}/edit', [LoanInstallmentListController::class, 'editSchedule'])->name('loan-management.loans.schedules.edit')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/schedules/{schedule}', [LoanInstallmentListController::class, 'updateSchedule'])->name('loan-management.loans.schedules.update')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/status', [LoanInstallmentListController::class, 'changeStatus'])->name('loan-management.loans.status')->middleware('can:loan_management.approve');

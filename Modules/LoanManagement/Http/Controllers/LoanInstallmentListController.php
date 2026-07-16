@@ -1446,6 +1446,60 @@ class LoanInstallmentListController extends Controller
         return view('loanmanagement::loans.partials.edit_schedule_modal', compact('loanRow', 'scheduleRow'));
     }
 
+    public function createItem(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_items'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $itemRow = (object) [
+            'id' => null,
+            'loan_id' => $loan,
+            'qty' => 1,
+            'unit_price' => 0,
+            'line_total' => 0,
+        ];
+        $isCreate = true;
+
+        return view('loanmanagement::loans.partials.edit_item_modal', compact('loanRow', 'itemRow', 'isCreate'));
+    }
+
+    public function storeItem(Request $request, int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_items'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $payload = $this->validatedLoanItemPayload($request, null, true);
+
+        $itemId = DB::connection('mysql_loan')->table('loan_items')->insertGetId($this->loanSafeColumns('loan_items', array_merge($payload, [
+            'loan_id' => $loan,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])));
+
+        $this->refreshLoanItemSnapshot($loan);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Loan item added successfully',
+                'data' => [
+                    'item_id' => $itemId,
+                    'redirect_url' => $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
+                ],
+            ]);
+        }
+
+        return redirect()
+            ->route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []))
+            ->with('status', ['success' => 1, 'msg' => 'Loan item added successfully']);
+    }
+
     public function editItem(int $loan, int $item)
     {
         abort_if(! $this->loanTableExists('loans'), 404);
@@ -1454,14 +1508,16 @@ class LoanInstallmentListController extends Controller
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
-        $itemRow = DB::connection('mysql_loan')
+        $itemQuery = DB::connection('mysql_loan')
             ->table('loan_items')
             ->where('id', $item)
-            ->where('loan_id', $loan)
-            ->first();
+            ->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($itemQuery, 'loan_items');
+        $itemRow = $itemQuery->first();
         abort_if(! $itemRow, 404);
+        $isCreate = false;
 
-        return view('loanmanagement::loans.partials.edit_item_modal', compact('loanRow', 'itemRow'));
+        return view('loanmanagement::loans.partials.edit_item_modal', compact('loanRow', 'itemRow', 'isCreate'));
     }
 
     public function updateItem(Request $request, int $loan, int $item)
@@ -1472,50 +1528,21 @@ class LoanInstallmentListController extends Controller
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
-        $itemRow = DB::connection('mysql_loan')
+        $itemQuery = DB::connection('mysql_loan')
             ->table('loan_items')
             ->where('id', $item)
-            ->where('loan_id', $loan)
-            ->first();
+            ->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($itemQuery, 'loan_items');
+        $itemRow = $itemQuery->first();
         abort_if(! $itemRow, 404);
 
-        $payload = $request->validate([
-            'product_name_snapshot' => 'nullable|string|max:191',
-            'sku_snapshot' => 'nullable|string|max:191',
-            'imei_snapshot' => 'nullable|string|max:191',
-            'serial_number_snapshot' => 'nullable|string|max:191',
-            'color' => 'nullable|string|max:191',
-            'qty' => 'nullable|numeric|min:0',
-            'unit_price' => 'nullable|numeric|min:0',
-            'line_total' => 'nullable|numeric|min:0',
-        ]);
+        $payload = $this->validatedLoanItemPayload($request, $itemRow, false);
 
-        $qty = round((float) ($payload['qty'] ?? $itemRow->qty ?? 1), 4);
-        $unitPrice = round((float) ($payload['unit_price'] ?? $itemRow->unit_price ?? 0), 2);
-        $lineTotal = array_key_exists('line_total', $payload) && $payload['line_total'] !== null
-            ? round((float) $payload['line_total'], 2)
-            : round($qty * $unitPrice, 2);
-
-        $productName = trim((string) ($payload['product_name_snapshot'] ?? $itemRow->product_name_snapshot ?? $itemRow->product_name ?? ''));
-        $sku = trim((string) ($payload['sku_snapshot'] ?? $itemRow->sku_snapshot ?? $itemRow->sku ?? ''));
-        $imei = trim((string) ($payload['imei_snapshot'] ?? $itemRow->imei_snapshot ?? $itemRow->imei ?? ''));
-        $serial = trim((string) ($payload['serial_number_snapshot'] ?? $itemRow->serial_number_snapshot ?? $itemRow->serial_number ?? ''));
-
-        DB::connection('mysql_loan')->table('loan_items')->where('id', $itemRow->id)->update($this->loanSafeColumns('loan_items', [
-            'product_name_snapshot' => $productName,
-            'product_name' => $productName,
-            'sku_snapshot' => $sku,
-            'sku' => $sku,
-            'imei_snapshot' => $imei,
-            'imei' => $imei,
-            'serial_number_snapshot' => $serial,
-            'serial_number' => $serial,
-            'color' => $payload['color'] ?? ($itemRow->color ?? null),
-            'qty' => $qty,
-            'unit_price' => $unitPrice,
-            'line_total' => $lineTotal,
+        DB::connection('mysql_loan')->table('loan_items')->where('id', $itemRow->id)->update($this->loanSafeColumns('loan_items', array_merge($payload, [
             'updated_at' => now(),
-        ]));
+        ])));
+
+        $this->refreshLoanItemSnapshot($loan);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -1530,6 +1557,65 @@ class LoanInstallmentListController extends Controller
         return redirect()
             ->route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []))
             ->with('status', ['success' => 1, 'msg' => 'Loan item updated successfully']);
+    }
+
+    protected function validatedLoanItemPayload(Request $request, ?object $itemRow = null, bool $isCreate = false): array
+    {
+        $payload = $request->validate([
+            'product_name_snapshot' => ($isCreate ? 'required' : 'nullable').'|string|max:191',
+            'sku_snapshot' => 'nullable|string|max:191',
+            'imei_snapshot' => 'nullable|string|max:191',
+            'serial_number_snapshot' => 'nullable|string|max:191',
+            'color' => 'nullable|string|max:191',
+            'qty' => 'nullable|numeric|min:0',
+            'unit_price' => 'nullable|numeric|min:0',
+            'line_total' => 'nullable|numeric|min:0',
+        ]);
+
+        $qty = round((float) ($payload['qty'] ?? ($itemRow->qty ?? 1)), 4);
+        $unitPrice = round((float) ($payload['unit_price'] ?? ($itemRow->unit_price ?? 0)), 2);
+        $lineTotal = array_key_exists('line_total', $payload) && $payload['line_total'] !== null
+            ? round((float) $payload['line_total'], 2)
+            : round($qty * $unitPrice, 2);
+
+        $productName = trim((string) ($payload['product_name_snapshot'] ?? ($itemRow->product_name_snapshot ?? $itemRow->product_name ?? '')));
+        $sku = trim((string) ($payload['sku_snapshot'] ?? ($itemRow->sku_snapshot ?? $itemRow->sku ?? '')));
+        $imei = trim((string) ($payload['imei_snapshot'] ?? ($itemRow->imei_snapshot ?? $itemRow->imei ?? '')));
+        $serial = trim((string) ($payload['serial_number_snapshot'] ?? ($itemRow->serial_number_snapshot ?? $itemRow->serial_number ?? '')));
+
+        return [
+            'product_name_snapshot' => $productName,
+            'product_name' => $productName,
+            'sku_snapshot' => $sku,
+            'sku' => $sku,
+            'imei_snapshot' => $imei,
+            'imei' => $imei,
+            'serial_number_snapshot' => $serial,
+            'serial_number' => $serial,
+            'color' => $payload['color'] ?? ($itemRow->color ?? null),
+            'qty' => $qty,
+            'unit_price' => $unitPrice,
+            'line_total' => $lineTotal,
+        ];
+    }
+
+    protected function refreshLoanItemSnapshot(int $loan): void
+    {
+        if (! $this->loanTableExists('loans') || ! $this->loanTableExists('loan_items')) {
+            return;
+        }
+
+        $itemQuery = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id');
+        $this->excludeDeletedLoanRows($itemQuery, 'loan_items');
+        $items = $itemQuery->get();
+        $firstItem = $items->first();
+
+        DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+            'product_name_snapshot' => $items->map(fn ($item) => trim((string) ($item->product_name_snapshot ?? $item->product_name ?? '')))->filter()->implode(', ') ?: null,
+            'imei_snapshot' => $items->map(fn ($item) => trim((string) ($item->imei_snapshot ?? $item->imei ?? '')))->filter()->implode(', ') ?: null,
+            'source_product_id' => $firstItem->loan_product_id ?? null,
+            'updated_at' => now(),
+        ]));
     }
 
     public function updateSchedule(Request $request, int $loan, int $schedule)

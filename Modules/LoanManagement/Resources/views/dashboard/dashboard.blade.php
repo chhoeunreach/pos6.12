@@ -480,10 +480,30 @@
     .lm-table-wrap.lm-table-wrap--hover-actions {
         overflow: visible;
     }
+    .lm-pay-row {
+        position: relative;
+    }
+    .lm-pay-row:hover {
+        z-index: 25;
+    }
     .lm-customer-hover {
         position: relative;
         display: block;
         min-width: 180px;
+        z-index: 26;
+    }
+    .lm-customer-hover::after {
+        content: '';
+        position: absolute;
+        left: 100%;
+        top: -10px;
+        width: 22px;
+        height: calc(100% + 20px);
+        display: none;
+    }
+    .lm-customer-hover:hover::after,
+    .lm-customer-hover:focus-within::after {
+        display: block;
     }
     .lm-customer-hover__main {
         display: block;
@@ -498,39 +518,39 @@
     }
     .lm-customer-print-popover {
         position: absolute;
-        left: 0;
-        top: calc(100% + 8px);
-        z-index: 30;
-        width: 238px;
-        padding: 10px;
+        left: calc(100% + 14px);
+        top: 50%;
+        z-index: 60;
+        width: 270px;
+        padding: 12px;
         border: 1px solid #dbe5ef;
         border-radius: 12px;
         background: #ffffff;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+        box-shadow: 0 24px 54px rgba(15, 23, 42, 0.24);
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transform: translateY(-4px);
+        transform: translate(8px, -50%);
         transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
     }
     .lm-customer-print-popover::before {
         content: '';
         position: absolute;
-        left: 18px;
-        top: -6px;
+        left: -6px;
+        top: 50%;
         width: 10px;
         height: 10px;
         background: #ffffff;
         border-left: 1px solid #dbe5ef;
-        border-top: 1px solid #dbe5ef;
-        transform: rotate(45deg);
+        border-bottom: 1px solid #dbe5ef;
+        transform: translateY(-50%) rotate(45deg);
     }
     .lm-customer-hover:hover .lm-customer-print-popover,
     .lm-customer-hover:focus-within .lm-customer-print-popover {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
-        transform: translateY(0);
+        transform: translate(0, -50%);
     }
     .lm-customer-print-popover__title {
         display: block;
@@ -551,8 +571,8 @@
         align-items: center;
         justify-content: center;
         gap: 6px;
-        min-height: 32px;
-        padding: 6px 8px;
+        min-height: 38px;
+        padding: 8px 10px;
         border: 1px solid #d7e2ee;
         border-radius: 8px;
         background: #fff;
@@ -2461,43 +2481,105 @@
         transition: transform .25s ease;
     }
     .lm-chat-toggle.is-collapsed i {
-        transform: rotate(180deg);
+        transform: none;
     }
+    .lm-chat-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .lm-dashboard-panel--chat-hidden {
+        cursor: pointer;
+        min-height: 220px;
+        align-self: stretch;
+    }
+    .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__header {
+        height: 100%;
+        min-height: 220px;
+        flex-direction: column;
+        justify-content: center;
+        padding: 14px 8px;
+        border-bottom: 0;
+    }
+    .lm-dashboard-panel--chat-hidden .lm-chat-header-text,
+    .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__badge,
     .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__body {
         display: none;
     }
-    .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__badge {
-        opacity: 0.5;
+    .lm-dashboard-panel--chat-hidden .lm-chat-header-actions {
+        flex-direction: column;
+    }
+    .lm-dashboard-panel--chat-hidden .lm-chat-toggle {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        color: #1d4ed8;
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14);
+    }
+    .lm-dashboard-panel--chat-hidden::after {
+        content: 'Show Chat';
+        position: absolute;
+        left: 50%;
+        top: 112px;
+        transform: translateX(-50%);
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        white-space: nowrap;
     }
     .lm-dashboard-grid {
         transition: grid-template-columns .3s ease;
     }
     .lm-dashboard-grid.lm-dashboard-grid--chat-collapsed {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) 64px;
     }
-    .lm-chat-show-bar {
-        display: none;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 10px 16px;
-        border: 1px dashed #d7e2ee;
-        border-radius: 14px;
-        background: linear-gradient(180deg, #f8fbff, #f1f5f9);
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all .18s ease;
-        margin-top: 8px;
-    }
-    .lm-chat-show-bar:hover {
-        background: #eff6ff;
-        border-color: #bfdbfe;
-        color: #1d4ed8;
-    }
-    .lm-chat-show-bar.is-visible {
-        display: flex;
+    @media (max-width: 767px) {
+        .lm-customer-hover::after {
+            left: -8px;
+            top: 100%;
+            width: calc(100% + 16px);
+            height: 18px;
+        }
+        .lm-customer-print-popover {
+            left: 0;
+            top: calc(100% + 10px);
+            width: min(270px, 82vw);
+            transform: translateY(-4px);
+        }
+        .lm-customer-print-popover::before {
+            left: 18px;
+            top: -6px;
+            border-left: 1px solid #dbe5ef;
+            border-top: 1px solid #dbe5ef;
+            border-bottom: 0;
+            transform: rotate(45deg);
+        }
+        .lm-customer-hover:hover .lm-customer-print-popover,
+        .lm-customer-hover:focus-within .lm-customer-print-popover {
+            transform: translateY(0);
+        }
+        .lm-dashboard-grid.lm-dashboard-grid--chat-collapsed {
+            grid-template-columns: 1fr;
+        }
+        .lm-dashboard-panel--chat-hidden {
+            min-height: auto;
+        }
+        .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__header {
+            min-height: 58px;
+            height: auto;
+            flex-direction: row;
+            justify-content: center;
+            padding: 10px 12px;
+        }
+        .lm-dashboard-panel--chat-hidden::after {
+            position: static;
+            transform: none;
+            writing-mode: horizontal-tb;
+            margin-left: 8px;
+        }
     }
 </style>
 @endsection
@@ -2695,13 +2777,13 @@
 
         <div class="lm-dashboard-panel lm-dashboard-panel--feature" id="lmCustomerChatPanel">
             <div class="lm-dashboard-panel__header">
-                <div>
+                <div class="lm-chat-header-text">
                     <h3 class="lm-dashboard-panel__title">Customer Chat</h3>
                     <p class="lm-dashboard-panel__hint">Recent conversations before field follow-up.</p>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
+                <div class="lm-chat-header-actions">
                     <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
-                    <button type="button" class="lm-chat-toggle" id="lmChatToggleBtn" title="Hide Customer Chat" aria-label="Toggle Customer Chat visibility">
+                    <button type="button" class="lm-chat-toggle" id="lmChatToggleBtn" title="Hide Customer Chat" aria-label="Hide Customer Chat" aria-expanded="true">
                         <i class="fa fa-chevron-right"></i>
                     </button>
                 </div>
@@ -3650,31 +3732,54 @@
             var $chatPanel = $('#lmCustomerChatPanel');
             var $chatToggle = $('#lmChatToggleBtn');
             var $chatGrid = $chatPanel.closest('.lm-dashboard-grid');
-            var $showBar = $('<div class="lm-chat-show-bar" id="lmChatShowBar"><i class="fa fa-comments"></i> Show Customer Chat</div>');
+            var chatStorageKey = 'loanDashboardCustomerChatHidden';
 
-            $chatGrid.after($showBar);
+            function setCustomerChatHidden(hidden) {
+                $chatPanel.toggleClass('lm-dashboard-panel--chat-hidden', hidden);
+                $chatGrid.toggleClass('lm-dashboard-grid--chat-collapsed', hidden);
+                $chatPanel.attr('tabindex', hidden ? '0' : null);
+                $chatPanel.attr('aria-label', hidden ? 'Show Customer Chat' : null);
+                $chatToggle
+                    .toggleClass('is-collapsed', hidden)
+                    .attr('title', hidden ? 'Show Customer Chat' : 'Hide Customer Chat')
+                    .attr('aria-label', hidden ? 'Show Customer Chat' : 'Hide Customer Chat')
+                    .attr('aria-expanded', hidden ? 'false' : 'true')
+                    .find('i')
+                    .toggleClass('fa-chevron-left', hidden)
+                    .toggleClass('fa-chevron-right', !hidden);
 
-            $chatToggle.on('click', function () {
-                var isHidden = $chatPanel.hasClass('lm-dashboard-panel--chat-hidden');
-                if (isHidden) {
-                    $chatPanel.removeClass('lm-dashboard-panel--chat-hidden');
-                    $chatGrid.removeClass('lm-dashboard-grid--chat-collapsed');
-                    $chatToggle.removeClass('is-collapsed').attr('title', 'Hide Customer Chat').find('i').removeClass('fa-chevron-left').addClass('fa-chevron-right');
-                    $showBar.removeClass('is-visible');
-                } else {
-                    $chatPanel.addClass('lm-dashboard-panel--chat-hidden');
-                    $chatGrid.addClass('lm-dashboard-grid--chat-collapsed');
-                    $chatToggle.addClass('is-collapsed').attr('title', 'Show Customer Chat').find('i').removeClass('fa-chevron-right').addClass('fa-chevron-left');
-                    $showBar.addClass('is-visible');
+                try {
+                    window.localStorage.setItem(chatStorageKey, hidden ? '1' : '0');
+                } catch (e) {}
+            }
+
+            $chatToggle.on('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setCustomerChatHidden(!$chatPanel.hasClass('lm-dashboard-panel--chat-hidden'));
+            });
+
+            $chatPanel.on('click', function () {
+                if ($chatPanel.hasClass('lm-dashboard-panel--chat-hidden')) {
+                    setCustomerChatHidden(false);
                 }
             });
 
-            $showBar.on('click', function () {
-                $chatPanel.removeClass('lm-dashboard-panel--chat-hidden');
-                $chatGrid.removeClass('lm-dashboard-grid--chat-collapsed');
-                $chatToggle.removeClass('is-collapsed').attr('title', 'Hide Customer Chat').find('i').removeClass('fa-chevron-left').addClass('fa-chevron-right');
-                $showBar.removeClass('is-visible');
+            $chatPanel.on('keydown', function (event) {
+                if (!$chatPanel.hasClass('lm-dashboard-panel--chat-hidden')) {
+                    return;
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setCustomerChatHidden(false);
+                }
             });
+
+            try {
+                if (window.localStorage.getItem(chatStorageKey) === '1') {
+                    setCustomerChatHidden(true);
+                }
+            } catch (e) {}
 
             timer = window.setInterval(refreshLoanDashboard, refreshMs);
             window.loanDashboardRealtimeTimer = timer;

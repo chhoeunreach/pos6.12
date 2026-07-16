@@ -13,6 +13,12 @@
         <h3 class="box-title">Loan Items</h3>
         <div class="box-tools pull-right">
             <button type="button"
+                    class="btn btn-xs btn-success lm-btn-modal"
+                    data-href="{{ route('loan-management.loans.items.create', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                    data-container=".view_modal">
+                <i class="fa fa-plus"></i> Add Item
+            </button>
+            <button type="button"
                     class="btn btn-xs btn-default"
                     data-toggle="collapse"
                     data-target="#loanProductReference{{ $loanRow->id }}"
@@ -76,6 +82,14 @@
         </div>
 
         <div class="lm-edit-sections-mobile">
+            <div style="margin-bottom:10px;">
+                <button type="button"
+                        class="btn btn-sm btn-success btn-block lm-btn-modal"
+                        data-href="{{ route('loan-management.loans.items.create', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                        data-container=".view_modal">
+                    <i class="fa fa-plus"></i> Add Loan Item
+                </button>
+            </div>
             @forelse($loanItems as $item)
                 <div class="lm-edit-section-card">
                     <div class="lm-edit-section-card-header">
