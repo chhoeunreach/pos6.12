@@ -832,25 +832,48 @@
         var rect = target.getBoundingClientRect();
         var width = Math.ceil(rect.width || target.offsetWidth || 794);
         var a4Height = Math.round(width * 297 / 210);
-        var contentHeight = Math.ceil(Math.max(
-            rect.height || 0,
-            target.offsetHeight || 0,
-            target.scrollHeight || 0
-        ));
-        var height = Math.max(a4Height, contentHeight);
         var serializer = new XMLSerializer();
         var clone = target.cloneNode(true);
         clone.style.width = width + 'px';
         clone.style.height = 'auto';
-        clone.style.minHeight = height + 'px';
+        clone.style.minHeight = a4Height + 'px';
         clone.style.margin = '0';
         clone.style.boxSizing = 'border-box';
         clone.style.overflow = 'visible';
         clone.style.background = '#fff';
+
+        var measurer = document.createElement('div');
+        measurer.style.position = 'absolute';
+        measurer.style.left = '-100000px';
+        measurer.style.top = '0';
+        measurer.style.width = width + 'px';
+        measurer.style.background = '#fff';
+        measurer.style.overflow = 'visible';
+        measurer.appendChild(clone);
+        document.body.appendChild(measurer);
+
+        var cloneRect = clone.getBoundingClientRect();
+        var height = Math.ceil(Math.max(
+            a4Height,
+            rect.height || 0,
+            target.offsetHeight || 0,
+            target.scrollHeight || 0,
+            cloneRect.height || 0,
+            clone.offsetHeight || 0,
+            clone.scrollHeight || 0,
+            measurer.offsetHeight || 0,
+            measurer.scrollHeight || 0
+        ));
+        clone.style.minHeight = height + 'px';
+
         var styles = Array.from(document.querySelectorAll('style'))
             .map(function(styleTag) { return styleTag.textContent || ''; })
             .join('\n');
         var html = serializer.serializeToString(clone);
+        if (measurer.parentNode) {
+            measurer.parentNode.removeChild(measurer);
+        }
+
         var svg = ''
             + '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
             + '<foreignObject width="100%" height="100%">'
