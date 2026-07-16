@@ -475,6 +475,109 @@
         background: #fef2f2;
         color: #dc2626;
     }
+    .lm-quick-box.lm-quick-box--loan,
+    .lm-dashboard-panel__body.lm-dashboard-panel__body--quick-actions,
+    .lm-table-wrap.lm-table-wrap--hover-actions {
+        overflow: visible;
+    }
+    .lm-customer-hover {
+        position: relative;
+        display: block;
+        min-width: 180px;
+    }
+    .lm-customer-hover__main {
+        display: block;
+        padding: 3px 4px;
+        margin: -3px -4px;
+        border-radius: 8px;
+        transition: background .15s ease;
+    }
+    .lm-pay-row:hover .lm-customer-hover__main,
+    .lm-customer-hover:focus-within .lm-customer-hover__main {
+        background: #f8fafc;
+    }
+    .lm-customer-print-popover {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 30;
+        width: 238px;
+        padding: 10px;
+        border: 1px solid #dbe5ef;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-4px);
+        transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+    }
+    .lm-customer-print-popover::before {
+        content: '';
+        position: absolute;
+        left: 18px;
+        top: -6px;
+        width: 10px;
+        height: 10px;
+        background: #ffffff;
+        border-left: 1px solid #dbe5ef;
+        border-top: 1px solid #dbe5ef;
+        transform: rotate(45deg);
+    }
+    .lm-customer-hover:hover .lm-customer-print-popover,
+    .lm-customer-hover:focus-within .lm-customer-print-popover {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+    .lm-customer-print-popover__title {
+        display: block;
+        margin-bottom: 7px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .lm-customer-print-popover__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .lm-customer-print-popover__actions button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 6px 8px;
+        border: 1px solid #d7e2ee;
+        border-radius: 8px;
+        background: #fff;
+        color: #0f172a;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    .lm-customer-print-popover__actions button:hover,
+    .lm-customer-print-popover__actions button:focus {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+    .lm-customer-print-popover__actions .lm-customer-print-popover__primary {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        border-color: #1d4ed8;
+        color: #ffffff;
+    }
+    .lm-customer-print-popover__actions .lm-customer-print-popover__primary:hover,
+    .lm-customer-print-popover__actions .lm-customer-print-popover__primary:focus {
+        background: linear-gradient(135deg, #1d4ed8, #1e40af);
+        color: #ffffff;
+    }
 
     /* Payment Modal Form Styles */
     .view_modal .modal-content {
@@ -2391,7 +2494,7 @@
                 </div>
                 <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 3 smart tools</span>
             </div>
-            <div class="lm-dashboard-panel__body">
+            <div class="lm-dashboard-panel__body lm-dashboard-panel__body--quick-actions">
                 <div class="lm-quick-grid">
                     <div class="lm-quick-box lm-quick-box--loan">
                         <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon lm-quick-box__icon--pay"><i class="fa fa-money"></i></span> Collect Payment</h4>
@@ -2407,7 +2510,7 @@
                                 <input type="text" class="form-control" id="loanDashboardQuickSearchInput" placeholder="Search loan #, customer name, phone...">
                             </div>
                         </div>
-                        <div class="table-responsive lm-table-wrap">
+                        <div class="table-responsive lm-table-wrap lm-table-wrap--hover-actions">
                             <table class="table table-condensed table-bordered lm-dashboard-table lm-mini-table" id="loanDashboardQuickSearchTable">
                                 <thead><tr><th>Customer</th><th>Due</th><th class="text-right">Balance</th><th class="text-center">Pay</th></tr></thead>
                                 <tbody data-loan-table="dashboard_quick_search">
@@ -2885,6 +2988,7 @@
                 var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view?_lm_modal=1";
                 var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
+                var autoPrintModalUrl = printModalUrl + "?autostart=1";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 var quickPayUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/quick-pay";
                 var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
@@ -2896,9 +3000,22 @@
                     : (row.status && String(row.status).toLowerCase() !== 'active' ? '<span class="lm-pay-status">' + esc(row.status) + '</span>' : '');
                 html += '<tr class="lm-pay-row">'
                     + '<td>'
+                    + '<div class="lm-customer-hover">'
+                    + '<div class="lm-customer-hover__main">'
                     + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
                     + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + '</span>'
                     + statusBadge
+                    + '</div>'
+                    + '<div class="lm-customer-print-popover" role="group" aria-label="Customer print actions">'
+                    + '<span class="lm-customer-print-popover__title">Customer actions</span>'
+                    + '<div class="lm-customer-print-popover__actions">'
+                    + '<button type="button" class="btn-modal lm-customer-print-popover__primary" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button>'
+                    + '<button type="button" class="btn-modal" data-href="' + autoPrintModalUrl + '" data-container=".view_modal"><i class="fa fa-bolt"></i> Auto</button>'
+                    + '<button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View</button>'
+                    + '<button type="button" class="btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Pay</button>'
+                    + '</div>'
+                    + '</div>'
+                    + '</div>'
                     + '</td>'
                     + '<td class="lm-pay-due">' + dueLabel + '</td>'
                     + '<td class="text-right lm-pay-balance">' + money(row.balance_amount) + '</td>'
