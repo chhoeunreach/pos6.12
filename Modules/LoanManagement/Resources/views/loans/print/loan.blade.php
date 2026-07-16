@@ -278,14 +278,18 @@
         }
         .schedule-table th,
         .schedule-table td {
-            padding: 0.65mm 0.8mm;
+            padding: 0.85mm 1mm;
             font-size: 9px;
+            line-height: 1.16;
         }
         .schedule-table th {
             background: var(--header-bg);
             font-size: 9.4px;
             border-top: 1.5px solid var(--line);
             border-bottom: 1.2px solid var(--line);
+        }
+        .schedule-table tbody tr {
+            height: 6.3mm;
         }
         .schedule-table tbody tr:nth-child(even) td {
             background: var(--row-alt);
@@ -298,10 +302,10 @@
         .schedule-table .payment-method-cell {
             color: #222;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
-            line-height: 1.12;
+            line-height: 1.18;
         }
         .schedule-table .payment-date-cell {
-            line-height: 1.12;
+            line-height: 1.18;
         }
         .schedule-table .amount-cell {
             font-family: 'RobotoBold', Arial, sans-serif;
@@ -429,7 +433,7 @@
         }
         .nowrap { white-space: nowrap; }
         .page.loan-print-compact {
-            padding: 7mm 11mm 5mm;
+            padding: 7.5mm 11.5mm 5.5mm;
         }
         .loan-print-compact .header {
             min-height: 19mm;
@@ -468,26 +472,47 @@
         .loan-print-compact .address-row {
             padding: 0.6mm 0 1.2mm;
         }
+        .loan-print-compact .product-title-text,
+        .loan-print-compact .date-bar {
+            padding-top: 1.1mm;
+            padding-bottom: 1.1mm;
+        }
+        .loan-print-compact .summary-terms-cell {
+            padding: 1.6mm 2.2mm !important;
+        }
+        .loan-print-compact .print-table .summary-terms td {
+            padding: 0.35mm 0;
+        }
+        .loan-print-compact .print-table .summary-totals td {
+            padding: 1.05mm 1.3mm;
+        }
         .loan-print-compact .print-table th,
         .loan-print-compact .print-table td {
-            padding: 0.48mm 0.65mm;
-            font-size: 8.5px;
-            line-height: 1.07;
+            padding: 0.58mm 0.75mm;
+            font-size: 8.7px;
+            line-height: 1.12;
+        }
+        .loan-print-compact .schedule-table tbody tr {
+            height: 5.7mm;
         }
         .loan-print-compact .schedule-table th,
         .loan-print-compact .schedule-table td {
-            padding: 0.38mm 0.55mm;
-            font-size: 8.1px;
-            line-height: 1.06;
+            padding: 0.55mm 0.72mm;
+            font-size: 8.25px;
+            line-height: 1.1;
         }
         .loan-print-compact .schedule-table th {
-            font-size: 8.5px;
+            font-size: 8.7px;
+        }
+        .loan-print-compact .payment-method-cell,
+        .loan-print-compact .payment-date-cell {
+            line-height: 1.16;
         }
         .loan-print-compact .status-pill {
-            min-width: 10.5mm;
-            padding: 0.12mm 0.55mm;
-            font-size: 7.3px;
-            border-radius: 1.2mm;
+            min-width: 10.8mm;
+            padding: 0.16mm 0.6mm;
+            font-size: 7.45px;
+            border-radius: 1.25mm;
         }
         .loan-print-compact .signature-row {
             margin-top: 1.8mm;
@@ -566,9 +591,12 @@
             }
             .loan-print-compact .schedule-table th,
             .loan-print-compact .schedule-table td {
-                padding: 0.3mm 0.45mm;
-                font-size: 7.8px;
-                line-height: 1.04;
+                padding: 0.42mm 0.58mm;
+                font-size: 8px;
+                line-height: 1.08;
+            }
+            .loan-print-compact .schedule-table tbody tr {
+                height: 5.35mm;
             }
             .contact-line {
                 font-size: 12px;
