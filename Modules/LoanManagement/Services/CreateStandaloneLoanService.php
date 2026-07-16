@@ -135,7 +135,7 @@ class CreateStandaloneLoanService
             }
 
             $locationId = $this->resolveLocationId($data);
-            $resolvedCustomerName = $this->resolveCustomerName($data);
+            $resolvedCustomerName = $this->resolveCustomerDisplayName($data);
             $resolvedCustomerPhone = trim((string) ($data['customer_phone'] ?? ''));
             $resolvedCustomerAddress = $this->resolveCustomerAddress($data);
 
@@ -357,6 +357,16 @@ class CreateStandaloneLoanService
         }
 
         return trim((string) ($data['customer_name'] ?? ''));
+    }
+
+    protected function resolveCustomerDisplayName(array $data): string
+    {
+        $khmerName = trim((string) ($data['customer_khmer_name'] ?? ''));
+        if ($khmerName !== '') {
+            return $khmerName;
+        }
+
+        return $this->resolveCustomerName($data);
     }
 
     protected function resolveCustomerAddress(array $data): string

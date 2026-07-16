@@ -32,13 +32,15 @@ class LoanCustomerService
     protected function buildPayload(array $data, array $snapshot, bool $isCreate): array
     {
         $name = trim((string) ($data['name'] ?? $snapshot['name'] ?? ''));
+        $khmerName = trim((string) ($data['khmer_name'] ?? ''));
+        $displayName = $khmerName !== '' ? $khmerName : $name;
         $phone = trim((string) ($data['phone'] ?? $snapshot['phone'] ?? ''));
         $payload = [
             'main_contact_id' => $data['main_contact_id'] ?? ($snapshot['main_contact_id'] ?? null),
             'business_location_id' => $data['business_location_id'] ?? ($snapshot['business_location_id'] ?? null),
             'business_location_name_snapshot' => $snapshot['business_location_name_snapshot'] ?? null,
             'name' => $name,
-            'customer_name' => $name,
+            'customer_name' => $displayName,
             'phone' => $phone,
             'alternate_phone' => $data['alternate_phone'] ?? ($snapshot['alternate_phone'] ?? null),
             'login_phone' => $data['login_phone'] ?? null,
@@ -52,7 +54,7 @@ class LoanCustomerService
             'id_card_number' => $data['id_card_number'] ?? ($snapshot['id_card_number'] ?? null),
             'passport_number' => $data['passport_number'] ?? null,
             'address' => $data['address'] ?? ($snapshot['address'] ?? null),
-            'khmer_name' => $data['khmer_name'] ?? null,
+            'khmer_name' => $khmerName !== '' ? $khmerName : null,
             'province' => $data['province'] ?? null,
             'district' => $data['district'] ?? null,
             'commune' => $data['commune'] ?? null,
@@ -116,4 +118,3 @@ class LoanCustomerService
         return $full !== '' ? $full : ($user->username ?? null);
     }
 }
-

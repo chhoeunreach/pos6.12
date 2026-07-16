@@ -718,9 +718,9 @@
         $('#id_card_ocr_address_input').val(fields.address || '');
         fillIfEmpty('#customer_id_card_input', fields.id_card_number);
         fillIfEmpty('#customer_khmer_name_input', fields.khmer_name);
-        fillIfEmpty('#customer_name_input', fields.english_name);
+        fillIfEmpty('#customer_name_input', fields.khmer_name || fields.english_name);
         fillIfEmpty('#customer_address_input', fields.address);
-        $('#customer_english_name_input').val($('#customer_name_input').val() || '');
+        $('#customer_english_name_input').val(fields.english_name || $('#customer_name_input').val() || '');
     }
 
     function scanIdCard(dataUri) {
@@ -781,9 +781,12 @@
                 $box.empty();
                 if (res.data && res.data.length) {
                     res.data.forEach(function(c){
+                        var primaryName = (c.khmer_name || c.name || '');
+                        var secondaryName = (c.name && c.name !== primaryName) ? c.name : '';
                         $box.append(
                             '<div class="lm-cs-item" data-id="'+c.id+'" data-name="'+(c.name||'')+'" data-khmer-name="'+(c.khmer_name||'')+'" data-phone="'+(c.phone||'')+'" data-alternate-phone="'+(c.alternate_phone||'')+'" data-address="'+(c.address||'')+'" data-idcard="'+(c.id_card_number||'')+'">' +
-                            '<div class="lm-cs-name">'+(c.name||'')+'</div>' +
+                            '<div class="lm-cs-name">'+primaryName+'</div>' +
+                            (secondaryName ? '<div class="lm-cs-phone">'+secondaryName+'</div>' : '') +
                             '<div class="lm-cs-phone">'+(c.phone||'')+' '+(c.customer_code||'')+'</div>' +
                             '</div>'
                         );
@@ -798,8 +801,9 @@
 
     $(document).on('click', '.lm-cs-item', function(){
         var $item = $(this);
+        var primaryName = $item.data('khmer-name') || $item.data('name');
         $('#customer_id_input').val($item.data('id'));
-        $('#customer_name_input').val($item.data('name'));
+        $('#customer_name_input').val(primaryName);
         $('#customer_english_name_input').val($item.data('name'));
         $('#customer_khmer_name_input').val($item.data('khmer-name'));
         $('#customer_phone_input').val($item.data('phone'));

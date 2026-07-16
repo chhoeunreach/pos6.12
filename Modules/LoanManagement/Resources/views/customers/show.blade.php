@@ -2,6 +2,10 @@
 @section('title', 'Customer Detail')
 
 @section('content_body')
+@php
+    $primaryName = trim((string) ($customerRow->khmer_name ?? '')) ?: trim((string) ($customerRow->name ?? ''));
+    $englishName = trim((string) ($customerRow->name ?? ''));
+@endphp
 <section class="content-header"><h1>Customer Detail</h1></section>
 <section class="content">
     <div class="box box-primary"><div class="box-body">
@@ -18,7 +22,9 @@
             <div class="col-md-10 col-sm-9">
                 <div class="row">
                     <div class="col-md-4"><strong>Code:</strong> {{ $customerRow->customer_code ?? '-' }}</div>
-                    <div class="col-md-4"><strong>Name:</strong> {{ $customerRow->name ?? '-' }}</div>
+                    <div class="col-md-4"><strong>Name:</strong> {{ $primaryName !== '' ? $primaryName : '-' }}</div>
+                    <div class="col-md-4"><strong>English Name:</strong> {{ $englishName !== '' ? $englishName : '-' }}</div>
+                    <div class="col-md-4"><strong>Khmer Name:</strong> {{ trim((string) ($customerRow->khmer_name ?? '')) ?: '-' }}</div>
                     <div class="col-md-4"><strong>Phone:</strong> {{ $customerRow->phone ?? '-' }}</div>
                     <div class="col-md-4"><strong>Status:</strong> {{ $customerRow->status ?? '-' }}</div>
                     <div class="col-md-4"><strong>Can Login:</strong> {{ !empty($customerRow->can_login) ? 'Yes' : 'No' }}</div>

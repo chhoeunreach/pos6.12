@@ -70,7 +70,16 @@
                                     </td>
                                     <td>{{ $c->id }}</td>
                                     <td>{{ $c->customer_code ?? '-' }}</td>
-                                    <td>{{ $c->name ?? $c->customer_name ?? '-' }}</td>
+                                    <td>
+                                        @php
+                                            $primaryName = trim((string) ($c->khmer_name ?? '')) ?: trim((string) ($c->name ?? $c->customer_name ?? ''));
+                                            $secondaryName = trim((string) ($c->name ?? ''));
+                                        @endphp
+                                        <strong>{{ $primaryName !== '' ? $primaryName : '-' }}</strong>
+                                        @if($secondaryName !== '' && $secondaryName !== $primaryName)
+                                            <br><small class="text-muted">{{ $secondaryName }}</small>
+                                        @endif
+                                    </td>
                                     <td>{{ $c->phone ?? '-' }}</td>
                                     <td>{{ $c->business_location_name_snapshot ?? '-' }}</td>
                                     <td>{!! !empty($c->can_login) ? '<span class="label label-success">Yes</span>' : '<span class="label label-default">No</span>' !!}</td>

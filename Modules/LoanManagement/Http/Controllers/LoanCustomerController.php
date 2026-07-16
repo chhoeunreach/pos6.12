@@ -27,10 +27,21 @@ class LoanCustomerController extends Controller
         $customers = collect();
         if ($tableExists) {
             $q = DB::connection($this->connection)->table($this->table.' as c')->orderByDesc('c.id');
-            foreach (['name', 'phone', 'customer_code', 'id_card_number', 'status'] as $f) {
+            foreach (['phone', 'customer_code', 'id_card_number', 'status'] as $f) {
                 if ($request->filled($f) && Schema::connection($this->connection)->hasColumn($this->table, $f)) {
                     $q->where('c.'.$f, 'like', '%'.$request->input($f).'%');
                 }
+            }
+            if ($request->filled('name')) {
+                $q->where(function ($query) use ($request) {
+                    $like = '%'.$request->input('name').'%';
+                    if (Schema::connection($this->connection)->hasColumn($this->table, 'khmer_name')) {
+                        $query->where('c.khmer_name', 'like', $like)
+                            ->orWhere('c.name', 'like', $like);
+                    } else {
+                        $query->where('c.name', 'like', $like);
+                    }
+                });
             }
             if ($request->filled('blacklist_status') && Schema::connection($this->connection)->hasColumn($this->table, 'blacklist_status')) {
                 $q->where('c.blacklist_status', (int) $request->input('blacklist_status'));
