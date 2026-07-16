@@ -182,12 +182,12 @@
             padding: 0;
         }
         .product-title-text {
-            padding: 0.9mm;
+            padding: 1.15mm 1.8mm;
             text-align: center;
         }
         .date-bar {
             border-left: 1px solid var(--line);
-            padding: 0.9mm 1.6mm;
+            padding: 1.15mm 2mm;
             font-family: 'RobotoBold';
             text-align: center;
         }
@@ -219,7 +219,7 @@
         .summary-terms-cell {
             width: 67%;
             border-right: 1px solid var(--soft-line) !important;
-            padding: 1.3mm 2mm !important;
+            padding: 1.8mm 2.4mm !important;
         }
         .summary-totals-cell {
             width: 33%;
@@ -230,7 +230,7 @@
         }
         .print-table .summary-terms td {
             border: 0;
-            padding: 0.25mm 0;
+            padding: 0.38mm 0;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             text-align: left;
@@ -248,7 +248,7 @@
         .print-table .summary-totals td {
             border: 0;
             border-bottom: 1px solid var(--soft-line);
-            padding: 0.9mm 1.2mm;
+            padding: 1.15mm 1.5mm;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             line-height: 1.15;
@@ -376,7 +376,7 @@
         .notice {
             border-top: 1.5px solid var(--orange);
             border-bottom: 1.5px solid var(--orange);
-            padding: 5mm 0;
+            padding: 5mm 4mm;
             text-align: center;
             font-family: 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 11px;
@@ -474,17 +474,17 @@
         }
         .loan-print-compact .product-title-text,
         .loan-print-compact .date-bar {
-            padding-top: 1.1mm;
-            padding-bottom: 1.1mm;
+            padding-top: 1.3mm;
+            padding-bottom: 1.3mm;
         }
         .loan-print-compact .summary-terms-cell {
-            padding: 1.6mm 2.2mm !important;
+            padding: 2mm 2.6mm !important;
         }
         .loan-print-compact .print-table .summary-terms td {
-            padding: 0.35mm 0;
+            padding: 0.45mm 0;
         }
         .loan-print-compact .print-table .summary-totals td {
-            padding: 1.05mm 1.3mm;
+            padding: 1.25mm 1.5mm;
         }
         .loan-print-compact .print-table th,
         .loan-print-compact .print-table td {
@@ -522,7 +522,7 @@
             margin-top: 3.2mm;
         }
         .loan-print-compact .notice {
-            padding: 1.6mm 0;
+            padding: 2mm 3mm;
             font-size: 8.8px;
             line-height: 1.24;
         }
@@ -612,7 +612,7 @@
                 margin-top: 2.5mm;
             }
             .notice {
-                padding: 1.8mm 0;
+                padding: 2mm 3mm;
                 font-size: 9px;
                 line-height: 1.28;
             }
