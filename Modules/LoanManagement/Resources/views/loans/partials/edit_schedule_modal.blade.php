@@ -8,6 +8,19 @@
     $status = strtolower((string) ($scheduleRow->status ?? 'unpaid'));
     $isEmbeddedModal = request()->boolean('_lm_modal');
     $editRouteParams = ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []);
+    $schedulePayments = $schedulePayments ?? collect();
+    $paymentTypes = $paymentTypes ?? ['cash' => 'Cash'];
+    $defaultPaymentMethod = $defaultPaymentMethod ?? (array_key_exists('cash', $paymentTypes) ? 'cash' : array_key_first($paymentTypes));
+    $paymentAmount = $paid > 0 ? $paid : max(0, $amountDue - $balance);
+    $paymentDate = ! empty($scheduleRow->paid_date)
+        ? \Carbon\Carbon::parse($scheduleRow->paid_date)->format('Y-m-d')
+        : (! empty($scheduleRow->paid_at) ? \Carbon\Carbon::parse($scheduleRow->paid_at)->format('Y-m-d') : date('Y-m-d'));
+    $firstPayment = $schedulePayments->first();
+    $firstPaymentMethod = $firstPayment->method ?? $firstPayment->channel ?? $firstPayment->payment_method_snapshot ?? $defaultPaymentMethod;
+    if (! array_key_exists($firstPaymentMethod, $paymentTypes)) {
+        $matchedMethod = array_search($firstPaymentMethod, $paymentTypes, true);
+        $firstPaymentMethod = $matchedMethod !== false ? $matchedMethod : $defaultPaymentMethod;
+    }
     $statuses = [
         'auto' => 'Auto',
         'pending' => 'Pending',
@@ -112,6 +125,84 @@
                     </div>
                 </div>
             </div>
+
+            <hr style="margin:10px 0 14px;">
+
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('payment_action', 'Payment Action') !!}
+                        <select name="payment_action" id="payment_action" class="form-control">
+                            <option value="keep">Keep payment records</option>
+                            <option value="sync_status">Sync by status</option>
+                            <option value="add_update">Add / Update payment</option>
+                            <option value="remove">Remove payment</option>
+                        </select>
+                        <small class="text-muted">Use this when status must change payment records too.</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('payment_amount', 'Payment Amount') !!}
+                        <input type="number" step="0.01" min="0" name="payment_amount" id="payment_amount" class="form-control schedule-payment-field" value="{{ number_format($paymentAmount, 2, '.', '') }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('payment_paid_date', 'Payment Date') !!}
+                        <input type="date" name="payment_paid_date" id="payment_paid_date" class="form-control schedule-payment-field" value="{{ $paymentDate }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('payment_method', 'Payment Method') !!}
+                        {!! Form::select('payment_method', $paymentTypes, $firstPaymentMethod, ['class' => 'form-control schedule-payment-field', 'id' => 'payment_method']) !!}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {!! Form::label('payment_reference_number', 'Payment Reference') !!}
+                        <input type="text" name="payment_reference_number" id="payment_reference_number" class="form-control schedule-payment-field" value="{{ $firstPayment->reference_number ?? '' }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {!! Form::label('payment_note', 'Payment Note') !!}
+                        <input type="text" name="payment_note" id="payment_note" class="form-control schedule-payment-field" value="{{ $firstPayment->note ?? '' }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="margin-top:4px;">
+                <table class="table table-condensed table-bordered" style="margin-bottom:0;">
+                    <thead>
+                        <tr>
+                            <th>Linked Payment</th>
+                            <th>Date</th>
+                            <th>Method</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($schedulePayments as $payment)
+                            @php
+                                $linkedPaidDate = $payment->paid_date ?? $payment->paid_at ?? null;
+                                $linkedAmount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+                                $linkedMethod = $payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? '-';
+                                $linkedReceipt = $payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #'.$payment->id);
+                            @endphp
+                            <tr>
+                                <td>{{ $linkedReceipt }}</td>
+                                <td>{{ ! empty($linkedPaidDate) ? \Carbon\Carbon::parse($linkedPaidDate)->format('d-m-Y') : '-' }}</td>
+                                <td>{{ $linkedMethod }}</td>
+                                <td class="text-right">{{ number_format($linkedAmount, 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="text-center text-muted">No payment linked to this schedule.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="modal-footer">
@@ -141,9 +232,27 @@ $(function () {
         var amountDue = numberValue('[name="schedule_amount"]');
         var paid = numberValue('[name="paid_amount"]');
         $form.find('[name="balance_amount"]').val(Math.max(amountDue - paid, 0).toFixed(2));
+        if (!$form.find('[name="payment_amount"]').data('touched')) {
+            $form.find('[name="payment_amount"]').val(Math.max(paid, 0).toFixed(2));
+        }
     }
 
     $form.on('click', '.loan-schedule-recalculate', recalculateBalance);
+    $form.on('input change', '[name="payment_amount"]', function () {
+        $(this).data('touched', true);
+    });
+    $form.on('change', '[name="status"]', function () {
+        var status = String($(this).val() || '').toLowerCase();
+        if (['paid', 'completed'].indexOf(status) !== -1) {
+            $form.find('[name="payment_action"]').val('sync_status');
+            var amountDue = numberValue('[name="schedule_amount"]');
+            if (!$form.find('[name="payment_amount"]').data('touched')) {
+                $form.find('[name="payment_amount"]').val(amountDue.toFixed(2));
+            }
+        } else if (['pending', 'unpaid'].indexOf(status) !== -1 && numberValue('[name="paid_amount"]') <= 0) {
+            $form.find('[name="payment_action"]').val('sync_status');
+        }
+    });
 
     $form.off('submit.loanScheduleModal').on('submit.loanScheduleModal', function (e) {
         e.preventDefault();

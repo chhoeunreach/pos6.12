@@ -621,12 +621,12 @@
                                     <div class="mob-customer-detail-fields" id="mobCustomerDetailFields">
                                         <div class="mob-grid-2">
                                             <div class="mob-field">
-                                                <label>Name in Khmer</label>
+                                                <label>Name in Khmer (Primary)</label>
                                                 <input type="text" name="customer_khmer_name" id="modalCustomerKhmerName" class="mob-input" placeholder="Khmer name">
                                             </div>
                                             <div class="mob-field">
-                                                <label>Name in English <span class="mob-required">*</span></label>
-                                                <input type="text" name="customer_name" id="modalCustomerName" class="mob-input" required placeholder="English name">
+                                                <label>Customer Name <span class="mob-required">*</span></label>
+                                                <input type="text" name="customer_name" id="modalCustomerName" class="mob-input" required placeholder="Khmer or English name">
                                                 <input type="hidden" name="customer_english_name" id="modalCustomerEnglishName">
                                             </div>
                                         </div>
@@ -1424,9 +1424,9 @@ function mobApplyIdCardFields(fields, rawText) {
     document.getElementById('mobIdCardOcrAddress').value = fields.address || '';
     mobFillIfEmpty('modalCustomerIdCard', fields.id_card_number);
     mobFillIfEmpty('modalCustomerKhmerName', fields.khmer_name);
-    mobFillIfEmpty('modalCustomerName', fields.english_name);
+    mobFillIfEmpty('modalCustomerName', fields.khmer_name || fields.english_name);
     mobFillIfEmpty('modalCustomerAddress', fields.address);
-    document.getElementById('modalCustomerEnglishName').value = document.getElementById('modalCustomerName').value || '';
+    document.getElementById('modalCustomerEnglishName').value = fields.english_name || document.getElementById('modalCustomerName').value || '';
 }
 
 function mobScanIdCard(dataUri) {
@@ -1993,7 +1993,9 @@ function mobPreviewSchedule() {
 
 function mobSubmit(action) {
     document.querySelector('#standaloneLoanModalForm input[name="action_type"]').value = action;
-    document.getElementById('modalCustomerEnglishName').value = document.getElementById('modalCustomerName').value || '';
+    if (!String(document.getElementById('modalCustomerEnglishName').value || '').trim()) {
+        document.getElementById('modalCustomerEnglishName').value = document.getElementById('modalCustomerName').value || '';
+    }
     var form = document.getElementById('standaloneLoanModalForm');
     var fd = new FormData(form);
     if (mobIdCardData) fd.append('id_card_image', mobIdCardData);

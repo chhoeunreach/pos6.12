@@ -20,6 +20,9 @@ class CreateStandaloneLoanService
                 $q->where('name', 'like', '%'.$keyword.'%')
                     ->orWhere('phone', 'like', '%'.$keyword.'%')
                     ->orWhere('customer_code', 'like', '%'.$keyword.'%');
+                if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
+                    $q->orWhere('khmer_name', 'like', '%'.$keyword.'%');
+                }
             })
             ->whereNull('deleted_at');
 

@@ -888,7 +888,9 @@
         e.preventDefault();
         var $form = $(this);
         var $buttons = $('#btnCreateLoan');
-        $('#customer_english_name_input').val($('#customer_name_input').val() || '');
+        if (!String($('#customer_english_name_input').val() || '').trim()) {
+            $('#customer_english_name_input').val($('#customer_name_input').val() || '');
+        }
         var fd = new FormData(this);
         if (idCardImageData) {
             fd.append('id_card_image', idCardImageData);
