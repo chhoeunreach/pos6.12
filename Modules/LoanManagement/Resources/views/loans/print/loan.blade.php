@@ -831,15 +831,21 @@
     function buildLoanImageSvg(target) {
         var rect = target.getBoundingClientRect();
         var width = Math.ceil(rect.width || target.offsetWidth || 794);
-        var height = Math.round(width * 297 / 210);
+        var a4Height = Math.round(width * 297 / 210);
+        var contentHeight = Math.ceil(Math.max(
+            rect.height || 0,
+            target.offsetHeight || 0,
+            target.scrollHeight || 0
+        ));
+        var height = Math.max(a4Height, contentHeight);
         var serializer = new XMLSerializer();
         var clone = target.cloneNode(true);
         clone.style.width = width + 'px';
-        clone.style.height = height + 'px';
+        clone.style.height = 'auto';
         clone.style.minHeight = height + 'px';
         clone.style.margin = '0';
         clone.style.boxSizing = 'border-box';
-        clone.style.overflow = 'hidden';
+        clone.style.overflow = 'visible';
         clone.style.background = '#fff';
         var styles = Array.from(document.querySelectorAll('style'))
             .map(function(styleTag) { return styleTag.textContent || ''; })
@@ -848,7 +854,7 @@
         var svg = ''
             + '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
             + '<foreignObject width="100%" height="100%">'
-            + '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;height:' + height + 'px;background:#fff;overflow:hidden;">'
+            + '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;min-height:' + height + 'px;background:#fff;overflow:visible;">'
             + '<style>' + styles + '</style>'
             + html
             + '</div>'
