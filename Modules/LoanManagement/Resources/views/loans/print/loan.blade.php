@@ -416,6 +416,9 @@
             margin: 5mm 0 3mm;
             font-size: 13px;
         }
+        .telegram-qr-block {
+            margin-top: 5mm;
+        }
         .printed-date {
             margin-top: 3mm;
             color: #999;
@@ -534,27 +537,30 @@
             line-height: 1.22;
         }
         .loan-print-compact .payment-area {
-            padding-top: 1.6mm;
-            gap: 7mm;
+            padding-top: 1.2mm;
+            gap: 6mm;
         }
         .loan-print-compact .payment-card {
-            min-height: 25mm;
+            min-height: 32mm;
         }
         .loan-print-compact .payment-card .caption {
             font-size: 8.3px;
-            margin-bottom: 0.8mm;
+            margin-bottom: 0.6mm;
         }
         .loan-print-compact .qr-large {
-            max-width: 25mm;
-            max-height: 25mm;
+            max-width: 34mm;
+            max-height: 34mm;
         }
         .loan-print-compact .qr-small {
-            max-width: 20mm;
-            max-height: 20mm;
+            max-width: 22mm;
+            max-height: 22mm;
         }
         .loan-print-compact .transfer-number {
-            margin: 1.3mm 0 1mm;
+            margin: 1mm 0 0.8mm;
             font-size: 10.5px;
+        }
+        .loan-print-compact .telegram-qr-block {
+            margin-top: 2mm;
         }
         .loan-print-compact .printed-date {
             margin-top: 1mm;
@@ -624,19 +630,19 @@
                 line-height: 1.45;
             }
             .payment-area {
-                gap: 8mm;
-                padding-top: 2.5mm;
+                gap: 7mm;
+                padding-top: 1.8mm;
             }
             .payment-card {
-                min-height: 30mm;
+                min-height: 34mm;
             }
             .payment-card .caption {
                 font-size: 9px;
                 margin-bottom: 1mm;
             }
             .qr-large {
-                max-width: 30mm;
-                max-height: 30mm;
+                max-width: 36mm;
+                max-height: 36mm;
             }
             .qr-small {
                 max-width: 24mm;
@@ -645,6 +651,9 @@
             .transfer-number {
                 margin: 2mm 0 1mm;
                 font-size: 11px;
+            }
+            .telegram-qr-block {
+                margin-top: 2.5mm;
             }
             .printed-date {
                 margin-top: 1.5mm;
@@ -1034,7 +1043,7 @@
             @if(file_exists(public_path('img/payment-method.png')))
                 <img src="{{ asset('img/payment-method.png') }}" style="max-width:33mm;max-height:12mm;" alt="Payment methods">
             @endif
-            <div style="margin-top:5mm;">
+            <div class="telegram-qr-block">
                 <span class="caption orange">សូមស្កេន QR Telegram ខាងក្រោម</span><br>
                 @if(! empty($telegramQr))
                     <img src="{{ $telegramQr }}" class="qr-small" alt="Telegram QR">
