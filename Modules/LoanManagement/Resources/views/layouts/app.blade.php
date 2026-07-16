@@ -155,6 +155,7 @@
     @if (file_exists($moduleJsPath))
         <script>{!! file_get_contents($moduleJsPath) !!}</script>
     @endif
+    @include('loanmanagement::layouts.partials.language_runtime')
 
     @if (!empty($__additional_views) && is_array($__additional_views))
         @foreach ($__additional_views as $additional_view)

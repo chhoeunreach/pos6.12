@@ -10,6 +10,7 @@
         'Create Loan': 'បង្កើតកម្ចី',
         'Create From POS': 'បង្កើតពី POS',
         'Loan Calculator': 'ម៉ាស៊ីនគណនាកម្ចី',
+        'Calc': 'គណនា',
         'Due Today': 'ដល់កំណត់ថ្ងៃនេះ',
         'Partial Payments': 'បង់ប្រាក់មិនទាន់គ្រប់',
         'Closed Accounts': 'គណនីបានបិទ',
@@ -103,6 +104,7 @@
         'Documents': 'ឯកសារ',
         'Document': 'ឯកសារ',
         'Photos, PDFs, Text files': 'រូបថត PDF និងឯកសារអត្ថបទ',
+        '(Photos, PDFs, Text files)': '(រូបថត PDF និងឯកសារអត្ថបទ)',
         'Customer Information': 'ព័ត៌មានអតិថិជន',
         'Search Existing Customer': 'ស្វែងរកអតិថិជនមានស្រាប់',
         'Clear Selected Customer': 'សម្អាតអតិថិជនដែលបានជ្រើស',
@@ -219,6 +221,13 @@
         'Hide': 'លាក់',
         'Show': 'បង្ហាញ',
         'All': 'ទាំងអស់',
+        'All Locations': 'ទីតាំងទាំងអស់',
+        'Search loan #, customer name, phone...': 'ស្វែងរកលេខកម្ចី ឈ្មោះអតិថិជន លេខទូរស័ព្ទ...',
+        'Search by name, phone, or loan # to collect payment.': 'ស្វែងរកតាមឈ្មោះ លេខទូរស័ព្ទ ឬលេខកម្ចីដើម្បីប្រមូលប្រាក់។',
+        'Type to search for payment collection.': 'វាយដើម្បីស្វែងរកសម្រាប់ប្រមូលប្រាក់។',
+        'Search customer name or phone for fast payment.': 'ស្វែងរកឈ្មោះអតិថិជន ឬលេខទូរស័ព្ទសម្រាប់បង់ប្រាក់រហ័ស។',
+        'No loans found for this search.': 'រកមិនឃើញកម្ចីសម្រាប់ការស្វែងរកនេះ។',
+        'Search failed.': 'ស្វែងរកបរាជ័យ។',
         'Name': 'ឈ្មោះ',
         'Email': 'អ៊ីមែល',
         'Username': 'ឈ្មោះអ្នកប្រើ',
@@ -234,7 +243,9 @@
         'Phone number': 'លេខទូរស័ព្ទ',
         'Alternate phone': 'លេខទូរស័ព្ទបន្ថែម',
         'ID Card': 'អត្តសញ្ញាណប័ណ្ណ',
-        'Product fields filled automatically.': 'ព័ត៌មានទំនិញបានបំពេញដោយស្វ័យប្រវត្តិ។'
+        'Product fields filled automatically.': 'ព័ត៌មានទំនិញបានបំពេញដោយស្វ័យប្រវត្តិ។',
+        'Tip: You can paste images from clipboard (Ctrl+V / Cmd+V) anywhere on this page': 'គន្លឹះ៖ អ្នកអាចបិទភ្ជាប់រូបភាពពី Clipboard (Ctrl+V / Cmd+V) នៅលើទំព័រនេះ',
+        'Paste images with Ctrl+V · Photos compressed, files kept as-is': 'បិទភ្ជាប់រូបភាពដោយ Ctrl+V · រូបថតត្រូវបានបង្រួម ឯកសារផ្សេងទុកដូចដើម'
     };
 
     var skipTags = { SCRIPT: true, STYLE: true, TEXTAREA: true, CODE: true, PRE: true };

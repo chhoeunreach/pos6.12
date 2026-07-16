@@ -24,7 +24,7 @@ class LoanDashboardController extends Controller
     {
         $filters = $this->service->getFilters($request);
 
-        $locations = $this->simpleOptions('loans', 'business_location_id');
+        $locations = $this->locationOptions();
         $statuses = ['draft', 'pending', 'approved', 'active', 'completed', 'rejected', 'cancelled', 'defaulted'];
         $collectors = $this->simpleOptions('loans', 'collector_id');
         $currencies = ['USD', 'KHR'];
@@ -110,9 +110,10 @@ class LoanDashboardController extends Controller
     {
         $scope = trim((string) $request->input('scope', 'loan'));
         $term = trim((string) $request->input('q', ''));
+        $locationId = $request->filled('location_id') ? (int) $request->input('location_id') : null;
         $rows = $scope === 'sell'
             ? $this->service->searchSellsForDashboard($term)
-            : $this->service->searchLoansForDashboard($term);
+            : $this->service->searchLoansForDashboard($term, 10, $locationId);
 
         return response()->json([
             'success' => true,
@@ -142,6 +143,51 @@ class LoanDashboardController extends Controller
                 'name' => $stringLabel ? (string) $value : 'ID #'.$value,
             ];
         })->values()->all();
+    }
+
+    protected function locationOptions(): array
+    {
+        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            $query = DB::connection('mysql_loan')->table('loan_business_locations')
+                ->selectRaw('id, COALESCE(NULLIF(name, ""), CONCAT("Location #", id)) as name')
+                ->orderBy('name');
+
+            if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
+                $query->whereNull('deleted_at');
+            }
+
+            return $query->get()
+                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                ->all();
+        }
+
+        if ($this->service->tableExists('loans') && $this->service->columnExists('loans', 'business_location_id')) {
+            $nameColumn = $this->service->columnExists('loans', 'business_location_name_snapshot')
+                ? 'business_location_name_snapshot'
+                : null;
+
+            $query = DB::connection('mysql_loan')->table('loans')
+                ->whereNotNull('business_location_id')
+                ->select('business_location_id as id');
+
+            if ($nameColumn) {
+                $query->addSelect($nameColumn.' as name')
+                    ->whereNotNull($nameColumn)
+                    ->where($nameColumn, '!=', '')
+                    ->groupBy('business_location_id', $nameColumn)
+                    ->orderBy($nameColumn);
+            } else {
+                $query->selectRaw('business_location_id as id, CONCAT("Location #", business_location_id) as name')
+                    ->groupBy('business_location_id')
+                    ->orderBy('business_location_id');
+            }
+
+            return $query->limit(200)->get()
+                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                ->all();
+        }
+
+        return [];
     }
 
     protected function getRecentChats(): array

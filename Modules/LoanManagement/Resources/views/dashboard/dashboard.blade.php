@@ -2722,6 +2722,17 @@
                                 <input type="text" class="form-control" id="loanDashboardQuickSearchInput" placeholder="Search loan #, customer name, phone...">
                             </div>
                         </div>
+                        <div class="form-group lm-quick-input" style="margin-bottom:12px;">
+                            <div class="input-group">
+                                <span class="input-group-addon"><i class="fa fa-map-marker"></i></span>
+                                <select class="form-control" id="loanDashboardQuickLocationFilter">
+                                    <option value="">All Locations</option>
+                                    @foreach($locations as $location)
+                                        <option value="{{ $location['id'] }}">{{ $location['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
                         <div class="table-responsive lm-table-wrap lm-table-wrap--hover-actions">
                             <table class="table table-condensed table-bordered lm-dashboard-table lm-mini-table" id="loanDashboardQuickSearchTable">
                                 <thead><tr><th>Customer</th><th>Due</th><th class="text-right">Balance</th><th class="text-center">Pay</th></tr></thead>
@@ -3220,7 +3231,7 @@
                     + '<div class="lm-customer-hover">'
                     + '<div class="lm-customer-hover__main">'
                     + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
-                    + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + '</span>'
+                    + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
                     + statusBadge
                     + '</div>'
                     + '<div class="lm-customer-print-popover" role="group" aria-label="Customer print actions">'
@@ -3256,8 +3267,9 @@
 
         function runQuickSearch() {
             var term = $.trim($('#loanDashboardQuickSearchInput').val() || '');
+            var locationId = $('#loanDashboardQuickLocationFilter').val() || '';
 
-            fetch(quickSearchUrl + '?q=' + encodeURIComponent(term), {
+            fetch(quickSearchUrl + '?q=' + encodeURIComponent(term) + '&location_id=' + encodeURIComponent(locationId), {
                 method: 'GET',
                 credentials: 'same-origin',
                 headers: {
@@ -3678,6 +3690,9 @@
             $('#loanDashboardQuickSearchInput').on('input', function () {
                 window.clearTimeout(quickSearchTimer);
                 quickSearchTimer = window.setTimeout(runQuickSearch, 250);
+            });
+            $('#loanDashboardQuickLocationFilter').on('change', function () {
+                runQuickSearch();
             });
             $('#loanDashboardSellSearchInput').on('input', function () {
                 window.clearTimeout(sellSearchTimer);

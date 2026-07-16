@@ -67,7 +67,7 @@ class LoanDashboardService
         });
     }
 
-    public function searchLoansForDashboard(string $term, int $limit = 10): array
+    public function searchLoansForDashboard(string $term, int $limit = 10, ?int $locationId = null): array
     {
         $term = trim($term);
         if (! $this->tableExists('loans')) {
@@ -79,6 +79,7 @@ class LoanDashboardService
         $customerPhoneExpr = $this->loanCustomerPhoneExpression('l');
         $loanNumberExpr = $this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id AS CHAR)';
         $balanceExpr = $this->loanBalanceExpression('l');
+        $locationNameExpr = $this->columnExists('loans', 'location_name_snapshot') ? 'l.location_name_snapshot' : 'NULL';
         $nextDueDate = 'NULL';
 
         if ($this->tableExists('loan_payment_schedules')) {
@@ -96,10 +97,15 @@ class LoanDashboardService
                 {$loanNumberExpr} as loan_number,
                 {$customerNameExpr} as customer_name,
                 {$customerPhoneExpr} as customer_phone,
+                {$locationNameExpr} as location_name,
                 {$balanceExpr} as balance_amount,
                 ".($this->columnExists('loans', 'status') ? 'l.status' : "'-'")." as status,
                 {$nextDueDate} as next_due_date
             ");
+
+        if (! empty($locationId) && $this->columnExists('loans', 'business_location_id')) {
+            $query->where('l.business_location_id', $locationId);
+        }
 
         if ($term !== '') {
             $like = '%'.$term.'%';
@@ -128,6 +134,7 @@ class LoanDashboardService
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
                 'customer_phone' => $row->customer_phone ?: '-',
+                'location_name' => $row->location_name ?: null,
                 'balance_amount' => round((float) ($row->balance_amount ?? 0), 2),
                 'status' => $row->status ?: '-',
                 'next_due_date' => $row->next_due_date,

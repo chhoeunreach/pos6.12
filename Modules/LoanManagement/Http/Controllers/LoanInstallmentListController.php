@@ -85,6 +85,7 @@ class LoanInstallmentListController extends Controller
             'district' => $customerRow->district ?? '-',
             'province' => $customerRow->province ?? '-',
             'product' => $loanItems->map(fn ($item) => trim((string) ($item->product_name_snapshot ?? $item->product_name ?? '')))->filter()->implode(', ') ?: ($loanRow->product_name_snapshot ?? '-'),
+            'serial_number' => $loanItems->map(fn ($item) => trim((string) ($item->serial_number_snapshot ?? $item->serial_number ?? '')))->filter()->implode(', ') ?: '-',
             'qty' => $loanItems->map(fn ($item) => (string) ($item->qty ?? $item->quantity ?? 1))->filter()->implode(', ') ?: '1',
             'unit_price' => $loanItems->map(fn ($item) => number_format((float) ($item->unit_price ?? 0), 2, '.', ''))->filter(fn ($value) => (float) $value > 0)->implode(', ') ?: number_format((float) ($loanRow->principal_amount ?? 0), 2, '.', ''),
             'amount_cash' => $depositAmounts['cash'],
@@ -162,6 +163,7 @@ class LoanInstallmentListController extends Controller
             $info['duration_m'] ?? '',
             $info['interest_percent'] ?? '0.00',
             $info['first_due'] ?? '',
+            $info['serial_number'] ?? '',
         ])->map(fn ($value) => trim((string) $value))->implode(',');
     }
 
