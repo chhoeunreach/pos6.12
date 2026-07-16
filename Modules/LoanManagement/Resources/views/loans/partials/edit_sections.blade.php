@@ -72,6 +72,12 @@
                                         data-container=".view_modal">
                                     <i class="fa fa-pencil"></i> Edit
                                 </button>
+                                <button type="button"
+                                        class="btn btn-xs btn-danger js-loan-item-delete"
+                                        data-url="{{ route('loan-management.loans.items.destroy', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                        data-return-to="{{ route('loan-management.loans.edit', $editLoanReturnParams) }}">
+                                    <i class="fa fa-trash"></i> Delete
+                                </button>
                             </td>
                         </tr>
                     @empty
@@ -110,6 +116,12 @@
                                 data-container=".view_modal">
                             <i class="fa fa-pencil"></i> Edit
                         </button>
+                        <button type="button"
+                                class="btn btn-xs btn-danger js-loan-item-delete"
+                                data-url="{{ route('loan-management.loans.items.destroy', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                                data-return-to="{{ route('loan-management.loans.edit', $editLoanReturnParams) }}">
+                            <i class="fa fa-trash"></i> Delete
+                        </button>
                     </div>
                 </div>
             @empty
@@ -120,6 +132,47 @@
         </div>
     </div>
 </div>
+
+@once
+    <script>
+    $(document).off('click.loanItemDelete').on('click.loanItemDelete', '.js-loan-item-delete', function (event) {
+        event.preventDefault();
+
+        var $button = $(this);
+        var url = $button.data('url');
+        var returnTo = $button.data('return-to') || window.location.href;
+
+        if (!url || !confirm('Delete this loan item?')) {
+            return;
+        }
+
+        $button.prop('disabled', true);
+
+        $.ajax({
+            url: url,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                _token: '{{ csrf_token() }}',
+                return_to: returnTo
+            },
+            success: function (res) {
+                if (window.toastr) {
+                    toastr.success(res.message || 'Loan item deleted successfully');
+                }
+
+                window.location.href = (res.data && res.data.redirect_url) ? res.data.redirect_url : returnTo;
+            },
+            error: function (xhr) {
+                alert((xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to delete loan item');
+            },
+            complete: function () {
+                $button.prop('disabled', false);
+            }
+        });
+    });
+    </script>
+@endonce
 
 <div class="box box-default lm-collapsible" data-collapse-key="payment-schedules">
     <div class="box-header with-border">

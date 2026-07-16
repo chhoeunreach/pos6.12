@@ -1559,6 +1559,49 @@ class LoanInstallmentListController extends Controller
             ->with('status', ['success' => 1, 'msg' => 'Loan item updated successfully']);
     }
 
+    public function destroyItem(Request $request, int $loan, int $item)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        abort_if(! $this->loanTableExists('loan_items'), 404);
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $itemQuery = DB::connection('mysql_loan')
+            ->table('loan_items')
+            ->where('id', $item)
+            ->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($itemQuery, 'loan_items');
+        $itemRow = $itemQuery->first();
+        abort_if(! $itemRow, 404);
+
+        if ($this->loanTableHasCol('loan_items', 'deleted_at')) {
+            DB::connection('mysql_loan')->table('loan_items')->where('id', $itemRow->id)->update($this->loanSafeColumns('loan_items', [
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]));
+        } else {
+            DB::connection('mysql_loan')->table('loan_items')->where('id', $itemRow->id)->delete();
+        }
+
+        $this->refreshLoanItemSnapshot($loan);
+        $redirectUrl = $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []));
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Loan item deleted successfully',
+                'data' => [
+                    'redirect_url' => $redirectUrl,
+                ],
+            ]);
+        }
+
+        return redirect()
+            ->to($redirectUrl)
+            ->with('status', ['success' => 1, 'msg' => 'Loan item deleted successfully']);
+    }
+
     protected function validatedLoanItemPayload(Request $request, ?object $itemRow = null, bool $isCreate = false): array
     {
         $payload = $request->validate([
