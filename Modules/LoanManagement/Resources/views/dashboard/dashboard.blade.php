@@ -2369,6 +2369,136 @@
             overflow: hidden;
         }
     }
+
+    /* ============================================================
+       ENHANCED HOVER: Collect Payment quick box
+       ============================================================ */
+    .lm-quick-box--loan {
+        transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .lm-quick-box--loan:hover {
+        transform: translateY(-3px);
+        border-color: #86efac;
+        box-shadow: 0 20px 40px rgba(34, 197, 94, 0.14), 0 0 0 2px rgba(34, 197, 94, 0.10);
+        background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+    }
+    .lm-quick-box--loan .lm-quick-box__icon--pay {
+        transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .lm-quick-box--loan:hover .lm-quick-box__icon--pay {
+        transform: scale(1.12);
+        box-shadow: 0 4px 14px rgba(34, 197, 94, 0.25);
+    }
+    .lm-pay-btn {
+        transition: all .18s ease;
+        cursor: pointer;
+        min-height: 34px;
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 8px;
+    }
+    .lm-pay-btn:hover,
+    .lm-pay-btn:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(34, 197, 94, 0.30);
+        background: linear-gradient(135deg, #16a34a, #15803d) !important;
+        border-color: #15803d !important;
+        color: #fff !important;
+    }
+    .lm-pay-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25);
+    }
+    .lm-pay-row {
+        transition: background .15s ease;
+    }
+    .lm-pay-row:hover {
+        background: #f0fdf4;
+    }
+    .lm-pay-action .dropdown .btn {
+        transition: all .15s ease;
+    }
+    .lm-pay-action .dropdown .btn:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    .lm-quick-box--loan .lm-quick-input .form-control {
+        border-color: #bbf7d0;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .lm-quick-box--loan .lm-quick-input .form-control:focus {
+        border-color: #4ade80;
+        box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+    }
+
+    /* ============================================================
+       CUSTOMER CHAT: Hide/Show toggle
+       ============================================================ */
+    .lm-chat-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid #d7e2ee;
+        border-radius: 10px;
+        background: #fff;
+        color: #64748b;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all .18s ease;
+        flex-shrink: 0;
+    }
+    .lm-chat-toggle:hover,
+    .lm-chat-toggle:focus {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+    }
+    .lm-chat-toggle i {
+        transition: transform .25s ease;
+    }
+    .lm-chat-toggle.is-collapsed i {
+        transform: rotate(180deg);
+    }
+    .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__body {
+        display: none;
+    }
+    .lm-dashboard-panel--chat-hidden .lm-dashboard-panel__badge {
+        opacity: 0.5;
+    }
+    .lm-dashboard-grid {
+        transition: grid-template-columns .3s ease;
+    }
+    .lm-dashboard-grid.lm-dashboard-grid--chat-collapsed {
+        grid-template-columns: 1fr;
+    }
+    .lm-chat-show-bar {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border: 1px dashed #d7e2ee;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #f8fbff, #f1f5f9);
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all .18s ease;
+        margin-top: 8px;
+    }
+    .lm-chat-show-bar:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+    .lm-chat-show-bar.is-visible {
+        display: flex;
+    }
 </style>
 @endsection
 
@@ -2563,13 +2693,18 @@
             </div>
         </div>
 
-        <div class="lm-dashboard-panel lm-dashboard-panel--feature">
+        <div class="lm-dashboard-panel lm-dashboard-panel--feature" id="lmCustomerChatPanel">
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Customer Chat</h3>
                     <p class="lm-dashboard-panel__hint">Recent conversations before field follow-up.</p>
                 </div>
-                <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
+                    <button type="button" class="lm-chat-toggle" id="lmChatToggleBtn" title="Hide Customer Chat" aria-label="Toggle Customer Chat visibility">
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
             </div>
             <div class="lm-dashboard-panel__body">
                 <div class="lm-chat-card">
@@ -3509,6 +3644,36 @@
                 if (saleId && typeof window.loanManagementOpenAutoInstallment === 'function') {
                     window.loanManagementOpenAutoInstallment(saleId);
                 }
+            });
+
+            /* ---- Customer Chat hide / show toggle ---- */
+            var $chatPanel = $('#lmCustomerChatPanel');
+            var $chatToggle = $('#lmChatToggleBtn');
+            var $chatGrid = $chatPanel.closest('.lm-dashboard-grid');
+            var $showBar = $('<div class="lm-chat-show-bar" id="lmChatShowBar"><i class="fa fa-comments"></i> Show Customer Chat</div>');
+
+            $chatGrid.after($showBar);
+
+            $chatToggle.on('click', function () {
+                var isHidden = $chatPanel.hasClass('lm-dashboard-panel--chat-hidden');
+                if (isHidden) {
+                    $chatPanel.removeClass('lm-dashboard-panel--chat-hidden');
+                    $chatGrid.removeClass('lm-dashboard-grid--chat-collapsed');
+                    $chatToggle.removeClass('is-collapsed').attr('title', 'Hide Customer Chat').find('i').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+                    $showBar.removeClass('is-visible');
+                } else {
+                    $chatPanel.addClass('lm-dashboard-panel--chat-hidden');
+                    $chatGrid.addClass('lm-dashboard-grid--chat-collapsed');
+                    $chatToggle.addClass('is-collapsed').attr('title', 'Show Customer Chat').find('i').removeClass('fa-chevron-right').addClass('fa-chevron-left');
+                    $showBar.addClass('is-visible');
+                }
+            });
+
+            $showBar.on('click', function () {
+                $chatPanel.removeClass('lm-dashboard-panel--chat-hidden');
+                $chatGrid.removeClass('lm-dashboard-grid--chat-collapsed');
+                $chatToggle.removeClass('is-collapsed').attr('title', 'Hide Customer Chat').find('i').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+                $showBar.removeClass('is-visible');
             });
 
             timer = window.setInterval(refreshLoanDashboard, refreshMs);
