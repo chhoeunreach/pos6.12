@@ -3449,37 +3449,57 @@ class LoanInstallmentListController extends Controller
         }
 
         $locationOptions = collect();
+        $permittedLocationIds = $this->permittedMainLocationIds();
         if ($this->loanTableExists('loan_business_locations')) {
-            $locationOptions = Cache::remember('loan_management.edit_location_options.'.($hasLoanLocationAddress ? 'with_address' : 'without_address'), now()->addMinutes(5), function () use ($loanLocationSelect) {
-                $query = DB::connection('mysql_loan')
-                    ->table('loan_business_locations')
-                    ->select($loanLocationSelect)
-                    ->orderBy('name');
+            $query = DB::connection('mysql_loan')
+                ->table('loan_business_locations')
+                ->select($loanLocationSelect)
+                ->orderBy('name');
 
-                if ($this->loanTableHasCol('loan_business_locations', 'deleted_at')) {
-                    $query->where(function ($query) {
-                        $query->whereNull('deleted_at')
-                            ->orWhere('deleted_at', 0);
-                    });
-                }
+            if ($this->loanTableHasCol('loan_business_locations', 'deleted_at')) {
+                $query->where(function ($query) {
+                    $query->whereNull('deleted_at')
+                        ->orWhere('deleted_at', 0);
+                });
+            }
 
-                return $query->get();
-            });
+            if ($permittedLocationIds !== null) {
+                $query->where(function ($query) use ($permittedLocationIds) {
+                    $query->whereIn('main_location_id', $permittedLocationIds)
+                        ->orWhereIn('id', $permittedLocationIds);
+                });
+            }
+
+            $locationOptions = $query->get();
+            if ($selectedLoanLocation && ! $locationOptions->contains('id', $selectedLoanLocation->id)) {
+                $locationOptions->prepend($selectedLoanLocation);
+            }
         } elseif ($this->loanTableExists('loans')) {
             $loanColumns = $this->loanTableColumns('loans');
             if (in_array('business_location_name_snapshot', $loanColumns, true) && in_array('business_location_id', $loanColumns, true)) {
-                $locationOptions = Cache::remember('loan_management.edit_location_options_fallback', now()->addMinutes(5), function () {
-                    return DB::connection('mysql_loan')
-                        ->table('loans')
-                        ->selectRaw('business_location_id as id, business_location_name_snapshot as name, main_location_id, NULL as address')
-                        ->whereNotNull('business_location_id')
-                        ->whereNotNull('business_location_name_snapshot')
-                        ->where('business_location_name_snapshot', '!=', '')
-                        ->groupBy('business_location_id', 'business_location_name_snapshot', 'main_location_id')
-                        ->orderBy('business_location_name_snapshot')
-                        ->get();
-                });
+                $query = DB::connection('mysql_loan')
+                    ->table('loans')
+                    ->selectRaw('business_location_id as id, business_location_name_snapshot as name, main_location_id, NULL as address')
+                    ->whereNotNull('business_location_id')
+                    ->whereNotNull('business_location_name_snapshot')
+                    ->where('business_location_name_snapshot', '!=', '');
+
+                if ($permittedLocationIds !== null && in_array('main_location_id', $loanColumns, true)) {
+                    $query->where(function ($query) use ($permittedLocationIds) {
+                        $query->whereIn('main_location_id', $permittedLocationIds)
+                            ->orWhereIn('business_location_id', $permittedLocationIds);
+                    });
+                }
+
+                $locationOptions = $query
+                    ->groupBy('business_location_id', 'business_location_name_snapshot', 'main_location_id')
+                    ->orderBy('business_location_name_snapshot')
+                    ->get();
             }
+        }
+
+        if ($locationOptions->isEmpty() && $selectedLoanLocation) {
+            $locationOptions = collect([$selectedLoanLocation]);
         }
 
         if (!empty($locationId) && Schema::hasTable('business_locations')) {
@@ -3597,6 +3617,22 @@ class LoanInstallmentListController extends Controller
 
                 return (float) ($item->unit_price ?? 0) * max(1, (float) ($item->qty ?? $item->quantity ?? 1));
             });
+    }
+
+    protected function permittedMainLocationIds(): ?array
+    {
+        try {
+            $businessId = session('user.business_id');
+            $permitted = auth()->user()?->permitted_locations($businessId);
+
+            if ($permitted === 'all') {
+                return null;
+            }
+
+            return array_values(array_filter(array_map('intval', (array) $permitted)));
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function editSections(int $loan)

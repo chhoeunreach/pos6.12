@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Utils\TransactionUtil;
+use App\BusinessLocation;
 use Modules\LoanManagement\Http\Requests\StoreLoanFromSellRequest;
 use Modules\LoanManagement\Services\CreateLoanFromSellService;
 
@@ -23,7 +24,7 @@ class LoanFromSellController extends Controller
 
     public function index()
     {
-        $locations = DB::table('business_locations')->orderBy('name')->pluck('name', 'id');
+        $locations = BusinessLocation::forDropdown((int) session('user.business_id'), false, false, true, true);
         $customerNames = DB::table('contacts')
             ->whereNotNull('name')
             ->where('name', '!=', '')
@@ -183,6 +184,7 @@ class LoanFromSellController extends Controller
             'final_total' => $request->final_total,
             'imei_or_lot' => $request->imei_or_lot,
             'product_name_sku' => $request->product_name_sku,
+            'permitted_location_ids' => $this->permittedLocationIds(),
         ];
 
         if (blank($request->input('customer_group_name'))) {
@@ -202,6 +204,20 @@ class LoanFromSellController extends Controller
     public function searchSales(Request $request): JsonResponse
     {
         return $this->search($request);
+    }
+
+    protected function permittedLocationIds(): ?array
+    {
+        try {
+            $permitted = auth()->user()?->permitted_locations(session('user.business_id'));
+            if ($permitted === 'all') {
+                return null;
+            }
+
+            return array_values(array_filter(array_map('intval', (array) $permitted)));
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function clone(Request $request, $transaction_id)

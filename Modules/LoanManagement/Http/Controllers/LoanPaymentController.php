@@ -474,7 +474,36 @@ class LoanPaymentController extends Controller
             return collect();
         }
 
-        return DB::connection($this->connection)->table('loan_business_locations')->orderBy('name')->pluck('name', 'id');
+        $query = DB::connection($this->connection)->table('loan_business_locations')->orderBy('name');
+        if (Schema::connection($this->connection)->hasColumn('loan_business_locations', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        $permittedIds = $this->permittedMainLocationIds();
+        if ($permittedIds !== null) {
+            $query->where(function ($query) use ($permittedIds) {
+                $query->whereIn('main_location_id', $permittedIds)
+                    ->orWhereIn('id', $permittedIds);
+            });
+        }
+
+        return $query->pluck('name', 'id');
+    }
+
+    protected function permittedMainLocationIds(): ?array
+    {
+        try {
+            $businessId = session('user.business_id');
+            $permitted = auth()->user()?->permitted_locations($businessId);
+
+            if ($permitted === 'all') {
+                return null;
+            }
+
+            return array_values(array_filter(array_map('intval', (array) $permitted)));
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     protected function distinctOptions(string $table, string $column)

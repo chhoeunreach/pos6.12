@@ -12,6 +12,28 @@ use Illuminate\Support\Facades\Schema;
 
 class SettingsController extends Controller
 {
+    public function switchLanguage(Request $request)
+    {
+        $data = $request->validate([
+            'language' => 'required|in:en,km',
+        ]);
+
+        $language = $data['language'];
+        $user = $request->session()->get('user', []);
+        $user['language'] = $language;
+
+        $request->session()->put('user', $user);
+        $request->session()->put('user.language', $language);
+
+        if (auth()->check() && Schema::hasColumn('users', 'language')) {
+            DB::table('users')
+                ->where('id', auth()->id())
+                ->update(['language' => $language]);
+        }
+
+        return back();
+    }
+
     public function invoicePrefix()
     {
         if (! auth()->user()->can('loan_management.view')) {

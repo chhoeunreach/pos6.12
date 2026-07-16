@@ -140,6 +140,12 @@
                     data-toggle="modal" data-target="#loan_location_import_modal">
                     <i class="fa fa-upload"></i> Import
                 </button>
+                <form method="POST" action="{{ route('loan-management.locations.sync-pos') }}" class="pull-right tw-mb-2 tw-mr-2" style="display:inline-block;">
+                    @csrf
+                    <button type="submit" class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-primary">
+                        <i class="fa fa-refresh"></i> Sync POS Locations
+                    </button>
+                </form>
                 <button type="button"
                     class="tw-dw-btn tw-bg-gradient-to-r tw-from-indigo-600 tw-to-blue-500 tw-font-bold tw-text-white tw-border-none tw-rounded-full pull-right tw-mb-2"
                     data-toggle="modal" data-target="#loan_location_add_modal">

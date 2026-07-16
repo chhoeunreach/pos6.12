@@ -29,17 +29,10 @@ class LoanCreateController extends Controller
     public function index()
     {
         $business_id = session('user.business_id');
-
-        $locations = DB::table('business_locations')->orderBy('name')->pluck('name', 'id');
-
-        $permitted_locations = auth()->user()->permitted_locations($business_id);
-        $defaultLocationId = null;
-        if ($permitted_locations === 'all') {
-            $first = $locations->keys()->first();
-            $defaultLocationId = $first ?? null;
-        } elseif (is_array($permitted_locations) && count($permitted_locations) >= 1) {
-            $defaultLocationId = $permitted_locations[0];
-        }
+        $locationData = $this->locationDropdownData((int) $business_id);
+        $locations = $locationData['locations'];
+        $loanLocations = $locationData['loanLocations'];
+        $defaultLocationId = $locationData['defaultLocationId'];
 
         $paymentTypes = app(TransactionUtil::class)->payment_types(null, true, (int) ($business_id));
 
@@ -51,14 +44,6 @@ class LoanCreateController extends Controller
             ->get();
 
         $defaultCollectorId = auth()->id();
-
-        $loanLocations = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
-            $loanLocations = DB::connection('mysql_loan')->table('loan_business_locations')
-                ->whereNull('deleted_at')
-                ->orderBy('name')
-                ->get();
-        }
 
         $recentLoans = $this->recentLoans();
 
@@ -77,19 +62,10 @@ class LoanCreateController extends Controller
     public function modal()
     {
         $business_id = session('user.business_id');
-
-        $locations = DB::table('business_locations')->orderBy('name')->pluck('name', 'id');
-
-        $permitted_locations = auth()->user()->permitted_locations($business_id);
-        $defaultLocationId = null;
-        if ($permitted_locations === 'all') {
-            $first = $locations->keys()->first();
-            $defaultLocationId = $first ?? null;
-        } elseif (is_array($permitted_locations) && count($permitted_locations) === 1) {
-            $defaultLocationId = $permitted_locations[0];
-        } elseif (is_array($permitted_locations) && count($permitted_locations) > 1) {
-            $defaultLocationId = $permitted_locations[0];
-        }
+        $locationData = $this->locationDropdownData((int) $business_id);
+        $locations = $locationData['locations'];
+        $loanLocations = $locationData['loanLocations'];
+        $defaultLocationId = $locationData['defaultLocationId'];
 
         $paymentTypes = app(TransactionUtil::class)->payment_types(null, true, (int) ($business_id));
 
@@ -101,14 +77,6 @@ class LoanCreateController extends Controller
             ->get();
 
         $defaultCollectorId = auth()->id();
-
-        $loanLocations = collect();
-        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
-            $loanLocations = DB::connection('mysql_loan')->table('loan_business_locations')
-                ->whereNull('deleted_at')
-                ->orderBy('name')
-                ->get();
-        }
 
         $business_id = session('user.business_id');
 
@@ -142,6 +110,32 @@ class LoanCreateController extends Controller
             'defaultLocationId',
             'defaultCollectorId'
         ));
+    }
+
+    protected function locationDropdownData(int $businessId): array
+    {
+        $locations = BusinessLocation::forDropdown($businessId, false, false, true, true);
+        $permittedLocations = auth()->user()->permitted_locations($businessId);
+        $permittedIds = $permittedLocations === 'all' ? null : array_values(array_filter((array) $permittedLocations));
+        $defaultLocationId = $locations->keys()->first();
+
+        $loanLocations = collect();
+        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            $query = DB::connection('mysql_loan')->table('loan_business_locations')
+                ->when(Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->orderBy('name');
+
+            if ($permittedIds !== null) {
+                $query->where(function ($query) use ($permittedIds) {
+                    $query->whereIn('main_location_id', $permittedIds)
+                        ->orWhereIn('id', $permittedIds);
+                });
+            }
+
+            $loanLocations = $query->get();
+        }
+
+        return compact('locations', 'loanLocations', 'defaultLocationId');
     }
 
     protected function recentLoans(int $limit = 8)
@@ -326,7 +320,7 @@ class LoanCreateController extends Controller
                     $fields = $this->parseProductText($parserService, $rawText);
                 } else {
                     try {
-                        $fields = $parserService->parseImage((string) $payload['product_image']);
+                        $fields = $this->normalizeProductPhotoFields($parserService->parseImage((string) $payload['product_image']));
                     } catch (\RuntimeException $fallbackException) {
                         if (! str_contains($fallbackException->getMessage(), 'OpenAI API key is not configured')) {
                             throw $fallbackException;
@@ -375,7 +369,7 @@ class LoanCreateController extends Controller
     protected function parseProductText(OpenAiProductPhotoParserService $parserService, string $rawText): array
     {
         try {
-            return $parserService->parse($rawText);
+            return $this->normalizeProductPhotoFields($parserService->parse($rawText));
         } catch (\RuntimeException $exception) {
             if (! str_contains($exception->getMessage(), 'OpenAI API key is not configured')) {
                 throw $exception;
@@ -432,7 +426,7 @@ class LoanCreateController extends Controller
                 continue;
             }
             if (preg_match('/^[A-Z0-9][A-Z0-9\s+().\/-]{3,80}$/i', $line) && ! preg_match('/^\d+$/', $line)) {
-                $fields['product_name'] = trim($line);
+                $fields['product_name'] = $this->normalizeProductName(trim($line));
                 break;
             }
         }
@@ -732,6 +726,7 @@ class LoanCreateController extends Controller
 
     protected function cleanKhmerNameValue(string $value): string
     {
+        $value = $this->cleanKhmerLabel($value);
         $value = preg_replace('/[^\x{1780}-\x{17FF}\s]+/u', ' ', $value);
         $value = trim(preg_replace('/\s+/u', ' ', (string) $value));
 
@@ -739,7 +734,18 @@ class LoanCreateController extends Controller
             return '';
         }
 
-        return $value;
+        $words = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $words = array_values(array_filter($words, fn ($word) => ! $this->isKhmerNameNoiseWord($word)));
+
+        if (empty($words)) {
+            return '';
+        }
+
+        if (count($words) > 3) {
+            $words = array_slice($words, -3);
+        }
+
+        return trim(implode(' ', $words));
     }
 
     protected function guessBestKhmerName(array $lines): ?string
@@ -768,6 +774,39 @@ class LoanCreateController extends Controller
         }
 
         return $bestScore > 0 ? $best : null;
+    }
+
+    protected function isKhmerNameNoiseWord(string $word): bool
+    {
+        $word = trim($word);
+
+        if ($word === '') {
+            return true;
+        }
+
+        if (preg_match('/គោត្តនាម|គោគ្គនាម|នាម|ឈ្មោះ|អត្តសញ្ញាណ|និង|នឹង/u', $word)) {
+            return true;
+        }
+
+        return mb_strlen($word) >= 10;
+    }
+
+    protected function normalizeProductPhotoFields(array $fields): array
+    {
+        if (! empty($fields['product_name'])) {
+            $fields['product_name'] = $this->normalizeProductName((string) $fields['product_name']);
+        }
+
+        return $fields;
+    }
+
+    protected function normalizeProductName(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value));
+        $value = preg_replace('/^(?:model\s*name|product\s*name|model|product|item\s*name|device\s*name)\s*[:：-]?\s*/iu', '', $value);
+        $value = trim(preg_replace('/\s+/u', ' ', (string) $value));
+
+        return preg_replace('/\biPhone\b/i', 'Phone', $value);
     }
 
     protected function cleanAddressLabel(string $value): string

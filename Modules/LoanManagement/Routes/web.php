@@ -31,6 +31,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
         Route::get('/dashboard/quick-search', [LoanDashboardController::class, 'quickSearch'])->name('loan-management.dashboard.quick-search')->middleware('can:loan_management.view');
+        Route::post('/language', [SettingsController::class, 'switchLanguage'])->name('loan-management.language.switch')->middleware('can:loan_management.view');
 
         Route::get('/operations/{page}', [LoanCollectionController::class, 'index'])
             ->whereIn('page', ['new-loans', 'active-loans', 'due-today', 'partial-payments', 'closed-accounts'])
@@ -155,6 +156,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/locations/export', [LoanLocationController::class, 'export'])->name('loan-management.locations.export')->middleware('can:loan_management.view');
         Route::get('/locations/template', [LoanLocationController::class, 'template'])->name('loan-management.locations.template')->middleware('can:loan_management.view');
         Route::post('/locations/import', [LoanLocationController::class, 'import'])->name('loan-management.locations.import')->middleware('can:loan_management.view');
+        Route::post('/locations/sync-pos', [LoanLocationController::class, 'syncFromPos'])->name('loan-management.locations.sync-pos')->middleware('can:loan_management.view');
         Route::post('/locations', [LoanLocationController::class, 'store'])->name('loan-management.locations.store')->middleware('can:loan_management.view');
         Route::put('/locations/{location}', [LoanLocationController::class, 'updateDetails'])->name('loan-management.locations.update')->middleware('can:loan_management.view');
         Route::delete('/locations/{location}', [LoanLocationController::class, 'destroy'])->name('loan-management.locations.destroy')->middleware('can:loan_management.view');

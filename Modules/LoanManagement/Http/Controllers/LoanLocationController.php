@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Modules\LoanManagement\Services\LoanSyncFromPosService;
 use ZipArchive;
 
 class LoanLocationController extends Controller
@@ -195,6 +196,24 @@ class LoanLocationController extends Controller
                 'msg' => 'Import failed: '.$e->getMessage(),
             ]);
         }
+    }
+
+    public function syncFromPos(LoanSyncFromPosService $syncService)
+    {
+        abort_if(! $this->tableExists($this->table), 404);
+        $this->ensureLocationCrudColumns();
+
+        $businessId = (int) session('user.business_id');
+        $result = $syncService->syncBusinessLocations($businessId ?: null, auth()->id());
+        $success = empty($result['reason']);
+
+        $message = $success
+            ? 'POS locations synced. Synced: '.($result['synced'] ?? 0).', Skipped: '.($result['skipped'] ?? 0).'.'
+            : 'POS location sync failed: '.$result['reason'];
+
+        return redirect()
+            ->route('loan-management.locations.index')
+            ->with('status', ['success' => $success ? 1 : 0, 'msg' => $message]);
     }
 
     public function store(Request $request)

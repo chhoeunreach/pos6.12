@@ -94,5 +94,38 @@
             </div>
         </div>
         </div>
+        <div class="col-sm-12 lm-doc-section">
+            <div class="form-group">
+                <label><i class="fa fa-paperclip"></i> Documents <small class="text-muted">(Photos, PDFs, Text files)</small></label>
+                <div class="lm-doc-grid" id="lmDocGrid">
+                    <label class="lm-doc-add" for="lmDocInput">
+                        <i class="fa fa-plus-circle"></i>
+                        <span>Add File</span>
+                    </label>
+                </div>
+                <input type="file" id="lmDocInput" accept="image/*,.pdf,.txt,.csv,.doc,.docx" multiple style="display:none;">
+                <div class="row" style="margin-top:10px;">
+                    <div class="col-sm-12 col-md-6">
+                        <textarea name="document_text" class="form-control" rows="3" placeholder="Write document note or extra information to send with Telegram"></textarea>
+                    </div>
+                    <div class="col-sm-12 col-md-6">
+                        <div id="lmDocumentLinks">
+                            <div class="input-group" style="margin-bottom:6px;">
+                                <input type="url" name="document_links[]" class="form-control" placeholder="Paste document link">
+                                <span class="input-group-btn">
+                                    <button type="button" class="btn btn-default" id="btnAddDocumentLink" title="Add another link">
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lm-doc-paste-hint" id="lmDocPasteHint">
+                    <i class="fa fa-clipboard"></i>
+                    <span>Tip: You can paste images from clipboard (Ctrl+V / Cmd+V) anywhere on this page</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

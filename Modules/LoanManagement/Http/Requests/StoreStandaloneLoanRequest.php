@@ -92,6 +92,9 @@ class StoreStandaloneLoanRequest extends FormRequest
             'id_card_ocr_fields.address' => 'nullable|string|max:1000',
             'documents' => 'nullable|array',
             'documents.*' => 'nullable|string',
+            'document_text' => 'nullable|string|max:5000',
+            'document_links' => 'nullable|array',
+            'document_links.*' => 'nullable|url|max:1000',
             'action_type' => 'required|in:draft,create,create_approve',
         ];
     }

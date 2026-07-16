@@ -71,7 +71,11 @@ class CreateLoanFromSellService
                     });
             });
         }
-        if (! empty($filters['location_id'])) $query->where('t.location_id', $filters['location_id']);
+        if (! empty($filters['location_id'])) {
+            $query->where('t.location_id', $filters['location_id']);
+        } elseif (array_key_exists('permitted_location_ids', $filters) && is_array($filters['permitted_location_ids'])) {
+            $query->whereIn('t.location_id', $filters['permitted_location_ids']);
+        }
         if (! empty($filters['payment_status'])) $query->where('t.payment_status', $filters['payment_status']);
         if (! empty($filters['sale_status'])) $query->where('t.status', $filters['sale_status']);
         if (empty($filters['sale_status'])) $query->where('t.status', 'final');

@@ -458,6 +458,9 @@
                 background: #f1f5f9; border: 1px solid #e5e7eb;
             }
             .mob-doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+            .mob-doc-thumb .mob-doc-icon { text-align: center; color: #64748b; padding: 8px; }
+            .mob-doc-thumb .mob-doc-icon i { font-size: 28px; display: block; margin-bottom: 4px; }
+            .mob-doc-thumb .mob-doc-icon span { font-size: 9px; word-break: break-all; display: block; }
             .mob-doc-thumb .mob-doc-remove {
                 position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
                 background: rgba(239,68,68,.9); border: none; color: #fff; font-size: 10px;
@@ -692,14 +695,25 @@
 
                         <div class="mob-customer-side">
                             <div class="mob-card mob-doc-card">
-                                <div class="mob-section-title"><i class="fa fa-file-image-o"></i> Documents</div>
+                                <div class="mob-section-title"><i class="fa fa-paperclip"></i> Documents</div>
                                 <div class="mob-doc-grid" id="mobDocGrid">
                                     <label class="mob-doc-add" for="mobDocInput">
-                                        <i class="fa fa-plus-circle"></i> Add Photo
+                                        <i class="fa fa-plus-circle"></i> Add File
                                     </label>
                                 </div>
-                                <input type="file" id="mobDocInput" accept="image/*" multiple style="display:none;" onchange="mobHandleDocs(this)">
-                                <div style="margin-top:8px; font-size:10px; color:#94a3b8;">Photos will be compressed before upload</div>
+                                <input type="file" id="mobDocInput" accept="image/*,.pdf,.txt,.csv,.doc,.docx" multiple style="display:none;" onchange="mobHandleDocs(this)">
+                                <textarea name="document_text" class="mob-input" rows="3" placeholder="Write document note or extra information to send with Telegram" style="margin-top:8px;"></textarea>
+                                <div id="mobDocumentLinks" style="margin-top:8px;">
+                                    <div class="mob-doc-link-row" style="display:flex; gap:6px; margin-bottom:6px;">
+                                        <input type="url" name="document_links[]" class="mob-input" placeholder="Paste document link">
+                                        <button type="button" class="btn btn-default btn-sm" id="mobAddDocumentLink" title="Add another link">
+                                            <i class="fa fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="margin-top:8px; font-size:10px; color:#94a3b8;">
+                                    <i class="fa fa-clipboard"></i> Paste images with Ctrl+V &middot; Photos compressed, files kept as-is
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1447,6 +1461,38 @@ document.getElementById('modalBtnShowAlternatePhone')?.addEventListener('click',
 });
 
 var mobDocFiles = [];
+jQuery(document).on('click', '#mobAddDocumentLink', function() {
+    jQuery('#mobDocumentLinks').append(
+        '<div class="mob-doc-link-row" style="display:flex; gap:6px; margin-bottom:6px;">' +
+            '<input type="url" name="document_links[]" class="mob-input" placeholder="Paste document link">' +
+            '<button type="button" class="btn btn-default btn-sm mob-remove-document-link" title="Remove link"><i class="fa fa-times"></i></button>' +
+        '</div>'
+    );
+});
+
+jQuery(document).on('click', '.mob-remove-document-link', function() {
+    jQuery(this).closest('.mob-doc-link-row').remove();
+});
+
+function mobGetFileIcon(name) {
+    var ext = (name || '').split('.').pop().toLowerCase();
+    var icons = { pdf: 'fa-file-pdf-o', txt: 'fa-file-text-o', csv: 'fa-file-text-o', doc: 'fa-file-word-o', docx: 'fa-file-word-o' };
+    return icons[ext] || 'fa-file-o';
+}
+function mobIsImageFile(file) {
+    return file && file.type && file.type.indexOf('image/') === 0;
+}
+function mobReadTextFile(file) {
+    return new Promise(function(resolve) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var text = e.target.result || '';
+            var dataUri = 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(text)));
+            resolve(dataUri);
+        };
+        reader.readAsText(file);
+    });
+}
 function mobSetProductOcrStatus(card, message, isError) {
     var el = card ? card.querySelector('.mob-product-ocr-status') : null;
     if (!el) return;
@@ -1850,14 +1896,37 @@ function mobHandleDocs(input) {
         thumb.className = 'mob-doc-thumb';
         thumb.innerHTML = '<div class="mob-compressing-overlay"><i class="fa fa-spinner fa-spin"></i></div>';
         grid.insertBefore(thumb, addBtn);
-        mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
-            var idx = mobDocFiles.length;
-            mobDocFiles.push(dataUri);
-            var sizeKb = Math.round((dataUri.length * 3/4) / 1024);
-            thumb.innerHTML = '<img src="' + dataUri + '">' +
-                '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
-                '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
-        });
+
+        if (mobIsImageFile(file)) {
+            mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
+                var idx = mobDocFiles.length;
+                mobDocFiles.push({ dataUri: dataUri, name: file.name, type: 'image' });
+                var sizeKb = Math.round((dataUri.length * 3/4) / 1024);
+                thumb.innerHTML = '<img src="' + dataUri + '">' +
+                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
+                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+            });
+        } else if (file.type === 'text/plain' || file.name.match(/\.(txt|csv|log)$/i)) {
+            mobReadTextFile(file).then(function(dataUri) {
+                var idx = mobDocFiles.length;
+                mobDocFiles.push({ dataUri: dataUri, name: file.name, type: 'text' });
+                var sizeKb = Math.round(file.size / 1024);
+                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa fa-file-text-o"></i><span>' + file.name + '</span></div>' +
+                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
+                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+            });
+        } else {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var idx = mobDocFiles.length;
+                mobDocFiles.push({ dataUri: e.target.result, name: file.name, type: 'file' });
+                var sizeKb = Math.round(file.size / 1024);
+                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa ' + mobGetFileIcon(file.name) + '"></i><span>' + file.name + '</span></div>' +
+                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
+                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+            };
+            reader.readAsDataURL(file);
+        }
     });
     input.value = '';
 }
@@ -1865,6 +1934,34 @@ function mobRemoveDoc(btn, idx) {
     mobDocFiles[idx] = null;
     btn.closest('.mob-doc-thumb').remove();
 }
+
+document.addEventListener('paste', function(e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    var handled = false;
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image/') === 0) {
+            var file = items[i].getAsFile();
+            if (file) {
+                mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
+                    var grid = document.getElementById('mobDocGrid');
+                    var addBtn = grid.querySelector('.mob-doc-add');
+                    var thumb = document.createElement('div');
+                    thumb.className = 'mob-doc-thumb';
+                    var idx = mobDocFiles.length;
+                    mobDocFiles.push({ dataUri: dataUri, name: 'pasted-image-' + Date.now() + '.png', type: 'image' });
+                    var sizeKb = Math.round((dataUri.length * 3/4) / 1024);
+                    thumb.innerHTML = '<img src="' + dataUri + '">' +
+                        '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
+                        '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+                    grid.insertBefore(thumb, addBtn);
+                });
+                handled = true;
+            }
+        }
+    }
+    if (handled) e.preventDefault();
+});
 
 function mobPreviewSchedule() {
     var $form = jQuery('#standaloneLoanModalForm');
@@ -1901,7 +1998,7 @@ function mobSubmit(action) {
     var fd = new FormData(form);
     if (mobIdCardData) fd.append('id_card_image', mobIdCardData);
     if (mobCustomerProfileData) fd.append('customer_profile_image', mobCustomerProfileData);
-    mobDocFiles.forEach(function(d, i) { if (d) fd.append('documents[]', d); });
+    mobDocFiles.forEach(function(d, i) { if (d) fd.append('documents[]', d.dataUri); });
     fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
     var urls = { storeLoan: "{{ route('loan-management.loans.store-standalone') }}", loanList: "{{ route('loan-management.loans') }}" };
     var $btns = jQuery('#mobBottombar button').prop('disabled', true);

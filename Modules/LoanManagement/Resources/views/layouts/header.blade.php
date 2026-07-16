@@ -6,6 +6,7 @@
     $pendingVisitCount = (int) ($headerBadgeCounts['pending_visits'] ?? 0);
     $overdueCount = (int) ($headerBadgeCounts['overdue'] ?? 0);
     $notificationCount = $unreadChatCount + $pendingVisitCount + $overdueCount;
+    $loanLanguage = session('user.language', config('app.locale'));
 
     try {
         $locationName = session('user.business_location_name')
@@ -71,6 +72,20 @@
                     <span class="lm-badge lm-header-badge">{{ $notificationCount }}</span>
                 @endif
             </a>
+        @endif
+
+        @if(Route::has('loan-management.language.switch'))
+            <div class="lm-language-switch" title="Loan language">
+                @foreach(['en' => 'EN', 'km' => 'ខ្មែរ'] as $languageKey => $languageLabel)
+                    <form method="POST" action="{{ route('loan-management.language.switch') }}">
+                        @csrf
+                        <input type="hidden" name="language" value="{{ $languageKey }}">
+                        <button type="submit" class="{{ $loanLanguage === $languageKey ? 'active' : '' }}" {{ $loanLanguage === $languageKey ? 'disabled' : '' }}>
+                            {{ $languageLabel }}
+                        </button>
+                    </form>
+                @endforeach
+            </div>
         @endif
 
         <div class="lm-user-meta">

@@ -593,14 +593,44 @@ class CreateStandaloneLoanService
 
         foreach ((array) ($data['documents'] ?? []) as $index => $document) {
             if (is_string($document) && $document !== '') {
-                $this->storeDataUriFile($document, $customerId, 'document', 'customer-document-'.$loanId.'-'.($index + 1).'.jpg');
+                $ext = 'jpg';
+                if (preg_match('/^data:([^;]+);/', $document, $m)) {
+                    $mt = $m[1];
+                    if (str_contains($mt, 'pdf')) {
+                        $ext = 'pdf';
+                    } elseif (str_contains($mt, 'png')) {
+                        $ext = 'png';
+                    } elseif (str_contains($mt, 'text')) {
+                        $ext = 'txt';
+                    }
+                }
+                $this->storeDataUriFile($document, $customerId, 'document', 'customer-document-'.$loanId.'-'.($index + 1).'.'.$ext);
+            }
+        }
+
+        $documentText = trim((string) ($data['document_text'] ?? ''));
+        if ($documentText !== '') {
+            $this->storeTextDocument($documentText, $customerId, 'customer-document-note-'.$loanId.'.txt');
+        }
+
+        foreach ((array) ($data['document_links'] ?? []) as $index => $link) {
+            $link = trim((string) $link);
+            if ($link !== '') {
+                $this->storeTextDocument($link, $customerId, 'customer-document-link-'.$loanId.'-'.($index + 1).'.txt');
             }
         }
     }
 
+    protected function storeTextDocument(string $text, int $customerId, string $originalName): ?int
+    {
+        $dataUri = 'data:text/plain;base64,'.base64_encode($text);
+
+        return $this->storeDataUriFile($dataUri, $customerId, 'document', $originalName);
+    }
+
     protected function storeDataUriFile(string $dataUri, int $customerId, string $category, string $originalName): ?int
     {
-        if (preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,/', $dataUri, $match)) {
+        if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
             $mimeType = $match[1];
             $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
         } else {
@@ -612,7 +642,18 @@ class CreateStandaloneLoanService
             return null;
         }
 
-        $extension = str_contains($mimeType, 'png') ? 'png' : 'jpg';
+        $extensionMap = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
+            'application/pdf' => 'pdf',
+            'text/plain' => 'txt',
+            'text/csv' => 'csv',
+        ];
+        $extension = $extensionMap[$mimeType] ?? (str_contains($mimeType, 'png') ? 'png' : (str_contains($mimeType, 'pdf') ? 'pdf' : 'jpg'));
+
         $path = 'loan-customers/'.$customerId.'/'.Str::uuid().'.'.$extension;
         Storage::disk('public')->put($path, $binary);
 
@@ -1064,8 +1105,9 @@ class CreateStandaloneLoanService
         }
 
         $customerName = $this->loanTelegramCustomerName($loan);
+        $documentLines = $this->loanTelegramDocumentLines($loan);
 
-        return implode("\n", [
+        $lines = [
             'កាលបរិច្ឆេទ:'.$this->formatTelegramDate($loan->loan_date ?? null),
             'វិក័យប័ត្រ        :'.($loan->loan_number ?? $loan->id),
             'អតិថិជនឈ្មោះ :'.$customerName,
@@ -1077,7 +1119,16 @@ class CreateStandaloneLoanService
             'ថ្ងៃខែសងប្រាក់ លើកទី1:'.$this->formatTelegramDate($firstDueDate ?: ($loan->first_due_date ?? null)),
             'ចំនួនខែកម្ចី       :'.(int) ($loan->duration_months ?? $loan->installment_count ?? 0),
             'ដោយ:'.($loan->created_by_name_snapshot ?? $this->resolveAuthUserName() ?? '-'),
-        ]);
+        ];
+
+        if (! empty($documentLines)) {
+            $lines[] = 'Documents:';
+            foreach ($documentLines as $line) {
+                $lines[] = $line;
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     protected function loanTelegramCustomerName(object $loan): string
@@ -1126,10 +1177,17 @@ class CreateStandaloneLoanService
             return collect();
         }
 
-        return DB::connection('mysql_loan')->table('loan_payments')
+        $query = DB::connection('mysql_loan')->table('loan_payments')
             ->where('loan_id', $loanId)
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            $query->whereIn('payment_type', ['loan', 'initial', 'down_payment', 'downpayment', 'deposit']);
+        } elseif (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+            $query->whereNull('schedule_id');
+        }
+
+        return $query->get();
     }
 
     protected function loanTelegramFirstDueDate(int $loanId): ?string
@@ -1143,6 +1201,51 @@ class CreateStandaloneLoanService
             ->orderBy('installment_no')
             ->orderBy('due_date')
             ->value('due_date');
+    }
+
+    protected function loanTelegramDocumentLines(object $loan): array
+    {
+        if (empty($loan->customer_id) || ! Schema::connection('mysql_loan')->hasTable('loan_files')) {
+            return [];
+        }
+
+        $hasOriginalName = Schema::connection('mysql_loan')->hasColumn('loan_files', 'original_name');
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $loan->customer_id)
+            ->where('category', 'document')
+            ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->when($hasOriginalName, function ($query) use ($loan) {
+                $query->where(function ($nameQuery) use ($loan) {
+                    $nameQuery->where('original_name', 'like', 'customer-document-note-'.$loan->id.'.%')
+                        ->orWhere('original_name', 'like', 'customer-document-link-'.$loan->id.'-%');
+                });
+            });
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_files', 'mime_type')) {
+            $query->where('mime_type', 'text/plain');
+        }
+
+        return $query->orderBy('id')
+            ->get($hasOriginalName ? ['path', 'original_name'] : ['path'])
+            ->map(function ($file) use ($hasOriginalName) {
+                $path = $this->readablePublicDiskPath($file->path ?? null);
+                if ($path === null) {
+                    return null;
+                }
+
+                $content = trim((string) @file_get_contents($path));
+                if ($content === '') {
+                    return null;
+                }
+
+                $label = $hasOriginalName && str_contains((string) ($file->original_name ?? ''), 'link') ? 'Link' : 'Note';
+
+                return '- '.$label.': '.Str::limit($content, 350);
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     protected function formatTelegramDate($date): string
@@ -1171,15 +1274,34 @@ class CreateStandaloneLoanService
             return 'លុយ '.$this->formatTelegramMoney($fallbackAmount, $symbol);
         }
 
-        return $payments->map(function ($payment) use ($symbol) {
-            $method = trim((string) ($payment->payment_method_snapshot ?? $payment->method ?? 'លុយ'));
-            if (in_array(Str::lower($method), ['cash', 'លុយ'], true)) {
-                $method = 'លុយ $';
-            }
+        $totalAmount = (float) $payments->sum(function ($payment) {
+            return (float) ($payment->total_paid ?? $payment->amount ?? 0);
+        });
+
+        if ($totalAmount <= 0) {
+            return 'លុយ '.$this->formatTelegramMoney($fallbackAmount, $symbol);
+        }
+
+        $methodBreakdown = $payments->map(function ($payment) use ($symbol) {
+            $method = trim((string) ($payment->payment_method_snapshot ?? $payment->method ?? ''));
             $amount = (float) ($payment->total_paid ?? $payment->amount ?? 0);
 
+            if ($amount <= 0) {
+                return null;
+            }
+
+            if ($method === '' || in_array(Str::lower($method), ['cash', 'លុយ'], true)) {
+                return 'លុយ '.$this->formatTelegramMoney($amount, $symbol);
+            }
+
             return $method.' '.$this->formatTelegramMoney($amount, $symbol);
-        })->filter()->implode('  ');
+        })->filter()->values();
+
+        if ($methodBreakdown->count() === 1) {
+            return $methodBreakdown->first();
+        }
+
+        return 'សរុប '.$this->formatTelegramMoney($totalAmount, $symbol).' ('.$methodBreakdown->implode(' + ').')';
     }
 
     protected function resolveLoanTelegramPhotoPaths(int $loanId): array
@@ -1209,6 +1331,7 @@ class CreateStandaloneLoanService
                 ->where('fileable_id', $loanId)
                 ->whereIn('category', ['product_photo', 'document', 'customer_photo', 'id_front'])
                 ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'mime_type'), fn ($query) => $query->where('mime_type', 'like', 'image/%'))
                 ->orderByRaw("CASE category WHEN 'product_photo' THEN 0 WHEN 'document' THEN 1 WHEN 'customer_photo' THEN 2 WHEN 'id_front' THEN 3 ELSE 4 END")
                 ->orderBy('id')
                 ->pluck('path');
@@ -1230,6 +1353,7 @@ class CreateStandaloneLoanService
                     ->where('fileable_id', $customerId)
                     ->whereIn('category', ['customer_photo', 'id_front', 'document'])
                     ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'mime_type'), fn ($query) => $query->where('mime_type', 'like', 'image/%'))
                     ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'original_name'), function ($query) use ($loanId) {
                         $query->where(function ($nameQuery) use ($loanId) {
                             $nameQuery->where('original_name', 'like', 'customer-profile-'.$loanId.'.%')

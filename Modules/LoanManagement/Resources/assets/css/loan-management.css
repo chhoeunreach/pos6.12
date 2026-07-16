@@ -1141,6 +1141,36 @@ body.lm-sidebar-collapsed .lm-main { width: 100%; }
     object-fit: cover;
 }
 
+.lm-language-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+.lm-language-switch form {
+    margin: 0;
+}
+.lm-language-switch button {
+    min-width: 42px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+.lm-language-switch button.active,
+.lm-language-switch button:disabled {
+    background: #2563eb;
+    color: #fff;
+    cursor: default;
+}
+
 @media (max-width: 576px) {
     .lm-customer-photo-uploader {
         align-items: flex-start;

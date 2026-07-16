@@ -61,6 +61,37 @@
     .lm-recent-loan-status.cancelled,
     .lm-recent-loan-status.defaulted { background: #fef2f2; color: #dc2626; }
     .lm-recent-actions { white-space: nowrap; }
+    .lm-doc-section { margin-top: 8px; }
+    .lm-doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 8px; }
+    .lm-doc-thumb {
+        position: relative; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;
+        background: #f8fafc; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    }
+    .lm-doc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lm-doc-thumb .lm-doc-icon { text-align: center; color: #64748b; }
+    .lm-doc-thumb .lm-doc-icon i { font-size: 28px; display: block; margin-bottom: 4px; }
+    .lm-doc-thumb .lm-doc-icon span { font-size: 9px; word-break: break-all; display: block; padding: 0 4px; }
+    .lm-doc-thumb .lm-doc-remove {
+        position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%;
+        background: rgba(0,0,0,.55); color: #fff; border: none; font-size: 10px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .lm-doc-thumb .lm-doc-badge {
+        position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,.6); color: #fff;
+        font-size: 9px; padding: 1px 5px; border-radius: 4px;
+    }
+    .lm-doc-add {
+        border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; cursor: pointer; color: #94a3b8;
+        transition: all .15s; min-height: 100px; text-align: center; padding: 8px;
+    }
+    .lm-doc-add:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+    .lm-doc-add i { font-size: 22px; margin-bottom: 4px; }
+    .lm-doc-add span { font-size: 10px; }
+    .lm-doc-paste-hint {
+        margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border: 1px solid #bae6fd;
+        border-radius: 6px; font-size: 11px; color: #0369a1; display: flex; align-items: center; gap: 6px;
+    }
     .lm-id-crop-overlay {
         position: fixed; inset: 0; z-index: 1060; display: none; align-items: center; justify-content: center;
         background: rgba(15, 23, 42, 0.72); padding: 18px;
@@ -221,6 +252,137 @@
     var idCardImageData = '';
     var idCardCropper = null;
     var idCardCropFile = null;
+    var lmDocFiles = [];
+
+    function lmGetFileIcon(name) {
+        var ext = (name || '').split('.').pop().toLowerCase();
+        var icons = { pdf: 'fa-file-pdf-o', txt: 'fa-file-text-o', csv: 'fa-file-text-o', doc: 'fa-file-word-o', docx: 'fa-file-word-o' };
+        return icons[ext] || 'fa-file-o';
+    }
+
+    function lmIsImageFile(file) {
+        return file && file.type && file.type.indexOf('image/') === 0;
+    }
+
+    function lmAddDocThumb(dataUri, fileName, fileSize, isText) {
+        var grid = document.getElementById('lmDocGrid');
+        var addBtn = grid.querySelector('.lm-doc-add');
+        var thumb = document.createElement('div');
+        thumb.className = 'lm-doc-thumb';
+        var idx = lmDocFiles.length;
+        lmDocFiles.push({ dataUri: dataUri, name: fileName || 'document', type: isText ? 'text' : 'file' });
+        var sizeKb = fileSize ? Math.round(fileSize / 1024) : Math.round((dataUri.length * 3 / 4) / 1024);
+
+        if (isText) {
+            thumb.innerHTML = '<div class="lm-doc-icon"><i class="fa fa-file-text-o"></i><span>' + (fileName || 'text') + '</span></div>' +
+                '<button type="button" class="lm-doc-remove" onclick="lmRemoveDoc(' + idx + ')"><i class="fa fa-times"></i></button>' +
+                '<span class="lm-doc-badge">' + sizeKb + 'KB</span>';
+        } else {
+            thumb.innerHTML = '<img src="' + dataUri + '" alt="">' +
+                '<button type="button" class="lm-doc-remove" onclick="lmRemoveDoc(' + idx + ')"><i class="fa fa-times"></i></button>' +
+                '<span class="lm-doc-badge">' + sizeKb + 'KB</span>';
+        }
+        grid.insertBefore(thumb, addBtn);
+    }
+
+    function lmRemoveDoc(idx) {
+        lmDocFiles[idx] = null;
+        var grid = document.getElementById('lmDocGrid');
+        var thumbs = grid.querySelectorAll('.lm-doc-thumb');
+        if (thumbs[idx]) thumbs[idx].remove();
+    }
+
+    function lmCompressImageFile(file, maxW, maxH, quality) {
+        return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var w = img.width, h = img.height;
+                    if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+                    if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function lmReadTextFile(file) {
+        return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var text = e.target.result || '';
+                var dataUri = 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(text)));
+                resolve(dataUri);
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function lmHandleDocFiles(files) {
+        Array.from(files || []).forEach(function(file) {
+            if (lmIsImageFile(file)) {
+                lmCompressImageFile(file, 1200, 800, 0.65).then(function(dataUri) {
+                    lmAddDocThumb(dataUri, file.name, file.size, false);
+                });
+            } else if (file.type === 'text/plain' || file.name.match(/\.(txt|csv|log)$/i)) {
+                lmReadTextFile(file).then(function(dataUri) {
+                    lmAddDocThumb(dataUri, file.name, file.size, true);
+                });
+            } else {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    lmAddDocThumb(e.target.result, file.name, file.size, false);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    document.getElementById('lmDocInput').addEventListener('change', function() {
+        lmHandleDocFiles(this.files);
+        this.value = '';
+    });
+
+    $(document).on('click', '#btnAddDocumentLink', function() {
+        $('#lmDocumentLinks').append(
+            '<div class="input-group" style="margin-bottom:6px;">' +
+                '<input type="url" name="document_links[]" class="form-control" placeholder="Paste document link">' +
+                '<span class="input-group-btn">' +
+                    '<button type="button" class="btn btn-default btn-remove-document-link" title="Remove link"><i class="fa fa-times"></i></button>' +
+                '</span>' +
+            '</div>'
+        );
+    });
+
+    $(document).on('click', '.btn-remove-document-link', function() {
+        $(this).closest('.input-group').remove();
+    });
+
+    document.addEventListener('paste', function(e) {
+        var items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        var handled = false;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image/') === 0) {
+                var file = items[i].getAsFile();
+                if (file) {
+                    lmCompressImageFile(file, 1200, 800, 0.65).then(function(dataUri) {
+                        lmAddDocThumb(dataUri, 'pasted-image-' + Date.now() + '.png', file.size, false);
+                    });
+                    handled = true;
+                }
+            }
+        }
+        if (handled) {
+            e.preventDefault();
+        }
+    });
 
     function money(value) {
         var n = parseFloat(value || 0);
@@ -727,6 +889,7 @@
         if (idCardImageData) {
             fd.append('id_card_image', idCardImageData);
         }
+        lmDocFiles.forEach(function(d, i) { if (d) fd.append('documents[]', d.dataUri); });
         $buttons.prop('disabled', true);
         $.ajax({
             url: $form.attr('action'),

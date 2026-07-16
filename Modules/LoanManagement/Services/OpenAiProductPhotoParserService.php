@@ -154,7 +154,8 @@ class OpenAiProductPhotoParserService
         return implode("\n", [
             'Extract product information for a loan item from OCR text.',
             'Return only information supported by the OCR text. Use null for missing fields.',
-            'Product name should be a concise product/model name, for example iPhone 13 Pro Max or Samsung Galaxy A15.',
+            'Product name should be a concise product/model name, for example Phone 13 Pro Max or Samsung Galaxy A15.',
+            'For Apple phones, write Phone instead of iPhone.',
             'Color should be the detected product color only.',
             'Storage should include capacity and units, for example 128GB or 8GB/256GB.',
             'Serial number should use labels such as Serial, S/N, SN, Serial No, or barcode text clearly used as a serial.',
@@ -205,6 +206,11 @@ class OpenAiProductPhotoParserService
         foreach (self::FIELDS as $field) {
             $value = $data[$field] ?? null;
             $normalized[$field] = is_string($value) && trim($value) !== '' ? trim($value) : null;
+        }
+
+        if (! empty($normalized['product_name'])) {
+            $normalized['product_name'] = trim(preg_replace('/^(?:model\s*name|product\s*name|model|product|item\s*name|device\s*name)\s*[:：-]?\s*/iu', '', $normalized['product_name']));
+            $normalized['product_name'] = preg_replace('/\biPhone\b/i', 'Phone', $normalized['product_name']);
         }
 
         if (! empty($normalized['imei'])) {

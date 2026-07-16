@@ -73,6 +73,7 @@
             ['label' => 'Activity Logs', 'icon' => 'fa fa-history', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.view'],
         ]],
         ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [
+            ['label' => 'Manage Users', 'icon' => 'fa fa-user-plus', 'route' => 'users.index', 'can' => 'user.view|user.create'],
             ['label' => 'Invoice Prefix', 'icon' => 'fa fa-file-text-o', 'route' => 'loan-management.settings', 'can' => 'loan_management.view'],
             ['label' => 'Locations', 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view'],
             ['label' => 'Payment Methods', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
