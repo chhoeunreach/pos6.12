@@ -147,11 +147,11 @@
         .print-table th,
         .print-table td {
             border: 1px solid var(--line);
-            padding: 1.15mm 1.2mm;
+            padding: 0.85mm 1mm;
             text-align: center;
             vertical-align: middle;
-            font-size: 10px;
-            line-height: 1.2;
+            font-size: 9.4px;
+            line-height: 1.12;
         }
         .print-table th {
             background: #f6f6f6;
@@ -179,12 +179,12 @@
             padding: 0;
         }
         .product-title-text {
-            padding: 1.3mm;
+            padding: 0.9mm;
             text-align: center;
         }
         .date-bar {
             border-left: 1px solid var(--line);
-            padding: 1.3mm 2mm;
+            padding: 0.9mm 1.6mm;
             font-family: 'RobotoBold';
             text-align: center;
         }
@@ -216,7 +216,7 @@
         .summary-terms-cell {
             width: 67%;
             border-right: 1px solid var(--line) !important;
-            padding: 2mm 2.5mm !important;
+            padding: 1.3mm 2mm !important;
         }
         .summary-totals-cell {
             width: 33%;
@@ -227,7 +227,7 @@
         }
         .print-table .summary-terms td {
             border: 0;
-            padding: 0.4mm 0;
+            padding: 0.25mm 0;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             text-align: left;
@@ -245,7 +245,7 @@
         .print-table .summary-totals td {
             border: 0;
             border-bottom: 1px solid var(--line);
-            padding: 1.4mm 1.6mm;
+            padding: 0.9mm 1.2mm;
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             line-height: 1.15;
@@ -258,7 +258,7 @@
         }
         .summary-method-line {
             display: block;
-            margin-top: 0.5mm;
+            margin-top: 0.2mm;
             color: #333;
             font-family: 'Roboto', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 8.8px;
@@ -275,12 +275,12 @@
         }
         .schedule-table th,
         .schedule-table td {
-            padding: 1mm 1mm;
-            font-size: 9.4px;
+            padding: 0.65mm 0.8mm;
+            font-size: 9px;
         }
         .schedule-table th {
             background: #f2f2f2;
-            font-size: 10px;
+            font-size: 9.4px;
             border-top: 1.5px solid var(--line);
             border-bottom: 1.2px solid var(--line);
         }
@@ -297,12 +297,12 @@
         }
         .status-pill {
             display: inline-block;
-            min-width: 13mm;
-            padding: 0.25mm 0.9mm;
+            min-width: 11.5mm;
+            padding: 0.15mm 0.7mm;
             border-radius: 2mm;
             font-family: 'RobotoBold', Arial, sans-serif;
-            font-size: 8.2px;
-            line-height: 1.15;
+            font-size: 7.8px;
+            line-height: 1.08;
             text-align: center;
             white-space: nowrap;
         }
@@ -412,108 +412,110 @@
         }
         .nowrap { white-space: nowrap; }
         .page.loan-print-compact {
-            padding: 7mm 12mm 5mm;
+            padding: 6mm 10mm 4mm;
         }
         .loan-print-compact .header {
-            min-height: 20mm;
+            min-height: 18mm;
         }
         .loan-print-compact .brand-row {
-            min-height: 17mm;
+            min-height: 15mm;
         }
         .loan-print-compact .logo-wrap {
-            width: 24mm;
-            height: 17mm;
+            width: 22mm;
+            height: 15mm;
         }
         .loan-print-compact .logo {
-            max-width: 24mm;
-            max-height: 17mm;
+            max-width: 22mm;
+            max-height: 15mm;
         }
         .loan-print-compact .brand-title {
-            font-size: 20px;
+            font-size: 18px;
         }
         .loan-print-compact .tagline {
-            margin-top: 1mm;
-            font-size: 9px;
+            margin-top: 0.5mm;
+            padding-bottom: 0.45mm;
+            font-size: 8.4px;
         }
         .loan-print-compact .info-grid {
-            margin-top: 1mm;
-            margin-bottom: 0.8mm;
+            margin-top: 0.6mm;
+            margin-bottom: 0.4mm;
+            gap: 5mm;
         }
         .loan-print-compact .info-table td {
-            padding: 0.8mm 0;
-            font-size: 10px;
+            padding: 0.45mm 0;
+            font-size: 9.2px;
         }
         .loan-print-compact .info-table .label {
-            font-size: 10.5px;
+            font-size: 9.6px;
         }
         .loan-print-compact .address-row {
-            padding: 0.8mm 0 1.6mm;
+            padding: 0.4mm 0 1mm;
         }
         .loan-print-compact .print-table th,
         .loan-print-compact .print-table td {
-            padding: 0.55mm 0.7mm;
-            font-size: 8.7px;
-            line-height: 1.08;
+            padding: 0.35mm 0.5mm;
+            font-size: 8.2px;
+            line-height: 1.02;
         }
         .loan-print-compact .schedule-table th,
         .loan-print-compact .schedule-table td {
-            padding: 0.45mm 0.6mm;
-            font-size: 8.4px;
-            line-height: 1.08;
+            padding: 0.25mm 0.45mm;
+            font-size: 7.8px;
+            line-height: 1;
         }
         .loan-print-compact .schedule-table th {
-            font-size: 8.8px;
+            font-size: 8.2px;
         }
         .loan-print-compact .status-pill {
-            min-width: 11mm;
-            padding: 0.15mm 0.6mm;
-            font-size: 7.5px;
+            min-width: 9.5mm;
+            padding: 0.1mm 0.45mm;
+            font-size: 7px;
         }
         .loan-print-compact .signature-row {
-            margin-top: 2mm;
-            min-height: 15mm;
+            margin-top: 1.2mm;
+            min-height: 12mm;
         }
         .loan-print-compact .signature-name {
-            margin-top: 4mm;
+            margin-top: 2.5mm;
         }
         .loan-print-compact .notice {
-            padding: 1.8mm 0;
-            font-size: 9.2px;
-            line-height: 1.25;
+            padding: 1.2mm 0;
+            font-size: 8.4px;
+            line-height: 1.18;
         }
         .loan-print-compact .notice .title {
-            font-size: 11px;
+            font-size: 10px;
         }
         .loan-print-compact .warranty-line {
-            font-size: 8.6px;
-            line-height: 1.25;
+            font-size: 8px;
+            line-height: 1.18;
         }
         .loan-print-compact .payment-area {
-            padding-top: 2mm;
-            gap: 8mm;
+            padding-top: 1.2mm;
+            gap: 6mm;
         }
         .loan-print-compact .payment-card {
-            min-height: 28mm;
+            min-height: 23mm;
         }
         .loan-print-compact .payment-card .caption {
-            font-size: 8.6px;
-            margin-bottom: 1mm;
+            font-size: 8px;
+            margin-bottom: 0.6mm;
         }
         .loan-print-compact .qr-large {
-            max-width: 28mm;
-            max-height: 28mm;
+            max-width: 23mm;
+            max-height: 23mm;
         }
         .loan-print-compact .qr-small {
-            max-width: 22mm;
-            max-height: 22mm;
+            max-width: 18mm;
+            max-height: 18mm;
         }
         .loan-print-compact .transfer-number {
-            margin: 2mm 0 1.5mm;
-            font-size: 11px;
+            margin: 1mm 0 0.8mm;
+            font-size: 10px;
         }
         .loan-print-compact .printed-date {
-            margin-top: 1.5mm;
-            font-size: 8px;
+            margin-top: 0.8mm;
+            font-size: 7.5px;
         }
 
         @page { size: A4 portrait; margin: 5mm; }
@@ -527,7 +529,7 @@
                 padding: 5mm 8mm 4mm;
             }
             .page.loan-print-compact {
-                padding: 4mm 7mm 3mm;
+                padding: 3mm 6mm 2.5mm;
             }
             .print-table th,
             .print-table td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -541,32 +543,32 @@
             }
             .schedule-table th,
             .schedule-table td {
-                padding: 0.8mm 0.8mm;
-                font-size: 9px;
+                padding: 0.55mm 0.65mm;
+                font-size: 8.5px;
             }
             .loan-print-compact .schedule-table th,
             .loan-print-compact .schedule-table td {
-                padding: 0.35mm 0.5mm;
-                font-size: 8px;
-                line-height: 1.04;
+                padding: 0.2mm 0.38mm;
+                font-size: 7.4px;
+                line-height: 1;
             }
             .contact-line {
                 font-size: 12px;
             }
             .signature-row {
-                margin-top: 2mm;
-                min-height: 18mm;
+                margin-top: 1.5mm;
+                min-height: 15mm;
             }
             .signature-name {
-                margin-top: 5mm;
+                margin-top: 3.5mm;
             }
             .signature-line {
                 margin-top: 2.5mm;
             }
             .notice {
-                padding: 2.5mm 0;
-                font-size: 10px;
-                line-height: 1.45;
+                padding: 1.8mm 0;
+                font-size: 9px;
+                line-height: 1.28;
             }
             .notice .title {
                 font-size: 12px;
