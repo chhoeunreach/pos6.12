@@ -322,7 +322,8 @@ class LoanInstallmentListController extends Controller
 
         $unassigned = $monthlyPayments
             ->filter(fn ($payment) => empty($payment->schedule_id))
-            ->sortByDesc(fn ($payment) => $payment->paid_at ?? $payment->paid_date ?? $payment->id ?? 0)
+            ->sortBy(fn ($payment) => (($payment->paid_date ?? $payment->paid_at ?? null) ?: '9999-12-31')
+                .'-'.str_pad((string) ($payment->id ?? 0), 10, '0', STR_PAD_LEFT))
             ->values();
 
         if ($unassigned->isEmpty()) {

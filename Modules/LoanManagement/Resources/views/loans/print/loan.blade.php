@@ -170,17 +170,22 @@
             border-left: 1px solid var(--line);
             border-right: 1px solid var(--line);
             border-top: 1px solid var(--line);
-            text-align: center;
+            display: grid;
+            grid-template-columns: 1fr 45mm;
+            align-items: center;
             font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
+            padding: 0;
+        }
+        .product-title-text {
             padding: 1.3mm;
+            text-align: center;
         }
         .date-bar {
-            float: right;
-            min-width: 45mm;
             border-left: 1px solid var(--line);
-            padding-left: 8mm;
+            padding: 1.3mm 2mm;
             font-family: 'RobotoBold';
+            text-align: center;
         }
         .summary-row td {
             font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
@@ -613,7 +618,7 @@
     </div>
 
     <div class="product-title">
-        វិក្កយបត្រកម្ចី
+        <span class="product-title-text">វិក្កយបត្រកម្ចី</span>
         <span class="date-bar">{{ $loanDateTitle }}</span>
     </div>
     <table class="print-table product-table">
@@ -729,8 +734,10 @@
                     $paymentDates = $rowPayments
                         ->map(fn ($p) => $p->paid_date ?? $p->paid_at ?? null)
                         ->filter()
-                        ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('d-m-Y'))
+                        ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d').'|'.\Carbon\Carbon::parse($date)->format('d-m-Y'))
                         ->unique()
+                        ->sort()
+                        ->map(fn ($date) => explode('|', $date, 2)[1] ?? $date)
                         ->values();
                     $paymentLines = $paymentLinesForPrint($rowPayments);
                     if ($paymentLines->isEmpty() && $paid > 0) {
