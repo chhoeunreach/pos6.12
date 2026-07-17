@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Modules\LoanManagement\Entities\Loan;
 use Modules\LoanManagement\Http\Resources\CustomerLoanSummaryResource;
@@ -249,6 +250,8 @@ class StaffMobileLoanController extends Controller
         );
 
         $this->upsertFirstLoanItem($loanId, $firstItem, $unitPrice, $qty);
+        $this->updateLoanCustomer((int) ($loan->customer_id ?? 0), $data);
+        $this->storeMobileCustomerDocuments((int) ($loan->customer_id ?? 0), $loanId, $data);
 
         $fresh = Loan::query()->where('id', $loanId)->first();
 
@@ -356,6 +359,7 @@ class StaffMobileLoanController extends Controller
     protected function mobileLoanPayload(Loan $loan, bool $includeDetail = false): array
     {
         $summary = (new CustomerLoanSummaryResource($this->summaryService->buildLoanSummary($loan)))->toArray(request());
+        $scheduleSummary = $this->scheduleSummary((int) $loan->id);
         $payload = array_merge($summary, [
             'status' => (string) ($loan->status ?? $summary['loan_status'] ?? ''),
             'loan_date' => ! empty($loan->loan_date) ? date('Y-m-d', strtotime((string) $loan->loan_date)) : null,
@@ -377,15 +381,272 @@ class StaffMobileLoanController extends Controller
             'paid_amount' => $this->money($loan->paid_amount ?? $summary['total_paid_amount'] ?? 0),
             'balance_amount' => $this->money($loan->balance_amount ?? $summary['remaining_balance'] ?? 0),
             'total_payable' => $this->money($loan->total_amount ?? $summary['total_loan_amount'] ?? 0),
+            'payoff_amount' => $this->money($scheduleSummary['payoff_amount'] > 0 ? $scheduleSummary['payoff_amount'] : ($loan->balance_amount ?? $summary['remaining_balance'] ?? 0)),
+            'schedule_total' => $scheduleSummary['total'],
+            'schedule_paid_total' => $scheduleSummary['paid'],
+            'schedule_unpaid_total' => $scheduleSummary['unpaid'],
         ]);
 
         if ($includeDetail) {
             $payload['items'] = $this->loanRows('loan_items', $loan->id, 'id');
             $payload['schedules'] = $this->loanRows('loan_payment_schedules', $loan->id, 'due_date');
             $payload['payments'] = $this->loanRows('loan_payments', $loan->id, 'id', true);
+            $payload['customer'] = $this->customerPayload((int) ($loan->customer_id ?? 0));
+            $payload['files'] = $this->customerFiles((int) ($loan->customer_id ?? 0));
         }
 
         return $payload;
+    }
+
+    protected function updateLoanCustomer(int $customerId, array $data): void
+    {
+        if ($customerId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_customers')) {
+            return;
+        }
+
+        $name = trim((string) ($data['customer_english_name'] ?? $data['customer_name'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($data['customer_name'] ?? ''));
+        }
+
+        $payload = $this->onlyExistingColumns('loan_customers', [
+            'name' => $name !== '' ? $name : null,
+            'khmer_name' => trim((string) ($data['customer_khmer_name'] ?? '')) ?: null,
+            'phone' => trim((string) ($data['customer_phone'] ?? '')) ?: null,
+            'login_phone' => trim((string) ($data['customer_phone'] ?? '')) ?: null,
+            'alternate_phone' => trim((string) ($data['alternate_phone'] ?? '')) ?: null,
+            'address' => trim((string) ($data['customer_address'] ?? '')) ?: null,
+            'province' => trim((string) ($data['province_name'] ?? '')) ?: null,
+            'province_code' => trim((string) ($data['province_code'] ?? '')) ?: null,
+            'district' => trim((string) ($data['district_name'] ?? '')) ?: null,
+            'district_code' => trim((string) ($data['district_code'] ?? '')) ?: null,
+            'commune' => trim((string) ($data['commune_name'] ?? '')) ?: null,
+            'commune_code' => trim((string) ($data['commune_code'] ?? '')) ?: null,
+            'village' => trim((string) ($data['village_name'] ?? '')) ?: null,
+            'village_code' => trim((string) ($data['village_code'] ?? '')) ?: null,
+            'id_card_number' => trim((string) ($data['id_card_number'] ?? '')) ?: null,
+            'business_location_id' => $data['business_location_id'] ?? null,
+            'updated_at' => now(),
+        ]);
+
+        $payload = array_filter($payload, fn ($value) => $value !== null && $value !== '');
+
+        if (! empty($payload)) {
+            DB::connection($this->conn)->table('loan_customers')
+                ->where('id', $customerId)
+                ->update($payload);
+        }
+    }
+
+    protected function storeMobileCustomerDocuments(int $customerId, int $loanId, array $data): void
+    {
+        if ($customerId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_files')) {
+            return;
+        }
+
+        $profileImage = trim((string) ($data['customer_profile_image'] ?? ''));
+        if ($profileImage !== '') {
+            $fileId = $this->storeMobileDataUriFile($profileImage, $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
+            $this->updateCustomerFileReference($customerId, 'customer_photo_file_id', $fileId);
+        }
+
+        $idCardImage = trim((string) ($data['id_card_image'] ?? ''));
+        if ($idCardImage !== '') {
+            $fileId = $this->storeMobileDataUriFile($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.jpg');
+            $this->updateCustomerFileReference($customerId, 'id_front_file_id', $fileId);
+            $this->storeIdCardScan($customerId, $fileId, $data);
+        }
+
+        foreach ((array) ($data['documents'] ?? []) as $index => $document) {
+            if (! is_string($document) || trim($document) === '') {
+                continue;
+            }
+
+            $this->storeMobileDataUriFile(
+                $document,
+                $customerId,
+                'document',
+                'customer-document-'.$loanId.'-'.($index + 1).'.'.$this->extensionFromDataUri($document)
+            );
+        }
+
+        $documentText = trim((string) ($data['document_text'] ?? ''));
+        if ($documentText !== '') {
+            $this->storeMobileDataUriFile(
+                'data:text/plain;base64,'.base64_encode($documentText),
+                $customerId,
+                'document_note',
+                'customer-document-note-'.$loanId.'.txt'
+            );
+        }
+
+        foreach ((array) ($data['document_links'] ?? []) as $index => $link) {
+            $link = trim((string) $link);
+            if ($link === '') {
+                continue;
+            }
+
+            $this->storeMobileDataUriFile(
+                'data:text/plain;base64,'.base64_encode($link),
+                $customerId,
+                'document_link',
+                'customer-document-link-'.$loanId.'-'.($index + 1).'.txt'
+            );
+        }
+    }
+
+    protected function storeMobileDataUriFile(string $dataUri, int $customerId, string $category, string $originalName): ?int
+    {
+        if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
+            $mimeType = $match[1];
+            $base64 = substr($dataUri, strpos($dataUri, ',') + 1);
+        } else {
+            $mimeType = 'image/jpeg';
+            $base64 = $dataUri;
+        }
+
+        $binary = base64_decode($base64, true);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = $this->extensionFromMimeType($mimeType);
+        $path = 'loan-customers/'.$customerId.'/'.uniqid('', true).'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+
+        return (int) DB::connection($this->conn)->table('loan_files')->insertGetId($this->onlyExistingColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+            'fileable_id' => $customerId,
+            'category' => $category,
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $originalName,
+            'mime_type' => $mimeType,
+            'size_bytes' => strlen($binary),
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function updateCustomerFileReference(int $customerId, string $column, ?int $fileId): void
+    {
+        if (! $fileId || ! Schema::connection($this->conn)->hasColumn('loan_customers', $column)) {
+            return;
+        }
+
+        DB::connection($this->conn)->table('loan_customers')->where('id', $customerId)->update([
+            $column => $fileId,
+            'updated_at' => now(),
+        ]);
+    }
+
+    protected function storeIdCardScan(int $customerId, ?int $fileId, array $data): void
+    {
+        if (! $fileId || ! Schema::connection($this->conn)->hasTable('loan_id_card_scans')) {
+            return;
+        }
+
+        DB::connection($this->conn)->table('loan_id_card_scans')->insert($this->onlyExistingColumns('loan_id_card_scans', [
+            'customer_id' => $customerId,
+            'loan_file_id' => $fileId,
+            'side' => 'front',
+            'ocr_raw_text' => $data['id_card_ocr_raw_text'] ?? null,
+            'ocr_structured_json' => ! empty($data['id_card_ocr_fields']) ? json_encode($data['id_card_ocr_fields'], JSON_UNESCAPED_UNICODE) : null,
+            'provider' => 'tesseract',
+            'status' => ! empty($data['id_card_ocr_raw_text']) ? 'completed' : 'pending',
+            'scanned_at' => ! empty($data['id_card_ocr_raw_text']) ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function customerPayload(int $customerId): ?object
+    {
+        if ($customerId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_customers')) {
+            return null;
+        }
+
+        return DB::connection($this->conn)->table('loan_customers')->where('id', $customerId)->first();
+    }
+
+    protected function customerFiles(int $customerId): array
+    {
+        if ($customerId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_files')) {
+            return [];
+        }
+
+        return DB::connection($this->conn)->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->when(Schema::connection($this->conn)->hasColumn('loan_files', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($file) {
+                $storageUrl = ! empty($file->path) ? Storage::disk($file->disk ?? 'public')->url($file->path) : null;
+                $file->url = $storageUrl ? url($storageUrl) : null;
+                return $file;
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function extensionFromDataUri(string $dataUri): string
+    {
+        if (preg_match('/^data:([^;]+);/', $dataUri, $match)) {
+            return $this->extensionFromMimeType($match[1]);
+        }
+
+        return 'jpg';
+    }
+
+    protected function extensionFromMimeType(string $mimeType): string
+    {
+        return [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
+            'application/pdf' => 'pdf',
+            'text/plain' => 'txt',
+            'text/csv' => 'csv',
+        ][$mimeType] ?? (str_contains($mimeType, 'png') ? 'png' : (str_contains($mimeType, 'pdf') ? 'pdf' : 'jpg'));
+    }
+
+    protected function scheduleSummary(int $loanId): array
+    {
+        $summary = [
+            'total' => 0,
+            'paid' => 0,
+            'unpaid' => 0,
+            'payoff_amount' => 0.0,
+        ];
+
+        if (! Schema::connection($this->conn)->hasTable('loan_payment_schedules')) {
+            return $summary;
+        }
+
+        $rows = DB::connection($this->conn)
+            ->table('loan_payment_schedules')
+            ->where('loan_id', $loanId)
+            ->get();
+
+        foreach ($rows as $row) {
+            $summary['total']++;
+            $status = strtolower((string) ($row->status ?? ''));
+            $balance = (float) ($row->balance_amount ?? $row->amount_balance ?? $row->balance ?? 0);
+            if ($status === 'paid' || $balance <= 0) {
+                $summary['paid']++;
+            } else {
+                $summary['unpaid']++;
+                $summary['payoff_amount'] += $balance;
+            }
+        }
+
+        $summary['payoff_amount'] = round($summary['payoff_amount'], 2);
+
+        return $summary;
     }
 
     protected function upsertFirstLoanItem(int $loanId, array $item, float $unitPrice, int $qty): void

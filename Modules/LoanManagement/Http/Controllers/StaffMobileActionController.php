@@ -25,6 +25,9 @@ class StaffMobileActionController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'paid_at' => 'nullable|date',
             'note' => 'nullable|string',
+            'pay_off' => 'nullable|boolean',
+            'schedule_ids' => 'nullable|array',
+            'schedule_ids.*' => 'integer|min:1',
             'details' => 'required|array|min:1',
             'details.*.method' => 'required|string|max:30',
             'details.*.amount' => 'required|numeric|min:0.01',
@@ -50,7 +53,7 @@ class StaffMobileActionController extends Controller
                 'paid_at' => $payAt,
                 'channel' => 'mobile',
                 'status' => 'confirmed',
-                'note' => $data['note'] ?? null,
+                'note' => trim((string) ($data['note'] ?? '')) ?: null,
                 'payment_ref_no' => 'PMT-'.strtoupper(Str::random(10)),
                 'received_by' => auth()->id(),
                 'received_by_name_snapshot' => trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? ''))),
@@ -89,9 +92,14 @@ class StaffMobileActionController extends Controller
                 $schedules = DB::connection($this->conn)->table('loan_payment_schedules')
                     ->where('loan_id', $data['loan_id'])
                     ->whereIn('status', ['pending', 'unpaid', 'partial', 'late'])
+                    ->when(! empty($data['schedule_ids']), fn ($query) => $query->whereIn('id', $data['schedule_ids']))
                     ->orderBy('due_date')
                     ->orderBy('id')
                     ->get();
+
+                if (! empty($data['schedule_ids']) && $schedules->isEmpty()) {
+                    throw new \RuntimeException('Selected payment schedule was not found.');
+                }
 
                 foreach ($schedules as $s) {
                     if ($remaining <= 0) {
@@ -274,4 +282,3 @@ class StaffMobileActionController extends Controller
         });
     }
 }
-
