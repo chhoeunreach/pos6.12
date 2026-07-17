@@ -12,9 +12,11 @@ use Modules\LoanManagement\Http\Controllers\CustomerAppProfileController;
 use Modules\LoanManagement\Http\Controllers\CustomerChatController;
 use Modules\LoanManagement\Http\Controllers\CustomerLocationTrackingController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
+use Modules\LoanManagement\Http\Controllers\LoanCreateController;
 use Modules\LoanManagement\Http\Controllers\PublicAppController;
 use Modules\LoanManagement\Http\Controllers\StaffMobileActionController;
 use Modules\LoanManagement\Http\Controllers\StaffMobileController;
+use Modules\LoanManagement\Http\Controllers\StaffMobileLoanController;
 
 Route::prefix('loan-management')->group(function () {
     Route::get('/app-settings', [PublicAppController::class, 'appSettings']);
@@ -30,6 +32,18 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/mobile/customers', [StaffMobileController::class, 'customers']);
         Route::get('/mobile/customers/{id}', [StaffMobileController::class, 'customerShow']);
         Route::get('/mobile/late-customers', [StaffMobileController::class, 'lateCustomers']);
+        Route::get('/mobile/loan-form-options', [StaffMobileLoanController::class, 'options']);
+        Route::get('/mobile/loans', [StaffMobileLoanController::class, 'index']);
+        Route::post('/mobile/loans', [StaffMobileLoanController::class, 'store']);
+        Route::post('/mobile/loans/preview-schedule', [StaffMobileLoanController::class, 'previewSchedule']);
+        Route::get('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'show']);
+        Route::put('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'update']);
+        Route::delete('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'destroy']);
+        Route::get('/mobile/loan-customers/search', [StaffMobileLoanController::class, 'searchCustomers']);
+        Route::get('/mobile/address/{level}', [StaffMobileLoanController::class, 'addressOptions']);
+        Route::get('/mobile/address-sync', [StaffMobileLoanController::class, 'addressSync']);
+        Route::post('/mobile/id-card/scan', [LoanCreateController::class, 'scanIdCard']);
+        Route::post('/mobile/product-photo/scan', [LoanCreateController::class, 'scanProductPhoto']);
         Route::post('/mobile/payments', [StaffMobileActionController::class, 'receivePayment']);
         Route::post('/mobile/staff-location', [StaffMobileActionController::class, 'staffLocation']);
         Route::post('/mobile/collection-visits', [StaffMobileActionController::class, 'collectionVisit']);

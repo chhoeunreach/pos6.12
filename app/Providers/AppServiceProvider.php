@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
         //force https
         $url = parse_url(config('app.url'));
 
-        if ($url['scheme'] == 'https') {
+        if (isset($url['scheme']) && $url['scheme'] == 'https') {
             \URL::forceScheme('https');
         }
 

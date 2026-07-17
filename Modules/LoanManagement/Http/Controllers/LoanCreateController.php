@@ -587,6 +587,8 @@ class LoanCreateController extends Controller
         $tessdataDirs = [
             base_path('Modules/LoanManagement/storage/tesseract/tessdata'),
             dirname($tesseract).DIRECTORY_SEPARATOR.'tessdata',
+            '/usr/local/share/tessdata',
+            '/opt/homebrew/share/tessdata',
             '/usr/share/tesseract-ocr/5/tessdata',
             '/usr/share/tesseract-ocr/4.00/tessdata',
             '/usr/share/tessdata',
@@ -643,6 +645,13 @@ class LoanCreateController extends Controller
             $fields['id_card_number'] = preg_replace('/\D+/', '', $match[0]);
         }
 
+        if (strlen((string) $fields['id_card_number']) < 8) {
+            preg_match_all('/(?<!\d)\d{8,10}(?!\d)/', preg_replace('/\s+/', '', $text), $matches);
+            $candidates = $matches[0] ?? [];
+            usort($candidates, fn ($a, $b) => strlen($b) <=> strlen($a));
+            $fields['id_card_number'] = $candidates[0] ?? null;
+        }
+
         foreach ($lines as $line) {
             $mrzLine = strtoupper(preg_replace('/\s+/', '', $line));
             if (preg_match('/^IDKHM(\d{8,10})\d*<+/i', $mrzLine, $match)) {
@@ -690,7 +699,8 @@ class LoanCreateController extends Controller
         if ($fields['english_name'] === null) {
             foreach ($lines as $line) {
                 $mrzNameLine = strtoupper(preg_replace('/\s+/', '', $line));
-                if (preg_match('/^([A-Z]+)<+([A-Z]+)(?:<+)?$/', $mrzNameLine, $match)) {
+                if (preg_match('/^([A-Z]+)<+([A-Z]+)(?:<+)?$/', $mrzNameLine, $match)
+                    || preg_match('/([A-Z]{2,})<+([A-Z]{2,})/', $mrzNameLine, $match)) {
                     $fields['english_name'] = trim($match[1].' '.$match[2]);
                     break;
                 }
@@ -704,6 +714,10 @@ class LoanCreateController extends Controller
                     break;
                 }
             }
+        }
+
+        if (! empty($fields['english_name']) && preg_match('/KHMER|CUSTOMER|PROFILE|PHOTO|INVOICE|PRODUCT|REVIEW|PHONE|CARD/i', $fields['english_name'])) {
+            $fields['english_name'] = null;
         }
 
         return array_filter($fields, fn ($value) => $value !== null && $value !== '');
