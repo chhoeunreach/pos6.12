@@ -553,5 +553,23 @@
             ['class' => 'form-control', 'id' => 'types_of_service_custom_field_6_label']); !!}
         </div>
     </div>
+    <div class="clearfix"></div>
+    <div class="col-sm-12">
+        <h4>Labels for Stock Transfer Custom Fields:</h4>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-group">
+            {!! Form::label('transfer_custom_field_1_label', 'Custom Field 1'); !!}
+            {!! Form::text('custom_labels[transfer][custom_field_1]', !empty($custom_labels['transfer']['custom_field_1']) ? $custom_labels['transfer']['custom_field_1'] : null,
+            ['class' => 'form-control', 'id' => 'transfer_custom_field_1_label']); !!}
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-group">
+            {!! Form::label('transfer_custom_field_2_label', 'Custom Field 2'); !!}
+            {!! Form::text('custom_labels[transfer][custom_field_2]', !empty($custom_labels['transfer']['custom_field_2']) ? $custom_labels['transfer']['custom_field_2'] : null,
+            ['class' => 'form-control', 'id' => 'transfer_custom_field_2_label']); !!}
+        </div>
+    </div>
 </div>
 </div>

@@ -253,8 +253,10 @@ class StockTransferController extends Controller
 
         $statuses = $this->stockTransferStatuses();
 
+        $hr_staff = $this->getHrTechnicianStaff();
+
         return view('stock_transfer.create')
-                ->with(compact('business_locations', 'statuses'));
+                ->with(compact('business_locations', 'statuses', 'hr_staff'));
     }
 
     private function stockTransferStatuses()
@@ -264,6 +266,31 @@ class StockTransferController extends Controller
             'in_transit' => __('lang_v1.in_transit'),
             'completed' => __('restaurant.completed'),
         ];
+    }
+
+    private function getHrTechnicianStaff()
+    {
+        try {
+            $rows = DB::connection('hr')
+                ->table('users as u')
+                ->join('departments as d', 'd.id', '=', 'u.department_id')
+                ->where('d.dept_name', 'ជាង')
+                ->where('u.is_active', 1)
+                ->whereNull('u.deleted_at')
+                ->select('u.id', 'u.name', 'u.username')
+                ->orderBy('u.username')
+                ->get();
+
+            $staff = [];
+            foreach ($rows as $row) {
+                $label = $row->username ? $row->username . '-' . $row->name : $row->name;
+                $staff[$row->id] = $label;
+            }
+        } catch (\Exception $e) {
+            $staff = [];
+        }
+
+        return $staff;
     }
 
     /**
@@ -288,7 +315,7 @@ class StockTransferController extends Controller
 
             DB::beginTransaction();
 
-            $input_data = $request->only(['location_id', 'ref_no', 'transaction_date', 'additional_notes', 'shipping_charges', 'final_total']);
+            $input_data = $request->only(['location_id', 'ref_no', 'transaction_date', 'additional_notes', 'shipping_charges', 'final_total', 'transfer_custom_field_1', 'transfer_custom_field_2']);
             $status = $request->input('status');
             $user_id = $request->session()->get('user.id');
 
@@ -325,6 +352,8 @@ class StockTransferController extends Controller
                     $input_data['ref_no'] = $base_ref . '-' . $suffix;
                 }
             }
+
+            $input_data['transfer_custom_field_1'] = $input_data['ref_no'];
 
             $products = $request->input('products');
             $sell_lines = [];
@@ -814,8 +843,10 @@ class StockTransferController extends Controller
             $products[] = $product;
         }
 
+        $hr_staff = $this->getHrTechnicianStaff();
+
         return view('stock_transfer.edit')
-                ->with(compact('sell_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products'));
+                ->with(compact('sell_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products', 'hr_staff'));
     }
 
     /**
@@ -943,8 +974,10 @@ class StockTransferController extends Controller
             ];
         }
 
+        $hr_staff = $this->getHrTechnicianStaff();
+
         return view('stock_transfer.retransfer')
-            ->with(compact('original_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products', 'default_location_from_id', 'retransfer_lines', 'suggested_ref_no', 'suggested_additional_notes', 'missing_lots'));
+            ->with(compact('original_transfer', 'purchase_transfer', 'business_locations', 'statuses', 'products', 'default_location_from_id', 'retransfer_lines', 'suggested_ref_no', 'suggested_additional_notes', 'missing_lots', 'hr_staff'));
     }
 
     /**
@@ -1310,7 +1343,7 @@ class StockTransferController extends Controller
 
             DB::beginTransaction();
 
-            $input_data = $request->only(['transaction_date', 'additional_notes', 'shipping_charges', 'final_total']);
+            $input_data = $request->only(['transaction_date', 'additional_notes', 'shipping_charges', 'final_total', 'transfer_custom_field_1', 'transfer_custom_field_2']);
 
             $input_data['total_before_tax'] = $input_data['final_total'];
 

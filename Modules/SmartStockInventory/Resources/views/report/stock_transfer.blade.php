@@ -84,11 +84,15 @@
                                 <th>@lang('sale.invoice_no')</th>
                                 <th>@lang('lang_v1.added_by')</th>
                                 <th>@lang('purchase.additional_notes')</th>
+                                <th>Key Invoice</th>
+                                <th>Key Staff</th>
                             </tr>
                         </thead>
                         <tfoot>
                             <tr>
                                 <th>@lang('lang_v1.total')</th>
+                                <th></th>
+                                <th></th>
                                 <th></th>
                                 <th></th>
                                 <th></th>
@@ -163,6 +167,8 @@ $(document).ready(function() {
             { data: 'invoice', name: 'invoice' },
             { data: 'sender_by', name: 'sender_by' },
             { data: 'note', name: 'note' },
+            { data: 'key_invoice', name: 'key_invoice' },
+            { data: 'key_staff_id', name: 'key_staff_id' },
         ],
         footerCallback: function() {
             var api = this.api();

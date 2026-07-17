@@ -513,7 +513,9 @@ class StockReportController extends Controller
                 'l2.name as location_to',
                 'transactions.ref_no as invoice',
                 DB::raw("CONCAT(COALESCE(sender.surname, ''),' ',COALESCE(sender.first_name, ''),' ',COALESCE(sender.last_name,'')) as sender_by"),
-                'transactions.additional_notes as note'
+                'transactions.additional_notes as note',
+                'transactions.transfer_custom_field_1 as key_invoice',
+                'transactions.transfer_custom_field_2 as key_staff_id'
             );
 
             $datatable = Datatables::of($query)
@@ -521,8 +523,45 @@ class StockReportController extends Controller
                 ->editColumn('qty', function ($row) {
                     return $this->transactionUtil->num_f($row->qty, false, null, true);
                 })
+                ->editColumn('key_staff_id', function ($row) {
+                    if (empty($row->key_staff_id)) {
+                        return '';
+                    }
+                    try {
+                        $staff = DB::connection('hr')
+                            ->table('users')
+                            ->where('id', $row->key_staff_id)
+                            ->select('name', 'username')
+                            ->first();
+                        if ($staff) {
+                            return e($staff->username ? $staff->username . '-' . $staff->name : $staff->name);
+                        }
+                    } catch (\Exception $e) {
+                        // fallback
+                    }
+                    return e($row->key_staff_id);
+                })
                 ->filterColumn('sender_by', function ($query, $keyword) {
                     $query->whereRaw("CONCAT(COALESCE(sender.surname, ''),' ',COALESCE(sender.first_name, ''),' ',COALESCE(sender.last_name,'')) like ?", ["%{$keyword}%"]);
+                })
+                ->filterColumn('key_staff_id', function ($query, $keyword) {
+                    try {
+                        $staff_ids = DB::connection('hr')
+                            ->table('users')
+                            ->where(function ($q) use ($keyword) {
+                                $q->where('name', 'like', "%{$keyword}%")
+                                    ->orWhere('username', 'like', "%{$keyword}%");
+                            })
+                            ->pluck('id')
+                            ->toArray();
+                        if (! empty($staff_ids)) {
+                            $query->whereIn('transactions.transfer_custom_field_2', $staff_ids);
+                        } else {
+                            $query->whereRaw('1 = 0');
+                        }
+                    } catch (\Exception $e) {
+                        $query->whereRaw('1 = 0');
+                    }
                 })
                 ->rawColumns([])
                 ->make(true);

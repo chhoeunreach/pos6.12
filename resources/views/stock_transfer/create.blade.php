@@ -158,6 +158,22 @@
                         {!! Form::textarea('additional_notes', null, ['class' => 'form-control', 'rows' => 3]) !!}
                     </div>
                 </div>
+                @php
+                    $business_id = session('user.business_id');
+                    $transfer_custom_labels = app(\App\Utils\Util::class)->getCustomLabels($business_id, 'transfer');
+                @endphp
+                <div class="col-sm-4">
+                    <div class="form-group">
+                        {!! Form::label('transfer_custom_field_1', !empty($transfer_custom_labels['custom_field_1']) ? $transfer_custom_labels['custom_field_1'] : 'Key Invoice') !!}
+                        {!! Form::text('transfer_custom_field_1', null, ['class' => 'form-control']) !!}
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="form-group">
+                        {!! Form::label('transfer_custom_field_2', !empty($transfer_custom_labels['custom_field_2']) ? $transfer_custom_labels['custom_field_2'] : 'Key Staff') !!}
+                        {!! Form::select('transfer_custom_field_2', ['' => __('messages.please_select')] + $hr_staff, null, ['class' => 'form-control select2']) !!}
+                    </div>
+                </div>
             </div>
             <div class="row">
                 <div class="col-md-12 text-right show_price_with_permission">

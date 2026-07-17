@@ -280,6 +280,43 @@
   </div>
 </div>
 
+@php
+  $transfer_custom_labels = app(\App\Utils\Util::class)->getCustomLabels(session('user.business_id'), 'transfer');
+  $staff_label = '';
+  if (!empty($sell_transfer->transfer_custom_field_2)) {
+      try {
+          $staff_row = \Illuminate\Support\Facades\DB::connection('hr')
+              ->table('users')
+              ->where('id', $sell_transfer->transfer_custom_field_2)
+              ->select('name', 'username')
+              ->first();
+          if ($staff_row) {
+              $staff_label = $staff_row->username ? $staff_row->username . '-' . $staff_row->name : $staff_row->name;
+          } else {
+              $staff_label = $sell_transfer->transfer_custom_field_2;
+          }
+      } catch (\Exception $e) {
+          $staff_label = $sell_transfer->transfer_custom_field_2;
+      }
+  }
+@endphp
+@if(!empty($sell_transfer->transfer_custom_field_1) || !empty($sell_transfer->transfer_custom_field_2))
+<div class="row">
+  @if(!empty($sell_transfer->transfer_custom_field_1))
+  <div class="col-sm-6">
+    <strong>{{ !empty($transfer_custom_labels['custom_field_1']) ? $transfer_custom_labels['custom_field_1'] : 'Key Invoice' }}:</strong><br>
+    <p class="well well-sm no-shadow bg-gray">{{ $sell_transfer->transfer_custom_field_1 }}</p>
+  </div>
+  @endif
+  @if(!empty($sell_transfer->transfer_custom_field_2))
+  <div class="col-sm-6">
+    <strong>{{ !empty($transfer_custom_labels['custom_field_2']) ? $transfer_custom_labels['custom_field_2'] : 'Key Staff' }}:</strong><br>
+    <p class="well well-sm no-shadow bg-gray">{{ $staff_label }}</p>
+  </div>
+  @endif
+</div>
+@endif
+
 {{-- Barcode --}}
 <div class="row print_section">
   <div class="col-xs-12">

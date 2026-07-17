@@ -130,6 +130,22 @@
 						{!! Form::textarea('additional_notes', $sell_transfer->additional_notes, ['class' => 'form-control', 'rows' => 3]); !!}
 					</div>
 				</div>
+				@php
+					$business_id = session('user.business_id');
+					$transfer_custom_labels = app(\App\Utils\Util::class)->getCustomLabels($business_id, 'transfer');
+				@endphp
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('transfer_custom_field_1', !empty($transfer_custom_labels['custom_field_1']) ? $transfer_custom_labels['custom_field_1'] : 'Key Invoice') !!}
+						{!! Form::text('transfer_custom_field_1', $sell_transfer->transfer_custom_field_1, ['class' => 'form-control']); !!}
+					</div>
+				</div>
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('transfer_custom_field_2', !empty($transfer_custom_labels['custom_field_2']) ? $transfer_custom_labels['custom_field_2'] : 'Key Staff') !!}
+						{!! Form::select('transfer_custom_field_2', ['' => __('messages.please_select')] + $hr_staff, $sell_transfer->transfer_custom_field_2, ['class' => 'form-control select2']); !!}
+					</div>
+				</div>
 			</div>
 			@php
 				$final_total = $subtotal + $sell_transfer->shipping_charges;
