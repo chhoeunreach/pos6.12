@@ -245,8 +245,44 @@
         scanIdCard: "{{ route('loan-management.loans.ajax.scan-id-card') }}",
         previewSchedule: "{{ route('loan-management.loans.preview-standalone-schedule') }}",
         storeLoan: "{{ route('loan-management.loans.store-standalone') }}",
-        loanList: "{{ route('loan-management.loans') }}"
+        loanList: "{{ route('loan-management.loans') }}",
+        productBySerial: "{{ route('loan-management.loans.ajax.product-by-serial') }}"
     };
+
+    var serialLookupTimers = {};
+
+    function lookupProductBySerial($row) {
+        var serial = $row.find('.item-imei').val().trim();
+        if (serial.length < 3) return;
+
+        var existingName = $row.find('.item-name').val().trim();
+        if (existingName) return;
+
+        $.get(urls.productBySerial, { serial: serial }, function (res) {
+            if (res.success && res.data && res.data.product_name) {
+                var $nameField = $row.find('.item-name');
+                if (!$nameField.val().trim()) {
+                    $nameField.val(res.data.product_name);
+                }
+            }
+        });
+    }
+
+    $(document).on('input', '.item-imei', function () {
+        var $row = $(this).closest('tr');
+        var serial = $(this).val().trim();
+        var rowId = $row.index();
+
+        if (serialLookupTimers[rowId]) {
+            clearTimeout(serialLookupTimers[rowId]);
+        }
+
+        if (serial.length < 3) return;
+
+        serialLookupTimers[rowId] = setTimeout(function () {
+            lookupProductBySerial($row);
+        }, 600);
+    });
 
     var searchTimer = null;
     var idCardImageData = '';

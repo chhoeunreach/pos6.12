@@ -79,7 +79,7 @@
                 success: function(res){
                     alert(res.message || 'Loan created successfully');
                     if(res?.data?.loan_id){
-                        window.location = "{{ url('/loan-management/loans') }}/" + res.data.loan_id + "/view";
+                        window.location = "{{ url('/loan-management/loans') }}/" + res.data.loan_id + "/view?_lm_modal=1";
                         return;
                     }
                     window.location = "{{ route('loan-management.loans.create-from-sell') }}";

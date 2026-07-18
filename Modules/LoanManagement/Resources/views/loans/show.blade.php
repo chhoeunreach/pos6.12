@@ -67,14 +67,26 @@
 @endif
 @endsection
 @section('content_body')
-<section class="content-header">
-    <h1>Loan Detail #{{ $loanRow->id }}</h1>
-    <div class="pull-right d-none d-lg-block">
+<section class="content-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+        @if($isEmbeddedModal)
+        <button type="button"
+                class="btn btn-default btn-sm"
+                onclick="window.jQuery('.view_modal').modal('hide');"
+                title="Close">
+            <i class="fa fa-times"></i>
+        </button>
+        @endif
+        <h1 style="margin:0;">Loan Detail #{{ $loanRow->id }}</h1>
+    </div>
+    <div class="pull-right d-none d-lg-block" style="white-space:nowrap;">
         @can('loan_management.edit')
-        <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
-           class="btn btn-primary">
+        <button type="button"
+                class="btn btn-primary btn-modal"
+                data-href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
+                data-container=".view_modal">
             <i class="fa fa-pencil"></i> Edit Loan
-        </a>
+        </button>
         @endcan
         <button type="button"
                 class="btn btn-success btn-modal"
@@ -260,10 +272,12 @@
             <i class="fa fa-exchange"></i> POS
         </button>
         @can('loan_management.edit')
-        <a href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
-           class="lm-mab-btn lm-mab-btn-outline">
+        <button type="button"
+                class="lm-mab-btn lm-mab-btn-outline btn-modal"
+                data-href="{{ route('loan-management.loans.edit', $loanEditRouteParams) }}"
+                data-container=".view_modal">
             <i class="fa fa-pencil"></i> Edit
-        </a>
+        </button>
         @endcan
     </div>
 </div>

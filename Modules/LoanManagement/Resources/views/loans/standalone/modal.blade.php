@@ -2002,7 +2002,7 @@ function mobSubmit(action) {
     if (mobCustomerProfileData) fd.append('customer_profile_image', mobCustomerProfileData);
     mobDocFiles.forEach(function(d, i) { if (d) fd.append('documents[]', d.dataUri); });
     fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
-    var urls = { storeLoan: "{{ route('loan-management.loans.store-standalone') }}", loanList: "{{ route('loan-management.loans') }}" };
+    var urls = { storeLoan: "{{ route('loan-management.loans.store-standalone') }}", loanViewBase: "{{ url('/loan-management/loans') }}" };
     var $btns = jQuery('#mobBottombar button').prop('disabled', true);
     jQuery.ajax({
         url: urls.storeLoan, method: 'POST', data: fd, processData: false, contentType: false,
@@ -2010,7 +2010,17 @@ function mobSubmit(action) {
             if (window.toastr) toastr.success(res.message || 'Loan created');
             jQuery('#standaloneLoanModal').modal('hide');
             if (res?.data?.loan_id) {
-                window.location.href = urls.loanList + '/' + res.data.loan_id + '/view';
+                var loanUrl = urls.loanViewBase + '/' + res.data.loan_id + '/view?_lm_modal=1';
+                if (window.jQuery && window.jQuery('.view_modal').length) {
+                    window.jQuery('.view_modal').html('<div class="text-center" style="padding:48px;"><i class="fa fa-spinner fa-spin fa-2x"></i><p>Loading loan...</p></div>').modal('show');
+                    window.jQuery.ajax({
+                        url: loanUrl, dataType: 'html',
+                        success: function(html) { window.jQuery('.view_modal').html(html); },
+                        error: function() { window.location.href = loanUrl; }
+                    });
+                } else {
+                    window.location.href = loanUrl;
+                }
             } else {
                 location.reload();
             }

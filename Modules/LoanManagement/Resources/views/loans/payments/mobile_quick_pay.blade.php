@@ -381,6 +381,15 @@ $(function() {
             success: function(res) {
                 if (window.toastr) toastr.success(res.message || 'Payment saved!');
                 $('#quickPayModal').modal('hide');
+                var $loanSections = $('.view_modal').find('#loanShowSections');
+                if ($loanSections.length && $loanSections.data('url')) {
+                    window.jQuery.ajax({
+                        url: $loanSections.data('url'),
+                        dataType: 'html',
+                        success: function (html) { $loanSections.html(html); }
+                    });
+                    return;
+                }
                 if (res.data && res.data.redirect_url) {
                     window.location.href = res.data.redirect_url;
                 } else {

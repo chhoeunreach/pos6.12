@@ -2053,6 +2053,50 @@
         .lm-pay-more .btn {
             padding: 6px 8px;
         }
+        #loanDashboardQuickSearchTable {
+            table-layout: fixed;
+        }
+        #loanDashboardQuickSearchTable th:nth-child(1),
+        #loanDashboardQuickSearchTable td:nth-child(1) {
+            width: 42%;
+        }
+        #loanDashboardQuickSearchTable th:nth-child(2),
+        #loanDashboardQuickSearchTable td:nth-child(2) {
+            width: 20%;
+        }
+        #loanDashboardQuickSearchTable th:nth-child(3),
+        #loanDashboardQuickSearchTable td:nth-child(3) {
+            width: 20%;
+        }
+        #loanDashboardQuickSearchTable th:nth-child(4),
+        #loanDashboardQuickSearchTable td:nth-child(4) {
+            width: 18%;
+        }
+        #loanDashboardQuickSearchTable .lm-row-title,
+        #loanDashboardQuickSearchTable .lm-row-subtitle {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #loanDashboardQuickSearchTable .lm-pay-action {
+            padding-left: 6px !important;
+            padding-right: 6px !important;
+            white-space: nowrap;
+        }
+        #loanDashboardQuickSearchTable .lm-pay-btn {
+            min-width: 50px;
+            padding: 8px 10px;
+        }
+        #loanDashboardQuickSearchTable .lm-pay-btn .fa {
+            display: none;
+        }
+        #loanDashboardQuickSearchTable .lm-pay-more {
+            margin-left: 3px;
+        }
+        #loanDashboardQuickSearchTable .lm-pay-more .btn {
+            min-width: 34px;
+            padding: 8px 7px;
+        }
         .lm-table-wrap {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -2591,98 +2635,6 @@
     </div>
 
     <div class="lm-dashboard-pane is-active" data-dashboard-pane="overview">
-    <section class="lm-admin-brief">
-        <div class="lm-admin-command">
-            <div class="lm-admin-command__inner">
-                <div>
-                    <span class="lm-admin-kicker"><i class="fa fa-line-chart"></i> Admin Command Dashboard</span>
-                    <h1 class="lm-admin-title">Loan Control Center</h1>
-                    <p class="lm-admin-copy">Review collection pressure, payment activity, customer follow-up, and loan creation from one focused workspace.</p>
-                </div>
-
-                <div class="lm-admin-actions">
-                    @if(Route::has('loan-management.loans.create'))
-                        <a href="{{ route('loan-management.loans.create') }}" class="lm-admin-action primary"><i class="fa fa-plus-circle"></i> New Loan</a>
-                    @endif
-                    @if(Route::has('loan-management.loans.create-from-sell'))
-                        <a href="{{ route('loan-management.loans.create-from-sell') }}" class="lm-admin-action"><i class="fa fa-shopping-cart"></i> Create From POS</a>
-                    @endif
-                    @if(Route::has('loan-management.collection.page'))
-                        <a href="{{ route('loan-management.collection.page', ['page' => 'overdue-accounts']) }}" class="lm-admin-action"><i class="fa fa-phone"></i> Collection Queue</a>
-                    @endif
-                    @if(Route::has('loan-management.loans.calculator'))
-                        <a href="{{ route('loan-management.loans.calculator') }}" class="lm-admin-action"><i class="fa fa-calculator"></i> Calculator</a>
-                    @endif
-                    @if(Route::has('loan-management.reports.index'))
-                        <a href="{{ route('loan-management.reports.index') }}" class="lm-admin-action"><i class="fa fa-bar-chart"></i> Reports</a>
-                    @endif
-                </div>
-
-                <div class="lm-admin-metrics">
-                    <div class="lm-admin-metric">
-                        <span>Today Collection</span>
-                        <strong>{{ number_format($dashboardTodayCollection, 2) }}</strong>
-                    </div>
-                    <div class="lm-admin-metric">
-                        <span>Monthly Income</span>
-                        <strong>{{ number_format($dashboardMonthlyIncome, 2) }}</strong>
-                    </div>
-                    <div class="lm-admin-metric">
-                        <span>Active Loans</span>
-                        <strong>{{ number_format((int) ($quickCards['active_loans'] ?? 0)) }}</strong>
-                    </div>
-                    <div class="lm-admin-metric">
-                        <span>Late Customers</span>
-                        <strong>{{ number_format((int) ($quickCards['late_customers'] ?? 0)) }}</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="lm-admin-priority">
-            <div class="lm-admin-priority__head">
-                <div>
-                    <h3>Priority Work</h3>
-                    <p>Cases needing manager attention today.</p>
-                </div>
-                <div class="lm-admin-priority__score">{{ number_format($dashboardPriorityTotal) }}</div>
-            </div>
-            <div class="lm-admin-priority-list">
-                @if(Route::has('loan-management.operations.page'))
-                    <a href="{{ route('loan-management.operations.page', ['page' => 'due-today']) }}" class="lm-admin-priority-item">
-                        <i class="fa fa-calendar-check-o"></i>
-                        <span><strong>Due Today</strong><span>Installments scheduled for collection</span></span>
-                        <b class="lm-admin-priority-count">{{ number_format($dashboardDueToday) }}</b>
-                    </a>
-                @endif
-                @if(Route::has('loan-management.collection.page'))
-                    <a href="{{ route('loan-management.collection.page', ['page' => 'overdue-accounts']) }}" class="lm-admin-priority-item">
-                        <i class="fa fa-exclamation-triangle"></i>
-                        <span><strong>Overdue Accounts</strong><span>Accounts past due and unpaid</span></span>
-                        <b class="lm-admin-priority-count">{{ number_format($dashboardOverdue) }}</b>
-                    </a>
-                    <a href="{{ route('loan-management.collection.page', ['page' => 'broken-promise']) }}" class="lm-admin-priority-item">
-                        <i class="fa fa-chain-broken"></i>
-                        <span><strong>Broken PTP</strong><span>Promise-to-pay cases missed</span></span>
-                        <b class="lm-admin-priority-count">{{ number_format($dashboardBrokenPtp) }}</b>
-                    </a>
-                    <a href="{{ route('loan-management.collection.page', ['page' => 'field-visit-required']) }}" class="lm-admin-priority-item">
-                        <i class="fa fa-street-view"></i>
-                        <span><strong>Field Visits</strong><span>Customers requiring field follow-up</span></span>
-                        <b class="lm-admin-priority-count">{{ number_format($dashboardPendingVisits) }}</b>
-                    </a>
-                @endif
-                @if(Route::has('loan-management.risk.page'))
-                    <a href="{{ route('loan-management.risk.page', ['page' => 'high-risk-customers']) }}" class="lm-admin-priority-item">
-                        <i class="fa fa-user-times"></i>
-                        <span><strong>High Risk</strong><span>Customers flagged by risk workflow</span></span>
-                        <b class="lm-admin-priority-count">{{ number_format($dashboardHighRisk) }}</b>
-                    </a>
-                @endif
-            </div>
-        </div>
-    </section>
-
     <section class="lm-dashboard-cards">
         @foreach($cards as $card)
             @php $val = $quickCards[$card['key']] ?? 0; @endphp

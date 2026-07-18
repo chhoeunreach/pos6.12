@@ -555,9 +555,33 @@ $(function () {
                     toastr.success(res.message || 'Payment added successfully');
                 }
 
-                $('.view_modal').modal('hide');
+                var $modal = $('.view_modal');
                 var printUrl = res.data && res.data.print_url ? res.data.print_url : '';
                 var redirectUrl = res.data && res.data.redirect_url ? res.data.redirect_url : "{{ route('loan-management.dashboard') }}";
+                var $loanSections = $modal.find('#loanShowSections');
+
+                if ($loanSections.length && $loanSections.data('url')) {
+                    // Payment was submitted from a loan view inside a modal — reload sections
+                    $modal.modal('hide');
+                    if (typeof window.loanManagementDirectPrintUrl === 'function' && printUrl) {
+                        window.loanManagementDirectPrintUrl(printUrl, function () {
+                            window.jQuery.ajax({
+                                url: $loanSections.data('url'),
+                                dataType: 'html',
+                                success: function (html) { $loanSections.html(html); }
+                            });
+                        });
+                    } else {
+                        window.jQuery.ajax({
+                            url: $loanSections.data('url'),
+                            dataType: 'html',
+                            success: function (html) { $loanSections.html(html); }
+                        });
+                    }
+                    return;
+                }
+
+                $('.view_modal').modal('hide');
 
                 if (typeof window.loanManagementDirectPrintUrl === 'function' && printUrl) {
                     window.loanManagementDirectPrintUrl(printUrl, function () {

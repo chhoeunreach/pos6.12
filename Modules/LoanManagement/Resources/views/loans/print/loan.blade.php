@@ -854,17 +854,23 @@
                 @php
                     $qty = (float) ($p->quantity ?? 1);
                     $price = (float) ($p->unit_price_inc_tax ?? 0);
-                    $subtotal = round($qty * $price, 2);
+                    $subtotal = round((float) ($p->subtotal ?? ($qty * $price)), 2);
                     $imei = trim((string) ($p->imei ?? ''));
                     $serial = trim((string) ($p->serial ?? ''));
+                    $color = trim((string) ($p->color ?? ''));
+                    $storage = trim((string) ($p->storage ?? ''));
                     $showImei = $imei !== '' && $imei !== '-';
                     $showSerial = $serial !== '' && $serial !== '-' && strcasecmp($serial, $imei) !== 0;
+                    $showColor = $color !== '' && $color !== '-';
+                    $showStorage = $storage !== '' && $storage !== '-';
                 @endphp
                 <tr>
                     <td class="bold">{{ $i + 1 }}</td>
                     <td class="bold">{{ $p->product_sku ?? '-' }}</td>
                     <td class="text-left bold">
                         {{ $p->product_name ?? '-' }}
+                        @if($showColor) / Color: {{ $color }} @endif
+                        @if($showStorage) / Storage: {{ $storage }} @endif
                         @if($showImei) / IMEI: {{ $imei }} @endif
                         @if($showSerial) / Serial: {{ $serial }} @endif
                     </td>

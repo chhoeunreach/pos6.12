@@ -1150,21 +1150,31 @@ class LoanInstallmentListController extends Controller
 
         $products = collect();
         if ($this->loanTableExists('loan_items')) {
-            $products = DB::connection('mysql_loan')->table('loan_items')
+            $productQuery = DB::connection('mysql_loan')->table('loan_items')
                 ->where('loan_id', $loan)
+                ->orderBy('id');
+            $this->excludeDeletedLoanRows($productQuery, 'loan_items');
+
+            $products = $productQuery
                 ->get()
                 ->map(function ($item) {
                     $qty = $item->qty ?? $item->quantity ?? 1;
                     $unitPrice = $item->unit_price ?? $item->unit_price_inc_tax ?? 0;
+                    $lineTotal = $item->line_total ?? $item->total_price ?? null;
+                    $subtotal = $lineTotal !== null
+                        ? (float) $lineTotal
+                        : ((float) $qty * (float) $unitPrice);
 
                     return (object) [
                         'product_sku' => $item->sku_snapshot ?? $item->product_sku ?? '-',
                         'product_name' => $item->product_name_snapshot ?? $item->product_name ?? '-',
                         'quantity' => $qty,
                         'unit_price_inc_tax' => $unitPrice,
-                        'subtotal' => $item->line_total ?? $item->total_price ?? ((float) $qty * (float) $unitPrice),
+                        'subtotal' => $subtotal,
                         'imei' => $item->imei_snapshot ?? '-',
                         'serial' => $item->serial_number_snapshot ?? '-',
+                        'color' => $item->color_snapshot ?? $item->color ?? '-',
+                        'storage' => $item->storage_snapshot ?? $item->storage ?? '-',
                         'lot' => $item->lot_number_snapshot ?? '-',
                     ];
                 });
@@ -1722,7 +1732,7 @@ class LoanInstallmentListController extends Controller
         $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
         abort_if(! $loanRow, 404);
 
-        $payload = $this->validatedLoanItemPayload($request, null, true);
+        $payload = $this->validatedLoanItemPayload($request, null, true, $loan);
 
         $itemId = DB::connection('mysql_loan')->table('loan_items')->insertGetId($this->loanSafeColumns('loan_items', array_merge($payload, [
             'loan_id' => $loan,
@@ -1784,7 +1794,7 @@ class LoanInstallmentListController extends Controller
         $itemRow = $itemQuery->first();
         abort_if(! $itemRow, 404);
 
-        $payload = $this->validatedLoanItemPayload($request, $itemRow, false);
+        $payload = $this->validatedLoanItemPayload($request, $itemRow, false, $loan);
 
         DB::connection('mysql_loan')->table('loan_items')->where('id', $itemRow->id)->update($this->loanSafeColumns('loan_items', array_merge($payload, [
             'updated_at' => now(),
@@ -1792,19 +1802,13 @@ class LoanInstallmentListController extends Controller
 
         $this->refreshLoanItemSnapshot($loan);
 
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Loan item updated successfully',
-                'data' => [
-                    'redirect_url' => $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
-                ],
-            ]);
-        }
-
-        return redirect()
-            ->route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []))
-            ->with('status', ['success' => 1, 'msg' => 'Loan item updated successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan item updated successfully',
+            'data' => [
+                'redirect_url' => $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
+            ],
+        ]);
     }
 
     public function destroyItem(Request $request, int $loan, int $item)
@@ -1835,59 +1839,310 @@ class LoanInstallmentListController extends Controller
         $this->refreshLoanItemSnapshot($loan);
         $redirectUrl = $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []));
 
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Loan item deleted successfully',
-                'data' => [
-                    'redirect_url' => $redirectUrl,
-                ],
-            ]);
-        }
-
-        return redirect()
-            ->to($redirectUrl)
-            ->with('status', ['success' => 1, 'msg' => 'Loan item deleted successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan item deleted successfully',
+            'data' => [
+                'redirect_url' => $redirectUrl,
+            ],
+        ]);
     }
 
-    protected function validatedLoanItemPayload(Request $request, ?object $itemRow = null, bool $isCreate = false): array
+    protected function validatedLoanItemPayload(Request $request, ?object $itemRow = null, bool $isCreate = false, int $loanId = 0): array
     {
         $payload = $request->validate([
             'product_name_snapshot' => ($isCreate ? 'required' : 'nullable').'|string|max:191',
             'sku_snapshot' => 'nullable|string|max:191',
             'imei_snapshot' => 'nullable|string|max:191',
             'serial_number_snapshot' => 'nullable|string|max:191',
+            'lot_number_snapshot' => 'nullable|string|max:191',
+            'brand' => 'nullable|string|max:191',
+            'category' => 'nullable|string|max:191',
             'color' => 'nullable|string|max:191',
+            'storage' => 'nullable|string|max:191',
+            'product_photo_path' => 'nullable|string|max:1000',
+            'product_photo' => 'nullable|string',
+            'product_ocr_raw_text' => 'nullable|string|max:10000',
             'qty' => 'nullable|numeric|min:0',
             'unit_price' => 'nullable|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
             'line_total' => 'nullable|numeric|min:0',
         ]);
 
         $qty = round((float) ($payload['qty'] ?? ($itemRow->qty ?? 1)), 4);
         $unitPrice = round((float) ($payload['unit_price'] ?? ($itemRow->unit_price ?? 0)), 2);
+        $discount = round((float) ($payload['discount'] ?? ($itemRow->discount ?? 0)), 2);
         $lineTotal = array_key_exists('line_total', $payload) && $payload['line_total'] !== null
             ? round((float) $payload['line_total'], 2)
-            : round($qty * $unitPrice, 2);
+            : max(0, round(($qty * $unitPrice) - $discount, 2));
 
         $productName = trim((string) ($payload['product_name_snapshot'] ?? ($itemRow->product_name_snapshot ?? $itemRow->product_name ?? '')));
         $sku = trim((string) ($payload['sku_snapshot'] ?? ($itemRow->sku_snapshot ?? $itemRow->sku ?? '')));
         $imei = trim((string) ($payload['imei_snapshot'] ?? ($itemRow->imei_snapshot ?? $itemRow->imei ?? '')));
         $serial = trim((string) ($payload['serial_number_snapshot'] ?? ($itemRow->serial_number_snapshot ?? $itemRow->serial_number ?? '')));
+        $lot = trim((string) ($payload['lot_number_snapshot'] ?? ($itemRow->lot_number_snapshot ?? $itemRow->lot_number ?? '')));
+        $brand = trim((string) ($payload['brand'] ?? ($itemRow->brand ?? '')));
+        $category = trim((string) ($payload['category'] ?? ($itemRow->category ?? '')));
+        $color = trim((string) ($payload['color'] ?? ($itemRow->color ?? '')));
+        $storage = trim((string) ($payload['storage'] ?? ($itemRow->storage ?? '')));
+
+        $photoPath = trim((string) ($payload['product_photo_path'] ?? ($itemRow->product_photo_path ?? '')));
+        $storedPhotoPath = $this->storeLoanItemPhotoFromDataUri((string) ($payload['product_photo'] ?? ''), $loanId ?: (int) ($itemRow->loan_id ?? 0), (int) ($itemRow->id ?? 0));
+        if ($storedPhotoPath !== null) {
+            $photoPath = $storedPhotoPath;
+        }
 
         return [
             'product_name_snapshot' => $productName,
             'product_name' => $productName,
             'sku_snapshot' => $sku,
             'sku' => $sku,
+            'brand' => $brand,
+            'category' => $category,
             'imei_snapshot' => $imei,
             'imei' => $imei,
             'serial_number_snapshot' => $serial,
             'serial_number' => $serial,
-            'color' => $payload['color'] ?? ($itemRow->color ?? null),
+            'lot_number_snapshot' => $lot,
+            'lot_number' => $lot,
+            'color' => $color,
+            'color_snapshot' => $color,
+            'storage' => $storage,
+            'storage_snapshot' => $storage,
+            'product_photo_path' => $photoPath,
+            'product_ocr_raw_text' => trim((string) ($payload['product_ocr_raw_text'] ?? ($itemRow->product_ocr_raw_text ?? ''))),
             'qty' => $qty,
             'unit_price' => $unitPrice,
+            'discount' => $discount,
             'line_total' => $lineTotal,
         ];
+    }
+
+    protected function storeLoanItemPhotoFromDataUri(string $dataUri, int $loanId, int $itemId = 0): ?string
+    {
+        $dataUri = trim($dataUri);
+        if ($dataUri === '' || $loanId <= 0) {
+            return null;
+        }
+
+        if (preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,/', $dataUri, $match)) {
+            $mimeType = $match[1];
+            $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
+        } else {
+            $mimeType = 'image/jpeg';
+        }
+
+        $binary = base64_decode($dataUri, true);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = str_contains($mimeType, 'png') ? 'png' : 'jpg';
+        $itemKey = $itemId > 0 ? 'item-'.$itemId : 'item-new';
+        $path = 'loan-product-photos/'.$loanId.'/'.$itemKey.'-'.Str::uuid().'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+        $this->storeLoanItemPhotoFile($path, $loanId, 'loan-product-'.$loanId.'-'.$itemKey.'.'.$extension);
+
+        return $path;
+    }
+
+    protected function storeLoanItemPhotoFile(string $path, int $loanId, string $originalName): void
+    {
+        if (! $this->loanTableExists('loan_files')) {
+            return;
+        }
+
+        $fullPath = Storage::disk('public')->path($path);
+        if (! is_readable($fullPath)) {
+            return;
+        }
+
+        $mimeType = function_exists('mime_content_type') ? (mime_content_type($fullPath) ?: 'image/jpeg') : 'image/jpeg';
+
+        DB::connection('mysql_loan')->table('loan_files')->insert($this->loanSafeColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\Loan::class,
+            'fileable_id' => $loanId,
+            'category' => 'product_photo',
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $originalName,
+            'mime_type' => $mimeType,
+            'size_bytes' => filesize($fullPath) ?: null,
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function storeLoanCustomerImageFromDataUri(string $dataUri, int $loanId, string $category, string $namePrefix): ?int
+    {
+        $dataUri = trim($dataUri);
+        if ($dataUri === '' || $loanId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        if (preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,/', $dataUri, $match)) {
+            $mimeType = $match[1];
+            $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
+        } else {
+            $mimeType = 'image/jpeg';
+        }
+
+        $binary = base64_decode($dataUri, true);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = str_contains($mimeType, 'png') ? 'png' : 'jpg';
+        $path = 'loan-customer-photos/'.$loanId.'/'.$namePrefix.'-'.Str::uuid().'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+        $fullPath = Storage::disk('public')->path($path);
+
+        return (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->loanSafeColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\Loan::class,
+            'fileable_id' => $loanId,
+            'category' => $category,
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $namePrefix.'-'.$loanId.'.'.$extension,
+            'mime_type' => $mimeType,
+            'size_bytes' => is_readable($fullPath) ? (filesize($fullPath) ?: null) : null,
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function loanFileUrlById(int $fileId): ?string
+    {
+        if ($fileId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        $file = DB::connection('mysql_loan')->table('loan_files')->where('id', $fileId)->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return Storage::disk($file->disk ?? 'public')->url($file->path);
+    }
+
+    protected function loanFilesByCategory(int $loanId, string $category)
+    {
+        if ($loanId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return collect();
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\Loan::class)
+            ->where('fileable_id', $loanId)
+            ->where('category', $category)
+            ->orderByDesc('id');
+        $this->excludeDeletedLoanRows($query, 'loan_files');
+
+        return $query->get()->map(function ($file) {
+            $file->url = ! empty($file->path) ? Storage::disk($file->disk ?? 'public')->url($file->path) : null;
+            return $file;
+        });
+    }
+
+    protected function latestCustomerFileUrlByCategory(int $customerId, string $category): ?string
+    {
+        if ($customerId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->where('category', $category)
+            ->orderByDesc('id');
+        $this->excludeDeletedLoanRows($query, 'loan_files');
+
+        $file = $query->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return Storage::disk($file->disk ?? 'public')->url($file->path);
+    }
+
+    protected function updateLoanCustomerFileReference(int $customerId, string $column, int $fileId): void
+    {
+        if ($customerId <= 0 || $fileId <= 0 || ! $this->loanTableExists('loan_customers') || ! $this->loanTableHasCol('loan_customers', $column)) {
+            return;
+        }
+
+        DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update($this->loanSafeColumns('loan_customers', [
+            $column => $fileId,
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function storeLoanDocumentFromDataUri(string $dataUri, int $loanId, string $namePrefix): ?int
+    {
+        $dataUri = trim($dataUri);
+        if ($dataUri === '' || $loanId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
+            $mimeType = $match[1];
+            $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
+        } else {
+            $mimeType = 'application/octet-stream';
+        }
+
+        $binary = base64_decode($dataUri, true);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = str_contains($mimeType, 'pdf') ? 'pdf'
+            : (str_contains($mimeType, 'png') ? 'png'
+            : (str_contains($mimeType, 'jpeg') || str_contains($mimeType, 'jpg') ? 'jpg' : 'bin'));
+        $path = 'loan-documents/'.$loanId.'/'.$namePrefix.'-'.Str::uuid().'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+        $fullPath = Storage::disk('public')->path($path);
+
+        return (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->loanSafeColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\Loan::class,
+            'fileable_id' => $loanId,
+            'category' => 'document',
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $namePrefix.'.'.$extension,
+            'mime_type' => $mimeType,
+            'size_bytes' => is_readable($fullPath) ? (filesize($fullPath) ?: null) : null,
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function storeLoanTextDocument(string $text, int $loanId, string $originalName): ?int
+    {
+        if (trim($text) === '' || $loanId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        $path = 'loan-documents/'.$loanId.'/'.Str::uuid().'-'.$originalName;
+        Storage::disk('public')->put($path, $text);
+        $fullPath = Storage::disk('public')->path($path);
+
+        return (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->loanSafeColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\Loan::class,
+            'fileable_id' => $loanId,
+            'category' => 'document',
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $originalName,
+            'mime_type' => 'text/plain',
+            'size_bytes' => is_readable($fullPath) ? (filesize($fullPath) ?: null) : null,
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
     }
 
     protected function refreshLoanItemSnapshot(int $loan): void
@@ -1903,8 +2158,10 @@ class LoanInstallmentListController extends Controller
 
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
             'product_name_snapshot' => $items->map(fn ($item) => trim((string) ($item->product_name_snapshot ?? $item->product_name ?? '')))->filter()->implode(', ') ?: null,
+            'sku_snapshot' => $items->map(fn ($item) => trim((string) ($item->sku_snapshot ?? $item->sku ?? '')))->filter()->implode(', ') ?: null,
             'imei_snapshot' => $items->map(fn ($item) => trim((string) ($item->imei_snapshot ?? $item->imei ?? '')))->filter()->implode(', ') ?: null,
-            'source_product_id' => $firstItem->loan_product_id ?? null,
+            'serial_number_snapshot' => $items->map(fn ($item) => trim((string) ($item->serial_number_snapshot ?? $item->serial_number ?? '')))->filter()->implode(', ') ?: null,
+            'source_product_id' => $firstItem ? ($firstItem->loan_product_id ?? null) : null,
             'updated_at' => now(),
         ]));
     }
@@ -3276,18 +3533,29 @@ class LoanInstallmentListController extends Controller
 
     protected function loadLoanShowSectionData(int $loan, object $loanRow, $sourceDue = null): array
     {
-        $items = $this->loanTableExists('loan_items')
-            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->get()
-            : collect();
+        $items = collect();
+        if ($this->loanTableExists('loan_items')) {
+            $itemsQuery = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($itemsQuery, 'loan_items');
+            $items = $itemsQuery->orderBy('id')->get();
+        }
 
         $productItems = collect();
         if ($this->loanTableExists('loan_product_items')) {
             $productItemsQuery = DB::connection('mysql_loan')->table('loan_product_items');
+            $this->excludeDeletedLoanRows($productItemsQuery, 'loan_product_items');
+            $activeItemIds = $items->pluck('id')->filter()->values();
+
             if ($this->loanTableHasCol('loan_product_items', 'loan_id')) {
-                $productItems = $productItemsQuery->where('loan_id', $loan)->get();
+                $productItemsQuery->where('loan_id', $loan);
+                if ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $activeItemIds->isNotEmpty()) {
+                    $productItemsQuery->whereIn('loan_item_id', $activeItemIds);
+                } elseif ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $items->isEmpty()) {
+                    $productItemsQuery->whereRaw('1 = 0');
+                }
+                $productItems = $productItemsQuery->get();
             } elseif ($this->loanTableHasCol('loan_product_items', 'loan_item_id') && $items->count() > 0) {
-                $itemIds = $items->pluck('id')->filter()->values();
-                $productItems = $itemIds->isEmpty() ? collect() : $productItemsQuery->whereIn('loan_item_id', $itemIds)->get();
+                $productItems = $activeItemIds->isEmpty() ? collect() : $productItemsQuery->whereIn('loan_item_id', $activeItemIds)->get();
             }
         }
 
@@ -3324,9 +3592,12 @@ class LoanInstallmentListController extends Controller
 
     protected function loadLoanEditSectionData(int $loan): array
     {
-        $loanItems = $this->loanTableExists('loan_items')
-            ? DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->orderBy('id')->get()
-            : collect();
+        $loanItems = collect();
+        if ($this->loanTableExists('loan_items')) {
+            $loanItemsQuery = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($loanItemsQuery, 'loan_items');
+            $loanItems = $loanItemsQuery->orderBy('id')->get();
+        }
 
         $schedules = collect();
         if ($this->loanTableExists('loan_payment_schedules')) {
@@ -4027,6 +4298,50 @@ class LoanInstallmentListController extends Controller
         $depositAmounts = $this->loanDepositPaymentCopyAmounts($loan, $loanRow);
         $customerDepositPaymentsAmount = round($depositAmounts['cash'] + $depositAmounts['bank'], 2);
 
+        $depositPayments = collect();
+        if ($this->loanTableExists('loan_payments') && $this->loanTableHasCol('loan_payments', 'payment_type')) {
+            $depQuery = DB::connection('mysql_loan')->table('loan_payments')
+                ->where('loan_id', $loan)
+                ->whereIn('payment_type', ['loan', 'initial', 'down_payment', 'downpayment', 'deposit'])
+                ->orderByDesc('id');
+            $this->excludeDeletedLoanRows($depQuery, 'loan_payments');
+            $depositPayments = $depQuery->get();
+        }
+
+        $loanItems = collect();
+        if ($this->loanTableExists('loan_items')) {
+            $loanItemsQuery = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($loanItemsQuery, 'loan_items');
+            $loanItems = $loanItemsQuery->orderBy('id')->get();
+        }
+
+        $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
+        $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
+
+        $collectors = Schema::hasTable('users')
+            ? DB::table('users')
+                ->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")
+                ->orderBy('first_name')
+                ->get()
+            : collect();
+
+        $defaultCollectorId = auth()->id();
+
+        $locations = $locationOptions->pluck('name', 'id');
+        $loanCustomerRow = null;
+        $loanCustomerId = (int) ($loanRow->customer_id ?? 0);
+        if ($loanCustomerId > 0 && $this->loanTableExists('loan_customers')) {
+            $loanCustomerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->first();
+        }
+
+        $customerProfilePhotoUrl = $this->loanFileUrlById((int) ($loanRow->customer_photo_file_id ?? 0))
+            ?: $this->loanFileUrlById((int) ($loanCustomerRow->customer_photo_file_id ?? 0))
+            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'customer_photo');
+        $idCardPhotoUrl = $this->loanFileUrlById((int) ($loanRow->id_front_file_id ?? 0))
+            ?: $this->loanFileUrlById((int) ($loanCustomerRow->id_front_file_id ?? 0))
+            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'id_front');
+        $loanDocumentFiles = $this->loanFilesByCategory($loan, 'document');
+
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
             'displayInterestRate',
@@ -4050,7 +4365,17 @@ class LoanInstallmentListController extends Controller
             'loanItemsUnitPriceTotal',
             'customerDepositPaymentsAmount',
             'schedulesCount',
-            'paymentsCount'
+            'paymentsCount',
+            'loanItems',
+            'paymentTypes',
+            'defaultPaymentMethod',
+            'collectors',
+            'defaultCollectorId',
+            'locations',
+            'depositPayments',
+            'customerProfilePhotoUrl',
+            'idCardPhotoUrl',
+            'loanDocumentFiles'
         ));
     }
 
@@ -4114,10 +4439,40 @@ class LoanInstallmentListController extends Controller
                 'customer_name_snapshot' => 'nullable|string|max:191',
                 'customer_phone_snapshot' => 'nullable|string|max:191',
                 'customer_address_snapshot' => 'nullable|string|max:1000',
+                'customer_khmer_name' => 'nullable|string|max:191',
+                'customer_english_name' => 'nullable|string|max:191',
+                'alternate_phone' => 'nullable|string|max:191',
+                'customer_group_name' => 'nullable|string|max:255',
+                'customer_profile_image' => 'nullable|string',
+                'id_card_image' => 'nullable|string',
+                'id_card_ocr_raw_text' => 'nullable|string',
+                'id_card_ocr_fields' => 'nullable|array',
+                'id_card_ocr_fields.id_card_number' => 'nullable|string|max:100',
+                'id_card_ocr_fields.khmer_name' => 'nullable|string|max:191',
+                'id_card_ocr_fields.english_name' => 'nullable|string|max:191',
+                'id_card_ocr_fields.address' => 'nullable|string|max:1000',
+                'documents' => 'nullable|array',
+                'documents.*' => 'nullable|string',
+                'document_text' => 'nullable|string|max:5000',
+                'document_links' => 'nullable|array',
+                'document_links.*' => 'nullable|url|max:1000',
+                'province_code' => 'nullable|string|max:20',
+                'province_name' => 'nullable|string|max:191',
+                'district_code' => 'nullable|string|max:20',
+                'district_name' => 'nullable|string|max:191',
+                'commune_code' => 'nullable|string|max:20',
+                'commune_name' => 'nullable|string|max:191',
+                'village_code' => 'nullable|string|max:20',
+                'village_name' => 'nullable|string|max:191',
+                'id_card_number' => 'nullable|string|max:100',
+                'occupation' => 'nullable|string|max:191',
+                'guarantor_name' => 'nullable|string|max:191',
+                'guarantor_phone' => 'nullable|string|max:191',
                 'main_contact_id' => 'nullable|integer|min:0',
                 'business_location_name_snapshot' => 'nullable|string|max:191',
                 'main_location_id' => 'nullable|integer|min:0',
                 'business_location_id' => 'nullable|integer|min:0',
+                'assigned_collector_id' => 'nullable|integer|min:0',
                 'source_type' => 'nullable|string|max:30',
                 'source_invoice_no' => 'nullable|string|max:191',
                 'source_created_at' => 'nullable|date',
@@ -4168,6 +4523,8 @@ class LoanInstallmentListController extends Controller
                 'last_payment_date' => 'nullable|date',
                 'last_payment_amount' => 'nullable|numeric|min:0',
                 'recovery_score' => 'nullable|integer|min:0|max:65535',
+                'delete_items' => 'nullable|array',
+                'delete_items.*' => 'integer|min:1',
             ]);
 
             if (! empty($data['business_location_id']) && $this->loanTableExists('loan_business_locations')) {
@@ -4207,6 +4564,90 @@ class LoanInstallmentListController extends Controller
             abort_if(! $this->loanTableExists('loans'), 404);
             $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
             abort_if(! $loanRow, 404);
+            $loanCustomerId = (int) ($loanRow->customer_id ?? $data['customer_id'] ?? 0);
+
+            if (! empty($data['id_card_ocr_fields']['id_card_number']) && empty($data['id_card_number'])) {
+                $data['id_card_number'] = $data['id_card_ocr_fields']['id_card_number'];
+            }
+            if (! empty($data['id_card_ocr_fields']['khmer_name']) && empty($data['customer_khmer_name'])) {
+                $data['customer_khmer_name'] = $data['id_card_ocr_fields']['khmer_name'];
+            }
+            if (! empty($data['id_card_ocr_fields']['english_name']) && empty($data['customer_english_name'])) {
+                $data['customer_english_name'] = $data['id_card_ocr_fields']['english_name'];
+            }
+            if (! empty($data['id_card_ocr_fields']['address']) && empty($data['customer_address_snapshot'])) {
+                $data['customer_address_snapshot'] = $data['id_card_ocr_fields']['address'];
+            }
+
+            foreach ([
+                'province_name' => 'customer_province_snapshot',
+                'province_code' => 'customer_province_code_snapshot',
+                'district_name' => 'customer_district_snapshot',
+                'district_code' => 'customer_district_code_snapshot',
+                'commune_name' => 'customer_commune_snapshot',
+                'commune_code' => 'customer_commune_code_snapshot',
+                'village_name' => 'customer_village_snapshot',
+                'village_code' => 'customer_village_code_snapshot',
+                'customer_group_name' => 'customer_group_name_snapshot',
+            ] as $inputKey => $column) {
+                if (array_key_exists($inputKey, $data)) {
+                    $data[$column] = $data[$inputKey];
+                }
+            }
+
+            $profileFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['customer_profile_image'] ?? ''), $loan, 'customer_photo', 'customer-profile');
+            if ($profileFileId !== null) {
+                $data['customer_photo_file_id'] = $profileFileId;
+                $this->updateLoanCustomerFileReference($loanCustomerId, 'customer_photo_file_id', $profileFileId);
+            }
+            $idCardFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['id_card_image'] ?? ''), $loan, 'id_front', 'id-card-front');
+            if ($idCardFileId !== null) {
+                $data['id_front_file_id'] = $idCardFileId;
+                $this->updateLoanCustomerFileReference($loanCustomerId, 'id_front_file_id', $idCardFileId);
+            }
+            foreach ((array) ($data['documents'] ?? []) as $index => $document) {
+                $this->storeLoanDocumentFromDataUri((string) $document, $loan, 'loan-document-'.$loan.'-'.($index + 1));
+            }
+            $documentText = trim((string) ($data['document_text'] ?? ''));
+            if ($documentText !== '') {
+                $this->storeLoanTextDocument($documentText, $loan, 'loan-document-note-'.$loan.'.txt');
+            }
+            foreach ((array) ($data['document_links'] ?? []) as $index => $link) {
+                $link = trim((string) $link);
+                if ($link !== '') {
+                    $this->storeLoanTextDocument($link, $loan, 'loan-document-link-'.$loan.'-'.($index + 1).'.txt');
+                }
+            }
+
+            unset(
+                $data['id_card_ocr_fields'],
+                $data['customer_profile_image'],
+                $data['id_card_image'],
+                $data['documents'],
+                $data['document_text'],
+                $data['document_links'],
+                $data['customer_group_name'],
+                $data['province_name'],
+                $data['district_name'],
+                $data['commune_name'],
+                $data['village_name']
+            );
+
+            if (! empty($data['assigned_collector_id'])) {
+                $data['collector_id'] = (int) $data['assigned_collector_id'];
+                if (Schema::hasTable('users')) {
+                    $collector = DB::table('users')
+                        ->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")
+                        ->where('id', (int) $data['assigned_collector_id'])
+                        ->first();
+                    if ($collector && trim((string) $collector->name) !== '') {
+                        $data['collector_name_snapshot'] = trim((string) $collector->name);
+                    }
+                }
+            } elseif (array_key_exists('assigned_collector_id', $data)) {
+                $data['collector_id'] = null;
+                $data['collector_name_snapshot'] = null;
+            }
 
             foreach ([
                 'customer_id' => $loanRow->customer_id ?? 0,
@@ -4271,6 +4712,79 @@ class LoanInstallmentListController extends Controller
 
             $this->syncLoanSchedulesFromEdit($loan, $data, $loanRow);
 
+            $deleteItems = array_values(array_filter(array_map('intval', (array) $request->input('delete_items', []))));
+            if (! empty($deleteItems) && $this->loanTableExists('loan_items')) {
+                $deleteQuery = DB::connection('mysql_loan')
+                    ->table('loan_items')
+                    ->where('loan_id', $loan)
+                    ->whereIn('id', $deleteItems);
+
+                if ($this->loanTableHasCol('loan_items', 'deleted_at')) {
+                    $deleteQuery->update($this->loanSafeColumns('loan_items', [
+                        'deleted_at' => now(),
+                        'updated_at' => now(),
+                    ]));
+                } else {
+                    $deleteQuery->delete();
+                }
+
+                $this->refreshLoanItemSnapshot($loan);
+            }
+
+            $editItems = $request->input('edit_items', []);
+            if (!empty($editItems) && is_array($editItems) && $this->loanTableExists('loan_items')) {
+                foreach ($editItems as $key => $itemData) {
+                    if (!is_array($itemData)) continue;
+                    $productName = trim((string) ($itemData['product_name_snapshot'] ?? $itemData['product_name'] ?? ''));
+                    $sku = trim((string) ($itemData['sku_snapshot'] ?? $itemData['sku'] ?? ''));
+                    $imei = trim((string) ($itemData['imei_snapshot'] ?? $itemData['imei'] ?? ''));
+                    $serial = trim((string) ($itemData['serial_number_snapshot'] ?? $itemData['serial_number'] ?? ''));
+                    $lot = trim((string) ($itemData['lot_number_snapshot'] ?? $itemData['lot_number'] ?? ''));
+                    $brand = trim((string) ($itemData['brand'] ?? ''));
+                    $category = trim((string) ($itemData['category'] ?? ''));
+                    $color = trim((string) ($itemData['color'] ?? ''));
+                    $storage = trim((string) ($itemData['storage'] ?? ''));
+                    $qty = max(0, (float) ($itemData['qty'] ?? 1));
+                    $unitPrice = max(0, (float) ($itemData['unit_price'] ?? 0));
+                    $discount = max(0, (float) ($itemData['discount'] ?? 0));
+                    $lineTotal = array_key_exists('line_total', $itemData) && $itemData['line_total'] !== null
+                        ? round((float) $itemData['line_total'], 2) : max(0, round(($qty * $unitPrice) - $discount, 2));
+                    $photoPath = trim((string) ($itemData['product_photo_path'] ?? ''));
+                    $storedPhotoPath = $this->storeLoanItemPhotoFromDataUri((string) ($itemData['product_photo'] ?? ''), $loan, is_numeric($key) ? (int) $key : 0);
+                    if ($storedPhotoPath !== null) {
+                        $photoPath = $storedPhotoPath;
+                    }
+                    $itemPayload = $this->loanSafeColumns('loan_items', [
+                        'product_name_snapshot' => $productName, 'product_name' => $productName,
+                        'sku_snapshot' => $sku, 'sku' => $sku,
+                        'brand' => $brand, 'category' => $category,
+                        'imei_snapshot' => $imei, 'imei' => $imei,
+                        'serial_number_snapshot' => $serial, 'serial_number' => $serial,
+                        'lot_number_snapshot' => $lot, 'lot_number' => $lot,
+                        'color' => $color, 'color_snapshot' => $color,
+                        'storage' => $storage, 'storage_snapshot' => $storage,
+                        'product_photo_path' => $photoPath,
+                        'product_ocr_raw_text' => trim((string) ($itemData['product_ocr_raw_text'] ?? '')),
+                        'qty' => $qty, 'unit_price' => $unitPrice, 'discount' => $discount, 'line_total' => $lineTotal,
+                        'updated_at' => now(),
+                    ]);
+                    $isNew = !is_numeric($key) || str_starts_with((string) $key, 'new_');
+                    if ($isNew) {
+                        $itemPayload['loan_id'] = $loan;
+                        $itemPayload['created_at'] = now();
+                        DB::connection('mysql_loan')->table('loan_items')->insert($itemPayload);
+                    } else {
+                        DB::connection('mysql_loan')->table('loan_items')
+                            ->where('id', (int) $key)->where('loan_id', $loan)->update($itemPayload);
+                    }
+                }
+                if (!empty($editItems)) $this->refreshLoanItemSnapshot($loan);
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'Loan updated successfully.']);
+            }
+
             $redirectParams = ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []);
             if ($request->filled('customer_id')) {
                 $redirectParams['customer_id'] = $request->input('customer_id');
@@ -4281,8 +4795,14 @@ class LoanInstallmentListController extends Controller
                 'msg' => 'Loan updated successfully.',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+            }
             throw $e;
         } catch (\Throwable $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            }
             return back()
                 ->withInput()
                 ->withErrors([

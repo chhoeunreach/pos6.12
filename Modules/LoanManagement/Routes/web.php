@@ -74,6 +74,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/loans/ajax/search-loan-customers', [LoanCreateController::class, 'searchCustomers'])->name('loan-management.loans.ajax.search-customers')->middleware($createLoanPermission);
         Route::post('/loans/ajax/scan-id-card', [LoanCreateController::class, 'scanIdCard'])->name('loan-management.loans.ajax.scan-id-card')->middleware($createLoanPermission);
         Route::post('/loans/ajax/scan-product-photo', [LoanCreateController::class, 'scanProductPhoto'])->name('loan-management.loans.ajax.scan-product-photo')->middleware($createLoanPermission);
+        Route::get('/loans/ajax/product-by-serial', [LoanCreateController::class, 'lookupProductBySerial'])->name('loan-management.loans.ajax.product-by-serial')->middleware($createLoanPermission);
         Route::get('/cambodia-address/sync', [CambodiaAddressController::class, 'sync'])->name('loan-management.cambodia-address.sync')->middleware($createLoanPermission);
         Route::get('/cambodia-address/provinces', [CambodiaAddressController::class, 'provinces'])->name('loan-management.cambodia-address.provinces')->middleware($createLoanPermission);
         Route::get('/cambodia-address/districts', [CambodiaAddressController::class, 'districts'])->name('loan-management.cambodia-address.districts')->middleware($createLoanPermission);
@@ -94,6 +95,12 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/loans/{loan}/view', [LoanInstallmentListController::class, 'show'])->name('loan-management.loans.view')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/sections/show', [LoanInstallmentListController::class, 'showSections'])->name('loan-management.loans.sections.show')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/edit', [LoanInstallmentListController::class, 'edit'])->name('loan-management.loans.edit')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/ajax/scan-id-card', [LoanCreateController::class, 'scanIdCard'])->name('loan-management.loans.edit.scan-id-card')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/ajax/scan-product-photo', [LoanCreateController::class, 'scanProductPhoto'])->name('loan-management.loans.edit.scan-product-photo')->middleware('can:loan_management.edit');
+        Route::get('/loans/{loan}/cambodia-address/provinces', [CambodiaAddressController::class, 'provinces'])->name('loan-management.loans.edit.cambodia-address.provinces')->middleware('can:loan_management.edit');
+        Route::get('/loans/{loan}/cambodia-address/districts', [CambodiaAddressController::class, 'districts'])->name('loan-management.loans.edit.cambodia-address.districts')->middleware('can:loan_management.edit');
+        Route::get('/loans/{loan}/cambodia-address/communes', [CambodiaAddressController::class, 'communes'])->name('loan-management.loans.edit.cambodia-address.communes')->middleware('can:loan_management.edit');
+        Route::get('/loans/{loan}/cambodia-address/villages', [CambodiaAddressController::class, 'villages'])->name('loan-management.loans.edit.cambodia-address.villages')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/sections/edit', [LoanInstallmentListController::class, 'editSections'])->name('loan-management.loans.sections.edit')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/workflow/edit', [LoanInstallmentListController::class, 'editWorkflow'])->name('loan-management.loans.workflow.edit')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/workflow', [LoanInstallmentListController::class, 'updateWorkflow'])->name('loan-management.loans.workflow.update')->middleware('can:loan_management.edit');

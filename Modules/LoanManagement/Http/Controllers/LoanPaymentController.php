@@ -180,6 +180,14 @@ class LoanPaymentController extends Controller
 
         $this->refreshLoanTotals((int) $row->loan_id);
 
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment updated successfully.',
+                'data' => ['redirect_url' => $this->safeReturnTo($request, route('loan-management.payments.index'))]
+            ]);
+        }
+
         return redirect()
             ->to($this->safeReturnTo($request, route('loan-management.payments.index')))
             ->with('status', ['success' => 1, 'msg' => 'Payment updated successfully.']);
@@ -204,6 +212,14 @@ class LoanPaymentController extends Controller
         });
 
         $this->refreshLoanTotals((int) $row->loan_id);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment deleted successfully.',
+                'data' => ['redirect_url' => $this->safeReturnTo($request, route('loan-management.payments.index'))]
+            ]);
+        }
 
         return redirect()
             ->to($this->safeReturnTo($request, route('loan-management.payments.index')))

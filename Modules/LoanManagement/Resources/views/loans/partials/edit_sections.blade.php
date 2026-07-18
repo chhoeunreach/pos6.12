@@ -8,24 +8,10 @@
     ] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []));
 @endphp
 
-<div class="box box-default lm-collapsible" data-collapse-key="loan-items" id="lm-section-loan-items">
+<div class="box box-default lm-collapsible is-collapsed" data-collapse-key="loan-items" id="lm-section-loan-items">
     <div class="box-header with-border">
-        <h3 class="box-title">Loan Items</h3>
+        <h3 class="box-title">Loan Items (Read-only Reference)</h3>
         <div class="box-tools pull-right">
-            <button type="button"
-                    class="btn btn-xs btn-success lm-btn-modal"
-                    data-href="{{ route('loan-management.loans.items.create', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                    data-container=".view_modal">
-                <i class="fa fa-plus"></i> Add Item
-            </button>
-            <button type="button"
-                    class="btn btn-xs btn-default"
-                    data-toggle="collapse"
-                    data-target="#loanProductReference{{ $loanRow->id }}"
-                    aria-expanded="false"
-                    aria-controls="loanProductReference{{ $loanRow->id }}">
-                <i class="fa fa-eye"></i> View Reference
-            </button>
             <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                 <i class="fa fa-minus"></i>
             </button>
@@ -41,138 +27,9 @@
                 <div class="lm-edit-snapshot__item"><small>Invoice</small><strong>{{ $loanRow->invoice_number_snapshot ?? $loanRow->source_invoice_no ?? '-' }}</strong></div>
             </div>
         </div>
-        <div class="lm-edit-sections-table">
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Product</th>
-                        <th>SKU</th>
-                        <th>IMEI</th>
-                        <th>Qty</th>
-                        <th>Unit Price</th>
-                        <th>Line Total</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($loanItems as $item)
-                        <tr>
-                            <td>{{ $item->id }}</td>
-                            <td>{{ $item->product_name_snapshot ?? '-' }}</td>
-                            <td>{{ $item->sku_snapshot ?? '-' }}</td>
-                            <td>{{ $item->imei_snapshot ?? '-' }}</td>
-                            <td>{{ $item->qty ?? 0 }}</td>
-                            <td>{{ number_format((float) ($item->unit_price ?? 0), 2) }}</td>
-                            <td>{{ number_format((float) ($item->line_total ?? 0), 2) }}</td>
-                            <td>
-                                <button type="button"
-                                        class="btn btn-xs btn-primary lm-btn-modal"
-                                        data-href="{{ route('loan-management.loans.items.edit', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                                        data-container=".view_modal">
-                                    <i class="fa fa-pencil"></i> Edit
-                                </button>
-                                <button type="button"
-                                        class="btn btn-xs btn-danger js-loan-item-delete"
-                                        data-url="{{ route('loan-management.loans.items.destroy', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                                        data-return-to="{{ route('loan-management.loans.edit', $editLoanReturnParams) }}">
-                                    <i class="fa fa-trash"></i> Delete
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="8" class="text-center">No loan items found.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <div class="lm-edit-sections-mobile">
-            <div style="margin-bottom:10px;">
-                <button type="button"
-                        class="btn btn-sm btn-success btn-block lm-btn-modal"
-                        data-href="{{ route('loan-management.loans.items.create', ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                        data-container=".view_modal">
-                    <i class="fa fa-plus"></i> Add Loan Item
-                </button>
-            </div>
-            @forelse($loanItems as $item)
-                <div class="lm-edit-section-card">
-                    <div class="lm-edit-section-card-header">
-                        <span class="lm-edit-section-card-title">{{ $item->product_name_snapshot ?? 'Item #' . $item->id }}</span>
-                        <small style="color:#94a3b8;">ID: {{ $item->id }}</small>
-                    </div>
-                    <div class="lm-edit-section-card-body">
-                        <div class="lm-edit-section-card-item"><small>SKU</small><span>{{ $item->sku_snapshot ?? '-' }}</span></div>
-                        <div class="lm-edit-section-card-item"><small>IMEI</small><span>{{ $item->imei_snapshot ?? '-' }}</span></div>
-                        <div class="lm-edit-section-card-item"><small>Qty</small><span>{{ $item->qty ?? 0 }}</span></div>
-                        <div class="lm-edit-section-card-item"><small>Unit Price</small><span>{{ number_format((float) ($item->unit_price ?? 0), 2) }}</span></div>
-                        <div class="lm-edit-section-card-item"><small>Line Total</small><span style="font-weight:700;color:#0f172a;">{{ number_format((float) ($item->line_total ?? 0), 2) }}</span></div>
-                    </div>
-                    <div class="lm-edit-section-card-actions">
-                        <button type="button"
-                                class="btn btn-xs btn-primary lm-btn-modal"
-                                data-href="{{ route('loan-management.loans.items.edit', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                                data-container=".view_modal">
-                            <i class="fa fa-pencil"></i> Edit
-                        </button>
-                        <button type="button"
-                                class="btn btn-xs btn-danger js-loan-item-delete"
-                                data-url="{{ route('loan-management.loans.items.destroy', ['loan' => $loanRow->id, 'item' => $item->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
-                                data-return-to="{{ route('loan-management.loans.edit', $editLoanReturnParams) }}">
-                            <i class="fa fa-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-            @empty
-                <div class="lm-edit-section-card">
-                    <div style="text-align:center;color:#94a3b8;padding:12px 0;">No loan items found.</div>
-                </div>
-            @endforelse
-        </div>
+        <p class="text-muted" style="margin:0;">Items are now editable directly in the form above. This section shows the snapshot reference.</p>
     </div>
 </div>
-
-@once
-    <script>
-    $(document).off('click.loanItemDelete').on('click.loanItemDelete', '.js-loan-item-delete', function (event) {
-        event.preventDefault();
-
-        var $button = $(this);
-        var url = $button.data('url');
-        var returnTo = $button.data('return-to') || window.location.href;
-
-        if (!url || !confirm('Delete this loan item?')) {
-            return;
-        }
-
-        $button.prop('disabled', true);
-
-        $.ajax({
-            url: url,
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                _token: '{{ csrf_token() }}',
-                return_to: returnTo
-            },
-            success: function (res) {
-                if (window.toastr) {
-                    toastr.success(res.message || 'Loan item deleted successfully');
-                }
-
-                window.location.href = (res.data && res.data.redirect_url) ? res.data.redirect_url : returnTo;
-            },
-            error: function (xhr) {
-                alert((xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to delete loan item');
-            },
-            complete: function () {
-                $button.prop('disabled', false);
-            }
-        });
-    });
-    </script>
-@endonce
 
 <div class="box box-default lm-collapsible" data-collapse-key="payment-schedules">
     <div class="box-header with-border">

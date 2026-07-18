@@ -12,21 +12,24 @@
     <div class="box-header"><h3 class="box-title">Loan Items Snapshot</h3></div>
     <div class="box-body table-responsive">
         <table class="table table-bordered">
-            <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>IMEI</th><th>Serial</th><th>Lot</th></tr></thead>
+            <thead><tr><th>Product</th><th>SKU</th><th>Brand</th><th>Color</th><th>Storage</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>IMEI</th><th>Serial</th><th>Lot</th></tr></thead>
             <tbody>
             @forelse($items as $i)
                 <tr>
                     <td>{{ $i->product_name_snapshot ?? '-' }}</td>
                     <td>{{ $i->sku_snapshot ?? '-' }}</td>
+                    <td>{{ $i->brand ?? '-' }}</td>
+                    <td>{{ $i->color_snapshot ?? $i->color ?? '-' }}</td>
+                    <td>{{ $i->storage_snapshot ?? $i->storage ?? '-' }}</td>
                     <td>{{ $i->qty ?? 0 }}</td>
                     <td>{{ number_format((float)($i->unit_price ?? 0),2) }}</td>
-                    <td>{{ number_format((float)($i->total_price ?? 0),2) }}</td>
+                    <td>{{ number_format((float)($i->line_total ?? $i->total_price ?? (($i->qty ?? 0) * ($i->unit_price ?? 0))),2) }}</td>
                     <td>{{ $i->imei_snapshot ?? '-' }}</td>
                     <td>{{ $i->serial_number_snapshot ?? '-' }}</td>
                     <td>{{ $i->lot_number_snapshot ?? '-' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="text-center">No loan items</td></tr>
+                <tr><td colspan="11" class="text-center">No loan items</td></tr>
             @endforelse
             </tbody>
         </table>
