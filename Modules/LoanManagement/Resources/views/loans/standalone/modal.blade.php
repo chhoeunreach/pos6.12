@@ -621,13 +621,13 @@
                                     <div class="mob-customer-detail-fields" id="mobCustomerDetailFields">
                                         <div class="mob-grid-2">
                                             <div class="mob-field">
-                                                <label>Name in Khmer (Primary)</label>
-                                                <input type="text" name="customer_khmer_name" id="modalCustomerKhmerName" class="mob-input" placeholder="Khmer name">
+                                                <label>Name in Khmer <span class="mob-required">*</span></label>
+                                                <input type="text" name="customer_khmer_name" id="modalCustomerKhmerName" class="mob-input" required placeholder="Khmer name">
                                             </div>
                                             <div class="mob-field">
-                                                <label>Customer Name <span class="mob-required">*</span></label>
-                                                <input type="text" name="customer_name" id="modalCustomerName" class="mob-input" required placeholder="Khmer or English name">
-                                                <input type="hidden" name="customer_english_name" id="modalCustomerEnglishName">
+                                                <label>Name in English <span class="mob-required">*</span></label>
+                                                <input type="text" name="customer_english_name" id="modalCustomerEnglishName" class="mob-input" required placeholder="English name">
+                                                <input type="hidden" name="customer_name" id="modalCustomerName">
                                             </div>
                                         </div>
                                         <div class="mob-grid-2">
@@ -1009,7 +1009,7 @@ function mobPopulateReview() {
     document.getElementById('mobRevDate').textContent = getVal('input[name="loan_date"]') || '-';
     document.getElementById('mobRevLocation').textContent = getText('select[name="business_location_id"]') || '-';
     document.getElementById('mobRevCollector').textContent = getText('select[name="assigned_collector_id"]') || '-';
-    document.getElementById('mobRevCustName').textContent = getVal('#modalCustomerName') || '-';
+    document.getElementById('mobRevCustName').textContent = getVal('#modalCustomerKhmerName') || getVal('#modalCustomerEnglishName') || '-';
     document.getElementById('mobRevCustPhone').textContent = getVal('#modalCustomerPhone') || '-';
 
     var principal = parseFloat(getVal('#modalPrincipalAmount')) || 0;
@@ -1424,9 +1424,9 @@ function mobApplyIdCardFields(fields, rawText) {
     document.getElementById('mobIdCardOcrAddress').value = fields.address || '';
     mobFillIfEmpty('modalCustomerIdCard', fields.id_card_number);
     mobFillIfEmpty('modalCustomerKhmerName', fields.khmer_name);
-    mobFillIfEmpty('modalCustomerName', fields.khmer_name || fields.english_name);
+    mobFillIfEmpty('modalCustomerEnglishName', fields.english_name);
     mobFillIfEmpty('modalCustomerAddress', fields.address);
-    document.getElementById('modalCustomerEnglishName').value = fields.english_name || document.getElementById('modalCustomerName').value || '';
+    document.getElementById('modalCustomerName').value = document.getElementById('modalCustomerKhmerName').value || document.getElementById('modalCustomerEnglishName').value || '';
 }
 
 function mobScanIdCard(dataUri) {
@@ -1965,6 +1965,7 @@ document.addEventListener('paste', function(e) {
 
 function mobPreviewSchedule() {
     var $form = jQuery('#standaloneLoanModalForm');
+    document.getElementById('modalCustomerName').value = document.getElementById('modalCustomerKhmerName').value || document.getElementById('modalCustomerEnglishName').value || '';
     var urls = { previewSchedule: "{{ route('loan-management.loans.preview-standalone-schedule') }}" };
     jQuery.post(urls.previewSchedule, $form.serialize(), function(res) {
         var rows = res.data || [];
@@ -1993,10 +1994,12 @@ function mobPreviewSchedule() {
 
 function mobSubmit(action) {
     document.querySelector('#standaloneLoanModalForm input[name="action_type"]').value = action;
-    if (!String(document.getElementById('modalCustomerEnglishName').value || '').trim()) {
-        document.getElementById('modalCustomerEnglishName').value = document.getElementById('modalCustomerName').value || '';
-    }
+    document.getElementById('modalCustomerName').value = document.getElementById('modalCustomerKhmerName').value || document.getElementById('modalCustomerEnglishName').value || '';
     var form = document.getElementById('standaloneLoanModalForm');
+    if (form.checkValidity && ! form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
     var fd = new FormData(form);
     if (mobIdCardData) fd.append('id_card_image', mobIdCardData);
     if (mobCustomerProfileData) fd.append('customer_profile_image', mobCustomerProfileData);

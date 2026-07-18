@@ -328,6 +328,8 @@ class CreateStandaloneLoanService
     protected function updateCustomerAddressFields(int $customerId, array $data): void
     {
         $payload = $this->filterColumns('loan_customers', [
+            'name' => $this->resolveCustomerName($data),
+            'khmer_name' => trim((string) ($data['customer_khmer_name'] ?? '')),
             'address' => $this->resolveCustomerAddress($data),
             'alternate_phone' => trim((string) ($data['alternate_phone'] ?? '')) ?: null,
             'province' => trim((string) ($data['province_name'] ?? '')),

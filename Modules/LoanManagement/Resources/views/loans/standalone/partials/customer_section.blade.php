@@ -51,15 +51,15 @@
         </div>
         <div class="col-sm-6 col-md-3">
             <div class="form-group">
-                <label>Name in Khmer (Primary)</label>
-                <input type="text" name="customer_khmer_name" id="customer_khmer_name_input" class="form-control" placeholder="Khmer name">
+                <label>Name in Khmer <span class="text-danger">*</span></label>
+                <input type="text" name="customer_khmer_name" id="customer_khmer_name_input" class="form-control" required placeholder="Khmer name">
             </div>
         </div>
         <div class="col-sm-6 col-md-3">
             <div class="form-group">
-                <label>Customer Name <span class="text-danger">*</span></label>
-                <input type="text" name="customer_name" id="customer_name_input" class="form-control" required placeholder="Khmer or English name">
-                <input type="hidden" name="customer_english_name" id="customer_english_name_input">
+                <label>Name in English <span class="text-danger">*</span></label>
+                <input type="text" name="customer_english_name" id="customer_english_name_input" class="form-control" required placeholder="English name">
+                <input type="hidden" name="customer_name" id="customer_name_input">
             </div>
         </div>
         <div class="col-sm-6 col-md-3">

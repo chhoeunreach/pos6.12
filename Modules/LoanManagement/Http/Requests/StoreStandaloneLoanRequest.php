@@ -19,8 +19,8 @@ class StoreStandaloneLoanRequest extends FormRequest
         return [
             'customer_id' => 'nullable|integer',
             'customer_name' => 'required|string|max:191',
-            'customer_english_name' => 'nullable|string|max:191',
-            'customer_khmer_name' => 'nullable|string|max:191',
+            'customer_english_name' => 'required|string|max:191',
+            'customer_khmer_name' => 'required|string|max:191',
             'customer_phone' => 'nullable|string|max:191',
             'alternate_phone' => 'nullable|string|max:191',
             'customer_address' => 'nullable|string|max:1000',
