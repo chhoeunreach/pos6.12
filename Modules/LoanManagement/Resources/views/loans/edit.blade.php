@@ -563,21 +563,18 @@
                             <div class="wiz-customer-ocr-status" id="wizIdCardOcrStatus"></div>
                         </div>
                     </div>
+                    <input type="hidden" name="customer_name_snapshot" value="{{ old('customer_khmer_name', trim((string) ($loanRow->customer_khmer_name ?? ''))) ?: old('customer_name_snapshot', $editCustomerName) }}">
                     <div class="lm-wiz-grid-2">
-                        <div class="lm-wiz-field">
-                            <label>Customer Name <span class="lm-wiz-required">*</span></label>
-                            <input type="text" name="customer_name_snapshot" class="lm-wiz-input" value="{{ old('customer_name_snapshot', $editCustomerName) }}" required placeholder="Name">
-                        </div>
                         <div class="lm-wiz-field">
                             <label>Khmer Name <span class="lm-wiz-required">*</span></label>
                             <input type="text" name="customer_khmer_name" class="lm-wiz-input" value="{{ old('customer_khmer_name', $loanRow->customer_khmer_name ?? '') }}" required placeholder="Khmer name">
                         </div>
-                    </div>
-                    <div class="lm-wiz-grid-2">
                         <div class="lm-wiz-field">
                             <label>English Name <span class="lm-wiz-required">*</span></label>
                             <input type="text" name="customer_english_name" class="lm-wiz-input" value="{{ old('customer_english_name', $loanRow->customer_english_name ?? '') }}" required placeholder="English name">
                         </div>
+                    </div>
+                    <div class="lm-wiz-grid-2">
                         <div class="lm-wiz-field">
                             <label>Phone <span class="lm-wiz-required">*</span></label>
                             <input type="text" name="customer_phone_snapshot" class="lm-wiz-input" value="{{ old('customer_phone_snapshot', $editCustomerPhone) }}" required placeholder="Phone">
@@ -1329,7 +1326,14 @@
         wizPhotoChoice = null;
     }
 
+    function wizSyncCustomerNameFromKhmer() {
+        var khmerName = String($('[name="customer_khmer_name"]').val() || '').trim();
+        var englishName = String($('[name="customer_english_name"]').val() || '').trim();
+        $('[name="customer_name_snapshot"]').val(khmerName || englishName);
+    }
+
     function wizSerializeLoanForm() {
+        wizSyncCustomerNameFromKhmer();
         var fields = $('#wizEditForm')
             .find(':input')
             .not('.wiz-deposit-edit-form :input')
@@ -1942,7 +1946,7 @@
             $('[name="customer_english_name"]').val(fields.english_name).trigger('input').trigger('change');
         }
         if (fields.khmer_name || fields.english_name) {
-            $('[name="customer_name_snapshot"]').val(fields.khmer_name || fields.english_name).trigger('input').trigger('change');
+            wizSyncCustomerNameFromKhmer();
         }
         wizFillCustomerIfEmpty('[name="customer_address_snapshot"]', fields.address);
     }
@@ -2147,6 +2151,7 @@
     }
 
     function wizPopulateReview() {
+        wizSyncCustomerNameFromKhmer();
         var getVal = function (sel) { var el = document.querySelector(sel); return el ? el.value : ''; };
         var getText = function (sel) {
             var el = document.querySelector(sel);
@@ -2219,13 +2224,22 @@
         }
 
         if (step === 1) {
-            var nameInput = $('[name="customer_name_snapshot"]');
-            if (!nameInput.val().trim()) {
-                nameInput.addClass('has-error');
+            wizSyncCustomerNameFromKhmer();
+            var khmerNameInput = $('[name="customer_khmer_name"]');
+            if (!khmerNameInput.val().trim()) {
+                khmerNameInput.addClass('has-error');
                 valid = false;
-                if (!firstInvalid) firstInvalid = nameInput;
+                if (!firstInvalid) firstInvalid = khmerNameInput;
             } else {
-                nameInput.removeClass('has-error');
+                khmerNameInput.removeClass('has-error');
+            }
+            var englishNameInput = $('[name="customer_english_name"]');
+            if (!englishNameInput.val().trim()) {
+                englishNameInput.addClass('has-error');
+                valid = false;
+                if (!firstInvalid) firstInvalid = englishNameInput;
+            } else {
+                englishNameInput.removeClass('has-error');
             }
             var phoneInput = $('[name="customer_phone_snapshot"]');
             if (!phoneInput.val().trim()) {
@@ -2618,6 +2632,7 @@
             wizGoStep(0);
             return;
         }
+        wizSyncCustomerNameFromKhmer();
         wizSyncDuration();
         var $btn = $(this);
         var form = $('#wizEditForm');
@@ -2662,6 +2677,9 @@
             }
         });
     });
+
+    $(document).on('input change', '[name="customer_khmer_name"], [name="customer_english_name"]', wizSyncCustomerNameFromKhmer);
+    wizSyncCustomerNameFromKhmer();
 
     $(document).on('keydown', function (e) {
         if (e.key === 'Enter') {
