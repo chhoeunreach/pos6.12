@@ -51,6 +51,9 @@
                         <a class="btn btn-sm {{ $type === 'payments' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.monthly-import-export') }}">
                             Monthly Payments
                         </a>
+                        <a class="btn btn-sm {{ $type === 'customer_deposit_payments' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.import.index', ['type' => 'customer_deposit_payments']) }}">
+                            Customer Deposit Payments
+                        </a>
                     </div>
                     @if($type !== 'loans')
                         <a class="btn btn-sm btn-info pull-right" href="{{ route('loan-management.import.template', ['type' => 'loans']) }}">

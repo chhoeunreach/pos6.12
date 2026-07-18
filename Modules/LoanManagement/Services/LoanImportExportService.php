@@ -32,6 +32,14 @@ class LoanImportExportService
                 'label' => 'Monthly Payments',
                 'description' => 'Import customer monthly installment collections with method-aware duplicate checks.',
             ],
+            'customer_deposit_payments' => [
+                'label' => 'Customer Deposit Payments',
+                'description' => 'Import customer deposit/down-payment loan payments with method-aware duplicate checks.',
+            ],
+            'loan_payments' => [
+                'label' => 'Loan Payments',
+                'description' => 'Import loan/down-payment records with payment_type = loan.',
+            ],
             'guarantors' => [
                 'label' => 'Guarantors',
                 'description' => 'Attach guarantor details to an existing loan or customer.',
@@ -63,6 +71,8 @@ class LoanImportExportService
             'customer_loan_history' => ['label' => 'Customer Loan History', 'description' => 'Loan history grouped by customer fields.'],
             'payments' => ['label' => 'Payment History', 'description' => 'All loan payment records.'],
             'payment_history' => ['label' => 'Payment History', 'description' => 'All loan payment records.'],
+            'customer_deposit_payments' => ['label' => 'Customer Deposit Payments', 'description' => 'Customer deposit/down-payment loan payment records.'],
+            'loan_payments' => ['label' => 'Loan Payments', 'description' => 'Loan/down-payment records stored with payment_type = loan.'],
             'repossessed_assets' => ['label' => 'Repossessed Assets', 'description' => 'Loans and product assets marked for repossession.'],
             'monthly_loan_summary' => ['label' => 'Monthly Loan Summary', 'description' => 'Loans grouped/exported for monthly summary analysis.'],
             'monthly_collections' => ['label' => 'Monthly Collections', 'description' => 'Payment collections for the selected date range.'],
@@ -78,6 +88,10 @@ class LoanImportExportService
         $type = $this->normalizeType($type);
         $templates = $this->templateDefinitions();
 
+        if ($type === 'loan_payments') {
+            return $templates['customer_deposit_payments'];
+        }
+
         return $templates[$type] ?? $templates['loans'];
     }
 
@@ -86,7 +100,7 @@ class LoanImportExportService
         $type = $this->normalizeType($type);
         $this->currentImportUserId = $userId;
         $this->ensurePaymentTypeColumn();
-        $this->ensureImportBatchStatusColumn();
+        $this->ensureImportBatchColumns();
         $duplicateMode = in_array($duplicateMode, ['skip', 'replace'], true) ? $duplicateMode : 'skip';
         $rows = $this->readImportFile($file, $type);
         $headers = array_shift($rows) ?: [];
@@ -96,6 +110,7 @@ class LoanImportExportService
             throw new \RuntimeException('Import file does not contain a header row.');
         }
 
+        $rows = $this->cleanImportDataRows($rows);
         $batchId = $this->createBatch($type, $file, $userId, count($rows), $headers);
         $valid = 0;
         $invalid = 0;
@@ -122,7 +137,7 @@ class LoanImportExportService
             if ($duplicateId && $duplicateMode === 'skip') {
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => 'skipped',
-                    'loan_id' => in_array($type, ['loans', 'schedules', 'payments'], true) ? ($type === 'loans' ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
+                    'loan_id' => in_array($type, array_merge(['loans', 'schedules'], $this->paymentImportTypes()), true) ? ($type === 'loans' ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
                     'error_message' => 'Skipped duplicate existing record.',
                     'updated_at' => now(),
                 ]));
@@ -132,7 +147,7 @@ class LoanImportExportService
 
             try {
                 $id = DB::connection($this->connection)->transaction(function () use ($type, $normalized, $duplicateMode, $duplicateId) {
-                    return $type === 'payments'
+                    return $this->isPaymentImportType($type)
                         ? $this->storePayment($normalized, $duplicateMode, $duplicateId)
                         : ($type === 'loans' ? $this->storeLoan($normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId));
                 });
@@ -176,7 +191,7 @@ class LoanImportExportService
     {
         $type = $this->normalizeType($type);
         $this->ensurePaymentTypeColumn();
-        $this->ensureImportBatchStatusColumn();
+        $this->ensureImportBatchColumns();
         $rows = $this->readImportFile($file, $type);
         $headers = array_shift($rows) ?: [];
         $headers = array_map(fn ($header) => $this->normalizeHeader($header), $headers);
@@ -185,6 +200,7 @@ class LoanImportExportService
             throw new \RuntimeException('Import file does not contain a header row.');
         }
 
+        $rows = $this->cleanImportDataRows($rows);
         $batchId = $this->createBatch($type, $file, $userId, count($rows), $headers);
 
         return $this->batchProgress($batchId);
@@ -194,7 +210,7 @@ class LoanImportExportService
     {
         $duplicateMode = in_array($duplicateMode, ['skip', 'replace'], true) ? $duplicateMode : 'skip';
         $limit = max(1, min(200, $limit));
-        $this->ensureImportBatchStatusColumn();
+        $this->ensureImportBatchColumns();
 
         $batch = $this->importBatch($batchId);
         if (! $batch) {
@@ -213,6 +229,7 @@ class LoanImportExportService
 
         $rows = $this->readStoredImportFile((string) $batch->file_path, (string) $batch->file_type);
         array_shift($rows);
+        $rows = $this->cleanImportDataRows($rows);
 
         $lastRowNo = (int) DB::connection($this->connection)
             ->table('loan_import_rows')
@@ -255,7 +272,7 @@ class LoanImportExportService
             if ($duplicateId && $duplicateMode === 'skip') {
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => 'skipped',
-                    'loan_id' => in_array($type, ['loans', 'schedules', 'payments'], true) ? ($type === 'loans' ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
+                    'loan_id' => in_array($type, array_merge(['loans', 'schedules'], $this->paymentImportTypes()), true) ? ($type === 'loans' ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
                     'error_message' => 'Skipped duplicate existing record.',
                     'updated_at' => now(),
                 ]));
@@ -265,7 +282,7 @@ class LoanImportExportService
 
             try {
                 $id = DB::connection($this->connection)->transaction(function () use ($type, $normalized, $duplicateMode, $duplicateId) {
-                    return $type === 'payments'
+                    return $this->isPaymentImportType($type)
                         ? $this->storePayment($normalized, $duplicateMode, $duplicateId)
                         : ($type === 'loans' ? $this->storeLoan($normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId));
                 });
@@ -535,7 +552,7 @@ class LoanImportExportService
 
         $query = DB::connection($this->connection)->table('loan_import_batches');
         if ($type !== null) {
-            $query->where('file_type', $this->normalizeType($type));
+            $query->where('file_type', $this->importBatchStorageType($this->normalizeType($type)));
         }
 
         return $query->orderByDesc('id')->limit($limit)->get();
@@ -603,6 +620,13 @@ class LoanImportExportService
             'payment_import' => 'payments',
             'payment_import_template' => 'payments',
             'payment_history' => 'payments',
+            'loan_payment' => 'customer_deposit_payments',
+            'loan_payments' => 'loan_payments',
+            'deposit_payment' => 'customer_deposit_payments',
+            'deposit_payments' => 'customer_deposit_payments',
+            'customer_deposit' => 'customer_deposit_payments',
+            'customer_deposit_payment' => 'customer_deposit_payments',
+            'customer_deposit_payments' => 'customer_deposit_payments',
             'customer' => 'customers',
             'customer_import' => 'customers',
             'customer_import_template' => 'customers',
@@ -631,6 +655,21 @@ class LoanImportExportService
         ];
 
         return $aliases[$type] ?? $type;
+    }
+
+    protected function paymentImportTypes(): array
+    {
+        return ['payments', 'customer_deposit_payments', 'loan_payments'];
+    }
+
+    protected function isPaymentImportType(string $type): bool
+    {
+        return in_array($type, $this->paymentImportTypes(), true);
+    }
+
+    protected function importBatchStorageType(string $type): string
+    {
+        return $type === 'customer_deposit_payments' ? 'loan_payments' : $type;
     }
 
     protected function readCsv(string $path): array
@@ -845,8 +884,8 @@ class LoanImportExportService
             $relMap[(string) $rel['Id']] = (string) $rel['Target'];
         }
 
-        $preferred = $type === 'payments'
-            ? ['monthly payment', 'monthly payments', 'payment']
+        $preferred = $this->isPaymentImportType($type)
+            ? ['customer deposit payment', 'loan payment', 'monthly payment', 'monthly payments', 'payment']
             : ['full loan information', 'loan information', 'loan'];
         foreach ($workbook->sheets->sheet as $sheet) {
             $name = strtolower((string) $sheet['name']);
@@ -1045,6 +1084,20 @@ class LoanImportExportService
         return trim(implode('', $row)) === '';
     }
 
+    protected function cleanImportDataRows(array $rows): array
+    {
+        return array_values(array_filter($rows, function ($row) {
+            $row = (array) $row;
+            if ($this->isEmptyRow($row)) {
+                return false;
+            }
+
+            $firstCell = strtolower(trim((string) ($row[0] ?? '')));
+
+            return ! in_array($firstCell, ['required', 'optional', 'notes'], true);
+        }));
+    }
+
     protected function templateDefinitions(): array
     {
         return [
@@ -1063,14 +1116,14 @@ class LoanImportExportService
                     'employer_phone', 'guarantor_name', 'guarantor_phone', 'guarantor_national_id',
                     'guarantor_address', 'guarantor_relationship', 'product_id', 'product_name', 'sku',
                     'brand', 'category', 'imei', 'serial_number', 'quantity', 'unit_price', 'total_price',
-                    'principal_amount', 'down_payment', 'financed_amount', 'interest_rate', 'interest_type',
+                    'principal_amount', 'down_payment', 'payment_type', 'financed_amount', 'interest_rate', 'interest_type',
                     'duration_months', 'payment_frequency', 'first_due_date', 'penalty_type',
                     'penalty_amount', 'collector_name', 'note',
                 ],
                 'required' => ['customer_name', 'sale_date', 'principal_amount', 'duration_months', 'interest_rate', 'payment_frequency', 'first_due_date'],
-                'optional' => ['loan_invoice', 'phone', 'product_name', 'imei', 'customer_group', 'national_id', 'guarantor fields', 'penalty_type', 'penalty_amount', 'collector_name', 'note'],
-                'example' => ['LN-0001', '1001', 'SALE-0001', now()->toDateString(), 'BL0001', 'Phnom Penh', '', 'CUS-0001', 'Sok Dara', 'VIP', '012345678', '011222333', 'sok@example.com', '010101234', 'Phnom Penh', 'Seller', 'ABC Shop', '023555111', 'Chan Sophea', '011222333', '020202345', 'Phnom Penh', 'Brother', '101', 'iPhone 12 Pro Max', 'SKU-IPH12', 'Apple', 'Phone', '356789123456789', 'SN123456', '1', '500.00', '500.00', '500.00', '200.00', '300.00', '4.00', 'flat', '12', 'monthly', now()->addMonth()->toDateString(), 'fixed', '0.00', 'Collector One', 'Imported loan migration row'],
-                'notes' => 'Imports a complete loan with customer, guarantor, product snapshot, schedules, and down-payment summary. The importer accepts loan_invoice as loan_number and duration_months as installment_count.',
+                'optional' => ['loan_invoice', 'phone', 'product_name', 'imei', 'customer_group', 'national_id', 'payment_type', 'guarantor fields', 'penalty_type', 'penalty_amount', 'collector_name', 'note'],
+                'example' => ['LN-0001', '1001', 'SALE-0001', now()->toDateString(), 'BL0001', 'Phnom Penh', '', 'CUS-0001', 'Sok Dara', 'VIP', '012345678', '011222333', 'sok@example.com', '010101234', 'Phnom Penh', 'Seller', 'ABC Shop', '023555111', 'Chan Sophea', '011222333', '020202345', 'Phnom Penh', 'Brother', '101', 'iPhone 12 Pro Max', 'SKU-IPH12', 'Apple', 'Phone', '356789123456789', 'SN123456', '1', '500.00', '500.00', '500.00', '200.00', 'loan', '300.00', '4.00', 'flat', '12', 'monthly', now()->addMonth()->toDateString(), 'fixed', '0.00', 'Collector One', 'Imported loan migration row'],
+                'notes' => 'Imports a complete loan with customer, guarantor, product snapshot, schedules, and down-payment summary. payment_type controls the imported initial/down payment; use loan for Customer Deposit Payments. The importer accepts loan_invoice as loan_number and duration_months as installment_count.',
             ],
             'schedules' => [
                 'columns' => ['loan_invoice', 'loan_id', 'installment_no', 'due_date', 'principal', 'interest', 'total', 'status', 'paid_date'],
@@ -1085,6 +1138,13 @@ class LoanImportExportService
                 'optional' => ['cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
                 'example' => ['KY-000001', now()->toDateString(), '55.00', '0.00', '50.00', '5.00', 'Bank', 'monthly', '1', '', 'USD', '1', '0.00', '0.00', 'PAY-KY-000001-'.now()->format('Ymd').'-M1-CASH', 'Admin', 'Monthly installment payment'],
                 'notes' => 'If schedule_id is empty, payment is applied to the oldest unpaid schedule for the loan. If amount is blank, it is calculated from cash_amount + bank_amount. payment_type: monthly or loan (payoff). installment_no targets a specific schedule row. penalty_amount and discount_amount adjust the schedule balance. Duplicate payments match by reference_number when provided, otherwise by loan + schedule + payment_type + paid_date + amount + payment_method.',
+            ],
+            'customer_deposit_payments' => [
+                'columns' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
+                'required' => ['loan_invoice', 'payment_date', 'amount'],
+                'optional' => ['cash_amount', 'bank_amount', 'payment_method', 'payment_type', 'currency', 'exchange_rate', 'reference_no', 'received_by', 'note'],
+                'example' => ['KY-000001', now()->toDateString(), '200.00', '200.00', '0.00', '0.00', 'Cash', 'loan', '', '', 'USD', '1', '0.00', '0.00', 'DEP-KY-000001-'.now()->format('Ymd'), 'Admin', 'Customer deposit payment'],
+                'notes' => 'Imports Customer Deposit Payments. payment_type defaults to loan for this template. These payments are stored as loan/down-payment records, not monthly collection rows.',
             ],
             'guarantors' => [
                 'columns' => ['loan_number', 'loan_id', 'customer_id', 'name', 'phone', 'relation', 'address', 'id_number', 'status', 'note'],
@@ -1112,8 +1172,8 @@ class LoanImportExportService
 
     protected function normalizeImportRow(string $type, array $row): array
     {
-        if ($type === 'payments') {
-            return $this->normalizePaymentRow($row);
+        if ($this->isPaymentImportType($type)) {
+            return $this->normalizePaymentRow($row, $type);
         }
         if ($type === 'loans') {
             return $this->normalizeLoanRow($row);
@@ -1177,7 +1237,7 @@ class LoanImportExportService
 
     protected function validateImportRow(string $type, array $row, string $duplicateMode = 'skip'): array
     {
-        if ($type === 'payments') {
+        if ($this->isPaymentImportType($type)) {
             return $this->validatePaymentRow($row);
         }
         if ($type === 'loans') {
@@ -1347,6 +1407,7 @@ class LoanImportExportService
             'paid_amount' => $paid,
             'balance_amount' => $balance,
             'initial_payment_method' => $row['payment_method'] ?? $row['method'] ?? null,
+            'initial_payment_type' => $this->normalizePaymentType($row['payment_type'] ?? 'loan'),
             'initial_payment_date' => $this->date($row['paid_date'] ?? $row['payment_date'] ?? $row['loan_date'] ?? null),
             'initial_payment_reference' => $row['reference_number'] ?? $row['payment_ref_no'] ?? null,
             'installment_count' => $installments,
@@ -1385,7 +1446,7 @@ class LoanImportExportService
         ];
     }
 
-    protected function normalizePaymentRow(array $row): array
+    protected function normalizePaymentRow(array $row, string $type = 'payments'): array
     {
         $loanId = (int) ($row['loan_id'] ?? 0);
         $loanNumber = trim((string) ($row['loan_number'] ?? $row['loan_invoice'] ?? ''));
@@ -1414,13 +1475,15 @@ class LoanImportExportService
         $currency = trim((string) ($row['currency'] ?? ''));
         $exchangeRate = $this->decimal($row['exchange_rate'] ?? 1);
 
+        $defaultPaymentType = in_array($type, ['customer_deposit_payments', 'loan_payments'], true) ? 'loan' : 'monthly';
+
         return [
             'loan_id' => $loanId,
             'loan_number' => $loanNumber,
             'schedule_id' => $scheduleId,
             'installment_no' => (int) ($row['installment_no'] ?? 0) ?: null,
             'due_date' => $this->date($row['due_date'] ?? null),
-            'payment_type' => $this->normalizePaymentType($row['payment_type'] ?? 'monthly'),
+            'payment_type' => $this->normalizePaymentType($row['payment_type'] ?? $defaultPaymentType),
             'amount' => $amount,
             'paid_date' => $this->date($row['payment_date'] ?? $row['paid_date'] ?? $row['paid_at'] ?? null),
             'paid_at' => ! empty($row['paid_at']) && strtotime((string) $row['paid_at']) ? date('Y-m-d H:i:s', strtotime((string) $row['paid_at'])) : null,
@@ -1614,7 +1677,7 @@ class LoanImportExportService
     {
         $value = strtolower(trim((string) $value));
 
-        return in_array($value, ['loan', 'initial', 'down_payment', 'downpayment', 'deposit'], true) ? 'loan' : 'monthly';
+        return in_array($value, ['loan', 'initial', 'down_payment', 'downpayment', 'deposit', 'customer_deposit', 'customer_deposit_payment'], true) ? 'loan' : 'monthly';
     }
 
     protected function storeLoan(array $row, string $duplicateMode = 'skip', ?int $existingLoanId = null): int
@@ -1761,7 +1824,7 @@ class LoanImportExportService
             'payment_ref_no' => $paymentRef,
             'receipt_number' => $paymentRef,
             'loan_id' => $loanId,
-            'payment_type' => 'loan',
+            'payment_type' => $row['initial_payment_type'] ?? 'loan',
             'customer_id' => $loan->customer_id ?? null,
             'schedule_id' => null,
             'loan_number_snapshot' => $loan->loan_number ?? ($row['loan_number'] ?? null),
@@ -1859,7 +1922,8 @@ class LoanImportExportService
     protected function storePayment(array $row, string $duplicateMode = 'skip', ?int $existingPaymentId = null): int
     {
         $loan = DB::connection($this->connection)->table('loans')->where('id', $row['loan_id'])->first();
-        $scheduleId = $row['schedule_id'] ?: $this->oldestOpenScheduleId((int) $loan->id);
+        $isMonthlyPayment = ($row['payment_type'] ?? 'monthly') === 'monthly';
+        $scheduleId = $isMonthlyPayment ? ($row['schedule_id'] ?: $this->oldestOpenScheduleId((int) $loan->id)) : null;
         $paidAt = $row['paid_at'] ?: ($row['paid_date'].' '.now()->format('H:i:s'));
         $paymentRef = $row['reference_number'] ?: 'IMP-PAY-'.now()->format('YmdHis').'-'.Str::random(4);
         $receivedBy = trim((string) ($row['received_by'] ?? ''));
@@ -1931,7 +1995,7 @@ class LoanImportExportService
             ]));
         }
 
-        if (! $existingPaymentId || $duplicateMode !== 'replace') {
+        if ($isMonthlyPayment && (! $existingPaymentId || $duplicateMode !== 'replace')) {
             $this->applyPaymentToSchedules((int) $loan->id, $scheduleId ? (int) $scheduleId : null, $row['amount'], $paidAt);
         }
         $this->refreshLoanTotals((int) $loan->id);
@@ -2536,7 +2600,7 @@ class LoanImportExportService
             return $id ? (int) $id : null;
         }
 
-        if ($type === 'payments' && Schema::connection($this->connection)->hasTable('loan_payments')) {
+        if ($this->isPaymentImportType($type) && Schema::connection($this->connection)->hasTable('loan_payments')) {
             if (! empty($row['reference_number'])) {
                 $columns = array_values(array_filter(['payment_number', 'payment_ref_no', 'receipt_number', 'reference_number'], fn ($column) => $this->hasColumn('loan_payments', $column)));
                 if (! empty($columns)) {
@@ -2618,7 +2682,7 @@ class LoanImportExportService
         if (in_array($type, ['loans', 'active_loans', 'closed_loans', 'overdue_loans', 'collection_report', 'customer_loan_history', 'repossessed_assets', 'monthly_loan_summary', 'collection_assignments'], true)) {
             return $this->loanExportRows($filters, $type);
         }
-        if (in_array($type, ['payments', 'monthly_collections'], true)) {
+        if (in_array($type, ['payments', 'monthly_collections', 'customer_deposit_payments', 'loan_payments'], true)) {
             return $this->paymentExportRows($filters, $type);
         }
         if ($type === 'schedules') {
@@ -2729,8 +2793,11 @@ class LoanImportExportService
             $query->leftJoin('loan_payment_schedules as s', 's.id', '=', 'p.schedule_id');
         }
         $this->applyCommonFilters($query, $filters, 'loan_payments', 'p');
-        if (in_array($type, ['payments', 'monthly_collections'], true) && $this->hasColumn('loan_payments', 'payment_type')) {
+        if ($type === 'monthly_collections' && $this->hasColumn('loan_payments', 'payment_type')) {
             $query->where('p.payment_type', 'monthly');
+        }
+        if (in_array($type, ['customer_deposit_payments', 'loan_payments'], true) && $this->hasColumn('loan_payments', 'payment_type')) {
+            $query->where('p.payment_type', 'loan');
         }
 
         return $query->select($this->paymentFullExportSelect())->orderByDesc('p.id')->get();
@@ -2808,6 +2875,7 @@ class LoanImportExportService
             DB::raw($this->sqlColumn('loans', 'l', 'principal_amount', '0').' as principal_amount'),
             DB::raw($this->sqlColumn('loans', 'l', 'total_amount', '0').' as total_amount'),
             DB::raw($this->sqlColumn('loans', 'l', 'down_payment', '0').' as down_payment'),
+            DB::raw("'loan' as payment_type"),
             DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'financed_amount').', '.$this->sqlColumn('loans', 'l', 'balance_amount', '0').') as financed_amount'),
             DB::raw($this->sqlColumn('loans', 'l', 'interest_rate', '0').' as interest_rate'),
             DB::raw("COALESCE(".$this->sqlColumn('loans', 'l', 'interest_type').", 'flat') as interest_type"),
@@ -2895,7 +2963,7 @@ class LoanImportExportService
             'guarantor_name', 'guarantor_phone', 'guarantor_national_id', 'guarantor_address',
             'guarantor_relationship', 'product_id', 'product_name', 'sku', 'brand', 'category', 'imei',
             'serial_number', 'quantity', 'unit_price', 'total_price', 'principal_amount', 'total_amount',
-            'down_payment', 'financed_amount', 'interest_rate', 'interest_type', 'duration_months',
+            'down_payment', 'payment_type', 'financed_amount', 'interest_rate', 'interest_type', 'duration_months',
             'payment_frequency', 'first_due_date', 'penalty_type', 'penalty_amount', 'note',
             'total_paid', 'principal_paid', 'interest_paid', 'outstanding_principal',
             'outstanding_interest', 'overdue_amount', 'next_due_amount', 'next_due_date',
@@ -2914,6 +2982,8 @@ class LoanImportExportService
             'customer_loan_history' => ['customer_id', 'customer_code', 'customer_name', 'phone', 'loan_id', 'loan_invoice', 'loan_status', 'sale_date', 'principal_amount', 'total_amount', 'total_paid', 'overdue_amount', 'next_due_date'],
             'payments' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
             'monthly_collections' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
+            'customer_deposit_payments' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
+            'loan_payments' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'received_by', 'note'],
             'repossessed_assets' => ['loan_id', 'loan_invoice', 'customer_name', 'phone', 'product_name', 'imei', 'serial_number', 'repossession_status', 'repossession_date', 'repossession_reason', 'collector_name'],
             'monthly_loan_summary' => ['loan_id', 'loan_invoice', 'sale_date', 'customer_name', 'phone', 'principal_amount', 'total_amount', 'total_paid', 'outstanding_principal', 'outstanding_interest', 'loan_status', 'collection_status'],
             'schedules' => ['loan_invoice', 'loan_id', 'installment_no', 'due_date', 'principal', 'interest', 'total', 'status', 'paid_date'],
@@ -2950,13 +3020,14 @@ class LoanImportExportService
             return 0;
         }
 
+        $this->ensureImportBatchColumns();
         $path = $this->storeUploadedFileInModule($file, 'imports');
 
         return (int) DB::connection($this->connection)->table('loan_import_batches')->insertGetId($this->safeColumns('loan_import_batches', [
             'batch_code' => 'IMP-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4)),
             'file_name' => $file->getClientOriginalName(),
             'file_path' => $path,
-            'file_type' => $type,
+            'file_type' => $this->importBatchStorageType($type),
             'uploaded_by' => $userId,
             'status' => 'processing',
             'column_mapping_json' => json_encode($headers),
@@ -3111,17 +3182,26 @@ class LoanImportExportService
         });
     }
 
-    protected function ensureImportBatchStatusColumn(): void
+    protected function ensureImportBatchColumns(): void
     {
-        if (! Schema::connection($this->connection)->hasTable('loan_import_batches')
-            || ! Schema::connection($this->connection)->hasColumn('loan_import_batches', 'status')) {
+        if (! Schema::connection($this->connection)->hasTable('loan_import_batches')) {
             return;
         }
 
-        $column = DB::connection($this->connection)->selectOne("SHOW COLUMNS FROM `loan_import_batches` LIKE 'status'");
-        if ($column && preg_match('/varchar\((\d+)\)/i', (string) $column->Type, $matches) && (int) $matches[1] < 30) {
+        $this->ensureVarcharColumnLength('loan_import_batches', 'status', 30, "NOT NULL DEFAULT 'uploaded'");
+        $this->ensureVarcharColumnLength('loan_import_batches', 'file_type', 60, 'NULL');
+    }
+
+    protected function ensureVarcharColumnLength(string $table, string $columnName, int $minimumLength, string $definitionSuffix): void
+    {
+        if (! Schema::connection($this->connection)->hasColumn($table, $columnName)) {
+            return;
+        }
+
+        $column = DB::connection($this->connection)->selectOne("SHOW COLUMNS FROM `{$table}` LIKE ?", [$columnName]);
+        if ($column && preg_match('/varchar\((\d+)\)/i', (string) $column->Type, $matches) && (int) $matches[1] < $minimumLength) {
             DB::connection($this->connection)->statement(
-                "ALTER TABLE `loan_import_batches` MODIFY `status` varchar(30) NOT NULL DEFAULT 'uploaded'"
+                "ALTER TABLE `{$table}` MODIFY `{$columnName}` varchar({$minimumLength}) {$definitionSuffix}"
             );
         }
     }
