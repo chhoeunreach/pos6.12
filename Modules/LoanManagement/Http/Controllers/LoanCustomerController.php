@@ -66,16 +66,20 @@ class LoanCustomerController extends Controller
     {
         $data = $request->validated();
         unset($data['customer_photo']);
-        if ($request->hasFile('customer_photo')) {
-            $data['customer_photo_file_id'] = $this->storeCustomerPhoto($request);
-        }
+
         $snapshot = [];
         if (($data['create_mode'] ?? 'new') === 'clone' && ! empty($data['main_contact_id'])) {
             $snapshot = $this->getContactSnapshot((int) $data['main_contact_id']) ?? [];
         }
         $customerId = $this->customerService->create($data, $snapshot);
-        if (! empty($data['customer_photo_file_id'])) {
-            $this->attachFileToCustomer((int) $data['customer_photo_file_id'], $customerId);
+        if ($request->hasFile('customer_photo')) {
+            $photoFileId = $this->storeCustomerPhoto($request, $customerId);
+            if (Schema::connection($this->connection)->hasColumn($this->table, 'customer_photo_file_id')) {
+                DB::connection($this->connection)
+                    ->table($this->table)
+                    ->where('id', $customerId)
+                    ->update(['customer_photo_file_id' => $photoFileId, 'updated_at' => now()]);
+            }
         }
         return redirect()->route('loan-management.customers')->with('status', ['success' => 1, 'msg' => 'Loan customer created successfully.']);
     }
@@ -288,7 +292,8 @@ class LoanCustomerController extends Controller
 
         $file = $request->file('customer_photo');
         $disk = 'public';
-        $path = $file->store('loan-management/customer-photos/'.date('Y/m'), $disk);
+        $folder = $customerId ? 'loan-customers/'.$customerId : 'loan-customers/temp';
+        $path = $file->store($folder, $disk);
 
         $payload = [
             'fileable_type' => 'loan_customer',

@@ -542,6 +542,9 @@
                                 <button type="button" class="btn btn-default btn-sm wiz-photo-choice-btn" data-camera="#wizIdCardCamera" data-upload="#wizIdCardUpload">
                                     <i class="fa fa-camera"></i> Photo
                                 </button>
+                                <button type="button" class="btn btn-info btn-sm" id="wizIdCardReExtractBtn" data-image-url="{{ $idCardPhotoUrl ?? '' }}">
+                                    <i class="fa fa-magic"></i> Re-extract Text
+                                </button>
                                 <input type="file" id="wizIdCardCamera" accept="image/*" capture="environment" style="display:none;">
                                 <input type="file" id="wizIdCardUpload" accept="image/*" style="display:none;">
                             </div>
@@ -566,14 +569,14 @@
                             <input type="text" name="customer_name_snapshot" class="lm-wiz-input" value="{{ old('customer_name_snapshot', $editCustomerName) }}" required placeholder="Name">
                         </div>
                         <div class="lm-wiz-field">
-                            <label>Khmer Name</label>
-                            <input type="text" name="customer_khmer_name" class="lm-wiz-input" value="{{ old('customer_khmer_name', $loanRow->customer_khmer_name ?? '') }}" placeholder="Khmer name">
+                            <label>Khmer Name <span class="lm-wiz-required">*</span></label>
+                            <input type="text" name="customer_khmer_name" class="lm-wiz-input" value="{{ old('customer_khmer_name', $loanRow->customer_khmer_name ?? '') }}" required placeholder="Khmer name">
                         </div>
                     </div>
                     <div class="lm-wiz-grid-2">
                         <div class="lm-wiz-field">
-                            <label>English Name</label>
-                            <input type="text" name="customer_english_name" class="lm-wiz-input" value="{{ old('customer_english_name', $loanRow->customer_english_name ?? '') }}" placeholder="English name">
+                            <label>English Name <span class="lm-wiz-required">*</span></label>
+                            <input type="text" name="customer_english_name" class="lm-wiz-input" value="{{ old('customer_english_name', $loanRow->customer_english_name ?? '') }}" required placeholder="English name">
                         </div>
                         <div class="lm-wiz-field">
                             <label>Phone <span class="lm-wiz-required">*</span></label>
@@ -1880,6 +1883,7 @@
 
         $('#wizIdCardImage').val(dataUri);
         $('#wizIdCardPreview').html('<img src="' + dataUri + '" alt="ID card">');
+        $('#wizIdCardReExtractBtn').data('image-url', '');
         wizScanIdCard(dataUri);
     }
 
@@ -1931,12 +1935,16 @@
         $('#wizIdCardOcrEnglishName').val(fields.english_name || '');
         $('#wizIdCardOcrAddress').val(fields.address || '');
         wizFillCustomerIfEmpty('[name="id_card_number"]', fields.id_card_number);
-        wizFillCustomerIfEmpty('[name="customer_khmer_name"]', fields.khmer_name);
-        wizFillCustomerIfEmpty('[name="customer_name_snapshot"]', fields.khmer_name || fields.english_name);
-        wizFillCustomerIfEmpty('[name="customer_address_snapshot"]', fields.address);
+        if (fields.khmer_name) {
+            $('[name="customer_khmer_name"]').val(fields.khmer_name).trigger('input').trigger('change');
+        }
         if (fields.english_name) {
             $('[name="customer_english_name"]').val(fields.english_name).trigger('input').trigger('change');
         }
+        if (fields.khmer_name || fields.english_name) {
+            $('[name="customer_name_snapshot"]').val(fields.khmer_name || fields.english_name).trigger('input').trigger('change');
+        }
+        wizFillCustomerIfEmpty('[name="customer_address_snapshot"]', fields.address);
     }
 
     function wizScanIdCard(dataUri) {
@@ -1963,6 +1971,54 @@
             }
         });
     }
+
+    function wizImageUrlToDataUri(url) {
+        return new Promise(function(resolve, reject) {
+            if (!url) {
+                reject(new Error('No ID card photo found.'));
+                return;
+            }
+
+            fetch(url, { credentials: 'same-origin' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Unable to read ID card photo.');
+                    }
+
+                    return response.blob();
+                })
+                .then(function(blob) {
+                    var reader = new FileReader();
+                    reader.onload = function(event) { resolve(event.target.result); };
+                    reader.onerror = function() { reject(new Error('Unable to prepare ID card photo.')); };
+                    reader.readAsDataURL(blob);
+                })
+                .catch(reject);
+        });
+    }
+
+    $('#wizIdCardReExtractBtn').on('click', function() {
+        var $button = $(this);
+        var dataUri = $('#wizIdCardImage').val();
+        var imageUrl = $button.data('image-url') || '';
+
+        $button.prop('disabled', true);
+        $('#wizIdCardOcrStatus').text('Re-extracting ID card text...').css('color', '#64748b');
+
+        var request = dataUri ? Promise.resolve(dataUri) : wizImageUrlToDataUri(imageUrl);
+
+        request
+            .then(function(imageDataUri) {
+                $('#wizIdCardImage').val(imageDataUri);
+                wizScanIdCard(imageDataUri);
+            })
+            .catch(function(error) {
+                $('#wizIdCardOcrStatus').text(error.message || 'Unable to re-extract ID card text.').css('color', '#dc2626');
+            })
+            .finally(function() {
+                $button.prop('disabled', false);
+            });
+    });
 
     function wizAddressItemCode(item, fallback) {
         return item.code || item.value || item.id || item.province_code || item.district_code || item.commune_code || item.village_code || fallback || '';

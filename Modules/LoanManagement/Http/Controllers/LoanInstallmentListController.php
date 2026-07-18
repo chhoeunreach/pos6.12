@@ -41,17 +41,28 @@ class LoanInstallmentListController extends Controller
     protected function attachLoanCustomerKhmerName(object $loanRow): object
     {
         $loanRow->customer_khmer_name = null;
+        $loanRow->customer_english_name = null;
 
         if (empty($loanRow->customer_id)
-            || ! $this->loanTableExists('loan_customers')
-            || ! $this->loanTableHasCol('loan_customers', 'khmer_name')) {
+            || ! $this->loanTableExists('loan_customers')) {
             return $loanRow;
         }
 
-        $loanRow->customer_khmer_name = DB::connection('mysql_loan')
+        $select = ['name'];
+        if ($this->loanTableHasCol('loan_customers', 'khmer_name')) {
+            $select[] = 'khmer_name';
+        }
+
+        $customer = DB::connection('mysql_loan')
             ->table('loan_customers')
+            ->select($select)
             ->where('id', $loanRow->customer_id)
-            ->value('khmer_name');
+            ->first();
+
+        if ($customer) {
+            $loanRow->customer_khmer_name = $customer->khmer_name ?? null;
+            $loanRow->customer_english_name = $customer->name ?? null;
+        }
 
         return $loanRow;
     }
@@ -1974,10 +1985,10 @@ class LoanInstallmentListController extends Controller
         ]));
     }
 
-    protected function storeLoanCustomerImageFromDataUri(string $dataUri, int $loanId, string $category, string $namePrefix): ?int
+    protected function storeLoanCustomerImageFromDataUri(string $dataUri, int $customerId, string $category, string $namePrefix): ?int
     {
         $dataUri = trim($dataUri);
-        if ($dataUri === '' || $loanId <= 0 || ! $this->loanTableExists('loan_files')) {
+        if ($dataUri === '' || $customerId <= 0 || ! $this->loanTableExists('loan_files')) {
             return null;
         }
 
@@ -1994,17 +2005,17 @@ class LoanInstallmentListController extends Controller
         }
 
         $extension = str_contains($mimeType, 'png') ? 'png' : 'jpg';
-        $path = 'loan-customer-photos/'.$loanId.'/'.$namePrefix.'-'.Str::uuid().'.'.$extension;
+        $path = 'loan-customers/'.$customerId.'/'.Str::uuid().'.'.$extension;
         Storage::disk('public')->put($path, $binary);
         $fullPath = Storage::disk('public')->path($path);
 
         return (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->loanSafeColumns('loan_files', [
-            'fileable_type' => \Modules\LoanManagement\Entities\Loan::class,
-            'fileable_id' => $loanId,
+            'fileable_type' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+            'fileable_id' => $customerId,
             'category' => $category,
             'disk' => 'public',
             'path' => $path,
-            'original_name' => $namePrefix.'-'.$loanId.'.'.$extension,
+            'original_name' => $namePrefix.'-'.$customerId.'.'.$extension,
             'mime_type' => $mimeType,
             'size_bytes' => is_readable($fullPath) ? (filesize($fullPath) ?: null) : null,
             'uploaded_by' => auth()->id(),
@@ -4332,6 +4343,10 @@ class LoanInstallmentListController extends Controller
         $loanCustomerId = (int) ($loanRow->customer_id ?? 0);
         if ($loanCustomerId > 0 && $this->loanTableExists('loan_customers')) {
             $loanCustomerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->first();
+            if ($loanCustomerRow) {
+                $loanRow->customer_khmer_name = $loanCustomerRow->khmer_name ?? null;
+                $loanRow->customer_english_name = $loanCustomerRow->name ?? null;
+            }
         }
 
         $customerProfilePhotoUrl = $this->loanFileUrlById((int) ($loanRow->customer_photo_file_id ?? 0))
@@ -4595,12 +4610,12 @@ class LoanInstallmentListController extends Controller
                 }
             }
 
-            $profileFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['customer_profile_image'] ?? ''), $loan, 'customer_photo', 'customer-profile');
+            $profileFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['customer_profile_image'] ?? ''), $loanCustomerId, 'customer_photo', 'customer-profile');
             if ($profileFileId !== null) {
                 $data['customer_photo_file_id'] = $profileFileId;
                 $this->updateLoanCustomerFileReference($loanCustomerId, 'customer_photo_file_id', $profileFileId);
             }
-            $idCardFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['id_card_image'] ?? ''), $loan, 'id_front', 'id-card-front');
+            $idCardFileId = $this->storeLoanCustomerImageFromDataUri((string) ($data['id_card_image'] ?? ''), $loanCustomerId, 'id_front', 'id-card-front');
             if ($idCardFileId !== null) {
                 $data['id_front_file_id'] = $idCardFileId;
                 $this->updateLoanCustomerFileReference($loanCustomerId, 'id_front_file_id', $idCardFileId);
