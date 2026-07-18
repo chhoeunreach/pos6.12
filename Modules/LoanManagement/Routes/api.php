@@ -31,6 +31,8 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/mobile/dashboard', [StaffMobileController::class, 'dashboard']);
         Route::get('/mobile/customers', [StaffMobileController::class, 'customers']);
         Route::get('/mobile/customers/{id}', [StaffMobileController::class, 'customerShow']);
+        Route::put('/mobile/customers/{id}', [StaffMobileController::class, 'customerUpdate']);
+        Route::post('/mobile/customers/{id}/verify', [StaffMobileController::class, 'customerVerify']);
         Route::get('/mobile/late-customers', [StaffMobileController::class, 'lateCustomers']);
         Route::get('/mobile/loan-form-options', [StaffMobileLoanController::class, 'options']);
         Route::get('/mobile/loans', [StaffMobileLoanController::class, 'index']);

@@ -104,6 +104,7 @@ class StaffMobileLoanController extends Controller
 
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', ''));
+        $collectionDue = $request->boolean('collection_due');
         $limit = min(100, max(1, (int) $request->query('limit', 50)));
 
         $rows = Loan::query()
@@ -117,6 +118,16 @@ class StaffMobileLoanController extends Controller
                 });
             })
             ->when($status !== '' && strtolower($status) !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($collectionDue, function ($query) {
+                $query->whereNotIn('status', ['closed', 'paid', 'completed', 'cancelled'])
+                    ->whereExists(function ($sub) {
+                        $sub->selectRaw('1')
+                            ->from('loan_payment_schedules as s')
+                            ->whereColumn('s.loan_id', 'loans.id')
+                            ->whereDate('s.due_date', '<=', now()->toDateString())
+                            ->whereIn('s.status', ['pending', 'unpaid', 'partial', 'late']);
+                    });
+            })
             ->orderByDesc('id')
             ->limit($limit)
             ->get();
@@ -382,6 +393,7 @@ class StaffMobileLoanController extends Controller
             'balance_amount' => $this->money($loan->balance_amount ?? $summary['remaining_balance'] ?? 0),
             'total_payable' => $this->money($loan->total_amount ?? $summary['total_loan_amount'] ?? 0),
             'payoff_amount' => $this->money($scheduleSummary['payoff_amount'] > 0 ? $scheduleSummary['payoff_amount'] : ($loan->balance_amount ?? $summary['remaining_balance'] ?? 0)),
+            'next_due_date' => $scheduleSummary['next_due_date'],
             'schedule_total' => $scheduleSummary['total'],
             'schedule_paid_total' => $scheduleSummary['paid'],
             'schedule_unpaid_total' => $scheduleSummary['unpaid'],
@@ -621,6 +633,7 @@ class StaffMobileLoanController extends Controller
             'paid' => 0,
             'unpaid' => 0,
             'payoff_amount' => 0.0,
+            'next_due_date' => null,
         ];
 
         if (! Schema::connection($this->conn)->hasTable('loan_payment_schedules')) {
@@ -641,6 +654,10 @@ class StaffMobileLoanController extends Controller
             } else {
                 $summary['unpaid']++;
                 $summary['payoff_amount'] += $balance;
+                $dueDate = (string) ($row->due_date ?? '');
+                if ($dueDate !== '' && ($summary['next_due_date'] === null || $dueDate < $summary['next_due_date'])) {
+                    $summary['next_due_date'] = $dueDate;
+                }
             }
         }
 
