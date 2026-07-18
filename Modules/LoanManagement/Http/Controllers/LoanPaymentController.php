@@ -102,6 +102,38 @@ class LoanPaymentController extends Controller
         ]);
     }
 
+    public function collectionModal(int $loan)
+    {
+        abort_if(! Schema::connection($this->connection)->hasTable('loans'), 404);
+        abort_if(! Schema::connection($this->connection)->hasTable('loan_payments'), 404);
+
+        $this->ensurePaymentTypeColumn();
+
+        $loanRow = DB::connection($this->connection)->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $payments = $this->basePaymentQuery()
+            ->where('p.loan_id', $loan)
+            ->when($this->hasColumn('loan_payments', 'payment_type'), function ($query) {
+                $query->where('p.payment_type', 'monthly');
+            })
+            ->orderByDesc('p.'.$this->paymentDateColumn())
+            ->orderByDesc('p.id')
+            ->limit(50)
+            ->get();
+
+        $summary = [
+            'count' => $payments->count(),
+            'amount' => (float) $payments->sum('amount'),
+        ];
+
+        return view('loanmanagement::payments.collection_modal', [
+            'loan' => $loanRow,
+            'payments' => $payments,
+            'summary' => $summary,
+        ]);
+    }
+
     public function update(Request $request, int $payment)
     {
         $row = $this->paymentRow($payment);

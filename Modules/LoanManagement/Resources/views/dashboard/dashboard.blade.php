@@ -459,6 +459,21 @@
         min-height: auto;
         border-radius: 6px;
     }
+    .lm-print-btn {
+        margin-left: 4px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .lm-print-btn:hover,
+    .lm-print-btn:focus {
+        background: #dbeafe;
+        color: #1e40af;
+    }
     .lm-pay-status {
         display: inline-block;
         margin-top: 3px;
@@ -475,35 +490,11 @@
         background: #fef2f2;
         color: #dc2626;
     }
-    .lm-quick-box.lm-quick-box--loan,
-    .lm-dashboard-panel__body.lm-dashboard-panel__body--quick-actions,
-    .lm-table-wrap.lm-table-wrap--hover-actions {
-        overflow: visible;
-    }
     .lm-pay-row {
         position: relative;
     }
     .lm-pay-row:hover {
         z-index: 25;
-    }
-    .lm-customer-hover {
-        position: relative;
-        display: block;
-        min-width: 180px;
-        z-index: 26;
-    }
-    .lm-customer-hover::after {
-        content: '';
-        position: absolute;
-        left: 100%;
-        top: -10px;
-        width: 22px;
-        height: calc(100% + 20px);
-        display: none;
-    }
-    .lm-customer-hover:hover::after,
-    .lm-customer-hover:focus-within::after {
-        display: block;
     }
     .lm-customer-hover__main {
         display: block;
@@ -516,89 +507,6 @@
     .lm-customer-hover:focus-within .lm-customer-hover__main {
         background: #f8fafc;
     }
-    .lm-customer-print-popover {
-        position: absolute;
-        left: calc(100% + 14px);
-        top: 50%;
-        z-index: 60;
-        width: 270px;
-        padding: 12px;
-        border: 1px solid #dbe5ef;
-        border-radius: 12px;
-        background: #ffffff;
-        box-shadow: 0 24px 54px rgba(15, 23, 42, 0.24);
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transform: translate(8px, -50%);
-        transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
-    }
-    .lm-customer-print-popover::before {
-        content: '';
-        position: absolute;
-        left: -6px;
-        top: 50%;
-        width: 10px;
-        height: 10px;
-        background: #ffffff;
-        border-left: 1px solid #dbe5ef;
-        border-bottom: 1px solid #dbe5ef;
-        transform: translateY(-50%) rotate(45deg);
-    }
-    .lm-customer-hover:hover .lm-customer-print-popover,
-    .lm-customer-hover:focus-within .lm-customer-print-popover {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transform: translate(0, -50%);
-    }
-    .lm-customer-print-popover__title {
-        display: block;
-        margin-bottom: 7px;
-        color: #64748b;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-    }
-    .lm-customer-print-popover__actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
-    }
-    .lm-customer-print-popover__actions button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        min-height: 38px;
-        padding: 8px 10px;
-        border: 1px solid #d7e2ee;
-        border-radius: 8px;
-        background: #fff;
-        color: #0f172a;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1.2;
-        white-space: nowrap;
-    }
-    .lm-customer-print-popover__actions button:hover,
-    .lm-customer-print-popover__actions button:focus {
-        background: #eff6ff;
-        border-color: #bfdbfe;
-        color: #1d4ed8;
-    }
-    .lm-customer-print-popover__actions .lm-customer-print-popover__primary {
-        background: linear-gradient(135deg, #2563eb, #1d4ed8);
-        border-color: #1d4ed8;
-        color: #ffffff;
-    }
-    .lm-customer-print-popover__actions .lm-customer-print-popover__primary:hover,
-    .lm-customer-print-popover__actions .lm-customer-print-popover__primary:focus {
-        background: linear-gradient(135deg, #1d4ed8, #1e40af);
-        color: #ffffff;
-    }
-
     /* Payment Modal Form Styles */
     .view_modal .modal-content {
         border: 0;
@@ -2058,19 +1966,19 @@
         }
         #loanDashboardQuickSearchTable th:nth-child(1),
         #loanDashboardQuickSearchTable td:nth-child(1) {
-            width: 42%;
+            width: 30%;
         }
         #loanDashboardQuickSearchTable th:nth-child(2),
         #loanDashboardQuickSearchTable td:nth-child(2) {
-            width: 20%;
+            width: 19%;
         }
         #loanDashboardQuickSearchTable th:nth-child(3),
         #loanDashboardQuickSearchTable td:nth-child(3) {
-            width: 20%;
+            width: 19%;
         }
         #loanDashboardQuickSearchTable th:nth-child(4),
         #loanDashboardQuickSearchTable td:nth-child(4) {
-            width: 18%;
+            width: 32%;
         }
         #loanDashboardQuickSearchTable .lm-row-title,
         #loanDashboardQuickSearchTable .lm-row-subtitle {
@@ -2084,10 +1992,18 @@
             white-space: nowrap;
         }
         #loanDashboardQuickSearchTable .lm-pay-btn {
-            min-width: 50px;
-            padding: 8px 10px;
+            min-width: 46px;
+            padding: 8px 8px;
+        }
+        #loanDashboardQuickSearchTable .lm-print-btn {
+            min-width: 34px;
+            margin-left: 3px;
+            padding: 8px 7px;
         }
         #loanDashboardQuickSearchTable .lm-pay-btn .fa {
+            display: none;
+        }
+        #loanDashboardQuickSearchTable .lm-print-btn span {
             display: none;
         }
         #loanDashboardQuickSearchTable .lm-pay-more {
@@ -2581,30 +2497,6 @@
         grid-template-columns: minmax(0, 1fr) 64px;
     }
     @media (max-width: 767px) {
-        .lm-customer-hover::after {
-            left: -8px;
-            top: 100%;
-            width: calc(100% + 16px);
-            height: 18px;
-        }
-        .lm-customer-print-popover {
-            left: 0;
-            top: calc(100% + 10px);
-            width: min(270px, 82vw);
-            transform: translateY(-4px);
-        }
-        .lm-customer-print-popover::before {
-            left: 18px;
-            top: -6px;
-            border-left: 1px solid #dbe5ef;
-            border-top: 1px solid #dbe5ef;
-            border-bottom: 0;
-            transform: rotate(45deg);
-        }
-        .lm-customer-hover:hover .lm-customer-print-popover,
-        .lm-customer-hover:focus-within .lm-customer-print-popover {
-            transform: translateY(0);
-        }
         .lm-dashboard-grid.lm-dashboard-grid--chat-collapsed {
             grid-template-columns: 1fr;
         }
@@ -3168,9 +3060,8 @@
                 var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view?_lm_modal=1";
                 var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
-                var autoPrintModalUrl = printModalUrl + "?autostart=1";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
-                var quickPayUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/quick-pay";
+                var collectionUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payments/collection-modal";
                 var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
                 var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
                 var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
@@ -3186,27 +3077,19 @@
                     + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
                     + statusBadge
                     + '</div>'
-                    + '<div class="lm-customer-print-popover" role="group" aria-label="Customer print actions">'
-                    + '<span class="lm-customer-print-popover__title">Customer actions</span>'
-                    + '<div class="lm-customer-print-popover__actions">'
-                    + '<button type="button" class="btn-modal lm-customer-print-popover__primary" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button>'
-                    + '<button type="button" class="btn-modal" data-href="' + autoPrintModalUrl + '" data-container=".view_modal"><i class="fa fa-bolt"></i> Auto</button>'
-                    + '<button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View</button>'
-                    + '<button type="button" class="btn-modal" data-href="' + payUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Pay</button>'
-                    + '</div>'
-                    + '</div>'
                     + '</div>'
                     + '</td>'
                     + '<td class="lm-pay-due">' + dueLabel + '</td>'
                     + '<td class="text-right lm-pay-balance">' + money(row.balance_amount) + '</td>'
                     + '<td class="text-center lm-pay-action">'
-                    + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> Pay</button>'
+                    + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> <span>Pay</span></button>'
+                    + '<button type="button" class="btn btn-default btn-xs lm-print-btn btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal" title="Print loan for ' + esc(row.customer_name) + '"><i class="fa fa-print"></i> <span>Print</span></button>'
                     + '<div class="lm-pay-more dropdown">'
                     + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
                     + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
-                    + '<li><button type="button" class="btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal"><i class="fa fa-print"></i> Print</button></li>'
+                    + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
                     + '<li><button type="button" class="js-copy-loan-payment-info" data-url="' + copyInfoUrl + '"><i class="fa fa-copy"></i> Copy</button></li>'
                     + '</ul>'

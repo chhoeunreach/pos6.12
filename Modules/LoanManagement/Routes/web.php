@@ -87,6 +87,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/loans/list-data', [LoanInstallmentListController::class, 'data'])->name('loan-management.loans.list-data')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/print-modal', [LoanInstallmentListController::class, 'printModal'])->name('loan-management.loans.print-modal')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/print', [LoanInstallmentListController::class, 'print'])->name('loan-management.loans.print')->middleware('can:loan_management.view');
+        Route::get('/loans/{loan}/payments/collection-modal', [LoanPaymentController::class, 'collectionModal'])->name('loan-management.loans.payments.collection-modal')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/payment/create', [LoanInstallmentListController::class, 'createPayment'])->name('loan-management.loans.payment.create')->middleware('can:loan_management.view');
         Route::get('/loans/{loan}/payment/quick-pay', [LoanInstallmentListController::class, 'mobileQuickPay'])->name('loan-management.loans.payment.quick-pay')->middleware('can:loan_management.view');
         Route::post('/loans/{loan}/payment', [LoanInstallmentListController::class, 'storePayment'])->name('loan-management.loans.payment.store')->middleware('can:loan_management.view');
