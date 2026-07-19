@@ -31,6 +31,8 @@ class StaffMobileLoanController extends Controller
     public function options(Request $request)
     {
         $this->useApiGuard($request);
+        $locations = $this->locations($request->user());
+        $defaultLocationId = ! empty($locations) ? (int) ($locations[0]->id ?? 0) : null;
 
         return $this->ok('Loan form options loaded', [
             'defaults' => [
@@ -43,8 +45,9 @@ class StaffMobileLoanController extends Controller
                 'duration_months' => 12,
                 'interest_rate' => 0,
                 'assigned_collector_id' => optional($request->user())->id,
+                'business_location_id' => $defaultLocationId,
             ],
-            'locations' => $this->locations(),
+            'locations' => $locations,
             'collectors' => $this->collectors(),
             'currencies' => ['USD', 'KHR'],
             'interest_types' => ['flat', 'reducing_balance'],
@@ -731,19 +734,48 @@ class StaffMobileLoanController extends Controller
         return $query->get()->values()->all();
     }
 
-    protected function locations(): array
+    protected function locations($user = null): array
     {
         if (! Schema::connection($this->conn)->hasTable('loan_business_locations')) {
             return [];
         }
 
-        return DB::connection($this->conn)->table('loan_business_locations')
+        $query = DB::connection($this->conn)->table('loan_business_locations')
             ->select('id', 'name', 'main_location_id')
-            ->when(Schema::connection($this->conn)->hasColumn('loan_business_locations', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
-            ->orderBy('name')
+            ->when(Schema::connection($this->conn)->hasColumn('loan_business_locations', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
+
+        $locationIds = $this->mobileUserLocationIds($user);
+        if (! empty($locationIds)) {
+            $query->whereIn('id', $locationIds);
+        }
+
+        return $query->orderBy('name')
             ->get()
             ->values()
             ->all();
+    }
+
+    protected function mobileUserLocationIds($user = null): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        foreach (['business_location_id', 'location_id', 'default_location_id'] as $field) {
+            $value = (int) ($user->{$field} ?? 0);
+            if ($value > 0) {
+                return [$value];
+            }
+        }
+
+        if (method_exists($user, 'permitted_locations')) {
+            $permitted = $user->permitted_locations($user->business_id ?? null);
+            if (is_array($permitted)) {
+                return array_values(array_filter(array_map('intval', $permitted)));
+            }
+        }
+
+        return [];
     }
 
     protected function collectors(): array

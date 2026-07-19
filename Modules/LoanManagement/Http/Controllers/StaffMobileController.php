@@ -19,7 +19,7 @@ class StaffMobileController extends Controller
         $activeLoans = 0;
         $todayCollection = 0.0;
         $lateCustomers = 0;
-        $pendingVisits = 0;
+        $todayNewCustomerSummary = $this->todayNewCustomerSummary($today);
 
         if (Schema::connection($this->conn)->hasTable('loans')) {
             $activeLoans = (int) DB::connection($this->conn)->table('loans')->whereIn('status', ['active', 'approved', 'late'])->count();
@@ -44,26 +44,16 @@ class StaffMobileController extends Controller
                 ->count('l.customer_id');
         }
 
-        if (Schema::connection($this->conn)->hasTable('loan_collection_visits')) {
-            $visitQ = DB::connection($this->conn)->table('loan_collection_visits');
-            if (Schema::connection($this->conn)->hasColumn('loan_collection_visits', 'result')) {
-                $visitQ->whereIn('result', ['pending', 'follow_up', 'rescheduled']);
-            } elseif (Schema::connection($this->conn)->hasColumn('loan_collection_visits', 'status')) {
-                $visitQ->whereIn('status', ['pending', 'follow_up', 'rescheduled']);
-            } else {
-                $visitQ->whereRaw('1=0');
-            }
-            $pendingVisits = (int) $visitQ->count();
-        }
-
         return $this->ok('Dashboard loaded', [
-            'assigned_customers' => $this->assignedCustomersCount(),
+            'active_customers' => $this->activeCustomersCount(),
+            'today_new_customers' => $todayNewCustomerSummary['count'],
+            'today_new_customer_payments' => $this->money($todayNewCustomerSummary['payments']),
+            'today_new_customer_date' => $todayNewCustomerSummary['date'],
             'active_loans' => $activeLoans,
             'today_collection' => $this->money($todayCollection),
             'monthly_collection' => $this->monthlyCollection(),
             'unread_chats' => $this->unreadChatsCount(),
             'late_customers' => $lateCustomers,
-            'pending_visits' => $pendingVisits,
         ]);
     }
 
@@ -236,13 +226,154 @@ class StaffMobileController extends Controller
         ];
     }
 
-    protected function assignedCustomersCount(): int
+    protected function activeCustomersCount(): int
     {
-        if (! Schema::connection($this->conn)->hasTable('loan_customers')) {
+        if (! Schema::connection($this->conn)->hasTable('loans')) {
             return 0;
         }
 
-        return (int) DB::connection($this->conn)->table('loan_customers')->count();
+        $query = DB::connection($this->conn)->table('loans')
+            ->whereNotIn('status', ['closed', 'paid', 'completed', 'cancelled'])
+            ->whereNotNull('customer_id');
+
+        $columns = Schema::connection($this->conn)->getColumnListing('loans');
+        $balanceColumn = collect(['balance_amount', 'amount_balance', 'remaining_balance'])
+            ->first(fn ($column) => in_array($column, $columns, true));
+        if ($balanceColumn) {
+            $query->where($balanceColumn, '>', 0);
+        }
+
+        return (int) $query->distinct('customer_id')->count('customer_id');
+    }
+
+    protected function todayNewCustomerSummary(string $today): array
+    {
+        if (! Schema::connection($this->conn)->hasTable('loans')) {
+            return ['count' => 0, 'payments' => 0.0, 'date' => $today];
+        }
+
+        $loanColumns = Schema::connection($this->conn)->getColumnListing('loans');
+        $dateColumns = array_values(array_intersect(
+            ['loan_date', 'source_created_at', 'sale_date', 'created_at'],
+            $loanColumns
+        ));
+
+        if (empty($dateColumns)) {
+            return ['count' => 0, 'payments' => 0.0, 'date' => $today];
+        }
+
+        $selectColumns = ['id'];
+        foreach (['customer_id', 'down_payment', 'paid_amount', 'initial_payment_amount'] as $column) {
+            if (in_array($column, $loanColumns, true)) {
+                $selectColumns[] = $column;
+            }
+        }
+
+        $todayLoanQuery = DB::connection($this->conn)->table('loans')
+            ->where(function ($query) use ($dateColumns, $today) {
+                foreach ($dateColumns as $index => $column) {
+                    $method = $index === 0 ? 'whereDate' : 'orWhereDate';
+                    $query->{$method}($column, $today);
+                }
+            });
+
+        if (! in_array('customer_id', $selectColumns, true)) {
+            $selectColumns[] = 'customer_id';
+        }
+
+        $queryColumns = array_values(array_unique(
+            array_intersect($selectColumns, $loanColumns)
+        ));
+
+        $todayLoans = $todayLoanQuery->get($queryColumns);
+        $effectiveDate = $today;
+
+        if ($todayLoans->isEmpty()) {
+            $latestDate = $this->latestLoanBusinessDate($dateColumns);
+            if ($latestDate && $latestDate !== $today) {
+                $effectiveDate = $latestDate;
+                $todayLoans = DB::connection($this->conn)->table('loans')
+                    ->where(function ($query) use ($dateColumns, $effectiveDate) {
+                        foreach ($dateColumns as $index => $column) {
+                            $method = $index === 0 ? 'whereDate' : 'orWhereDate';
+                            $query->{$method}($column, $effectiveDate);
+                        }
+                    })
+                    ->get($queryColumns);
+            }
+        }
+
+        if ($todayLoans->isEmpty()) {
+            return ['count' => 0, 'payments' => 0.0, 'date' => $effectiveDate];
+        }
+
+        $loanIds = $todayLoans->pluck('id')->filter()->values();
+        $customerIds = $todayLoans
+            ->pluck('customer_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($loanIds->isEmpty()) {
+            return ['count' => 0, 'payments' => 0.0, 'date' => $effectiveDate];
+        }
+
+        $payments = 0.0;
+        if (Schema::connection($this->conn)->hasTable('loan_payments')) {
+            $paymentColumns = Schema::connection($this->conn)->getColumnListing('loan_payments');
+            $amountColumn = collect(['amount', 'total_paid_base', 'paid_amount', 'total_amount'])
+                ->first(fn ($column) => in_array($column, $paymentColumns, true));
+
+            if ($amountColumn && in_array('loan_id', $paymentColumns, true)) {
+                $paymentQuery = DB::connection($this->conn)->table('loan_payments as p')
+                    ->whereIn('p.loan_id', $loanIds->all());
+                $payments = (float) $paymentQuery->sum('p.'.$amountColumn);
+            }
+        }
+
+        if ($payments <= 0) {
+            $loanPaymentColumns = array_values(array_intersect(
+                ['down_payment', 'paid_amount', 'initial_payment_amount'],
+                $loanColumns
+            ));
+
+            foreach ($todayLoans as $loan) {
+                foreach ($loanPaymentColumns as $column) {
+                    $payments += (float) ($loan->{$column} ?? 0);
+                }
+            }
+        }
+
+        return [
+            'count' => $customerIds->isNotEmpty() ? $customerIds->count() : $loanIds->count(),
+            'payments' => $payments,
+            'date' => $effectiveDate,
+        ];
+    }
+
+    protected function latestLoanBusinessDate(array $dateColumns): ?string
+    {
+        $latest = null;
+
+        foreach ($dateColumns as $column) {
+            $value = DB::connection($this->conn)->table('loans')
+                ->whereNotNull($column)
+                ->max($column);
+            if (! $value) {
+                continue;
+            }
+
+            $date = substr((string) $value, 0, 10);
+            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                continue;
+            }
+
+            if ($latest === null || $date > $latest) {
+                $latest = $date;
+            }
+        }
+
+        return $latest;
     }
 
     protected function monthlyCollection(): float
