@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class StaffMobileActionController extends Controller
@@ -34,6 +35,8 @@ class StaffMobileActionController extends Controller
             'details.*.currency' => 'nullable|in:USD,KHR',
             'details.*.exchange_rate' => 'nullable|numeric|min:0.0001',
             'details.*.transaction_no' => 'nullable|string|max:255',
+            'payment_docs' => 'nullable|array',
+            'payment_docs.*' => 'nullable|string',
         ]);
 
         $result = DB::connection($this->conn)->transaction(function () use ($data) {
@@ -48,9 +51,13 @@ class StaffMobileActionController extends Controller
             $paymentPayload = [
                 'loan_id' => $data['loan_id'],
                 'payment_type' => 'monthly',
+                'schedule_id' => count((array) ($data['schedule_ids'] ?? [])) === 1 ? (int) $data['schedule_ids'][0] : null,
                 'customer_id' => $data['customer_id'],
                 'amount' => $amount,
+                'total_paid' => $amount,
+                'total_paid_base' => $amount,
                 'paid_at' => $payAt,
+                'paid_date' => substr($payAt, 0, 10),
                 'channel' => 'mobile',
                 'status' => 'confirmed',
                 'note' => trim((string) ($data['note'] ?? '')) ?: null,
@@ -62,6 +69,21 @@ class StaffMobileActionController extends Controller
             ];
 
             $paymentId = DB::connection($this->conn)->table('loan_payments')->insertGetId($this->safeColumns('loan_payments', $paymentPayload));
+            $paymentDocIds = [];
+            foreach ((array) ($data['payment_docs'] ?? []) as $index => $document) {
+                if (! is_string($document) || trim($document) === '') {
+                    continue;
+                }
+
+                $fileId = $this->storeMobilePaymentDoc(
+                    $document,
+                    $paymentId,
+                    'payment-doc-'.$paymentId.'-'.($index + 1)
+                );
+                if ($fileId) {
+                    $paymentDocIds[] = $fileId;
+                }
+            }
 
             $totalDetail = 0.0;
             foreach ($data['details'] as $detail) {
@@ -177,10 +199,150 @@ class StaffMobileActionController extends Controller
                 'amount' => $this->money($amount),
                 'detail_amount_total' => $this->money($totalDetail),
                 'paid_at' => $payAt,
+                'payment_doc_ids' => $paymentDocIds,
             ];
         });
 
         return $this->ok('Payment received successfully', $result);
+    }
+
+    public function loanPayments(Request $request, int $loanId)
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_payments')) {
+            return $this->ok('Payments loaded', [
+                'payments' => [],
+                'deposit_payments' => [],
+                'collection_payments' => [],
+            ]);
+        }
+
+        $payments = DB::connection($this->conn)->table('loan_payments')
+            ->where('loan_id', $loanId)
+            ->orderByDesc($this->paymentDateColumn())
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($payment) => $this->paymentPayload($payment))
+            ->values()
+            ->all();
+
+        $depositTypes = ['loan', 'initial', 'down_payment', 'downpayment', 'deposit'];
+        $depositPayments = array_values(array_filter($payments, fn ($payment) => in_array($payment['payment_type'], $depositTypes, true)));
+        $collectionPayments = array_values(array_filter($payments, fn ($payment) => ! in_array($payment['payment_type'], $depositTypes, true)));
+
+        return $this->ok('Payments loaded', [
+            'payments' => $payments,
+            'deposit_payments' => $depositPayments,
+            'collection_payments' => $collectionPayments,
+        ]);
+    }
+
+    public function updatePayment(Request $request, int $paymentId)
+    {
+        $payment = $this->paymentRow($paymentId);
+        if (! $payment) {
+            return $this->fail('Payment not found', 404, (object) []);
+        }
+
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'paid_date' => 'nullable|date',
+            'method' => 'nullable|string|max:100',
+            'schedule_id' => 'nullable|integer|min:1',
+            'status' => 'nullable|string|max:50',
+            'reference_number' => 'nullable|string|max:191',
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $oldAmount = $this->paymentAmount($payment);
+        $newAmount = round((float) $data['amount'], 2);
+        $oldScheduleId = (int) ($payment->schedule_id ?? 0);
+        $newScheduleId = ! empty($data['schedule_id']) ? (int) $data['schedule_id'] : null;
+        $paidDate = ! empty($data['paid_date']) ? $data['paid_date'] : substr((string) ($payment->{$this->paymentDateColumn()} ?? now()->toDateString()), 0, 10);
+        $paidAt = $paidDate.' '.now()->format('H:i:s');
+        $method = trim((string) ($data['method'] ?? ''));
+
+        DB::connection($this->conn)->transaction(function () use ($paymentId, $payment, $data, $oldAmount, $newAmount, $oldScheduleId, $newScheduleId, $paidDate, $paidAt, $method) {
+            DB::connection($this->conn)->table('loan_payments')->where('id', $paymentId)->update($this->safeColumns('loan_payments', [
+                'schedule_id' => $newScheduleId,
+                'amount' => $newAmount,
+                'total_paid' => $newAmount,
+                'total_paid_base' => $newAmount,
+                'payment_method_snapshot' => $method !== '' ? $method : null,
+                'channel' => $method !== '' ? $method : ($payment->channel ?? 'mobile'),
+                'reference_number' => trim((string) ($data['reference_number'] ?? '')) ?: null,
+                'paid_date' => $paidDate,
+                'paid_at' => $paidAt,
+                'status' => trim((string) ($data['status'] ?? 'confirmed')) ?: 'confirmed',
+                'note' => trim((string) ($data['note'] ?? '')) ?: null,
+                'updated_at' => now(),
+            ]));
+
+            if (Schema::connection($this->conn)->hasTable('loan_payment_details')) {
+                $detail = DB::connection($this->conn)->table('loan_payment_details')->where('payment_id', $paymentId)->orderBy('id')->first();
+                $detailPayload = $this->safeColumns('loan_payment_details', [
+                    'method' => $method !== '' ? $method : ($payment->channel ?? 'cash'),
+                    'payment_method_snapshot' => $method !== '' ? $method : null,
+                    'amount' => $newAmount,
+                    'amount_base' => $newAmount,
+                    'transaction_no' => trim((string) ($data['reference_number'] ?? '')) ?: null,
+                    'reference_number' => trim((string) ($data['reference_number'] ?? '')) ?: null,
+                    'note' => trim((string) ($data['note'] ?? '')) ?: null,
+                    'updated_at' => now(),
+                ]);
+                if ($detail) {
+                    DB::connection($this->conn)->table('loan_payment_details')->where('id', $detail->id)->update($detailPayload);
+                } else {
+                    DB::connection($this->conn)->table('loan_payment_details')->insert($detailPayload + $this->safeColumns('loan_payment_details', [
+                        'payment_id' => $paymentId,
+                        'created_at' => now(),
+                    ]));
+                }
+            }
+
+            if ($oldScheduleId > 0 && $oldScheduleId !== (int) $newScheduleId) {
+                $this->adjustSchedulePayment($oldScheduleId, -$oldAmount, $paidAt);
+                if ($newScheduleId) {
+                    $this->adjustSchedulePayment($newScheduleId, $newAmount, $paidAt);
+                }
+            } elseif ($newScheduleId) {
+                $this->adjustSchedulePayment($newScheduleId, $newAmount - $oldAmount, $paidAt);
+            }
+        });
+
+        $this->refreshLoanTotals((int) $payment->loan_id);
+        $updated = $this->paymentRow($paymentId);
+
+        return $this->ok('Payment updated', $updated ? $this->paymentPayload($updated) : (object) []);
+    }
+
+    public function deletePayment(Request $request, int $paymentId)
+    {
+        $payment = $this->paymentRow($paymentId);
+        if (! $payment) {
+            return $this->fail('Payment not found', 404, (object) []);
+        }
+
+        DB::connection($this->conn)->transaction(function () use ($paymentId, $payment) {
+            if (! empty($payment->schedule_id)) {
+                $this->adjustSchedulePayment((int) $payment->schedule_id, -$this->paymentAmount($payment), now()->toDateTimeString());
+            }
+
+            if (Schema::connection($this->conn)->hasTable('loan_payment_details')) {
+                DB::connection($this->conn)->table('loan_payment_details')->where('payment_id', $paymentId)->delete();
+            }
+            if (Schema::connection($this->conn)->hasTable('loan_files')) {
+                DB::connection($this->conn)->table('loan_files')
+                    ->where('fileable_type', \Modules\LoanManagement\Entities\LoanPayment::class)
+                    ->where('fileable_id', $paymentId)
+                    ->delete();
+            }
+
+            DB::connection($this->conn)->table('loan_payments')->where('id', $paymentId)->delete();
+        });
+
+        $this->refreshLoanTotals((int) $payment->loan_id);
+
+        return $this->ok('Payment deleted', ['id' => $paymentId, 'loan_id' => (int) $payment->loan_id]);
     }
 
     public function staffLocation(Request $request)
@@ -268,6 +430,195 @@ class StaffMobileActionController extends Controller
             ? Schema::connection($this->conn)->getColumnListing($table)
             : [];
         return array_intersect_key($payload, array_flip($columns));
+    }
+
+    protected function paymentRow(int $paymentId)
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_payments')) {
+            return null;
+        }
+
+        return DB::connection($this->conn)->table('loan_payments')->where('id', $paymentId)->first();
+    }
+
+    protected function paymentPayload($payment): array
+    {
+        $dateColumn = $this->paymentDateColumn();
+        $amount = $this->paymentAmount($payment);
+        $method = (string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? '');
+        $reference = (string) ($payment->reference_number ?? $payment->payment_ref_no ?? $payment->receipt_number ?? '');
+
+        return [
+            'id' => (int) ($payment->id ?? 0),
+            'loan_id' => (int) ($payment->loan_id ?? 0),
+            'customer_id' => (int) ($payment->customer_id ?? 0),
+            'schedule_id' => (int) ($payment->schedule_id ?? 0),
+            'payment_type' => (string) ($payment->payment_type ?? 'monthly'),
+            'receipt_number' => (string) ($payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ('Payment #'.($payment->id ?? ''))),
+            'paid_date' => (string) ($payment->{$dateColumn} ?? $payment->paid_at ?? ''),
+            'payment_date' => (string) ($payment->{$dateColumn} ?? $payment->paid_at ?? ''),
+            'amount' => $this->money($amount),
+            'method' => $method,
+            'payment_method' => $method,
+            'reference_number' => $reference,
+            'reference_no' => $reference,
+            'status' => (string) ($payment->status ?? 'confirmed'),
+            'note' => (string) ($payment->note ?? ''),
+        ];
+    }
+
+    protected function paymentDateColumn(): string
+    {
+        return Schema::connection($this->conn)->hasColumn('loan_payments', 'paid_date') ? 'paid_date' : 'paid_at';
+    }
+
+    protected function paymentAmountColumn(): string
+    {
+        if (Schema::connection($this->conn)->hasColumn('loan_payments', 'total_paid_base')) {
+            return 'total_paid_base';
+        }
+        if (Schema::connection($this->conn)->hasColumn('loan_payments', 'total_paid')) {
+            return 'total_paid';
+        }
+        return 'amount';
+    }
+
+    protected function paymentAmount($payment): float
+    {
+        return round((float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0), 2);
+    }
+
+    protected function adjustSchedulePayment(int $scheduleId, float $diff, string $paidAt): void
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_payment_schedules')) {
+            return;
+        }
+
+        $schedule = DB::connection($this->conn)->table('loan_payment_schedules')->where('id', $scheduleId)->first();
+        if (! $schedule) {
+            return;
+        }
+
+        $due = (float) ($schedule->schedule_amount ?? $schedule->amount_due ?? 0);
+        if ($due <= 0) {
+            $due = (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0)
+                + (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
+        }
+        $oldPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
+        $newPaid = max(0, $oldPaid + $diff);
+        $newBalance = max(0, $due - $newPaid);
+
+        DB::connection($this->conn)->table('loan_payment_schedules')->where('id', $scheduleId)->update($this->safeColumns('loan_payment_schedules', [
+            'paid_amount' => $newPaid,
+            'amount_paid' => $newPaid,
+            'balance_amount' => $newBalance,
+            'amount_balance' => $newBalance,
+            'status' => $newBalance <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'pending'),
+            'paid_at' => $newBalance <= 0 ? $paidAt : null,
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function refreshLoanTotals(int $loanId): void
+    {
+        if (! Schema::connection($this->conn)->hasTable('loans')) {
+            return;
+        }
+
+        $loan = DB::connection($this->conn)->table('loans')->where('id', $loanId)->first();
+        if (! $loan) {
+            return;
+        }
+
+        $amountColumn = $this->paymentAmountColumn();
+        $paid = (float) DB::connection($this->conn)->table('loan_payments')->where('loan_id', $loanId)->sum($amountColumn);
+        $balance = null;
+        if (Schema::connection($this->conn)->hasTable('loan_payment_schedules')) {
+            if (Schema::connection($this->conn)->hasColumn('loan_payment_schedules', 'balance_amount')) {
+                $balance = (float) DB::connection($this->conn)->table('loan_payment_schedules')->where('loan_id', $loanId)->sum('balance_amount');
+            } elseif (Schema::connection($this->conn)->hasColumn('loan_payment_schedules', 'amount_balance')) {
+                $balance = (float) DB::connection($this->conn)->table('loan_payment_schedules')->where('loan_id', $loanId)->sum('amount_balance');
+            }
+        }
+
+        if ($balance === null) {
+            $principal = (float) ($loan->principal_amount ?? $loan->total_payable_amount ?? $loan->total_amount ?? 0);
+            $balance = max(0, $principal - $paid);
+        }
+
+        DB::connection($this->conn)->table('loans')->where('id', $loanId)->update($this->safeColumns('loans', [
+            'paid_amount' => $paid,
+            'balance_amount' => $balance,
+            'last_payment_amount' => $paid > 0 ? $this->lastPaymentAmount($loanId) : null,
+            'last_payment_date' => $paid > 0 ? $this->lastPaymentDate($loanId) : null,
+            'status' => $balance <= 0 ? 'completed' : ($loan->status === 'completed' ? 'active' : ($loan->status ?? 'active')),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function lastPaymentAmount(int $loanId): ?float
+    {
+        $row = DB::connection($this->conn)->table('loan_payments')->where('loan_id', $loanId)->orderByDesc($this->paymentDateColumn())->orderByDesc('id')->first();
+        return $row ? $this->paymentAmount($row) : null;
+    }
+
+    protected function lastPaymentDate(int $loanId): ?string
+    {
+        $row = DB::connection($this->conn)->table('loan_payments')->where('loan_id', $loanId)->orderByDesc($this->paymentDateColumn())->orderByDesc('id')->first();
+        return $row ? (string) ($row->{$this->paymentDateColumn()} ?? null) : null;
+    }
+
+    protected function storeMobilePaymentDoc(string $dataUri, int $paymentId, string $namePrefix): ?int
+    {
+        $dataUri = trim($dataUri);
+        if ($dataUri === '' || $paymentId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_files')) {
+            return null;
+        }
+
+        if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
+            $mimeType = $match[1];
+            $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
+        } else {
+            $mimeType = 'application/octet-stream';
+        }
+
+        $binary = base64_decode($dataUri, true);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = $this->extensionFromMimeType($mimeType);
+        $path = 'payment-documents/'.$paymentId.'/'.$namePrefix.'-'.Str::uuid().'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+
+        return (int) DB::connection($this->conn)->table('loan_files')->insertGetId($this->safeColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\LoanPayment::class,
+            'fileable_id' => $paymentId,
+            'category' => 'payment_doc',
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $namePrefix.'.'.$extension,
+            'mime_type' => $mimeType,
+            'size_bytes' => strlen($binary),
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function extensionFromMimeType(string $mimeType): string
+    {
+        $mimeType = strtolower(trim($mimeType));
+        return match ($mimeType) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+            'application/pdf' => 'pdf',
+            'text/plain' => 'txt',
+            'text/csv', 'application/csv' => 'csv',
+            default => 'bin',
+        };
     }
 
     protected function ensurePaymentTypeColumn(): void

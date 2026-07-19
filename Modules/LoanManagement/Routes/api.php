@@ -47,6 +47,9 @@ Route::prefix('loan-management')->group(function () {
         Route::post('/mobile/id-card/scan', [LoanCreateController::class, 'scanIdCard']);
         Route::post('/mobile/product-photo/scan', [LoanCreateController::class, 'scanProductPhoto']);
         Route::post('/mobile/payments', [StaffMobileActionController::class, 'receivePayment']);
+        Route::get('/mobile/loans/{loanId}/payments', [StaffMobileActionController::class, 'loanPayments']);
+        Route::put('/mobile/payments/{paymentId}', [StaffMobileActionController::class, 'updatePayment']);
+        Route::delete('/mobile/payments/{paymentId}', [StaffMobileActionController::class, 'deletePayment']);
         Route::post('/mobile/staff-location', [StaffMobileActionController::class, 'staffLocation']);
         Route::post('/mobile/collection-visits', [StaffMobileActionController::class, 'collectionVisit']);
 
