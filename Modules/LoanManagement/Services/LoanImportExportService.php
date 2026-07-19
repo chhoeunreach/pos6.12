@@ -3198,8 +3198,19 @@ class LoanImportExportService
             return;
         }
 
-        $column = DB::connection($this->connection)->selectOne("SHOW COLUMNS FROM `{$table}` LIKE ?", [$columnName]);
-        if ($column && preg_match('/varchar\((\d+)\)/i', (string) $column->Type, $matches) && (int) $matches[1] < $minimumLength) {
+        $column = DB::connection($this->connection)->selectOne(
+            'SELECT DATA_TYPE AS data_type, CHARACTER_MAXIMUM_LENGTH AS character_maximum_length
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = ?
+                    AND COLUMN_NAME = ?
+                LIMIT 1',
+            [$table, $columnName]
+        );
+
+        if ($column
+            && strtolower((string) $column->data_type) === 'varchar'
+            && (int) $column->character_maximum_length < $minimumLength) {
             DB::connection($this->connection)->statement(
                 "ALTER TABLE `{$table}` MODIFY `{$columnName}` varchar({$minimumLength}) {$definitionSuffix}"
             );
