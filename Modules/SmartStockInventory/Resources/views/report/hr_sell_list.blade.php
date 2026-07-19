@@ -35,6 +35,8 @@
                     <tr>
                         <th>Date</th>
                         <th>Invoice No</th>
+                        <th>Product</th>
+                        <th>S/N</th>
                         <th>Staff</th>
                         <th>Branch</th>
                         <th>Customer</th>
@@ -142,6 +144,8 @@
             columns: [
                 { data: 'created_at', name: 'sor.created_at', type: 'date' },
                 { data: 'invoice_no', name: 'sor.invoice_no', type: 'text' },
+                { data: 'product_names', name: 'product_names', orderable: false, type: 'text' },
+                { data: 'serial_numbers', name: 'serial_numbers', orderable: false, type: 'text' },
                 { data: 'staff_name', name: 'staff_name', type: 'text' },
                 { data: 'branch_name', name: 'sor.branch_name', type: 'text' },
                 { data: 'customer_name', name: 'sor.customer_name', type: 'text' },

@@ -48,6 +48,8 @@ class HrSellListReportController extends Controller
                         'sor.created_at',
                         'sor.service_type',
                         DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                        DB::raw("(SELECT GROUP_CONCAT(NULLIF(TRIM(sol.product_name), '') ORDER BY sol.id SEPARATOR '|||') FROM sell_out_report_lines as sol WHERE sol.sell_out_report_id = sor.id) as product_names"),
+                        DB::raw("(SELECT GROUP_CONCAT(NULLIF(TRIM(CONCAT_WS(' / ', NULLIF(sol.serial_number, ''), NULLIF(sol.imei, ''), NULLIF(sol.imei2, ''), NULLIF(sol.primary_identifier, ''))), '') ORDER BY sol.id SEPARATOR '|||') FROM sell_out_report_lines as sol WHERE sol.sell_out_report_id = sor.id) as serial_numbers"),
                         'u.employee_code as staff_code',
                         'u.avatar as staff_avatar'
                     );
@@ -76,7 +78,19 @@ class HrSellListReportController extends Controller
                             ->orWhere('sor.customer_name', 'like', "%{$search}%")
                             ->orWhere('sor.seller_name', 'like', "%{$search}%")
                             ->orWhere('u.name', 'like', "%{$search}%")
-                            ->orWhere('u.employee_code', 'like', "%{$search}%");
+                            ->orWhere('u.employee_code', 'like', "%{$search}%")
+                            ->orWhereExists(function ($lineQuery) use ($search) {
+                                $lineQuery->select(DB::raw(1))
+                                    ->from('sell_out_report_lines as sol_search')
+                                    ->whereColumn('sol_search.sell_out_report_id', 'sor.id')
+                                    ->where(function ($lineSearch) use ($search) {
+                                        $lineSearch->where('sol_search.product_name', 'like', "%{$search}%")
+                                            ->orWhere('sol_search.serial_number', 'like', "%{$search}%")
+                                            ->orWhere('sol_search.imei', 'like', "%{$search}%")
+                                            ->orWhere('sol_search.imei2', 'like', "%{$search}%")
+                                            ->orWhere('sol_search.primary_identifier', 'like', "%{$search}%");
+                                    });
+                            });
                     });
                 }
 
@@ -88,6 +102,12 @@ class HrSellListReportController extends Controller
                         return '<span class="display_currency" data-currency_symbol="true" data-orig-value="' . $row->total_amount . '">' . $row->total_amount . '</span>';
                     })
                     ->editColumn('created_at', '{{@format_datetime($created_at)}}')
+                    ->editColumn('product_names', function ($row) {
+                        return $this->formatLineList($row->product_names);
+                    })
+                    ->editColumn('serial_numbers', function ($row) {
+                        return $this->formatLineList($row->serial_numbers);
+                    })
                     ->editColumn('staff_name', function ($row) {
                         $avatar = ! empty($row->staff_avatar) ? ltrim($row->staff_avatar, '/') : null;
                         $avatarUrl = $avatar ? asset('uploads/avatar/' . rawurlencode($avatar)) : null;
@@ -108,7 +128,28 @@ class HrSellListReportController extends Controller
                                 ->orWhere('sor.seller_name', 'like', "%{$keyword}%");
                         });
                     })
-                    ->rawColumns(['action', 'total_amount', 'staff_name'])
+                    ->filterColumn('product_names', function ($query, $keyword) {
+                        $query->whereExists(function ($lineQuery) use ($keyword) {
+                            $lineQuery->select(DB::raw(1))
+                                ->from('sell_out_report_lines as sol_filter')
+                                ->whereColumn('sol_filter.sell_out_report_id', 'sor.id')
+                                ->where('sol_filter.product_name', 'like', "%{$keyword}%");
+                        });
+                    })
+                    ->filterColumn('serial_numbers', function ($query, $keyword) {
+                        $query->whereExists(function ($lineQuery) use ($keyword) {
+                            $lineQuery->select(DB::raw(1))
+                                ->from('sell_out_report_lines as sol_filter')
+                                ->whereColumn('sol_filter.sell_out_report_id', 'sor.id')
+                                ->where(function ($lineSearch) use ($keyword) {
+                                    $lineSearch->where('sol_filter.serial_number', 'like', "%{$keyword}%")
+                                        ->orWhere('sol_filter.imei', 'like', "%{$keyword}%")
+                                        ->orWhere('sol_filter.imei2', 'like', "%{$keyword}%")
+                                        ->orWhere('sol_filter.primary_identifier', 'like', "%{$keyword}%");
+                                });
+                        });
+                    })
+                    ->rawColumns(['action', 'total_amount', 'staff_name', 'product_names', 'serial_numbers'])
                     ->make(true);
             } catch (\Exception $e) {
                 \Log::warning('HR sell list report error: ' . $e->getMessage());
@@ -150,6 +191,25 @@ class HrSellListReportController extends Controller
 
         return view('smartstockinventory::report.hr_sell_list')
             ->with(compact('business_locations', 'sell_types', 'branches'));
+    }
+
+    private function formatLineList($value)
+    {
+        $items = collect(explode('|||', (string) $value))
+            ->map(function ($item) {
+                return trim($item);
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($items->isEmpty()) {
+            return '-';
+        }
+
+        return $items->map(function ($item) {
+            return e($item);
+        })->implode('<br>');
     }
 
     public function getDetail($report_id)
