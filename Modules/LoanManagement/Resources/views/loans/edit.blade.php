@@ -401,11 +401,13 @@
         <div class="lm-wiz-step" data-step="1"><div class="lm-wiz-step-dot">2</div></div>
         <div class="lm-wiz-step" data-step="2"><div class="lm-wiz-step-dot">3</div></div>
         <div class="lm-wiz-step" data-step="3"><div class="lm-wiz-step-dot">4</div></div>
+        <div class="lm-wiz-step" data-step="4"><div class="lm-wiz-step-dot">5</div></div>
     </div>
     <div class="lm-wiz-step-labels" id="wizStepLabels">
         <span class="active">Invoice</span>
         <span>Customer</span>
         <span>Products</span>
+        <span>Related Data</span>
         <span>Review</span>
     </div>
 
@@ -1036,8 +1038,22 @@
                 </div>
             </div>
 
-            {{-- ========== STEP 3: REVIEW ========== --}}
+            {{-- ========== STEP 3: RELATED DATA ========== --}}
             <div class="lm-wiz-panel" data-panel="3">
+                <div id="loanEditSections">
+                    @include('loanmanagement::loans.partials.edit_sections', [
+                        'loanRow' => $loanRow,
+                        'backCustomerId' => request('customer_id') ?: ($loanRow->customer_id ?? null),
+                        'loanItems' => $loanItems ?? collect(),
+                        'schedules' => $schedules ?? collect(),
+                        'payments' => $payments ?? collect(),
+                        'depositPayments' => $depositPayments ?? collect(),
+                    ])
+                </div>
+            </div>
+
+            {{-- ========== STEP 4: REVIEW ========== --}}
+            <div class="lm-wiz-panel" data-panel="4">
                 <div class="lm-wiz-card">
                     <div class="lm-wiz-section-title"><i class="fa fa-receipt"></i> Summary</div>
                     <div class="lm-wiz-review-grid">
@@ -1273,7 +1289,7 @@
 <script>
 (function ($) {
     var wizCurrentStep = 0;
-    var wizTotalSteps = 4;
+    var wizTotalSteps = 5;
     var wizUrls = {
         productBySerial: "{{ route('loan-management.loans.ajax.product-by-serial') }}",
         scanIdCard: "{{ route('loan-management.loans.edit.scan-id-card', ['loan' => $loanRow->id]) }}",

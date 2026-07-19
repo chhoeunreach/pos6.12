@@ -2925,36 +2925,61 @@ class LoanInstallmentListController extends Controller
             ->orderBy('id')
             ->get();
 
-        $remaining = $amount;
-        $oneTimeInterestUsed = false;
+        $payOffSchedule = $schedules->first();
+        if (! $payOffSchedule) {
+            return;
+        }
 
-        foreach ($schedules as $schedule) {
-            if ($remaining <= 0) {
-                break;
-            }
+        $remainingPrincipal = round((float) $schedules->sum(function ($schedule) {
+            return (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0);
+        }), 2);
+        $oneMonthInterest = round((float) $schedules
+            ->map(fn ($schedule) => (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0))
+            ->first(fn ($interest) => $interest > 0, 0), 2);
+        $payOffAmount = round($amount > 0 ? $amount : ($remainingPrincipal + $oneMonthInterest), 2);
 
-            $currentPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
-            $principal = (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0);
-            $interest = (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
-            $target = max(0, $principal + (! $oneTimeInterestUsed ? $interest : 0));
-            $applied = min($remaining, $target);
-            $newPaid = round($currentPaid + $applied, 2);
+        DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $payOffSchedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+            'principal_amount' => $remainingPrincipal,
+            'principal_due' => $remainingPrincipal,
+            'principal' => $remainingPrincipal,
+            'installment_value' => $remainingPrincipal,
+            'interest_amount' => $oneMonthInterest,
+            'interest_due' => $oneMonthInterest,
+            'interest' => $oneMonthInterest,
+            'benefit_value' => $oneMonthInterest,
+            'schedule_amount' => $payOffAmount,
+            'amount_due' => $payOffAmount,
+            'total' => $payOffAmount,
+            'amount_paid' => $payOffAmount,
+            'paid_amount' => $payOffAmount,
+            'paid_value' => $payOffAmount,
+            'amount_balance' => 0,
+            'balance_amount' => 0,
+            'status' => 'pay off',
+            'paid_at' => $paidAt,
+            'paid_date' => substr($paidAt, 0, 10),
+            'updated_at' => now(),
+        ]));
 
-            DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
-                'amount_paid' => $newPaid,
-                'paid_amount' => $newPaid,
-                'amount_balance' => 0,
-                'balance_amount' => 0,
-                'status' => 'pay off',
-                'paid_at' => $paidAt,
+        $futureScheduleIds = $schedules
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id !== (int) $payOffSchedule->id)
+            ->values();
+
+        if ($futureScheduleIds->isEmpty()) {
+            return;
+        }
+
+        if ($this->loanTableHasCol('loan_payment_schedules', 'deleted_at')) {
+            DB::connection('mysql_loan')->table('loan_payment_schedules')->whereIn('id', $futureScheduleIds->all())->update($this->loanSafeColumns('loan_payment_schedules', [
+                'deleted_at' => now(),
                 'updated_at' => now(),
             ]));
-
-            $remaining = max(0, $remaining - $applied);
-            if ($interest > 0) {
-                $oneTimeInterestUsed = true;
-            }
+            return;
         }
+
+        DB::connection('mysql_loan')->table('loan_payment_schedules')->whereIn('id', $futureScheduleIds->all())->delete();
     }
 
     protected function applyLoanPaymentToSchedules(int $loan, float $amount, string $paidAt, ?int $selectedScheduleId = null): void
@@ -4462,6 +4487,7 @@ class LoanInstallmentListController extends Controller
             ?: $this->loanFileUrlById((int) ($loanCustomerRow->id_front_file_id ?? 0))
             ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'id_front');
         $loanDocumentFiles = $this->loanFilesByCategory($loan, 'document');
+        $editSectionData = $this->loadLoanEditSectionData($loan);
 
         return view('loanmanagement::loans.edit', compact(
             'loanRow',
@@ -4497,7 +4523,7 @@ class LoanInstallmentListController extends Controller
             'customerProfilePhotoUrl',
             'idCardPhotoUrl',
             'loanDocumentFiles'
-        ));
+        ) + $editSectionData);
     }
 
     protected function loanItemsUnitPriceTotal(int $loan): float
