@@ -1482,6 +1482,7 @@ class LoanInstallmentListController extends Controller
         $payload = $request->validate([
             'schedule_id' => 'nullable|integer|min:1',
             'pay_off' => 'nullable|boolean',
+            'pay_off_discount_amount' => 'nullable|numeric|min:0',
             'deposit_payment' => 'nullable|boolean',
             'paid_date' => 'required|date',
             'payment_lines' => 'required|array|min:1',
@@ -1498,6 +1499,7 @@ class LoanInstallmentListController extends Controller
         $paidDate = $payload['paid_date'];
         $paidAt = $paidDate.' '.now()->format('H:i:s');
         $isPayOff = ! empty($payload['pay_off']);
+        $payOffDiscountAmount = $isPayOff ? round((float) ($payload['pay_off_discount_amount'] ?? 0), 2) : 0.0;
         $isDepositPayment = ! empty($payload['deposit_payment']);
         $selectedScheduleId = ($isPayOff || $isDepositPayment) ? null : ($payload['schedule_id'] ?? null);
         $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
@@ -1536,7 +1538,7 @@ class LoanInstallmentListController extends Controller
         }
 
         try {
-            DB::connection('mysql_loan')->transaction(function () use ($request, $loan, $loanRow, $isPayOff, $isDepositPayment, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
+            DB::connection('mysql_loan')->transaction(function () use ($request, $loan, $loanRow, $isPayOff, $payOffDiscountAmount, $isDepositPayment, $selectedScheduleId, $paymentLines, $totalAmount, $paidDate, $paidAt, &$createdPaymentIds) {
                 $userName = trim((string) ((auth()->user()->first_name ?? '').' '.(auth()->user()->last_name ?? '')));
                 if ($userName === '') {
                     $userName = auth()->user()->username ?? null;
@@ -1605,7 +1607,7 @@ class LoanInstallmentListController extends Controller
                         'updated_at' => now(),
                     ]));
                 } elseif ($isPayOff) {
-                    $this->applyLoanPayOffToSchedules($loan, $totalAmount, $paidAt);
+                    $this->applyLoanPayOffToSchedules($loan, $totalAmount, $payOffDiscountAmount, $paidAt);
                 } else {
                     $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $selectedScheduleId);
                 }
@@ -2911,7 +2913,7 @@ class LoanInstallmentListController extends Controller
         return max(0.01, $payOffAmount > 0 ? $payOffAmount : (float) ($loanRow->balance_amount ?? 0));
     }
 
-    protected function applyLoanPayOffToSchedules(int $loan, float $amount, string $paidAt): void
+    protected function applyLoanPayOffToSchedules(int $loan, float $amount, float $discountAmount, string $paidAt): void
     {
         if (! $this->loanTableExists('loan_payment_schedules')) {
             return;
@@ -2936,7 +2938,10 @@ class LoanInstallmentListController extends Controller
         $oneMonthInterest = round((float) $schedules
             ->map(fn ($schedule) => (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0))
             ->first(fn ($interest) => $interest > 0, 0), 2);
-        $payOffAmount = round($amount > 0 ? $amount : ($remainingPrincipal + $oneMonthInterest), 2);
+        $calculatedPayOffAmount = round($remainingPrincipal + $oneMonthInterest, 2);
+        $discountAmount = min(max(0, round($discountAmount, 2)), $calculatedPayOffAmount);
+        $paidAmount = round($amount, 2);
+        $payOffAmount = max($calculatedPayOffAmount, round($paidAmount + $discountAmount, 2));
 
         DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $payOffSchedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
             'principal_amount' => $remainingPrincipal,
@@ -2950,9 +2955,10 @@ class LoanInstallmentListController extends Controller
             'schedule_amount' => $payOffAmount,
             'amount_due' => $payOffAmount,
             'total' => $payOffAmount,
-            'amount_paid' => $payOffAmount,
-            'paid_amount' => $payOffAmount,
-            'paid_value' => $payOffAmount,
+            'amount_paid' => $paidAmount,
+            'paid_amount' => $paidAmount,
+            'paid_value' => $paidAmount,
+            'discount_amount' => $discountAmount,
             'amount_balance' => 0,
             'balance_amount' => 0,
             'status' => 'pay off',

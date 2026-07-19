@@ -120,6 +120,17 @@
                         </label>
                     </div>
                 </div>
+                <div class="col-md-4 loan-pay-off-discount-wrap" style="display:none;">
+                    <div class="form-group">
+                        {!! Form::label('pay_off_discount_amount', 'Pay off discount:') !!}
+                        <div class="input-group">
+                            <span class="input-group-addon">
+                                <i class="fa fa-tag"></i>
+                            </span>
+                            <input type="number" step="0.01" min="0" name="pay_off_discount_amount" id="pay_off_discount_amount" class="form-control input_number loan-pay-off-discount" value="0.00">
+                        </div>
+                    </div>
+                </div>
                 @endif
 
                 <div class="col-md-4">
@@ -248,8 +259,11 @@ $(function () {
         $form.find('.payment-line-amount').each(function () {
             total += parseFloat($(this).val()) || 0;
         });
+        var discount = $form.find('.loan-pay-off-option').is(':checked')
+            ? (parseFloat($form.find('.loan-pay-off-discount').val()) || 0)
+            : 0;
         $form.find('.loan-payment-total').text(total.toFixed(2));
-        $form.find('.loan-payment-remaining').text(Math.max(suggestedTotal - total, 0).toFixed(2));
+        $form.find('.loan-payment-remaining').text(Math.max(suggestedTotal - total - discount, 0).toFixed(2));
     }
 
     function remainingBeforeNewRow() {
@@ -378,10 +392,15 @@ $(function () {
             previousScheduleId = $form.find('[name="schedule_id"]').val() || previousScheduleId;
             suggestedTotal = payOffBalance;
             $form.find('[name="schedule_id"]').val('').trigger('change');
-            setSinglePaymentAmount(payOffBalance);
+            $form.find('.loan-pay-off-discount-wrap').show();
+            var discount = Math.min(parseFloat($form.find('.loan-pay-off-discount').val()) || 0, payOffBalance);
+            $form.find('.loan-pay-off-discount').val(discount.toFixed(2));
+            setSinglePaymentAmount(Math.max(payOffBalance - discount, 0.01));
             return;
         }
 
+        $form.find('.loan-pay-off-discount-wrap').hide();
+        $form.find('.loan-pay-off-discount').val('0.00');
         if (!$form.find('[name="schedule_id"]').val() && previousScheduleId) {
             $form.find('[name="schedule_id"]').val(previousScheduleId).trigger('change');
         } else if (!$form.find('[name="schedule_id"]').val()) {
@@ -528,6 +547,11 @@ $(function () {
 
     $form.on('input change', '.payment-line-amount', updateLoanPaymentTotal);
     $form.on('change', '.loan-pay-off-option', applyPayTarget);
+    $form.on('input change', '.loan-pay-off-discount', function () {
+        if ($form.find('.loan-pay-off-option').is(':checked')) {
+            applyPayTarget();
+        }
+    });
     $form.on('change', '[name="schedule_id"]', function () {
         if ($form.find('.loan-pay-off-option').is(':checked')) {
             updateScheduleDisplay();

@@ -33,6 +33,7 @@
             @csrf
             <input type="hidden" name="return_to" value="{{ url('/loan-management/loans/'.$loanRow->id.'/view') }}">
             <input type="hidden" name="pay_off" id="lmPayPayOff" value="0">
+            <input type="hidden" name="pay_off_discount_amount" id="lmPayPayOffDiscountHidden" value="0.00">
             <input type="hidden" name="paid_date" value="{{ date('Y-m-d') }}">
             <input type="hidden" name="schedule_id" id="lmPayScheduleId" value="{{ $selectedScheduleId ?? '' }}">
 
@@ -69,6 +70,13 @@
                         <input type="number" step="0.01" min="0.01" name="payment_lines[0][amount]"
                                id="lmPayAmountInput" class="lm-pay-amount-input"
                                value="{{ $defaultAmount }}" required>
+                    </div>
+                </div>
+
+                <div class="lm-pay-section" id="lmPayDiscountSection" style="display:none;">
+                    <div class="lm-pay-field">
+                        <label>Pay off discount</label>
+                        <input type="number" step="0.01" min="0" id="lmPayDiscountInput" class="lm-pay-field-input" value="0.00">
                     </div>
                 </div>
 
@@ -249,6 +257,18 @@ $(function() {
     var loanBalance = {{ $loanBalance }};
     var payOffAmount = parseFloat('{{ $payOffAmount }}');
 
+    function payOffDiscount() {
+        return Math.min(parseFloat($form.find('#lmPayDiscountInput').val()) || 0, payOffAmount);
+    }
+
+    function applyQuickPayOffAmount() {
+        var discount = payOffDiscount();
+        $form.find('#lmPayDiscountInput').val(discount.toFixed(2));
+        $form.find('#lmPayPayOffDiscountHidden').val(discount.toFixed(2));
+        $form.find('#lmPayAmountInput').val(Math.max(payOffAmount - discount, 0.01).toFixed(2));
+        updatePayDisplay();
+    }
+
     // Quick amount buttons
     $form.on('click', '.lm-pay-qbtn', function() {
         var amount = parseFloat($(this).data('amount'));
@@ -259,8 +279,12 @@ $(function() {
 
         if ($(this).hasClass('lm-pay-qbtn-payoff')) {
             $form.find('#lmPayPayOff').val('1');
+            $form.find('#lmPayDiscountSection').show();
+            applyQuickPayOffAmount();
         } else {
             $form.find('#lmPayPayOff').val('0');
+            $form.find('#lmPayDiscountSection').hide();
+            $form.find('#lmPayDiscountInput, #lmPayPayOffDiscountHidden').val('0.00');
         }
     });
 
@@ -268,7 +292,15 @@ $(function() {
     $form.on('input', '#lmPayAmountInput', function() {
         $form.find('.lm-pay-qbtn').removeClass('active');
         $form.find('#lmPayPayOff').val('0');
+        $form.find('#lmPayDiscountSection').hide();
+        $form.find('#lmPayDiscountInput, #lmPayPayOffDiscountHidden').val('0.00');
         updatePayDisplay();
+    });
+
+    $form.on('input change', '#lmPayDiscountInput', function() {
+        if ($form.find('#lmPayPayOff').val() === '1') {
+            applyQuickPayOffAmount();
+        }
     });
 
     // Method chips

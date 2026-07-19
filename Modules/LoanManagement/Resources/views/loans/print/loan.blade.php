@@ -964,10 +964,13 @@
                         }
                         $rowPayments = $paymentsBySchedule->get($row->id, collect());
                         $paid = (float) ($row->paid_value ?? $rowPayments->sum(fn ($p) => (float) ($p->total_paid_base ?? $p->amount ?? 0)));
-                        $rowStatus = $paid >= $rowTotal && $rowTotal > 0
-                            ? 'Paid'
+                        $discount = (float) ($row->discount_amount ?? 0);
+                        $storedStatus = strtolower((string) ($row->status ?? ''));
+                        $isPayOff = in_array($storedStatus, ['pay off', 'pay_off', 'payoff'], true);
+                        $rowStatus = ($isPayOff || ($paid + $discount >= $rowTotal && $rowTotal > 0))
+                            ? ($isPayOff ? 'Pay Off' : 'Paid')
                             : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
-                        $rowStatusClass = strtolower($rowStatus) === 'paid'
+                        $rowStatusClass = in_array(strtolower($rowStatus), ['paid', 'pay off'], true)
                             ? 'status-paid'
                             : (strtolower($rowStatus) === 'partial' ? 'status-partial' : 'status-unpaid');
                         $paymentDates = $rowPayments

@@ -83,7 +83,7 @@
                                 data-container=".view_modal">
                             <i class="fa fa-pencil"></i> <span class="hidden-xs">Edit</span>
                         </button>
-                        @if(! in_array($s->status ?? '', ['paid', 'completed'], true))
+                        @if(! in_array(strtolower((string) ($s->status ?? '')), ['paid', 'completed', 'pay off', 'pay_off', 'payoff'], true))
                             <button type="button"
                                     class="btn btn-xs btn-success btn-modal d-none d-lg-inline-block"
                                     data-href="{{ route('loan-management.loans.payment.create', ['loan' => $loanRow->id, 'schedule_id' => $s->id]) }}"
