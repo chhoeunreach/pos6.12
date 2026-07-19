@@ -2201,7 +2201,7 @@ class LoanInstallmentListController extends Controller
                 'schedule_amount' => 'nullable|numeric|min:0',
                 'paid_amount' => 'nullable|numeric|min:0',
                 'balance_amount' => 'nullable|numeric|min:0',
-                'status' => 'nullable|string|in:auto,pending,unpaid,partial,paid,late,completed',
+                'status' => 'nullable|string|in:auto,pending,unpaid,partial,paid,late,completed,pay off,pay_off,payoff',
                 'payment_action' => 'nullable|string|in:keep,sync_status,add_update,remove',
                 'payment_amount' => 'nullable|numeric|min:0',
                 'payment_method' => 'nullable|string|max:100',
@@ -2219,6 +2219,9 @@ class LoanInstallmentListController extends Controller
                 : round(max(0, $amountDue - $paid), 2);
 
             $status = strtolower(trim((string) ($payload['status'] ?? 'auto')));
+            if (in_array($status, ['pay_off', 'payoff'], true)) {
+                $status = 'pay off';
+            }
             if ($status === '' || $status === 'auto') {
                 if ($amountDue > 0 && $balance <= 0) {
                     $status = 'paid';
@@ -2250,10 +2253,10 @@ class LoanInstallmentListController extends Controller
                     'balance_amount' => $balance,
                     'amount_balance' => $balance,
                     'status' => $status,
-                    'paid_at' => in_array($status, ['paid', 'completed'], true)
+                    'paid_at' => in_array($status, ['paid', 'completed', 'pay off'], true)
                         ? ($scheduleRow->paid_at ?? now())
                         : ($paid > 0 ? ($scheduleRow->paid_at ?? null) : null),
-                    'paid_date' => in_array($status, ['paid', 'completed'], true)
+                    'paid_date' => in_array($status, ['paid', 'completed', 'pay off'], true)
                         ? now()->toDateString()
                         : ($paid > 0 ? ($scheduleRow->paid_date ?? null) : null),
                     'updated_at' => now(),
@@ -2265,20 +2268,15 @@ class LoanInstallmentListController extends Controller
             });
 
             if ($request->ajax() || $request->wantsJson()) {
-                $sectionHtml = view(
-                    'loanmanagement::loans.partials.edit_sections',
-                    array_merge([
-                        'loanRow' => $loanRow,
-                        'backCustomerId' => request('customer_id') ?: ($loanRow->customer_id ?? null),
-                    ], $this->loadLoanEditSectionData($loan))
-                )->render();
+                $sectionData = $this->freshLoanSectionsResponseData($request, $loan);
 
                 return response()->json([
                     'success' => true,
                     'message' => 'Payment schedule updated successfully',
                     'data' => [
-                        'redirect_url' => $request->input('return_to') ?: route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
-                        'sections_html' => $sectionHtml,
+                        'redirect_url' => $request->input('return_to') ?: $sectionData['redirect_url'],
+                        'sections_html' => $sectionData['sections_html'],
+                        'sections_target' => $sectionData['sections_target'],
                     ],
                 ]);
             }
@@ -2320,7 +2318,7 @@ class LoanInstallmentListController extends Controller
         if ($action === 'sync_status') {
             if (in_array($status, ['pending', 'unpaid'], true)) {
                 $action = 'remove';
-            } elseif (in_array($status, ['paid', 'completed'], true) || $paid > 0) {
+            } elseif (in_array($status, ['paid', 'completed', 'pay off'], true) || $paid > 0) {
                 $action = 'add_update';
             } else {
                 $action = 'keep';
@@ -2358,7 +2356,7 @@ class LoanInstallmentListController extends Controller
 
         $amount = array_key_exists('payment_amount', $payload) && $payload['payment_amount'] !== null
             ? round((float) $payload['payment_amount'], 2)
-            : ($paid > 0 ? $paid : (in_array($status, ['paid', 'completed'], true) ? $amountDue : 0));
+            : ($paid > 0 ? $paid : (in_array($status, ['paid', 'completed', 'pay off'], true) ? $amountDue : 0));
         if ($amount <= 0) {
             return;
         }
@@ -2439,7 +2437,7 @@ class LoanInstallmentListController extends Controller
             'paid_value' => $amount,
             'balance_amount' => $balance,
             'amount_balance' => $balance,
-            'status' => $balance <= 0 ? 'paid' : 'partial',
+            'status' => $status === 'pay off' ? 'pay off' : ($balance <= 0 ? 'paid' : 'partial'),
             'paid_at' => $paidAt,
             'paid_date' => $paidDate,
             'updated_at' => now(),
@@ -2624,6 +2622,104 @@ class LoanInstallmentListController extends Controller
                     'workflow_error' => 'Unable to update workflow: '.$e->getMessage(),
                 ]);
         }
+    }
+
+    public function destroySchedule(Request $request, int $loan, int $schedule)
+    {
+        try {
+            abort_if(! $this->loanTableExists('loans'), 404);
+            abort_if(! $this->loanTableExists('loan_payment_schedules'), 404);
+
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+            abort_if(! $loanRow, 404);
+
+            $scheduleQuery = DB::connection('mysql_loan')
+                ->table('loan_payment_schedules')
+                ->where('id', $schedule)
+                ->where('loan_id', $loan);
+            $this->excludeDeletedLoanRows($scheduleQuery, 'loan_payment_schedules');
+            $scheduleRow = $scheduleQuery->first();
+            abort_if(! $scheduleRow, 404);
+
+            DB::connection('mysql_loan')->transaction(function () use ($loan, $scheduleRow) {
+                $this->deleteSchedulePayments($loan, (int) $scheduleRow->id);
+
+                if ($this->loanTableHasCol('loan_payment_schedules', 'deleted_at')) {
+                    DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+                        'deleted_at' => now(),
+                        'updated_at' => now(),
+                    ]));
+                } else {
+                    DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->delete();
+                }
+
+                $this->refreshLoanBalanceFromSchedules($loan);
+                $this->refreshLoanPaymentTotals($loan, 0);
+            });
+
+            if ($request->ajax() || $request->wantsJson()) {
+                $sectionData = $this->freshLoanSectionsResponseData($request, $loan);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment schedule deleted successfully',
+                    'data' => [
+                        'redirect_url' => $sectionData['redirect_url'],
+                        'sections_html' => $sectionData['sections_html'],
+                        'sections_target' => $sectionData['sections_target'],
+                    ],
+                ]);
+            }
+
+            return redirect()
+                ->route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []))
+                ->with('status', ['success' => 1, 'msg' => 'Payment schedule deleted successfully']);
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unable to delete payment schedule: '.$e->getMessage(),
+                    'data' => [
+                        'detail' => $e->getFile().':'.$e->getLine(),
+                    ],
+                ], 500);
+            }
+
+            return back()
+                ->withErrors(['schedule_error' => 'Unable to delete payment schedule: '.$e->getMessage()]);
+        }
+    }
+
+    protected function freshLoanSectionsResponseData(Request $request, int $loan): array
+    {
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $context = strtolower((string) $request->input('sections_context', $request->query('sections_context', 'edit')));
+        $isShowContext = in_array($context, ['show', 'detail', 'loan_detail'], true);
+
+        if ($isShowContext) {
+            return [
+                'sections_target' => 'loanShowSections',
+                'sections_html' => view(
+                    'loanmanagement::loans.partials.show_sections',
+                    array_merge(['loanRow' => $loanRow], $this->loadLoanShowSectionData($loan, $loanRow, $loanRow->sell_due_amount_snapshot ?? null))
+                )->render(),
+                'redirect_url' => route('loan-management.loans.view', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
+            ];
+        }
+
+        return [
+            'sections_target' => 'loanEditSections',
+            'sections_html' => view(
+                'loanmanagement::loans.partials.edit_sections',
+                array_merge([
+                    'loanRow' => $loanRow,
+                    'backCustomerId' => request('customer_id') ?: ($loanRow->customer_id ?? null),
+                ], $this->loadLoanEditSectionData($loan))
+            )->render(),
+            'redirect_url' => route('loan-management.loans.edit', ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])),
+        ];
     }
 
     public function updateSchedulesFromEdit(Request $request, int $loan)
@@ -2830,24 +2926,34 @@ class LoanInstallmentListController extends Controller
             ->get();
 
         $remaining = $amount;
+        $oneTimeInterestUsed = false;
+
         foreach ($schedules as $schedule) {
+            if ($remaining <= 0) {
+                break;
+            }
+
             $currentPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
             $principal = (float) ($schedule->principal_amount ?? $schedule->principal_due ?? 0);
             $interest = (float) ($schedule->interest_amount ?? $schedule->interest_due ?? 0);
-            $target = max(0, $principal + $interest);
+            $target = max(0, $principal + (! $oneTimeInterestUsed ? $interest : 0));
             $applied = min($remaining, $target);
+            $newPaid = round($currentPaid + $applied, 2);
 
             DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
-                'amount_paid' => $currentPaid + $applied,
-                'paid_amount' => $currentPaid + $applied,
+                'amount_paid' => $newPaid,
+                'paid_amount' => $newPaid,
                 'amount_balance' => 0,
                 'balance_amount' => 0,
-                'status' => 'paid',
+                'status' => 'pay off',
                 'paid_at' => $paidAt,
                 'updated_at' => now(),
             ]));
 
             $remaining = max(0, $remaining - $applied);
+            if ($interest > 0) {
+                $oneTimeInterestUsed = true;
+            }
         }
     }
 
@@ -4454,8 +4560,8 @@ class LoanInstallmentListController extends Controller
                 'customer_name_snapshot' => 'nullable|string|max:191',
                 'customer_phone_snapshot' => 'nullable|string|max:191',
                 'customer_address_snapshot' => 'nullable|string|max:1000',
-                'customer_khmer_name' => 'required|string|max:191',
-                'customer_english_name' => 'required|string|max:191',
+                'customer_khmer_name' => 'nullable|string|max:191',
+                'customer_english_name' => 'nullable|string|max:191',
                 'alternate_phone' => 'nullable|string|max:191',
                 'customer_group_name' => 'nullable|string|max:255',
                 'customer_profile_image' => 'nullable|string',
@@ -4592,6 +4698,56 @@ class LoanInstallmentListController extends Controller
             }
             if (! empty($data['id_card_ocr_fields']['address']) && empty($data['customer_address_snapshot'])) {
                 $data['customer_address_snapshot'] = $data['id_card_ocr_fields']['address'];
+            }
+
+            $existingCustomerName = null;
+            $existingCustomerKhmerName = null;
+            if ($loanCustomerId > 0 && $this->loanTableExists('loan_customers')) {
+                $existingCustomer = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->first();
+                if ($existingCustomer) {
+                    $existingCustomerName = $existingCustomer->name ?? null;
+                    $existingCustomerKhmerName = $existingCustomer->khmer_name ?? null;
+                }
+            }
+
+            $customerKhmerName = trim((string) ($data['customer_khmer_name'] ?? ''));
+            if ($customerKhmerName === '') {
+                $customerKhmerName = collect([
+                    $data['id_card_ocr_fields']['khmer_name'] ?? null,
+                    $existingCustomerKhmerName,
+                    $data['customer_name_snapshot'] ?? null,
+                    $loanRow->customer_name_snapshot ?? null,
+                    $existingCustomerName,
+                    $data['customer_english_name'] ?? null,
+                ])->map(fn ($value) => trim((string) $value))->first(fn ($value) => $value !== '') ?? '';
+            }
+
+            $customerEnglishName = trim((string) ($data['customer_english_name'] ?? ''));
+            if ($customerEnglishName === '') {
+                $customerEnglishName = collect([
+                    $data['id_card_ocr_fields']['english_name'] ?? null,
+                    $existingCustomerName,
+                    $customerKhmerName,
+                    $data['customer_name_snapshot'] ?? null,
+                    $loanRow->customer_name_snapshot ?? null,
+                ])->map(fn ($value) => trim((string) $value))->first(fn ($value) => $value !== '') ?? '';
+            }
+
+            $data['customer_khmer_name'] = $customerKhmerName;
+            $data['customer_english_name'] = $customerEnglishName;
+            if (empty($data['customer_name_snapshot'])) {
+                $data['customer_name_snapshot'] = $customerKhmerName !== '' ? $customerKhmerName : $customerEnglishName;
+            }
+
+            if ($loanCustomerId > 0 && $this->loanTableExists('loan_customers')) {
+                DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->update($this->loanSafeColumns('loan_customers', [
+                    'khmer_name' => $customerKhmerName !== '' ? $customerKhmerName : null,
+                    'name' => $customerEnglishName !== '' ? $customerEnglishName : ($customerKhmerName !== '' ? $customerKhmerName : null),
+                    'phone' => $data['customer_phone_snapshot'] ?? null,
+                    'mobile' => $data['customer_phone_snapshot'] ?? null,
+                    'address' => $data['customer_address_snapshot'] ?? null,
+                    'updated_at' => now(),
+                ]));
             }
 
             foreach ([

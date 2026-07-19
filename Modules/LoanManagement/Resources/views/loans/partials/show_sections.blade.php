@@ -79,7 +79,7 @@
                     <td>
                         <button type="button"
                                 class="btn btn-xs btn-primary btn-modal"
-                                data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $s->id]) }}"
+                                data-href="{{ route('loan-management.loans.schedules.edit', ['loan' => $loanRow->id, 'schedule' => $s->id, 'sections_context' => 'show'] + (request()->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])) }}"
                                 data-container=".view_modal">
                             <i class="fa fa-pencil"></i> <span class="hidden-xs">Edit</span>
                         </button>

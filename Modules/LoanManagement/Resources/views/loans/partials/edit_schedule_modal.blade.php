@@ -7,6 +7,7 @@
     $dueDate = ! empty($scheduleRow->due_date) ? \Carbon\Carbon::parse($scheduleRow->due_date)->format('Y-m-d') : '';
     $status = strtolower((string) ($scheduleRow->status ?? 'unpaid'));
     $isEmbeddedModal = request()->boolean('_lm_modal');
+    $sectionsContext = request('sections_context', 'edit');
     $editRouteParams = ['loan' => $loanRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : []);
     $schedulePayments = $schedulePayments ?? collect();
     $paymentTypes = $paymentTypes ?? ['cash' => 'Cash'];
@@ -29,6 +30,7 @@
         'paid' => 'Paid',
         'late' => 'Late',
         'completed' => 'Completed',
+        'pay off' => 'Pay Off',
     ];
 @endphp
 
@@ -36,6 +38,7 @@
     <div class="modal-content">
         {!! Form::open(['url' => route('loan-management.loans.schedules.update', ['loan' => $loanRow->id, 'schedule' => $scheduleRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])), 'method' => 'post', 'id' => 'loan_schedule_update_form']) !!}
         <input type="hidden" name="return_to" value="{{ route('loan-management.loans.edit', $editRouteParams) }}">
+        <input type="hidden" name="sections_context" value="{{ $sectionsContext }}">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
                 <span aria-hidden="true">&times;</span>
@@ -209,6 +212,11 @@
             <button type="button" class="btn btn-default pull-left loan-schedule-recalculate">
                 <i class="fa fa-calculator"></i> Auto Balance
             </button>
+            <button type="button"
+                    class="btn btn-danger pull-left loan-schedule-delete"
+                    data-url="{{ route('loan-management.loans.schedules.destroy', ['loan' => $loanRow->id, 'schedule' => $scheduleRow->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}">
+                <i class="fa fa-trash"></i> Delete
+            </button>
             <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
                 @lang('messages.update')
             </button>
@@ -243,7 +251,7 @@ $(function () {
     });
     $form.on('change', '[name="status"]', function () {
         var status = String($(this).val() || '').toLowerCase();
-        if (['paid', 'completed'].indexOf(status) !== -1) {
+        if (['paid', 'completed', 'pay off'].indexOf(status) !== -1) {
             $form.find('[name="payment_action"]').val('sync_status');
             var amountDue = numberValue('[name="schedule_amount"]');
             if (!$form.find('[name="payment_amount"]').data('touched')) {
@@ -253,6 +261,49 @@ $(function () {
             $form.find('[name="payment_action"]').val('sync_status');
         }
     });
+
+    function replaceSectionsFromResponse(res) {
+        var data = (res && res.data) ? res.data : {};
+        var targetId = data.sections_target || 'loanEditSections';
+        var targetIds = [targetId, 'loanShowSections', 'loanEditSections'];
+        var html = data.sections_html || '';
+
+        $('.view_modal').modal('hide');
+
+        if (html) {
+            for (var i = 0; i < targetIds.length; i++) {
+                var id = targetIds[i];
+                var parentTarget = window.parent && window.parent.document ? window.parent.document.getElementById(id) : null;
+                if (parentTarget) {
+                    parentTarget.innerHTML = html;
+                    return true;
+                }
+
+                var localTarget = document.getElementById(id);
+                if (localTarget) {
+                    localTarget.innerHTML = html;
+                    return true;
+                }
+            }
+        }
+
+        if (data.redirect_url && window.jQuery && $('.view_modal').length) {
+            $.ajax({
+                url: data.redirect_url,
+                dataType: 'html',
+                success: function (html) {
+                    $('.view_modal').html(html).modal('show');
+                },
+                error: function () {
+                    window.location.href = data.redirect_url;
+                }
+            });
+            return true;
+        }
+
+        window.location.href = data.redirect_url || window.location.href;
+        return false;
+    }
 
     $form.off('submit.loanScheduleModal').on('submit.loanScheduleModal', function (e) {
         e.preventDefault();
@@ -272,21 +323,7 @@ $(function () {
                     toastr.success(res.message || 'Payment schedule updated successfully');
                 }
 
-                $('.view_modal').modal('hide');
-                if (res.data && res.data.sections_html && window.parent && window.parent.document) {
-                    var parentSections = window.parent.document.getElementById('loanEditSections');
-                    if (parentSections) {
-                        parentSections.innerHTML = res.data.sections_html;
-                        return;
-                    }
-                }
-
-                if (res.data && res.data.sections_html && document.getElementById('loanEditSections')) {
-                    document.getElementById('loanEditSections').innerHTML = res.data.sections_html;
-                    return;
-                }
-
-                window.location.href = (res.data && res.data.redirect_url) ? res.data.redirect_url : window.location.href;
+                replaceSectionsFromResponse(res);
             },
             error: function (xhr) {
                 var message = 'Failed to update payment schedule';
@@ -319,6 +356,45 @@ $(function () {
                 if (!$errorBox.length) {
                     alert(message);
                     return;
+                }
+            },
+            complete: function () {
+                $buttons.prop('disabled', false);
+            }
+        });
+    });
+
+    $form.on('click', '.loan-schedule-delete', function () {
+        if (!confirm('Delete this payment schedule? Related payment records linked to this schedule will also be removed.')) {
+            return;
+        }
+
+        var $button = $(this);
+        var $buttons = $form.find('button');
+        var $errorBox = $('#loan_schedule_update_error');
+
+        $errorBox.hide().empty();
+        $buttons.prop('disabled', true);
+
+        $.ajax({
+            url: $button.data('url'),
+            method: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function (res) {
+                if (window.toastr) {
+                    toastr.success(res.message || 'Payment schedule deleted successfully');
+                }
+                replaceSectionsFromResponse(res);
+            },
+            error: function (xhr) {
+                var message = 'Failed to delete payment schedule';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                $errorBox.text(message).show();
+                if (window.toastr) {
+                    toastr.error(message);
                 }
             },
             complete: function () {

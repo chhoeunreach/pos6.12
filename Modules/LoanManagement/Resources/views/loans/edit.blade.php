@@ -566,12 +566,12 @@
                     <input type="hidden" name="customer_name_snapshot" value="{{ old('customer_khmer_name', trim((string) ($loanRow->customer_khmer_name ?? ''))) ?: old('customer_name_snapshot', $editCustomerName) }}">
                     <div class="lm-wiz-grid-2">
                         <div class="lm-wiz-field">
-                            <label>Khmer Name <span class="lm-wiz-required">*</span></label>
-                            <input type="text" name="customer_khmer_name" class="lm-wiz-input" value="{{ old('customer_khmer_name', $loanRow->customer_khmer_name ?? '') }}" required placeholder="Khmer name">
+                            <label>Khmer Name</label>
+                            <input type="text" name="customer_khmer_name" class="lm-wiz-input" value="{{ old('customer_khmer_name', $loanRow->customer_khmer_name ?? '') }}" placeholder="Khmer name">
                         </div>
                         <div class="lm-wiz-field">
-                            <label>English Name <span class="lm-wiz-required">*</span></label>
-                            <input type="text" name="customer_english_name" class="lm-wiz-input" value="{{ old('customer_english_name', $loanRow->customer_english_name ?? '') }}" required placeholder="English name">
+                            <label>English Name</label>
+                            <input type="text" name="customer_english_name" class="lm-wiz-input" value="{{ old('customer_english_name', $loanRow->customer_english_name ?? '') }}" placeholder="English name">
                         </div>
                     </div>
                     <div class="lm-wiz-grid-2">
@@ -2224,23 +2224,19 @@
         }
 
         if (step === 1) {
+            var khmerFallback = String($('#wizIdCardOcrKhmerName').val() || $('[name="customer_name_snapshot"]').val() || $('[name="customer_english_name"]').val() || '').trim();
+            var englishFallback = String($('#wizIdCardOcrEnglishName').val() || $('[name="customer_khmer_name"]').val() || $('[name="customer_name_snapshot"]').val() || '').trim();
+            if (!$('[name="customer_khmer_name"]').val().trim() && khmerFallback) {
+                $('[name="customer_khmer_name"]').val(khmerFallback).trigger('input').trigger('change');
+            }
+            if (!$('[name="customer_english_name"]').val().trim() && englishFallback) {
+                $('[name="customer_english_name"]').val(englishFallback).trigger('input').trigger('change');
+            }
             wizSyncCustomerNameFromKhmer();
             var khmerNameInput = $('[name="customer_khmer_name"]');
-            if (!khmerNameInput.val().trim()) {
-                khmerNameInput.addClass('has-error');
-                valid = false;
-                if (!firstInvalid) firstInvalid = khmerNameInput;
-            } else {
-                khmerNameInput.removeClass('has-error');
-            }
+            khmerNameInput.removeClass('has-error');
             var englishNameInput = $('[name="customer_english_name"]');
-            if (!englishNameInput.val().trim()) {
-                englishNameInput.addClass('has-error');
-                valid = false;
-                if (!firstInvalid) firstInvalid = englishNameInput;
-            } else {
-                englishNameInput.removeClass('has-error');
-            }
+            englishNameInput.removeClass('has-error');
             var phoneInput = $('[name="customer_phone_snapshot"]');
             if (!phoneInput.val().trim()) {
                 phoneInput.addClass('has-error');

@@ -114,6 +114,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/loans/{loan}/items/{item}/delete', [LoanInstallmentListController::class, 'destroyItem'])->name('loan-management.loans.items.destroy')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/schedules/{schedule}/edit', [LoanInstallmentListController::class, 'editSchedule'])->name('loan-management.loans.schedules.edit')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/schedules/{schedule}', [LoanInstallmentListController::class, 'updateSchedule'])->name('loan-management.loans.schedules.update')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/schedules/{schedule}/delete', [LoanInstallmentListController::class, 'destroySchedule'])->name('loan-management.loans.schedules.destroy')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/status', [LoanInstallmentListController::class, 'changeStatus'])->name('loan-management.loans.status')->middleware('can:loan_management.approve');
         Route::delete('/loans/{loan}', [LoanInstallmentListController::class, 'destroy'])->name('loan-management.loans.destroy')->middleware('can:loan_management.delete');
 

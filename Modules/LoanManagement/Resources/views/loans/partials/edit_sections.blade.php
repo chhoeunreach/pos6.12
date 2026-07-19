@@ -66,13 +66,15 @@
                             $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
                             $paidPaymentSummary = trim((string) ($schedule->paid_payment_summary ?? ''));
                             $scheduleStatus = strtolower((string) ($schedule->status ?? 'pending'));
-                            if ($paid > 0 && ($balance <= 0 || ($due > 0 && $paid >= $due))) {
+                            if ($scheduleStatus === 'pay off') {
+                                $scheduleStatus = 'pay off';
+                            } elseif ($paid > 0 && ($balance <= 0 || ($due > 0 && $paid >= $due))) {
                                 $scheduleStatus = 'paid';
                             } elseif ($paid > 0 && !in_array($scheduleStatus, ['paid', 'completed'], true)) {
                                 $scheduleStatus = 'partial';
                             }
                             $statusClass = match($scheduleStatus) {
-                                'paid', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                                'paid', 'completed', 'pay off' => 'color:#16a34a;background:#dcfce7;',
                                 'partial' => 'color:#d97706;background:#fef3c7;',
                                 'late', 'overdue' => 'color:#dc2626;background:#fee2e2;',
                                 default => 'color:#64748b;background:#f1f5f9;',
@@ -120,13 +122,15 @@
                     $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
                     $paidPaymentSummary = trim((string) ($schedule->paid_payment_summary ?? ''));
                     $scheduleStatus = strtolower((string) ($schedule->status ?? 'pending'));
-                    if ($paid > 0 && ($balance <= 0 || ($due > 0 && $paid >= $due))) {
+                    if ($scheduleStatus === 'pay off') {
+                        $scheduleStatus = 'pay off';
+                    } elseif ($paid > 0 && ($balance <= 0 || ($due > 0 && $paid >= $due))) {
                         $scheduleStatus = 'paid';
                     } elseif ($paid > 0 && !in_array($scheduleStatus, ['paid', 'completed'], true)) {
                         $scheduleStatus = 'partial';
                     }
                     $statusClass = match($scheduleStatus) {
-                        'paid', 'completed' => 'color:#16a34a;background:#dcfce7;',
+                        'paid', 'completed', 'pay off' => 'color:#16a34a;background:#dcfce7;',
                         'partial' => 'color:#d97706;background:#fef3c7;',
                         'late', 'overdue' => 'color:#dc2626;background:#fee2e2;',
                         default => 'color:#64748b;background:#f1f5f9;',
