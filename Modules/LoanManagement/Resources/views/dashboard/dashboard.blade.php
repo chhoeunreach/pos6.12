@@ -3077,6 +3077,7 @@
             var refreshScheduleUrl = "{{ url('loan-management/loans') }}/" + row.id + "/schedules/refresh";
             var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
             var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
+            var telegramLinkUrl = row.customer_id ? "{{ url('loan-management/customers') }}/" + row.customer_id + "/telegram/link" : '';
             var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
             var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
             var statusBadge = isOverdue
@@ -3103,6 +3104,7 @@
                 + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
                 + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
                 + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
+                + (telegramLinkUrl ? '<li><button type="button" class="js-dashboard-telegram-link" data-url="' + telegramLinkUrl + '" data-customer="' + esc(row.customer_name) + '"><i class="fa fa-paper-plane"></i> Connect Telegram</button></li>' : '')
                 + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
                 + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
                 + '<li><button type="button" class="lm-dashboard-refresh-schedule-btn" data-loan-id="' + esc(row.id) + '" data-url="' + refreshScheduleUrl + '"><i class="fa fa-refresh"></i> Refresh Schedule</button></li>'
@@ -3299,6 +3301,74 @@
                         toastr.error('Unable to copy loan information');
                     } else {
                         alert('Unable to copy loan information');
+                    }
+                })
+                .finally(function () {
+                    $button.prop('disabled', false);
+                });
+        });
+
+        $(document).on('click', '.js-dashboard-telegram-link', function (event) {
+            event.preventDefault();
+
+            var $button = $(this);
+            var url = $button.data('url');
+            var customer = $button.data('customer') || 'customer';
+            if (!url || !$('.view_modal').length) {
+                return;
+            }
+
+            $button.prop('disabled', true);
+            fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                body: '{}'
+            })
+                .then(function (response) {
+                    return response.json().then(function (json) {
+                        if (!response.ok) {
+                            throw new Error(json.message || 'Unable to create Telegram link.');
+                        }
+                        return json;
+                    });
+                })
+                .then(function (res) {
+                    var link = res && res.link ? res.link : '';
+                    var expires = res && res.expires_at ? moment(res.expires_at).format('YYYY-MM-DD HH:mm') : '';
+                    var qrUrl = link ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link) : '';
+
+                    $('.view_modal').html(
+                        '<div class="modal-dialog modal-sm" role="document">' +
+                            '<div class="modal-content">' +
+                                '<div class="modal-header">' +
+                                    '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                                    '<h4 class="modal-title"><i class="fa fa-paper-plane"></i> Connect Telegram</h4>' +
+                                '</div>' +
+                                '<div class="modal-body text-center">' +
+                                    '<p class="text-muted" style="margin-bottom:12px;">Share this link with ' + esc(customer) + '. Valid for a limited time and can only be used once.</p>' +
+                                    (qrUrl ? '<img src="' + qrUrl + '" alt="Telegram QR code" style="width:220px;height:220px;max-width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:#fff;margin-bottom:12px;">' : '') +
+                                    '<input class="form-control text-center" readonly value="' + esc(link) + '" style="margin-bottom:8px;">' +
+                                    (expires ? '<div class="text-muted small">Expires: ' + esc(expires) + '</div>' : '') +
+                                '</div>' +
+                                '<div class="modal-footer">' +
+                                    '<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
+                                    '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="btn btn-primary">Open Link</a>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>'
+                    ).modal('show');
+                })
+                .catch(function (error) {
+                    if (window.toastr) {
+                        toastr.error(error.message || 'Unable to create Telegram link.');
+                    } else {
+                        alert(error.message || 'Unable to create Telegram link.');
                     }
                 })
                 .finally(function () {

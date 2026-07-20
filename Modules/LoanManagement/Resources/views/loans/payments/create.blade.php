@@ -3,6 +3,8 @@
     $customerName = trim((string) ($loanRow->customer_khmer_name ?? '')) ?: ($loanRow->customer_name_snapshot ?? '-');
     $loanBalance = (float) ($loanRow->balance_amount ?? 0);
     $loanCurrency = $loanRow->currency ?? 'USD';
+    $telegramCustomerId = (int) ($loanRow->customer_id ?? 0);
+    $telegramLinkUrl = $telegramCustomerId > 0 ? route('loan-management.customers.telegram.link', $telegramCustomerId) : null;
     $scheduleLabel = null;
 
     if (! empty($selectedSchedule)) {
@@ -48,6 +50,17 @@
                     <div class="well">
                         <strong>Loan #:</strong> {{ $loanNumber }}<br>
                         <strong>Customer:</strong> {{ $customerName }}
+                        @if($telegramLinkUrl && auth()->user() && auth()->user()->can('loan_management.edit'))
+                            <div style="margin-top:10px;">
+                                <button type="button"
+                                        class="btn btn-info btn-xs js-payment-telegram-link"
+                                        data-url="{{ $telegramLinkUrl }}"
+                                        data-customer="{{ $customerName }}">
+                                    <i class="fa fa-paper-plane"></i> Connect Telegram
+                                </button>
+                                <small class="help-block" style="margin-bottom:0;">Creates a limited-time, one-use link and QR code.</small>
+                            </div>
+                        @endif
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -69,6 +82,27 @@
                                 Auto apply to oldest unpaid
                             @endif
                         </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row" id="paymentTelegramLinkPanel" style="display:none;">
+                <div class="col-sm-12">
+                    <div class="alert alert-info" style="margin-bottom:12px;">
+                        <div class="row">
+                            <div class="col-sm-4 text-center">
+                                <img id="paymentTelegramQr" src="" alt="Telegram QR code" style="width:180px;height:180px;max-width:100%;border:1px solid #dbe4ef;border-radius:8px;padding:8px;background:#fff;">
+                            </div>
+                            <div class="col-sm-8">
+                                <strong><i class="fa fa-paper-plane"></i> Telegram customer link</strong>
+                                <p class="help-block" style="margin:6px 0 10px;">Share this link with the customer. Valid for a limited time and can only be used once.</p>
+                                <input type="text" class="form-control" id="paymentTelegramLinkInput" readonly>
+                                <div class="help-block" id="paymentTelegramExpires" style="margin-bottom:10px;"></div>
+                                <a href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm" id="paymentTelegramOpenLink">
+                                    <i class="fa fa-external-link"></i> Open Link
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -240,6 +274,7 @@ $(function () {
     var copyInfo = @json($copyInfo ?? []);
     var copyInfoUrl = '{{ route('loan-management.loans.payment.copy-info', $loanRow->id) }}';
     var isDepositPayment = @json((bool) $isDepositPayment);
+    var telegramLinkUrl = @json($telegramLinkUrl);
 
     if (!copyInfo || Object.keys(copyInfo).length === 0) {
         $.ajax({ url: copyInfoUrl, dataType: 'json' })
@@ -380,6 +415,38 @@ $(function () {
         document.body.removeChild(textarea);
         return deferred.promise();
     }
+
+    $form.on('click', '.js-payment-telegram-link', function () {
+        var $button = $(this);
+        var url = $button.data('url') || telegramLinkUrl;
+        if (!url) {
+            return;
+        }
+
+        $button.prop('disabled', true);
+        $.post(url, {_token: $('meta[name="csrf-token"]').attr('content')})
+            .done(function (res) {
+                var link = res && res.link ? res.link : '';
+                var expires = res && res.expires_at ? moment(res.expires_at).format('YYYY-MM-DD HH:mm') : '';
+                var qrUrl = link ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link) : '';
+
+                $('#paymentTelegramQr').attr('src', qrUrl);
+                $('#paymentTelegramLinkInput').val(link);
+                $('#paymentTelegramOpenLink').attr('href', link || '#');
+                $('#paymentTelegramExpires').text(expires ? 'Expires: ' + expires : '');
+                $('#paymentTelegramLinkPanel').slideDown(150);
+
+                if (window.toastr) {
+                    toastr.success('Telegram link created');
+                }
+            })
+            .fail(function (xhr) {
+                alert((xhr.responseJSON && xhr.responseJSON.message) || xhr.responseText || 'Unable to create Telegram link.');
+            })
+            .always(function () {
+                $button.prop('disabled', false);
+            });
+    });
 
     function applyPayTarget() {
         if (isDepositPayment) {

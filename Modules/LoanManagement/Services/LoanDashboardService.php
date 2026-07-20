@@ -94,6 +94,7 @@ class LoanDashboardService
 
         $query->selectRaw("
                 l.id,
+                ".($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL')." as customer_id,
                 {$loanNumberExpr} as loan_number,
                 {$customerNameExpr} as customer_name,
                 {$customerPhoneExpr} as customer_phone,
@@ -131,6 +132,7 @@ class LoanDashboardService
         return $query->get()->map(function ($row) {
             return [
                 'id' => (int) $row->id,
+                'customer_id' => (int) ($row->customer_id ?? 0),
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
                 'customer_phone' => $row->customer_phone ?: '-',

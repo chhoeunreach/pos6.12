@@ -1009,12 +1009,12 @@ class LoanInstallmentListController extends Controller
                 $actions .= '<ul class="dropdown-menu dropdown-menu-right" role="menu">';
                 $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id).'"><i class="fa fa-eye"></i> View</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
-                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
-                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-exchange"></i> POS</a></li>';
-                $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
                 if (! empty($r->customer_id) && $canEdit) {
                     $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.telegram.link', $r->customer_id).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-telegram-link"><i class="fa fa-paper-plane"></i> Connect Telegram</a></li>';
                 }
+                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
+                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-exchange"></i> POS</a></li>';
+                $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
                 if ($canEdit) {
                     $actions .= '<li><a href="'.route('loan-management.loans.edit', $r->id).'"><i class="fa fa-pencil"></i> Edit</a></li>';
                 }
