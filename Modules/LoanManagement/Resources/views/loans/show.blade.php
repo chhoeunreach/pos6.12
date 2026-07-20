@@ -94,6 +94,12 @@
                 data-container=".view_modal">
             <i class="fa fa-money"></i> Add Payment
         </button>
+        <button type="button"
+                class="btn btn-default btn-modal"
+                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
+                data-container=".view_modal">
+            <i class="fa fa-print"></i> Print Loan
+        </button>
         @can('loan_management.edit')
         <button type="button"
                 class="btn btn-info lm-refresh-schedule-btn"
@@ -102,12 +108,6 @@
             <i class="fa fa-refresh"></i> Refresh Schedule
         </button>
         @endcan
-        <button type="button"
-                class="btn btn-default btn-modal"
-                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
-                data-container=".view_modal">
-            <i class="fa fa-print"></i> Print Loan
-        </button>
         <button type="button"
            data-href="{{ route('loan-management.loans.convert-to-pos', ['loan' => $loanRow->id, 'modal' => 1]) }}"
            data-container=".view_modal"
@@ -267,6 +267,12 @@
                 data-loan-id="{{ $loanRow->id }}">
             <i class="fa fa-money"></i> Pay
         </button>
+        <button type="button"
+                class="lm-mab-btn lm-mab-btn-outline btn-modal"
+                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
+                data-container=".view_modal">
+            <i class="fa fa-print"></i> Print
+        </button>
         @can('loan_management.edit')
         <button type="button"
                 class="lm-mab-btn lm-mab-btn-outline lm-refresh-schedule-btn"
@@ -274,12 +280,6 @@
             <i class="fa fa-refresh"></i> Schedule
         </button>
         @endcan
-        <button type="button"
-                class="lm-mab-btn lm-mab-btn-outline btn-modal"
-                data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
-                data-container=".view_modal">
-            <i class="fa fa-print"></i> Print
-        </button>
         <button type="button"
            data-href="{{ route('loan-management.loans.convert-to-pos', ['loan' => $loanRow->id, 'modal' => 1]) }}"
            data-container=".view_modal"
