@@ -147,7 +147,7 @@ class TelegramChatService
             }
 
             $existingCustomerIds[(int) $customer->id] = true;
-            $name = (string) ($customer->name ?? $customer->khmer_name ?? 'Customer');
+            $name = (string) ($customer->khmer_name ?? $customer->name ?? 'Customer');
             $rows->push([
                 'id' => (int) $thread->id,
                 'customer_id' => (int) $customer->id,
@@ -192,7 +192,7 @@ class TelegramChatService
                 continue;
             }
 
-            $name = (string) ($customer->name ?? $customer->khmer_name ?? 'Customer');
+            $name = (string) ($customer->khmer_name ?? $customer->name ?? 'Customer');
             $rows->push([
                 'id' => null,
                 'customer_id' => (int) $customer->id,
@@ -219,7 +219,7 @@ class TelegramChatService
         return [
             'id' => (int) $thread->id,
             'customer_id' => (int) $thread->customer_id,
-            'display_name' => (string) ($customer->name ?? $customer->khmer_name ?? 'Customer'),
+            'display_name' => (string) ($customer->khmer_name ?? $customer->name ?? 'Customer'),
             'status' => (string) $thread->status,
             'messages' => $thread->messages->map(fn ($m) => $this->formatMessage($m))->values()->all(),
         ];
@@ -304,7 +304,7 @@ class TelegramChatService
     {
         if ($senderType === 'customer') {
             $customer = LoanCustomer::query()->find($senderId);
-            return (string) ($customer->name ?? 'Customer');
+            return (string) ($customer->khmer_name ?? $customer->name ?? 'Customer');
         }
 
         if (class_exists(\App\User::class)) {
