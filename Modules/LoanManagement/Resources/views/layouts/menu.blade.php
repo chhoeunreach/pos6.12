@@ -5,6 +5,8 @@
     $lmUrl = function (string $route, array $params = [], string $fallback = '#') {
         return Route::has($route) ? route($route, $params) : url($fallback);
     };
+    $lmIsKhmer = session('user.language', config('app.locale')) === 'km';
+    $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
 @endphp
 
 <li class="treeview {{ request()->segment(1) === 'loan-management' ? 'active menu-open' : '' }}">
@@ -14,6 +16,7 @@
     </a>
     <ul class="treeview-menu">
         <li><a href="{{ $lmUrl('loan-management.dashboard.index', [], '/loan-management/dashboard/main') }}"><i class="fa fa-dashboard"></i> Dashboard</a></li>
+        <li><a href="{{ $lmUrl('loan-management.admin-loan', [], '/loan-management/admin-loan') }}" target="_blank" rel="noopener"><i class="fa fa-line-chart"></i> {{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</a></li>
 
         <li class="treeview">
             <a href="#"><i class="fa fa-phone"></i> Collection Cases <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
@@ -73,6 +76,7 @@
             <a href="#"><i class="fa fa-bar-chart"></i> Reports <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 <li><a href="{{ $lmUrl('loan-management.reports.index', [], '/loan-management/reports/index') }}"><i class="fa fa-list-alt"></i> Installment Reports</a></li>
+                <li><a href="{{ $lmUrl('loan-management.reports.yearly-loan-summary', [], '/loan-management/reports/yearly-loan-summary') }}"><i class="fa fa-calendar"></i> {{ $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ') }}</a></li>
                 <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'monthly'], '/loan-management/payments/index?payment_type=monthly') }}"><i class="fa fa-money"></i> Collection Payment Reports</a></li>
                 <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'loan'], '/loan-management/payments/index?payment_type=loan') }}"><i class="fa fa-bank"></i> Deposit Payment Reports</a></li>
             </ul>

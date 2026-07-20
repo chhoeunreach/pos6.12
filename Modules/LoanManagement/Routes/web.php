@@ -31,6 +31,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/dashboard/main', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard.index')->middleware('can:loan_management.view');
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
         Route::get('/dashboard/quick-search', [LoanDashboardController::class, 'quickSearch'])->name('loan-management.dashboard.quick-search')->middleware('can:loan_management.view');
+        Route::get('/admin-loan', [DashboardController::class, 'adminLoan'])->name('loan-management.admin-loan')->middleware('can:loan_management.view');
         Route::post('/language', [SettingsController::class, 'switchLanguage'])->name('loan-management.language.switch')->middleware('can:loan_management.view');
 
         Route::get('/operations/{page}', [LoanCollectionController::class, 'index'])
@@ -189,6 +190,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/aba', [DashboardController::class, 'placeholder'])->defaults('page', 'ABA Transactions')->name('loan-management.aba')->middleware('can:loan_management.view');
         Route::get('/reports', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports')->middleware('can:loan_management.view');
         Route::get('/reports/index', [DashboardController::class, 'placeholder'])->defaults('page', 'Reports')->name('loan-management.reports.index')->middleware('can:loan_management.view');
+        Route::get('/reports/yearly-loan-summary', [DashboardController::class, 'yearlyLoanSummary'])->name('loan-management.reports.yearly-loan-summary')->middleware('can:loan_management.view');
         Route::get('/reports/payments', [DashboardController::class, 'placeholder'])->defaults('page', 'Payments Report')->name('loan-management.reports.payments')->middleware('can:loan_management.view');
 
         Route::get('/tools/import', [LoanImportExportController::class, 'index'])->name('loan-management.import.index')->middleware('can:loan_management.import.view');

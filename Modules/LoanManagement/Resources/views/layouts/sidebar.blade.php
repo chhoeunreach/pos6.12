@@ -5,6 +5,8 @@
     $canCreateLoan = LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create|loan_management.create_from_sell');
     $canViewLoans = LoanMenuHelper::loanUserCan('loan_management.loans.view|loan_management.view');
     $canViewPayments = LoanMenuHelper::loanUserCan('loan_management.payments.view|loan_management.payment|loan_management.view');
+    $lmIsKhmer = session('user.language', config('app.locale')) === 'km';
+    $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
 
     $sidebarUrl = function (string $route, array $params = []) {
         return Route::has($route) ? route($route, $params) : '#';
@@ -12,6 +14,7 @@
 
     $menu = [
         ['label' => 'Dashboard', 'icon' => 'fa fa-dashboard', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view'],
+        ['label' => $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី'), 'icon' => 'fa fa-line-chart', 'route' => 'loan-management.admin-loan', 'can' => 'loan_management.dashboard.view|loan_management.view', 'target' => '_blank'],
         ['label' => 'Loan Operations', 'icon' => 'fa fa-credit-card', 'children' => [
             ['label' => 'All Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view|loan_management.view'],
             ['label' => 'Create Loan', 'icon' => 'fa fa-plus-circle', 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create'],
@@ -61,6 +64,7 @@
         ]],
         ['label' => 'Reports', 'icon' => 'fa fa-bar-chart', 'children' => [
             ['label' => 'Installment Reports', 'icon' => 'fa fa-list-alt', 'route' => 'loan-management.reports.index', 'can' => 'loan_management.reports.view|loan_management.view', 'meta' => 'Soon'],
+            ['label' => $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ'), 'icon' => 'fa fa-calendar', 'route' => 'loan-management.reports.yearly-loan-summary', 'can' => 'loan_management.reports.view|loan_management.view'],
             ['label' => 'Collection Payment Reports', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'monthly'], 'can' => 'loan_management.reports.view|loan_management.view'],
             ['label' => 'Deposit Payment Reports', 'icon' => 'fa fa-bank', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'loan'], 'can' => 'loan_management.reports.view|loan_management.view'],
             ['label' => 'Collection Reports', 'icon' => 'fa fa-phone-square', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view|loan_management.view'],
@@ -156,7 +160,7 @@
             @endphp
 
             @if(empty($children))
-                <a href="{{ $sidebarUrl($item['route'], $item['params'] ?? []) }}" class="lm-menu-link {{ $isActive ? 'active' : '' }}">
+                <a href="{{ $sidebarUrl($item['route'], $item['params'] ?? []) }}" class="lm-menu-link {{ $isActive ? 'active' : '' }}" @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener" @endif>
                     <i class="{{ $item['icon'] }} lm-menu-icon"></i>
                     <span class="lm-menu-label">{{ $item['label'] }}</span>
                     @if(!empty($item['meta']))

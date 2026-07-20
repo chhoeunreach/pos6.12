@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var links = {
         dashboard: "{{ route('loan-management.dashboard') }}",
+        adminLoan: "{{ route('loan-management.admin-loan') }}",
         customers: "{{ route('loan-management.customers.index') }}",
         guarantors: "{{ route('loan-management.guarantors.index') }}",
         blacklist: "{{ route('loan-management.blacklist.index') }}",
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <a href="javascript:void(0)" id="btn-expand-all" style="display:inline-block;padding:2px 6px;"><i class="fa fa-expand"></i> Expand</a>
         </li>
         <li class="${activeClass(links.dashboard)}"><a href="${links.dashboard}"><i class="fa fa-dashboard"></i> <span>Dashboard</span></a></li>
+        <li class="${activeClass(links.adminLoan)}"><a href="${links.adminLoan}" target="_blank" rel="noopener"><i class="fa fa-line-chart"></i> <span>Admin Loan</span></a></li>
         <li class="treeview installment-section section-customers ${treeOpenClass([links.customers, links.guarantors, links.blacklist])}" data-section="customers">
             <a href="#"><i class="fa fa-users"></i> <span>Customers</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.customers, links.guarantors, links.blacklist])}>

@@ -5,6 +5,7 @@
         'Loan Management': 'គ្រប់គ្រងកម្ចី',
         'Dedicated loan operation workspace': 'កន្លែងធ្វើការសម្រាប់ប្រតិបត្តិការកម្ចី',
         'Dashboard': 'ផ្ទាំងគ្រប់គ្រង',
+        'Admin Loan': 'រដ្ឋបាលកម្ចី',
         'Loan Operations': 'ប្រតិបត្តិការកម្ចី',
         'All Loans': 'កម្ចីទាំងអស់',
         'Create Loan': 'បង្កើតកម្ចី',
