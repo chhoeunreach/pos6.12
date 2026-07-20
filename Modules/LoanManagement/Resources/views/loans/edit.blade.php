@@ -7,8 +7,8 @@
 <style>
     html,
     body.loan-management-embedded-modal {
-        height: 100% !important;
-        overflow: hidden !important;
+        min-height: 100% !important;
+        overflow: auto !important;
         background: #f5f5f5 !important;
     }
     body.loan-management-embedded-modal .thetop,
@@ -18,11 +18,10 @@
     body.loan-management-embedded-modal .lm-content,
     body.loan-management-embedded-modal .lm-workspace {
         width: 100% !important;
-        height: 100% !important;
-        min-height: 0 !important;
+        min-height: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
-        overflow: hidden !important;
+        overflow: visible !important;
     }
     body.loan-management-embedded-modal #main_app_header,
     body.loan-management-embedded-modal #app,
@@ -50,14 +49,14 @@
         min-height: 100% !important;
     }
     .lm-edit-wizard {
-        height: 100% !important;
-        min-height: 0 !important;
+        min-height: 100% !important;
     }
     .lm-edit-wizard #wizEditForm {
-        height: 100% !important;
+        min-height: 100% !important;
     }
     .lm-edit-wizard .lm-wiz-steps-wrap {
         min-height: 0 !important;
+        overflow: visible !important;
     }
 </style>
 @endif
@@ -413,15 +412,6 @@
     @endif
 
     <div class="lm-wiz-topbar" style="display:flex; align-items:center; gap:8px;">
-        @if($isEmbeddedModal)
-        <button type="button"
-                class="btn btn-default btn-sm"
-                style="color:#fff; background:rgba(255,255,255,.15); border:none;"
-                onclick="window.jQuery('.view_modal').modal('hide');"
-                title="Close">
-            <i class="fa fa-times"></i>
-        </button>
-        @endif
         <div class="lm-wiz-title" style="flex:1;">
             <i class="fa fa-pencil-square-o"></i> Edit Loan #{{ $loanRow->loan_number ?? $loanRow->id }}
         </div>

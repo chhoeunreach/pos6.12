@@ -604,8 +604,13 @@ class LoanDashboardService
         return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', '<', Carbon::today()->toDateString())
             ->whereIn('s.status', ['unpaid', 'partial', 'late'])
-            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, s.due_date as date_to_pay, DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->schedulePaidExpression('s').' as total_paid, '.$this->scheduleBalanceExpression('s').' as total_not_yet_paid, '.$this->payOffNowExpression('l', 's').' as pay_off_now, '.$this->scheduleBalanceExpression('s').' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
-            ->orderByDesc('overdue_days')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, '.($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'c.customer_photo_file_id' : 'NULL').' as customer_photo_file_id, s.due_date as date_to_pay, DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->schedulePaidExpression('s').' as total_paid, '.$this->scheduleBalanceExpression('s').' as total_not_yet_paid, '.$this->payOffNowExpression('l', 's').' as pay_off_now, '.$this->scheduleBalanceExpression('s').' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
+            ->orderByDesc('overdue_days')->limit(50)->get()->map(function ($row) {
+                $data = (array) $row;
+                $data['customer_photo_url'] = $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0));
+
+                return $data;
+            })->all();
     }
 
     public function getRecentPayments($filters): array

@@ -1490,13 +1490,13 @@
     }
     .lm-dashboard-iframe-modal .modal-dialog,
     .modal-dialog.lm-dashboard-iframe-modal {
-        width: 96%;
-        max-width: 1280px;
+        width: 98%;
+        max-width: none;
     }
     .lm-dashboard-iframe-modal .modal-body,
     .modal-dialog.lm-dashboard-iframe-modal .modal-body {
         padding: 0;
-        height: 80vh;
+        height: calc(100vh - 96px);
         background: #f8fafc;
     }
     .lm-dashboard-iframe-modal iframe,
@@ -2326,7 +2326,7 @@
         }
         .lm-dashboard-iframe-modal .modal-body,
         .modal-dialog.lm-dashboard-iframe-modal .modal-body {
-            height: 70vh;
+            height: calc(100vh - 72px);
         }
 
         /* Action buttons: stack on mobile */
@@ -2976,8 +2976,26 @@
                         <thead><tr><th>Customer</th><th>Pay Date</th><th>Days</th><th class="text-right">Paid</th><th class="text-right">Due</th><th class="text-right">Payoff</th><th class="text-center">Pay</th></tr></thead>
                         <tbody data-loan-table="overdue_customers">
                         @forelse(($overdueCustomers ?? []) as $row)
+                            @php
+                                $overdueName = trim((string) ($row['customer'] ?? '-'));
+                                $overdueInitial = mb_substr($overdueName !== '' && $overdueName !== '-' ? $overdueName : 'C', 0, 1);
+                            @endphp
                             <tr>
-                                <td><span class="lm-row-title">{{ $row['customer'] ?? '-' }}</span></td>
+                                <td>
+                                    <div class="lm-customer-profile">
+                                        <span class="lm-customer-profile__avatar">
+                                            @if(!empty($row['customer_photo_url']))
+                                                <img src="{{ $row['customer_photo_url'] }}" alt="">
+                                            @else
+                                                {{ $overdueInitial }}
+                                            @endif
+                                        </span>
+                                        <span class="lm-customer-profile__info">
+                                            <span class="lm-row-title">{{ $overdueName }}</span>
+                                            <span class="lm-row-subtitle">{{ $row['loan_number'] ?? '' }}{{ !empty($row['phone']) ? ' · '.$row['phone'] : '' }}</span>
+                                        </span>
+                                    </div>
+                                </td>
                                 <td>{{ $row['date_to_pay'] ?? '-' }}</td>
                                 <td>{{ (int)($row['overdue_days'] ?? 0) }} day(s)</td>
                                 <td class="text-right">{{ number_format((float)($row['total_paid'] ?? 0), 2) }}</td>
@@ -3277,8 +3295,14 @@
             var html = '';
             (rows || []).forEach(function (row) {
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
+                var customerName = row.customer || '-';
+                var customerInitial = customerName && customerName !== '-' ? String(customerName).charAt(0).toUpperCase() : 'C';
+                var customerAvatar = row.customer_photo_url
+                    ? '<span class="lm-customer-profile__avatar"><img src="' + esc(row.customer_photo_url) + '" alt=""></span>'
+                    : '<span class="lm-customer-profile__avatar">' + esc(customerInitial) + '</span>';
+                var customerSub = (row.loan_number || '') + (row.phone ? ' &middot; ' + esc(row.phone) : '');
                 html += '<tr>'
-                    + '<td><span class="lm-row-title">'+esc(row.customer)+'</span></td>'
+                    + '<td><div class="lm-customer-profile">' + customerAvatar + '<span class="lm-customer-profile__info"><span class="lm-row-title">'+esc(customerName)+'</span><span class="lm-row-subtitle">'+customerSub+'</span></span></div></td>'
                     + '<td>'+esc(row.date_to_pay || '-')+'</td>'
                     + '<td>'+intValue(row.overdue_days)+' day(s)</td>'
                     + '<td class="text-right">'+money(row.total_paid || 0)+'</td>'
