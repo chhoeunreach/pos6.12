@@ -2973,7 +2973,7 @@
                 </div>
                 <div class="lm-dashboard-panel__body lm-table-wrap">
                     <table class="table table-condensed lm-dashboard-table lm-mini-table" id="loanOverdueCustomersTable">
-                        <thead><tr><th>Customer</th><th>Date To Pay</th><th>Duration</th><th class="text-right">Total Paid</th><th class="text-right">Total Not Yet Paid</th><th class="text-right">Pay Off Now</th></tr></thead>
+                        <thead><tr><th>Customer</th><th>Pay Date</th><th>Days</th><th class="text-right">Paid</th><th class="text-right">Due</th><th class="text-right">Payoff</th><th class="text-center">Pay</th></tr></thead>
                         <tbody data-loan-table="overdue_customers">
                         @forelse(($overdueCustomers ?? []) as $row)
                             <tr>
@@ -2983,9 +2983,14 @@
                                 <td class="text-right">{{ number_format((float)($row['total_paid'] ?? 0), 2) }}</td>
                                 <td class="text-right">{{ number_format((float)($row['total_not_yet_paid'] ?? ($row['overdue_amount'] ?? 0)), 2) }}</td>
                                 <td class="text-right">{{ number_format((float)($row['pay_off_now'] ?? 0), 2) }}</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-success btn-xs btn-modal" data-href="{{ url('loan-management/loans/'.($row['id'] ?? 0).'/payment/create?return_to='.rawurlencode(route('loan-management.dashboard'))) }}" data-container=".view_modal">
+                                        <i class="fa fa-money"></i> Pay
+                                    </button>
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="text-center">No overdue customers.</td></tr>
+                            <tr><td colspan="7" class="text-center">No overdue customers.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -3271,6 +3276,7 @@
         function renderOverdueCustomers(rows) {
             var html = '';
             (rows || []).forEach(function (row) {
+                var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 html += '<tr>'
                     + '<td><span class="lm-row-title">'+esc(row.customer)+'</span></td>'
                     + '<td>'+esc(row.date_to_pay || '-')+'</td>'
@@ -3278,9 +3284,10 @@
                     + '<td class="text-right">'+money(row.total_paid || 0)+'</td>'
                     + '<td class="text-right">'+money(row.total_not_yet_paid || row.overdue_amount || 0)+'</td>'
                     + '<td class="text-right">'+money(row.pay_off_now || 0)+'</td>'
+                    + '<td class="text-center"><button type="button" class="btn btn-success btn-xs btn-modal" data-href="'+payUrl+'" data-container=".view_modal"><i class="fa fa-money"></i> Pay</button></td>'
                     + '</tr>';
             });
-            $('[data-loan-table="overdue_customers"]').html(html || '<tr><td colspan="6" class="text-center">No overdue customers.</td></tr>');
+            $('[data-loan-table="overdue_customers"]').html(html || '<tr><td colspan="7" class="text-center">No overdue customers.</td></tr>');
         }
 
         function quickSearchRowHtml(row) {
