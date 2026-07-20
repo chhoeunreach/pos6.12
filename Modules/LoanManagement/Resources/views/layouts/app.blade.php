@@ -10,11 +10,12 @@
     $pageTitle = trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title').' - LoanManagement' : 'LoanManagement';
     $businessName = Session::get('business.name');
     $isLoanEmbeddedModal = request()->boolean('_lm_modal');
+    $loanLanguage = session('user.language', config('app.locale'));
 @endphp
 
 <!DOCTYPE html>
-<html class="tw-bg-white tw-scroll-smooth" lang="{{ app()->getLocale() }}"
-    dir="{{ in_array(session()->get('user.language', config('app.locale')), config('constants.langs_rtl')) ? 'rtl' : 'ltr' }}">
+<html class="tw-bg-white tw-scroll-smooth" lang="{{ $loanLanguage }}"
+    dir="{{ in_array($loanLanguage, config('constants.langs_rtl')) ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -24,13 +25,14 @@
 
     @include('layouts.partials.css')
     @include('layouts.partials.extracss')
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
 
     @if (file_exists($moduleCssPath))
         <style>{!! file_get_contents($moduleCssPath) !!}</style>
     @endif
     @yield('loan_css')
 </head>
-<body class="hold-transition skin-blue-light sidebar-mini loan-management-page {{ $isLoanEmbeddedModal ? 'loan-management-embedded-modal' : '' }} tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
+<body class="hold-transition skin-blue-light sidebar-mini loan-management-page lm-language-{{ $loanLanguage }} {{ $isLoanEmbeddedModal ? 'loan-management-embedded-modal' : '' }} tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
     @if (in_array($request->ip(), $whitelist, true))
         <input type="hidden" id="__is_localhost" value="true">
     @endif

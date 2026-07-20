@@ -1,10 +1,8 @@
 @php
     use Modules\LoanManagement\Helpers\LoanMenuHelper;
+    use Illuminate\Support\Str;
 
     $badgeCounts = $loanBadgeCounts ?? LoanMenuHelper::badgeCounts();
-    $canCreateLoan = LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create|loan_management.create_from_sell');
-    $canViewLoans = LoanMenuHelper::loanUserCan('loan_management.loans.view|loan_management.view');
-    $canViewPayments = LoanMenuHelper::loanUserCan('loan_management.payments.view|loan_management.payment|loan_management.view');
     $lmIsKhmer = session('user.language', config('app.locale')) === 'km';
     $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
 
@@ -12,190 +10,211 @@
         return Route::has($route) ? route($route, $params) : '#';
     };
 
-    $menu = [
-        ['label' => 'Dashboard', 'icon' => 'fa fa-dashboard', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view'],
-        ['label' => $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី'), 'icon' => 'fa fa-line-chart', 'route' => 'loan-management.admin-loan', 'can' => 'loan_management.dashboard.view|loan_management.view', 'target' => '_blank'],
-        ['label' => 'Loan Operations', 'icon' => 'fa fa-credit-card', 'children' => [
-            ['label' => 'All Loans', 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view|loan_management.view'],
-            ['label' => 'Create Loan', 'icon' => 'fa fa-plus-circle', 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create'],
-            ['label' => 'Create From POS', 'icon' => 'fa fa-shopping-cart', 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create'],
-            ['label' => 'Loan Calculator', 'icon' => 'fa fa-calculator', 'route' => 'loan-management.loans.calculator', 'can' => 'loan_management.loans.create|loan_management.create'],
-            ['label' => 'Due Today', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view'],
-            ['label' => 'Partial Payments', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.view'],
-            ['label' => 'Closed Accounts', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Collection Cases', 'icon' => 'fa fa-phone', 'children' => [
-            ['label' => 'Overdue Accounts', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'overdue-accounts'], 'can' => 'loan_management.view', 'badge' => $badgeCounts['overdue'] ?? 0],
-            ['label' => 'Promise To Pay', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'promise-to-pay'], 'can' => 'loan_management.view'],
-            ['label' => 'Broken Promise', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'broken-promise'], 'can' => 'loan_management.view'],
-            ['label' => 'Field Visit Required', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'field-visit-required'], 'can' => 'loan_management.view', 'badge' => $badgeCounts['pending_visits'] ?? 0],
-            ['label' => 'Skip Customers', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'skip-customers'], 'can' => 'loan_management.view'],
-            ['label' => 'Delinquent Accounts', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'delinquent-accounts'], 'can' => 'loan_management.view'],
-            ['label' => 'Recovery Management', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'recovery-management'], 'can' => 'loan_management.view'],
-            ['label' => 'Debt Collection', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'debt-collection'], 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Risk & Legal', 'icon' => 'fa fa-balance-scale', 'children' => [
-            ['label' => 'High Risk Customers', 'route' => 'loan-management.risk.page', 'params' => ['page' => 'high-risk-customers'], 'can' => 'loan_management.view'],
-            ['label' => 'Fraud Risk', 'route' => 'loan-management.risk.page', 'params' => ['page' => 'fraud-risk'], 'can' => 'loan_management.view'],
-            ['label' => 'Legal Cases', 'route' => 'loan-management.risk.page', 'params' => ['page' => 'legal-cases'], 'can' => 'loan_management.view'],
-            ['label' => 'Blacklisted Customers', 'route' => 'loan-management.risk.page', 'params' => ['page' => 'blacklisted-customers'], 'can' => 'loan_management.blacklist.view'],
-            ['label' => 'Repossessions', 'route' => 'loan-management.risk.page', 'params' => ['page' => 'repossessions'], 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Customer Management', 'icon' => 'fa fa-users', 'children' => [
-            ['label' => 'Customers', 'route' => 'loan-management.customers', 'can' => 'loan_management.view'],
-            ['label' => 'Clone From POS', 'icon' => 'fa fa-copy', 'route' => 'loan-management.customers.clone-from-pos', 'can' => 'loan_management.create'],
-            ['label' => 'Guarantors', 'route' => 'loan-management.guarantors.index', 'can' => 'loan_management.guarantors.view|loan_management.view'],
-            ['label' => 'Blacklist', 'icon' => 'fa fa-ban', 'route' => 'loan-management.blacklist.index', 'can' => 'loan_management.blacklist.view|loan_management.view'],
-            ['label' => 'Contact History', 'route' => 'loan-management.customer-workflow.page', 'params' => ['page' => 'contact-history'], 'can' => 'loan_management.view'],
-            ['label' => 'Collection Visits', 'route' => 'loan-management.collection-visits.index', 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Communication', 'icon' => 'fa fa-comments', 'children' => [
-            ['label' => 'Live Chat', 'route' => 'loan-management.chat.index', 'can' => 'loan_management.chat.view', 'badge' => $badgeCounts['unread_chat'] ?? 0],
-            ['label' => 'Voice Calls', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'voice-calls'], 'can' => 'loan_management.view'],
-            ['label' => 'Notifications', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'notifications'], 'can' => 'loan_management.view'],
-            ['label' => 'SMS/Telegram Logs', 'route' => 'loan-management.communication.page', 'params' => ['page' => 'sms-telegram-logs'], 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Finance', 'icon' => 'fas fa-money-bill-alt', 'children' => [
-            ['label' => 'Payments', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'can' => 'loan_management.view'],
-            ['label' => 'Payment History', 'icon' => 'fa fa-history', 'route' => 'loan-management.payment-history.index', 'can' => 'loan_management.view'],
-            ['label' => 'Customer Deposit Payments', 'icon' => 'fa fa-bank', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'loan'], 'can' => 'loan_management.view'],
-            ['label' => 'Interest / Collection Payments', 'icon' => 'fa fa-calendar-check-o', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'monthly'], 'can' => 'loan_management.view'],
-            ['label' => 'ABA Transactions', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.aba.index', 'can' => 'loan_management.aba.view|loan_management.view', 'meta' => 'Soon'],
-        ]],
-        ['label' => 'Reports', 'icon' => 'fa fa-bar-chart', 'children' => [
-            ['label' => 'Installment Reports', 'icon' => 'fa fa-list-alt', 'route' => 'loan-management.reports.index', 'can' => 'loan_management.reports.view|loan_management.view', 'meta' => 'Soon'],
-            ['label' => $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ'), 'icon' => 'fa fa-calendar', 'route' => 'loan-management.reports.yearly-loan-summary', 'can' => 'loan_management.reports.view|loan_management.view'],
-            ['label' => 'Collection Payment Reports', 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'monthly'], 'can' => 'loan_management.reports.view|loan_management.view'],
-            ['label' => 'Deposit Payment Reports', 'icon' => 'fa fa-bank', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'loan'], 'can' => 'loan_management.reports.view|loan_management.view'],
-            ['label' => 'Collection Reports', 'icon' => 'fa fa-phone-square', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view|loan_management.view'],
-        ]],
-        ['label' => 'Tools', 'icon' => 'fa fa-wrench', 'children' => [
-            ['label' => 'Loan Import/Export', 'route' => 'loan-management.tools.loan-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
-            ['label' => 'Monthly Payments Import/Export', 'route' => 'loan-management.tools.monthly-import-export', 'can' => 'loan_management.import.view|loan_management.export.view'],
-            ['label' => 'Send Notification', 'icon' => 'fa fa-bell', 'route' => 'loan-management.tools.send-notification', 'can' => 'loan_management.view', 'meta' => 'Soon'],
-            ['label' => 'GPS Tracking', 'route' => 'loan-management.gps.index', 'can' => 'loan_management.gps.view'],
-            ['label' => 'Activity Logs', 'icon' => 'fa fa-history', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.view'],
-        ]],
-        ['label' => 'Settings', 'icon' => 'fa fa-cog', 'children' => [
-            ['label' => 'Manage Users', 'icon' => 'fa fa-user-plus', 'route' => 'users.index', 'can' => 'user.view|user.create'],
-            ['label' => 'Invoice Prefix', 'icon' => 'fa fa-file-text-o', 'route' => 'loan-management.settings', 'can' => 'loan_management.view'],
-            ['label' => 'Locations', 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view'],
-            ['label' => 'Payment Methods', 'icon' => 'fa fa-credit-card', 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
-            ['label' => 'Currencies', 'icon' => 'fa fa-money', 'route' => 'loan-management.settings.currencies', 'can' => 'loan_management.view', 'meta' => 'Soon'],
-        ]],
+    $menuSections = [
+        [
+            'items' => [
+                ['label' => $lmText('Dashboard', 'ផ្ទាំងគ្រប់គ្រង'), 'icon' => 'fa fa-home', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view', 'tone' => 'blue'],
+            ],
+        ],
+        [
+            'label' => $lmText('Loan Management', 'ការគ្រប់គ្រងកម្ចី'),
+            'items' => [
+                ['label' => $lmText('New Loan', 'កម្ចីថ្មី'), 'icon' => 'fa fa-plus-circle', 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create', 'tone' => 'blue'],
+                ['label' => $lmText('Loan Applications', 'ពាក្យស្នើសុំកម្ចី'), 'icon' => 'fa fa-file-text-o', 'tone' => 'slate', 'children' => [
+                    ['label' => $lmText('All Loans', 'បញ្ជីកម្ចីទាំងអស់'), 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view|loan_management.view'],
+                    ['label' => $lmText('Create From POS', 'បង្កើតពីការលក់'), 'route' => 'loan-management.loans.create-from-sell', 'can' => 'loan_management.create_from_sell|loan_management.loans.create|loan_management.create'],
+                    ['label' => $lmText('Loan Calculator', 'ម៉ាស៊ីនគណនាកម្ចី'), 'route' => 'loan-management.loans.calculator', 'can' => 'loan_management.loans.create|loan_management.create'],
+                ]],
+                ['label' => $lmText('Loan Operations', 'ប្រតិបត្តិការកម្ចី'), 'icon' => 'fa fa-database', 'tone' => 'slate', 'children' => [
+                    ['label' => $lmText('Due Today', 'ត្រូវបង់ថ្ងៃនេះ'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Partial Payments', 'ការបង់ប្រាក់មិនពេញ'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Closed Accounts', 'គណនីបិទរួច'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view'],
+                ]],
+                ['label' => $lmText('Loan Schedule', 'កាលវិភាគកម្ចី'), 'icon' => 'fa fa-calendar', 'route' => 'loan-management.schedules.index', 'can' => 'loan_management.view', 'tone' => 'slate'],
+                ['label' => $lmText('Closed Loans', 'កម្ចីបានបិទ'), 'icon' => 'fa fa-archive', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.view', 'tone' => 'slate'],
+            ],
+        ],
+        [
+            'label' => $lmText('Customers', 'អតិថិជន'),
+            'items' => [
+                ['label' => $lmText('Customers', 'អតិថិជន'), 'icon' => 'fa fa-users', 'route' => 'loan-management.customers', 'can' => 'loan_management.view', 'tone' => 'green'],
+                ['label' => $lmText('Guarantors', 'អ្នកធានា'), 'icon' => 'fa fa-shield', 'route' => 'loan-management.guarantors.index', 'can' => 'loan_management.guarantors.view|loan_management.view', 'tone' => 'green'],
+                ['label' => $lmText('Blacklist', 'បញ្ជីខ្មៅ'), 'icon' => 'fa fa-user-times', 'route' => 'loan-management.blacklist.index', 'can' => 'loan_management.blacklist.view|loan_management.view', 'tone' => 'red'],
+            ],
+        ],
+        [
+            'label' => $lmText('Collections', 'ការប្រមូលប្រាក់'),
+            'items' => [
+                ['label' => $lmText("Today's Collection", 'ប្រមូលប្រាក់ថ្ងៃនេះ'), 'icon' => 'fa fa-usd', 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.view', 'tone' => 'violet'],
+                ['label' => $lmText('Payments', 'ការបង់ប្រាក់'), 'icon' => 'fa fa-money', 'route' => 'loan-management.payments.index', 'can' => 'loan_management.view', 'tone' => 'violet'],
+                ['label' => $lmText('Overdue', 'ហួសកំណត់'), 'icon' => 'fa fa-exclamation-triangle', 'route' => 'loan-management.collection.page', 'params' => ['page' => 'overdue-accounts'], 'can' => 'loan_management.view', 'badge' => $badgeCounts['overdue'] ?? 0, 'tone' => 'red'],
+                ['label' => $lmText('Collection Cases', 'ករណីប្រមូលប្រាក់'), 'icon' => 'fa fa-shield', 'tone' => 'violet', 'children' => [
+                    ['label' => $lmText('Promise To Pay', 'សន្យាបង់ប្រាក់'), 'route' => 'loan-management.collection.page', 'params' => ['page' => 'promise-to-pay'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Broken Promise', 'ខកខានសន្យា'), 'route' => 'loan-management.collection.page', 'params' => ['page' => 'broken-promise'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Delinquent Accounts', 'គណនីយឺតយ៉ាវ'), 'route' => 'loan-management.collection.page', 'params' => ['page' => 'delinquent-accounts'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Recovery Management', 'គ្រប់គ្រងការស្ដារបំណុល'), 'route' => 'loan-management.collection.page', 'params' => ['page' => 'recovery-management'], 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Debt Collection', 'ប្រមូលបំណុល'), 'route' => 'loan-management.collection.page', 'params' => ['page' => 'debt-collection'], 'can' => 'loan_management.view'],
+                ]],
+                ['label' => $lmText('Field Visits', 'ចុះជួបអតិថិជន'), 'icon' => 'fa fa-map-marker', 'route' => 'loan-management.collection-visits.index', 'can' => 'loan_management.view', 'badge' => $badgeCounts['pending_visits'] ?? 0, 'tone' => 'violet'],
+            ],
+        ],
+        [
+            'label' => $lmText('Finance', 'ហិរញ្ញវត្ថុ'),
+            'items' => [
+                ['label' => $lmText('Cash & Bank', 'សាច់ប្រាក់ និងធនាគារ'), 'icon' => 'fa fa-bank', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'loan'], 'can' => 'loan_management.view', 'tone' => 'cyan'],
+                ['label' => $lmText('Income', 'ចំណូល'), 'icon' => 'fa fa-level-up', 'route' => 'loan-management.payments.index', 'params' => ['payment_type' => 'monthly'], 'can' => 'loan_management.view', 'tone' => 'cyan'],
+                ['label' => $lmText('Expenses', 'ចំណាយ'), 'icon' => 'fa fa-level-down', 'route' => 'loan-management.reports.payments', 'can' => 'loan_management.view', 'tone' => 'orange'],
+                ['label' => $lmText('Accounting', 'គណនេយ្យ'), 'icon' => 'fa fa-book', 'route' => 'loan-management.payment-history.index', 'can' => 'loan_management.view', 'tone' => 'cyan'],
+            ],
+        ],
+        [
+            'label' => $lmText('Reports', 'របាយការណ៍'),
+            'items' => [
+                ['label' => $lmText('Loan Reports', 'របាយការណ៍កម្ចី'), 'icon' => 'fa fa-pie-chart', 'tone' => 'blue', 'children' => [
+                    ['label' => $lmText('Installment Reports', 'របាយការណ៍រំលស់'), 'route' => 'loan-management.reports.index', 'can' => 'loan_management.reports.view|loan_management.view'],
+                    ['label' => $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ'), 'route' => 'loan-management.reports.yearly-loan-summary', 'can' => 'loan_management.reports.view|loan_management.view'],
+                    ['label' => $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី'), 'route' => 'loan-management.admin-loan', 'can' => 'loan_management.dashboard.view|loan_management.view', 'target' => '_blank'],
+                ]],
+                ['label' => $lmText('Collection Reports', 'របាយការណ៍ប្រមូលប្រាក់'), 'icon' => 'fa fa-bar-chart', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
+                ['label' => $lmText('Financial Reports', 'របាយការណ៍ហិរញ្ញវត្ថុ'), 'icon' => 'fa fa-file-excel-o', 'route' => 'loan-management.reports.payments', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
+                ['label' => $lmText('Performance', 'សមិទ្ធផល'), 'icon' => 'fa fa-line-chart', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view', 'tone' => 'blue'],
+            ],
+        ],
+        [
+            'label' => $lmText('Administration', 'រដ្ឋបាល'),
+            'items' => [
+                ['label' => $lmText('Users & Roles', 'អ្នកប្រើប្រាស់ និងតួនាទី'), 'icon' => 'fa fa-user-o', 'tone' => 'blue', 'children' => [
+                    ['label' => $lmText('Manage Users', 'គ្រប់គ្រងអ្នកប្រើប្រាស់'), 'route' => 'users.index', 'can' => 'user.view|user.create'],
+                ]],
+                ['label' => $lmText('Branches', 'សាខា'), 'icon' => 'fa fa-building-o', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view', 'tone' => 'blue'],
+                ['label' => $lmText('Audit Logs', 'កំណត់ហេតុសវនកម្ម'), 'icon' => 'fa fa-check-circle-o', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.view', 'tone' => 'blue'],
+                ['label' => $lmText('System Settings', 'ការកំណត់ប្រព័ន្ធ'), 'icon' => 'fa fa-cog', 'tone' => 'blue', 'children' => [
+                    ['label' => $lmText('Invoice Prefix', 'លេខកូដវិក្កយបត្រ'), 'route' => 'loan-management.settings', 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Payment Methods', 'វិធីបង់ប្រាក់'), 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Currencies', 'រូបិយប័ណ្ណ'), 'route' => 'loan-management.settings.currencies', 'can' => 'loan_management.view'],
+                ]],
+            ],
+        ],
     ];
+
+    $currentUser = auth()->user();
+    $adminName = optional($currentUser)->first_name ?? optional($currentUser)->username ?? optional($currentUser)->email ?? 'Admin Loan';
 @endphp
 
 <aside class="lm-sidebar" id="loanManagementSidebar">
     <div class="lm-brand">
         <div class="lm-brand-icon">
-            <i class="fa fa-credit-card"></i>
+            <i class="fa fa-folder-open"></i>
         </div>
         <div class="lm-brand-text">
-            <span>Loan Management</span>
-            <small>Loans & collections</small>
+            <span>KY Store</span>
+            <small>{{ $lmText('Loan Management', 'ការគ្រប់គ្រងកម្ចី') }}</small>
         </div>
-        <button type="button" class="lm-sidebar-close d-lg-none" id="loanSidebarClose"
-                style="margin-left: auto; border: 0; background: none; color: #94a3b8; font-size: 18px; padding: 4px 8px; cursor: pointer; border-radius: 6px;"
-                aria-label="Close sidebar">
+        <button type="button" class="lm-sidebar-collapse" id="loanSidebarCollapse" aria-label="Toggle sidebar">
+            <i class="fa fa-angle-double-left"></i>
+        </button>
+        <button type="button" class="lm-sidebar-close d-lg-none" id="loanSidebarClose" aria-label="Close sidebar">
             <i class="fa fa-times"></i>
         </button>
     </div>
 
-    <div class="lm-sidebar-actions">
-        @if($canCreateLoan && Route::has('loan-management.loans.create'))
-            <a href="{{ route('loan-management.loans.create') }}" class="lm-sidebar-action primary">
-                <i class="fa fa-plus-circle"></i>
-                <span>New Loan</span>
-            </a>
-        @endif
-
-        <div class="lm-sidebar-action-grid">
-            @if($canCreateLoan && Route::has('loan-management.loans.create-from-sell'))
-                <a href="{{ route('loan-management.loans.create-from-sell') }}" class="lm-sidebar-mini-action">
-                    <i class="fa fa-shopping-cart"></i>
-                    <span>From POS</span>
-                </a>
-            @endif
-            @if($canViewPayments && Route::has('loan-management.payments.index'))
-                <a href="{{ route('loan-management.payments.index') }}" class="lm-sidebar-mini-action">
-                    <i class="fa fa-money"></i>
-                    <span>Payments</span>
-                </a>
-            @endif
-            @if($canViewLoans && Route::has('loan-management.collection.page'))
-                <a href="{{ route('loan-management.collection.page', ['page' => 'overdue-accounts']) }}" class="lm-sidebar-mini-action danger">
-                    <i class="fa fa-exclamation-triangle"></i>
-                    <span>Overdue</span>
-                    @if(($badgeCounts['overdue'] ?? 0) > 0)
-                        <b>{{ (int) $badgeCounts['overdue'] }}</b>
-                    @endif
-                </a>
-            @endif
-            @if(Route::has('loan-management.loans.calculator') && $canCreateLoan)
-                <a href="{{ route('loan-management.loans.calculator') }}" class="lm-sidebar-mini-action">
-                    <i class="fa fa-calculator"></i>
-                    <span>Calculator</span>
-                </a>
-            @endif
-        </div>
+    <div class="lm-sidebar-search">
+        <i class="fa fa-search"></i>
+        <input type="search" id="lmSidebarSearch" placeholder="{{ $lmText('Search menu...', 'ស្វែងរកម៉ឺនុយ...') }}" autocomplete="off">
+        <span>{{ $lmIsKhmer ? '⌘ គ' : '⌘ K' }}</span>
     </div>
 
-    <nav class="lm-menu">
-        @foreach($menu as $item)
+    <nav class="lm-menu" aria-label="Loan Management">
+        @foreach($menuSections as $section)
             @php
-                $children = $item['children'] ?? [];
-                $visibleChildren = collect($children)->filter(fn ($child) => \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($child['can'] ?? 'loan_management.view'))->values();
-                $isVisible = empty($children)
-                    ? \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($item['can'] ?? 'loan_management.view')
-                    : $visibleChildren->isNotEmpty();
-                if (! $isVisible) {
-                    continue;
-                }
+                $visibleItems = collect($section['items'])->filter(function ($item) {
+                    $children = $item['children'] ?? [];
+                    if (empty($children)) {
+                        return \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($item['can'] ?? 'loan_management.view');
+                    }
 
-                $routes = empty($children)
-                    ? [$item['route'] ?? '']
-                    : $visibleChildren->flatMap(fn ($child) => $child['active_routes'] ?? [$child['route']])->all();
-                $isActive = LoanMenuHelper::activeRoute($routes, false);
+                    return collect($children)->contains(function ($child) {
+                        return \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($child['can'] ?? 'loan_management.view');
+                    });
+                })->values();
             @endphp
 
-            @if(empty($children))
-                <a href="{{ $sidebarUrl($item['route'], $item['params'] ?? []) }}" class="lm-menu-link {{ $isActive ? 'active' : '' }}" @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener" @endif>
-                    <i class="{{ $item['icon'] }} lm-menu-icon"></i>
-                    <span class="lm-menu-label">{{ $item['label'] }}</span>
-                    @if(!empty($item['meta']))
-                        <span class="lm-menu-meta">{{ $item['meta'] }}</span>
-                    @endif
-                </a>
-            @else
-                <div class="lm-menu-group {{ $isActive ? 'open' : '' }}">
-                    <button class="lm-menu-link lm-menu-toggle {{ $isActive ? 'active' : '' }}" type="button">
-                        <i class="{{ $item['icon'] }} lm-menu-icon"></i>
-                        <span class="lm-menu-label">{{ $item['label'] }}</span>
-                        <i class="fa fa-angle-down lm-angle"></i>
-                    </button>
+            @continue($visibleItems->isEmpty())
 
-                    <div class="lm-submenu" style="{{ $isActive ? 'display:block;' : '' }}">
-                        @foreach($visibleChildren as $child)
-                            @php $childActive = LoanMenuHelper::activeRoute($child['active_routes'] ?? [$child['route']], false); @endphp
-                            <a href="{{ $sidebarUrl($child['route'], $child['params'] ?? []) }}" class="lm-submenu-link {{ $childActive ? 'active' : '' }} {{ !empty($child['meta']) ? 'has-meta' : '' }}">
-                                @if(!empty($child['icon']))
-                                    <i class="{{ $child['icon'] }} lm-submenu-icon"></i>
-                                @else
-                                    <span class="lm-submenu-dot"></span>
-                                @endif
-                                <span class="lm-menu-label">{{ $child['label'] }}</span>
-                                @if(!empty($child['badge']))
-                                    <span class="lm-badge">{{ (int) $child['badge'] }}</span>
-                                @endif
-                                @if(!empty($child['meta']))
-                                    <span class="lm-menu-meta">{{ $child['meta'] }}</span>
-                                @endif
-                            </a>
-                        @endforeach
-                    </div>
-                </div>
-            @endif
+            <div class="lm-menu-section">
+                @if(!empty($section['label']))
+                    <div class="lm-menu-section-title"><span>{{ $section['label'] }}</span></div>
+                @endif
+
+                @foreach($visibleItems as $item)
+                    @php
+                        $children = collect($item['children'] ?? [])->filter(fn ($child) => \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan($child['can'] ?? 'loan_management.view'))->values();
+                        $routes = $children->isEmpty()
+                            ? [$item['route'] ?? '']
+                            : $children->flatMap(fn ($child) => $child['active_routes'] ?? [$child['route']])->all();
+                        $isActive = LoanMenuHelper::activeRoute($routes, false);
+                        $tone = $item['tone'] ?? 'blue';
+                    @endphp
+
+                    @if($children->isEmpty())
+                        <a href="{{ $sidebarUrl($item['route'], $item['params'] ?? []) }}"
+                           class="lm-menu-link {{ $isActive ? 'active' : '' }} tone-{{ $tone }}"
+                           data-lm-menu-text="{{ Str::lower($item['label']) }}"
+                           title="{{ $item['label'] }}"
+                           @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener" @endif>
+                            <i class="{{ $item['icon'] }} lm-menu-icon"></i>
+                            <span class="lm-menu-label">{{ $item['label'] }}</span>
+                            @if(!empty($item['badge']))
+                                <span class="lm-badge">{{ number_format((int) $item['badge']) }}</span>
+                            @endif
+                            @if(!empty($item['meta']))
+                                <span class="lm-menu-meta">{{ $item['meta'] }}</span>
+                            @endif
+                        </a>
+                    @else
+                        <div class="lm-menu-group {{ $isActive ? 'open' : '' }}" data-lm-menu-text="{{ Str::lower($item['label'].' '.$children->pluck('label')->implode(' ')) }}">
+                            <button class="lm-menu-link lm-menu-toggle {{ $isActive ? 'active' : '' }} tone-{{ $tone }}" type="button" title="{{ $item['label'] }}">
+                                <i class="{{ $item['icon'] }} lm-menu-icon"></i>
+                                <span class="lm-menu-label">{{ $item['label'] }}</span>
+                                <i class="fa fa-angle-down lm-angle"></i>
+                            </button>
+
+                            <div class="lm-submenu" style="{{ $isActive ? 'display:block;' : '' }}">
+                                @foreach($children as $child)
+                                    @php $childActive = LoanMenuHelper::activeRoute($child['active_routes'] ?? [$child['route']], false); @endphp
+                                    <a href="{{ $sidebarUrl($child['route'], $child['params'] ?? []) }}"
+                                       class="lm-submenu-link {{ $childActive ? 'active' : '' }} {{ !empty($child['meta']) ? 'has-meta' : '' }}"
+                                       title="{{ $child['label'] }}"
+                                       @if(!empty($child['target'])) target="{{ $child['target'] }}" rel="noopener" @endif>
+                                        @if(!empty($child['icon']))
+                                            <i class="{{ $child['icon'] }} lm-submenu-icon"></i>
+                                        @else
+                                            <span class="lm-submenu-dot"></span>
+                                        @endif
+                                        <span class="lm-menu-label">{{ $child['label'] }}</span>
+                                        @if(!empty($child['badge']))
+                                            <span class="lm-badge">{{ number_format((int) $child['badge']) }}</span>
+                                        @endif
+                                        @if(!empty($child['meta']))
+                                            <span class="lm-menu-meta">{{ $child['meta'] }}</span>
+                                        @endif
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
         @endforeach
     </nav>
+
+    <a href="{{ $sidebarUrl('loan-management.admin-loan') }}" class="lm-admin-card" target="_blank" rel="noopener">
+        <span class="lm-admin-avatar">AD<span></span></span>
+        <span class="lm-admin-info">
+            <strong>{{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</strong>
+            <small>{{ $adminName }}</small>
+        </span>
+        <i class="fa fa-cog lm-admin-gear"></i>
+        <i class="fa fa-angle-down lm-admin-chevron"></i>
+    </a>
 </aside>
