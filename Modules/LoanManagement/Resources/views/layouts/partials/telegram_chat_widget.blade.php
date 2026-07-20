@@ -66,6 +66,11 @@
     .lm-tg-meta .fa-telegram{color:#54a9eb}
     .lm-tg-ticks{color:#9ca3af}
     .lm-tg-ticks.read{color:#54a9eb}
+    .lm-tg-actions{display:flex;gap:4px;justify-content:flex-end;margin-top:4px;opacity:.85}
+    .lm-tg-action{border:0;background:rgba(15,23,42,.08);color:#334155;border-radius:10px;padding:2px 7px;font-size:10px;line-height:1.4;cursor:pointer}
+    .lm-tg-action:hover{background:rgba(15,23,42,.14)}
+    .lm-tg-action.delete{color:#b91c1c;background:rgba(239,68,68,.12)}
+    .lm-tg-edited{font-style:italic;color:#94a3b8}
     .lm-tg-empty{text-align:center;color:#94a3b8;font-size:12px;margin-top:30px}
     .lm-tg-composer{flex:0 0 auto;background:#fff;padding:9px 10px;display:flex;gap:8px;align-items:center;border-top:1px solid #e2e8f0}
     .lm-tg-composer input[type=text]{flex:1;border:1px solid #d1d5db;background:#f4f6f8;border-radius:20px;padding:9px 15px;outline:none;font-size:13px}
@@ -167,8 +172,11 @@
         }).then(function(r){ return r.json(); });
     }
     function apiPostJson(url, payload){
+        return apiJson(url, 'POST', payload);
+    }
+    function apiJson(url, method, payload){
         return fetch(url, {
-            method: 'POST',
+            method: method || 'POST',
             credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
@@ -213,10 +221,23 @@
                 var isRead = !!m.read_at;
                 ticks = '<span class="lm-tg-ticks' + (isRead ? ' read' : '') + '">' + (isRead ? '&#10003;&#10003;' : '&#10003;') + '</span>';
             }
+            var edited = m.edited ? '<span class="lm-tg-edited">edited</span>' : '';
+            var actions = '';
+            if (m.can_update || m.can_delete) {
+                actions += '<div class="lm-tg-actions">';
+                if (m.can_update) {
+                    actions += '<button type="button" class="lm-tg-action edit" data-message-id="' + esc(m.id) + '" data-message-text="' + esc(m.message || '') + '"><i class="fa fa-pencil"></i> Edit</button>';
+                }
+                if (m.can_delete) {
+                    actions += '<button type="button" class="lm-tg-action delete" data-message-id="' + esc(m.id) + '"><i class="fa fa-trash"></i> Delete</button>';
+                }
+                actions += '</div>';
+            }
             box.append(
                 '<div class="lm-tg-row '+(m.is_own ? 'own' : '')+'">' +
                     '<div class="lm-tg-bubble">' + body +
-                        '<div class="lm-tg-meta"><span>' + esc(formatTime(m.created_at)) + '</span>' + ticks + '</div>' +
+                        '<div class="lm-tg-meta"><span>' + esc(formatTime(m.created_at)) + '</span>' + edited + ticks + '</div>' +
+                        actions +
                     '</div>' +
                 '</div>'
             );
@@ -355,6 +376,53 @@
                 sendingMessage = false;
                 $btn.prop('disabled', false);
                 $('#lmTgMessageInput').trigger('focus');
+            });
+    });
+
+    $('#lmTgMessages').on('click', '.lm-tg-action.edit', function(){
+        if (!activeThreadId) return;
+        var messageId = $(this).data('message-id');
+        var currentText = $(this).data('message-text') || '';
+        var nextText = window.prompt('Update Telegram message:', currentText);
+        if (nextText === null) return;
+        nextText = nextText.trim();
+        if (!nextText) {
+            showComposerError('Message cannot be empty.');
+            return;
+        }
+
+        apiJson(chatBaseUrl + '/' + activeThreadId + '/messages/' + messageId, 'PUT', {message: nextText})
+            .then(function(resp){
+                if (resp && resp.success) {
+                    loadThread(false);
+                    loadContacts($('#lmTgSearchInput').val());
+                } else {
+                    showComposerError((resp && resp.message) || 'Failed to update message.');
+                }
+            })
+            .catch(function(){
+                showComposerError('Failed to update message.');
+            });
+    });
+
+    $('#lmTgMessages').on('click', '.lm-tg-action.delete', function(){
+        if (!activeThreadId) return;
+        var messageId = $(this).data('message-id');
+        if (!window.confirm('Delete this Telegram chat message?')) {
+            return;
+        }
+
+        apiJson(chatBaseUrl + '/' + activeThreadId + '/messages/' + messageId, 'DELETE', {})
+            .then(function(resp){
+                if (resp && resp.success) {
+                    loadThread(false);
+                    loadContacts($('#lmTgSearchInput').val());
+                } else {
+                    showComposerError((resp && resp.message) || 'Failed to delete message.');
+                }
+            })
+            .catch(function(){
+                showComposerError('Failed to delete message.');
             });
     });
 })(jQuery);

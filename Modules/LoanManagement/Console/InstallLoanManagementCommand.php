@@ -130,6 +130,7 @@ class InstallLoanManagementCommand extends Command
             'loan_management.chat.assign',
             'loan_management.chat.transfer',
             'loan_management.chat.close',
+            'loan_management.chat.delete',
             'loan_management.chat.admin',
             'loan_management.aba.view',
             'loan_management.reports.view',
@@ -151,6 +152,7 @@ class InstallLoanManagementCommand extends Command
             'loan_management.chat.assign',
             'loan_management.chat.transfer',
             'loan_management.chat.close',
+            'loan_management.chat.delete',
             'loan_management.chat.admin',
             'loan_management.customer_gps.manage',
         ];

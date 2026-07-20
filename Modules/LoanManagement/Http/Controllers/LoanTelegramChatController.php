@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Modules\LoanManagement\Entities\LoanTelegramChatMessage;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
 use Modules\LoanManagement\Services\TelegramChatService;
 
@@ -142,6 +143,56 @@ class LoanTelegramChatController extends Controller
         return $this->ok('Message sent', $this->chatService->formatMessage($message));
     }
 
+    public function updateMessage(Request $request, int $thread, int $message)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.reply') || auth()->user()->can('loan_management.chat.admin'), 403);
+
+        $row = LoanTelegramChatThread::query()->find($thread);
+        if (! $row || ! $this->canAccessThread($row)) {
+            return $this->fail('Thread not found', 404, (object) []);
+        }
+
+        $messageRow = LoanTelegramChatMessage::query()
+            ->where('thread_id', $row->id)
+            ->where('id', $message)
+            ->first();
+
+        if (! $messageRow) {
+            return $this->fail('Message not found', 404, (object) []);
+        }
+
+        abort_unless($this->canUpdateMessage($messageRow), 403, 'You do not have permission to update this message.');
+        abort_unless($messageRow->message_type === 'text', 422, 'Only text messages can be updated.');
+
+        $data = $request->validate(['message' => 'required|string|max:5000']);
+        $updated = $this->chatService->updateTextMessage($messageRow, (string) $data['message']);
+
+        return $this->ok('Message updated', $this->chatService->formatMessage($updated));
+    }
+
+    public function destroyMessage(int $thread, int $message)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.delete') || auth()->user()->can('loan_management.chat.admin'), 403);
+
+        $row = LoanTelegramChatThread::query()->find($thread);
+        if (! $row || ! $this->canAccessThread($row)) {
+            return $this->fail('Thread not found', 404, (object) []);
+        }
+
+        $messageRow = LoanTelegramChatMessage::query()
+            ->where('thread_id', $row->id)
+            ->where('id', $message)
+            ->first();
+
+        if (! $messageRow) {
+            return $this->fail('Message not found', 404, (object) []);
+        }
+
+        $this->chatService->deleteMessage($messageRow);
+
+        return $this->ok('Message deleted', (object) []);
+    }
+
     public function read(int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
@@ -153,5 +204,15 @@ class LoanTelegramChatController extends Controller
         $this->chatService->markRead($row, 'staff');
 
         return $this->ok('Marked as read', (object) []);
+    }
+
+    protected function canUpdateMessage(LoanTelegramChatMessage $message): bool
+    {
+        if ($this->isAdmin()) {
+            return in_array($message->sender_type, ['staff', 'admin'], true);
+        }
+
+        return in_array($message->sender_type, ['staff', 'admin'], true)
+            && (int) $message->sender_id === (int) auth()->id();
     }
 }

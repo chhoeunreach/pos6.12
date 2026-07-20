@@ -213,7 +213,7 @@ class TelegramChatService
 
     public function formatThread(LoanTelegramChatThread $thread): array
     {
-        $thread->loadMissing(['customer', 'messages']);
+        $thread->loadMissing(['customer', 'messages' => fn ($query) => $query->orderBy('created_at')->orderBy('id')]);
         $customer = $thread->customer;
 
         return [
@@ -234,6 +234,10 @@ class TelegramChatService
                 'name' => (string) ($message->file_name ?? ''),
             ];
         }
+        $user = auth()->user();
+        $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
+        $isOwnOutbound = $isOutbound && $user && (int) $message->sender_id === (int) $user->id;
+        $canAdminChat = $user && $user->can('loan_management.chat.admin');
 
         return [
             'id' => (int) $message->id,
@@ -250,7 +254,38 @@ class TelegramChatService
             'is_own' => in_array($message->sender_type, ['staff', 'admin'], true),
             'read_at' => $message->read_at?->toIso8601String(),
             'created_at' => $message->created_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $message->updated_at?->format('Y-m-d H:i:s'),
+            'edited' => $message->updated_at && $message->created_at && $message->updated_at->gt($message->created_at->copy()->addSeconds(2)),
+            'can_update' => $message->message_type === 'text'
+                && $isOutbound
+                && $user
+                && (($user->can('loan_management.chat.reply') && $isOwnOutbound) || $canAdminChat),
+            'can_delete' => $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
         ];
+    }
+
+    public function updateTextMessage(LoanTelegramChatMessage $message, string $text): LoanTelegramChatMessage
+    {
+        $message->message = $text;
+        $message->metadata = array_merge((array) ($message->metadata ?? []), [
+            'edited_at' => now()->toIso8601String(),
+            'edited_by' => auth()->id(),
+        ]);
+        $message->save();
+
+        $this->refreshThreadLastMessage($message->thread);
+
+        return $message->refresh();
+    }
+
+    public function deleteMessage(LoanTelegramChatMessage $message): void
+    {
+        $thread = $message->thread;
+        $message->delete();
+
+        if ($thread) {
+            $this->refreshThreadLastMessage($thread);
+        }
     }
 
     protected function persistMessage(LoanTelegramChatThread $thread, string $senderType, int $senderId, array $data): LoanTelegramChatMessage
@@ -328,6 +363,31 @@ class TelegramChatService
             'audio' => 'Voice message',
             default => (string) ($message->message ?? strtoupper($message->message_type)),
         };
+    }
+
+    protected function refreshThreadLastMessage(?LoanTelegramChatThread $thread): void
+    {
+        if (! $thread) {
+            return;
+        }
+
+        $last = LoanTelegramChatMessage::query()
+            ->where('thread_id', $thread->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($last) {
+            $thread->last_message = $this->lastMessageSnapshot($last);
+            $thread->last_message_type = $last->message_type;
+            $thread->last_message_at = $last->created_at ?? now();
+        } else {
+            $thread->last_message = null;
+            $thread->last_message_type = null;
+            $thread->last_message_at = null;
+        }
+
+        $thread->save();
     }
 
     protected function customerWithinLocations(LoanCustomer $customer, array $locationIds): bool
