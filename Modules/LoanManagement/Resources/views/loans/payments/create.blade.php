@@ -5,6 +5,7 @@
     $loanCurrency = $loanRow->currency ?? 'USD';
     $telegramCustomerId = (int) ($loanRow->customer_id ?? 0);
     $telegramLinkUrl = $telegramCustomerId > 0 ? route('loan-management.customers.telegram.link', $telegramCustomerId) : null;
+    $telegramLinked = (bool) ($telegramLinked ?? false);
     $scheduleLabel = null;
 
     if (! empty($selectedSchedule)) {
@@ -52,13 +53,19 @@
                         <strong>Customer:</strong> {{ $customerName }}
                         @if($telegramLinkUrl && auth()->user() && auth()->user()->can('loan_management.edit'))
                             <div style="margin-top:10px;">
-                                <button type="button"
-                                        class="btn btn-info btn-xs js-payment-telegram-link"
-                                        data-url="{{ $telegramLinkUrl }}"
-                                        data-customer="{{ $customerName }}">
-                                    <i class="fa fa-paper-plane"></i> Connect Telegram
-                                </button>
-                                <small class="help-block" style="margin-bottom:0;">Creates a limited-time, one-use link and QR code.</small>
+                                @if($telegramLinked)
+                                    <button type="button" class="btn btn-default btn-xs" disabled>
+                                        <i class="fa fa-check-circle"></i> Telegram Connected
+                                    </button>
+                                @else
+                                    <button type="button"
+                                            class="btn btn-info btn-xs js-payment-telegram-link"
+                                            data-url="{{ $telegramLinkUrl }}"
+                                            data-customer="{{ $customerName }}">
+                                        <i class="fa fa-paper-plane"></i> Connect Telegram
+                                    </button>
+                                    <small class="help-block" style="margin-bottom:0;">Creates a limited-time, one-use link and QR code.</small>
+                                @endif
                             </div>
                         @endif
                     </div>

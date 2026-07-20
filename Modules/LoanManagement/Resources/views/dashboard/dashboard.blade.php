@@ -3078,6 +3078,12 @@
             var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
             var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
             var telegramLinkUrl = row.customer_id ? "{{ url('loan-management/customers') }}/" + row.customer_id + "/telegram/link" : '';
+            var telegramAction = '';
+            if (row.telegram_linked) {
+                telegramAction = '<li><button type="button" disabled class="text-muted"><i class="fa fa-check-circle"></i> Telegram Connected</button></li>';
+            } else if (telegramLinkUrl) {
+                telegramAction = '<li><button type="button" class="js-dashboard-telegram-link" data-url="' + telegramLinkUrl + '" data-customer="' + esc(row.customer_name) + '"><i class="fa fa-paper-plane"></i> Connect Telegram</button></li>';
+            }
             var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
             var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
             var statusBadge = isOverdue
@@ -3104,7 +3110,7 @@
                 + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
                 + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
                 + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
-                + (telegramLinkUrl ? '<li><button type="button" class="js-dashboard-telegram-link" data-url="' + telegramLinkUrl + '" data-customer="' + esc(row.customer_name) + '"><i class="fa fa-paper-plane"></i> Connect Telegram</button></li>' : '')
+                + telegramAction
                 + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
                 + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
                 + '<li><button type="button" class="lm-dashboard-refresh-schedule-btn" data-loan-id="' + esc(row.id) + '" data-url="' + refreshScheduleUrl + '"><i class="fa fa-refresh"></i> Refresh Schedule</button></li>'

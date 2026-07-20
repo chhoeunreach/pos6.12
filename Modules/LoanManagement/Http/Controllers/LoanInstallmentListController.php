@@ -830,15 +830,17 @@ class LoanInstallmentListController extends Controller
             return DataTables::of(collect([]))->make(true);
         }
 
-        $canJoinCustomersForKhmerName = $this->hasCol('customer_id')
+        $canJoinCustomers = $this->hasCol('customer_id')
             && $this->loanTableExists('loan_customers')
+            && $this->loanTableHasCol('loan_customers', 'id');
+        $canJoinCustomersForKhmerName = $canJoinCustomers
             && $this->loanTableHasCol('loan_customers', 'khmer_name');
         $customerNameExpr = $canJoinCustomersForKhmerName
             ? 'COALESCE(NULLIF(c.khmer_name, ""), '.($this->hasCol('customer_name_snapshot') ? 'l.customer_name_snapshot' : 'NULL').')'
             : ($this->hasCol('customer_name_snapshot') ? 'l.customer_name_snapshot' : 'NULL');
 
         $q = DB::connection('mysql_loan')->table('loans as l')
-            ->when($canJoinCustomersForKhmerName, function ($query) {
+            ->when($canJoinCustomers, function ($query) {
                 $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
             })
             ->selectRaw(
@@ -846,6 +848,7 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.
                 ($this->hasCol('loan_date') ? 'l.loan_date' : 'l.created_at').' as loan_date, '.
                 ($this->hasCol('customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.
+                ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL').' as telegram_chat_id, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
                 ($this->hasCol('main_location_id') ? 'l.main_location_id' : 'NULL').' as main_location_id, '.
@@ -1010,7 +1013,11 @@ class LoanInstallmentListController extends Controller
                 $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id).'"><i class="fa fa-eye"></i> View</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
                 if (! empty($r->customer_id) && $canEdit) {
-                    $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.telegram.link', $r->customer_id).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-telegram-link"><i class="fa fa-paper-plane"></i> Connect Telegram</a></li>';
+                    if (! empty($r->telegram_chat_id)) {
+                        $actions .= '<li><a href="#" class="disabled text-muted" onclick="return false;"><i class="fa fa-check-circle"></i> Telegram Connected</a></li>';
+                    } else {
+                        $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.telegram.link', $r->customer_id).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-telegram-link"><i class="fa fa-paper-plane"></i> Connect Telegram</a></li>';
+                    }
                 }
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-exchange"></i> POS</a></li>';
@@ -1353,6 +1360,15 @@ class LoanInstallmentListController extends Controller
 
         $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
         $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? '');
+        $telegramLinked = false;
+        if (! empty($loanRow->customer_id)
+            && $this->loanTableExists('loan_customers')
+            && $this->loanTableHasCol('loan_customers', 'telegram_chat_id')) {
+            $telegramLinked = ! empty(DB::connection('mysql_loan')
+                ->table('loan_customers')
+                ->where('id', (int) $loanRow->customer_id)
+                ->value('telegram_chat_id'));
+        }
 
         return view('loanmanagement::loans.payments.create', compact(
             'loanRow',
@@ -1363,6 +1379,7 @@ class LoanInstallmentListController extends Controller
             'payOffAmount',
             'paymentTypes',
             'defaultPaymentMethod',
+            'telegramLinked',
         ) + [
             'copyInfo' => [],
             'isDepositPayment' => $isDepositPayment,

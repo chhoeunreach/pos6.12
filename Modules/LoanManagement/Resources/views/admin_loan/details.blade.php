@@ -400,7 +400,11 @@
                                         @if($canEditLoan)
                                             <button type="button" class="edit-toggle" data-edit-modal-url="{{ route('loan-management.loans.edit', ['loan' => $loan->id, '_lm_modal' => 1]) }}" data-edit-modal-title="{{ ($loan->loan_number ?: ('Loan #'.$loan->id)) }}">{{ $text('Edit', 'កែ') }}</button>
                                             @if(! empty($loan->customer_id))
-                                                <button type="button" class="telegram-toggle" data-telegram-link-url="{{ route('loan-management.customers.telegram.link', $loan->customer_id) }}" data-telegram-customer="{{ $loan->customer_name ?: $text('Customer', 'អតិថិជន') }}">{{ $text('Connect Telegram', 'ភ្ជាប់ Telegram') }}</button>
+                                                @if(! empty($loan->telegram_chat_id))
+                                                    <button type="button" class="telegram-toggle" disabled style="color:#64748b;cursor:not-allowed;">{{ $text('Telegram Connected', 'បានភ្ជាប់ Telegram') }}</button>
+                                                @else
+                                                    <button type="button" class="telegram-toggle" data-telegram-link-url="{{ route('loan-management.customers.telegram.link', $loan->customer_id) }}" data-telegram-customer="{{ $loan->customer_name ?: $text('Customer', 'អតិថិជន') }}">{{ $text('Connect Telegram', 'ភ្ជាប់ Telegram') }}</button>
+                                                @endif
                                             @endif
                                         @endif
                                         <a class="loan-link" href="{{ route('loan-management.loans.view', $loan->id) }}" target="_blank">{{ $text('View', 'មើល') }}</a>

@@ -858,6 +858,7 @@ class DashboardController extends Controller
                 (in_array('loan_number', $columns, true) ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.
                 'l.'.$dateColumn.' as loan_date, '.
                 (in_array('customer_id', $columns, true) ? 'l.customer_id' : 'NULL').' as customer_id, '.
+                ($joinCustomers && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL').' as telegram_chat_id, '.
                 $customerNameExpr.' as customer_name, '.
                 (in_array('customer_phone_snapshot', $columns, true) ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone, '.
                 (in_array('customer_address_snapshot', $columns, true) ? 'l.customer_address_snapshot' : 'NULL').' as customer_address, '.

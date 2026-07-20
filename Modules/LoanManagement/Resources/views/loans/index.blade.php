@@ -97,6 +97,7 @@ $(document).ready(function(){
     function mobileLoanCard(row) {
         var id = row.id || '';
         var customerId = row.customer_id || '';
+        var telegramLinked = !!row.telegram_chat_id;
         var loanNumber = plainText(row.loan_number);
         var customer = plainText(row.customer_name_snapshot);
         var phone = plainText(row.customer_phone_snapshot);
@@ -132,7 +133,7 @@ $(document).ready(function(){
             + '  <div class="lm-mobile-loan-card-actions">'
             + '    <a href="' + viewUrl + '" class="btn btn-default btn-sm"><i class="fa fa-eye"></i> View</a>'
             + '    <a href="#" class="btn btn-success btn-sm btn-modal" data-href="' + quickPayUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Pay</a>'
-            + (telegramUrl ? '    <a href="#" class="btn btn-info btn-sm js-loan-telegram-link" data-url="' + telegramUrl + '" data-customer="' + escapeHtml(customer) + '"><i class="fa fa-paper-plane"></i> Telegram</a>' : '')
+            + (telegramUrl ? (telegramLinked ? '    <button type="button" class="btn btn-default btn-sm" disabled><i class="fa fa-check-circle"></i> Telegram</button>' : '    <a href="#" class="btn btn-info btn-sm js-loan-telegram-link" data-url="' + telegramUrl + '" data-customer="' + escapeHtml(customer) + '"><i class="fa fa-paper-plane"></i> Telegram</a>') : '')
             + '  </div>'
             + '</article>';
     }

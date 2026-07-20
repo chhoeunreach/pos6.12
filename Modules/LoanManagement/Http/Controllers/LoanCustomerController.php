@@ -188,6 +188,7 @@ class LoanCustomerController extends Controller
     {
         $row = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
         abort_if(! $row, 404);
+        abort_if(! empty($row->telegram_chat_id), 422, 'This customer is already connected to Telegram.');
 
         $botUsername = trim(\Modules\LoanManagement\Services\TelegramSettingsService::botUsername());
         abort_if($botUsername === '', 422, 'Telegram bot is not configured yet. Ask an admin to set it up under System Settings > Telegram Bot.');
