@@ -439,7 +439,14 @@ class LoanPaymentController extends Controller
         }
 
         $amountColumn = $this->paymentAmountColumn();
-        $paid = (float) DB::connection($this->connection)->table('loan_payments')->where('loan_id', $loanId)->sum($amountColumn);
+        $paymentQuery = DB::connection($this->connection)->table('loan_payments')->where('loan_id', $loanId);
+        if ($this->hasColumn('loan_payments', 'status')) {
+            $paymentQuery->whereRaw('LOWER(COALESCE(status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")');
+        }
+        if ($this->hasColumn('loan_payments', 'deleted_at')) {
+            $paymentQuery->whereNull('deleted_at');
+        }
+        $paid = (float) (clone $paymentQuery)->sum($amountColumn);
         $balance = null;
         if (Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
             if ($this->hasColumn('loan_payment_schedules', 'balance_amount')) {

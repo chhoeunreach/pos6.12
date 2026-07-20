@@ -7,6 +7,12 @@
     $money = fn ($value) => '$'.number_format((float) ($value ?? 0), 2);
     $number = fn ($value) => number_format((float) ($value ?? 0), 0);
     $yearOptions = range((int) now()->format('Y'), 2000);
+    $yearlyLoanDetailFilterPayload = [
+        'start_year' => $filters['start_year'],
+        'end_year' => $filters['end_year'],
+        'location_id' => $filters['location_id'],
+        'search' => $filters['search'],
+    ];
 @endphp
 
 @section('loan_css')
@@ -195,6 +201,12 @@
     .yls-table tbody tr:hover td {
         filter: brightness(.98);
     }
+    .yls-table tbody tr {
+        cursor: pointer;
+    }
+    .yls-table tbody tr:hover td:first-child {
+        box-shadow: inset 3px 0 0 #2563eb;
+    }
     .yls-total-row {
         background: #e2e8f0;
         border-top: 2px solid #94a3b8;
@@ -204,6 +216,57 @@
         margin-top: 6px;
         color: #64748b;
         font-size: 11px;
+    }
+    .yls-loan-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10050;
+        display: none;
+        background: rgba(15, 23, 42, .62);
+        padding: 18px;
+    }
+    .yls-loan-modal.is-open {
+        display: flex;
+    }
+    .yls-loan-modal-dialog {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, .35);
+    }
+    .yls-loan-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #dbe4ef;
+        background: #f8fafc;
+    }
+    .yls-loan-modal-title {
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 800;
+    }
+    .yls-loan-modal-close {
+        border: 1px solid #cbd5e1;
+        border-radius: 7px;
+        background: #fff;
+        color: #334155;
+        height: 30px;
+        padding: 0 11px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .yls-loan-modal iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #eef3f8;
     }
     @media (max-width: 1200px) {
         .yls-card-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
@@ -321,7 +384,7 @@
                 </thead>
                 <tbody>
                     @foreach($payload['rows'] as $row)
-                        <tr>
+                        <tr data-loan-detail-year="{{ $row['year'] }}" title="{{ $bi('Click to view loan details', 'ចុចដើម្បីមើលព័ត៌មានលម្អិតកម្ចី') }}">
                             <td class="text-center">{{ $loop->iteration }}</td>
                             <td class="text-center"><strong>{{ $row['year'] }}</strong></td>
                             <td class="text-right">{{ $number($row['loan_count']) }}</td>
@@ -380,6 +443,16 @@
         </div>
     </div>
 </section>
+
+<div class="yls-loan-modal" id="ylsLoanModal" aria-hidden="true">
+    <div class="yls-loan-modal-dialog">
+        <div class="yls-loan-modal-head">
+            <div class="yls-loan-modal-title" id="ylsLoanModalTitle">{{ $bi('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}</div>
+            <button type="button" class="yls-loan-modal-close" id="ylsLoanModalClose">{{ $bi('Close', 'បិទ') }}</button>
+        </div>
+        <iframe id="ylsLoanModalFrame" title="{{ $bi('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}"></iframe>
+    </div>
+</div>
 @endsection
 
 @section('loan_js')
@@ -388,6 +461,73 @@
         var $form = $('#ylsFilterForm');
         $form.on('change', 'select', function () {
             $form.trigger('submit');
+        });
+
+        var detailUrl = @json(route('loan-management.admin-loan.details'));
+        var filters = @json($yearlyLoanDetailFilterPayload);
+        var labels = {
+            all: @json($bi('All Loans', 'កម្ចីទាំងអស់')),
+            registered: @json($bi('Registered Installments', 'អតិថិជនចុះឈ្មោះរំលស់')),
+            generalPaid: @json($bi('General Installments Paid', 'អតិថិជនរំលស់បានបង់ទូរទៅ')),
+            paidOff: @json($bi('Paid Off', 'បង់ផ្ដាច់')),
+            badDebt: @json($bi('Bad / Risk', 'ខូច / ហានិភ័យ'))
+        };
+
+        function groupForCell(index) {
+            if (index >= 2 && index <= 5) return 'registered';
+            if (index >= 6 && index <= 9) return 'generalPaid';
+            if (index >= 10 && index <= 15) return 'paidOff';
+            if (index >= 16 && index <= 21) return 'badDebt';
+            return 'all';
+        }
+
+        function openLoanModal(year, group) {
+            var params = new URLSearchParams();
+            params.set('year', year);
+            params.set('group', group);
+            Object.keys(filters).forEach(function (key) {
+                if (filters[key] !== null && filters[key] !== undefined && String(filters[key]) !== '') {
+                    params.set(key, filters[key]);
+                }
+            });
+
+            $('#ylsLoanModalTitle').text((labels[group] || labels.all) + ' - ' + year);
+            $('#ylsLoanModalFrame').attr('src', detailUrl + '?' + params.toString());
+            $('#ylsLoanModal').addClass('is-open').attr('aria-hidden', 'false');
+            $('body').css('overflow', 'hidden');
+        }
+
+        function closeLoanModal() {
+            $('#ylsLoanModal').removeClass('is-open').attr('aria-hidden', 'true');
+            $('#ylsLoanModalFrame').attr('src', 'about:blank');
+            $('body').css('overflow', '');
+        }
+
+        $('.yls-table tbody').on('click', 'td', function (event) {
+            if ($(event.target).closest('a, button, input, select, textarea').length) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+
+            var $row = $(this).closest('tr');
+            var year = $row.data('loan-detail-year');
+            if (!year) {
+                return;
+            }
+            openLoanModal(year, groupForCell(this.cellIndex));
+        });
+
+        $('#ylsLoanModalClose').on('click', closeLoanModal);
+        $('#ylsLoanModal').on('click', function (event) {
+            if (event.target === this) {
+                closeLoanModal();
+            }
+        });
+        $(document).on('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeLoanModal();
+            }
         });
     })(jQuery);
 </script>

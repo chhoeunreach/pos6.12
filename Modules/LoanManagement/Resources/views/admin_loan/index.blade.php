@@ -39,6 +39,12 @@
             ],
         ];
     })->values();
+    $adminLoanFilterPayload = [
+        'start_year' => $filters['start_year'],
+        'end_year' => $filters['end_year'],
+        'location_id' => $filters['location_id'],
+        'search' => $filters['search'],
+    ];
 @endphp
 <!doctype html>
 <html lang="{{ $isKhmer ? 'km' : 'en' }}">
@@ -152,6 +158,264 @@
         #admin-loan-react-root #header-settings > div:last-child {
             display: none !important;
         }
+        #admin-loan-react-root #global-header > div,
+        #admin-loan-react-root #main-application-shell > main,
+        #admin-loan-react-root #global-footer > div {
+            width: 100% !important;
+            max-width: none !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+        #admin-loan-react-root #main-application-shell > main {
+            padding-top: 10px !important;
+            padding-bottom: 12px !important;
+            gap: 12px !important;
+        }
+        #admin-loan-react-root #quick-status-ribbon,
+        #admin-loan-react-root #regulatory-warning-card {
+            border-radius: 10px !important;
+            padding: 12px !important;
+        }
+        #admin-loan-react-root #tabs-navigation-container button {
+            padding: 8px 12px !important;
+        }
+        #admin-loan-react-root [class~="min-w-[2000px]"] {
+            min-width: max-content !important;
+        }
+        #admin-loan-react-root table {
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            table-layout: auto !important;
+            width: max-content !important;
+            min-width: 100% !important;
+            background: #fff !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(1),
+        #admin-loan-react-root tbody td:nth-child(1),
+        #admin-loan-react-root tfoot td:nth-child(1) {
+            width: 52px !important;
+            min-width: 52px !important;
+            max-width: 52px !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(2),
+        #admin-loan-react-root tbody td:nth-child(2),
+        #admin-loan-react-root tfoot td:nth-child(2) {
+            width: 72px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(3),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(16),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(20),
+        #admin-loan-react-root tbody td:nth-child(3),
+        #admin-loan-react-root tbody td:nth-child(16),
+        #admin-loan-react-root tbody td:nth-child(20),
+        #admin-loan-react-root tfoot td:nth-child(3),
+        #admin-loan-react-root tfoot td:nth-child(16),
+        #admin-loan-react-root tfoot td:nth-child(20) {
+            width: auto !important;
+            min-width: max-content !important;
+            max-width: none !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+4),
+        #admin-loan-react-root tbody td:nth-child(n+4),
+        #admin-loan-react-root tfoot td:nth-child(n+4) {
+            width: auto !important;
+            min-width: max-content !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(6),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(15),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(19),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(23),
+        #admin-loan-react-root tbody td:nth-child(6),
+        #admin-loan-react-root tbody td:nth-child(15),
+        #admin-loan-react-root tbody td:nth-child(19),
+        #admin-loan-react-root tbody td:nth-child(23),
+        #admin-loan-react-root tfoot td:nth-child(6),
+        #admin-loan-react-root tfoot td:nth-child(15),
+        #admin-loan-react-root tfoot td:nth-child(19),
+        #admin-loan-react-root tfoot td:nth-child(23) {
+            min-width: 0 !important;
+        }
+        #admin-loan-react-root thead tr:first-child th {
+            padding: 8px 6px !important;
+            border-right: 1px solid rgba(255, 255, 255, .18) !important;
+            color: #fff !important;
+            font-size: clamp(9px, .58vw, 11px) !important;
+            font-weight: 800 !important;
+            line-height: 1.25 !important;
+            letter-spacing: 0 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(1),
+        #admin-loan-react-root thead tr:first-child th:nth-child(2) {
+            background: #1f2937 !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(3) {
+            background: #0f766e !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(4) {
+            background: #334155 !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(5) {
+            background: #1d4ed8 !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(6) {
+            background: #92400e !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(7) {
+            background: #9f1239 !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th {
+            padding: 6px 4px !important;
+            background: #f8fafc !important;
+            color: #1f2937 !important;
+            border-right: 1px solid #dbe4ef !important;
+            border-bottom: 1px solid #cfd9e6 !important;
+            font-size: clamp(7px, .46vw, 9px) !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+            letter-spacing: 0 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+            white-space: nowrap !important;
+            overflow-wrap: normal !important;
+            word-break: normal !important;
+            max-width: none !important;
+        }
+        #admin-loan-react-root tbody td,
+        #admin-loan-react-root tfoot td {
+            padding: 7px 8px !important;
+            border-right: 1px solid #e3eaf3 !important;
+            border-bottom: 1px solid #e8eef5 !important;
+            font-size: clamp(10px, .58vw, 12px) !important;
+            font-weight: 600 !important;
+            line-height: 1.35 !important;
+            color: #111827 !important;
+            text-align: right !important;
+            vertical-align: middle !important;
+            white-space: nowrap !important;
+            font-variant-numeric: tabular-nums !important;
+        }
+        #admin-loan-react-root tbody td:nth-child(1),
+        #admin-loan-react-root tbody td:nth-child(2),
+        #admin-loan-react-root tfoot td:nth-child(1),
+        #admin-loan-react-root tfoot td:nth-child(2) {
+            text-align: center !important;
+            font-size: clamp(11px, .64vw, 12px) !important;
+        }
+        #admin-loan-react-root tbody td:nth-child(n+4),
+        #admin-loan-react-root tfoot td:nth-child(n+4) {
+            font-size: clamp(9px, .54vw, 11px) !important;
+        }
+        #admin-loan-react-root tbody td:nth-child(3),
+        #admin-loan-react-root tbody td:nth-child(16),
+        #admin-loan-react-root tbody td:nth-child(20),
+        #admin-loan-react-root tfoot td:nth-child(3),
+        #admin-loan-react-root tfoot td:nth-child(16),
+        #admin-loan-react-root tfoot td:nth-child(20) {
+            font-size: clamp(10px, .58vw, 12px) !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(odd) td {
+            background: #ffffff !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td {
+            background: #fbfdff !important;
+        }
+        #admin-loan-react-root tbody tr:hover td {
+            background: #edf7ff !important;
+        }
+        #admin-loan-react-root tbody tr {
+            cursor: pointer !important;
+        }
+        #admin-loan-react-root tbody tr:hover td:first-child {
+            box-shadow: inset 3px 0 0 #2563eb !important;
+        }
+        #admin-loan-react-root table th:last-child,
+        #admin-loan-react-root table td:last-child {
+            display: none !important;
+        }
+        #admin-loan-react-root tfoot td {
+            background: #101827 !important;
+            color: #fff !important;
+            font-weight: 900 !important;
+            border-color: rgba(255, 255, 255, .12) !important;
+        }
+        #admin-loan-react-root thead tr:first-child th:nth-child(3),
+        #admin-loan-react-root thead tr:first-child th:nth-child(4),
+        #admin-loan-react-root thead tr:first-child th:nth-child(5),
+        #admin-loan-react-root thead tr:first-child th:nth-child(6),
+        #admin-loan-react-root thead tr:first-child th:nth-child(7) {
+            box-shadow: inset 0 -3px 0 rgba(255, 255, 255, .16) !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+3):nth-child(-n+6),
+        #admin-loan-react-root tbody td:nth-child(n+3):nth-child(-n+6),
+        #admin-loan-react-root tfoot td:nth-child(n+3):nth-child(-n+6) {
+            background-color: #f7fffc !important;
+            border-right-color: #d7eee7 !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+7):nth-child(-n+10),
+        #admin-loan-react-root tbody td:nth-child(n+7):nth-child(-n+10),
+        #admin-loan-react-root tfoot td:nth-child(n+7):nth-child(-n+10) {
+            background-color: #fbfcfe !important;
+            border-right-color: #e2e8f0 !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+11):nth-child(-n+15),
+        #admin-loan-react-root tbody td:nth-child(n+11):nth-child(-n+15),
+        #admin-loan-react-root tfoot td:nth-child(n+11):nth-child(-n+15) {
+            background-color: #f6faff !important;
+            border-right-color: #d8e7fb !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+16):nth-child(-n+19),
+        #admin-loan-react-root tbody td:nth-child(n+16):nth-child(-n+19),
+        #admin-loan-react-root tfoot td:nth-child(n+16):nth-child(-n+19) {
+            background-color: #fffdf5 !important;
+            border-right-color: #f4e5bd !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(n+20):nth-child(-n+23),
+        #admin-loan-react-root tbody td:nth-child(n+20):nth-child(-n+23),
+        #admin-loan-react-root tfoot td:nth-child(n+20):nth-child(-n+23) {
+            background-color: #fff8f9 !important;
+            border-right-color: #f4d5da !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td:nth-child(n+3):nth-child(-n+6) {
+            background-color: #eefbf7 !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td:nth-child(n+7):nth-child(-n+10) {
+            background-color: #f4f7fb !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td:nth-child(n+11):nth-child(-n+15) {
+            background-color: #eef6ff !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td:nth-child(n+16):nth-child(-n+19) {
+            background-color: #fff8e6 !important;
+        }
+        #admin-loan-react-root tbody tr:nth-child(even) td:nth-child(n+20):nth-child(-n+23) {
+            background-color: #fff0f2 !important;
+        }
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(3),
+        #admin-loan-react-root tbody td:nth-child(3),
+        #admin-loan-react-root tfoot td:nth-child(3),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(7),
+        #admin-loan-react-root tbody td:nth-child(7),
+        #admin-loan-react-root tfoot td:nth-child(7),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(11),
+        #admin-loan-react-root tbody td:nth-child(11),
+        #admin-loan-react-root tfoot td:nth-child(11),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(16),
+        #admin-loan-react-root tbody td:nth-child(16),
+        #admin-loan-react-root tfoot td:nth-child(16),
+        #admin-loan-react-root thead tr:nth-child(2) th:nth-child(20),
+        #admin-loan-react-root tbody td:nth-child(20),
+        #admin-loan-react-root tfoot td:nth-child(20) {
+            border-left: 2px solid rgba(15, 23, 42, .18) !important;
+        }
+        #admin-loan-react-root tfoot td:nth-child(n+3) {
+            background-color: #101827 !important;
+        }
         #admin-loan-react-root #add-new-record-btn,
         #admin-loan-react-root #add-new-month-record-btn,
         #admin-loan-react-root [id^="edit-btn-"],
@@ -160,14 +424,96 @@
         #admin-loan-react-root [id^="delete-month-btn-"] {
             display: none !important;
         }
+        .admin-loan-detail-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(15, 23, 42, .62);
+            backdrop-filter: blur(6px);
+        }
+        .admin-loan-detail-modal.is-open {
+            display: flex;
+        }
+        .admin-loan-detail-dialog {
+            width: min(1680px, 98vw);
+            height: min(920px, 94vh);
+            overflow: hidden;
+            border: 1px solid rgba(203, 213, 225, .92);
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, .28);
+        }
+        .admin-loan-detail-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            height: 48px;
+            padding: 0 14px 0 18px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .admin-loan-detail-title {
+            min-width: 0;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .admin-loan-detail-close {
+            height: 32px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 0 12px;
+            background: #fff;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .admin-loan-detail-frame {
+            display: block;
+            width: 100%;
+            height: calc(100% - 48px);
+            border: 0;
+            background: #fff;
+        }
         @media (max-width: 1200px) {
             .admin-loan-filter-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            #admin-loan-react-root #global-header > div,
+            #admin-loan-react-root #main-application-shell > main,
+            #admin-loan-react-root #global-footer > div {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            #admin-loan-react-root [class~="min-w-[2000px]"] {
+                min-width: max-content !important;
             }
         }
         @media (max-width: 767px) {
             .admin-loan-filter-grid {
                 grid-template-columns: 1fr;
+            }
+            #admin-loan-react-root #global-header > div {
+                padding-top: 10px !important;
+                padding-bottom: 10px !important;
+                gap: 10px !important;
+            }
+            #admin-loan-react-root #main-application-shell > main {
+                padding-top: 10px !important;
+                padding-bottom: 12px !important;
+            }
+            #admin-loan-react-root [class~="min-w-[2000px]"] {
+                min-width: max-content !important;
             }
         }
     </style>
@@ -221,6 +567,15 @@
     <div id="admin-loan-react-root">
         <div id="root"></div>
     </div>
+    <div class="admin-loan-detail-modal" id="adminLoanDetailModal" aria-hidden="true">
+        <div class="admin-loan-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="adminLoanDetailTitle">
+            <div class="admin-loan-detail-head">
+                <div class="admin-loan-detail-title" id="adminLoanDetailTitle">{{ $text('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}</div>
+                <button type="button" class="admin-loan-detail-close" id="adminLoanDetailClose">{{ $text('Close', 'បិទ') }}</button>
+            </div>
+            <iframe class="admin-loan-detail-frame" id="adminLoanDetailFrame" title="{{ $text('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}"></iframe>
+        </div>
+    </div>
     <script>
         (function () {
             var yearlyRecords = @json($adminRows);
@@ -241,6 +596,8 @@
             }
 
             var targetLanguage = '{{ $isKhmer ? 'km' : 'en' }}';
+            var adminLoanDetailsUrl = @json(route('loan-management.admin-loan.details'));
+            var adminLoanFilters = @json($adminLoanFilterPayload);
             var languageForm = document.getElementById('adminLanguageForm');
             var languageInput = document.getElementById('adminLanguageInput');
             document.querySelectorAll('[data-admin-language]').forEach(function (button) {
@@ -271,6 +628,97 @@
                     clearInterval(syncReactLanguage);
                 }
             }, 150);
+
+            function adminLoanGroupForCellIndex(index) {
+                if (index >= 2 && index <= 5) return 'registered';
+                if (index >= 6 && index <= 9) return 'generalPaid';
+                if (index >= 10 && index <= 14) return 'paidOff';
+                if (index >= 15 && index <= 18) return 'active';
+                if (index >= 19 && index <= 22) return 'badDebt';
+                return 'all';
+            }
+
+            function adminLoanGroupLabel(group) {
+                var labels = {
+                    all: targetLanguage === 'km' ? 'កម្ចីទាំងអស់' : 'All Loans',
+                    registered: targetLanguage === 'km' ? 'អតិថិជនចុះឈ្មោះរំលស់' : 'Registered Installments',
+                    generalPaid: targetLanguage === 'km' ? 'អតិថិជនរំលស់បានបង់ទូរទៅ' : 'General Installments Paid',
+                    paidOff: targetLanguage === 'km' ? 'អតិថិជនរំលស់បានបង់ផ្ដាច់' : 'Settled / Fully Paid Off',
+                    active: targetLanguage === 'km' ? 'អតិថិជនរំលស់កំពុងដំណើរការ' : 'Active / Ongoing Installments',
+                    badDebt: targetLanguage === 'km' ? 'អតិថិជនរំលស់ខូច' : 'Defaulted / Bad Debt'
+                };
+                return labels[group] || labels.all;
+            }
+
+            function openAdminLoanDetailModal(year, group) {
+                var params = new URLSearchParams();
+                params.set('year', String(year));
+                params.set('group', group);
+                Object.keys(adminLoanFilters).forEach(function (key) {
+                    if (adminLoanFilters[key] !== null && adminLoanFilters[key] !== undefined && String(adminLoanFilters[key]) !== '') {
+                        params.set(key, adminLoanFilters[key]);
+                    }
+                });
+
+                document.getElementById('adminLoanDetailTitle').textContent = adminLoanGroupLabel(group) + ' - ' + year;
+                document.getElementById('adminLoanDetailFrame').setAttribute('src', adminLoanDetailsUrl + '?' + params.toString());
+                document.getElementById('adminLoanDetailModal').classList.add('is-open');
+                document.getElementById('adminLoanDetailModal').setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeAdminLoanDetailModal() {
+                document.getElementById('adminLoanDetailModal').classList.remove('is-open');
+                document.getElementById('adminLoanDetailModal').setAttribute('aria-hidden', 'true');
+                document.getElementById('adminLoanDetailFrame').setAttribute('src', 'about:blank');
+                document.body.style.overflow = '';
+            }
+
+            document.addEventListener('mouseover', function (event) {
+                var row = event.target && event.target.closest ? event.target.closest('#admin-loan-react-root tbody tr') : null;
+                if (!row || row.dataset.adminLoanHinted === '1') {
+                    return;
+                }
+                row.dataset.adminLoanHinted = '1';
+                row.title = targetLanguage === 'km' ? 'ចុចដើម្បីមើលទិន្នន័យកម្ចីពេញ' : 'Click to view full loan data';
+            });
+
+            document.addEventListener('click', function (event) {
+                if (!event.target || !event.target.closest) {
+                    return;
+                }
+                if (event.target.closest('a, button, input, select, textarea')) {
+                    return;
+                }
+
+                var cell = event.target.closest('#admin-loan-react-root tbody td');
+                var row = cell ? cell.closest('tr') : null;
+                if (!cell || !row) {
+                    return;
+                }
+
+                var yearCell = row.cells && row.cells.length > 1 ? row.cells[1] : null;
+                var year = yearCell ? parseInt((yearCell.textContent || '').replace(/\D+/g, ''), 10) : NaN;
+                if (!year || Number.isNaN(year)) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                openAdminLoanDetailModal(year, adminLoanGroupForCellIndex(cell.cellIndex));
+            }, true);
+
+            document.getElementById('adminLoanDetailClose').addEventListener('click', closeAdminLoanDetailModal);
+            document.getElementById('adminLoanDetailModal').addEventListener('click', function (event) {
+                if (event.target === this) {
+                    closeAdminLoanDetailModal();
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeAdminLoanDetailModal();
+                }
+            });
         })();
 </script>
 </body>

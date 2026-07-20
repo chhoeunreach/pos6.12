@@ -48,6 +48,9 @@
                         <a class="btn btn-sm {{ $type === 'loans' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.loan-import-export') }}">
                             Full Loan Information
                         </a>
+                        <a class="btn btn-sm {{ $type === 'active_loans' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.import.index', ['type' => 'active_loans']) }}">
+                            Active / Ongoing Installments
+                        </a>
                         <a class="btn btn-sm {{ $type === 'payments' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.monthly-import-export') }}">
                             Monthly Payments
                         </a>

@@ -80,6 +80,117 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function adminLoanDetails(Request $request)
+    {
+        $this->allow('loan_management.view');
+
+        $year = (int) $request->input('year', now()->format('Y'));
+        if ($year < 2000 || $year > 2100) {
+            $year = (int) now()->format('Y');
+        }
+
+        $filters = $this->yearlySummaryFilters($request);
+        $filters['start_year'] = $year;
+        $filters['end_year'] = $year;
+        $group = (string) $request->input('group', 'all');
+
+        return view('loanmanagement::admin_loan.details', [
+            'year' => $year,
+            'group' => $group,
+            'filters' => $filters,
+            'loans' => $this->adminLoanDetailRows($filters, $group),
+            'locations' => $this->loanReportLocationOptions(),
+            'isKhmer' => $this->loanReportIsKhmer(),
+        ]);
+    }
+
+    public function adminLoanInlineUpdate(Request $request, int $loan)
+    {
+        abort_unless(auth()->user()->can('loan_management.edit'), 403);
+        abort_unless(Schema::connection('mysql_loan')->hasTable('loans'), 404);
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loans');
+        $exists = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->exists();
+        abort_unless($exists, 404);
+
+        $data = $request->validate([
+            'loan_date' => ['nullable', 'date'],
+            'source_invoice_no' => ['nullable', 'string', 'max:191'],
+            'source_type' => ['nullable', 'string', 'max:30'],
+            'customer_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'customer_phone_snapshot' => ['nullable', 'string', 'max:50'],
+            'customer_address_snapshot' => ['nullable', 'string', 'max:1000'],
+            'id_card_number' => ['nullable', 'string', 'max:100'],
+            'location_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'business_location_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'principal_amount' => ['nullable', 'numeric', 'min:0'],
+            'interest_amount' => ['nullable', 'numeric', 'min:0'],
+            'total_amount' => ['nullable', 'numeric', 'min:0'],
+            'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'balance_amount' => ['nullable', 'numeric', 'min:0'],
+            'down_payment' => ['nullable', 'numeric', 'min:0'],
+            'installment_count' => ['nullable', 'integer', 'min:0', 'max:1000'],
+            'duration_months' => ['nullable', 'integer', 'min:0', 'max:1000'],
+            'interest_rate' => ['nullable', 'numeric', 'min:0'],
+            'interest_type' => ['nullable', 'string', 'max:30'],
+            'payment_frequency' => ['nullable', 'string', 'max:30'],
+            'first_due_date' => ['nullable', 'date'],
+            'maturity_date' => ['nullable', 'date'],
+            'status' => ['nullable', 'string', 'max:50'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'collector_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'collection_status' => ['nullable', 'string', 'max:50'],
+            'risk_level' => ['nullable', 'string', 'max:50'],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'items' => ['nullable', 'array'],
+            'items.*.id' => ['required_with:items', 'integer', 'min:1'],
+            'items.*.product_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'items.*.sku_snapshot' => ['nullable', 'string', 'max:191'],
+            'items.*.imei_snapshot' => ['nullable', 'string', 'max:191'],
+            'items.*.serial_number_snapshot' => ['nullable', 'string', 'max:191'],
+            'items.*.brand' => ['nullable', 'string', 'max:191'],
+            'items.*.category' => ['nullable', 'string', 'max:191'],
+            'items.*.color' => ['nullable', 'string', 'max:191'],
+            'items.*.storage' => ['nullable', 'string', 'max:191'],
+            'items.*.qty' => ['nullable', 'numeric', 'min:0'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.discount' => ['nullable', 'numeric', 'min:0'],
+            'items.*.line_total' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $updates = [];
+        foreach ($data as $column => $value) {
+            if ($column === 'items') {
+                continue;
+            }
+            if (! in_array($column, $columns, true)) {
+                continue;
+            }
+            if (in_array($column, ['principal_amount', 'interest_amount', 'total_amount', 'paid_amount', 'balance_amount', 'down_payment', 'interest_rate'], true)) {
+                $value = round((float) $value, 2);
+            }
+            if ($column === 'currency') {
+                $value = strtoupper(trim((string) $value));
+            }
+            $updates[$column] = $value;
+        }
+        if (in_array('updated_at', $columns, true)) {
+            $updates['updated_at'] = now();
+        }
+
+        if (! empty($updates)) {
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($updates);
+        }
+        $this->updateAdminLoanCustomerSnapshot($loan, $data);
+        $this->updateAdminLoanItems($loan, (array) ($data['items'] ?? []));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan updated successfully.',
+            'data' => DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first(),
+        ]);
+    }
+
     protected function buildPagePayload(string $page): array
     {
         $conn = DB::connection('mysql_loan');
@@ -408,7 +519,7 @@ class DashboardController extends Controller
         $this->applyYearlyLoanFilters($query, $filters, 'l', 'loan_date', 'p', $dateColumn);
 
         if (in_array('status', $columns, true)) {
-            $query->whereRaw('LOWER(COALESCE(p.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted")');
+            $query->whereRaw('LOWER(COALESCE(p.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")');
         }
 
         return $query
@@ -535,11 +646,53 @@ class DashboardController extends Controller
 
     protected function closedLoanConditionSql(string $alias): string
     {
-        if (! Schema::connection('mysql_loan')->hasColumn('loans', 'status')) {
+        $columns = Schema::connection('mysql_loan')->hasTable('loans')
+            ? Schema::connection('mysql_loan')->getColumnListing('loans')
+            : [];
+
+        if (empty($columns)) {
             return '0';
         }
 
-        return 'LOWER(COALESCE('.$alias.'.status, "")) IN ("completed", "closed", "paid", "paid_off", "pay off", "payoff")';
+        $conditions = [];
+
+        if (in_array('status', $columns, true)) {
+            $conditions[] = 'LOWER(COALESCE('.$alias.'.status, "")) IN ("completed", "closed", "paid", "paid_off", "pay off", "payoff")';
+        }
+
+        $paidExpr = $this->coalesceSql('loans', $alias, ['paid_amount']);
+        $balanceExpr = $this->coalesceSql('loans', $alias, ['balance_amount']);
+        if (in_array('paid_amount', $columns, true) && in_array('balance_amount', $columns, true)) {
+            $conditions[] = '('.$paidExpr.' > 0 AND '.$balanceExpr.' <= 0)';
+        }
+
+        $totalExpr = $this->coalesceSql('loans', $alias, ['total_amount', 'total_payable_amount', 'principal_amount']);
+        $paymentTotalExpr = $this->loanPaymentTotalSubquerySql($alias);
+        if ($paymentTotalExpr !== null) {
+            $conditions[] = '('.$totalExpr.' > 0 AND '.$paymentTotalExpr.' >= '.$totalExpr.')';
+        }
+
+        return $conditions ? '('.implode(' OR ', $conditions).')' : '0';
+    }
+
+    protected function loanPaymentTotalSubquerySql(string $loanAlias): ?string
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id')) {
+            return null;
+        }
+
+        $amountExpr = $this->coalesceSql('loan_payments', 'lp', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $where = ['lp.loan_id = '.$loanAlias.'.id'];
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status')) {
+            $where[] = 'LOWER(COALESCE(lp.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")';
+        }
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'deleted_at')) {
+            $where[] = 'lp.deleted_at IS NULL';
+        }
+
+        return '(SELECT COALESCE(SUM('.$amountExpr.'), 0) FROM loan_payments lp WHERE '.implode(' AND ', $where).')';
     }
 
     protected function badLoanConditionSql(string $alias, array $columns, ?string $customerAlias = null): string
@@ -666,6 +819,224 @@ class DashboardController extends Controller
             : 0;
 
         return $totals;
+    }
+
+    protected function adminLoanDetailRows(array $filters, string $group)
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans')) {
+            return collect();
+        }
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loans');
+        $dateColumn = $this->firstLoanReportColumn('loans', ['loan_date', 'created_at'], $columns);
+        if (! $dateColumn) {
+            return collect();
+        }
+
+        $joinCustomers = Schema::connection('mysql_loan')->hasTable('loan_customers')
+            && in_array('customer_id', $columns, true)
+            && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id');
+        $customerNameExpr = $joinCustomers && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')
+            ? 'COALESCE(NULLIF(c.khmer_name, ""), '.(in_array('customer_name_snapshot', $columns, true) ? 'l.customer_name_snapshot' : 'NULL').')'
+            : (in_array('customer_name_snapshot', $columns, true) ? 'l.customer_name_snapshot' : 'NULL');
+        $customerBlacklist = $joinCustomers && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'blacklist_status');
+        $closedCondition = $this->closedLoanConditionSql('l');
+        $statusExpr = in_array('status', $columns, true)
+            ? 'CASE WHEN '.$closedCondition.' THEN "completed" ELSE l.status END'
+            : 'CASE WHEN '.$closedCondition.' THEN "completed" ELSE "pending" END';
+
+        $q = DB::connection('mysql_loan')->table('loans as l');
+        if ($joinCustomers) {
+            $q->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
+        }
+
+        $this->applyYearlyLoanFilters($q, $filters, 'l', $dateColumn);
+        $this->applyAdminLoanDetailGroupFilter($q, $group, $columns, $customerBlacklist ? 'c' : null);
+
+        return $q->selectRaw(
+                'l.id, '.
+                (in_array('loan_number', $columns, true) ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.
+                'l.'.$dateColumn.' as loan_date, '.
+                (in_array('customer_id', $columns, true) ? 'l.customer_id' : 'NULL').' as customer_id, '.
+                $customerNameExpr.' as customer_name, '.
+                (in_array('customer_phone_snapshot', $columns, true) ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone, '.
+                (in_array('customer_address_snapshot', $columns, true) ? 'l.customer_address_snapshot' : 'NULL').' as customer_address, '.
+                (in_array('id_card_number', $columns, true) ? 'l.id_card_number' : 'NULL').' as id_card_number, '.
+                (in_array('source_invoice_no', $columns, true) ? 'l.source_invoice_no' : 'NULL').' as source_invoice_no, '.
+                (in_array('source_type', $columns, true) ? 'l.source_type' : 'NULL').' as source_type, '.
+                (in_array('source_transaction_id', $columns, true) ? 'l.source_transaction_id' : 'NULL').' as source_transaction_id, '.
+                (in_array('location_name_snapshot', $columns, true) ? 'l.location_name_snapshot' : (in_array('business_location_name_snapshot', $columns, true) ? 'l.business_location_name_snapshot' : 'NULL')).' as location_name, '.
+                (in_array('business_location_name_snapshot', $columns, true) ? 'l.business_location_name_snapshot' : 'NULL').' as business_location_name_snapshot, '.
+                (in_array('principal_amount', $columns, true) ? 'l.principal_amount' : '0').' as principal_amount, '.
+                (in_array('interest_amount', $columns, true) ? 'l.interest_amount' : '0').' as interest_amount, '.
+                (in_array('total_amount', $columns, true) ? 'l.total_amount' : '0').' as total_amount, '.
+                (in_array('paid_amount', $columns, true) ? 'l.paid_amount' : '0').' as paid_amount, '.
+                (in_array('balance_amount', $columns, true) ? 'l.balance_amount' : '0').' as balance_amount, '.
+                (in_array('down_payment', $columns, true) ? 'l.down_payment' : '0').' as down_payment, '.
+                (in_array('installment_count', $columns, true) ? 'l.installment_count' : '0').' as installment_count, '.
+                (in_array('duration_months', $columns, true) ? 'l.duration_months' : '0').' as duration_months, '.
+                (in_array('interest_rate', $columns, true) ? 'l.interest_rate' : '0').' as interest_rate, '.
+                (in_array('interest_type', $columns, true) ? 'l.interest_type' : 'NULL').' as interest_type, '.
+                (in_array('payment_frequency', $columns, true) ? 'l.payment_frequency' : 'NULL').' as payment_frequency, '.
+                (in_array('first_due_date', $columns, true) ? 'l.first_due_date' : 'NULL').' as first_due_date, '.
+                (in_array('maturity_date', $columns, true) ? 'l.maturity_date' : 'NULL').' as maturity_date, '.
+                $statusExpr.' as status, '.
+                (in_array('currency', $columns, true) ? 'l.currency' : "'USD'").' as currency, '.
+                (in_array('collector_name_snapshot', $columns, true) ? 'l.collector_name_snapshot' : 'NULL').' as collector_name_snapshot, '.
+                (in_array('collection_status', $columns, true) ? 'l.collection_status' : 'NULL').' as collection_status, '.
+                (in_array('risk_level', $columns, true) ? 'l.risk_level' : 'NULL').' as risk_level, '.
+                (in_array('note', $columns, true) ? 'l.note' : 'NULL').' as note'
+            )
+            ->orderByDesc('l.'.$dateColumn)
+            ->orderByDesc('l.id')
+            ->limit(1000)
+            ->get()
+            ->each(function ($loanRow) {
+                $loanRow->items = $this->adminLoanItems((int) $loanRow->id);
+                $loanRow->related_counts = [
+                    'products' => $loanRow->items->count(),
+                    'schedules' => $this->adminLoanRelatedCount('loan_payment_schedules', (int) $loanRow->id),
+                    'payments' => $this->adminLoanRelatedCount('loan_payments', (int) $loanRow->id),
+                    'documents' => $this->adminLoanRelatedCount('loan_files', (int) $loanRow->id),
+                ];
+            });
+    }
+
+    protected function applyAdminLoanDetailGroupFilter($query, string $group, array $columns, ?string $customerAlias = null): void
+    {
+        if ($group === 'paidOff') {
+            $query->whereRaw($this->closedLoanConditionSql('l'));
+            return;
+        }
+
+        if ($group === 'badDebt') {
+            $query->whereRaw($this->badLoanConditionSql('l', $columns, $customerAlias));
+            return;
+        }
+
+        if ($group === 'active') {
+            $query->whereRaw('NOT ('.$this->closedLoanConditionSql('l').')')
+                ->whereRaw('NOT ('.$this->badLoanConditionSql('l', $columns, $customerAlias).')');
+            return;
+        }
+
+        if ($group === 'generalPaid') {
+            $paidExpr = $this->coalesceSql('loans', 'l', ['paid_amount']);
+            $query->whereRaw($paidExpr.' > 0');
+        }
+    }
+
+    protected function adminLoanItems(int $loan)
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_items')) {
+            return collect();
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan);
+        if (Schema::connection('mysql_loan')->hasColumn('loan_items', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return $query->orderBy('id')->get();
+    }
+
+    protected function adminLoanRelatedCount(string $table, int $loan): int
+    {
+        if (! Schema::connection('mysql_loan')->hasTable($table) || ! Schema::connection('mysql_loan')->hasColumn($table, 'loan_id')) {
+            return 0;
+        }
+
+        $query = DB::connection('mysql_loan')->table($table)->where('loan_id', $loan);
+        if (Schema::connection('mysql_loan')->hasColumn($table, 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return (int) $query->count();
+    }
+
+    protected function updateAdminLoanCustomerSnapshot(int $loan, array $data): void
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            return;
+        }
+
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        $customerId = (int) ($loanRow->customer_id ?? 0);
+        if ($customerId <= 0) {
+            return;
+        }
+
+        DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update($this->adminLoanSafeColumns('loan_customers', [
+            'name' => $data['customer_name_snapshot'] ?? null,
+            'khmer_name' => $data['customer_name_snapshot'] ?? null,
+            'phone' => $data['customer_phone_snapshot'] ?? null,
+            'mobile' => $data['customer_phone_snapshot'] ?? null,
+            'address' => $data['customer_address_snapshot'] ?? null,
+            'id_card_number' => $data['id_card_number'] ?? null,
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function updateAdminLoanItems(int $loan, array $items): void
+    {
+        if (empty($items) || ! Schema::connection('mysql_loan')->hasTable('loan_items')) {
+            return;
+        }
+
+        foreach ($items as $item) {
+            $itemId = (int) ($item['id'] ?? 0);
+            if ($itemId <= 0) {
+                continue;
+            }
+
+            $exists = DB::connection('mysql_loan')->table('loan_items')
+                ->where('id', $itemId)
+                ->where('loan_id', $loan)
+                ->exists();
+            if (! $exists) {
+                continue;
+            }
+
+            $qty = round((float) ($item['qty'] ?? 1), 4);
+            $unitPrice = round((float) ($item['unit_price'] ?? 0), 2);
+            $discount = round((float) ($item['discount'] ?? 0), 2);
+            $lineTotal = array_key_exists('line_total', $item) && $item['line_total'] !== null
+                ? round((float) $item['line_total'], 2)
+                : max(0, round(($qty * $unitPrice) - $discount, 2));
+
+            DB::connection('mysql_loan')->table('loan_items')->where('id', $itemId)->update($this->adminLoanSafeColumns('loan_items', [
+                'product_name_snapshot' => $item['product_name_snapshot'] ?? null,
+                'product_name' => $item['product_name_snapshot'] ?? null,
+                'sku_snapshot' => $item['sku_snapshot'] ?? null,
+                'sku' => $item['sku_snapshot'] ?? null,
+                'imei_snapshot' => $item['imei_snapshot'] ?? null,
+                'imei' => $item['imei_snapshot'] ?? null,
+                'serial_number_snapshot' => $item['serial_number_snapshot'] ?? null,
+                'serial_number' => $item['serial_number_snapshot'] ?? null,
+                'brand' => $item['brand'] ?? null,
+                'category' => $item['category'] ?? null,
+                'color' => $item['color'] ?? null,
+                'color_snapshot' => $item['color'] ?? null,
+                'storage' => $item['storage'] ?? null,
+                'storage_snapshot' => $item['storage'] ?? null,
+                'qty' => $qty,
+                'unit_price' => $unitPrice,
+                'discount' => $discount,
+                'line_total' => $lineTotal,
+                'updated_at' => now(),
+            ]));
+        }
+    }
+
+    protected function adminLoanSafeColumns(string $table, array $values): array
+    {
+        if (! Schema::connection('mysql_loan')->hasTable($table)) {
+            return [];
+        }
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing($table);
+
+        return array_intersect_key($values, array_flip($columns));
     }
 
     protected function parseYearlyLocationFilter(string $value): array

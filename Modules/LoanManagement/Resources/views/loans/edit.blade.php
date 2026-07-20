@@ -5,6 +5,27 @@
 @php $isEmbeddedModal = request()->boolean('_lm_modal'); @endphp
 @if($isEmbeddedModal)
 <style>
+    html,
+    body.loan-management-embedded-modal {
+        height: 100% !important;
+        overflow: hidden !important;
+        background: #f5f5f5 !important;
+    }
+    body.loan-management-embedded-modal .thetop,
+    body.loan-management-embedded-modal #scrollable-container,
+    body.loan-management-embedded-modal #loanManagementApp,
+    body.loan-management-embedded-modal #loanManagementMain,
+    body.loan-management-embedded-modal .lm-content,
+    body.loan-management-embedded-modal .lm-workspace {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+    body.loan-management-embedded-modal #main_app_header,
+    body.loan-management-embedded-modal #app,
     #loanManagementSidebar,
     #loanManagementHeader,
     .lm-breadcrumb-wrap,
@@ -19,14 +40,24 @@
         padding-top: 0 !important;
     }
     #loanManagementMain .lm-workspace {
-        padding: 12px 18px 24px !important;
+        padding: 0 !important;
     }
     .content-header {
         margin-top: 0 !important;
         padding-top: 0 !important;
     }
     .content {
-        min-height: auto !important;
+        min-height: 100% !important;
+    }
+    .lm-edit-wizard {
+        height: 100% !important;
+        min-height: 0 !important;
+    }
+    .lm-edit-wizard #wizEditForm {
+        height: 100% !important;
+    }
+    .lm-edit-wizard .lm-wiz-steps-wrap {
+        min-height: 0 !important;
     }
 </style>
 @endif
