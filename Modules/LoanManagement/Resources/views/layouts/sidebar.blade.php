@@ -92,6 +92,7 @@
                     ['label' => $lmText('Invoice Prefix', 'លេខកូដវិក្កយបត្រ'), 'route' => 'loan-management.settings', 'can' => 'loan_management.view'],
                     ['label' => $lmText('Payment Methods', 'វិធីបង់ប្រាក់'), 'route' => 'loan-management.settings.payment-methods', 'can' => 'loan_management.view'],
                     ['label' => $lmText('Currencies', 'រូបិយប័ណ្ណ'), 'route' => 'loan-management.settings.currencies', 'can' => 'loan_management.view'],
+                    ['label' => $lmText('Telegram Bot', 'ប៊ូតតេឡេក្រាម'), 'route' => 'loan-management.settings.telegram', 'can' => 'loan_management.view'],
                 ]],
             ],
         ],

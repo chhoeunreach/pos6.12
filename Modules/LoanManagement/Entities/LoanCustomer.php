@@ -31,6 +31,11 @@ class LoanCustomer extends Authenticatable
         'login_phone',
         'email',
         'telegram',
+        'telegram_chat_id',
+        'telegram_username',
+        'telegram_linked_at',
+        'telegram_link_token',
+        'telegram_link_token_expires_at',
         'facebook',
         'gender',
         'date_of_birth',
@@ -73,6 +78,7 @@ class LoanCustomer extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'telegram_link_token',
     ];
 
     protected $casts = [
@@ -84,6 +90,8 @@ class LoanCustomer extends Authenticatable
         'blacklist_status' => 'boolean',
         'blacklist_date' => 'datetime',
         'synced_at' => 'datetime',
+        'telegram_linked_at' => 'datetime',
+        'telegram_link_token_expires_at' => 'datetime',
     ];
 
     public function setPasswordAttribute($value): void

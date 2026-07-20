@@ -16,7 +16,17 @@ use Modules\LoanManagement\Http\Controllers\LoanCollectionController;
 use Modules\LoanManagement\Http\Controllers\LoanInstallmentListController;
 use Modules\LoanManagement\Http\Controllers\LoanLocationController;
 use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
+use Modules\LoanManagement\Http\Controllers\LoanTelegramChatController;
+use Modules\LoanManagement\Http\Controllers\LoanTelegramWebhookController;
 use Modules\LoanManagement\Http\Controllers\SettingsController;
+
+// Public Telegram webhook - deliberately outside the auth-wrapped group below (Telegram
+// cannot authenticate as a staff session) and outside the 'loan-management' prefix so its
+// URI matches the '/webhook/*' CSRF exemption in App\Http\Middleware\VerifyCsrfToken.
+// Security is enforced inside the controller via Telegram's X-Telegram-Bot-Api-Secret-Token header.
+Route::middleware(['web'])
+    ->post('/webhook/loan-telegram', [LoanTelegramWebhookController::class, 'handle'])
+    ->name('loan-management.telegram.webhook');
 
 Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.activity'])
     ->prefix('loan-management')
@@ -139,6 +149,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/customers/{customer}/disable-gps', [LoanCustomerController::class, 'disableGpsTracking'])->name('loan-management.customers.disable-gps')->middleware('can:loan_management.edit');
         Route::post('/customers/{customer}/sync-main-contact', [LoanCustomerController::class, 'syncFromUltimatePos'])->name('loan-management.customers.sync-main-contact')->middleware('can:loan_management.edit');
         Route::post('/customers/{customer}/reset-password', [LoanCustomerController::class, 'resetPassword'])->name('loan-management.customers.reset-password')->middleware('can:loan_management.edit');
+        Route::post('/customers/{customer}/telegram/link', [LoanCustomerController::class, 'generateTelegramLink'])->name('loan-management.customers.telegram.link')->middleware('can:loan_management.edit');
+        Route::post('/customers/{customer}/telegram/unlink', [LoanCustomerController::class, 'unlinkTelegram'])->name('loan-management.customers.telegram.unlink')->middleware('can:loan_management.edit');
         Route::delete('/customers/{customer}', [LoanCustomerController::class, 'destroy'])->name('loan-management.customers.destroy')->middleware('can:loan_management.delete');
         Route::get('/customer-tracking', [AdminCustomerTrackingController::class, 'index'])->name('loan-management.customer-tracking')->middleware('can:loan_management.view');
         Route::get('/customer-tracking/data', [AdminCustomerTrackingController::class, 'data'])->name('loan-management.customer-tracking.data')->middleware('can:loan_management.view');
@@ -159,6 +171,14 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/chat-api/chats/{thread}/pin', [LoanChatController::class, 'pin'])->name('loan-management.chat-api.pin')->middleware('can:loan_management.chat.view');
         Route::post('/chat-api/chats/{thread}/mute', [LoanChatController::class, 'mute'])->name('loan-management.chat-api.mute')->middleware('can:loan_management.chat.view');
         Route::delete('/chat/{thread}', [LoanChatController::class, 'destroy'])->name('loan-management.chat.destroy')->middleware('can:loan_management.chat.delete');
+
+        // Telegram customer-chat bridge - fully separate from the chat-api/* routes above
+        // (which power the staff's own internal Live Chat tool and never touch Telegram).
+        Route::get('/telegram-chat-api/chats', [LoanTelegramChatController::class, 'index'])->name('loan-management.telegram-chat-api.index')->middleware('can:loan_management.chat.view');
+        Route::post('/telegram-chat-api/chats', [LoanTelegramChatController::class, 'store'])->name('loan-management.telegram-chat-api.store')->middleware('can:loan_management.chat.view');
+        Route::get('/telegram-chat-api/chats/{thread}', [LoanTelegramChatController::class, 'show'])->name('loan-management.telegram-chat-api.show')->middleware('can:loan_management.chat.view');
+        Route::post('/telegram-chat-api/chats/{thread}/messages', [LoanTelegramChatController::class, 'sendMessage'])->name('loan-management.telegram-chat-api.messages')->middleware('can:loan_management.chat.view');
+        Route::post('/telegram-chat-api/chats/{thread}/read', [LoanTelegramChatController::class, 'read'])->name('loan-management.telegram-chat-api.read')->middleware('can:loan_management.chat.view');
         Route::get('/loans', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans')->middleware('can:loan_management.view');
         Route::get('/loans/list', [LoanInstallmentListController::class, 'index'])->name('loan-management.loans.index')->middleware('can:loan_management.view');
         Route::get('/schedules', [DashboardController::class, 'placeholder'])->defaults('page', 'Installment Schedules')->name('loan-management.schedules.index')->middleware('can:loan_management.view');
@@ -215,6 +235,11 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/settings/payment-methods', [SettingsController::class, 'updatePaymentMethods'])->name('loan-management.settings.payment-methods.update')->middleware('can:loan_management.view');
         Route::get('/settings/currencies', [DashboardController::class, 'placeholder'])->defaults('page', 'Currencies')->name('loan-management.settings.currencies')->middleware('can:loan_management.view');
         Route::post('/settings/invoice-prefix', [SettingsController::class, 'updateInvoicePrefix'])->name('loan-management.settings.invoice-prefix')->middleware('can:loan_management.view');
+        Route::get('/settings/telegram', [SettingsController::class, 'telegram'])->name('loan-management.settings.telegram')->middleware('can:loan_management.view');
+        Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('loan-management.settings.telegram.update')->middleware('can:loan_management.view');
+        Route::post('/settings/telegram/generate-secret', [SettingsController::class, 'generateTelegramWebhookSecret'])->name('loan-management.settings.telegram.generate-secret')->middleware('can:loan_management.view');
+        Route::post('/settings/telegram/test-connection', [SettingsController::class, 'testTelegramConnection'])->name('loan-management.settings.telegram.test-connection')->middleware('can:loan_management.view');
+        Route::post('/settings/telegram/register-webhook', [SettingsController::class, 'registerTelegramWebhook'])->name('loan-management.settings.telegram.register-webhook')->middleware('can:loan_management.view');
 
         Route::get('/guarantors', [DashboardController::class, 'placeholder'])->defaults('page', 'Guarantors')->name('loan-management.guarantors.index')->middleware('can:loan_management.view');
         Route::get('/blacklist', [DashboardController::class, 'placeholder'])->defaults('page', 'Blacklist')->name('loan-management.blacklist.index')->middleware('can:loan_management.view');

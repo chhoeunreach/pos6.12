@@ -18,6 +18,12 @@ return [
         'broadcasting_enabled' => (bool) env('LOAN_CHAT_BROADCASTING_ENABLED', false),
         'polling_interval_seconds' => (int) env('LOAN_CHAT_POLLING_INTERVAL', 5),
     ],
+    'telegram' => [
+        'bot_token' => env('LOAN_CHAT_TELEGRAM_BOT_TOKEN', ''),
+        'bot_username' => env('LOAN_CHAT_TELEGRAM_BOT_USERNAME', ''),
+        'webhook_secret' => env('LOAN_CHAT_TELEGRAM_WEBHOOK_SECRET', ''),
+        'link_ttl_minutes' => (int) env('LOAN_CHAT_TELEGRAM_LINK_TTL_MINUTES', 15),
+    ],
     'allow_without_pos_stock' => true,
     'google_vision' => [
         'api_key' => env('GOOGLE_CLOUD_VISION_API_KEY', env('GOOGLE_VISION_API_KEY')),

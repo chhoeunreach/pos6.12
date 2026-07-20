@@ -1404,6 +1404,8 @@
     </script>
     @yield('loan_js')
 
+    @include('loanmanagement::layouts.partials.telegram_chat_widget')
+
     <style>
         @media print {
             body,
