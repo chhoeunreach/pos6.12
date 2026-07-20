@@ -77,7 +77,6 @@
                 ]],
                 ['label' => $lmText('Collection Reports', 'របាយការណ៍ប្រមូលប្រាក់'), 'icon' => 'fa fa-bar-chart', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
                 ['label' => $lmText('Financial Reports', 'របាយការណ៍ហិរញ្ញវត្ថុ'), 'icon' => 'fa fa-file-excel-o', 'route' => 'loan-management.reports.payments', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
-                ['label' => $lmText('Performance', 'សមិទ្ធផល'), 'icon' => 'fa fa-line-chart', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view', 'tone' => 'blue'],
             ],
         ],
         [
@@ -85,6 +84,7 @@
             'items' => [
                 ['label' => $lmText('Users & Roles', 'អ្នកប្រើប្រាស់ និងតួនាទី'), 'icon' => 'fa fa-user-o', 'tone' => 'blue', 'children' => [
                     ['label' => $lmText('Manage Users', 'គ្រប់គ្រងអ្នកប្រើប្រាស់'), 'route' => 'users.index', 'can' => 'user.view|user.create'],
+                    ['label' => $lmText('Loan Users', 'អ្នកប្រើប្រាស់កម្ចី'), 'route' => 'loan-management.users.index', 'can' => 'loan_management.view|loan_management.setting'],
                 ]],
                 ['label' => $lmText('Branches', 'សាខា'), 'icon' => 'fa fa-building-o', 'route' => 'loan-management.locations.index', 'can' => 'loan_management.view', 'tone' => 'blue'],
                 ['label' => $lmText('Audit Logs', 'កំណត់ហេតុសវនកម្ម'), 'icon' => 'fa fa-check-circle-o', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.view', 'tone' => 'blue'],

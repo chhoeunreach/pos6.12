@@ -18,6 +18,7 @@ use Modules\LoanManagement\Http\Controllers\LoanLocationController;
 use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
 use Modules\LoanManagement\Http\Controllers\LoanTelegramChatController;
 use Modules\LoanManagement\Http\Controllers\LoanTelegramWebhookController;
+use Modules\LoanManagement\Http\Controllers\LoanUserController;
 use Modules\LoanManagement\Http\Controllers\SettingsController;
 
 // Public Telegram webhook - deliberately outside the auth-wrapped group below (Telegram
@@ -243,6 +244,16 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
 
         Route::get('/guarantors', [DashboardController::class, 'placeholder'])->defaults('page', 'Guarantors')->name('loan-management.guarantors.index')->middleware('can:loan_management.view');
         Route::get('/blacklist', [DashboardController::class, 'placeholder'])->defaults('page', 'Blacklist')->name('loan-management.blacklist.index')->middleware('can:loan_management.view');
+
+        Route::get('/users', [LoanUserController::class, 'index'])->name('loan-management.users.index')->middleware('can:loan_management.view');
+        Route::get('/users/create', [LoanUserController::class, 'create'])->name('loan-management.users.create')->middleware('can:loan_management.create');
+        Route::post('/users', [LoanUserController::class, 'store'])->name('loan-management.users.store')->middleware('can:loan_management.create');
+        Route::get('/users/{user}', [LoanUserController::class, 'show'])->name('loan-management.users.show')->middleware('can:loan_management.view');
+        Route::get('/users/{user}/edit', [LoanUserController::class, 'edit'])->name('loan-management.users.edit')->middleware('can:loan_management.edit');
+        Route::put('/users/{user}', [LoanUserController::class, 'update'])->name('loan-management.users.update')->middleware('can:loan_management.edit');
+        Route::delete('/users/{user}', [LoanUserController::class, 'destroy'])->name('loan-management.users.destroy')->middleware('can:loan_management.delete');
+        Route::post('/users/{user}/toggle-status', [LoanUserController::class, 'toggleStatus'])->name('loan-management.users.toggle-status')->middleware('can:loan_management.edit');
+        Route::post('/users/{user}/reset-password', [LoanUserController::class, 'resetPassword'])->name('loan-management.users.reset-password')->middleware('can:loan_management.edit');
 
         Route::get('/install', [InstallController::class, 'index'])->middleware('superadmin');
         Route::post('/install', [InstallController::class, 'install'])->middleware('superadmin');
