@@ -418,6 +418,10 @@
 
     var sendingMessage = false;
     function showComposerError(message){
+        if (!message) {
+            $('#lmTgComposerError').hide().text('');
+            return;
+        }
         var $err = $('#lmTgComposerError').text(message).show();
         window.clearTimeout(showComposerError._t);
         showComposerError._t = window.setTimeout(function(){ $err.fadeOut(200); }, 4000);
@@ -465,6 +469,35 @@
             .catch(function(){ showComposerError('Failed to send message.'); });
     }
 
+    function sendInvoiceImage(){
+        if (!activeThreadId || !activeLoanContext.loan_id) {
+            return false;
+        }
+
+        var caption = 'Invoice: ' + (activeLoanContext.loan_number || activeLoanContext.loan_id);
+        var $button = $('#lmTgSendInvoice');
+        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
+        showComposerError('');
+
+        apiPostJson(chatBaseUrl + '/' + activeThreadId + '/invoice-image', {
+            loan_id: activeLoanContext.loan_id,
+            message: caption
+        }).then(function(resp){
+            if (resp && resp.success) {
+                loadThread(false);
+                loadContacts($('#lmTgSearchInput').val());
+            } else {
+                showComposerError((resp && resp.message) || 'Failed to send invoice image.');
+            }
+        }).catch(function(){
+            showComposerError('Failed to send invoice image.');
+        }).finally(function(){
+            $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
+        });
+
+        return true;
+    }
+
     function sendTelegramFile(file, type, caption, durationSeconds){
         if (!file || !activeThreadId) return $.Deferred().reject().promise();
         var fd = new FormData();
@@ -499,6 +532,10 @@
     }
 
     $('#lmTgSendInvoice').on('click', function(){
+        if (sendInvoiceImage()) {
+            return;
+        }
+
         var loanNo = activeLoanContext.loan_number ? ('Loan #: ' + activeLoanContext.loan_number + '\n') : '';
         var balance = activeLoanContext.balance_amount ? ('Balance: ' + activeLoanContext.balance_amount + '\n') : '';
         var text = window.prompt('Invoice message:', 'Dear ' + activeCustomerName + ',\n' + loanNo + balance + 'Please review your invoice and contact us if you have questions.');
@@ -506,8 +543,8 @@
     });
 
     $('#lmTgSendPay').on('click', function(){
-        var balance = activeLoanContext.balance_amount ? (' Current balance: ' + activeLoanContext.balance_amount + '.') : '';
-        var text = window.prompt('Payment request message:', 'Dear ' + activeCustomerName + ', please make your payment when convenient.' + balance);
+        var amount = activeLoanContext.balance_amount || '......';
+        var text = window.prompt('Payment message:', 'សូមជំរាបសួរ ' + activeCustomerName + ' លោកអ្នកបានបង់ប្រាក់ ចំនួន ' + amount + ' រួចរាល់');
         if (text) sendTelegramText(text);
     });
 

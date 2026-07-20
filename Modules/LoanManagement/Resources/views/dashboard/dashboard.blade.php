@@ -3210,7 +3210,7 @@
                     tgStatus +
                     '<div class="lm-customer-hover__actions">' +
                         '<button type="button" class="primary js-dashboard-open-telegram" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-telegram"></i> Chat</button>' +
-                        '<button type="button" class="js-dashboard-telegram-invoice" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-file-text-o"></i> Invoice</button>' +
+                        '<button type="button" class="js-dashboard-telegram-invoice" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-id="' + esc(row.id) + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-file-text-o"></i> Invoice</button>' +
                         '<button type="button" class="js-dashboard-telegram-pay" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-money"></i> Pay</button>' +
                     '</div>' +
                 '</div>'
@@ -3522,6 +3522,7 @@
 
         function dashboardTelegramContext($button, action) {
             return {
+                loan_id: $button.data('loan-id') || '',
                 loan_number: $button.data('loan-number') || '',
                 balance_amount: $button.data('balance') || '',
                 auto_action: action || ''

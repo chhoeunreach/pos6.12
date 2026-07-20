@@ -56,6 +56,39 @@ class WkhtmltopdfPdfService
         return $configured ?: '/usr/bin/wkhtmltopdf';
     }
 
+    public function resolveImageBinaryPath(): string
+    {
+        $pdfBinary = $this->resolveBinaryPath();
+        $candidates = [];
+
+        if ($pdfBinary !== '') {
+            $candidates[] = str_replace('wkhtmltopdf', 'wkhtmltoimage', $pdfBinary);
+        }
+
+        $candidates[] = '/usr/bin/wkhtmltoimage';
+        $candidates[] = '/usr/local/bin/wkhtmltoimage';
+        $candidates[] = '/opt/homebrew/bin/wkhtmltoimage';
+        $candidates[] = 'C:\Program Files\wkhtmltopdf\bin\wkhtmltoimage.exe';
+        $candidates[] = 'C:\Program Files (x86)\wkhtmltopdf\bin\wkhtmltoimage.exe';
+        $candidates[] = 'C:\wkhtmltopdf\bin\wkhtmltoimage.exe';
+
+        foreach (array_unique($candidates) as $path) {
+            if (is_file($path) && is_executable($path)) {
+                return $path;
+            }
+        }
+
+        $process = new Process(['which', 'wkhtmltoimage']);
+        $process->setTimeout(5);
+        $process->run();
+        $found = trim($process->getOutput());
+        if ($process->isSuccessful() && $found !== '' && is_file($found) && is_executable($found)) {
+            return $found;
+        }
+
+        return $candidates[0] ?? '/usr/bin/wkhtmltoimage';
+    }
+
     /**
      * Render a Blade view into a PDF file using wkhtmltopdf.
      *
@@ -130,6 +163,82 @@ class WkhtmltopdfPdfService
 
             if (! File::exists($outputPath) || File::size($outputPath) === 0) {
                 $this->saveHtmlWithMpdf($html, $outputPath, $options);
+            }
+        } finally {
+            if (File::exists($workDir)) {
+                File::deleteDirectory($workDir);
+            }
+        }
+    }
+
+    public function saveHtmlToImage(string $html, string $outputPath, array $options = []): void
+    {
+        $dir = dirname($outputPath);
+        if (! File::exists($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+
+        $binary = $this->resolveImageBinaryPath();
+        if (! is_file($binary) || ! is_executable($binary)) {
+            throw new \RuntimeException('wkhtmltoimage binary not executable at: '.$binary);
+        }
+
+        $baseTmpDir = storage_path('app/temp');
+        if (! File::exists($baseTmpDir)) {
+            File::makeDirectory($baseTmpDir, 0755, true);
+        }
+
+        $workDir = $baseTmpDir . DIRECTORY_SEPARATOR . 'wkhtml_img_' . Str::random(16);
+        File::makeDirectory($workDir, 0755, true);
+
+        $tmpHtml = $workDir . DIRECTORY_SEPARATOR . 'index.html';
+        File::put($tmpHtml, $html);
+
+        $fontDir = $workDir . DIRECTORY_SEPARATOR . 'fonts';
+        File::makeDirectory($fontDir, 0755, true);
+        foreach ($this->fontSourcePaths() as $src) {
+            if (File::exists($src)) {
+                File::copy($src, $fontDir . DIRECTORY_SEPARATOR . basename($src));
+            }
+        }
+
+        try {
+            $mergedOptions = array_merge([
+                'encoding' => 'utf-8',
+                'format' => 'png',
+                'quality' => '92',
+                'width' => '1240',
+                'enable-local-file-access' => true,
+                'load-error-handling' => 'ignore',
+                'load-media-error-handling' => 'ignore',
+                'quiet' => true,
+            ], $options);
+
+            $args = [$binary];
+            foreach ($mergedOptions as $flag => $value) {
+                $flag = ltrim((string) $flag, '-');
+                $args[] = '--'.$flag;
+                if ($value === true) {
+                    continue;
+                }
+                if ($value === false || $value === null) {
+                    array_pop($args);
+                    continue;
+                }
+                $args[] = (string) $value;
+            }
+            $args[] = $tmpHtml;
+            $args[] = $outputPath;
+
+            $process = new Process($args);
+            $process->setTimeout(90);
+            $process->run();
+
+            if (! $process->isSuccessful()) {
+                throw new \RuntimeException(trim($process->getErrorOutput() ?: $process->getOutput()) ?: 'wkhtmltoimage failed.');
+            }
+            if (! File::exists($outputPath) || File::size($outputPath) === 0) {
+                throw new \RuntimeException('wkhtmltoimage generated an empty image.');
             }
         } finally {
             if (File::exists($workDir)) {

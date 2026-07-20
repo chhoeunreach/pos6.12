@@ -2,10 +2,14 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use App\Services\WkhtmltopdfPdfService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Modules\LoanManagement\Entities\LoanTelegramChatMessage;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
 use Modules\LoanManagement\Services\TelegramChatService;
@@ -158,6 +162,63 @@ class LoanTelegramChatController extends Controller
         };
 
         return $this->ok('Message sent', $this->chatService->formatMessage($message));
+    }
+
+    public function sendInvoiceImage(Request $request, int $thread, WkhtmltopdfPdfService $renderService)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.reply') || auth()->user()->can('loan_management.chat.view'), 403);
+
+        $row = LoanTelegramChatThread::query()->find($thread);
+        if (! $row || ! $this->canAccessThread($row)) {
+            return $this->fail('Thread not found', 404, (object) []);
+        }
+
+        $data = $request->validate([
+            'loan_id' => 'required|integer',
+            'message' => 'nullable|string|max:1000',
+        ]);
+
+        $loan = DB::connection('mysql_loan')->table('loans')->where('id', (int) $data['loan_id'])->first();
+        if (! $loan) {
+            return $this->fail('Loan not found', 404, (object) []);
+        }
+        if (! empty($loan->customer_id) && (int) $loan->customer_id !== (int) $row->customer_id) {
+            return $this->fail('This loan does not belong to the selected customer.', 422, (object) []);
+        }
+
+        $html = app(LoanInstallmentListController::class)->print((int) $data['loan_id'])->render();
+        $html = preg_replace('/<div class="no-print".*?<\/div>/is', '', $html, 1) ?: $html;
+        $imageCss = '<style>body{background:#fff!important}.page{margin:0 auto!important}.no-print{display:none!important}</style>';
+        $html = str_ireplace('</head>', $imageCss.'</head>', $html);
+
+        $tmpDir = storage_path('app/temp/telegram-invoices');
+        if (! File::exists($tmpDir)) {
+            File::makeDirectory($tmpDir, 0755, true);
+        }
+
+        $filename = 'loan-invoice-'.Str::slug((string) ($loan->loan_number ?? $loan->id), '-').'-'.time().'.png';
+        $path = $tmpDir.DIRECTORY_SEPARATOR.$filename;
+
+        try {
+            $renderService->saveHtmlToImage($html, $path);
+
+            $uploaded = new UploadedFile($path, $filename, 'image/png', null, true);
+            $senderType = $this->isAdmin() ? 'admin' : 'staff';
+            $caption = trim((string) ($data['message'] ?? ''));
+            if ($caption === '') {
+                $caption = 'Invoice: '.($loan->loan_number ?? $loan->id);
+            }
+
+            $message = $this->chatService->sendImageMessage($row, $senderType, (int) auth()->id(), $uploaded, $caption);
+
+            return $this->ok('Invoice image sent', $this->chatService->formatMessage($message));
+        } catch (\Throwable $e) {
+            return $this->fail('Unable to create invoice image: '.$e->getMessage(), 500, (object) []);
+        } finally {
+            if (File::exists($path)) {
+                File::delete($path);
+            }
+        }
     }
 
     public function updateMessage(Request $request, int $thread, int $message)
