@@ -474,6 +474,13 @@
         background: #dbeafe;
         color: #1e40af;
     }
+    .lm-dashboard-refresh-schedule-btn {
+        margin-left: 4px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+    }
     .lm-pay-status {
         display: inline-block;
         margin-top: 3px;
@@ -644,7 +651,8 @@
         padding: 8px 20px;
         font-size: 13px;
     }
-    .lm-pay-action .btn-modal {
+    .lm-pay-action .btn-modal,
+    .lm-pay-action .lm-dashboard-refresh-schedule-btn {
         cursor: pointer;
     }
     .loan-schedule-display {
@@ -2000,10 +2008,16 @@
             margin-left: 3px;
             padding: 8px 7px;
         }
+        #loanDashboardQuickSearchTable .lm-dashboard-refresh-schedule-btn {
+            min-width: 34px;
+            margin-left: 3px;
+            padding: 8px 7px;
+        }
         #loanDashboardQuickSearchTable .lm-pay-btn .fa {
             display: none;
         }
-        #loanDashboardQuickSearchTable .lm-print-btn span {
+        #loanDashboardQuickSearchTable .lm-print-btn span,
+        #loanDashboardQuickSearchTable .lm-dashboard-refresh-schedule-btn span {
             display: none;
         }
         #loanDashboardQuickSearchTable .lm-pay-more {
@@ -3062,6 +3076,7 @@
                 var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
                 var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
                 var collectionUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payments/collection-modal";
+                var refreshScheduleUrl = "{{ url('loan-management/loans') }}/" + row.id + "/schedules/refresh";
                 var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
                 var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
                 var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
@@ -3084,12 +3099,14 @@
                     + '<td class="text-center lm-pay-action">'
                     + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> <span>Pay</span></button>'
                     + '<button type="button" class="btn btn-default btn-xs lm-print-btn btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal" title="Print loan for ' + esc(row.customer_name) + '"><i class="fa fa-print"></i> <span>Print</span></button>'
+                    + '<button type="button" class="btn btn-info btn-xs lm-dashboard-refresh-schedule-btn" data-url="' + refreshScheduleUrl + '" title="Refresh schedule for ' + esc(row.customer_name) + '"><i class="fa fa-refresh"></i> <span>Schedule</span></button>'
                     + '<div class="lm-pay-more dropdown">'
                     + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
                     + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
                     + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
+                    + '<li><button type="button" class="lm-dashboard-refresh-schedule-btn" data-url="' + refreshScheduleUrl + '"><i class="fa fa-refresh"></i> Refresh Schedule</button></li>'
                     + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
                     + '<li><button type="button" class="js-copy-loan-payment-info" data-url="' + copyInfoUrl + '"><i class="fa fa-copy"></i> Copy</button></li>'
                     + '</ul>'
@@ -3099,6 +3116,54 @@
             });
             $('[data-loan-table="dashboard_quick_search"]').html(html || '<tr><td colspan="4" class="text-center">No loans found for this search.</td></tr>');
         }
+
+        $(document).on('click', '.lm-dashboard-refresh-schedule-btn', function (event) {
+            event.preventDefault();
+
+            var $button = $(this);
+            var url = $button.data('url');
+            if (!url) {
+                return;
+            }
+
+            if (!window.confirm('Refresh this loan payment schedule from the loan data and imported payments?')) {
+                return;
+            }
+
+            var originalHtml = $button.html();
+            $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> <span>Refreshing</span>');
+
+            $.ajax({
+                url: url,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    _token: $('meta[name="csrf-token"]').attr('content'),
+                    sections_context: 'show'
+                },
+                success: function (res) {
+                    if (res && res.success) {
+                        if (window.toastr) {
+                            toastr.success(res.message || 'Payment schedule refreshed successfully.');
+                        }
+                        runQuickSearch();
+                    } else if (window.toastr) {
+                        toastr.error((res && res.message) || 'Unable to refresh payment schedule.');
+                    }
+                },
+                error: function (xhr) {
+                    var message = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to refresh payment schedule.';
+                    if (window.toastr) {
+                        toastr.error(message);
+                    } else {
+                        alert(message);
+                    }
+                },
+                complete: function () {
+                    $button.prop('disabled', false).html(originalHtml);
+                }
+            });
+        });
 
         function runQuickSearch() {
             var term = $.trim($('#loanDashboardQuickSearchInput').val() || '');
