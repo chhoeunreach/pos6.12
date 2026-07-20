@@ -16,6 +16,7 @@
     #lmTgFab{position:fixed;right:26px;bottom:26px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#6dc9f7,#2894e0);color:#fff;border:0;box-shadow:0 6px 20px rgba(41,148,224,.5);font-size:25px;cursor:pointer;z-index:4998;display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
     #lmTgFab:hover{transform:scale(1.07)}
     #lmTgFab:active{transform:scale(.96)}
+    #lmTgFab .lm-tg-fab-icon{width:31px;height:31px;display:block;fill:currentColor;color:#fff}
     #lmTgFab .lm-tg-fab-dot{position:absolute;top:2px;right:2px;width:13px;height:13px;background:#94a3b8;border:2px solid #fff;border-radius:50%}
     #lmTgFab.linked .lm-tg-fab-dot{background:#22c55e}
     #lmTgFab.open{display:none}
@@ -91,8 +92,10 @@
     }
 </style>
 
-<button type="button" id="lmTgFab" title="Open Telegram Chat" class="{{ $tgBoundLinked ? 'linked' : '' }}">
-    <i class="fa fa-telegram"></i>
+<button type="button" id="lmTgFab" title="Open Telegram Chat" aria-label="Open Telegram Chat" class="{{ $tgBoundLinked ? 'linked' : '' }}">
+    <svg class="lm-tg-fab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M21.94 4.16c.28-1.18-.86-2.16-1.95-1.68L2.83 10.02c-1.22.54-1.19 2.29.05 2.78l4.28 1.68 1.63 5.15c.38 1.21 1.91 1.56 2.77.64l2.34-2.5 4.55 3.35c1.02.75 2.49.18 2.78-1.06l.71-15.9ZM8.2 13.57l9.8-6.23c.45-.29.92.31.53.67l-8.07 7.47-.31 3.36-1.95-5.27Z"/>
+    </svg>
     <span class="lm-tg-fab-dot"></span>
 </button>
 

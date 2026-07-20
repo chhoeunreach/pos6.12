@@ -2,14 +2,8 @@
     $cards = [
         ['key' => 'due_today', 'label' => 'Due Today', 'icon' => 'fa fa-calendar-check-o', 'tone' => 'blue'],
         ['key' => 'overdue_accounts', 'label' => 'Overdue Accounts', 'icon' => 'fa fa-exclamation-triangle', 'tone' => 'red'],
-        ['key' => 'skip_customers', 'label' => 'Skip Customers', 'icon' => 'fa fa-phone-square', 'tone' => 'slate'],
         ['key' => 'broken_ptp', 'label' => 'Broken PTP', 'icon' => 'fa fa-chain-broken', 'tone' => 'amber'],
-        ['key' => 'field_visits_today', 'label' => 'Field Visits Today', 'icon' => 'fa fa-street-view', 'tone' => 'teal'],
         ['key' => 'collection_amount_today', 'label' => 'Collection Amount Today', 'icon' => 'fa fa-dollar', 'tone' => 'green'],
-        ['key' => 'recovery_cases', 'label' => 'Recovery Cases', 'icon' => 'fa fa-refresh', 'tone' => 'purple'],
-        ['key' => 'legal_cases', 'label' => 'Legal Cases', 'icon' => 'fa fa-gavel', 'tone' => 'rose'],
-        ['key' => 'high_risk_customers', 'label' => 'High Risk Customers', 'icon' => 'fa fa-user-times', 'tone' => 'orange'],
-        ['key' => 'repossessions', 'label' => 'Repossessions', 'icon' => 'fa fa-truck', 'tone' => 'gray'],
     ];
     $dashboardBadgeCounts = \Modules\LoanManagement\Helpers\LoanMenuHelper::badgeCounts();
     $dashboardUnreadChats = (int) ($dashboardBadgeCounts['unread_chat'] ?? 0);
@@ -845,7 +839,7 @@
     }
     .lm-quick-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
         gap: 16px;
     }
     .lm-quick-box {
@@ -2580,6 +2574,74 @@
         font-size: 10px;
         box-shadow: 0 3px 8px rgba(22, 163, 74, .28);
     }
+    .lm-customer-chat-fab {
+        position: fixed;
+        right: 166px;
+        bottom: 26px;
+        z-index: 4997;
+        width: 58px;
+        height: 58px;
+        border: 0;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #22c55e, #0f766e);
+        color: #fff;
+        font-size: 24px;
+        box-shadow: 0 12px 26px rgba(15, 118, 110, .3);
+        cursor: pointer;
+        transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .lm-customer-chat-fab:hover,
+    .lm-customer-chat-fab:focus {
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 16px 32px rgba(15, 118, 110, .38);
+        outline: none;
+    }
+    .lm-customer-chat-fab__badge {
+        position: absolute;
+        right: -4px;
+        top: -4px;
+        min-width: 21px;
+        height: 21px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 6px;
+        background: #ef4444;
+        border: 2px solid #fff;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        box-shadow: 0 3px 8px rgba(239, 68, 68, .26);
+    }
+    .lm-customer-chat-source {
+        display: none;
+    }
+    .lm-customer-chat-modal .modal-dialog,
+    .modal-dialog.lm-customer-chat-modal {
+        width: min(760px, 96%);
+    }
+    .lm-customer-chat-modal .modal-body,
+    .modal-dialog.lm-customer-chat-modal .modal-body {
+        padding: 0;
+        background: #f8fafc;
+    }
+    .lm-customer-chat-modal .lm-dashboard-panel,
+    .modal-dialog.lm-customer-chat-modal .lm-dashboard-panel {
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .lm-customer-chat-modal .lm-chat-card,
+    .modal-dialog.lm-customer-chat-modal .lm-chat-card {
+        border-radius: 0;
+        box-shadow: none;
+    }
     @media (max-width: 767px) {
         .lm-create-sell-fab {
             right: 88px;
@@ -2587,6 +2649,13 @@
             width: 52px;
             height: 52px;
             font-size: 20px;
+        }
+        .lm-customer-chat-fab {
+            right: 150px;
+            bottom: 18px;
+            width: 52px;
+            height: 52px;
+            font-size: 21px;
         }
     }
 
@@ -2703,6 +2772,12 @@
         <i class="fa fa-shopping-cart" aria-hidden="true"></i>
         <span class="lm-create-sell-fab__plus" aria-hidden="true"><i class="fa fa-plus"></i></span>
     </button>
+    <button type="button" class="lm-customer-chat-fab" id="lmCustomerChatFab" title="Customer Chat" aria-label="Open Customer Chat">
+        <i class="fa fa-comments" aria-hidden="true"></i>
+        @if($dashboardUnreadChats > 0)
+            <span class="lm-customer-chat-fab__badge">{{ min((int) $dashboardUnreadChats, 99) }}</span>
+        @endif
+    </button>
 
     <div class="lm-dashboard-tabs" role="tablist" aria-label="Loan dashboard tabs">
         <button type="button" class="lm-dashboard-tab is-active" data-dashboard-tab="overview" aria-pressed="true">Overview</button>
@@ -2731,7 +2806,7 @@
                     <h3 class="lm-dashboard-panel__title">Quick Actions</h3>
                     <p class="lm-dashboard-panel__hint">Search loans, collect payment, create new loans.</p>
                 </div>
-                <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 2 smart tools</span>
+                <span class="lm-dashboard-panel__badge"><i class="fa fa-bolt"></i> 1 smart tool</span>
             </div>
             <div class="lm-dashboard-panel__body lm-dashboard-panel__body--quick-actions">
                 <div class="lm-quick-grid">
@@ -2771,24 +2846,12 @@
                         <div class="lm-quick-box__footer"><i class="fa fa-bolt"></i> Search customer name or phone for fast payment.</div>
                     </div>
 
-                    <div class="lm-quick-box lm-quick-box--sell">
-                        <h4 class="lm-quick-box__title"><span class="lm-quick-box__icon"><i class="fa fa-plus-square"></i></span> <a href="{{ route('loan-management.loans.create') }}" style="color:inherit;text-decoration:none;">New Loan</a></h4>
-                        <p class="lm-quick-box__subtitle">Create a loan without POS sell.</p>
-                        <div class="lm-quick-box__meta">
-                            <span class="lm-quick-box__chip"><i class="fa fa-user"></i> Select customer</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-shopping-cart"></i> Add items</span>
-                            <span class="lm-quick-box__chip"><i class="fa fa-credit-card"></i> Set terms</span>
-                        </div>
-                        <div class="lm-quick-box__footer">
-                            <a href="{{ route('loan-management.loans.create') }}" class="btn btn-primary btn-sm"><i class="fa fa-plus"></i> Create New Loan</a>
-                        </div>
-                    </div>
-
                 </div>
             </div>
         </div>
 
-        <div class="lm-dashboard-panel lm-dashboard-panel--feature" id="lmCustomerChatPanel">
+        <div class="lm-customer-chat-source" id="lmCustomerChatPanel">
+        <div class="lm-dashboard-panel lm-dashboard-panel--feature">
             <div class="lm-dashboard-panel__header">
                 <div class="lm-chat-header-text">
                     <h3 class="lm-dashboard-panel__title">Customer Chat</h3>
@@ -2796,9 +2859,6 @@
                 </div>
                 <div class="lm-chat-header-actions">
                     <span class="lm-dashboard-panel__badge"><i class="fa fa-comments"></i> {{ $dashboardUnreadChats }} unread</span>
-                    <button type="button" class="lm-chat-toggle" id="lmChatToggleBtn" title="Hide Customer Chat" aria-label="Hide Customer Chat" aria-expanded="true">
-                        <i class="fa fa-chevron-right"></i>
-                    </button>
                 </div>
             </div>
             <div class="lm-dashboard-panel__body">
@@ -2900,6 +2960,7 @@
                     </div>
                 </div>
             </div>
+        </div>
         </div>
 
         <div class="lm-side-stack">
@@ -3911,6 +3972,28 @@
                     "{{ route('loan-management.loans.create-from-sell') }}?_lm_modal=1"
                 );
             });
+            $('#lmCustomerChatFab').on('click', function (event) {
+                event.preventDefault();
+                var content = $('#lmCustomerChatPanel').html();
+                if (!content || !$('.view_modal').length) {
+                    return;
+                }
+
+                var html = '' +
+                    '<div class="modal-dialog modal-lg lm-customer-chat-modal" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                    '<span aria-hidden="true">&times;</span>' +
+                                '</button>' +
+                                '<h4 class="modal-title"><i class="fa fa-comments"></i> Customer Chat</h4>' +
+                            '</div>' +
+                            '<div class="modal-body">' + content + '</div>' +
+                        '</div>' +
+                    '</div>';
+
+                $('.view_modal').html(html).modal('show');
+            });
             $('#loanDashboardLiveChatSearch').on('input', function () {
                 window.clearTimeout(liveChatSearchTimer);
                 liveChatSearchTimer = window.setTimeout(renderLiveChatThreads, 160);
@@ -3957,59 +4040,6 @@
                     window.loanManagementOpenAutoInstallment(saleId);
                 }
             });
-
-            /* ---- Customer Chat hide / show toggle ---- */
-            var $chatPanel = $('#lmCustomerChatPanel');
-            var $chatToggle = $('#lmChatToggleBtn');
-            var $chatGrid = $chatPanel.closest('.lm-dashboard-grid');
-            var chatStorageKey = 'loanDashboardCustomerChatHidden';
-
-            function setCustomerChatHidden(hidden) {
-                $chatPanel.toggleClass('lm-dashboard-panel--chat-hidden', hidden);
-                $chatGrid.toggleClass('lm-dashboard-grid--chat-collapsed', hidden);
-                $chatPanel.attr('tabindex', hidden ? '0' : null);
-                $chatPanel.attr('aria-label', hidden ? 'Show Customer Chat' : null);
-                $chatToggle
-                    .toggleClass('is-collapsed', hidden)
-                    .attr('title', hidden ? 'Show Customer Chat' : 'Hide Customer Chat')
-                    .attr('aria-label', hidden ? 'Show Customer Chat' : 'Hide Customer Chat')
-                    .attr('aria-expanded', hidden ? 'false' : 'true')
-                    .find('i')
-                    .toggleClass('fa-chevron-left', hidden)
-                    .toggleClass('fa-chevron-right', !hidden);
-
-                try {
-                    window.localStorage.setItem(chatStorageKey, hidden ? '1' : '0');
-                } catch (e) {}
-            }
-
-            $chatToggle.on('click', function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                setCustomerChatHidden(!$chatPanel.hasClass('lm-dashboard-panel--chat-hidden'));
-            });
-
-            $chatPanel.on('click', function () {
-                if ($chatPanel.hasClass('lm-dashboard-panel--chat-hidden')) {
-                    setCustomerChatHidden(false);
-                }
-            });
-
-            $chatPanel.on('keydown', function (event) {
-                if (!$chatPanel.hasClass('lm-dashboard-panel--chat-hidden')) {
-                    return;
-                }
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setCustomerChatHidden(false);
-                }
-            });
-
-            try {
-                if (window.localStorage.getItem(chatStorageKey) === '1') {
-                    setCustomerChatHidden(true);
-                }
-            } catch (e) {}
 
             timer = window.setInterval(refreshLoanDashboard, refreshMs);
             window.loanDashboardRealtimeTimer = timer;
