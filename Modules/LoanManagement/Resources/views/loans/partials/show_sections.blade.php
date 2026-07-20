@@ -61,7 +61,19 @@
 </div>
 
 <div class="box box-info">
-    <div class="box-header"><h3 class="box-title">Payment Schedule</h3></div>
+    <div class="box-header">
+        <h3 class="box-title">Payment Schedule</h3>
+        @can('loan_management.edit')
+            <div class="box-tools pull-right">
+                <button type="button"
+                        class="btn btn-xs btn-info lm-refresh-schedule-btn"
+                        data-url="{{ route('loan-management.loans.schedules.refresh', ['loan' => $loanRow->id, 'sections_context' => 'show'] + (request()->boolean('_lm_modal') ? ['_lm_modal' => 1] : [])) }}"
+                        title="Refresh Schedule">
+                    <i class="fa fa-refresh"></i> <span class="hidden-xs">Refresh Schedule</span>
+                </button>
+            </div>
+        @endcan
+    </div>
     <div class="box-body table-responsive">
         <table class="table table-bordered">
             <thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Schedule Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Action</th></tr></thead>

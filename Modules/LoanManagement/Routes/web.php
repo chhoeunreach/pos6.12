@@ -107,6 +107,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/loans/{loan}/workflow', [LoanInstallmentListController::class, 'updateWorkflow'])->name('loan-management.loans.workflow.update')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/update', [LoanInstallmentListController::class, 'update'])->name('loan-management.loans.update')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/schedules/update-from-edit', [LoanInstallmentListController::class, 'updateSchedulesFromEdit'])->name('loan-management.loans.schedules.update-from-edit')->middleware('can:loan_management.edit');
+        Route::post('/loans/{loan}/schedules/refresh', [LoanInstallmentListController::class, 'refreshSchedules'])->name('loan-management.loans.schedules.refresh')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/items/create', [LoanInstallmentListController::class, 'createItem'])->name('loan-management.loans.items.create')->middleware('can:loan_management.edit');
         Route::post('/loans/{loan}/items', [LoanInstallmentListController::class, 'storeItem'])->name('loan-management.loans.items.store')->middleware('can:loan_management.edit');
         Route::get('/loans/{loan}/items/{item}/edit', [LoanInstallmentListController::class, 'editItem'])->name('loan-management.loans.items.edit')->middleware('can:loan_management.edit');

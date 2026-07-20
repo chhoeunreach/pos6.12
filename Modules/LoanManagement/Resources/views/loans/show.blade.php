@@ -94,6 +94,14 @@
                 data-container=".view_modal">
             <i class="fa fa-money"></i> Add Payment
         </button>
+        @can('loan_management.edit')
+        <button type="button"
+                class="btn btn-info lm-refresh-schedule-btn"
+                data-url="{{ route('loan-management.loans.schedules.refresh', ['loan' => $loanRow->id, 'sections_context' => 'show'] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}"
+                title="Refresh Schedule">
+            <i class="fa fa-refresh"></i> Refresh Schedule
+        </button>
+        @endcan
         <button type="button"
                 class="btn btn-default btn-modal"
                 data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
@@ -259,6 +267,13 @@
                 data-loan-id="{{ $loanRow->id }}">
             <i class="fa fa-money"></i> Pay
         </button>
+        @can('loan_management.edit')
+        <button type="button"
+                class="lm-mab-btn lm-mab-btn-outline lm-refresh-schedule-btn"
+                data-url="{{ route('loan-management.loans.schedules.refresh', ['loan' => $loanRow->id, 'sections_context' => 'show'] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}">
+            <i class="fa fa-refresh"></i> Schedule
+        </button>
+        @endcan
         <button type="button"
                 class="lm-mab-btn lm-mab-btn-outline btn-modal"
                 data-href="{{ route('loan-management.loans.print-modal', $loanRow->id) }}"
@@ -299,6 +314,61 @@
                 }
             });
         }
+
+        function replaceLoanSections(html) {
+            var target = document.getElementById('loanShowSections');
+            if (target && html) {
+                target.innerHTML = html;
+            }
+        }
+
+        document.addEventListener('click', function (event) {
+            var trigger = event.target.closest('.lm-refresh-schedule-btn');
+            if (!trigger || !window.jQuery) {
+                return;
+            }
+
+            event.preventDefault();
+            if (!window.confirm('Refresh this loan payment schedule from the loan data and imported payments?')) {
+                return;
+            }
+
+            var originalHtml = trigger.innerHTML;
+            trigger.disabled = true;
+            trigger.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Refreshing';
+
+            window.jQuery.ajax({
+                url: trigger.getAttribute('data-url'),
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    sections_context: 'show'
+                },
+                success: function (res) {
+                    if (res && res.success) {
+                        replaceLoanSections(res.data && res.data.sections_html);
+                        if (window.toastr) {
+                            window.toastr.success(res.message || 'Payment schedule refreshed successfully.');
+                        }
+                    } else if (window.toastr) {
+                        window.toastr.error((res && res.message) || 'Unable to refresh payment schedule.');
+                    }
+                },
+                error: function (xhr) {
+                    var message = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to refresh payment schedule.';
+                    if (window.toastr) {
+                        window.toastr.error(message);
+                    } else {
+                        alert(message);
+                    }
+                },
+                complete: function () {
+                    trigger.disabled = false;
+                    trigger.innerHTML = originalHtml;
+                }
+            });
+        });
 
         @if($isEmbeddedModal)
         document.addEventListener('click', function (event) {

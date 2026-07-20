@@ -2816,6 +2816,259 @@ class LoanInstallmentListController extends Controller
         }
     }
 
+    public function refreshSchedules(Request $request, int $loan)
+    {
+        try {
+            abort_if(! $this->loanTableExists('loans'), 404);
+            abort_if(! $this->loanTableExists('loan_payment_schedules'), 404);
+
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+            abort_if(! $loanRow, 404);
+
+            $data = $this->scheduleRefreshDataFromLoan($loan, $loanRow);
+
+            DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $data) {
+                $meta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
+                $meta['interest_rate'] = $data['interest_rate'];
+                $meta['interest_type'] = $data['interest_type'];
+                $meta['duration_months'] = $data['duration_months'];
+                $meta['payment_frequency'] = $data['payment_frequency'];
+                $meta['first_due_date'] = $data['first_due_date'];
+
+                DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+                    'principal_amount' => $data['principal_amount'],
+                    'interest_amount' => $data['interest_amount'] ?? ($loanRow->interest_amount ?? 0),
+                    'installment_count' => $data['installment_count'],
+                    'duration_months' => $data['duration_months'],
+                    'interest_rate' => $data['interest_rate'],
+                    'interest_type' => $data['interest_type'],
+                    'payment_frequency' => $data['payment_frequency'],
+                    'first_due_date' => $data['first_due_date'],
+                    'meta_json' => json_encode($meta, JSON_UNESCAPED_UNICODE),
+                    'updated_at' => now(),
+                ]));
+
+                $this->syncLoanSchedulesFromEdit($loan, $data, $loanRow);
+                if ($this->hasReplayableLoanMonthlyPayments($loan)) {
+                    $this->resetLoanSchedulePaymentState($loan);
+                    $this->replayLoanMonthlyPaymentsOntoSchedules($loan);
+                }
+                $this->refreshLoanPaymentTotals($loan, 0);
+            });
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment schedule refreshed successfully.',
+                    'data' => $this->freshLoanSectionsResponseData($request, $loan),
+                ]);
+            }
+
+            return redirect()
+                ->route('loan-management.loans.view', $loan)
+                ->with('status', ['success' => 1, 'msg' => 'Payment schedule refreshed successfully.']);
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unable to refresh payment schedule: '.$e->getMessage(),
+                    'data' => [
+                        'detail' => $e->getFile().':'.$e->getLine(),
+                    ],
+                ], 500);
+            }
+
+            return back()->withErrors(['schedule_error' => 'Unable to refresh payment schedule: '.$e->getMessage()]);
+        }
+    }
+
+    protected function scheduleRefreshDataFromLoan(int $loan, object $loanRow): array
+    {
+        $meta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
+        $principal = (float) ($loanRow->principal_amount ?? 0);
+        if ($principal <= 0) {
+            $principal = (float) ($loanRow->sell_due_amount_snapshot ?? 0);
+        }
+        if ($principal <= 0) {
+            $productTotal = $this->loanItemsUnitPriceTotal($loan);
+            $depositAmounts = $this->loanDepositPaymentCopyAmounts($loan, $loanRow);
+            $principal = max(0, round($productTotal - $depositAmounts['cash'] - $depositAmounts['bank'], 2));
+        }
+        if ($principal <= 0) {
+            $principal = (float) ($loanRow->total_amount ?? $loanRow->total_payable_amount ?? 0);
+        }
+
+        $months = max(1, (int) (
+            $loanRow->duration_months
+            ?? $loanRow->installment_count
+            ?? $meta['duration_months']
+            ?? 1
+        ));
+        $firstDueDate = $loanRow->first_due_date ?? $meta['first_due_date'] ?? null;
+        if (empty($firstDueDate)) {
+            $loanDate = $loanRow->loan_date ?? $loanRow->created_at ?? now()->toDateString();
+            $firstDueDate = \Carbon\Carbon::parse($loanDate)->addMonth()->toDateString();
+        }
+
+        $frequency = strtolower((string) ($loanRow->payment_frequency ?? $meta['payment_frequency'] ?? 'monthly'));
+        if (! in_array($frequency, ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'], true)) {
+            $frequency = 'monthly';
+        }
+
+        $interestType = (string) ($loanRow->interest_type ?? $meta['interest_type'] ?? 'flat');
+        if (! in_array($interestType, ['flat', 'reducing_balance'], true)) {
+            $interestType = 'flat';
+        }
+
+        $data = [
+            'principal_amount' => max(0.01, round($principal, 2)),
+            'installment_count' => $months,
+            'duration_months' => $months,
+            'interest_rate' => max(0, (float) ($loanRow->interest_rate ?? $meta['interest_rate'] ?? 0)),
+            'interest_type' => $interestType,
+            'payment_frequency' => $frequency,
+            'first_due_date' => \Carbon\Carbon::parse($firstDueDate)->toDateString(),
+        ];
+
+        $storedInterestTotal = max(0, round((float) ($loanRow->interest_amount ?? 0), 2));
+        if ($storedInterestTotal > 0) {
+            $data['interest_amount'] = $storedInterestTotal;
+        }
+
+        return $data;
+    }
+
+    protected function resetLoanSchedulePaymentState(int $loan): void
+    {
+        $query = DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($query, 'loan_payment_schedules');
+
+        $schedules = $query->get();
+        foreach ($schedules as $schedule) {
+            $amountDue = round((float) ($schedule->schedule_amount ?? $schedule->amount_due ?? $schedule->total ?? 0), 2);
+            DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+                'paid_amount' => 0,
+                'amount_paid' => 0,
+                'paid_value' => 0,
+                'balance_amount' => $amountDue,
+                'amount_balance' => $amountDue,
+                'status' => 'unpaid',
+                'paid_at' => null,
+                'paid_date' => null,
+                'updated_at' => now(),
+            ]));
+        }
+    }
+
+    protected function hasReplayableLoanMonthlyPayments(int $loan): bool
+    {
+        if (! $this->loanTableExists('loan_payments')) {
+            return false;
+        }
+
+        $query = DB::connection('mysql_loan')
+            ->table('loan_payments')
+            ->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($query, 'loan_payments');
+
+        if ($this->loanTableHasCol('loan_payments', 'payment_type')) {
+            $query->where('payment_type', 'monthly');
+        }
+        if ($this->loanTableHasCol('loan_payments', 'status')) {
+            $query->whereNotIn('status', ['cancelled', 'canceled', 'failed', 'void', 'deleted']);
+        }
+
+        $amountColumn = $this->loanPaymentAmountColumn();
+        if ($this->loanTableHasCol('loan_payments', $amountColumn)) {
+            $query->where($amountColumn, '>', 0);
+        }
+
+        return $query->exists();
+    }
+
+    protected function replayLoanMonthlyPaymentsOntoSchedules(int $loan): void
+    {
+        if (! $this->loanTableExists('loan_payments')) {
+            return;
+        }
+
+        $amountColumn = $this->loanPaymentAmountColumn();
+        $query = DB::connection('mysql_loan')
+            ->table('loan_payments')
+            ->where('loan_id', $loan);
+        $this->excludeDeletedLoanRows($query, 'loan_payments');
+
+        if ($this->loanTableHasCol('loan_payments', 'payment_type')) {
+            $query->where('payment_type', 'monthly');
+        }
+        if ($this->loanTableHasCol('loan_payments', 'status')) {
+            $query->whereNotIn('status', ['cancelled', 'canceled', 'failed', 'void', 'deleted']);
+        }
+
+        $payments = $query
+            ->orderBy($this->loanTableHasCol('loan_payments', 'paid_date') ? 'paid_date' : 'id')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($payments as $payment) {
+            $amount = round((float) ($payment->{$amountColumn} ?? $payment->amount ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $scheduleId = $this->nextOpenLoanScheduleId($loan, isset($payment->schedule_id) ? (int) $payment->schedule_id : null);
+            $paidAt = (string) ($payment->paid_at ?? (($payment->paid_date ?? now()->toDateString()).' 00:00:00'));
+            $this->applyLoanPaymentToSchedules($loan, $amount, $paidAt, $scheduleId);
+
+            if ($scheduleId && $this->loanTableHasCol('loan_payments', 'schedule_id') && empty($payment->schedule_id)) {
+                DB::connection('mysql_loan')->table('loan_payments')->where('id', $payment->id)->update($this->loanSafeColumns('loan_payments', [
+                    'schedule_id' => $scheduleId,
+                    'updated_at' => now(),
+                ]));
+            }
+        }
+    }
+
+    protected function nextOpenLoanScheduleId(int $loan, ?int $preferredScheduleId = null): ?int
+    {
+        if ($preferredScheduleId) {
+            $preferred = DB::connection('mysql_loan')
+                ->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->where('id', $preferredScheduleId);
+            $this->excludeDeletedLoanRows($preferred, 'loan_payment_schedules');
+            if ($preferred->exists()) {
+                return $preferredScheduleId;
+            }
+        }
+
+        $query = DB::connection('mysql_loan')
+            ->table('loan_payment_schedules')
+            ->where('loan_id', $loan)
+            ->whereIn('status', ['pending', 'unpaid', 'partial', 'late']);
+        $this->excludeDeletedLoanRows($query, 'loan_payment_schedules');
+
+        return $query
+            ->orderBy($this->loanTableHasCol('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
+            ->orderBy('id')
+            ->value('id');
+    }
+
+    protected function loanPaymentAmountColumn(): string
+    {
+        if ($this->loanTableHasCol('loan_payments', 'total_paid_base')) {
+            return 'total_paid_base';
+        }
+        if ($this->loanTableHasCol('loan_payments', 'total_paid')) {
+            return 'total_paid';
+        }
+        if ($this->loanTableHasCol('loan_payments', 'amount_base')) {
+            return 'amount_base';
+        }
+
+        return 'amount';
+    }
+
     protected function recalculateEditScheduleAmounts(int $loan, object $loanRow, array $data): array
     {
         $productTotal = $this->loanItemsUnitPriceTotal($loan);
