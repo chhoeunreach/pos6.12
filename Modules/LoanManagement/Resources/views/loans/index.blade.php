@@ -96,6 +96,7 @@ $(document).ready(function(){
 
     function mobileLoanCard(row) {
         var id = row.id || '';
+        var customerId = row.customer_id || '';
         var loanNumber = plainText(row.loan_number);
         var customer = plainText(row.customer_name_snapshot);
         var phone = plainText(row.customer_phone_snapshot);
@@ -109,6 +110,7 @@ $(document).ready(function(){
         var balance = plainText(row.balance_amount);
         var viewUrl = loanBaseUrl + '/' + id + '/view';
         var quickPayUrl = loanBaseUrl + '/' + id + '/payment/quick-pay';
+        var telegramUrl = customerId ? "{{ url('loan-management/customers') }}/" + customerId + "/telegram/link" : '';
 
         return ''
             + '<article class="lm-mobile-loan-card">'
@@ -130,6 +132,7 @@ $(document).ready(function(){
             + '  <div class="lm-mobile-loan-card-actions">'
             + '    <a href="' + viewUrl + '" class="btn btn-default btn-sm"><i class="fa fa-eye"></i> View</a>'
             + '    <a href="#" class="btn btn-success btn-sm btn-modal" data-href="' + quickPayUrl + '" data-container=".view_modal"><i class="fa fa-money"></i> Pay</a>'
+            + (telegramUrl ? '    <a href="#" class="btn btn-info btn-sm js-loan-telegram-link" data-url="' + telegramUrl + '" data-customer="' + escapeHtml(customer) + '"><i class="fa fa-paper-plane"></i> Telegram</a>' : '')
             + '  </div>'
             + '</article>';
     }
@@ -284,6 +287,54 @@ $(document).ready(function(){
             })
             .always(function() {
                 $button.prop('disabled', false);
+            });
+    });
+
+    $(document).on('click', '.js-loan-telegram-link', function(e){
+        e.preventDefault();
+
+        var $button = $(this);
+        var url = $button.data('url');
+        var customer = $button.data('customer') || 'customer';
+        if (!url) return;
+
+        $button.prop('disabled', true).addClass('disabled');
+        $.post(url, {_token: $('meta[name="csrf-token"]').attr('content')})
+            .done(function(res) {
+                var link = res && res.link ? res.link : '';
+                var expires = res && res.expires_at ? res.expires_at : '';
+                var qrUrl = link ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link) : '';
+                var safeLink = escapeHtml(link);
+                var safeCustomer = escapeHtml(customer);
+                var safeExpires = escapeHtml(expires ? moment(expires).format('YYYY-MM-DD HH:mm') : '');
+
+                $('.view_modal').html(
+                    '<div class="modal-dialog modal-sm" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                                '<h4 class="modal-title"><i class="fa fa-paper-plane"></i> Connect Telegram</h4>' +
+                            '</div>' +
+                            '<div class="modal-body text-center">' +
+                                '<p class="text-muted" style="margin-bottom:12px;">Share this link with ' + safeCustomer + '. Valid for a limited time and can only be used once.</p>' +
+                                (qrUrl ? '<img src="' + qrUrl + '" alt="Telegram QR code" style="width:220px;height:220px;max-width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:#fff;margin-bottom:12px;">' : '') +
+                                '<input class="form-control text-center" readonly value="' + safeLink + '" style="margin-bottom:8px;">' +
+                                (safeExpires ? '<div class="text-muted small">Expires: ' + safeExpires + '</div>' : '') +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
+                                '<a href="' + safeLink + '" target="_blank" rel="noopener" class="btn btn-primary">Open Link</a>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>'
+                ).modal('show');
+            })
+            .fail(function(xhr) {
+                var message = (xhr.responseJSON && xhr.responseJSON.message) || xhr.responseText || 'Unable to create Telegram link.';
+                alert(message);
+            })
+            .always(function() {
+                $button.prop('disabled', false).removeClass('disabled');
             });
     });
 });

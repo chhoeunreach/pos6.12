@@ -195,6 +195,91 @@
             cursor: pointer;
             padding: 0;
         }
+        .telegram-toggle {
+            border: 0;
+            background: transparent;
+            color: #0f766e;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+            padding: 0;
+        }
+        .telegram-link-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, .62);
+            padding: 14px;
+        }
+        .telegram-link-modal.is-open { display: flex; }
+        .telegram-link-dialog {
+            width: min(420px, 100%);
+            overflow: hidden;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 24px 80px rgba(15, 23, 42, .35);
+        }
+        .telegram-link-head,
+        .telegram-link-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px;
+            border-bottom: 1px solid #dbe4ef;
+            background: #f8fafc;
+        }
+        .telegram-link-foot {
+            justify-content: flex-end;
+            border-top: 1px solid #dbe4ef;
+            border-bottom: 0;
+        }
+        .telegram-link-title {
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 900;
+        }
+        .telegram-link-body {
+            padding: 16px;
+            text-align: center;
+        }
+        .telegram-link-body p {
+            margin: 0 0 12px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.5;
+        }
+        .telegram-link-body img {
+            width: 220px;
+            height: 220px;
+            max-width: 100%;
+            margin-bottom: 12px;
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .telegram-link-body input {
+            width: 100%;
+            height: 34px;
+            padding: 0 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+        }
+        .telegram-link-expiry {
+            margin-top: 8px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 800;
+        }
         .full-edit-modal {
             position: fixed;
             inset: 0;
@@ -314,6 +399,9 @@
                                     <div class="row-actions">
                                         @if($canEditLoan)
                                             <button type="button" class="edit-toggle" data-edit-modal-url="{{ route('loan-management.loans.edit', ['loan' => $loan->id, '_lm_modal' => 1]) }}" data-edit-modal-title="{{ ($loan->loan_number ?: ('Loan #'.$loan->id)) }}">{{ $text('Edit', 'កែ') }}</button>
+                                            @if(! empty($loan->customer_id))
+                                                <button type="button" class="telegram-toggle" data-telegram-link-url="{{ route('loan-management.customers.telegram.link', $loan->customer_id) }}" data-telegram-customer="{{ $loan->customer_name ?: $text('Customer', 'អតិថិជន') }}">{{ $text('Connect Telegram', 'ភ្ជាប់ Telegram') }}</button>
+                                            @endif
                                         @endif
                                         <a class="loan-link" href="{{ route('loan-management.loans.view', $loan->id) }}" target="_blank">{{ $text('View', 'មើល') }}</a>
                                     </div>
@@ -333,6 +421,20 @@
                 <button type="button" class="full-edit-close" id="fullEditClose">{{ $text('Close', 'បិទ') }}</button>
             </div>
             <iframe class="full-edit-frame" id="fullEditFrame" title="{{ $text('Edit Loan', 'កែកម្ចី') }}"></iframe>
+        </div>
+    </div>
+
+    <div class="telegram-link-modal" id="telegramLinkModal" aria-hidden="true">
+        <div class="telegram-link-dialog" role="dialog" aria-modal="true" aria-labelledby="telegramLinkTitle">
+            <div class="telegram-link-head">
+                <div class="telegram-link-title" id="telegramLinkTitle">{{ $text('Connect Telegram', 'ភ្ជាប់ Telegram') }}</div>
+                <button type="button" class="full-edit-close" id="telegramLinkClose">{{ $text('Close', 'បិទ') }}</button>
+            </div>
+            <div class="telegram-link-body" id="telegramLinkBody"></div>
+            <div class="telegram-link-foot">
+                <button type="button" class="btn" id="telegramLinkFootClose">{{ $text('Close', 'បិទ') }}</button>
+                <a class="btn btn-primary" href="#" target="_blank" rel="noopener" id="telegramLinkOpen">{{ $text('Open Link', 'បើកតំណ') }}</a>
+            </div>
         </div>
     </div>
 
@@ -370,6 +472,78 @@
             document.addEventListener('keydown', function (event) {
                 if (event.key === 'Escape' && modal.classList.contains('is-open')) {
                     closeFullEditModal();
+                }
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var modal = document.getElementById('telegramLinkModal');
+            var body = document.getElementById('telegramLinkBody');
+            var openLink = document.getElementById('telegramLinkOpen');
+            var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            function escapeHtml(value) {
+                return String(value || '').replace(/[&<>"']/g, function (char) {
+                    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char];
+                });
+            }
+
+            function closeTelegramModal() {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+
+            document.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-telegram-link-url]');
+                if (!button) return;
+                event.preventDefault();
+
+                button.disabled = true;
+                fetch(button.getAttribute('data-telegram-link-url'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: '{}'
+                })
+                    .then(function (response) {
+                        return response.json().then(function (json) {
+                            if (!response.ok) {
+                                throw new Error(json.message || 'Unable to create Telegram link.');
+                            }
+                            return json;
+                        });
+                    })
+                    .then(function (json) {
+                        var link = json.link || '';
+                        var expires = json.expires_at ? new Date(json.expires_at) : null;
+                        var qrUrl = link ? 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(link) : '';
+                        var customer = button.getAttribute('data-telegram-customer') || '{{ $text('customer', 'អតិថិជន') }}';
+                        body.innerHTML =
+                            '<p>{{ $text('Share this link with', 'ចែករំលែកតំណនេះទៅ') }} ' + escapeHtml(customer) + '. {{ $text('Valid for a limited time and can only be used once.', 'មានសុពលភាពក្នុងរយៈពេលកំណត់ និងប្រើបានតែម្តង។') }}</p>' +
+                            (qrUrl ? '<img src="' + qrUrl + '" alt="Telegram QR code">' : '') +
+                            '<input readonly value="' + escapeHtml(link) + '">' +
+                            (expires ? '<div class="telegram-link-expiry">{{ $text('Expires', 'ផុតកំណត់') }}: ' + escapeHtml(expires.toLocaleString()) + '</div>' : '');
+                        openLink.href = link || '#';
+                        modal.classList.add('is-open');
+                        modal.setAttribute('aria-hidden', 'false');
+                    })
+                    .catch(function (error) {
+                        alert(error.message || 'Unable to create Telegram link.');
+                    })
+                    .finally(function () {
+                        button.disabled = false;
+                    });
+            });
+
+            document.getElementById('telegramLinkClose').addEventListener('click', closeTelegramModal);
+            document.getElementById('telegramLinkFootClose').addEventListener('click', closeTelegramModal);
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeTelegramModal();
                 }
             });
         })();

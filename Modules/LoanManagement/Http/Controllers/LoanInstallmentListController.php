@@ -845,6 +845,7 @@ class LoanInstallmentListController extends Controller
                 'l.id, '.
                 ($this->hasCol('loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.
                 ($this->hasCol('loan_date') ? 'l.loan_date' : 'l.created_at').' as loan_date, '.
+                ($this->hasCol('customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
                 ($this->hasCol('main_location_id') ? 'l.main_location_id' : 'NULL').' as main_location_id, '.
@@ -1007,9 +1008,13 @@ class LoanInstallmentListController extends Controller
                 $actions .= '<button type="button" class="btn btn-xs btn-primary btn-flat dropdown-toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-ellipsis-v"></i> Action <span class="caret"></span></button>';
                 $actions .= '<ul class="dropdown-menu dropdown-menu-right" role="menu">';
                 $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id).'"><i class="fa fa-eye"></i> View</a></li>';
+                $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.convert-to-pos', ['loan' => $r->id, 'modal' => 1]).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-exchange"></i> POS</a></li>';
                 $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
+                if (! empty($r->customer_id) && $canEdit) {
+                    $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.telegram.link', $r->customer_id).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-telegram-link"><i class="fa fa-paper-plane"></i> Connect Telegram</a></li>';
+                }
                 if ($canEdit) {
                     $actions .= '<li><a href="'.route('loan-management.loans.edit', $r->id).'"><i class="fa fa-pencil"></i> Edit</a></li>';
                 }
