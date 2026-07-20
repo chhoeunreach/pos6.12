@@ -7,6 +7,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class LoanDashboardService
 {
@@ -96,6 +97,7 @@ class LoanDashboardService
                 l.id,
                 ".($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL')." as customer_id,
                 ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL')." as telegram_chat_id,
+                ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'c.customer_photo_file_id' : 'NULL')." as customer_photo_file_id,
                 {$loanNumberExpr} as loan_number,
                 {$customerNameExpr} as customer_name,
                 {$customerPhoneExpr} as customer_phone,
@@ -135,6 +137,7 @@ class LoanDashboardService
                 'id' => (int) $row->id,
                 'customer_id' => (int) ($row->customer_id ?? 0),
                 'telegram_linked' => ! empty($row->telegram_chat_id),
+                'customer_photo_url' => $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0)),
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
                 'customer_phone' => $row->customer_phone ?: '-',
@@ -144,6 +147,20 @@ class LoanDashboardService
                 'next_due_date' => $row->next_due_date,
             ];
         })->all();
+    }
+
+    protected function customerPhotoUrl(int $fileId): ?string
+    {
+        if ($fileId <= 0 || ! $this->tableExists('loan_files')) {
+            return null;
+        }
+
+        $file = DB::connection($this->connection)->table('loan_files')->where('id', $fileId)->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return Storage::disk($file->disk ?? 'public')->url($file->path);
     }
 
     public function searchSellsForDashboard(string $term, int $limit = 10): array

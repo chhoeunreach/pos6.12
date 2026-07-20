@@ -148,6 +148,7 @@
     var pollMs = parseInt('{{ $tgPollMs }}', 10);
     var activeThreadId = null;
     var activeCustomerId = null;
+    var loanPrintBaseUrl = '{{ url("loan-management/loans") }}';
     var pollTimer = null;
     var loadingThread = false;
     var searchTimer = null;
@@ -479,23 +480,83 @@
         $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
         showComposerError('');
 
-        apiPostJson(chatBaseUrl + '/' + activeThreadId + '/invoice-image', {
-            loan_id: activeLoanContext.loan_id,
-            message: caption
-        }).then(function(resp){
-            if (resp && resp.success) {
+        buildLoanPrintImageFromPreview(activeLoanContext.loan_id)
+            .then(function(blob){
+                var fileName = 'loan-invoice-' + String(activeLoanContext.loan_number || activeLoanContext.loan_id).replace(/[^a-zA-Z0-9_-]+/g, '-') + '.png';
+                var file = new File([blob], fileName, {type: 'image/png'});
+                return sendTelegramFile(file, 'image', caption);
+            })
+            .then(function(resp){
+                if (!(resp && resp.success)) {
+                    showComposerError((resp && resp.message) || 'Failed to send invoice image.');
+                    return;
+                }
+
                 loadThread(false);
                 loadContacts($('#lmTgSearchInput').val());
-            } else {
-                showComposerError((resp && resp.message) || 'Failed to send invoice image.');
-            }
-        }).catch(function(){
-            showComposerError('Failed to send invoice image.');
-        }).finally(function(){
-            $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
-        });
+            })
+            .catch(function(){
+                showComposerError('Failed to create invoice image from print preview.');
+            })
+            .finally(function(){
+                $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
+            });
 
         return true;
+    }
+
+    function buildLoanPrintImageFromPreview(loanId){
+        return new Promise(function(resolve, reject){
+            var iframe = document.createElement('iframe');
+            var timeout = window.setTimeout(function(){
+                cleanup();
+                reject(new Error('Print preview image timed out.'));
+            }, 30000);
+
+            function cleanup(){
+                window.clearTimeout(timeout);
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }
+
+            iframe.style.position = 'fixed';
+            iframe.style.left = '-10000px';
+            iframe.style.top = '0';
+            iframe.style.width = '1240px';
+            iframe.style.height = '1800px';
+            iframe.style.opacity = '0';
+            iframe.style.pointerEvents = 'none';
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.onload = function(){
+                try {
+                    var win = iframe.contentWindow;
+                    if (!win || typeof win.loanManagementBuildLoanPrintImageBlob !== 'function') {
+                        throw new Error('Print preview image builder is not available.');
+                    }
+
+                    win.loanManagementBuildLoanPrintImageBlob()
+                        .then(function(blob){
+                            cleanup();
+                            resolve(blob);
+                        })
+                        .catch(function(error){
+                            cleanup();
+                            reject(error);
+                        });
+                } catch (error) {
+                    cleanup();
+                    reject(error);
+                }
+            };
+            iframe.onerror = function(){
+                cleanup();
+                reject(new Error('Unable to load print preview.'));
+            };
+
+            iframe.src = loanPrintBaseUrl + '/' + encodeURIComponent(loanId) + '/print?_lm_telegram_image=1&_lm_reload=' + Date.now();
+            document.body.appendChild(iframe);
+        });
     }
 
     function sendTelegramFile(file, type, caption, durationSeconds){

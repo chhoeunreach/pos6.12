@@ -1133,11 +1133,47 @@
         };
     }
 
+    async function buildLoanPrintImageBlob() {
+        var target = document.querySelector('.page');
+        if (!target) {
+            throw new Error('Loan print page was not found.');
+        }
+
+        await waitForLoanPrintAssets();
+        var payload = buildLoanImageSvg(target);
+        var image = new Image();
+        image.decoding = 'async';
+
+        await new Promise(function(resolve, reject) {
+            image.onload = resolve;
+            image.onerror = reject;
+            image.src = payload.url;
+        });
+
+        var canvas = document.createElement('canvas');
+        canvas.width = payload.width * 2;
+        canvas.height = payload.height * 2;
+        var context = canvas.getContext('2d');
+        context.scale(2, 2);
+        context.drawImage(image, 0, 0, payload.width, payload.height);
+
+        var blob = await new Promise(function(resolve) {
+            canvas.toBlob(resolve, 'image/png');
+        });
+
+        if (!blob) {
+            throw new Error('Unable to create image');
+        }
+
+        return blob;
+    }
+
+    window.loanManagementBuildLoanPrintImageBlob = buildLoanPrintImageBlob;
+
     async function copyLoanAsImage() {
         var button = document.getElementById('copy_loan_as_image_button');
         var status = document.getElementById('copy_loan_as_image_status');
-        var target = document.querySelector('.page');
-        if (!button || !status || !target) {
+        if (!button || !status) {
             return;
         }
 
@@ -1145,31 +1181,7 @@
         status.textContent = 'Preparing image...';
 
         try {
-            await waitForLoanPrintAssets();
-            var payload = buildLoanImageSvg(target);
-            var image = new Image();
-            image.decoding = 'async';
-
-            await new Promise(function(resolve, reject) {
-                image.onload = resolve;
-                image.onerror = reject;
-                image.src = payload.url;
-            });
-
-            var canvas = document.createElement('canvas');
-            canvas.width = payload.width * 2;
-            canvas.height = payload.height * 2;
-            var context = canvas.getContext('2d');
-            context.scale(2, 2);
-            context.drawImage(image, 0, 0, payload.width, payload.height);
-
-            var blob = await new Promise(function(resolve) {
-                canvas.toBlob(resolve, 'image/png');
-            });
-
-            if (!blob) {
-                throw new Error('Unable to create image');
-            }
+            var blob = await buildLoanPrintImageBlob();
 
             if (navigator.clipboard && window.ClipboardItem) {
                 await navigator.clipboard.write([
