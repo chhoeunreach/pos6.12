@@ -24,6 +24,10 @@ class LoanImportExportService
                 'label' => 'Full Loan Information',
                 'description' => 'Import full loan information, including customer details, loan records, product snapshots, and monthly schedules.',
             ],
+            'full_loan_update' => [
+                'label' => 'Full Loan Update',
+                'description' => 'One-file update for invoice, customer, product, customer deposit payment, and payment collection fields.',
+            ],
             'active_loans' => [
                 'label' => 'Active / Ongoing Installments',
                 'description' => 'Import or update exported active/ongoing loan rows, including status, paid amount, balance, and collection fields.',
@@ -68,7 +72,10 @@ class LoanImportExportService
         return [
             'customers' => ['label' => 'Customers', 'description' => 'Loan customer master list.'],
             'loans' => ['label' => 'All Loans', 'description' => 'All loan account records.'],
+            'full_loan_update' => ['label' => 'Full Loan Update', 'description' => 'One export file containing invoice, customer, product, deposit payment, and collection payment fields for correction/import.'],
             'active_loans' => ['label' => 'Active Loans', 'description' => 'Loans filtered to active/open status where available.'],
+            'active_loan_deposit_template' => ['label' => 'Active Loan Deposit Fill Rows', 'description' => 'Upload-ready Customer Deposit Payment rows generated from active/ongoing loans.'],
+            'active_loan_schedule_template' => ['label' => 'Active Loan Schedule Fill Rows', 'description' => 'Upload-ready Payment Schedule rows generated from active/ongoing loans, including placeholder rows when schedules are missing.'],
             'closed_loans' => ['label' => 'Closed Loans', 'description' => 'Loans filtered to closed/completed/paid status.'],
             'overdue_loans' => ['label' => 'Overdue Loans', 'description' => 'Loans marked overdue or with overdue workflow fields.'],
             'collection_report' => ['label' => 'Collection Report', 'description' => 'Collection workflow, follow-up, overdue, and collector fields.'],
@@ -99,6 +106,15 @@ class LoanImportExportService
                 'optional' => ['customer fields', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount', 'installment_count', 'loan_date', 'status', 'collection_status', 'assigned_collector_id'],
                 'example' => ['', 'KY-000001', '', 'Sok Dara', '012345678', '500.00', '550.00', '550.00', '0.00', '12', now()->toDateString(), 'closed', 'paid_off', ''],
                 'notes' => 'Export Active / Ongoing Installments, update status/paid/balance/customer fields, then import with Replace existing. Duplicate rows match by loan number or id.',
+            ];
+        }
+        if ($type === 'full_loan_update') {
+            return [
+                'columns' => $this->exportColumns('full_loan_update'),
+                'required' => ['loan_invoice or loan_id'],
+                'optional' => ['invoice fields', 'customer fields', 'product fields', 'deposit payment fields', 'collection payment fields', 'paid_amount', 'balance_amount', 'status'],
+                'example' => ['KY-000001', '', now()->toDateString(), 'closed', 'Sok Dara', '012345678', '', 'iPhone', 'IMEI001', 'SN001', '550.00', '550.00', '0.00', '200.00', now()->toDateString(), 'Cash', 'DEP-KY-000001', 'confirmed', '350.00', now()->toDateString(), 'Cash', 'COL-KY-000001', 'confirmed', 'Full correction row'],
+                'notes' => 'Export, fill missing customer/product/deposit/collection data, then import with Replace existing. Deposit columns create payment_type=loan. Collection columns create payment_type=monthly.',
             ];
         }
         if ($type === 'loan_payments') {
@@ -150,7 +166,7 @@ class LoanImportExportService
             if ($duplicateId && $duplicateMode === 'skip') {
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => 'skipped',
-                    'loan_id' => in_array($type, array_merge($this->loanImportTypes(), ['schedules'], $this->paymentImportTypes()), true) ? ($this->isLoanImportType($type) ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
+                    'loan_id' => in_array($type, array_merge($this->loanImportTypes(), ['full_loan_update', 'schedules'], $this->paymentImportTypes()), true) ? (($this->isLoanImportType($type) || $this->isFullLoanUpdateType($type)) ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
                     'error_message' => 'Skipped duplicate existing record.',
                     'updated_at' => now(),
                 ]));
@@ -162,12 +178,12 @@ class LoanImportExportService
                 $id = DB::connection($this->connection)->transaction(function () use ($type, $normalized, $duplicateMode, $duplicateId) {
                     return $this->isPaymentImportType($type)
                         ? $this->storePayment($normalized, $duplicateMode, $duplicateId)
-                        : ($this->isLoanImportType($type) ? $this->storeLoanImportRow($type, $normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId));
+                        : ($this->isFullLoanUpdateType($type) ? $this->storeFullLoanUpdate($normalized, $duplicateMode, $duplicateId) : ($this->isLoanImportType($type) ? $this->storeLoanImportRow($type, $normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId)));
                 });
 
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => $duplicateId && $duplicateMode === 'replace' ? 'replaced' : 'imported',
-                    'loan_id' => $this->isLoanImportType($type) ? $id : ($normalized['loan_id'] ?? null),
+                    'loan_id' => ($this->isLoanImportType($type) || $this->isFullLoanUpdateType($type)) ? $id : ($normalized['loan_id'] ?? null),
                     'updated_at' => now(),
                 ]));
                 $valid++;
@@ -285,7 +301,7 @@ class LoanImportExportService
             if ($duplicateId && $duplicateMode === 'skip') {
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => 'skipped',
-                    'loan_id' => in_array($type, array_merge($this->loanImportTypes(), ['schedules'], $this->paymentImportTypes()), true) ? ($this->isLoanImportType($type) ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
+                    'loan_id' => in_array($type, array_merge($this->loanImportTypes(), ['full_loan_update', 'schedules'], $this->paymentImportTypes()), true) ? (($this->isLoanImportType($type) || $this->isFullLoanUpdateType($type)) ? $duplicateId : ($normalized['loan_id'] ?? null)) : null,
                     'error_message' => 'Skipped duplicate existing record.',
                     'updated_at' => now(),
                 ]));
@@ -297,12 +313,12 @@ class LoanImportExportService
                 $id = DB::connection($this->connection)->transaction(function () use ($type, $normalized, $duplicateMode, $duplicateId) {
                     return $this->isPaymentImportType($type)
                         ? $this->storePayment($normalized, $duplicateMode, $duplicateId)
-                        : ($this->isLoanImportType($type) ? $this->storeLoanImportRow($type, $normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId));
+                        : ($this->isFullLoanUpdateType($type) ? $this->storeFullLoanUpdate($normalized, $duplicateMode, $duplicateId) : ($this->isLoanImportType($type) ? $this->storeLoanImportRow($type, $normalized, $duplicateMode, $duplicateId) : $this->storeGenericImport($type, $normalized, $duplicateMode, $duplicateId)));
                 });
 
                 DB::connection($this->connection)->table('loan_import_rows')->where('id', $rowId)->update($this->safeColumns('loan_import_rows', [
                     'status' => $duplicateId && $duplicateMode === 'replace' ? 'replaced' : 'imported',
-                    'loan_id' => $this->isLoanImportType($type) ? $id : ($normalized['loan_id'] ?? null),
+                    'loan_id' => ($this->isLoanImportType($type) || $this->isFullLoanUpdateType($type)) ? $id : ($normalized['loan_id'] ?? null),
                     'updated_at' => now(),
                 ]));
                 $valid++;
@@ -648,12 +664,21 @@ class LoanImportExportService
             'loan_info' => 'loans',
             'full_loan_information' => 'loans',
             'full_loan_info' => 'loans',
+            'full_update' => 'full_loan_update',
+            'full_loan_update' => 'full_loan_update',
+            'full_customer_invoice_product_payment' => 'full_loan_update',
             'all_loans' => 'loans',
             'active_loan' => 'active_loans',
             'active_loans' => 'active_loans',
             'active_installments' => 'active_loans',
             'active_ongoing_installments' => 'active_loans',
             'ongoing_installments' => 'active_loans',
+            'active_deposit_template' => 'active_loan_deposit_template',
+            'active_deposit_rows' => 'active_loan_deposit_template',
+            'active_loan_deposit_rows' => 'active_loan_deposit_template',
+            'active_schedule_template' => 'active_loan_schedule_template',
+            'active_schedule_rows' => 'active_loan_schedule_template',
+            'active_loan_schedule_rows' => 'active_loan_schedule_template',
             'loan_import' => 'loans',
             'loan_import_template' => 'loans',
             'schedule' => 'schedules',
@@ -688,6 +713,11 @@ class LoanImportExportService
     protected function isLoanImportType(string $type): bool
     {
         return in_array($type, $this->loanImportTypes(), true);
+    }
+
+    protected function isFullLoanUpdateType(string $type): bool
+    {
+        return $type === 'full_loan_update';
     }
 
     protected function isPaymentImportType(string $type): bool
@@ -1204,6 +1234,9 @@ class LoanImportExportService
         if ($this->isPaymentImportType($type)) {
             return $this->normalizePaymentRow($row, $type);
         }
+        if ($this->isFullLoanUpdateType($type)) {
+            return $this->normalizeFullLoanUpdateRow($row);
+        }
         if ($this->isLoanImportType($type)) {
             return $this->normalizeLoanRow($row);
         }
@@ -1289,6 +1322,19 @@ class LoanImportExportService
     {
         if ($this->isPaymentImportType($type)) {
             return $this->validatePaymentRow($row);
+        }
+        if ($this->isFullLoanUpdateType($type)) {
+            $errors = [];
+            if (empty($row['loan_id']) && empty($row['loan_number'])) {
+                $errors[] = 'loan_invoice or loan_id is required';
+            }
+            foreach (['paid_amount', 'balance_amount', 'deposit_amount', 'collection_amount'] as $amountField) {
+                if (isset($row[$amountField]) && $row[$amountField] < 0) {
+                    $errors[] = $amountField.' must be 0 or greater';
+                }
+            }
+
+            return $errors;
         }
         if ($type === 'active_loans') {
             $errors = [];
@@ -1380,6 +1426,48 @@ class LoanImportExportService
         }
 
         return false;
+    }
+
+    protected function normalizeFullLoanUpdateRow(array $row): array
+    {
+        $loanNumber = trim((string) ($row['loan_number'] ?? $row['loan_invoice'] ?? ''));
+        $loanId = (int) ($row['loan_id'] ?? $row['id'] ?? 0);
+        if ($loanId <= 0 && $loanNumber !== '' && Schema::connection($this->connection)->hasTable('loans')) {
+            $loanId = (int) DB::connection($this->connection)->table('loans')->where('loan_number', $loanNumber)->value('id');
+        }
+
+        return [
+            'loan_id' => $loanId ?: null,
+            'loan_number' => $loanNumber,
+            'invoice_no' => $row['invoice_no'] ?? $row['source_invoice_no'] ?? null,
+            'loan_date' => $this->date($row['loan_date'] ?? $row['sale_date'] ?? null),
+            'status' => $row['status'] ?? $row['loan_status'] ?? null,
+            'customer_id' => (int) ($row['customer_id'] ?? 0) ?: null,
+            'customer_code' => $row['customer_code'] ?? null,
+            'customer_name' => $row['customer_name'] ?? $row['customer_name_snapshot'] ?? $row['name'] ?? null,
+            'customer_phone' => $row['customer_phone'] ?? $row['phone'] ?? null,
+            'customer_address' => $row['customer_address'] ?? $row['address'] ?? null,
+            'national_id' => $row['national_id'] ?? $row['id_number'] ?? $row['id_card_number'] ?? null,
+            'product_name' => $row['product_name'] ?? $row['product_name_snapshot'] ?? null,
+            'sku' => $row['sku'] ?? $row['sku_snapshot'] ?? null,
+            'imei' => $row['imei'] ?? $row['imei_snapshot'] ?? null,
+            'serial_number' => $row['serial_number'] ?? $row['serial_no'] ?? null,
+            'principal_amount' => $this->decimal($row['principal_amount'] ?? 0),
+            'total_amount' => $this->decimal($row['total_amount'] ?? 0),
+            'paid_amount' => $this->decimal($row['paid_amount'] ?? $row['total_paid'] ?? 0),
+            'balance_amount' => $this->decimal($row['balance_amount'] ?? 0),
+            'deposit_amount' => $this->decimal($row['deposit_amount'] ?? $row['customer_deposit_amount'] ?? 0),
+            'deposit_date' => $this->date($row['deposit_date'] ?? $row['customer_deposit_date'] ?? null),
+            'deposit_method' => $row['deposit_method'] ?? $row['customer_deposit_method'] ?? 'Cash',
+            'deposit_reference_no' => $row['deposit_reference_no'] ?? $row['customer_deposit_reference_no'] ?? null,
+            'deposit_status' => $row['deposit_status'] ?? 'confirmed',
+            'collection_amount' => $this->decimal($row['collection_amount'] ?? $row['payment_collection_amount'] ?? 0),
+            'collection_date' => $this->date($row['collection_date'] ?? $row['payment_collection_date'] ?? null),
+            'collection_method' => $row['collection_method'] ?? $row['payment_collection_method'] ?? 'Cash',
+            'collection_reference_no' => $row['collection_reference_no'] ?? $row['payment_collection_reference_no'] ?? null,
+            'collection_status' => $row['collection_status'] ?? 'confirmed',
+            'note' => $row['note'] ?? null,
+        ];
     }
 
     protected function normalizeLoanRow(array $row): array
@@ -1902,6 +1990,152 @@ class LoanImportExportService
         }
 
         return $loanId;
+    }
+
+    protected function storeFullLoanUpdate(array $row, string $duplicateMode = 'skip', ?int $existingLoanId = null): int
+    {
+        $loanId = $existingLoanId ?: (int) ($row['loan_id'] ?? 0);
+        if ($loanId <= 0 && ! empty($row['loan_number'])) {
+            $loanId = (int) DB::connection($this->connection)->table('loans')->where('loan_number', $row['loan_number'])->value('id');
+        }
+        if ($loanId <= 0) {
+            throw new \RuntimeException('Matching loan was not found for full update row.');
+        }
+
+        $loan = DB::connection($this->connection)->table('loans')->where('id', $loanId)->first();
+        if (! $loan) {
+            throw new \RuntimeException('Matching loan was not found for full update row.');
+        }
+
+        $loanPayload = [
+            'loan_number' => $row['loan_number'] ?: null,
+            'invoice_no' => $row['invoice_no'] ?: null,
+            'source_invoice_no' => $row['invoice_no'] ?: null,
+            'loan_date' => $row['loan_date'] ?: null,
+            'sale_date' => $row['loan_date'] ?: null,
+            'customer_name_snapshot' => $row['customer_name'] ?: null,
+            'customer_phone_snapshot' => $row['customer_phone'] ?: null,
+            'customer_address_snapshot' => $row['customer_address'] ?: null,
+            'id_card_number' => $row['national_id'] ?: null,
+            'product_name_snapshot' => $row['product_name'] ?: null,
+            'imei_snapshot' => $row['imei'] ?: null,
+            'principal_amount' => ($row['principal_amount'] ?? 0) > 0 ? $row['principal_amount'] : null,
+            'total_amount' => ($row['total_amount'] ?? 0) > 0 ? $row['total_amount'] : null,
+            'paid_amount' => array_key_exists('paid_amount', $row) ? $row['paid_amount'] : null,
+            'balance_amount' => array_key_exists('balance_amount', $row) ? $row['balance_amount'] : null,
+            'status' => $row['status'] ?: null,
+            'note' => $row['note'] ?: null,
+            'updated_at' => now(),
+        ];
+        $loanPayload = array_filter($loanPayload, fn ($value) => $value !== null && $value !== '');
+        if (! empty($loanPayload)) {
+            DB::connection($this->connection)->table('loans')->where('id', $loanId)->update($this->safeColumns('loans', $loanPayload));
+        }
+
+        $customerId = (int) ($row['customer_id'] ?? $loan->customer_id ?? 0);
+        if ($customerId > 0 && Schema::connection($this->connection)->hasTable('loan_customers')) {
+            DB::connection($this->connection)->table('loan_customers')->where('id', $customerId)->update($this->safeColumns('loan_customers', [
+                'customer_code' => $row['customer_code'] ?: null,
+                'name' => $row['customer_name'] ?: null,
+                'phone' => $row['customer_phone'] ?: null,
+                'address' => $row['customer_address'] ?: null,
+                'id_number' => $row['national_id'] ?: null,
+                'id_card_number' => $row['national_id'] ?: null,
+                'national_id' => $row['national_id'] ?: null,
+                'updated_at' => now(),
+            ]));
+        }
+
+        $this->upsertFullUpdateProductItem($loanId, $row);
+
+        $loanNumber = $row['loan_number'] ?: (string) ($loan->loan_number ?? $loanId);
+        if (($row['deposit_amount'] ?? 0) > 0) {
+            $paymentRow = [
+                'loan_id' => $loanId,
+                'loan_number' => $loanNumber,
+                'payment_type' => 'loan',
+                'schedule_id' => null,
+                'installment_no' => null,
+                'amount' => $row['deposit_amount'],
+                'paid_date' => $row['deposit_date'] ?: ($row['loan_date'] ?: now()->toDateString()),
+                'paid_at' => null,
+                'payment_method' => $row['deposit_method'] ?: 'Cash',
+                'currency' => $loan->currency ?? 'USD',
+                'exchange_rate' => 1,
+                'reference_number' => $row['deposit_reference_no'] ?: 'FULL-DEP-'.$loanNumber,
+                'status' => $row['deposit_status'] ?: 'confirmed',
+                'received_by' => '',
+                'penalty_amount' => 0,
+                'discount_amount' => 0,
+                'note' => $row['note'],
+            ];
+            $this->storePayment($paymentRow, $duplicateMode, $this->existingImportRowId('customer_deposit_payments', $paymentRow));
+        }
+
+        if (($row['collection_amount'] ?? 0) > 0) {
+            $paymentRow = [
+                'loan_id' => $loanId,
+                'loan_number' => $loanNumber,
+                'payment_type' => 'monthly',
+                'schedule_id' => null,
+                'installment_no' => null,
+                'amount' => $row['collection_amount'],
+                'paid_date' => $row['collection_date'] ?: ($row['loan_date'] ?: now()->toDateString()),
+                'paid_at' => null,
+                'payment_method' => $row['collection_method'] ?: 'Cash',
+                'currency' => $loan->currency ?? 'USD',
+                'exchange_rate' => 1,
+                'reference_number' => $row['collection_reference_no'] ?: 'FULL-COL-'.$loanNumber,
+                'status' => $row['collection_status'] ?: 'confirmed',
+                'received_by' => '',
+                'penalty_amount' => 0,
+                'discount_amount' => 0,
+                'note' => $row['note'],
+            ];
+            $this->storePayment($paymentRow, $duplicateMode, $this->existingImportRowId('payments', $paymentRow));
+        }
+
+        $finalPayload = [
+            'paid_amount' => array_key_exists('paid_amount', $row) ? $row['paid_amount'] : null,
+            'balance_amount' => array_key_exists('balance_amount', $row) ? $row['balance_amount'] : null,
+            'status' => $row['status'] ?: null,
+            'updated_at' => now(),
+        ];
+        $finalPayload = array_filter($finalPayload, fn ($value) => $value !== null && $value !== '');
+        if (! empty($finalPayload)) {
+            DB::connection($this->connection)->table('loans')->where('id', $loanId)->update($this->safeColumns('loans', $finalPayload));
+        }
+
+        return $loanId;
+    }
+
+    protected function upsertFullUpdateProductItem(int $loanId, array $row): void
+    {
+        if (! Schema::connection($this->connection)->hasTable('loan_items') || empty($row['product_name'])) {
+            return;
+        }
+
+        $payload = $this->safeColumns('loan_items', [
+            'loan_id' => $loanId,
+            'product_name' => $row['product_name'],
+            'product_name_snapshot' => $row['product_name'],
+            'sku' => $row['sku'],
+            'sku_snapshot' => $row['sku'],
+            'imei' => $row['imei'],
+            'imei_snapshot' => $row['imei'],
+            'serial_number' => $row['serial_number'],
+            'serial_number_snapshot' => $row['serial_number'],
+            'updated_at' => now(),
+        ]);
+
+        $existing = DB::connection($this->connection)->table('loan_items')->where('loan_id', $loanId)->orderBy('id')->value('id');
+        if ($existing) {
+            DB::connection($this->connection)->table('loan_items')->where('id', $existing)->update($payload);
+            return;
+        }
+
+        $payload['created_at'] = now();
+        DB::connection($this->connection)->table('loan_items')->insert($payload);
     }
 
     protected function createImportedInitialPayment(int $loanId, array $row, bool $replaceExisting = false): bool
@@ -2743,7 +2977,7 @@ class LoanImportExportService
 
     protected function existingImportRowId(string $type, array $row): ?int
     {
-        if ($this->isLoanImportType($type) && Schema::connection($this->connection)->hasTable('loans')) {
+        if (($this->isLoanImportType($type) || $this->isFullLoanUpdateType($type)) && Schema::connection($this->connection)->hasTable('loans')) {
             $query = DB::connection($this->connection)->table('loans');
             if (! empty($row['loan_number'])) {
                 $query->where('loan_number', $row['loan_number']);
@@ -2843,6 +3077,15 @@ class LoanImportExportService
 
     protected function exportRows(string $type, array $filters)
     {
+        if ($type === 'full_loan_update') {
+            return $this->fullLoanUpdateExportRows($filters);
+        }
+        if ($type === 'active_loan_deposit_template') {
+            return $this->activeLoanDepositTemplateRows($filters);
+        }
+        if ($type === 'active_loan_schedule_template') {
+            return $this->activeLoanScheduleTemplateRows($filters);
+        }
         if (in_array($type, ['loans', 'active_loans', 'closed_loans', 'overdue_loans', 'collection_report', 'customer_loan_history', 'repossessed_assets', 'monthly_loan_summary', 'collection_assignments'], true)) {
             return $this->loanExportRows($filters, $type);
         }
@@ -2870,6 +3113,135 @@ class LoanImportExportService
         $this->applyCommonFilters($query, $filters, $table);
 
         return $query->select($this->safeSelect($table, $this->exportColumns($type)))->orderByDesc('id')->get();
+    }
+
+    protected function fullLoanUpdateExportRows(array $filters)
+    {
+        $query = DB::connection($this->connection)->table('loans as l');
+        $this->applyCommonFilters($query, $filters, 'loans', 'l');
+
+        $hasCustomerJoin = Schema::connection($this->connection)->hasTable('loan_customers') && $this->hasColumn('loans', 'customer_id');
+        $hasItemJoin = Schema::connection($this->connection)->hasTable('loan_items');
+
+        if ($hasCustomerJoin) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
+        }
+        if ($hasItemJoin) {
+            $query->leftJoin('loan_items as li', function ($join) {
+                $join->on('li.loan_id', '=', 'l.id')
+                    ->whereRaw('li.id = (SELECT MIN(li2.id) FROM loan_items li2 WHERE li2.loan_id = l.id)');
+            });
+        }
+
+        return $query->select([
+            DB::raw($this->sqlColumn('loans', 'l', 'loan_number').' as loan_invoice'),
+            DB::raw('l.id as loan_id'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'invoice_no').', '.$this->sqlColumn('loans', 'l', 'source_invoice_no').') as invoice_no'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'loan_date').', '.$this->sqlColumn('loans', 'l', 'sale_date').', '.$this->sqlColumn('loans', 'l', 'source_created_at').') as loan_date'),
+            DB::raw($this->sqlColumn('loans', 'l', 'status').' as status'),
+            DB::raw($this->sqlColumn('loans', 'l', 'customer_id').' as customer_id'),
+            DB::raw($this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'customer_code').' as customer_code'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'customer_name_snapshot').', '.$this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'name').') as customer_name'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'customer_phone_snapshot').', '.$this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'phone').') as customer_phone'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'customer_address_snapshot').', '.$this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'address').') as customer_address'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'id_card_number').', '.$this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'national_id').', '.$this->sqlColumnWhen($hasCustomerJoin, 'loan_customers', 'c', 'id_card_number').') as national_id'),
+            DB::raw('COALESCE('.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'product_name_snapshot').', '.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'product_name').', '.$this->sqlColumn('loans', 'l', 'product_name_snapshot').') as product_name'),
+            DB::raw('COALESCE('.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'sku_snapshot').', '.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'sku').') as sku'),
+            DB::raw('COALESCE('.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'imei_snapshot').', '.$this->sqlColumn('loans', 'l', 'imei_snapshot').') as imei'),
+            DB::raw('COALESCE('.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'serial_number_snapshot').', '.$this->sqlColumnWhen($hasItemJoin, 'loan_items', 'li', 'serial_number').') as serial_number'),
+            DB::raw($this->sqlColumn('loans', 'l', 'principal_amount', '0').' as principal_amount'),
+            DB::raw($this->sqlColumn('loans', 'l', 'total_amount', '0').' as total_amount'),
+            DB::raw($this->sqlColumn('loans', 'l', 'paid_amount', '0').' as paid_amount'),
+            DB::raw($this->sqlColumn('loans', 'l', 'balance_amount', '0').' as balance_amount'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'down_payment').', 0) as deposit_amount'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'loan_date').', CURDATE()) as deposit_date'),
+            DB::raw("'Cash' as deposit_method"),
+            DB::raw("CONCAT('FULL-DEP-', COALESCE(".$this->sqlColumn('loans', 'l', 'loan_number', "''").", l.id)) as deposit_reference_no"),
+            DB::raw("'confirmed' as deposit_status"),
+            DB::raw('GREATEST(COALESCE('.$this->sqlColumn('loans', 'l', 'paid_amount', '0').', 0) - COALESCE('.$this->sqlColumn('loans', 'l', 'down_payment', '0').', 0), 0) as collection_amount'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'last_payment_date').', '.$this->sqlColumn('loans', 'l', 'loan_date').', CURDATE()) as collection_date'),
+            DB::raw("'Cash' as collection_method"),
+            DB::raw("CONCAT('FULL-COL-', COALESCE(".$this->sqlColumn('loans', 'l', 'loan_number', "''").", l.id)) as collection_reference_no"),
+            DB::raw("'confirmed' as collection_status"),
+            DB::raw($this->sqlColumn('loans', 'l', 'note').' as note'),
+        ])->orderByDesc('l.id')->get();
+    }
+
+    protected function activeLoanBaseQuery(array $filters)
+    {
+        $query = DB::connection($this->connection)->table('loans as l');
+        $this->applyCommonFilters($query, $filters, 'loans', 'l');
+
+        if ($this->hasColumn('loans', 'status')) {
+            $query->whereIn('l.status', ['active', 'open', 'partial']);
+        }
+
+        return $query;
+    }
+
+    protected function activeLoanDepositTemplateRows(array $filters)
+    {
+        $query = $this->activeLoanBaseQuery($filters);
+
+        return $query->select([
+            DB::raw($this->sqlColumn('loans', 'l', 'loan_number').' as loan_invoice'),
+            DB::raw('COALESCE('.$this->sqlColumn('loans', 'l', 'last_payment_date').', '.$this->sqlColumn('loans', 'l', 'loan_date').', CURDATE()) as payment_date'),
+            DB::raw($this->sqlColumn('loans', 'l', 'balance_amount', '0').' as amount'),
+            DB::raw('0 as cash_amount'),
+            DB::raw('0 as bank_amount'),
+            DB::raw($this->sqlColumn('loans', 'l', 'balance_amount', '0').' as payoff_amount'),
+            DB::raw("'Cash' as payment_method"),
+            DB::raw("'loan' as payment_type"),
+            DB::raw('NULL as installment_no'),
+            DB::raw('NULL as schedule_id'),
+            DB::raw($this->sqlColumn('loans', 'l', 'currency', "'USD'").' as currency'),
+            DB::raw('1 as exchange_rate'),
+            DB::raw('0 as penalty_amount'),
+            DB::raw('0 as discount_amount'),
+            DB::raw("CONCAT('DEP-', COALESCE(".$this->sqlColumn('loans', 'l', 'loan_number', "''").", l.id), '-', DATE_FORMAT(CURDATE(), '%Y%m%d')) as reference_no"),
+            DB::raw("'confirmed' as status"),
+            DB::raw('NULL as received_by'),
+            DB::raw("'Fill/verify amount before import. Generated from Active/Ongoing loan export.' as note"),
+        ])->orderByDesc('l.id')->get();
+    }
+
+    protected function activeLoanScheduleTemplateRows(array $filters)
+    {
+        $query = $this->activeLoanBaseQuery($filters);
+        if (Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
+            $query->leftJoin('loan_payment_schedules as s', 's.loan_id', '=', 'l.id');
+        }
+
+        $hasScheduleJoin = Schema::connection($this->connection)->hasTable('loan_payment_schedules');
+        $schedulePrincipal = $hasScheduleJoin
+            ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'principal').', '.$this->sqlColumn('loan_payment_schedules', 's', 'principal_amount').', '.$this->sqlColumn('loan_payment_schedules', 's', 'principal_due').', '.$this->sqlColumn('loans', 'l', 'principal_amount', '0').')'
+            : $this->sqlColumn('loans', 'l', 'principal_amount', '0');
+        $scheduleInterest = $hasScheduleJoin
+            ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'interest').', '.$this->sqlColumn('loan_payment_schedules', 's', 'interest_amount').', '.$this->sqlColumn('loan_payment_schedules', 's', 'interest_due').', '.$this->sqlColumn('loans', 'l', 'interest_amount', '0').')'
+            : $this->sqlColumn('loans', 'l', 'interest_amount', '0');
+        $scheduleTotal = $hasScheduleJoin
+            ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'total').', '.$this->sqlColumn('loan_payment_schedules', 's', 'schedule_amount').', '.$this->sqlColumn('loan_payment_schedules', 's', 'amount_due').', '.$this->sqlColumn('loans', 'l', 'total_amount', '0').')'
+            : $this->sqlColumn('loans', 'l', 'total_amount', '0');
+        $schedulePaid = $hasScheduleJoin
+            ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'paid_amount').', '.$this->sqlColumn('loan_payment_schedules', 's', 'amount_paid').', '.$this->sqlColumn('loans', 'l', 'paid_amount', '0').')'
+            : $this->sqlColumn('loans', 'l', 'paid_amount', '0');
+        $scheduleBalance = $hasScheduleJoin
+            ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'balance_amount').', '.$this->sqlColumn('loan_payment_schedules', 's', 'amount_balance').', '.$this->sqlColumn('loans', 'l', 'balance_amount', '0').')'
+            : $this->sqlColumn('loans', 'l', 'balance_amount', '0');
+
+        return $query->select([
+            DB::raw($this->sqlColumn('loans', 'l', 'loan_number').' as loan_invoice'),
+            DB::raw('l.id as loan_id'),
+            DB::raw($hasScheduleJoin ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'installment_no').', 1) as installment_no' : '1 as installment_no'),
+            DB::raw($hasScheduleJoin ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'due_date').', '.$this->sqlColumn('loans', 'l', 'first_due_date').', '.$this->sqlColumn('loans', 'l', 'loan_date').', CURDATE()) as due_date' : 'COALESCE('.$this->sqlColumn('loans', 'l', 'first_due_date').', '.$this->sqlColumn('loans', 'l', 'loan_date').', CURDATE()) as due_date'),
+            DB::raw($schedulePrincipal.' as principal'),
+            DB::raw($scheduleInterest.' as interest'),
+            DB::raw($scheduleTotal.' as total'),
+            DB::raw($schedulePaid.' as paid_amount'),
+            DB::raw($scheduleBalance.' as balance_amount'),
+            DB::raw('CASE WHEN '.$scheduleBalance.' <= 0 THEN "paid" ELSE COALESCE('.($hasScheduleJoin ? $this->sqlColumn('loan_payment_schedules', 's', 'status') : 'NULL').', "unpaid") END as status'),
+            DB::raw($hasScheduleJoin ? 'COALESCE('.$this->sqlColumn('loan_payment_schedules', 's', 'paid_date').', '.$this->sqlColumn('loan_payment_schedules', 's', 'paid_at').', '.$this->sqlColumn('loans', 'l', 'last_payment_date').') as paid_date' : $this->sqlColumn('loans', 'l', 'last_payment_date').' as paid_date'),
+        ])->orderByDesc('l.id')->orderBy('installment_no')->get();
     }
 
     protected function customerExportRows(array $filters)
@@ -3193,7 +3565,10 @@ class LoanImportExportService
         $columns = [
             'customers' => ['id', 'customer_code', 'customer_name', 'khmer_name', 'customer_group', 'phone', 'alternate_phone', 'email', 'telegram', 'facebook', 'national_id', 'id_number', 'address', 'province', 'district', 'commune', 'village', 'gender', 'date_of_birth', 'family_contact_name', 'family_contact_phone', 'spouse_name', 'spouse_phone', 'occupation', 'workplace', 'employer_name', 'employer_phone', 'monthly_income', 'customer_type', 'status', 'blacklist_status', 'blacklist_reason', 'note'],
             'loans' => $loanColumns,
+            'full_loan_update' => ['loan_invoice', 'loan_id', 'invoice_no', 'loan_date', 'status', 'customer_id', 'customer_code', 'customer_name', 'customer_phone', 'customer_address', 'national_id', 'product_name', 'sku', 'imei', 'serial_number', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount', 'deposit_amount', 'deposit_date', 'deposit_method', 'deposit_reference_no', 'deposit_status', 'collection_amount', 'collection_date', 'collection_method', 'collection_reference_no', 'collection_status', 'note'],
             'active_loans' => ['id', 'loan_number', 'customer_id', 'customer_name_snapshot', 'customer_phone_snapshot', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount', 'installment_count', 'loan_date', 'status', 'collection_status', 'assigned_collector_id'],
+            'active_loan_deposit_template' => ['loan_invoice', 'payment_date', 'amount', 'cash_amount', 'bank_amount', 'payoff_amount', 'payment_method', 'payment_type', 'installment_no', 'schedule_id', 'currency', 'exchange_rate', 'penalty_amount', 'discount_amount', 'reference_no', 'status', 'received_by', 'note'],
+            'active_loan_schedule_template' => ['loan_invoice', 'loan_id', 'installment_no', 'due_date', 'principal', 'interest', 'total', 'paid_amount', 'balance_amount', 'status', 'paid_date'],
             'closed_loans' => ['id', 'loan_number', 'customer_id', 'customer_name_snapshot', 'customer_phone_snapshot', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount', 'loan_date', 'status', 'last_payment_date', 'last_payment_amount'],
             'overdue_loans' => ['id', 'loan_number', 'customer_id', 'customer_name_snapshot', 'customer_phone_snapshot', 'total_amount', 'paid_amount', 'balance_amount', 'days_past_due', 'overdue_bucket', 'collection_status', 'risk_level', 'next_followup_at', 'assigned_collector_id'],
             'collection_report' => ['loan_id', 'loan_invoice', 'customer_name', 'phone', 'collection_status', 'collector_name', 'last_followup_date', 'followup_result', 'contact_attempts', 'overdue_amount', 'next_due_amount', 'next_due_date', 'repossession_status'],

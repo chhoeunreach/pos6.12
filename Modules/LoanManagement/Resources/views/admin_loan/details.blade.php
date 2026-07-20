@@ -265,7 +265,10 @@
             </div>
             <div class="actions">
                 @if($group === 'active')
+                    <a class="btn btn-success" href="{{ route('loan-management.export.download', ['type' => 'full_loan_update', 'date_from' => $year.'-01-01', 'date_to' => $year.'-12-31', 'status' => 'active']) }}">{{ $text('Export Full Update', 'នាំចេញកែទិន្នន័យពេញ') }}</a>
                     <a class="btn btn-success" href="{{ route('loan-management.export.download', ['type' => 'active_loans', 'date_from' => $year.'-01-01', 'date_to' => $year.'-12-31']) }}">{{ $text('Export Active/Ongoing', 'នាំចេញកំពុងដំណើរការ') }}</a>
+                    <a class="btn" href="{{ route('loan-management.export.download', ['type' => 'active_loan_deposit_template', 'date_from' => $year.'-01-01', 'date_to' => $year.'-12-31']) }}">{{ $text('Export Deposit Fill Rows', 'នាំចេញជួរប្រាក់កក់') }}</a>
+                    <a class="btn" href="{{ route('loan-management.export.download', ['type' => 'active_loan_schedule_template', 'date_from' => $year.'-01-01', 'date_to' => $year.'-12-31']) }}">{{ $text('Export Schedule Fill Rows', 'នាំចេញជួរកាលវិភាគបង់') }}</a>
                     <a class="btn btn-primary" href="{{ route('loan-management.import.index', ['type' => 'active_loans']) }}" target="_blank">{{ $text('Import Active/Ongoing', 'នាំចូលកំពុងដំណើរការ') }}</a>
                 @endif
                 <a class="btn" href="{{ route('loan-management.admin-loan', request()->only(['start_year', 'end_year', 'location_id', 'search'])) }}">{{ $text('Back to Admin Loan', 'ត្រឡប់ទៅរដ្ឋបាលកម្ចី') }}</a>
