@@ -2973,16 +2973,19 @@
                 </div>
                 <div class="lm-dashboard-panel__body lm-table-wrap">
                     <table class="table table-condensed lm-dashboard-table lm-mini-table" id="loanOverdueCustomersTable">
-                        <thead><tr><th>Customer</th><th>Days</th><th class="text-right">Amount</th></tr></thead>
+                        <thead><tr><th>Customer</th><th>Date To Pay</th><th>Duration</th><th class="text-right">Total Paid</th><th class="text-right">Total Not Yet Paid</th><th class="text-right">Pay Off Now</th></tr></thead>
                         <tbody data-loan-table="overdue_customers">
                         @forelse(($overdueCustomers ?? []) as $row)
                             <tr>
                                 <td><span class="lm-row-title">{{ $row['customer'] ?? '-' }}</span></td>
-                                <td>{{ (int)($row['overdue_days'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format((float)($row['overdue_amount'] ?? 0), 2) }}</td>
+                                <td>{{ $row['date_to_pay'] ?? '-' }}</td>
+                                <td>{{ (int)($row['overdue_days'] ?? 0) }} day(s)</td>
+                                <td class="text-right">{{ number_format((float)($row['total_paid'] ?? 0), 2) }}</td>
+                                <td class="text-right">{{ number_format((float)($row['total_not_yet_paid'] ?? ($row['overdue_amount'] ?? 0)), 2) }}</td>
+                                <td class="text-right">{{ number_format((float)($row['pay_off_now'] ?? 0), 2) }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="text-center">No overdue customers.</td></tr>
+                            <tr><td colspan="6" class="text-center">No overdue customers.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -3268,9 +3271,16 @@
         function renderOverdueCustomers(rows) {
             var html = '';
             (rows || []).forEach(function (row) {
-                html += '<tr><td><span class="lm-row-title">'+esc(row.customer)+'</span></td><td>'+intValue(row.overdue_days)+'</td><td class="text-right">'+money(row.overdue_amount)+'</td></tr>';
+                html += '<tr>'
+                    + '<td><span class="lm-row-title">'+esc(row.customer)+'</span></td>'
+                    + '<td>'+esc(row.date_to_pay || '-')+'</td>'
+                    + '<td>'+intValue(row.overdue_days)+' day(s)</td>'
+                    + '<td class="text-right">'+money(row.total_paid || 0)+'</td>'
+                    + '<td class="text-right">'+money(row.total_not_yet_paid || row.overdue_amount || 0)+'</td>'
+                    + '<td class="text-right">'+money(row.pay_off_now || 0)+'</td>'
+                    + '</tr>';
             });
-            $('[data-loan-table="overdue_customers"]').html(html || '<tr><td colspan="3" class="text-center">No overdue customers.</td></tr>');
+            $('[data-loan-table="overdue_customers"]').html(html || '<tr><td colspan="6" class="text-center">No overdue customers.</td></tr>');
         }
 
         function quickSearchRowHtml(row) {

@@ -604,7 +604,7 @@ class LoanDashboardService
         return $this->applyScheduleFilters($this->scheduleQueryWithLoanCustomer(), $filters)
             ->whereDate('s.due_date', '<', Carbon::today()->toDateString())
             ->whereIn('s.status', ['unpaid', 'partial', 'late'])
-            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->scheduleBalanceExpression('s').' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
+            ->selectRaw('l.id, l.loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, s.due_date as date_to_pay, DATEDIFF(CURDATE(), s.due_date) as overdue_days, '.$this->schedulePaidExpression('s').' as total_paid, '.$this->scheduleBalanceExpression('s').' as total_not_yet_paid, '.$this->payOffNowExpression('l', 's').' as pay_off_now, '.$this->scheduleBalanceExpression('s').' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
             ->orderByDesc('overdue_days')->limit(50)->get()->map(fn ($r) => (array) $r)->all();
     }
 
@@ -741,6 +741,21 @@ class LoanDashboardService
         return $balanceColumn
             ? 'COALESCE('.$alias.'.'.$balanceColumn.', '.$fallback.')'
             : $fallback;
+    }
+
+    protected function loanPrincipalExpression(string $alias): string
+    {
+        return 'COALESCE('.$this->qualifiedExistingColumn('loans', $alias, ['principal_amount', 'financed_amount', 'loan_amount', 'amount'], '0').', 0)';
+    }
+
+    protected function loanOneTimeInterestExpression(string $alias): string
+    {
+        return 'COALESCE('.$this->qualifiedExistingColumn('loans', $alias, ['interest_amount', 'outstanding_interest', 'interest_due'], '0').', 0)';
+    }
+
+    protected function payOffNowExpression(string $loanAlias, string $scheduleAlias): string
+    {
+        return '(('.$this->loanPrincipalExpression($loanAlias).') + ('.$this->scheduleBalanceExpression($scheduleAlias).') + ('.$this->loanOneTimeInterestExpression($loanAlias).'))';
     }
 
     protected function applyLoanFilters(Builder $query, array $filters, string $alias = 'loans'): Builder
