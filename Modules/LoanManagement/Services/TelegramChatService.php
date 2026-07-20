@@ -250,7 +250,6 @@ class TelegramChatService
         $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
         $isOwnOutbound = $isOutbound && $user && (int) $message->sender_id === (int) $user->id;
         $canAdminChat = $user && $user->can('loan_management.chat.admin');
-        $canSyncTelegram = $isOutbound && $this->telegramMessageIdentifiers($message) !== null;
 
         return [
             'id' => (int) $message->id,
@@ -271,23 +270,28 @@ class TelegramChatService
             'edited' => $message->updated_at && $message->created_at && $message->updated_at->gt($message->created_at->copy()->addSeconds(2)),
             'can_update' => $message->message_type === 'text'
                 && $isOutbound
-                && $canSyncTelegram
                 && $user
                 && (($user->can('loan_management.chat.reply') && $isOwnOutbound) || $canAdminChat),
-            'can_delete' => $canSyncTelegram && $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
+            'can_delete' => $isOutbound && $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
         ];
     }
 
     public function updateTextMessage(LoanTelegramChatMessage $message, string $text): LoanTelegramChatMessage
     {
-        $this->editTelegramMessageIfNeeded($message, $text);
-
-        $message->message = $text;
-        $message->metadata = array_merge((array) ($message->metadata ?? []), [
+        $telegramSynced = $this->editTelegramMessageIfNeeded($message, $text);
+        $metadata = array_merge((array) ($message->metadata ?? []), [
             'edited_at' => now()->toIso8601String(),
             'edited_by' => auth()->id(),
-            'telegram_edited_at' => now()->toIso8601String(),
         ]);
+        if ($telegramSynced) {
+            $metadata['telegram_edited_at'] = now()->toIso8601String();
+        } else {
+            $metadata['telegram_edit_skipped_at'] = now()->toIso8601String();
+            $metadata['telegram_edit_skipped_reason'] = 'telegram_message_id_missing';
+        }
+
+        $message->message = $text;
+        $message->metadata = $metadata;
         $message->save();
 
         $this->refreshThreadLastMessage($message->thread);
@@ -306,30 +310,34 @@ class TelegramChatService
         }
     }
 
-    protected function editTelegramMessageIfNeeded(LoanTelegramChatMessage $message, string $text): void
+    protected function editTelegramMessageIfNeeded(LoanTelegramChatMessage $message, string $text): bool
     {
         $this->assertOutboundTelegramMessage($message, 'edited');
 
         $ids = $this->telegramMessageIdentifiers($message);
         if (! $ids) {
-            throw new \RuntimeException('This message was sent before Telegram message tracking was enabled. It cannot be edited in Telegram.');
+            return false;
         }
 
         (new TelegramBotService(TelegramSettingsService::botToken()))
             ->editMessageText($ids['chat_id'], $ids['message_id'], $text);
+
+        return true;
     }
 
-    protected function deleteTelegramMessageIfNeeded(LoanTelegramChatMessage $message): void
+    protected function deleteTelegramMessageIfNeeded(LoanTelegramChatMessage $message): bool
     {
         $this->assertOutboundTelegramMessage($message, 'deleted');
 
         $ids = $this->telegramMessageIdentifiers($message);
         if (! $ids) {
-            throw new \RuntimeException('This message was sent before Telegram message tracking was enabled. It cannot be deleted in Telegram.');
+            return false;
         }
 
         (new TelegramBotService(TelegramSettingsService::botToken()))
             ->deleteMessage($ids['chat_id'], $ids['message_id']);
+
+        return true;
     }
 
     protected function telegramMessageIdentifiers(LoanTelegramChatMessage $message): ?array
