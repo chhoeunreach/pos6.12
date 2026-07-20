@@ -111,9 +111,17 @@ class LoanDashboardController extends Controller
         $scope = trim((string) $request->input('scope', 'loan'));
         $term = trim((string) $request->input('q', ''));
         $locationId = $request->filled('location_id') ? (int) $request->input('location_id') : null;
-        $rows = $scope === 'sell'
-            ? $this->service->searchSellsForDashboard($term)
-            : $this->service->searchLoansForDashboard($term, 10, $locationId);
+        if ($scope === 'sell') {
+            $rows = $this->service->searchSellsForDashboard($term);
+        } elseif ($request->filled('loan_id')) {
+            $loanId = (int) $request->input('loan_id');
+            $rows = collect($this->service->searchLoansForDashboard((string) $loanId, 25, $locationId))
+                ->filter(fn ($row) => (int) ($row['id'] ?? 0) === $loanId)
+                ->values()
+                ->all();
+        } else {
+            $rows = $this->service->searchLoansForDashboard($term, 10, $locationId);
+        }
 
         return response()->json([
             'success' => true,

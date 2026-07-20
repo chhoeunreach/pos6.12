@@ -5238,7 +5238,11 @@ class LoanInstallmentListController extends Controller
             }
 
             if ($request->wantsJson()) {
-                return response()->json(['success' => true, 'message' => 'Loan updated successfully.']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Loan updated successfully.',
+                    'data' => $this->freshLoanSectionsResponseData($request, $loan),
+                ]);
             }
 
             $redirectParams = ['loan' => $loan] + ($request->boolean('_lm_modal') ? ['_lm_modal' => 1] : []);

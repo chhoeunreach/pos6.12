@@ -3068,53 +3068,83 @@
             $('[data-loan-table="overdue_customers"]').html(html || '<tr><td colspan="3" class="text-center">No overdue customers.</td></tr>');
         }
 
+        function quickSearchRowHtml(row) {
+            var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view?_lm_modal=1";
+            var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
+            var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
+            var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
+            var collectionUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payments/collection-modal";
+            var refreshScheduleUrl = "{{ url('loan-management/loans') }}/" + row.id + "/schedules/refresh";
+            var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
+            var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
+            var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
+            var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
+            var statusBadge = isOverdue
+                ? '<span class="lm-pay-status lm-pay-status--overdue">OVERDUE</span>'
+                : (row.status && String(row.status).toLowerCase() !== 'active' ? '<span class="lm-pay-status">' + esc(row.status) + '</span>' : '');
+
+            return '<tr class="lm-pay-row" data-loan-id="' + esc(row.id) + '">'
+                + '<td>'
+                + '<div class="lm-customer-hover">'
+                + '<div class="lm-customer-hover__main">'
+                + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
+                + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
+                + statusBadge
+                + '</div>'
+                + '</div>'
+                + '</td>'
+                + '<td class="lm-pay-due">' + dueLabel + '</td>'
+                + '<td class="text-right lm-pay-balance">' + money(row.balance_amount) + '</td>'
+                + '<td class="text-center lm-pay-action">'
+                + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> <span>Pay</span></button>'
+                + '<button type="button" class="btn btn-default btn-xs lm-print-btn btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal" title="Print loan for ' + esc(row.customer_name) + '"><i class="fa fa-print"></i> <span>Print</span></button>'
+                + '<button type="button" class="btn btn-info btn-xs lm-dashboard-refresh-schedule-btn" data-loan-id="' + esc(row.id) + '" data-url="' + refreshScheduleUrl + '" title="Refresh schedule for ' + esc(row.customer_name) + '"><i class="fa fa-refresh"></i> <span>Schedule</span></button>'
+                + '<div class="lm-pay-more dropdown">'
+                + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
+                + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
+                + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
+                + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
+                + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
+                + '<li><button type="button" class="lm-dashboard-refresh-schedule-btn" data-loan-id="' + esc(row.id) + '" data-url="' + refreshScheduleUrl + '"><i class="fa fa-refresh"></i> Refresh Schedule</button></li>'
+                + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
+                + '<li><button type="button" class="js-copy-loan-payment-info" data-url="' + copyInfoUrl + '"><i class="fa fa-copy"></i> Copy</button></li>'
+                + '</ul>'
+                + '</div>'
+                + '</td>'
+                + '</tr>';
+        }
+
         function renderQuickSearch(rows) {
             var html = '';
             (rows || []).forEach(function (row) {
-                var detailUrl = "{{ url('loan-management/loans') }}/" + row.id + "/view?_lm_modal=1";
-                var editUrl = "{{ url('loan-management/loans') }}/" + row.id + "/edit?_lm_modal=1";
-                var printModalUrl = "{{ url('loan-management/loans') }}/" + row.id + "/print-modal";
-                var payUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/create?return_to={{ rawurlencode(route('loan-management.dashboard')) }}";
-                var collectionUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payments/collection-modal";
-                var refreshScheduleUrl = "{{ url('loan-management/loans') }}/" + row.id + "/schedules/refresh";
-                var addToPosUrl = "{{ url('loan-management/loans') }}/" + row.id + "/convert-to-pos?modal=1";
-                var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
-                var dueLabel = row.next_due_date ? esc(row.next_due_date) : '<span class="text-muted">-</span>';
-                var isOverdue = row.status && (String(row.status).toLowerCase() === 'overdue' || String(row.status).toLowerCase() === 'late');
-                var statusBadge = isOverdue
-                    ? '<span class="lm-pay-status lm-pay-status--overdue">OVERDUE</span>'
-                    : (row.status && String(row.status).toLowerCase() !== 'active' ? '<span class="lm-pay-status">' + esc(row.status) + '</span>' : '');
-                html += '<tr class="lm-pay-row">'
-                    + '<td>'
-                    + '<div class="lm-customer-hover">'
-                    + '<div class="lm-customer-hover__main">'
-                    + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
-                    + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
-                    + statusBadge
-                    + '</div>'
-                    + '</div>'
-                    + '</td>'
-                    + '<td class="lm-pay-due">' + dueLabel + '</td>'
-                    + '<td class="text-right lm-pay-balance">' + money(row.balance_amount) + '</td>'
-                    + '<td class="text-center lm-pay-action">'
-                    + '<button type="button" class="btn btn-success btn-xs lm-pay-btn btn-modal" data-href="' + payUrl + '" data-container=".view_modal" title="Collect payment for ' + esc(row.customer_name) + '"><i class="fa fa-money"></i> <span>Pay</span></button>'
-                    + '<button type="button" class="btn btn-default btn-xs lm-print-btn btn-modal" data-href="' + printModalUrl + '" data-container=".view_modal" title="Print loan for ' + esc(row.customer_name) + '"><i class="fa fa-print"></i> <span>Print</span></button>'
-                    + '<button type="button" class="btn btn-info btn-xs lm-dashboard-refresh-schedule-btn" data-url="' + refreshScheduleUrl + '" title="Refresh schedule for ' + esc(row.customer_name) + '"><i class="fa fa-refresh"></i> <span>Schedule</span></button>'
-                    + '<div class="lm-pay-more dropdown">'
-                    + '<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" title="More actions"><i class="fa fa-ellipsis-h"></i></button>'
-                    + '<ul class="dropdown-menu dropdown-menu-right lm-action-menu__list">'
-                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '"><i class="fa fa-eye"></i> View Loan</button></li>'
-                    + '<li><button type="button" class="js-loan-detail-modal" data-title="Edit Loan" data-url="' + editUrl + '"><i class="fa fa-pencil"></i> Edit</button></li>'
-                    + '<li><button type="button" class="btn-modal" data-href="' + collectionUrl + '" data-container=".view_modal"><i class="fa fa-calendar-check-o"></i> Payment Collection</button></li>'
-                    + '<li><button type="button" class="lm-dashboard-refresh-schedule-btn" data-url="' + refreshScheduleUrl + '"><i class="fa fa-refresh"></i> Refresh Schedule</button></li>'
-                    + '<li><button type="button" class="btn-modal" data-href="' + addToPosUrl + '" data-container=".view_modal"><i class="fa fa-exchange"></i> Add to POS</button></li>'
-                    + '<li><button type="button" class="js-copy-loan-payment-info" data-url="' + copyInfoUrl + '"><i class="fa fa-copy"></i> Copy</button></li>'
-                    + '</ul>'
-                    + '</div>'
-                    + '</td>'
-                    + '</tr>';
+                html += quickSearchRowHtml(row);
             });
             $('[data-loan-table="dashboard_quick_search"]').html(html || '<tr><td colspan="4" class="text-center">No loans found for this search.</td></tr>');
+        }
+
+        function refreshQuickSearchRow(loanId) {
+            var locationId = $('#loanDashboardQuickLocationFilter').val() || '';
+            return fetch(quickSearchUrl + '?loan_id=' + encodeURIComponent(loanId) + '&location_id=' + encodeURIComponent(locationId), {
+                headers: { 'Accept': 'application/json' }
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (json) {
+                    var row = json && json.data && json.data.length ? json.data[0] : null;
+                    var $oldRow = $('[data-loan-table="dashboard_quick_search"] tr[data-loan-id="' + loanId + '"]');
+                    if (!row) {
+                        $oldRow.remove();
+                        return;
+                    }
+
+                    var $newRow = $(quickSearchRowHtml(row));
+                    if ($oldRow.length) {
+                        $oldRow.replaceWith($newRow);
+                    } else {
+                        $('[data-loan-table="dashboard_quick_search"]').prepend($newRow);
+                    }
+                    $newRow.addClass('success');
+                    window.setTimeout(function () { $newRow.removeClass('success'); }, 900);
+                });
         }
 
         $(document).on('click', '.lm-dashboard-refresh-schedule-btn', function (event) {
@@ -3146,7 +3176,7 @@
                         if (window.toastr) {
                             toastr.success(res.message || 'Payment schedule refreshed successfully.');
                         }
-                        runQuickSearch();
+                        refreshQuickSearchRow($button.data('loan-id') || $button.closest('tr[data-loan-id]').data('loan-id'));
                     } else if (window.toastr) {
                         toastr.error((res && res.message) || 'Unable to refresh payment schedule.');
                     }

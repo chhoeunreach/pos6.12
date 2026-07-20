@@ -2654,22 +2654,20 @@
             method: 'POST',
             data: wizSerializeLoanForm(),
             dataType: 'json',
+            headers: {
+                Accept: 'application/json'
+            },
             success: function (res) {
                 if (window.toastr) {
                     toastr.success(res.message || 'Loan updated successfully.');
                 } else {
                     alert(res.message || 'Loan updated successfully.');
                 }
-                @if($isEmbeddedModal)
-                var viewUrl = "{{ route('loan-management.loans.view', $loanRow->id) }}?_lm_modal=1";
-                window.jQuery.ajax({
-                    url: viewUrl, dataType: 'html',
-                    success: function(html) { window.jQuery('.view_modal').html(html); },
-                    error: function() { window.location.href = viewUrl; }
-                });
-                @else
-                window.location.href = "{{ route('loan-management.loans.view', $loanRow->id) }}";
-                @endif
+                if (res.data && res.data.sections_html) {
+                    $('#loanEditSections').html(res.data.sections_html);
+                }
+                wizEditRecalcTotals();
+                wizPopulateReview();
             },
             error: function (xhr) {
                 var msg = 'Failed to save loan.';
