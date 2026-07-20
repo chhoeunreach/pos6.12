@@ -243,7 +243,12 @@ class LoanTelegramChatController extends Controller
         abort_unless($messageRow->message_type === 'text', 422, 'Only text messages can be updated.');
 
         $data = $request->validate(['message' => 'required|string|max:5000']);
-        $updated = $this->chatService->updateTextMessage($messageRow, (string) $data['message']);
+
+        try {
+            $updated = $this->chatService->updateTextMessage($messageRow, (string) $data['message']);
+        } catch (\Throwable $e) {
+            return $this->fail('Unable to update message in Telegram: '.$e->getMessage(), 422, (object) []);
+        }
 
         return $this->ok('Message updated', $this->chatService->formatMessage($updated));
     }
@@ -266,7 +271,11 @@ class LoanTelegramChatController extends Controller
             return $this->fail('Message not found', 404, (object) []);
         }
 
-        $this->chatService->deleteMessage($messageRow);
+        try {
+            $this->chatService->deleteMessage($messageRow);
+        } catch (\Throwable $e) {
+            return $this->fail('Unable to delete message in Telegram: '.$e->getMessage(), 422, (object) []);
+        }
 
         return $this->ok('Message deleted', (object) []);
     }

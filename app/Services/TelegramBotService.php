@@ -52,7 +52,21 @@ class TelegramBotService
         return $payload;
     }
 
-    public function sendMessageToChat(string $chat_id, string $message): void
+    protected function resultFromResponse($response, string $action): array
+    {
+        if ($response->failed()) {
+            throw new \RuntimeException('Telegram '.$action.' failed: HTTP ' . $response->status() . ' - ' . $response->body());
+        }
+
+        $json = (array) ($response->json() ?? []);
+        if (array_key_exists('ok', $json) && $json['ok'] !== true) {
+            throw new \RuntimeException('Telegram '.$action.' failed: ' . ($json['description'] ?? $response->body()));
+        }
+
+        return (array) ($json['result'] ?? []);
+    }
+
+    public function sendMessageToChat(string $chat_id, string $message): array
     {
         $chat_id = trim($chat_id);
         if ($this->token === '') {
@@ -68,12 +82,10 @@ class TelegramBotService
             'parse_mode' => 'HTML',
         ]);
 
-        if ($response->failed()) {
-            throw new \RuntimeException('Telegram sendMessage failed: HTTP ' . $response->status() . ' - ' . $response->body());
-        }
+        return $this->resultFromResponse($response, 'sendMessage');
     }
 
-    public function sendDocumentToChat(string $chat_id, string $file_path, ?string $caption = null, ?string $filename = null): void
+    public function sendDocumentToChat(string $chat_id, string $file_path, ?string $caption = null, ?string $filename = null): array
     {
         $chat_id = trim($chat_id);
         if ($this->token === '') {
@@ -106,12 +118,10 @@ class TelegramBotService
             fclose($handle);
         }
 
-        if ($response->failed()) {
-            throw new \RuntimeException('Telegram sendDocument failed: HTTP ' . $response->status() . ' - ' . $response->body());
-        }
+        return $this->resultFromResponse($response, 'sendDocument');
     }
 
-    public function sendLocationToChat(string $chat_id, float $latitude, float $longitude): void
+    public function sendLocationToChat(string $chat_id, float $latitude, float $longitude): array
     {
         $chat_id = trim($chat_id);
         if ($this->token === '') {
@@ -127,9 +137,7 @@ class TelegramBotService
             'longitude' => $longitude,
         ]);
 
-        if ($response->failed()) {
-            throw new \RuntimeException('Telegram sendLocation failed: HTTP ' . $response->status() . ' - ' . $response->body());
-        }
+        return $this->resultFromResponse($response, 'sendLocation');
     }
 
     /**
@@ -184,7 +192,7 @@ class TelegramBotService
         return $localPath;
     }
 
-    public function sendPhotoToChat(string $chat_id, string $file_path, ?string $caption = null, ?string $filename = null): void
+    public function sendPhotoToChat(string $chat_id, string $file_path, ?string $caption = null, ?string $filename = null): array
     {
         $chat_id = trim($chat_id);
         if ($this->token === '') {
@@ -215,8 +223,44 @@ class TelegramBotService
             fclose($handle);
         }
 
-        if ($response->failed()) {
-            throw new \RuntimeException('Telegram sendPhoto failed: HTTP ' . $response->status() . ' - ' . $response->body());
+        return $this->resultFromResponse($response, 'sendPhoto');
+    }
+
+    public function editMessageText(string $chat_id, int $message_id, string $message): array
+    {
+        $chat_id = trim($chat_id);
+        if ($this->token === '') {
+            throw new \RuntimeException('Telegram config error: TELEGRAM_BOT_TOKEN is empty');
         }
+        if ($chat_id === '') {
+            throw new \RuntimeException('Telegram config error: chat_id is empty');
+        }
+
+        $response = Http::timeout(5)->retry(1, 250)->asForm()->post($this->baseUrl() . '/editMessageText', [
+            'chat_id' => $chat_id,
+            'message_id' => $message_id,
+            'text' => $message,
+            'parse_mode' => 'HTML',
+        ]);
+
+        return $this->resultFromResponse($response, 'editMessageText');
+    }
+
+    public function deleteMessage(string $chat_id, int $message_id): array
+    {
+        $chat_id = trim($chat_id);
+        if ($this->token === '') {
+            throw new \RuntimeException('Telegram config error: TELEGRAM_BOT_TOKEN is empty');
+        }
+        if ($chat_id === '') {
+            throw new \RuntimeException('Telegram config error: chat_id is empty');
+        }
+
+        $response = Http::timeout(5)->retry(1, 250)->asForm()->post($this->baseUrl() . '/deleteMessage', [
+            'chat_id' => $chat_id,
+            'message_id' => $message_id,
+        ]);
+
+        return $this->resultFromResponse($response, 'deleteMessage');
     }
 }

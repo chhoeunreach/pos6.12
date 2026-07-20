@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use App\Services\TelegramBotService;
 use Modules\LoanManagement\Entities\LoanCustomer;
 use Modules\LoanManagement\Entities\LoanFile;
 use Modules\LoanManagement\Entities\LoanTelegramChatMessage;
@@ -249,6 +250,7 @@ class TelegramChatService
         $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
         $isOwnOutbound = $isOutbound && $user && (int) $message->sender_id === (int) $user->id;
         $canAdminChat = $user && $user->can('loan_management.chat.admin');
+        $canSyncTelegram = $isOutbound && $this->telegramMessageIdentifiers($message) !== null;
 
         return [
             'id' => (int) $message->id,
@@ -269,18 +271,22 @@ class TelegramChatService
             'edited' => $message->updated_at && $message->created_at && $message->updated_at->gt($message->created_at->copy()->addSeconds(2)),
             'can_update' => $message->message_type === 'text'
                 && $isOutbound
+                && $canSyncTelegram
                 && $user
                 && (($user->can('loan_management.chat.reply') && $isOwnOutbound) || $canAdminChat),
-            'can_delete' => $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
+            'can_delete' => $canSyncTelegram && $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
         ];
     }
 
     public function updateTextMessage(LoanTelegramChatMessage $message, string $text): LoanTelegramChatMessage
     {
+        $this->editTelegramMessageIfNeeded($message, $text);
+
         $message->message = $text;
         $message->metadata = array_merge((array) ($message->metadata ?? []), [
             'edited_at' => now()->toIso8601String(),
             'edited_by' => auth()->id(),
+            'telegram_edited_at' => now()->toIso8601String(),
         ]);
         $message->save();
 
@@ -292,10 +298,65 @@ class TelegramChatService
     public function deleteMessage(LoanTelegramChatMessage $message): void
     {
         $thread = $message->thread;
+        $this->deleteTelegramMessageIfNeeded($message);
         $message->delete();
 
         if ($thread) {
             $this->refreshThreadLastMessage($thread);
+        }
+    }
+
+    protected function editTelegramMessageIfNeeded(LoanTelegramChatMessage $message, string $text): void
+    {
+        $this->assertOutboundTelegramMessage($message, 'edited');
+
+        $ids = $this->telegramMessageIdentifiers($message);
+        if (! $ids) {
+            throw new \RuntimeException('This message was sent before Telegram message tracking was enabled. It cannot be edited in Telegram.');
+        }
+
+        (new TelegramBotService(TelegramSettingsService::botToken()))
+            ->editMessageText($ids['chat_id'], $ids['message_id'], $text);
+    }
+
+    protected function deleteTelegramMessageIfNeeded(LoanTelegramChatMessage $message): void
+    {
+        $this->assertOutboundTelegramMessage($message, 'deleted');
+
+        $ids = $this->telegramMessageIdentifiers($message);
+        if (! $ids) {
+            throw new \RuntimeException('This message was sent before Telegram message tracking was enabled. It cannot be deleted in Telegram.');
+        }
+
+        (new TelegramBotService(TelegramSettingsService::botToken()))
+            ->deleteMessage($ids['chat_id'], $ids['message_id']);
+    }
+
+    protected function telegramMessageIdentifiers(LoanTelegramChatMessage $message): ?array
+    {
+        $metadata = (array) ($message->metadata ?? []);
+        $chatId = trim((string) ($metadata['telegram_chat_id'] ?? ''));
+        $messageId = (int) ($metadata['telegram_message_id'] ?? 0);
+
+        if ($chatId === '' && $message->thread) {
+            $customer = LoanCustomer::query()->find($message->thread->customer_id);
+            $chatId = trim((string) ($customer->telegram_chat_id ?? ''));
+        }
+
+        if ($chatId === '' || $messageId <= 0) {
+            return null;
+        }
+
+        return [
+            'chat_id' => $chatId,
+            'message_id' => $messageId,
+        ];
+    }
+
+    protected function assertOutboundTelegramMessage(LoanTelegramChatMessage $message, string $action): void
+    {
+        if (! in_array($message->sender_type, ['staff', 'admin'], true)) {
+            throw new \RuntimeException('Only system/staff messages can be '.$action.' in Telegram.');
         }
     }
 

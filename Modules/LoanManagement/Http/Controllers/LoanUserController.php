@@ -3,6 +3,7 @@
 namespace Modules\LoanManagement\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +20,7 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
         $tableExists = Schema::connection($this->connection)->hasTable($this->table);
         $users = collect();
 
@@ -53,6 +55,8 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
+
         return view('loanmanagement::users.create');
     }
 
@@ -61,6 +65,8 @@ class LoanUserController extends Controller
         if (! auth()->user()->can('loan_management.create') && ! auth()->user()->can('loan_management.setting')) {
             abort(403, 'Unauthorized action.');
         }
+
+        $this->ensureLoanUsersTable();
 
         $data = $request->validate([
             'name' => 'required|string|max:191',
@@ -94,6 +100,8 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
+
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
 
@@ -115,6 +123,8 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
+
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
 
@@ -126,6 +136,8 @@ class LoanUserController extends Controller
         if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
             abort(403, 'Unauthorized action.');
         }
+
+        $this->ensureLoanUsersTable();
 
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
@@ -164,6 +176,8 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
+
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
 
@@ -178,6 +192,8 @@ class LoanUserController extends Controller
         if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
             abort(403, 'Unauthorized action.');
         }
+
+        $this->ensureLoanUsersTable();
 
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
@@ -198,6 +214,8 @@ class LoanUserController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $this->ensureLoanUsersTable();
+
         $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
         abort_if(! $userRow, 404);
 
@@ -211,5 +229,27 @@ class LoanUserController extends Controller
 
         return redirect()->back()
             ->with('status', ['success' => 1, 'msg' => 'Password reset successfully.']);
+    }
+
+    protected function ensureLoanUsersTable(): void
+    {
+        if (Schema::connection($this->connection)->hasTable($this->table)) {
+            return;
+        }
+
+        Schema::connection($this->connection)->create($this->table, function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->string('name');
+            $table->string('username')->unique();
+            $table->string('email')->nullable()->unique();
+            $table->string('phone', 50)->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->string('status', 30)->default('active')->index();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->timestamp('last_login_at')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
     }
 }

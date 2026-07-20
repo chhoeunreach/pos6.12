@@ -48,12 +48,22 @@ class RelayChatMessageToTelegramJob implements ShouldQueue
 
     protected function deliver(TelegramBotService $telegram, LoanTelegramChatMessage $message): void
     {
-        match ($message->message_type) {
+        $result = match ($message->message_type) {
             'image' => $telegram->sendPhotoToChat($this->chatId, $this->localFilePath($message), (string) ($message->message ?? '') ?: null),
             'file', 'audio' => $telegram->sendDocumentToChat($this->chatId, $this->localFilePath($message), (string) ($message->message ?? '') ?: null, $message->file_name),
             'location' => $telegram->sendLocationToChat($this->chatId, (float) $message->latitude, (float) $message->longitude),
             default => $telegram->sendMessageToChat($this->chatId, (string) ($message->message ?? '')),
         };
+
+        $telegramMessageId = (int) ($result['message_id'] ?? 0);
+        if ($telegramMessageId > 0) {
+            $message->metadata = array_merge((array) ($message->metadata ?? []), [
+                'telegram_chat_id' => $this->chatId,
+                'telegram_message_id' => $telegramMessageId,
+                'telegram_sent_at' => now()->toIso8601String(),
+            ]);
+            $message->save();
+        }
     }
 
     protected function localFilePath(LoanTelegramChatMessage $message): string
