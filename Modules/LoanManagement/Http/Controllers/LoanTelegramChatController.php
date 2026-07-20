@@ -135,10 +135,27 @@ class LoanTelegramChatController extends Controller
             return $this->fail('Thread not found', 404, (object) []);
         }
 
-        $data = $request->validate(['message_type' => 'required|in:text', 'message' => 'required|string']);
+        $data = $request->validate([
+            'message_type' => 'required|in:text,image,file,audio,location',
+            'message' => 'nullable|string|max:5000',
+            'file' => 'nullable|file|max:20480',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'address' => 'nullable|string|max:1000',
+            'duration_seconds' => 'nullable|integer|min:0|max:3600',
+        ]);
         $senderType = $this->isAdmin() ? 'admin' : 'staff';
+        abort_unless($data['message_type'] !== 'text' || trim((string) ($data['message'] ?? '')) !== '', 422, 'Message is required.');
+        abort_unless(! in_array($data['message_type'], ['image', 'file', 'audio'], true) || $request->hasFile('file'), 422, 'Please attach a file.');
+        abort_unless($data['message_type'] !== 'location' || (isset($data['latitude'], $data['longitude'])), 422, 'Location coordinates are required.');
 
-        $message = $this->chatService->sendTextMessage($row, $senderType, (int) auth()->id(), (string) $data['message']);
+        $message = match ($data['message_type']) {
+            'image' => $this->chatService->sendImageMessage($row, $senderType, (int) auth()->id(), $request->file('file'), (string) ($data['message'] ?? '')),
+            'file' => $this->chatService->sendFileMessage($row, $senderType, (int) auth()->id(), $request->file('file'), 'file', (string) ($data['message'] ?? '')),
+            'audio' => $this->chatService->sendAudioMessage($row, $senderType, (int) auth()->id(), $request->file('file'), (int) ($data['duration_seconds'] ?? 0), (string) ($data['message'] ?? '')),
+            'location' => $this->chatService->sendLocationMessage($row, $senderType, (int) auth()->id(), (float) $data['latitude'], (float) $data['longitude'], (string) ($data['address'] ?? '')),
+            default => $this->chatService->sendTextMessage($row, $senderType, (int) auth()->id(), (string) ($data['message'] ?? '')),
+        };
 
         return $this->ok('Message sent', $this->chatService->formatMessage($message));
     }

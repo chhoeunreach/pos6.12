@@ -503,6 +503,9 @@
     .lm-pay-row:hover {
         z-index: 25;
     }
+    .lm-table-wrap--hover-actions {
+        overflow: visible;
+    }
     .lm-customer-hover__main {
         display: block;
         padding: 3px 4px;
@@ -513,6 +516,84 @@
     .lm-pay-row:hover .lm-customer-hover__main,
     .lm-customer-hover:focus-within .lm-customer-hover__main {
         background: #f8fafc;
+    }
+    .lm-customer-hover {
+        position: relative;
+    }
+    .lm-customer-hover__panel {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 40;
+        display: none;
+        width: 260px;
+        padding: 12px;
+        border: 1px solid #dbeafe;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .18);
+    }
+    .lm-customer-hover:hover .lm-customer-hover__panel,
+    .lm-customer-hover:focus-within .lm-customer-hover__panel {
+        display: block;
+    }
+    .lm-customer-hover__panel:before {
+        content: "";
+        position: absolute;
+        top: -7px;
+        left: 18px;
+        width: 12px;
+        height: 12px;
+        border-left: 1px solid #dbeafe;
+        border-top: 1px solid #dbeafe;
+        background: #fff;
+        transform: rotate(45deg);
+    }
+    .lm-customer-hover__title {
+        font-size: 13px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 3px;
+    }
+    .lm-customer-hover__meta {
+        font-size: 11px;
+        color: #64748b;
+        margin-bottom: 8px;
+    }
+    .lm-customer-hover__status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 10px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .lm-customer-hover__status.linked {
+        background: #dcfce7;
+        color: #15803d;
+    }
+    .lm-customer-hover__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .lm-customer-hover__actions button {
+        border: 1px solid #dbe4ef;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #334155;
+        padding: 5px 8px;
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .lm-customer-hover__actions button.primary {
+        background: #229ed9;
+        border-color: #229ed9;
+        color: #fff;
     }
     /* Payment Modal Form Styles */
     .view_modal .modal-content {
@@ -2032,6 +2113,9 @@
             -webkit-overflow-scrolling: touch;
             max-width: 100%;
         }
+        .lm-table-wrap--hover-actions {
+            overflow: visible;
+        }
 
         /* Side stack: vertical on phone */
         .lm-side-stack {
@@ -3079,6 +3163,21 @@
             var copyInfoUrl = "{{ url('loan-management/loans') }}/" + row.id + "/payment/copy-info";
             var telegramLinkUrl = row.customer_id ? "{{ url('loan-management/customers') }}/" + row.customer_id + "/telegram/link" : '';
             var telegramAction = '';
+            var tgStatus = row.telegram_linked
+                ? '<span class="lm-customer-hover__status linked"><i class="fa fa-check-circle"></i> Telegram connected</span>'
+                : '<span class="lm-customer-hover__status"><i class="fa fa-paper-plane"></i> Telegram not connected</span>';
+            var hoverTelegram = row.customer_id
+                ? '<div class="lm-customer-hover__panel">' +
+                    '<div class="lm-customer-hover__title">' + esc(row.customer_name) + '</div>' +
+                    '<div class="lm-customer-hover__meta">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' · ' + esc(row.customer_phone) : '') + '</div>' +
+                    tgStatus +
+                    '<div class="lm-customer-hover__actions">' +
+                        '<button type="button" class="primary js-dashboard-open-telegram" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-telegram"></i> Chat</button>' +
+                        '<button type="button" class="js-dashboard-telegram-invoice" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-file-text-o"></i> Invoice</button>' +
+                        '<button type="button" class="js-dashboard-telegram-pay" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-money"></i> Pay</button>' +
+                    '</div>' +
+                '</div>'
+                : '';
             if (row.telegram_linked) {
                 telegramAction = '<li><button type="button" disabled class="text-muted"><i class="fa fa-check-circle"></i> Telegram Connected</button></li>';
             } else if (telegramLinkUrl) {
@@ -3098,6 +3197,7 @@
                 + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
                 + statusBadge
                 + '</div>'
+                + hoverTelegram
                 + '</div>'
                 + '</td>'
                 + '<td class="lm-pay-due">' + dueLabel + '</td>'
@@ -3380,6 +3480,36 @@
                 .finally(function () {
                     $button.prop('disabled', false);
                 });
+        });
+
+        function dashboardTelegramContext($button, action) {
+            return {
+                loan_number: $button.data('loan-number') || '',
+                balance_amount: $button.data('balance') || '',
+                auto_action: action || ''
+            };
+        }
+
+        $(document).on('click', '.js-dashboard-open-telegram, .js-dashboard-telegram-invoice, .js-dashboard-telegram-pay', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var $button = $(this);
+            var customerId = $button.data('customer-id');
+            if (!customerId || typeof window.loanManagementOpenTelegramCustomer !== 'function') {
+                return;
+            }
+
+            var action = $button.hasClass('js-dashboard-telegram-invoice')
+                ? 'invoice'
+                : ($button.hasClass('js-dashboard-telegram-pay') ? 'pay' : '');
+
+            window.loanManagementOpenTelegramCustomer(
+                customerId,
+                $button.data('customer-name') || 'Customer',
+                String($button.data('telegram-linked')) === '1',
+                dashboardTelegramContext($button, action)
+            );
         });
 
         function renderFollowUps(rows) {
