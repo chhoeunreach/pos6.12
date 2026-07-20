@@ -36,6 +36,7 @@
     .lm-tg-contact:hover{background:#eef4fb}
     .lm-tg-contact.active{background:#dbeafe}
     .lm-tg-contact-avatar{width:38px;height:38px;border-radius:50%;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 auto;font-size:14px;position:relative}
+    .lm-tg-contact-avatar img,.lm-tg-header .lm-tg-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
     .lm-tg-contact-avatar .dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:#cbd5e1;border:2px solid #f7f9fb}
     .lm-tg-contact-avatar .dot.linked{background:#22c55e}
     .lm-tg-contact-info{min-width:0;flex:1}
@@ -221,12 +222,31 @@
     function singleData(resp){ return resp && resp.data ? resp.data : null; }
     function listData(resp){ return resp && Array.isArray(resp.data) ? resp.data : []; }
 
-    function setHeader(name, linked, statusText){
-        $('#lmTgHeaderAvatar').html(esc((name || 'C').charAt(0).toUpperCase()));
-        $('#lmTgHeaderName').text(name || 'Customer');
-        $('#lmTgHeaderStatus').toggleClass('online', !!linked);
-        $('#lmTgHeaderStatusText').text(statusText || (linked ? 'connected via Telegram' : 'not connected'));
-        $('#lmTgNotLinkedBanner').toggle(!linked);
+    function profileName(profile, fallback){
+        return (profile && (profile.display_name || profile.customer_name || profile.name)) || fallback || 'Customer';
+    }
+    function profileInitial(name){
+        return (name || 'C').charAt(0).toUpperCase();
+    }
+    function setHeader(profile, linked, statusText){
+        if (typeof profile === 'string') {
+            profile = {display_name: profile};
+        }
+        profile = profile || {};
+        var name = profileName(profile);
+        var isLinked = typeof profile.telegram_linked === 'boolean' ? profile.telegram_linked : !!linked;
+        var details = profile.subtitle || profile.phone || profile.customer_code || '';
+
+        if (profile.avatar_url) {
+            $('#lmTgHeaderAvatar').html('<img src="' + esc(profile.avatar_url) + '" alt="">');
+        } else {
+            $('#lmTgHeaderAvatar').html(esc(profileInitial(name)));
+        }
+
+        $('#lmTgHeaderName').text(name);
+        $('#lmTgHeaderStatus').toggleClass('online', isLinked);
+        $('#lmTgHeaderStatusText').text(statusText || (details ? details + ' · ' : '') + (isLinked ? 'connected via Telegram' : 'not connected'));
+        $('#lmTgNotLinkedBanner').toggle(!isLinked);
     }
 
     function renderMessages(messages){
@@ -289,12 +309,15 @@
             var name = r.display_name || r.customer_name || 'Customer';
             var sub = r.last_message ? ((r.last_sender_name ? r.last_sender_name + ': ' : '') + r.last_message) : (r.display_subtitle || r.customer_phone || 'New chat');
             var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-tg-contact-badge">' + Number(r.unread_count) + '</span>' : '';
+            var avatar = r.avatar_url
+                ? '<img src="' + esc(r.avatar_url) + '" alt="">'
+                : esc(profileInitial(name));
             var item = $('<div class="lm-tg-contact" data-customer-id="'+r.customer_id+'" data-thread-id="'+(r.id || '')+'"></div>')
-                .append('<div class="lm-tg-contact-avatar">' + esc(name.charAt(0).toUpperCase()) + '<span class="dot'+(r.telegram_linked ? ' linked' : '')+'"></span></div>')
+                .append('<div class="lm-tg-contact-avatar">' + avatar + '<span class="dot'+(r.telegram_linked ? ' linked' : '')+'"></span></div>')
                 .append('<div class="lm-tg-contact-info"><div class="lm-tg-contact-name">' + esc(name) + '</div><div class="lm-tg-contact-sub">' + esc(sub) + '</div></div>')
                 .append(badge);
             if (String(r.customer_id) === String(activeCustomerId)) item.addClass('active');
-            item.on('click', function(){ openContact(r.customer_id, name, !!r.telegram_linked, {}); });
+            item.on('click', function(){ openContact(r.customer_id, name, !!r.telegram_linked, {profile: r}); });
             list.append(item);
         });
     }
@@ -311,6 +334,10 @@
         if (showLoading) $('#lmTgMessages').html('<div class="lm-tg-empty">Loading conversation...</div>');
         apiGet(chatBaseUrl + '/' + activeThreadId).then(function(resp){
             var thread = singleData(resp);
+            if (thread && String(thread.customer_id) === String(activeCustomerId)) {
+                setHeader(thread.customer_profile || thread, !!thread.telegram_linked);
+                activeCustomerName = profileName(thread.customer_profile || thread, activeCustomerName);
+            }
             renderMessages(thread ? thread.messages : []);
             apiPostJson(chatBaseUrl + '/' + activeThreadId + '/read', {});
         }).catch(function(){}).finally(function(){ loadingThread = false; });
@@ -328,19 +355,22 @@
     }
 
     function openContact(customerId, name, linked, context){
-        activeCustomerName = name || 'Customer';
         activeLoanContext = context || {};
+        var initialProfile = activeLoanContext.profile || {display_name: name, telegram_linked: !!linked};
+        activeCustomerName = profileName(initialProfile, name);
         activeCustomerId = customerId;
         $('.lm-tg-contact').removeClass('active');
         $('.lm-tg-contact[data-customer-id="'+customerId+'"]').addClass('active');
         $('#lmTgComposerForm').show();
         $('#lmTgTools').css('display', 'flex');
-        setHeader(name, linked);
+        setHeader(initialProfile, linked);
         $('#lmTgMessages').html('<div class="lm-tg-empty">Loading conversation...</div>');
         apiPostJson(chatBaseUrl, {customer_id: customerId}).then(function(resp){
             var thread = singleData(resp);
             if (thread && thread.id) {
                 activeThreadId = thread.id;
+                setHeader(thread.customer_profile || thread, !!thread.telegram_linked);
+                activeCustomerName = profileName(thread.customer_profile || thread, activeCustomerName);
                 loadThread(true);
                 startPolling();
                 if (activeLoanContext.auto_action === 'invoice') {

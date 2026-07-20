@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Modules\LoanManagement\Entities\LoanCustomer;
+use Modules\LoanManagement\Entities\LoanFile;
 use Modules\LoanManagement\Entities\LoanTelegramChatMessage;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
 use Modules\LoanManagement\Jobs\RelayChatMessageToTelegramJob;
@@ -147,18 +148,20 @@ class TelegramChatService
             }
 
             $existingCustomerIds[(int) $customer->id] = true;
-            $name = (string) ($customer->khmer_name ?? $customer->name ?? 'Customer');
+            $profile = $this->customerProfile($customer);
             $rows->push([
                 'id' => (int) $thread->id,
                 'customer_id' => (int) $customer->id,
-                'display_name' => $name,
-                'customer_name' => $name,
-                'customer_phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+                'display_name' => $profile['display_name'],
+                'customer_name' => $profile['display_name'],
+                'customer_phone' => $profile['phone'],
+                'display_subtitle' => $profile['subtitle'],
+                'avatar_url' => $profile['avatar_url'],
                 'last_message' => (string) ($thread->last_message ?? ''),
                 'last_message_type' => (string) ($thread->last_message_type ?? 'text'),
                 'last_message_at' => $thread->last_message_at?->format('Y-m-d H:i:s'),
                 'unread_count' => (int) ($thread->unread_staff_count ?? 0),
-                'telegram_linked' => ! empty($customer->telegram_chat_id),
+                'telegram_linked' => $profile['telegram_linked'],
                 'is_customer_only' => false,
             ]);
         }
@@ -192,18 +195,20 @@ class TelegramChatService
                 continue;
             }
 
-            $name = (string) ($customer->khmer_name ?? $customer->name ?? 'Customer');
+            $profile = $this->customerProfile($customer);
             $rows->push([
                 'id' => null,
                 'customer_id' => (int) $customer->id,
-                'display_name' => $name,
-                'customer_name' => $name,
-                'customer_phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+                'display_name' => $profile['display_name'],
+                'customer_name' => $profile['display_name'],
+                'customer_phone' => $profile['phone'],
+                'display_subtitle' => $profile['subtitle'],
+                'avatar_url' => $profile['avatar_url'],
                 'last_message' => '',
                 'last_message_type' => 'text',
                 'last_message_at' => null,
                 'unread_count' => 0,
-                'telegram_linked' => ! empty($customer->telegram_chat_id),
+                'telegram_linked' => $profile['telegram_linked'],
                 'is_customer_only' => true,
             ]);
         }
@@ -215,11 +220,17 @@ class TelegramChatService
     {
         $thread->loadMissing(['customer', 'messages' => fn ($query) => $query->orderBy('created_at')->orderBy('id')]);
         $customer = $thread->customer;
+        $profile = $this->customerProfile($customer);
 
         return [
             'id' => (int) $thread->id,
             'customer_id' => (int) $thread->customer_id,
-            'display_name' => (string) ($customer->khmer_name ?? $customer->name ?? 'Customer'),
+            'display_name' => $profile['display_name'],
+            'customer_name' => $profile['display_name'],
+            'customer_phone' => $profile['phone'],
+            'telegram_linked' => $profile['telegram_linked'],
+            'avatar_url' => $profile['avatar_url'],
+            'customer_profile' => $profile,
             'status' => (string) $thread->status,
             'messages' => $thread->messages->map(fn ($m) => $this->formatMessage($m))->values()->all(),
         ];
@@ -405,5 +416,35 @@ class TelegramChatService
             }
         }
         return false;
+    }
+
+    protected function customerProfile($customer): array
+    {
+        $name = trim((string) ($customer->khmer_name ?? '')) ?: trim((string) ($customer->name ?? '')) ?: 'Customer';
+        $phone = trim((string) ($customer->phone ?? '')) ?: trim((string) ($customer->login_phone ?? ''));
+        $code = trim((string) ($customer->customer_code ?? ''));
+        $subtitle = trim($phone.($phone && $code ? ' · ' : '').$code);
+
+        return [
+            'id' => (int) ($customer->id ?? 0),
+            'display_name' => $name,
+            'phone' => $phone,
+            'customer_code' => $code,
+            'subtitle' => $subtitle,
+            'telegram_username' => trim((string) ($customer->telegram_username ?? '')),
+            'telegram_linked' => ! empty($customer->telegram_chat_id),
+            'avatar_url' => $this->customerAvatarUrl($customer),
+        ];
+    }
+
+    protected function customerAvatarUrl($customer): string
+    {
+        if (empty($customer->customer_photo_file_id)) {
+            return '';
+        }
+
+        $file = LoanFile::query()->find($customer->customer_photo_file_id);
+
+        return $file ? (string) (app(LoanChatUploadService::class)->url($file) ?? '') : '';
     }
 }

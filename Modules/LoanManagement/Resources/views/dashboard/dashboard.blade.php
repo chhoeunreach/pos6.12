@@ -514,6 +514,7 @@
         transition: background .15s ease;
     }
     .lm-pay-row:hover .lm-customer-hover__main,
+    .lm-customer-hover.open .lm-customer-hover__main,
     .lm-customer-hover:focus-within .lm-customer-hover__main {
         background: #f8fafc;
     }
@@ -533,8 +534,7 @@
         background: #fff;
         box-shadow: 0 18px 42px rgba(15, 23, 42, .18);
     }
-    .lm-customer-hover:hover .lm-customer-hover__panel,
-    .lm-customer-hover:focus-within .lm-customer-hover__panel {
+    .lm-customer-hover.open .lm-customer-hover__panel {
         display: block;
     }
     .lm-customer-hover__panel:before {
@@ -594,6 +594,42 @@
         background: #229ed9;
         border-color: #229ed9;
         color: #fff;
+    }
+    .lm-customer-hover__toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        margin-left: 6px;
+        border: 1px solid #bfdbfe;
+        border-radius: 50%;
+        background: #eff6ff;
+        color: #1d4ed8;
+        vertical-align: middle;
+    }
+    .lm-customer-hover__toggle:hover,
+    .lm-customer-hover.open .lm-customer-hover__toggle {
+        background: #229ed9;
+        border-color: #229ed9;
+        color: #fff;
+    }
+    .lm-customer-hover__close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 22px;
+        height: 22px;
+        border: 0;
+        border-radius: 50%;
+        background: #f1f5f9;
+        color: #64748b;
+        line-height: 22px;
+        text-align: center;
+    }
+    .lm-customer-hover__close:hover {
+        background: #e2e8f0;
+        color: #0f172a;
     }
     /* Payment Modal Form Styles */
     .view_modal .modal-content {
@@ -3168,6 +3204,7 @@
                 : '<span class="lm-customer-hover__status"><i class="fa fa-paper-plane"></i> Telegram not connected</span>';
             var hoverTelegram = row.customer_id
                 ? '<div class="lm-customer-hover__panel">' +
+                    '<button type="button" class="lm-customer-hover__close js-dashboard-telegram-popover-close" aria-label="Close Telegram popup"><i class="fa fa-times"></i></button>' +
                     '<div class="lm-customer-hover__title">' + esc(row.customer_name) + '</div>' +
                     '<div class="lm-customer-hover__meta">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' · ' + esc(row.customer_phone) : '') + '</div>' +
                     tgStatus +
@@ -3194,6 +3231,7 @@
                 + '<div class="lm-customer-hover">'
                 + '<div class="lm-customer-hover__main">'
                 + '<a href="#" class="lm-row-title lm-dashboard-frame-link js-loan-detail-modal" data-title="Loan Detail" data-url="' + detailUrl + '">' + esc(row.customer_name) + '</a>'
+                + (row.customer_id ? '<button type="button" class="lm-customer-hover__toggle js-dashboard-telegram-popover-toggle" title="Telegram actions" aria-label="Telegram actions"><i class="fa fa-paper-plane"></i></button>' : '')
                 + '<span class="lm-row-subtitle">' + esc(row.loan_number) + (row.customer_phone && row.customer_phone !== '-' ? ' &middot; ' + esc(row.customer_phone) : '') + (row.location_name ? ' &middot; ' + esc(row.location_name) : '') + '</span>'
                 + statusBadge
                 + '</div>'
@@ -3490,11 +3528,39 @@
             };
         }
 
+        $(document).on('click', '.js-dashboard-telegram-popover-toggle', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var $wrap = $(this).closest('.lm-customer-hover');
+            $('.lm-customer-hover.open').not($wrap).removeClass('open');
+            $wrap.toggleClass('open');
+        });
+
+        $(document).on('click', '.js-dashboard-telegram-popover-close', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            $(this).closest('.lm-customer-hover').removeClass('open');
+        });
+
+        $(document).on('click', function (event) {
+            if (!$(event.target).closest('.lm-customer-hover').length) {
+                $('.lm-customer-hover.open').removeClass('open');
+            }
+        });
+
+        $(document).on('keydown', function (event) {
+            if (event.key === 'Escape') {
+                $('.lm-customer-hover.open').removeClass('open');
+            }
+        });
+
         $(document).on('click', '.js-dashboard-open-telegram, .js-dashboard-telegram-invoice, .js-dashboard-telegram-pay', function (event) {
             event.preventDefault();
             event.stopPropagation();
 
             var $button = $(this);
+            $button.closest('.lm-customer-hover').removeClass('open');
             var customerId = $button.data('customer-id');
             if (!customerId || typeof window.loanManagementOpenTelegramCustomer !== 'function') {
                 return;
