@@ -68,10 +68,22 @@
     #side-bar .theme-sidebar-child-hover:active,
     #side-bar .theme-sidebar-child-hover:focus {
         color: var(--theme-700);
+        background-color: color-mix(in srgb, var(--theme-700) 6%, transparent);
         outline: none;
     }
     #side-bar .theme-sidebar-child-active {
         color: var(--theme-700);
+        font-weight: 600;
+    }
+    #side-bar .theme-sidebar-child-active::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 4px;
+        bottom: 4px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background-color: var(--theme-700);
     }
 </style>
 

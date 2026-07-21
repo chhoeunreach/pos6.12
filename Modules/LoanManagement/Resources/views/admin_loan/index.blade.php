@@ -2,7 +2,7 @@
     $isKhmer = $isKhmer ?? session('user.language', config('app.locale')) === 'km';
     $text = fn ($en, $km) => $isKhmer ? $km : $en;
     $years = range((int) now()->format('Y'), 2000);
-    $adminRows = collect($payload['adminRows'] ?? [])->map(function ($row) {
+    $adminRows = collect($payload['adminRows'] ?? [])->sortBy('year')->map(function ($row) {
         return [
             'id' => (string) $row['year'],
             'year' => (int) $row['year'],
@@ -39,7 +39,9 @@
             ],
         ];
     })->values();
-    $adminMonthlyRows = collect($payload['adminMonthlyRows'] ?? [])->map(function ($row) {
+    $adminMonthlyRows = collect($payload['adminMonthlyRows'] ?? [])->sortBy(function ($row) {
+        return sprintf('%04d-%02d', (int) $row['year'], (int) $row['month']);
+    })->map(function ($row) {
         return [
             'id' => (string) ($row['id'] ?? sprintf('%04d-%02d', (int) $row['year'], (int) $row['month'])),
             'year' => (int) $row['year'],
@@ -622,7 +624,7 @@
             localStorage.setItem('khnar_yeung_monthly_ledger', JSON.stringify(monthlyRecords));
         })();
     </script>
-    <script type="module" src="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js') }}"></script>
+    <script type="module" src="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js') }}?v={{ filemtime(public_path('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js')) }}"></script>
     <script>
         (function () {
             var form = document.getElementById('adminLoanFilter');

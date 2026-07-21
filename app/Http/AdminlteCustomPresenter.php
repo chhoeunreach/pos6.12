@@ -127,14 +127,15 @@ class AdminlteCustomPresenter extends Presenter
             
             $children .= '<div class="chiled tw-relative tw-mt-1 tw-mb-2 tw-pl-11" style="display:' . $displayStyle . '">
             <div class="tw-absolute tw-inset-y-0 tw-w-px tw-h-full tw-bg-gray-100 tw-left-5"></div>
-            <div class="tw-space-y-1">';
+            <div class="tw-space-y-0.5">';
 
             foreach ($item->getChilds() as $child) {
 
                 $isActive = $child->isActive() ? 'theme-sidebar-child-active' : '';
 
-                $children .= '<a href="' . $child->getUrl() . '" title="" class="tw-flex tw-text-sm tw-font-normal tw-text-gray-600 tw-truncate tw-transition-all tw-duration-200 tw-py-1 theme-sidebar-child-hover tw-whitespace-nowrap ' . $isActive . '" ' . $child->getAttributes() . '>' .
-                '<span>' . $child->title . '</span>' .
+                $children .= '<a href="' . $child->getUrl() . '" title="" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-font-normal tw-text-gray-600 tw-truncate tw-transition-all tw-duration-150 tw-py-1.5 tw-px-2 tw-rounded-md tw-relative theme-sidebar-child-hover tw-whitespace-nowrap ' . $isActive . '" ' . $child->getAttributes() . '>' .
+                $this->formatChildIcon($child->icon) .
+                '<span class="tw-truncate">' . $child->title . '</span>' .
                     '</a>' . PHP_EOL;
             }
 
@@ -159,6 +160,22 @@ class AdminlteCustomPresenter extends Presenter
             // Assume it's a FontAwesome icon and return it wrapped in an <i> tag
             return '<i class="' . $icon . ' tw-size-5 tw-shrink-0"></i>';
         }
+    }
+
+    protected function formatChildIcon($icon)
+    {
+        if (empty($icon)) {
+            return '<span class="tw-w-4 tw-flex tw-items-center tw-justify-center tw-shrink-0">
+                <svg class="tw-size-2.5 tw-text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M9 6l6 6l-6 6"/>
+                </svg>
+            </span>';
+        }
+        if (strpos($icon, '<svg') !== false) {
+            return '<span class="tw-w-4 tw-flex tw-items-center tw-justify-center tw-shrink-0">' . $icon . '</span>';
+        }
+        return '<i class="' . $icon . ' tw-w-4 tw-shrink-0 tw-text-center"></i>';
     }
 
     public function getArray($item)
