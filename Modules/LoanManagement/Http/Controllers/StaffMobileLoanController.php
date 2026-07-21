@@ -166,7 +166,10 @@ class StaffMobileLoanController extends Controller
             return $this->fail('Loan not found', 404, (object) []);
         }
 
-        $html = app(LoanInstallmentListController::class)->print($loanId)->render();
+        // Clone the original web loan print output, then let wkhtmltopdf render
+        // that same HTML for the mobile/API print preview.
+        $webPrintView = app(LoanInstallmentListController::class)->print($loanId);
+        $html = $webPrintView->render();
         $outputPath = storage_path('app/temp/loan-print-'.$loanId.'-'.uniqid('', true).'.pdf');
 
         $pdfService->saveHtmlToPdf($html, $outputPath, [

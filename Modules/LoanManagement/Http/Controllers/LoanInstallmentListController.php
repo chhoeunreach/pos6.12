@@ -67,57 +67,6 @@ class LoanInstallmentListController extends Controller
         return $loanRow;
     }
 
-    protected function cleanPrintAddress($address): string
-    {
-        $address = Str::of((string) ($address ?? ''))->replace(["\r\n", "\r"], "\n")->squish()->value();
-        if ($address === '' || $address === '-') {
-            return '-';
-        }
-
-        $normalized = preg_replace('/\s+/u', ' ', $address);
-        $length = mb_strlen($normalized, 'UTF-8');
-        if ($length > 0 && $length % 2 === 0) {
-            $half = (int) ($length / 2);
-            $left = mb_substr($normalized, 0, $half, 'UTF-8');
-            $right = mb_substr($normalized, $half, null, 'UTF-8');
-            if ($left === $right) {
-                $normalized = $left;
-            }
-        }
-
-        $tokens = preg_split('/\s+/u', trim($normalized)) ?: [];
-        if (count($tokens) > 1 && count($tokens) % 2 === 0) {
-            $half = (int) (count($tokens) / 2);
-            $left = array_slice($tokens, 0, $half);
-            $right = array_slice($tokens, $half);
-            if ($left === $right) {
-                $normalized = implode(' ', $left);
-            }
-        }
-
-        $parts = preg_split('/\s*[,،;|\/\\\\]+|\s{2,}/u', $normalized) ?: [];
-        if (count($parts) <= 1) {
-            return trim($normalized) !== '' ? trim($normalized) : '-';
-        }
-
-        $seen = [];
-        $clean = [];
-        foreach ($parts as $part) {
-            $part = trim($part);
-            if ($part === '') {
-                continue;
-            }
-            $key = mb_strtolower(preg_replace('/\s+/u', ' ', $part), 'UTF-8');
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-            $clean[] = $part;
-        }
-
-        return ! empty($clean) ? implode(', ', $clean) : '-';
-    }
-
     protected function buildLoanPaymentCopyInfo(int $loan, object $loanRow): array
     {
         $customerRow = null;
@@ -1164,8 +1113,8 @@ class LoanInstallmentListController extends Controller
                         ?? ($customerRow->name ?? ($customerRow->customer_name ?? ($contact->name ?? '-'))))),
             'mobile' => $loanRow->customer_phone_snapshot
                 ?? ($customerRow->phone ?? ($customerRow->mobile ?? ($customerRow->login_phone ?? ($contact->mobile ?? '-')))),
-            'address_line_1' => $this->cleanPrintAddress($loanRow->customer_address_snapshot
-                ?? ($customerRow->address ?? ($contact->address_line_1 ?? '-'))),
+            'address_line_1' => $loanRow->customer_address_snapshot
+                ?? ($customerRow->address ?? ($contact->address_line_1 ?? '-')),
             'custom_field1' => $customerRow->id_card_number ?? ($contact->custom_field1 ?? '-'),
             'co_borrower' => $customerRow->spouse_name ?? ($customerRow->family_contact_name ?? '-'),
             'co_borrower_phone' => $customerRow->spouse_phone ?? ($customerRow->family_contact_phone ?? '-'),
@@ -4390,8 +4339,6 @@ class LoanInstallmentListController extends Controller
             }
         }
 
-        $customerAddressDisplay = $this->cleanPrintAddress($customerAddressDisplay);
-
         $createdByName = $loanRow->created_by_name_snapshot ?? null;
         $collectorDisplayName = $loanRow->collector_name_snapshot ?? null;
         $collectorUserId = $loanRow->collector_id ?? ($loanRow->assigned_to ?? null);
@@ -4763,7 +4710,7 @@ class LoanInstallmentListController extends Controller
 
         $customerName = $customerName !== '' ? $customerName : '-';
         $customerPhone = $customerPhone !== '' ? $customerPhone : '-';
-        $customerAddress = $this->cleanPrintAddress($customerAddress);
+        $customerAddress = $customerAddress !== '' ? $customerAddress : '-';
         $locationName = $locationName !== '' ? $locationName : '-';
         $locationAddress = $locationAddress !== '' ? $locationAddress : '-';
 
