@@ -39,6 +39,44 @@
             ],
         ];
     })->values();
+    $adminMonthlyRows = collect($payload['adminMonthlyRows'] ?? [])->map(function ($row) {
+        return [
+            'id' => (string) ($row['id'] ?? sprintf('%04d-%02d', (int) $row['year'], (int) $row['month'])),
+            'year' => (int) $row['year'],
+            'month' => (int) $row['month'],
+            'registered' => [
+                'customers' => (int) ($row['registered']['customers'] ?? 0),
+                'loanAmount' => (float) ($row['registered']['loan_amount'] ?? 0),
+                'interest' => (float) ($row['registered']['interest'] ?? 0),
+                'totalInterest' => (float) ($row['registered']['total_interest'] ?? 0),
+            ],
+            'generalPaid' => [
+                'principalPaid' => (float) ($row['general_paid']['principal_paid'] ?? 0),
+                'interestPaid' => (float) ($row['general_paid']['interest_paid'] ?? 0),
+                'interestDeducted' => (float) ($row['general_paid']['interest_deducted'] ?? 0),
+                'penaltiesReceived' => (float) ($row['general_paid']['penalties_received'] ?? 0),
+            ],
+            'paidOff' => [
+                'settledCustomers' => (int) ($row['paid_off']['settled_customers'] ?? 0),
+                'settledPrincipal' => (float) ($row['paid_off']['settled_principal'] ?? 0),
+                'settledInterest' => (float) ($row['paid_off']['settled_interest'] ?? 0),
+                'settledPenalties' => (float) ($row['paid_off']['settled_penalties'] ?? 0),
+                'prepaymentDiscount' => (float) ($row['paid_off']['prepayment_discount'] ?? 0),
+            ],
+            'activeOngoing' => [
+                'activeCustomers' => (int) ($row['active']['active_customers'] ?? 0),
+                'activePrincipal' => (float) ($row['active']['active_principal'] ?? 0),
+                'activeMonthlyInterest' => (float) ($row['active']['active_monthly_interest'] ?? 0),
+                'activeTotalInterest' => (float) ($row['active']['active_total_interest'] ?? 0),
+            ],
+            'badDebt' => [
+                'badCustomers' => (int) ($row['bad_debt']['bad_customers'] ?? 0),
+                'badPrincipal' => (float) ($row['bad_debt']['bad_principal'] ?? 0),
+                'badInterest' => (float) ($row['bad_debt']['bad_interest'] ?? 0),
+                'badTotal' => (float) ($row['bad_debt']['bad_total'] ?? 0),
+            ],
+        ];
+    })->values();
     $adminLoanFilterPayload = [
         'start_year' => $filters['start_year'],
         'end_year' => $filters['end_year'],
@@ -579,8 +617,9 @@
     <script>
         (function () {
             var yearlyRecords = @json($adminRows);
+            var monthlyRecords = @json($adminMonthlyRows);
             localStorage.setItem('khnar_yeung_ledger', JSON.stringify(yearlyRecords));
-            localStorage.setItem('khnar_yeung_monthly_ledger', JSON.stringify([]));
+            localStorage.setItem('khnar_yeung_monthly_ledger', JSON.stringify(monthlyRecords));
         })();
     </script>
     <script type="module" src="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js') }}"></script>
@@ -683,17 +722,44 @@
                 return labels[group] || labels.all;
             }
 
-            function openAdminLoanDetailModal(year, group) {
+            function adminLoanMonthFromText(text) {
+                var normalized = (text || '').toLowerCase();
+                var monthNames = [
+                    ['january', 'មករា'],
+                    ['february', 'កុម្ភៈ'],
+                    ['march', 'មីនា'],
+                    ['april', 'មេសា'],
+                    ['may', 'ឧសភា'],
+                    ['june', 'មិថុនា'],
+                    ['july', 'កក្កដា'],
+                    ['august', 'សីហា'],
+                    ['september', 'កញ្ញា'],
+                    ['october', 'តុលា'],
+                    ['november', 'វិច្ឆិកា'],
+                    ['december', 'ធ្នូ']
+                ];
+                for (var i = 0; i < monthNames.length; i++) {
+                    if (normalized.indexOf(monthNames[i][0]) !== -1 || normalized.indexOf(monthNames[i][1]) !== -1) {
+                        return i + 1;
+                    }
+                }
+                return null;
+            }
+
+            function openAdminLoanDetailModal(year, group, month) {
                 var params = new URLSearchParams();
                 params.set('year', String(year));
                 params.set('group', group);
+                if (month) {
+                    params.set('month', String(month));
+                }
                 Object.keys(adminLoanFilters).forEach(function (key) {
                     if (adminLoanFilters[key] !== null && adminLoanFilters[key] !== undefined && String(adminLoanFilters[key]) !== '') {
                         params.set(key, adminLoanFilters[key]);
                     }
                 });
 
-                document.getElementById('adminLoanDetailTitle').textContent = adminLoanGroupLabel(group) + ' - ' + year;
+                document.getElementById('adminLoanDetailTitle').textContent = adminLoanGroupLabel(group) + ' - ' + year + (month ? '-' + String(month).padStart(2, '0') : '');
                 document.getElementById('adminLoanDetailFrame').setAttribute('src', adminLoanDetailsUrl + '?' + params.toString());
                 document.getElementById('adminLoanDetailModal').classList.add('is-open');
                 document.getElementById('adminLoanDetailModal').setAttribute('aria-hidden', 'false');
@@ -735,10 +801,11 @@
                 if (!year || Number.isNaN(year)) {
                     return;
                 }
+                var month = row.closest('#monthly-report-table-card') ? adminLoanMonthFromText(yearCell.textContent || '') : null;
 
                 event.preventDefault();
                 event.stopPropagation();
-                openAdminLoanDetailModal(year, adminLoanGroupForCellIndex(cell.cellIndex));
+                openAdminLoanDetailModal(year, adminLoanGroupForCellIndex(cell.cellIndex), month);
             }, true);
 
             document.getElementById('adminLoanDetailClose').addEventListener('click', closeAdminLoanDetailModal);

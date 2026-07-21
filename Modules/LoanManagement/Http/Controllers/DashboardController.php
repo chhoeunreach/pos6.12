@@ -72,6 +72,7 @@ class DashboardController extends Controller
         $filters = $this->yearlySummaryFilters($request);
         $payload = $this->buildYearlyLoanSummary($filters);
         $payload['adminRows'] = $this->adminLoanRows($payload['rows']);
+        $payload['adminMonthlyRows'] = $this->adminLoanMonthlyRows($filters);
         $payload['adminTotals'] = $this->adminLoanTotals($payload['adminRows']);
 
         return view('loanmanagement::admin_loan.index', [
@@ -106,6 +107,11 @@ class DashboardController extends Controller
         $filters = $this->yearlySummaryFilters($request);
         $filters['start_year'] = $year;
         $filters['end_year'] = $year;
+        $month = $request->filled('month') ? (int) $request->input('month') : null;
+        if ($month !== null && ($month < 1 || $month > 12)) {
+            $month = null;
+        }
+        $filters['month'] = $month;
         $group = (string) $request->input('group', 'all');
 
         return view('loanmanagement::admin_loan.details', [
@@ -546,6 +552,103 @@ class DashboardController extends Controller
             ->get();
     }
 
+    protected function monthlyLoanAggregates(array $filters)
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loans')) {
+            return collect();
+        }
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loans');
+        $dateColumn = $this->firstLoanReportColumn('loans', ['loan_date', 'created_at'], $columns);
+        if (! $dateColumn) {
+            return collect();
+        }
+
+        $principalExpr = $this->coalesceSql('loans', 'l', ['principal_amount', 'financed_amount']);
+        $interestExpr = $this->coalesceSql('loans', 'l', ['interest_amount']);
+        $loanTotalExpr = $this->coalesceSql('loans', 'l', ['total_amount', 'total_payable_amount']);
+        $paidExpr = $this->coalesceSql('loans', 'l', ['paid_amount']);
+        $balanceExpr = $this->coalesceSql('loans', 'l', ['balance_amount']);
+        $closedCondition = $this->closedLoanConditionSql('l');
+
+        $joinCustomers = Schema::connection('mysql_loan')->hasTable('loan_customers')
+            && in_array('customer_id', $columns, true)
+            && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id');
+        $customerBlacklist = $joinCustomers && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'blacklist_status');
+        $badCondition = $this->badLoanConditionSql('l', $columns, $customerBlacklist ? 'c' : null);
+
+        $query = DB::connection('mysql_loan')->table('loans as l');
+        if ($joinCustomers) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
+        }
+        $this->applyYearlyLoanFilters($query, $filters, 'l', $dateColumn);
+
+        return $query
+            ->selectRaw('YEAR(l.'.$dateColumn.') as report_year')
+            ->selectRaw('MONTH(l.'.$dateColumn.') as report_month')
+            ->selectRaw('COUNT(*) as loan_count')
+            ->selectRaw('COALESCE(SUM('.$principalExpr.'), 0) as principal_total')
+            ->selectRaw('COALESCE(SUM('.$interestExpr.'), 0) as interest_total')
+            ->selectRaw('COALESCE(SUM('.$loanTotalExpr.'), 0) as loan_total')
+            ->selectRaw('COALESCE(SUM('.$paidExpr.'), 0) as loan_paid_total')
+            ->selectRaw('COALESCE(SUM('.$balanceExpr.'), 0) as loan_balance_total')
+            ->selectRaw('SUM(CASE WHEN '.$paidExpr.' > 0 THEN 1 ELSE 0 END) as paid_customer_count')
+            ->selectRaw('SUM(CASE WHEN '.$closedCondition.' THEN 1 ELSE 0 END) as closed_count')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$closedCondition.' THEN '.$principalExpr.' ELSE 0 END), 0) as closed_principal_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$closedCondition.' THEN '.$interestExpr.' ELSE 0 END), 0) as closed_interest_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$closedCondition.' THEN '.$loanTotalExpr.' ELSE 0 END), 0) as closed_loan_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$closedCondition.' THEN '.$paidExpr.' ELSE 0 END), 0) as closed_paid_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$closedCondition.' THEN '.$balanceExpr.' ELSE 0 END), 0) as closed_balance_total')
+            ->selectRaw('SUM(CASE WHEN '.$badCondition.' THEN 1 ELSE 0 END) as bad_count')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$badCondition.' THEN '.$principalExpr.' ELSE 0 END), 0) as bad_principal_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$badCondition.' THEN '.$interestExpr.' ELSE 0 END), 0) as bad_interest_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$badCondition.' THEN '.$loanTotalExpr.' ELSE 0 END), 0) as bad_loan_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$badCondition.' THEN '.$paidExpr.' ELSE 0 END), 0) as bad_paid_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN '.$badCondition.' THEN '.$balanceExpr.' ELSE 0 END), 0) as bad_balance_total')
+            ->groupByRaw('YEAR(l.'.$dateColumn.'), MONTH(l.'.$dateColumn.')')
+            ->get();
+    }
+
+    protected function monthlyPaymentAggregates(array $filters)
+    {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')) {
+            return collect();
+        }
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loan_payments');
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at'], $columns);
+        if (! $dateColumn) {
+            return collect();
+        }
+
+        $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $typeExpr = in_array('payment_type', $columns, true) ? 'LOWER(COALESCE(p.payment_type, ""))' : '""';
+        $collectionCase = 'CASE WHEN '.$typeExpr.' = "monthly" OR ('.$typeExpr.' = "" AND '.(in_array('schedule_id', $columns, true) ? 'p.schedule_id IS NOT NULL' : '0').') THEN '.$amountExpr.' ELSE 0 END';
+        $depositCase = 'CASE WHEN '.$typeExpr.' IN ("loan", "initial", "down_payment", "downpayment", "deposit") OR ('.$typeExpr.' = "" AND '.(in_array('schedule_id', $columns, true) ? 'p.schedule_id IS NULL' : '0').') THEN '.$amountExpr.' ELSE 0 END';
+        $penaltyExpr = $this->coalesceSql('loan_payments', 'p', ['penalty_amount'], '0');
+        $discountExpr = $this->coalesceSql('loan_payments', 'p', ['discount_amount'], '0');
+
+        $query = DB::connection('mysql_loan')->table('loan_payments as p')
+            ->join('loans as l', 'l.id', '=', 'p.loan_id');
+        $this->applyYearlyLoanFilters($query, $filters, 'l', 'loan_date', 'p', $dateColumn);
+
+        if (in_array('status', $columns, true)) {
+            $query->whereRaw('LOWER(COALESCE(p.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")');
+        }
+
+        return $query
+            ->selectRaw('YEAR(p.'.$dateColumn.') as report_year')
+            ->selectRaw('MONTH(p.'.$dateColumn.') as report_month')
+            ->selectRaw('COUNT(*) as payment_count')
+            ->selectRaw('SUM('.$collectionCase.') as collection_payment_total')
+            ->selectRaw('SUM('.$depositCase.') as deposit_payment_total')
+            ->selectRaw('SUM('.$amountExpr.') as payment_total')
+            ->selectRaw('SUM('.$penaltyExpr.') as penalty_total')
+            ->selectRaw('SUM('.$discountExpr.') as discount_total')
+            ->groupByRaw('YEAR(p.'.$dateColumn.'), MONTH(p.'.$dateColumn.')')
+            ->get();
+    }
+
     protected function applyYearlyLoanFilters($query, array $filters, string $loanAlias, string $loanDateColumn, ?string $dataAlias = null, ?string $dataDateColumn = null): void
     {
         $dateAlias = $dataAlias ?: $loanAlias;
@@ -807,6 +910,80 @@ class DashboardController extends Controller
         }, $rows);
     }
 
+    protected function adminLoanMonthlyRows(array $filters): array
+    {
+        $rows = [];
+        for ($year = (int) $filters['start_year']; $year <= (int) $filters['end_year']; $year++) {
+            for ($month = 1; $month <= 12; $month++) {
+                $rows[$this->adminLoanMonthKey($year, $month)] = $this->emptyAdminLoanMonthlyRow($year, $month);
+            }
+        }
+
+        foreach ($this->monthlyLoanAggregates($filters) as $row) {
+            $year = (int) $row->report_year;
+            $month = (int) $row->report_month;
+            $key = $this->adminLoanMonthKey($year, $month);
+            if (! isset($rows[$key])) {
+                continue;
+            }
+
+            $activeCount = max(0, (int) ($row->loan_count ?? 0) - (int) ($row->closed_count ?? 0) - (int) ($row->bad_count ?? 0));
+            $rows[$key]['registered']['customers'] = (int) ($row->loan_count ?? 0);
+            $rows[$key]['registered']['loan_amount'] = (float) ($row->principal_total ?? 0);
+            $rows[$key]['registered']['interest'] = (float) ($row->interest_total ?? 0);
+            $rows[$key]['registered']['total_interest'] = (float) ($row->loan_total ?? 0);
+            $rows[$key]['paid_off']['settled_customers'] = (int) ($row->closed_count ?? 0);
+            $rows[$key]['paid_off']['settled_principal'] = (float) ($row->closed_principal_total ?? 0);
+            $rows[$key]['paid_off']['settled_interest'] = (float) ($row->closed_interest_total ?? 0);
+            $rows[$key]['paid_off']['prepayment_discount'] = max(0, (float) ($row->closed_balance_total ?? 0));
+            $rows[$key]['active']['active_customers'] = $activeCount;
+            $rows[$key]['active']['active_principal'] = max(0, (float) ($row->principal_total ?? 0) - (float) ($row->closed_principal_total ?? 0) - (float) ($row->bad_principal_total ?? 0));
+            $rows[$key]['active']['active_monthly_interest'] = max(0, (float) ($row->interest_total ?? 0) - (float) ($row->closed_interest_total ?? 0) - (float) ($row->bad_interest_total ?? 0));
+            $rows[$key]['active']['active_total_interest'] = max(0, (float) ($row->loan_balance_total ?? 0) - (float) ($row->bad_balance_total ?? 0));
+            $rows[$key]['bad_debt']['bad_customers'] = (int) ($row->bad_count ?? 0);
+            $rows[$key]['bad_debt']['bad_principal'] = (float) ($row->bad_principal_total ?? 0);
+            $rows[$key]['bad_debt']['bad_interest'] = (float) ($row->bad_interest_total ?? 0);
+            $rows[$key]['bad_debt']['bad_total'] = (float) ($row->bad_balance_total ?? 0);
+        }
+
+        foreach ($this->monthlyPaymentAggregates($filters) as $row) {
+            $key = $this->adminLoanMonthKey((int) $row->report_year, (int) $row->report_month);
+            if (! isset($rows[$key])) {
+                continue;
+            }
+
+            $collectionTotal = (float) ($row->collection_payment_total ?? 0);
+            $depositTotal = (float) ($row->deposit_payment_total ?? 0);
+            $paymentTotal = (float) ($row->payment_total ?? 0);
+            $rows[$key]['general_paid']['principal_paid'] = $collectionTotal;
+            $rows[$key]['general_paid']['interest_paid'] = $depositTotal;
+            $rows[$key]['general_paid']['interest_deducted'] = (float) ($row->discount_total ?? 0);
+            $rows[$key]['general_paid']['penalties_received'] = max(0, (float) ($row->penalty_total ?? 0) ?: $paymentTotal - $collectionTotal - $depositTotal);
+            $rows[$key]['paid_off']['settled_penalties'] = (float) ($row->penalty_total ?? 0);
+        }
+
+        return array_values($rows);
+    }
+
+    protected function emptyAdminLoanMonthlyRow(int $year, int $month): array
+    {
+        return [
+            'id' => $this->adminLoanMonthKey($year, $month),
+            'year' => $year,
+            'month' => $month,
+            'registered' => ['customers' => 0, 'loan_amount' => 0.0, 'interest' => 0.0, 'total_interest' => 0.0],
+            'general_paid' => ['principal_paid' => 0.0, 'interest_paid' => 0.0, 'interest_deducted' => 0.0, 'penalties_received' => 0.0],
+            'paid_off' => ['settled_customers' => 0, 'settled_principal' => 0.0, 'settled_interest' => 0.0, 'settled_penalties' => 0.0, 'prepayment_discount' => 0.0],
+            'active' => ['active_customers' => 0, 'active_principal' => 0.0, 'active_monthly_interest' => 0.0, 'active_total_interest' => 0.0],
+            'bad_debt' => ['bad_customers' => 0, 'bad_principal' => 0.0, 'bad_interest' => 0.0, 'bad_total' => 0.0],
+        ];
+    }
+
+    protected function adminLoanMonthKey(int $year, int $month): string
+    {
+        return sprintf('%04d-%02d', $year, $month);
+    }
+
     protected function adminLoanExportRows(array $rows): array
     {
         return array_map(function (array $row) {
@@ -895,6 +1072,9 @@ class DashboardController extends Controller
         }
 
         $this->applyYearlyLoanFilters($q, $filters, 'l', $dateColumn);
+        if (! empty($filters['month'])) {
+            $q->whereMonth('l.'.$dateColumn, (int) $filters['month']);
+        }
         $this->applyAdminLoanDetailGroupFilter($q, $group, $columns, $customerBlacklist ? 'c' : null);
 
         return $q->selectRaw(
