@@ -2,13 +2,11 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
-use App\Services\WkhtmltopdfPdfService;
 use App\Utils\TransactionUtil;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -1097,10 +1095,9 @@ class LoanInstallmentListController extends Controller
         $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
 
         $printUrl = route('loan-management.loans.print', $loan);
-        $pdfPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'pdf' => 1]);
         $autoPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1]);
 
-        return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'pdfPrintUrl', 'autoPrintUrl'));
+        return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'autoPrintUrl'));
     }
 
     public function convertToPos(int $loan, Request $request, LoanToPosPrefillService $prefillService)
@@ -1362,7 +1359,7 @@ class LoanInstallmentListController extends Controller
         $logo = $logo ?: $this->businessLogoAsset();
         $telegramNumber = $telegramNumber ?: '0717221349';
 
-        $viewData = compact(
+        return view('loanmanagement::loans.print.loan', compact(
             'loanRow',
             'sourceInvoiceDisplay',
             'customer',
@@ -1376,42 +1373,7 @@ class LoanInstallmentListController extends Controller
             'telegramQr',
             'telegramNumber',
             'createdByName'
-        );
-
-        if (request()->boolean('pdf')) {
-            $html = view('loanmanagement::loans.print.loan', $viewData)->render();
-            $outputPath = storage_path('app/temp/loan-print-'.$loan.'-'.uniqid('', true).'.pdf');
-
-            app(WkhtmltopdfPdfService::class)->saveHtmlToPdf($html, $outputPath, [
-                'encoding' => 'utf-8',
-                'page-size' => 'A4',
-                'orientation' => 'Portrait',
-                'margin-top' => '5mm',
-                'margin-right' => '5mm',
-                'margin-bottom' => '5mm',
-                'margin-left' => '5mm',
-                'enable-local-file-access' => true,
-                'print-media-type' => true,
-                'load-error-handling' => 'ignore',
-                'load-media-error-handling' => 'ignore',
-                'quiet' => true,
-            ]);
-
-            abort_if(! File::exists($outputPath) || File::size($outputPath) === 0, 500, 'Unable to generate loan print PDF');
-
-            $pdf = File::get($outputPath);
-            File::delete($outputPath);
-
-            $filename = str_replace(['"', "\r", "\n"], '', 'Loan '.($loanRow->loan_number ?: $loan).'.pdf');
-
-            return response($pdf, 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="'.$filename.'"',
-                'Content-Length' => strlen($pdf),
-            ]);
-        }
-
-        return view('loanmanagement::loans.print.loan', $viewData);
+        ));
     }
 
     public function createPayment(int $loan)
