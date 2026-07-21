@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\LoanManagement\Http\Controllers\AuthController;
 use Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController;
 use Modules\LoanManagement\Http\Controllers\LoanFileUploadController;
+use Modules\LoanManagement\Http\Controllers\LoanTelegramChatController;
 use Modules\LoanManagement\Http\Controllers\CustomerAppAuthController;
 use Modules\LoanManagement\Http\Controllers\CustomerAppDashboardController;
 use Modules\LoanManagement\Http\Controllers\CustomerAppLoanController;
@@ -52,6 +53,11 @@ Route::prefix('loan-management')->group(function () {
         Route::delete('/mobile/payments/{paymentId}', [StaffMobileActionController::class, 'deletePayment']);
         Route::post('/mobile/loans/{loanId}/telegram/connect-link', [StaffMobileActionController::class, 'telegramConnectLink']);
         Route::post('/mobile/loans/{loanId}/telegram/message', [StaffMobileActionController::class, 'sendTelegramMessage']);
+        Route::get('/telegram/chats', [LoanTelegramChatController::class, 'index']);
+        Route::post('/telegram/chats', [LoanTelegramChatController::class, 'store']);
+        Route::get('/telegram/chats/{thread}', [LoanTelegramChatController::class, 'show']);
+        Route::post('/telegram/chats/{thread}/messages', [LoanTelegramChatController::class, 'sendMessage']);
+        Route::post('/telegram/chats/{thread}/read', [LoanTelegramChatController::class, 'read']);
         Route::post('/mobile/staff-location', [StaffMobileActionController::class, 'staffLocation']);
         Route::post('/mobile/collection-visits', [StaffMobileActionController::class, 'collectionVisit']);
 
