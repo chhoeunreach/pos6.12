@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -403,6 +404,9 @@ class StaffMobileLoanController extends Controller
             'customer_id' => (int) ($loan->customer_id ?? 0),
             'customer_name' => (string) ($loan->customer_name_snapshot ?? ''),
             'customer_phone' => (string) ($loan->customer_phone_snapshot ?? ''),
+            'source_invoice_no' => (string) ($loan->source_invoice_no ?? $loan->loan_number ?? $loan->id),
+            'location_name' => (string) ($loan->location_name_snapshot ?? ''),
+            'created_by_name' => $this->createdByName($loan),
             'business_location_id' => (int) ($loan->business_location_id ?? 0),
             'assigned_collector_id' => (int) ($loan->collector_id ?? $loan->assigned_collector_id ?? 0),
             'principal_amount' => $this->money($loan->principal_amount ?? $summary['product_price'] ?? 0),
@@ -430,9 +434,139 @@ class StaffMobileLoanController extends Controller
             $payload['payments'] = $this->loanRows('loan_payments', $loan->id, 'id', true);
             $payload['customer'] = $this->customerPayload((int) ($loan->customer_id ?? 0));
             $payload['files'] = $this->customerFiles((int) ($loan->customer_id ?? 0));
+            $payload['print_assets'] = $this->printAssetsPayload($loan);
         }
 
         return $payload;
+    }
+
+    protected function printAssetsPayload(Loan $loan): array
+    {
+        $location = $this->loanLocationRow($loan);
+
+        return [
+            'business_name' => $this->printLocationName($loan, $location),
+            'telegram_number' => (string) ($location->telegram_number ?? '0717221349'),
+            'transfer_number' => (string) ($location->transfer_number ?? '070923681'),
+            'logo_data_uri' => $this->locationAssetDataUri($location->logo_path ?? null),
+            'payment_qr_data_uri' => $this->locationAssetDataUri($location->payment_qr_path ?? null),
+            'telegram_qr_data_uri' => $this->locationAssetDataUri($location->telegram_qr_path ?? null),
+        ];
+    }
+
+    protected function printLocationName(Loan $loan, ?object $location): string
+    {
+        $name = trim((string) ($location->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim((string) ($loan->location_name_snapshot ?? $loan->business_location_name_snapshot ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        return 'KNEAYERNG LOAN';
+    }
+
+    protected function createdByName(Loan $loan): string
+    {
+        $name = trim((string) ($loan->created_by_name_snapshot ?? ''));
+        if ($name !== '' && $name !== '-') {
+            return preg_replace('/\s+/', ' ', $name) ?: $name;
+        }
+
+        $userId = (int) ($loan->created_by ?? 0);
+        if ($userId <= 0 || ! Schema::hasTable('users')) {
+            return '-';
+        }
+
+        $columns = Schema::getColumnListing('users');
+        $select = array_values(array_intersect(['first_name', 'last_name', 'username', 'name'], $columns));
+        if (empty($select)) {
+            return '-';
+        }
+
+        $user = DB::table('users')->select($select)->where('id', $userId)->first();
+        if (! $user) {
+            return '-';
+        }
+
+        $full = trim((string) (($user->first_name ?? '').' '.($user->last_name ?? '')));
+
+        return $full !== '' ? $full : (string) ($user->username ?? $user->name ?? '-');
+    }
+
+    protected function loanLocationRow(Loan $loan): ?object
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_business_locations')) {
+            return null;
+        }
+
+        $query = DB::connection($this->conn)->table('loan_business_locations')
+            ->when(Schema::connection($this->conn)->hasColumn('loan_business_locations', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
+        $locationId = (int) ($loan->business_location_id ?? 0);
+        $mainLocationId = (int) ($loan->main_location_id ?? 0);
+        $locationName = trim((string) ($loan->location_name_snapshot ?? $loan->business_location_name_snapshot ?? ''));
+
+        if ($locationId > 0) {
+            $row = (clone $query)->where('id', $locationId)->first();
+            if ($row) {
+                return $row;
+            }
+
+            if (Schema::connection($this->conn)->hasColumn('loan_business_locations', 'main_location_id')) {
+                $row = (clone $query)->where('main_location_id', $locationId)->first();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        if ($mainLocationId > 0 && Schema::connection($this->conn)->hasColumn('loan_business_locations', 'main_location_id')) {
+            $row = (clone $query)->where('main_location_id', $mainLocationId)->first();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        if ($locationName !== '' && Schema::connection($this->conn)->hasColumn('loan_business_locations', 'name')) {
+            $row = (clone $query)->where('name', $locationName)->first();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    protected function locationAssetDataUri(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', ltrim($path, '/'));
+        $fullPath = null;
+
+        if (preg_match('#^(?:uploads/)?loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            $fullPath = base_path('Modules/LoanManagement/loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
+        } elseif (preg_match('#^loan-management/location-assets/(\d+)/([^/]+)$#', $path, $matches)) {
+            $fullPath = base_path('Modules/LoanManagement/loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
+        } elseif (File::isFile(public_path($path))) {
+            $fullPath = public_path($path);
+        } elseif (File::isFile(base_path('Modules/LoanManagement/'.$path))) {
+            $fullPath = base_path('Modules/LoanManagement/'.$path);
+        }
+
+        if (! $fullPath || ! File::isFile($fullPath)) {
+            return null;
+        }
+
+        $mime = File::mimeType($fullPath) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode((string) File::get($fullPath));
     }
 
     protected function updateLoanCustomer(int $customerId, array $data): void
