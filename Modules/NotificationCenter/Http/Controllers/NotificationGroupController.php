@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use App\BusinessLocation;
 use App\Exports\ArrayExport;
 use Modules\NotificationCenter\Entities\NotificationGroup;
 use Modules\NotificationCenter\Imports\NotificationGroupsImportPreview;
@@ -17,12 +18,24 @@ class NotificationGroupController extends Controller
 {
     public function index()
     {
-        $fromGroups = NotificationGroup::where('direction', 'from')
-            ->orWhereNull('direction')
+        $business_id = request()->session()->get('user.business_id');
+
+        $fromGroups = NotificationGroup::where(function ($query) use ($business_id) {
+                $query->where('business_id', $business_id)
+                    ->orWhereNull('business_id');
+            })
+            ->where(function ($query) {
+                $query->where('direction', 'from')
+                    ->orWhereNull('direction');
+            })
             ->latest()
             ->get();
 
-        $toGroups = NotificationGroup::where('direction', 'to')
+        $toGroups = NotificationGroup::where(function ($query) use ($business_id) {
+                $query->where('business_id', $business_id)
+                    ->orWhereNull('business_id');
+            })
+            ->where('direction', 'to')
             ->latest()
             ->get();
 
@@ -31,7 +44,10 @@ class NotificationGroupController extends Controller
 
     public function create()
     {
-        return view('notificationcenter::groups.create');
+        $business_id = request()->session()->get('user.business_id');
+        $business_locations = BusinessLocation::forDropdown($business_id, true);
+
+        return view('notificationcenter::groups.create', compact('business_locations'));
     }
 
     public function store(Request $request)
@@ -52,6 +68,7 @@ class NotificationGroupController extends Controller
         $data['send_text'] = $request->boolean('send_text', true);
         $data['send_pdf'] = $request->boolean('send_pdf', true);
         $data['active'] = $request->boolean('active', true);
+        $data['location_name'] = $this->locationNameFor($data['location_id'] ?? null, $data['business_id']);
 
         NotificationGroup::create($data);
 
@@ -62,13 +79,16 @@ class NotificationGroupController extends Controller
     public function edit($id)
     {
         $group = NotificationGroup::findOrFail($id);
+        $business_id = request()->session()->get('user.business_id');
+        $business_locations = BusinessLocation::forDropdown($business_id, true);
 
-        return view('notificationcenter::groups.edit', compact('group'));
+        return view('notificationcenter::groups.edit', compact('group', 'business_locations'));
     }
 
     public function update(Request $request, $id)
     {
         $group = NotificationGroup::findOrFail($id);
+        $business_id = $request->session()->get('user.business_id');
 
         $data = $request->validate([
             'name' => 'required|string|max:255',
@@ -84,6 +104,8 @@ class NotificationGroupController extends Controller
         $data['send_text'] = $request->boolean('send_text', true);
         $data['send_pdf'] = $request->boolean('send_pdf', true);
         $data['active'] = $request->boolean('active', true);
+        $data['business_id'] = $group->business_id ?: $business_id;
+        $data['location_name'] = $this->locationNameFor($data['location_id'] ?? null, $data['business_id']);
 
         $group->update($data);
 
@@ -438,6 +460,17 @@ class NotificationGroupController extends Controller
         }
         $v = strtolower(trim((string) $value));
         return in_array($v, ['1', 'yes', 'true', 'active']);
+    }
+
+    private function locationNameFor($locationId, $businessId): ?string
+    {
+        if (empty($locationId)) {
+            return null;
+        }
+
+        return BusinessLocation::where('business_id', $businessId)
+            ->where('id', $locationId)
+            ->value('name');
     }
 
     public function test($id, TelegramService $telegram)
