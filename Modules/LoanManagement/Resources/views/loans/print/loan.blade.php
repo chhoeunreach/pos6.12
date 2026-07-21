@@ -4,9 +4,8 @@
     <meta charset="utf-8">
     <title>Print Loan {{ $loanRow->loan_number ?? $loanRow->id }}</title>
     <style>
-        @font-face { font-family: 'Roboto'; src: url('{{ asset("fonts/english/Roboto-Regular.ttf") }}') format('truetype'); }
-        @font-face { font-family: 'RobotoBold'; src: url('{{ asset("fonts/english/Roboto-Bold.ttf") }}') format('truetype'); }
-        @font-face { font-family: 'Khmer OS Battambang'; src: url('{{ asset("fonts/khmer/Battambang-Regular.ttf") }}') format('truetype'); }
+        @font-face { font-family: 'Noto Sans Khmer'; src: url('fonts/NotoSansKhmer-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
+        @font-face { font-family: 'Khmer OS Battambang'; src: url('fonts/KhmerOSbattambang.ttf') format('truetype'); font-weight: 400; font-style: normal; }
 
         :root {
             --orange: #ff8a00;
@@ -23,7 +22,9 @@
             padding: 0;
             color: #000;
             background: #3f454b;
-            font-family: 'Roboto', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
             font-size: 11px;
             line-height: 1.25;
         }
@@ -53,14 +54,14 @@
             padding: 10mm 14mm 8mm;
             background: #fff;
         }
-        .kh-moul { font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif; font-weight: 400; }
-        .kh { font-family: 'Khmer OS Battambang', Arial, sans-serif; }
+        .kh-moul { font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif; font-weight: 400; }
+        .kh { font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif; }
         .text-center { text-align: center; }
         .text-left { text-align: left; }
         .text-right { text-align: right; }
-        .bold { font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif; font-weight: 700; }
+        .bold { font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif; font-weight: 700; }
         .orange { color: var(--orange); }
-        .blue-label { color: var(--light-blue); font-family: 'Khmer OS Battambang', Arial, sans-serif; font-size: 12px; font-weight: 700; }
+        .blue-label { color: var(--light-blue); font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif; font-size: 12px; font-weight: 700; }
         .red { color: red; }
         .muted { color: #666; }
 
@@ -91,7 +92,7 @@
         }
         .brand-title {
             color: var(--orange);
-            font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
             font-size: 22px;
             line-height: 1.1;
@@ -103,7 +104,7 @@
             margin-top: 2mm;
             padding-bottom: 0.7mm;
             border-bottom: 1.5px solid var(--orange);
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 9.6px;
             text-align: center;
         }
@@ -129,12 +130,12 @@
         .info-table .label {
             width: 42%;
             color: var(--light-blue);
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
             font-size: 11.5px;
         }
         .info-table .value {
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
         }
         .address-row {
@@ -158,7 +159,7 @@
         }
         .print-table th {
             background: var(--header-bg);
-            font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
         }
         .print-table .dotted td,
@@ -177,7 +178,7 @@
             display: grid;
             grid-template-columns: 1fr 45mm;
             align-items: center;
-            font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
             padding: 0;
         }
@@ -188,18 +189,18 @@
         .date-bar {
             border-left: 1px solid var(--line);
             padding: 1.15mm 2mm;
-            font-family: 'RobotoBold';
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             text-align: center;
         }
         .summary-row td {
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
         }
         .money-cell {
             text-align: right !important;
             white-space: nowrap;
         }
         .summary-label {
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             text-align: left !important;
         }
         .product-summary-cell {
@@ -231,7 +232,7 @@
         .print-table .summary-terms td {
             border: 0;
             padding: 0.38mm 0;
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             text-align: left;
             line-height: 1.2;
@@ -249,7 +250,7 @@
             border: 0;
             border-bottom: 1px solid var(--soft-line);
             padding: 1.15mm 1.5mm;
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             line-height: 1.15;
         }
@@ -263,7 +264,7 @@
             display: block;
             margin-top: 0.2mm;
             color: #333;
-            font-family: 'Roboto', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 8.8px;
             line-height: 1.15;
             word-break: break-word;
@@ -301,14 +302,14 @@
         }
         .schedule-table .payment-method-cell {
             color: #222;
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             line-height: 1.18;
         }
         .schedule-table .payment-date-cell {
             line-height: 1.18;
         }
         .schedule-table .amount-cell {
-            font-family: 'RobotoBold', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             white-space: nowrap;
         }
         .schedule-table .status-cell {
@@ -320,7 +321,7 @@
             padding: 0.15mm 0.7mm;
             border: 1px solid var(--soft-line);
             border-radius: 1.5mm;
-            font-family: 'RobotoBold', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 7.8px;
             line-height: 1.08;
             text-align: center;
@@ -341,13 +342,13 @@
         }
         .contact-line {
             color: blue;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
             font-size: 14px;
             text-align: right;
         }
         .warranty-line {
-            font-family: 'Khmer OS Muol Light', 'Khmer OS Moul Light', 'Moul', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 10px;
             line-height: 1.7;
         }
@@ -361,12 +362,12 @@
         }
         .signature-box {
             text-align: center;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
         }
         .signature-name {
             margin-top: 9mm;
-            font-family: 'RobotoBold', 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
         }
         .signature-line {
             width: 43mm;
@@ -378,7 +379,7 @@
             border-bottom: 1.5px solid var(--orange);
             padding: 5mm 4mm;
             text-align: center;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-size: 11px;
             line-height: 1.7;
             break-inside: avoid;
@@ -386,7 +387,7 @@
         }
         .notice .title {
             color: red;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
             font-size: 13px;
         }
@@ -405,7 +406,7 @@
         }
         .payment-card .caption {
             color: #1244d8;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
             font-size: 10px;
             margin-bottom: 2mm;
@@ -430,7 +431,7 @@
         .footer-bold {
             margin-top: 4mm;
             text-align: center;
-            font-family: 'Khmer OS Battambang', Arial, sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
             font-size: 10px;
         }
