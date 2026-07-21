@@ -483,7 +483,7 @@ class LoanImportExportService
             }
         }
 
-        $sheetName = substr((string) ($this->importTypes()[$type]['label'] ?? ucwords(str_replace('_', ' ', $type))), 0, 31);
+        $sheetName = $this->xlsxSheetName((string) ($this->importTypes()[$type]['label'] ?? ucwords(str_replace('_', ' ', $type))));
         if (class_exists(\PhpOffice\PhpSpreadsheet\Spreadsheet::class)) {
             return $this->xlsxTemplateContentWithPhpSpreadsheet($sheetName, $rows);
         }
@@ -594,6 +594,15 @@ class LoanImportExportService
         }
 
         return $content;
+    }
+
+    protected function xlsxSheetName(string $name): string
+    {
+        $name = preg_replace('/[\\\\\\/\\?\\*\\[\\]:]+/', ' ', $name) ?: 'Sheet1';
+        $name = trim(preg_replace('/\\s+/', ' ', $name) ?: 'Sheet1');
+        $name = trim($name, "'");
+
+        return mb_substr($name !== '' ? $name : 'Sheet1', 0, 31);
     }
 
     public function recentBatches(int $limit = 20, ?string $type = null)
