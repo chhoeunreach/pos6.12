@@ -1332,6 +1332,7 @@
     var wizCustomerCropTarget = null;
     var wizDocCounter = 0;
     var wizPhotoChoice = null;
+    var wizDepositPaymentsAmount = {{ json_encode((float) ($customerDepositPaymentsAmount ?? 0)) }};
 
     function wizFormatMoney(v) {
         var n = parseFloat(v || 0);
@@ -1341,6 +1342,39 @@
     function wizParseNum(v) {
         var n = parseFloat(String(v || '').replace(/,/g, ''));
         return Number.isFinite(n) ? n : 0;
+    }
+
+    function wizProductItemsTotal() {
+        var itemTotal = 0;
+        $('#wizItemsList .wiz-item-row').each(function () {
+            var qty = wizParseNum($(this).find('[name$="[qty]"], [name="qty"]').val()) || 0;
+            var price = wizParseNum($(this).find('[name$="[unit_price]"], [name="unit_price"]').val()) || 0;
+            var discount = wizParseNum($(this).find('[name$="[discount]"], [name="discount"]').val()) || 0;
+            itemTotal += Math.max(0, qty * price - discount);
+        });
+
+        return itemTotal;
+    }
+
+    function wizEffectiveDepositAmount() {
+        var enteredDownPayment = wizParseNum($('[name="down_payment"]').val());
+        return enteredDownPayment > 0 ? enteredDownPayment : wizDepositPaymentsAmount;
+    }
+
+    function wizAutoGeneratePrincipalAfterDeposit() {
+        var productTotal = wizProductItemsTotal();
+        if (productTotal <= 0) {
+            return;
+        }
+
+        var enteredDownPayment = wizParseNum($('[name="down_payment"]').val());
+        var effectiveDeposit = wizEffectiveDepositAmount();
+        if (enteredDownPayment <= 0 && effectiveDeposit > 0) {
+            $('[name="down_payment"]').val(wizFormatMoney(effectiveDeposit));
+        }
+
+        var principalAfterDeposit = Math.max(0, productTotal - effectiveDeposit);
+        $('[name="principal_amount"]').val(wizFormatMoney(principalAfterDeposit)).trigger('change');
     }
 
     function wizShowPhotoChoice(cameraSelector, uploadSelector) {
@@ -2621,8 +2655,13 @@
     });
 
     $('#wizBtnPreviewSchedule, #wizBtnRefreshSchedule').on('click', function () {
+        wizAutoGeneratePrincipalAfterDeposit();
         wizSyncDuration();
+        wizEditRecalcTotals();
         var $btn = $(this);
+        var defaultButtonHtml = $btn.attr('id') === 'wizBtnRefreshSchedule'
+            ? '<i class="fa fa-refresh"></i> Refresh Schedule'
+            : '<i class="fa fa-table"></i> Preview Schedule';
         var form = $('#wizEditForm');
         $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Loading...');
         $.post(wizUrls.previewSchedule, wizSerializeLoanForm(), function (res) {
@@ -2656,7 +2695,7 @@
             var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Failed to preview schedule';
             if (window.toastr) toastr.error(msg); else alert(msg);
         }).always(function () {
-            $btn.prop('disabled', false).html('<i class="fa fa-table"></i> Preview Schedule');
+            $btn.prop('disabled', false).html(defaultButtonHtml);
         });
     });
 
