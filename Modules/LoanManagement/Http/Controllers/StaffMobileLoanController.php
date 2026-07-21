@@ -331,6 +331,14 @@ class StaffMobileLoanController extends Controller
             'payment.currency' => ['nullable', Rule::in(['USD', 'KHR'])],
             'payment.exchange_rate' => ['nullable', 'numeric', 'min:0'],
             'payment.status' => ['nullable', Rule::in(['completed', 'pending', 'failed'])],
+            'payments' => ['nullable', 'array'],
+            'payments.*.amount' => ['nullable', 'numeric', 'min:0'],
+            'payments.*.paid_date' => ['nullable', 'date'],
+            'payments.*.method' => ['nullable', 'string', 'max:100'],
+            'payments.*.reference_number' => ['nullable', 'string', 'max:255'],
+            'payments.*.currency' => ['nullable', Rule::in(['USD', 'KHR'])],
+            'payments.*.exchange_rate' => ['nullable', 'numeric', 'min:0'],
+            'payments.*.status' => ['nullable', Rule::in(['completed', 'pending', 'failed'])],
             'customer_profile_image' => ['nullable', 'string'],
             'id_card_image' => ['nullable', 'string'],
             'id_card_ocr_raw_text' => ['nullable', 'string'],
@@ -365,6 +373,20 @@ class StaffMobileLoanController extends Controller
             $data['payment']['currency'] = $data['payment']['currency'] ?? $data['currency'];
             $data['payment']['exchange_rate'] = $data['payment']['exchange_rate'] ?? $data['exchange_rate'];
             $data['payment']['status'] = $data['payment']['status'] ?? 'completed';
+        }
+
+        if (! empty($data['payments']) && is_array($data['payments'])) {
+            $data['payments'] = collect($data['payments'])
+                ->filter(fn ($payment) => is_array($payment) && (float) ($payment['amount'] ?? 0) > 0)
+                ->map(function ($payment) use ($data) {
+                    $payment['paid_date'] = $payment['paid_date'] ?? $data['loan_date'];
+                    $payment['currency'] = $payment['currency'] ?? $data['currency'];
+                    $payment['exchange_rate'] = $payment['exchange_rate'] ?? $data['exchange_rate'];
+                    $payment['status'] = $payment['status'] ?? 'completed';
+                    return $payment;
+                })
+                ->values()
+                ->all();
         }
 
         return $data;

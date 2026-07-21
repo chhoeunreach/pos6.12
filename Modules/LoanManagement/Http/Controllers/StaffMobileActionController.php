@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Modules\LoanManagement\Entities\LoanTelegramChatThread;
+use Modules\LoanManagement\Services\TelegramChatService;
+use Modules\LoanManagement\Services\TelegramSettingsService;
 
 class StaffMobileActionController extends Controller
 {
@@ -345,6 +348,82 @@ class StaffMobileActionController extends Controller
         return $this->ok('Payment deleted', ['id' => $paymentId, 'loan_id' => (int) $payment->loan_id]);
     }
 
+    public function telegramConnectLink(Request $request, int $loanId)
+    {
+        $loan = $this->loanRow($loanId);
+        if (! $loan || empty($loan->customer_id)) {
+            return $this->fail('Loan customer is missing', 404, (object) []);
+        }
+
+        $customer = $this->customerRow((int) $loan->customer_id);
+        if (! $customer) {
+            return $this->fail('Customer not found', 404, (object) []);
+        }
+        if (! empty($customer->telegram_chat_id)) {
+            return $this->ok('Customer is already connected to Telegram', [
+                'connected' => true,
+                'telegram_chat_id' => (string) $customer->telegram_chat_id,
+                'telegram_username' => (string) ($customer->telegram_username ?? ''),
+            ]);
+        }
+
+        $botUsername = trim(TelegramSettingsService::botUsername());
+        if ($botUsername === '') {
+            return $this->fail('Telegram bot is not configured yet. Set it under System Settings > Telegram Bot.', 422, (object) []);
+        }
+
+        $token = Str::random(40);
+        $expiresAt = now()->addMinutes(TelegramSettingsService::linkTtlMinutes());
+
+        DB::connection($this->conn)->table('loan_customers')->where('id', (int) $customer->id)->update($this->safeColumns('loan_customers', [
+            'telegram_link_token' => $token,
+            'telegram_link_token_expires_at' => $expiresAt,
+            'updated_at' => now(),
+        ]));
+
+        return $this->ok('Telegram connect link created', [
+            'connected' => false,
+            'link' => 'https://t.me/'.$botUsername.'?start='.$token,
+            'expires_at' => $expiresAt->toIso8601String(),
+        ]);
+    }
+
+    public function sendTelegramMessage(Request $request, int $loanId, TelegramChatService $chatService)
+    {
+        $data = $request->validate([
+            'message' => 'required|string|max:5000',
+        ]);
+
+        $loan = $this->loanRow($loanId);
+        if (! $loan || empty($loan->customer_id)) {
+            return $this->fail('Loan customer is missing', 404, (object) []);
+        }
+
+        $customer = $this->customerRow((int) $loan->customer_id);
+        if (! $customer) {
+            return $this->fail('Customer not found', 404, (object) []);
+        }
+        if (empty($customer->telegram_chat_id)) {
+            return $this->fail('Customer is not connected to Telegram. Generate a connect link first.', 422, [
+                'connected' => false,
+            ]);
+        }
+
+        $thread = $chatService->findOrCreateThread((int) $customer->id);
+        $senderType = $this->isAdminUser() ? 'admin' : 'staff';
+        $message = $chatService->sendTextMessage(
+            $thread,
+            $senderType,
+            (int) auth()->id(),
+            trim((string) $data['message'])
+        );
+
+        return $this->ok('Telegram message sent', [
+            'thread' => $chatService->formatThread(LoanTelegramChatThread::query()->find($thread->id) ?: $thread),
+            'message' => $chatService->formatMessage($message),
+        ]);
+    }
+
     public function staffLocation(Request $request)
     {
         $data = $request->validate([
@@ -439,6 +518,37 @@ class StaffMobileActionController extends Controller
         }
 
         return DB::connection($this->conn)->table('loan_payments')->where('id', $paymentId)->first();
+    }
+
+    protected function loanRow(int $loanId)
+    {
+        if (! Schema::connection($this->conn)->hasTable('loans')) {
+            return null;
+        }
+
+        return DB::connection($this->conn)->table('loans')->where('id', $loanId)->first();
+    }
+
+    protected function customerRow(int $customerId)
+    {
+        if (! Schema::connection($this->conn)->hasTable('loan_customers')) {
+            return null;
+        }
+
+        return DB::connection($this->conn)->table('loan_customers')->where('id', $customerId)->first();
+    }
+
+    protected function isAdminUser(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return method_exists($user, 'can') && (
+            $user->can('loan_management.chat.admin')
+            || $user->can('superadmin')
+        );
     }
 
     protected function paymentPayload($payment): array

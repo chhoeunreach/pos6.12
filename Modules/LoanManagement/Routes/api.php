@@ -50,6 +50,8 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/mobile/loans/{loanId}/payments', [StaffMobileActionController::class, 'loanPayments']);
         Route::put('/mobile/payments/{paymentId}', [StaffMobileActionController::class, 'updatePayment']);
         Route::delete('/mobile/payments/{paymentId}', [StaffMobileActionController::class, 'deletePayment']);
+        Route::post('/mobile/loans/{loanId}/telegram/connect-link', [StaffMobileActionController::class, 'telegramConnectLink']);
+        Route::post('/mobile/loans/{loanId}/telegram/message', [StaffMobileActionController::class, 'sendTelegramMessage']);
         Route::post('/mobile/staff-location', [StaffMobileActionController::class, 'staffLocation']);
         Route::post('/mobile/collection-visits', [StaffMobileActionController::class, 'collectionVisit']);
 
