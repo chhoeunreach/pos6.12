@@ -3,6 +3,7 @@
 @php
     $typeLabel = $typeLabelOverride ?? data_get($importTypes, $type.'.label', ucfirst(str_replace('_', ' ', $type)));
     $exportType = $exportType ?? $type;
+    $exportFormat = $exportType === 'active_loans' ? 'xlsx' : 'csv';
 @endphp
 
 @section('title', $typeLabel.' Import Export')
@@ -143,7 +144,7 @@
                     <input type="hidden" name="type" value="{{ $exportType }}">
                     <div class="box-body">
                         <div class="alert alert-info">
-                            {{ data_get($exportTypes, $exportType.'.description', 'Export downloads CSV data for this page.') }}
+                            {{ data_get($exportTypes, $exportType.'.description', 'Export downloads data for this page.') }}
                         </div>
                         <div class="row">
                             <div class="col-sm-6">
@@ -166,7 +167,7 @@
                     </div>
                     <div class="box-footer">
                         <button type="submit" class="btn btn-success">
-                            <i class="fa fa-download"></i> Export CSV
+                            <i class="fa fa-download"></i> Export {{ strtoupper($exportFormat) }}
                         </button>
                     </div>
                 </form>

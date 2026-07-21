@@ -388,9 +388,10 @@ class LoanImportExportService
         $type = $this->normalizeType($type);
         $columns = $this->exportColumns($type);
         $rows = $this->exportRows($type, $filters);
+        $format = $type === 'active_loans' ? 'xlsx' : 'csv';
 
-        $logId = $this->createExportLog($type, $filters, $userId, $rows->count());
-        $filename = 'loan-management-'.$type.'-'.now()->format('Ymd-His').'.csv';
+        $logId = $this->createExportLog($type, $filters, $userId, $rows->count(), $format);
+        $filename = 'loan-management-'.$type.'-'.now()->format('Ymd-His').'.'.$format;
         $relativePath = 'Modules/LoanManagement/storage/exports/'.$filename;
         $absolutePath = $this->moduleStoragePath('exports', $filename);
 
@@ -398,12 +399,20 @@ class LoanImportExportService
             mkdir(dirname($absolutePath), 0775, true);
         }
 
-        $handle = fopen($absolutePath, 'w');
-        fputcsv($handle, $columns);
-        foreach ($rows as $row) {
-            fputcsv($handle, array_map(fn ($column) => $row->{$column} ?? '', $columns));
+        if ($format === 'xlsx') {
+            $data = [$columns];
+            foreach ($rows as $row) {
+                $data[] = array_map(fn ($column) => $row->{$column} ?? '', $columns);
+            }
+            file_put_contents($absolutePath, $this->xlsxContentFromRows($type, $data));
+        } else {
+            $handle = fopen($absolutePath, 'w');
+            fputcsv($handle, $columns);
+            foreach ($rows as $row) {
+                fputcsv($handle, array_map(fn ($column) => $row->{$column} ?? '', $columns));
+            }
+            fclose($handle);
         }
-        fclose($handle);
 
         if ($logId && Schema::connection($this->connection)->hasTable('loan_export_logs')) {
             DB::connection($this->connection)->table('loan_export_logs')->where('id', $logId)->update($this->safeColumns('loan_export_logs', [
@@ -419,6 +428,16 @@ class LoanImportExportService
             'filename' => $filename,
             'rows_count' => $rows->count(),
         ];
+    }
+
+    protected function xlsxContentFromRows(string $type, array $rows): string
+    {
+        $definition = [
+            'columns' => $rows[0] ?? [],
+            'example' => $rows[1] ?? [],
+        ];
+
+        return $this->xlsxTemplateContent($type, $definition + ['_export_rows' => $rows]);
     }
 
     public function template(string $type): array
@@ -442,22 +461,26 @@ class LoanImportExportService
 
     protected function xlsxTemplateContent(string $type, array $definition): string
     {
-        $columns = array_values($definition['columns'] ?? []);
-        $example = array_values($definition['example'] ?? []);
-        $required = implode(', ', array_values($definition['required'] ?? []));
-        $optional = implode(', ', array_values($definition['optional'] ?? []));
-        $notes = (string) ($definition['notes'] ?? '');
+        if (isset($definition['_export_rows']) && is_array($definition['_export_rows'])) {
+            $rows = $definition['_export_rows'];
+        } else {
+            $columns = array_values($definition['columns'] ?? []);
+            $example = array_values($definition['example'] ?? []);
+            $required = implode(', ', array_values($definition['required'] ?? []));
+            $optional = implode(', ', array_values($definition['optional'] ?? []));
+            $notes = (string) ($definition['notes'] ?? '');
 
-        $rows = [
-            $columns,
-            array_pad($example, count($columns), ''),
-        ];
+            $rows = [
+                $columns,
+                array_pad($example, count($columns), ''),
+            ];
 
-        if ($required !== '' || $optional !== '' || $notes !== '') {
-            $rows[] = [];
-            $rows[] = ['Required', $required];
-            $rows[] = ['Optional', $optional];
-            $rows[] = ['Notes', $notes];
+            if ($required !== '' || $optional !== '' || $notes !== '') {
+                $rows[] = [];
+                $rows[] = ['Required', $required];
+                $rows[] = ['Optional', $optional];
+                $rows[] = ['Notes', $notes];
+            }
         }
 
         $sheetName = substr((string) ($this->importTypes()[$type]['label'] ?? ucwords(str_replace('_', ' ', $type))), 0, 31);
@@ -3676,7 +3699,7 @@ class LoanImportExportService
         ]));
     }
 
-    protected function createExportLog(string $type, array $filters, ?int $userId, int $rowsCount): ?int
+    protected function createExportLog(string $type, array $filters, ?int $userId, int $rowsCount, string $format = 'csv'): ?int
     {
         if (! Schema::connection($this->connection)->hasTable('loan_export_logs')) {
             return null;
@@ -3684,7 +3707,7 @@ class LoanImportExportService
 
         return (int) DB::connection($this->connection)->table('loan_export_logs')->insertGetId($this->safeColumns('loan_export_logs', [
             'export_type' => $type,
-            'format' => 'csv',
+            'format' => $format,
             'status' => 'processing',
             'requested_by' => $userId,
             'requested_by_name_snapshot' => auth()->user()->username ?? auth()->user()->first_name ?? null,
