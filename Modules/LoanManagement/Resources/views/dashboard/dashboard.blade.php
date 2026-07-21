@@ -2532,6 +2532,37 @@
         border-color: #4ade80;
         box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
     }
+    .lm-dashboard-panel--quick-payment {
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 170px);
+    }
+    .lm-dashboard-panel--quick-payment .lm-dashboard-panel__body,
+    .lm-dashboard-panel--quick-payment .lm-quick-grid,
+    .lm-dashboard-panel--quick-payment .lm-quick-box--loan {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+    }
+    .lm-dashboard-panel--quick-payment .lm-quick-box--loan {
+        min-height: calc(100vh - 285px);
+    }
+    .lm-dashboard-panel--quick-payment .lm-table-wrap {
+        flex: 1;
+        min-height: 320px;
+    }
+    @media (max-width: 767px) {
+        .lm-dashboard-panel--quick-payment {
+            min-height: calc(100vh - 110px);
+        }
+        .lm-dashboard-panel--quick-payment .lm-quick-box--loan {
+            min-height: calc(100vh - 230px);
+        }
+        .lm-dashboard-panel--quick-payment .lm-table-wrap {
+            min-height: 360px;
+        }
+    }
     .lm-create-sell-fab {
         position: fixed;
         right: 96px;
@@ -2800,7 +2831,7 @@
     </section>
 
     <section class="lm-dashboard-grid">
-        <div class="lm-dashboard-panel lm-dashboard-panel--feature">
+        <div class="lm-dashboard-panel lm-dashboard-panel--feature lm-dashboard-panel--quick-payment">
             <div class="lm-dashboard-panel__header">
                 <div>
                     <h3 class="lm-dashboard-panel__title">Quick Actions</h3>
