@@ -39,6 +39,7 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/mobile/loans', [StaffMobileLoanController::class, 'index']);
         Route::post('/mobile/loans', [StaffMobileLoanController::class, 'store']);
         Route::post('/mobile/loans/preview-schedule', [StaffMobileLoanController::class, 'previewSchedule']);
+        Route::get('/mobile/loans/{loanId}/print', [StaffMobileLoanController::class, 'print']);
         Route::get('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'show']);
         Route::put('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'update']);
         Route::delete('/mobile/loans/{loanId}', [StaffMobileLoanController::class, 'destroy']);

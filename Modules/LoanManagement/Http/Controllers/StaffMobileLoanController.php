@@ -2,6 +2,7 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use App\Services\WkhtmltopdfPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
@@ -154,6 +155,49 @@ class StaffMobileLoanController extends Controller
         }
 
         return $this->ok('Loan loaded', $this->mobileLoanPayload($loan, true));
+    }
+
+    public function print(Request $request, int $loanId, WkhtmltopdfPdfService $pdfService)
+    {
+        $this->useApiGuard($request);
+
+        $loan = Loan::query()->where('id', $loanId)->first();
+        if (! $loan) {
+            return $this->fail('Loan not found', 404, (object) []);
+        }
+
+        $html = app(LoanInstallmentListController::class)->print($loanId)->render();
+        $outputPath = storage_path('app/temp/loan-print-'.$loanId.'-'.uniqid('', true).'.pdf');
+
+        $pdfService->saveHtmlToPdf($html, $outputPath, [
+            'encoding' => 'utf-8',
+            'page-size' => 'A4',
+            'orientation' => 'Portrait',
+            'margin-top' => '5mm',
+            'margin-right' => '5mm',
+            'margin-bottom' => '5mm',
+            'margin-left' => '5mm',
+            'enable-local-file-access' => true,
+            'print-media-type' => true,
+            'load-error-handling' => 'ignore',
+            'load-media-error-handling' => 'ignore',
+            'quiet' => true,
+        ]);
+
+        if (! File::exists($outputPath) || File::size($outputPath) === 0) {
+            return $this->fail('Unable to generate loan print PDF', 500, (object) []);
+        }
+
+        $pdf = File::get($outputPath);
+        File::delete($outputPath);
+
+        $filename = str_replace(['"', "\r", "\n"], '', 'Loan '.($loan->loan_number ?: $loanId).'.pdf');
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Length' => strlen($pdf),
+        ]);
     }
 
     public function destroy(Request $request, int $loanId)
