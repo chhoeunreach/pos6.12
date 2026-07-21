@@ -2848,6 +2848,7 @@ class LoanInstallmentListController extends Controller
             abort_if(! $loanRow, 404);
 
             $data = $this->scheduleRefreshDataFromLoan($loan, $loanRow);
+            $data = $this->recalculateEditScheduleAmounts($loan, $loanRow, $data);
 
             DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $data) {
                 $meta = ! empty($loanRow->meta_json) ? (json_decode((string) $loanRow->meta_json, true) ?: []) : [];
