@@ -325,6 +325,14 @@ GET /api/mobile/pos/receipt/{transaction_id}
 ```
 **Response:** Returns the full `TransactionResource`, a `receipt` object with formatted data, and `html_content` (rendered Blade receipt HTML for printing).
 
+#### 5.3.6 Loan Print PDF
+```
+GET /api/loan-management/mobile/loans/{loan_id}/print
+```
+**Response:** Returns inline PDF bytes generated on the server with `wkhtmltopdf`.
+
+Flutter should not rebuild this print layout from HTML. Open/download `print_pdf_url` from the loan payload, attach the bearer token, then print/share the returned PDF bytes with a PDF package such as `printing`.
+
 ### 5.4 Products
 
 | Method | Endpoint | Description |
@@ -1510,6 +1518,7 @@ Handle 422 validation errors by iterating `errors` map and displaying per-field 
 - **Permissions**: Check `PermissionData.allPermissions` to show/hide UI elements.
 - **Pagination**: Pagination metadata at root level of response JSON. Parse `current_page`, `last_page`, `per_page`, `total`.
 - **Receipt HTML**: `GET /pos/receipt/{id}` returns `html_content` — render with `flutter_widget_from_html` or `webview_flutter`.
+- **Loan print**: Use `Loan.print_pdf_url` or `GET /api/loan-management/mobile/loans/{loan_id}/print`. The backend generates the A4 PDF with `wkhtmltopdf`; Flutter should print/share the PDF bytes directly.
 - **Project structure**:
   ```
   lib/

@@ -8,13 +8,13 @@
         @font-face { font-family: 'Khmer OS Battambang'; src: url('fonts/KhmerOSbattambang.ttf') format('truetype'); font-weight: 400; font-style: normal; }
 
         :root {
-            --orange: #ff8a00;
-            --light-blue: #7f9bb1;
-            --line: #1f2933;
-            --grid-line: #9aa4ad;
-            --soft-line: #c7ced4;
-            --header-bg: #f4f6f8;
-            --row-alt: #fbfcfd;
+            --orange: #ff8500;
+            --light-blue: #8aa2b6;
+            --line: #24303a;
+            --grid-line: #98a4af;
+            --soft-line: #c5cdd4;
+            --header-bg: #f4f7fa;
+            --row-alt: #fbfdff;
         }
         * { box-sizing: border-box; }
         body {
@@ -25,8 +25,8 @@
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
-            font-size: 11px;
-            line-height: 1.25;
+            font-size: 10.8px;
+            line-height: 1.22;
         }
         .no-print {
             width: 210mm;
@@ -51,7 +51,7 @@
             width: 210mm;
             min-height: 297mm;
             margin: 0 auto 18px;
-            padding: 10mm 14mm 8mm;
+            padding: 8.5mm 11.5mm 6mm;
             background: #fff;
         }
         .kh-moul { font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif; font-weight: 400; }
@@ -67,15 +67,14 @@
 
         .header {
             position: relative;
-            min-height: 24mm;
-            padding-right: 6mm;
+            min-height: 23mm;
         }
         .brand-row {
             display: grid;
-            grid-template-columns: 32mm 1fr 32mm;
+            grid-template-columns: 30mm 1fr 30mm;
             position: relative;
             align-items: center;
-            min-height: 21mm;
+            min-height: 20mm;
         }
         .logo-wrap {
             width: 28mm;
@@ -86,35 +85,35 @@
             justify-content: center;
         }
         .logo {
-            max-width: 28mm;
-            max-height: 21mm;
+            max-width: 26mm;
+            max-height: 20mm;
             object-fit: contain;
         }
         .brand-title {
             color: var(--orange);
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
-            font-size: 22px;
+            font-size: 23px;
             line-height: 1.1;
             text-align: center;
             white-space: nowrap;
         }
-        .brand-spacer { width: 32mm; }
+        .brand-spacer { width: 30mm; }
         .tagline {
-            margin-top: 2mm;
-            padding-bottom: 0.7mm;
+            margin-top: 1.2mm;
+            padding-bottom: 0.6mm;
             border-bottom: 1.5px solid var(--orange);
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
-            font-size: 9.6px;
+            font-size: 9.8px;
             text-align: center;
         }
 
         .info-grid {
             display: grid;
             grid-template-columns: 1.08fr 1.25fr 1.08fr;
-            gap: 7mm;
-            margin-top: 1.8mm;
-            margin-bottom: 1.5mm;
+            gap: 6mm;
+            margin-top: 1.4mm;
+            margin-bottom: 1mm;
         }
         .info-table {
             width: 100%;
@@ -122,24 +121,24 @@
             table-layout: fixed;
         }
         .info-table td {
-            padding: 1.5mm 0;
+            padding: 1.05mm 0;
             vertical-align: middle;
             border: none;
-            font-size: 11px;
+            font-size: 10.5px;
         }
         .info-table .label {
             width: 42%;
             color: var(--light-blue);
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
-            font-size: 11.5px;
+            font-size: 10.7px;
         }
         .info-table .value {
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
         }
         .address-row {
-            padding: 1.5mm 0 2.5mm;
+            padding: 1.1mm 0 1.8mm;
             border-bottom: 1.5px solid var(--orange);
         }
 
@@ -151,11 +150,11 @@
         .print-table th,
         .print-table td {
             border: 1px solid var(--line);
-            padding: 0.85mm 1mm;
+            padding: 0.68mm 0.85mm;
             text-align: center;
             vertical-align: middle;
-            font-size: 9.4px;
-            line-height: 1.12;
+            font-size: 8.9px;
+            line-height: 1.1;
         }
         .print-table th {
             background: var(--header-bg);
@@ -173,24 +172,28 @@
         .product-title {
             border-left: 1px solid var(--line);
             border-right: 1px solid var(--line);
-            border-top: 1.6px solid var(--orange);
+            border-top: 1.7px solid var(--orange);
             background: #fff;
             display: grid;
-            grid-template-columns: 1fr 45mm;
+            grid-template-columns: 1fr 46mm;
             align-items: center;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 400;
             padding: 0;
         }
         .product-title-text {
-            padding: 1.15mm 1.8mm;
+            padding: 1.25mm 1.8mm;
             text-align: center;
+            font-size: 18px;
+            line-height: 1.18;
         }
         .date-bar {
             border-left: 1px solid var(--line);
-            padding: 1.15mm 2mm;
+            padding: 1.25mm 2mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             text-align: center;
+            font-size: 17px;
+            line-height: 1.18;
         }
         .summary-row td {
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
@@ -220,7 +223,7 @@
         .summary-terms-cell {
             width: 67%;
             border-right: 1px solid var(--soft-line) !important;
-            padding: 1.8mm 2.4mm !important;
+            padding: 1.65mm 2.2mm !important;
         }
         .summary-totals-cell {
             width: 33%;
@@ -233,7 +236,7 @@
             border: 0;
             padding: 0.38mm 0;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
-            font-size: 10px;
+            font-size: 9.6px;
             text-align: left;
             line-height: 1.2;
         }
@@ -249,9 +252,9 @@
         .print-table .summary-totals td {
             border: 0;
             border-bottom: 1px solid var(--soft-line);
-            padding: 1.15mm 1.5mm;
+            padding: 1mm 1.35mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
-            font-size: 10px;
+            font-size: 9.6px;
             line-height: 1.15;
         }
         .print-table .summary-totals tr:last-child td {
@@ -279,18 +282,18 @@
         }
         .schedule-table th,
         .schedule-table td {
-            padding: 0.85mm 1mm;
-            font-size: 9px;
+            padding: 0.62mm 0.75mm;
+            font-size: 8.45px;
             line-height: 1.16;
         }
         .schedule-table th {
             background: var(--header-bg);
-            font-size: 9.4px;
+            font-size: 8.8px;
             border-top: 1.5px solid var(--line);
             border-bottom: 1.2px solid var(--line);
         }
         .schedule-table tbody tr {
-            height: 6.3mm;
+            height: 5.75mm;
         }
         .schedule-table tbody tr:nth-child(even) td {
             background: var(--row-alt);
@@ -344,7 +347,7 @@
             color: blue;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 12px;
             text-align: right;
         }
         .warranty-line {
@@ -355,8 +358,8 @@
         .signature-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            margin-top: 4mm;
-            min-height: 23mm;
+            margin-top: 3.3mm;
+            min-height: 20mm;
             break-inside: avoid;
             page-break-inside: avoid;
         }
@@ -366,7 +369,7 @@
             font-weight: 700;
         }
         .signature-name {
-            margin-top: 9mm;
+            margin-top: 7.2mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
         }
         .signature-line {
@@ -377,11 +380,11 @@
         .notice {
             border-top: 1.5px solid var(--orange);
             border-bottom: 1.5px solid var(--orange);
-            padding: 5mm 4mm;
+            padding: 3.3mm 4mm;
             text-align: center;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
-            font-size: 11px;
-            line-height: 1.7;
+            font-size: 9.5px;
+            line-height: 1.5;
             break-inside: avoid;
             page-break-inside: avoid;
         }
@@ -389,39 +392,39 @@
             color: red;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
-            font-size: 13px;
+            font-size: 11.5px;
         }
         .payment-area {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12mm;
-            padding-top: 5mm;
+            gap: 10mm;
+            padding-top: 3mm;
             align-items: end;
             break-inside: avoid;
             page-break-inside: avoid;
         }
         .payment-card {
-            min-height: 41mm;
+            min-height: 37mm;
             text-align: center;
         }
         .payment-card .caption {
             color: #1244d8;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', Arial, sans-serif;
             font-weight: 700;
-            font-size: 10px;
-            margin-bottom: 2mm;
+            font-size: 9.4px;
+            margin-bottom: 1.2mm;
         }
-        .qr-large { max-width: 38mm; max-height: 38mm; }
-        .qr-small { max-width: 30mm; max-height: 30mm; }
+        .qr-large { max-width: 34mm; max-height: 34mm; }
+        .qr-small { max-width: 25mm; max-height: 25mm; }
         .transfer-number {
-            margin: 5mm 0 3mm;
-            font-size: 13px;
+            margin: 3mm 0 1.7mm;
+            font-size: 12px;
         }
         .telegram-qr-block {
-            margin-top: 5mm;
+            margin-top: 2.5mm;
         }
         .printed-date {
-            margin-top: 3mm;
+            margin-top: 2mm;
             color: #999;
             font-size: 9px;
             text-align: center;
@@ -437,10 +440,10 @@
         }
         .nowrap { white-space: nowrap; }
         .page.loan-print-compact {
-            padding: 7.5mm 11.5mm 5.5mm;
+            padding: 6.2mm 10.2mm 4.6mm;
         }
         .loan-print-compact .header {
-            min-height: 19mm;
+            min-height: 18.4mm;
         }
         .loan-print-compact .brand-row {
             min-height: 16mm;
@@ -454,59 +457,60 @@
             max-height: 16mm;
         }
         .loan-print-compact .brand-title {
-            font-size: 19px;
+            font-size: 21px;
         }
         .loan-print-compact .tagline {
             margin-top: 0.8mm;
             padding-bottom: 0.6mm;
-            font-size: 8.8px;
+            font-size: 9px;
         }
         .loan-print-compact .info-grid {
-            margin-top: 0.8mm;
-            margin-bottom: 0.6mm;
-            gap: 5.5mm;
+            margin-top: 0.7mm;
+            margin-bottom: 0.5mm;
+            gap: 5mm;
         }
         .loan-print-compact .info-table td {
-            padding: 0.6mm 0;
-            font-size: 9.5px;
+            padding: 0.52mm 0;
+            font-size: 9.25px;
         }
         .loan-print-compact .info-table .label {
-            font-size: 9.9px;
+            font-size: 9.45px;
         }
         .loan-print-compact .address-row {
-            padding: 0.6mm 0 1.2mm;
+            padding: 0.45mm 0 1mm;
         }
         .loan-print-compact .product-title-text,
         .loan-print-compact .date-bar {
-            padding-top: 1.3mm;
-            padding-bottom: 1.3mm;
+            padding-top: 1.05mm;
+            padding-bottom: 1.05mm;
+            font-size: 17px;
         }
         .loan-print-compact .summary-terms-cell {
-            padding: 2mm 2.6mm !important;
+            padding: 1.65mm 2.4mm !important;
         }
         .loan-print-compact .print-table .summary-terms td {
-            padding: 0.45mm 0;
+            padding: 0.36mm 0;
         }
         .loan-print-compact .print-table .summary-totals td {
-            padding: 1.25mm 1.5mm;
+            padding: 1mm 1.35mm;
         }
         .loan-print-compact .print-table th,
         .loan-print-compact .print-table td {
-            padding: 0.58mm 0.75mm;
-            font-size: 8.7px;
-            line-height: 1.12;
+            padding: 0.48mm 0.66mm;
+            font-size: 8.25px;
+            line-height: 1.08;
         }
         .loan-print-compact .schedule-table tbody tr {
-            height: 5.7mm;
+            height: 5.25mm;
         }
         .loan-print-compact .schedule-table th,
         .loan-print-compact .schedule-table td {
-            padding: 0.55mm 0.72mm;
-            font-size: 8.25px;
-            line-height: 1.1;
+            padding: 0.43mm 0.58mm;
+            font-size: 7.9px;
+            line-height: 1.07;
         }
         .loan-print-compact .schedule-table th {
-            font-size: 8.7px;
+            font-size: 8.25px;
         }
         .loan-print-compact .payment-method-cell,
         .loan-print-compact .payment-date-cell {
@@ -519,42 +523,42 @@
             border-radius: 1.25mm;
         }
         .loan-print-compact .signature-row {
-            margin-top: 1.8mm;
-            min-height: 14mm;
+            margin-top: 1.4mm;
+            min-height: 13mm;
         }
         .loan-print-compact .signature-name {
-            margin-top: 3.2mm;
+            margin-top: 2.7mm;
         }
         .loan-print-compact .notice {
-            padding: 2mm 3mm;
-            font-size: 8.8px;
-            line-height: 1.24;
+            padding: 1.55mm 3mm;
+            font-size: 8px;
+            line-height: 1.18;
         }
         .loan-print-compact .notice .title {
-            font-size: 10.5px;
+            font-size: 9.8px;
         }
         .loan-print-compact .warranty-line {
-            font-size: 8.3px;
-            line-height: 1.22;
+            font-size: 7.65px;
+            line-height: 1.15;
         }
         .loan-print-compact .payment-area {
-            padding-top: 1.2mm;
-            gap: 6mm;
+            padding-top: 0.8mm;
+            gap: 7mm;
         }
         .loan-print-compact .payment-card {
-            min-height: 32mm;
+            min-height: 30mm;
         }
         .loan-print-compact .payment-card .caption {
             font-size: 8.3px;
             margin-bottom: 0.6mm;
         }
         .loan-print-compact .qr-large {
-            max-width: 34mm;
-            max-height: 34mm;
+            max-width: 32mm;
+            max-height: 32mm;
         }
         .loan-print-compact .qr-small {
-            max-width: 22mm;
-            max-height: 22mm;
+            max-width: 24mm;
+            max-height: 24mm;
         }
         .loan-print-compact .transfer-number {
             margin: 1mm 0 0.8mm;
@@ -564,8 +568,8 @@
             margin-top: 2mm;
         }
         .loan-print-compact .printed-date {
-            margin-top: 1mm;
-            font-size: 7.8px;
+            margin-top: 0.75mm;
+            font-size: 7.4px;
         }
 
         @page { size: A4 portrait; margin: 5mm; }
@@ -576,10 +580,10 @@
                 width: auto;
                 min-height: auto;
                 margin: 0;
-                padding: 5mm 8mm 4mm;
+                padding: 4.5mm 7mm 3.5mm;
             }
             .page.loan-print-compact {
-                padding: 4mm 7mm 3mm;
+                padding: 3.5mm 6mm 2.8mm;
             }
             .print-table th,
             .print-table td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }

@@ -1,6 +1,6 @@
 @php
     $isAutostart = request()->boolean('autostart');
-    $frameSrc = request()->boolean('autostart') ? $autoPrintUrl : $printUrl;
+    $frameSrc = $isAutostart ? $autoPrintUrl : ($pdfPrintUrl ?? $printUrl);
 @endphp
 <div class="modal-dialog modal-xl loan-print-preview-modal{{ $isAutostart ? ' loan-print-preview-modal--autostart' : '' }}" role="document" style="width: {{ $isAutostart ? '98%' : '96%' }}; max-width: {{ $isAutostart ? '1280px' : '1180px' }};">
     <div class="modal-content{{ $isAutostart ? ' loan-print-preview-modal__content--autostart' : '' }}">
@@ -26,9 +26,9 @@
             <a href="{{ $printUrl }}" target="_blank" rel="noopener" class="btn btn-default">
                 <i class="fa fa-external-link"></i> Open Full Page
             </a>
-            <button type="button" class="btn btn-primary" id="loan_print_preview_button">
+            <a href="{{ $pdfPrintUrl ?? $printUrl }}" target="_blank" rel="noopener" class="btn btn-primary" id="loan_print_preview_button">
                 <i class="fa fa-print"></i> @lang('messages.print')
-            </button>
+            </a>
             <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
         </div>
         @endif
@@ -52,15 +52,3 @@
         background: #ffffff;
     }
 </style>
-
-<script>
-$(function () {
-    $('#loan_print_preview_button').off('click.loanPrintPreview').on('click.loanPrintPreview', function () {
-        var frame = document.getElementById('loan_print_preview_frame');
-        if (frame && frame.contentWindow) {
-            frame.contentWindow.focus();
-            frame.contentWindow.print();
-        }
-    });
-});
-</script>

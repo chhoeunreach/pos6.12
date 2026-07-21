@@ -449,6 +449,7 @@ class StaffMobileLoanController extends Controller
             'customer_name' => (string) ($loan->customer_name_snapshot ?? ''),
             'customer_phone' => (string) ($loan->customer_phone_snapshot ?? ''),
             'source_invoice_no' => (string) ($loan->source_invoice_no ?? $loan->loan_number ?? $loan->id),
+            'print_pdf_url' => route('loan-management.mobile.loans.print', ['loanId' => $loan->id]),
             'location_name' => (string) ($loan->location_name_snapshot ?? ''),
             'created_by_name' => $this->createdByName($loan),
             'business_location_id' => (int) ($loan->business_location_id ?? 0),

@@ -2,11 +2,13 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use App\Services\WkhtmltopdfPdfService;
 use App\Utils\TransactionUtil;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -65,6 +67,57 @@ class LoanInstallmentListController extends Controller
         }
 
         return $loanRow;
+    }
+
+    protected function cleanPrintAddress($address): string
+    {
+        $address = Str::of((string) ($address ?? ''))->replace(["\r\n", "\r"], "\n")->squish()->value();
+        if ($address === '' || $address === '-') {
+            return '-';
+        }
+
+        $normalized = preg_replace('/\s+/u', ' ', $address);
+        $length = mb_strlen($normalized, 'UTF-8');
+        if ($length > 0 && $length % 2 === 0) {
+            $half = (int) ($length / 2);
+            $left = mb_substr($normalized, 0, $half, 'UTF-8');
+            $right = mb_substr($normalized, $half, null, 'UTF-8');
+            if ($left === $right) {
+                $normalized = $left;
+            }
+        }
+
+        $tokens = preg_split('/\s+/u', trim($normalized)) ?: [];
+        if (count($tokens) > 1 && count($tokens) % 2 === 0) {
+            $half = (int) (count($tokens) / 2);
+            $left = array_slice($tokens, 0, $half);
+            $right = array_slice($tokens, $half);
+            if ($left === $right) {
+                $normalized = implode(' ', $left);
+            }
+        }
+
+        $parts = preg_split('/\s*[,،;|\/\\\\]+|\s{2,}/u', $normalized) ?: [];
+        if (count($parts) <= 1) {
+            return trim($normalized) !== '' ? trim($normalized) : '-';
+        }
+
+        $seen = [];
+        $clean = [];
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            $key = mb_strtolower(preg_replace('/\s+/u', ' ', $part), 'UTF-8');
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $clean[] = $part;
+        }
+
+        return ! empty($clean) ? implode(', ', $clean) : '-';
     }
 
     protected function buildLoanPaymentCopyInfo(int $loan, object $loanRow): array
@@ -1044,9 +1097,10 @@ class LoanInstallmentListController extends Controller
         $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
 
         $printUrl = route('loan-management.loans.print', $loan);
+        $pdfPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'pdf' => 1]);
         $autoPrintUrl = route('loan-management.loans.print', ['loan' => $loan, 'auto_print' => 1]);
 
-        return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'autoPrintUrl'));
+        return view('loanmanagement::loans.print.modal', compact('loanRow', 'printUrl', 'pdfPrintUrl', 'autoPrintUrl'));
     }
 
     public function convertToPos(int $loan, Request $request, LoanToPosPrefillService $prefillService)
@@ -1113,8 +1167,8 @@ class LoanInstallmentListController extends Controller
                         ?? ($customerRow->name ?? ($customerRow->customer_name ?? ($contact->name ?? '-'))))),
             'mobile' => $loanRow->customer_phone_snapshot
                 ?? ($customerRow->phone ?? ($customerRow->mobile ?? ($customerRow->login_phone ?? ($contact->mobile ?? '-')))),
-            'address_line_1' => $loanRow->customer_address_snapshot
-                ?? ($customerRow->address ?? ($contact->address_line_1 ?? '-')),
+            'address_line_1' => $this->cleanPrintAddress($loanRow->customer_address_snapshot
+                ?? ($customerRow->address ?? ($contact->address_line_1 ?? '-'))),
             'custom_field1' => $customerRow->id_card_number ?? ($contact->custom_field1 ?? '-'),
             'co_borrower' => $customerRow->spouse_name ?? ($customerRow->family_contact_name ?? '-'),
             'co_borrower_phone' => $customerRow->spouse_phone ?? ($customerRow->family_contact_phone ?? '-'),
@@ -1308,7 +1362,7 @@ class LoanInstallmentListController extends Controller
         $logo = $logo ?: $this->businessLogoAsset();
         $telegramNumber = $telegramNumber ?: '0717221349';
 
-        return view('loanmanagement::loans.print.loan', compact(
+        $viewData = compact(
             'loanRow',
             'sourceInvoiceDisplay',
             'customer',
@@ -1322,7 +1376,42 @@ class LoanInstallmentListController extends Controller
             'telegramQr',
             'telegramNumber',
             'createdByName'
-        ));
+        );
+
+        if (request()->boolean('pdf')) {
+            $html = view('loanmanagement::loans.print.loan', $viewData)->render();
+            $outputPath = storage_path('app/temp/loan-print-'.$loan.'-'.uniqid('', true).'.pdf');
+
+            app(WkhtmltopdfPdfService::class)->saveHtmlToPdf($html, $outputPath, [
+                'encoding' => 'utf-8',
+                'page-size' => 'A4',
+                'orientation' => 'Portrait',
+                'margin-top' => '5mm',
+                'margin-right' => '5mm',
+                'margin-bottom' => '5mm',
+                'margin-left' => '5mm',
+                'enable-local-file-access' => true,
+                'print-media-type' => true,
+                'load-error-handling' => 'ignore',
+                'load-media-error-handling' => 'ignore',
+                'quiet' => true,
+            ]);
+
+            abort_if(! File::exists($outputPath) || File::size($outputPath) === 0, 500, 'Unable to generate loan print PDF');
+
+            $pdf = File::get($outputPath);
+            File::delete($outputPath);
+
+            $filename = str_replace(['"', "\r", "\n"], '', 'Loan '.($loanRow->loan_number ?: $loan).'.pdf');
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$filename.'"',
+                'Content-Length' => strlen($pdf),
+            ]);
+        }
+
+        return view('loanmanagement::loans.print.loan', $viewData);
     }
 
     public function createPayment(int $loan)
@@ -4339,6 +4428,8 @@ class LoanInstallmentListController extends Controller
             }
         }
 
+        $customerAddressDisplay = $this->cleanPrintAddress($customerAddressDisplay);
+
         $createdByName = $loanRow->created_by_name_snapshot ?? null;
         $collectorDisplayName = $loanRow->collector_name_snapshot ?? null;
         $collectorUserId = $loanRow->collector_id ?? ($loanRow->assigned_to ?? null);
@@ -4710,7 +4801,7 @@ class LoanInstallmentListController extends Controller
 
         $customerName = $customerName !== '' ? $customerName : '-';
         $customerPhone = $customerPhone !== '' ? $customerPhone : '-';
-        $customerAddress = $customerAddress !== '' ? $customerAddress : '-';
+        $customerAddress = $this->cleanPrintAddress($customerAddress);
         $locationName = $locationName !== '' ? $locationName : '-';
         $locationAddress = $locationAddress !== '' ? $locationAddress : '-';
 
