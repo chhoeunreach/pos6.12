@@ -32,6 +32,18 @@ class LoanTelegramChatController extends Controller
         return $u && $u->can('loan_management.chat.admin');
     }
 
+    protected function canUseTelegramChat(): bool
+    {
+        $user = auth()->user();
+
+        return $user && (
+            $user->can('loan_management.chat.view')
+            || $user->can('loan_management.chat.reply')
+            || $user->can('loan_management.chat.delete')
+            || $user->can('loan_management.chat.admin')
+        );
+    }
+
     /**
      * Loan-branch (business location) ids the current staff member is permitted to see Telegram
      * contacts for. Null means unrestricted. Mirrors the permitted_locations() +
@@ -223,7 +235,7 @@ class LoanTelegramChatController extends Controller
 
     public function updateMessage(Request $request, int $thread, int $message)
     {
-        abort_unless(auth()->user()->can('loan_management.chat.reply') || auth()->user()->can('loan_management.chat.admin'), 403);
+        abort_unless($this->canUseTelegramChat(), 403);
 
         $row = LoanTelegramChatThread::query()->find($thread);
         if (! $row || ! $this->canAccessThread($row)) {
@@ -255,7 +267,7 @@ class LoanTelegramChatController extends Controller
 
     public function destroyMessage(int $thread, int $message)
     {
-        abort_unless(auth()->user()->can('loan_management.chat.delete') || auth()->user()->can('loan_management.chat.admin'), 403);
+        abort_unless($this->canUseTelegramChat(), 403);
 
         $row = LoanTelegramChatThread::query()->find($thread);
         if (! $row || ! $this->canAccessThread($row)) {
@@ -295,11 +307,7 @@ class LoanTelegramChatController extends Controller
 
     protected function canUpdateMessage(LoanTelegramChatMessage $message): bool
     {
-        if ($this->isAdmin()) {
-            return in_array($message->sender_type, ['staff', 'admin'], true);
-        }
-
-        return in_array($message->sender_type, ['staff', 'admin'], true)
-            && (int) $message->sender_id === (int) auth()->id();
+        return $this->canUseTelegramChat()
+            && in_array($message->sender_type, ['staff', 'admin'], true);
     }
 }

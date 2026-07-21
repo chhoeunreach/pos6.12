@@ -248,8 +248,12 @@ class TelegramChatService
         }
         $user = auth()->user();
         $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
-        $isOwnOutbound = $isOutbound && $user && (int) $message->sender_id === (int) $user->id;
-        $canAdminChat = $user && $user->can('loan_management.chat.admin');
+        $canManageTelegramChat = $user && (
+            $user->can('loan_management.chat.view')
+            || $user->can('loan_management.chat.reply')
+            || $user->can('loan_management.chat.delete')
+            || $user->can('loan_management.chat.admin')
+        );
 
         return [
             'id' => (int) $message->id,
@@ -270,9 +274,8 @@ class TelegramChatService
             'edited' => $message->updated_at && $message->created_at && $message->updated_at->gt($message->created_at->copy()->addSeconds(2)),
             'can_update' => $message->message_type === 'text'
                 && $isOutbound
-                && $user
-                && (($user->can('loan_management.chat.reply') && $isOwnOutbound) || $canAdminChat),
-            'can_delete' => $isOutbound && $user && ($user->can('loan_management.chat.delete') || $canAdminChat),
+                && $canManageTelegramChat,
+            'can_delete' => $isOutbound && $canManageTelegramChat,
         ];
     }
 
