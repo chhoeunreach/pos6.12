@@ -7,6 +7,8 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Schema;
+use App\Exports\ArrayExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class DashboardController extends Controller
 {
@@ -78,6 +80,18 @@ class DashboardController extends Controller
             'locations' => $this->loanReportLocationOptions(),
             'isKhmer' => $this->loanReportIsKhmer(),
         ]);
+    }
+
+    public function adminLoanExport(Request $request)
+    {
+        $this->allow('loan_management.view');
+
+        $filters = $this->yearlySummaryFilters($request);
+        $payload = $this->buildYearlyLoanSummary($filters);
+        $rows = $this->adminLoanExportRows($this->adminLoanRows($payload['rows']));
+        $filename = 'khnar_yeung_installment_report_'.now()->format('Ymd_His').'.xlsx';
+
+        return Excel::download(new ArrayExport($rows), $filename);
     }
 
     public function adminLoanDetails(Request $request)
@@ -789,6 +803,36 @@ class DashboardController extends Controller
                     'bad_interest' => (float) $row['bad_interest_total'],
                     'bad_total' => (float) $row['bad_balance_total'],
                 ],
+            ];
+        }, $rows);
+    }
+
+    protected function adminLoanExportRows(array $rows): array
+    {
+        return array_map(function (array $row) {
+            return [
+                'Year' => $row['year'],
+                'Registered Customers' => $row['registered']['customers'] ?? 0,
+                'Registered Principal' => $row['registered']['loan_amount'] ?? 0,
+                'Registered Monthly Interest' => $row['registered']['interest'] ?? 0,
+                'Registered Total Interest' => $row['registered']['total_interest'] ?? 0,
+                'General Paid Principal' => $row['general_paid']['principal_paid'] ?? 0,
+                'General Paid Interest' => $row['general_paid']['interest_paid'] ?? 0,
+                'General Paid Interest Deducted' => $row['general_paid']['interest_deducted'] ?? 0,
+                'General Paid Penalty' => $row['general_paid']['penalties_received'] ?? 0,
+                'Paid Off Customers' => $row['paid_off']['settled_customers'] ?? 0,
+                'Paid Off Principal' => $row['paid_off']['settled_principal'] ?? 0,
+                'Paid Off Interest' => $row['paid_off']['settled_interest'] ?? 0,
+                'Paid Off Penalties' => $row['paid_off']['settled_penalties'] ?? 0,
+                'Prepayment Discount' => $row['paid_off']['prepayment_discount'] ?? 0,
+                'Active / Ongoing Customers' => $row['active']['active_customers'] ?? 0,
+                'Active / Ongoing Principal' => $row['active']['active_principal'] ?? 0,
+                'Active / Ongoing Monthly Interest' => $row['active']['active_monthly_interest'] ?? 0,
+                'Active / Ongoing Total Interest' => $row['active']['active_total_interest'] ?? 0,
+                'Bad Customers' => $row['bad_debt']['bad_customers'] ?? 0,
+                'Bad Principal' => $row['bad_debt']['bad_principal'] ?? 0,
+                'Bad Interest' => $row['bad_debt']['bad_interest'] ?? 0,
+                'Bad Total' => $row['bad_debt']['bad_total'] ?? 0,
             ];
         }, $rows);
     }

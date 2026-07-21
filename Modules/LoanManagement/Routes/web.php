@@ -43,6 +43,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/dashboard/data', [LoanDashboardController::class, 'data'])->name('loan-management.dashboard.data')->middleware('can:loan_management.view');
         Route::get('/dashboard/quick-search', [LoanDashboardController::class, 'quickSearch'])->name('loan-management.dashboard.quick-search')->middleware('can:loan_management.view');
         Route::get('/admin-loan', [DashboardController::class, 'adminLoan'])->name('loan-management.admin-loan')->middleware('can:loan_management.view');
+        Route::get('/admin-loan/export', [DashboardController::class, 'adminLoanExport'])->name('loan-management.admin-loan.export')->middleware('can:loan_management.view');
         Route::get('/admin-loan/details', [DashboardController::class, 'adminLoanDetails'])->name('loan-management.admin-loan.details')->middleware('can:loan_management.view');
         Route::post('/admin-loan/details/{loan}/update', [DashboardController::class, 'adminLoanInlineUpdate'])->name('loan-management.admin-loan.details.update')->middleware('can:loan_management.edit');
         Route::post('/language', [SettingsController::class, 'switchLanguage'])->name('loan-management.language.switch')->middleware('can:loan_management.view');

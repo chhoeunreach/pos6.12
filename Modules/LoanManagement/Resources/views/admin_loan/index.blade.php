@@ -597,6 +597,7 @@
 
             var targetLanguage = '{{ $isKhmer ? 'km' : 'en' }}';
             var adminLoanDetailsUrl = @json(route('loan-management.admin-loan.details'));
+            var adminLoanExportUrl = @json(route('loan-management.admin-loan.export', $adminLoanFilterPayload));
             var adminLoanFilters = @json($adminLoanFilterPayload);
             var languageForm = document.getElementById('adminLanguageForm');
             var languageInput = document.getElementById('adminLanguageInput');
@@ -628,6 +629,38 @@
                     clearInterval(syncReactLanguage);
                 }
             }, 150);
+
+            function syncExportButton() {
+                var exportButton = document.getElementById('export-csv-btn');
+                if (!exportButton) {
+                    return;
+                }
+                exportButton.id = 'export-xlsx-btn';
+                exportButton.setAttribute('data-export-xlsx-url', adminLoanExportUrl);
+                var label = exportButton.querySelector('span');
+                if (label) {
+                    label.textContent = 'Export XLSX';
+                }
+            }
+
+            var exportSyncAttempts = 0;
+            var exportButtonSync = setInterval(function () {
+                exportSyncAttempts += 1;
+                syncExportButton();
+                if (document.getElementById('export-xlsx-btn') || exportSyncAttempts > 30) {
+                    clearInterval(exportButtonSync);
+                }
+            }, 150);
+
+            document.addEventListener('click', function (event) {
+                var button = event.target && event.target.closest ? event.target.closest('#export-xlsx-btn, #export-csv-btn') : null;
+                if (!button) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                window.location.href = button.getAttribute('data-export-xlsx-url') || adminLoanExportUrl;
+            }, true);
 
             function adminLoanGroupForCellIndex(index) {
                 if (index >= 2 && index <= 5) return 'registered';
