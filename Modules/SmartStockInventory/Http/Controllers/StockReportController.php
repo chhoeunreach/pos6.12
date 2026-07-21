@@ -541,8 +541,35 @@ class StockReportController extends Controller
                     }
                     return e($row->key_staff_id);
                 })
+                ->filterColumn('transaction_date', function ($query, $keyword) {
+                    $query->whereRaw('DATE_FORMAT(transactions.transaction_date, "%Y-%m-%d") like ?', ["%{$keyword}%"]);
+                })
+                ->filterColumn('lot_number', function ($query, $keyword) {
+                    $query->where('purchase_lines.lot_number', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('sku', function ($query, $keyword) {
+                    $query->where('variations.sub_sku', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('product_name', function ($query, $keyword) {
+                    $query->whereRaw("IF(products.type='variable', CONCAT(products.name, ' - ', COALESCE(product_variations.name, ''), ' - ', variations.name), products.name) like ?", ["%{$keyword}%"]);
+                })
+                ->filterColumn('location_from', function ($query, $keyword) {
+                    $query->where('l1.name', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('location_to', function ($query, $keyword) {
+                    $query->where('l2.name', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('invoice', function ($query, $keyword) {
+                    $query->where('transactions.ref_no', 'like', "%{$keyword}%");
+                })
                 ->filterColumn('sender_by', function ($query, $keyword) {
                     $query->whereRaw("CONCAT(COALESCE(sender.surname, ''),' ',COALESCE(sender.first_name, ''),' ',COALESCE(sender.last_name,'')) like ?", ["%{$keyword}%"]);
+                })
+                ->filterColumn('note', function ($query, $keyword) {
+                    $query->where('transactions.additional_notes', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('key_invoice', function ($query, $keyword) {
+                    $query->where('transactions.transfer_custom_field_1', 'like', "%{$keyword}%");
                 })
                 ->filterColumn('key_staff_id', function ($query, $keyword) {
                     try {
