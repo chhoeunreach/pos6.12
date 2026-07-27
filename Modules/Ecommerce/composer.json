@@ -1,0 +1,17 @@
+{
+    "name": "upos/ecommerce",
+    "description": "Local ecommerce API connector for Ultimate POS",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Ecommerce\\Providers\\EcommerceServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Ecommerce\\": ""
+        }
+    }
+}

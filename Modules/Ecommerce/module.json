@@ -1,0 +1,14 @@
+{
+    "name": "Ecommerce",
+    "alias": "ecommerce",
+    "description": "Local ecommerce API connector for external shops",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\Ecommerce\\Providers\\EcommerceServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
