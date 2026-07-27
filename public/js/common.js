@@ -159,6 +159,32 @@ $(document).ready(function () {
         return str.trim();
     }
 
+    function __stock_report_copy_date() {
+        if (typeof moment !== 'undefined') {
+            return moment().format(typeof moment_date_format !== 'undefined' ? moment_date_format : 'YYYY-MM-DD');
+        }
+
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    function __prepend_stock_report_copy_date_column(output) {
+        var date = __stock_report_copy_date();
+        var header_added = false;
+
+        return output.split(/\r\n|\n|\r/).map(function(line) {
+            if (line.indexOf('\t') === -1) {
+                return line;
+            }
+
+            if (!header_added) {
+                header_added = true;
+                return 'Date\t' + line;
+            }
+
+            return date + '\t' + line;
+        }).join('\n');
+    }
+
     var buttons = [
         {
             extend: 'copy',
@@ -183,6 +209,22 @@ $(document).ready(function () {
                 }
             },
             footer: true,
+            action: function(e, dt, button, config) {
+                var original_customize = config.customize;
+
+                if ($(dt.table().node()).attr('id') === 'stock_report_table') {
+                    config.customize = function(output, copy_config) {
+                        if (typeof original_customize === 'function') {
+                            output = original_customize(output, copy_config);
+                        }
+
+                        return __prepend_stock_report_copy_date_column(output);
+                    };
+                }
+
+                $.fn.dataTable.ext.buttons.copyHtml5.action.call(this, e, dt, button, config);
+                config.customize = original_customize;
+            },
         },
         {
             extend: 'csv',
