@@ -135,6 +135,10 @@ $(document).ready(function() {
         scrollY: "75vh",
         scrollX:        true,
         scrollCollapse: true,
+        aLengthMenu: [
+            [25, 50, 100, 200, 500, 1000, 2000, -1],
+            [25, 50, 100, 200, 500, 1000, 2000, LANG.all],
+        ],
         ajax: {
             url: '/reports/stock-report',
             data: function(d) {
