@@ -1,3 +1,6 @@
+<link rel="icon" type="image/jpeg" href="{{ asset('img/browser-tab-icon.jpg?v='.$asset_v) }}">
+<link rel="shortcut icon" type="image/jpeg" href="{{ asset('img/browser-tab-icon.jpg?v='.$asset_v) }}">
+
 <link href="{{ asset('css/tailwind/app.css?v='.$asset_v) }}" rel="stylesheet">
 
 @php
@@ -162,4 +165,3 @@
 @if(!empty($__system_settings['additional_css']))
     {!! $__system_settings['additional_css'] !!}
 @endif
-

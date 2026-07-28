@@ -187,11 +187,6 @@
                                        class="lm-submenu-link {{ $childActive ? 'active' : '' }} {{ !empty($child['meta']) ? 'has-meta' : '' }}"
                                        title="{{ $child['label'] }}"
                                        @if(!empty($child['target'])) target="{{ $child['target'] }}" rel="noopener" @endif>
-                                        @if(!empty($child['icon']))
-                                            <i class="{{ $child['icon'] }} lm-submenu-icon"></i>
-                                        @else
-                                            <span class="lm-submenu-dot"></span>
-                                        @endif
                                         <span class="lm-menu-label">{{ $child['label'] }}</span>
                                         @if(!empty($child['badge']))
                                             <span class="lm-badge">{{ number_format((int) $child['badge']) }}</span>
