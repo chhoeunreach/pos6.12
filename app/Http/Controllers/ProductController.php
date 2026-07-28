@@ -70,8 +70,12 @@ class ProductController extends Controller
         $is_woocommerce = $this->moduleUtil->isModuleInstalled('Woocommerce');
 
         if (request()->ajax()) {
-            if ((int) request()->input('length') === -1) {
+            $is_fetching_all_rows = (int) request()->input('length') === -1;
+
+            if ($is_fetching_all_rows) {
                 @set_time_limit(0);
+                @ini_set('max_execution_time', 0);
+                @ini_set('memory_limit', '1024M');
             }
 
             //Filter by location
@@ -81,7 +85,13 @@ class ProductController extends Controller
             }
             $permitted_locations = auth()->user()->permitted_locations();
 
-            $query = Product::with(['media', 'product_locations'])
+            $with = ['product_locations'];
+
+            if (! $is_fetching_all_rows) {
+                $with[] = 'media';
+            }
+
+            $query = Product::with($with)
                 ->leftJoin('brands', 'products.brand_id', '=', 'brands.id')
                 ->join('units', 'products.unit_id', '=', 'units.id')
                 ->leftJoin('categories as c1', 'products.category_id', '=', 'c1.id')
@@ -218,7 +228,7 @@ class ProductController extends Controller
                 ->editColumn('category', '{{$category}} @if(!empty($sub_category))<br/> -- {{$sub_category}}@endif')
                 ->addColumn(
                     'action',
-                    function ($row) use ($selling_price_group_count) {
+                    function ($row) use ($selling_price_group_count, $is_fetching_all_rows) {
                         $html =
                         '<div class="btn-group"><button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max dropdown-toggle" data-toggle="dropdown" aria-expanded="false">'.__('messages.actions').'<span class="caret"></span><span class="sr-only">Toggle Dropdown</span></button><ul class="dropdown-menu dropdown-menu-left" role="menu"><li><a href="'.action([\App\Http\Controllers\LabelsController::class, 'show']).'?product_id='.$row->id.'" data-toggle="tooltip" title="'.__('lang_v1.label_help').'"><i class="fa fa-barcode"></i> '.__('barcode.labels').'</a></li>';
 
@@ -264,7 +274,7 @@ class ProductController extends Controller
                                 '<li><a href="'.action([\App\Http\Controllers\ProductController::class, 'create'], ['d' => $row->id]).'"><i class="fa fa-copy"></i> '.__('lang_v1.duplicate_product').'</a></li>';
                         }
 
-                        if (! empty($row->media->first())) {
+                        if (! $is_fetching_all_rows && ! empty($row->media->first())) {
                             $html .=
                                 '<li><a href="'.$row->media->first()->display_url.'" download="'.$row->media->first()->display_name.'"><i class="fas fa-download"></i> '.__('lang_v1.product_brochure').'</a></li>';
                         }
