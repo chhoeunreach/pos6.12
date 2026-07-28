@@ -134,7 +134,6 @@ class AdminlteCustomPresenter extends Presenter
                 $isActive = $child->isActive() ? 'theme-sidebar-child-active' : '';
 
                 $children .= '<a href="' . $child->getUrl() . '" title="" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-font-normal tw-text-gray-600 tw-truncate tw-transition-all tw-duration-150 tw-py-1.5 tw-px-2 tw-rounded-md tw-relative theme-sidebar-child-hover tw-whitespace-nowrap ' . $isActive . '" ' . $child->getAttributes() . '>' .
-                $this->formatChildIcon($child->icon) .
                 '<span class="tw-truncate">' . $child->title . '</span>' .
                     '</a>' . PHP_EOL;
             }
@@ -188,5 +187,4 @@ class AdminlteCustomPresenter extends Presenter
         }
     }
 }
-
 
