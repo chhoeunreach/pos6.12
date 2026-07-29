@@ -2,6 +2,7 @@
 
 namespace Modules\HrSellManagement\Http\Controllers;
 
+use App\BusinessLocation;
 use App\Transaction;
 use App\User;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class HrSellController extends Controller
     {
         abort_unless($this->canOpen(), 403);
         $businessId = (int) session('user.business_id');
-        $records = HrSellRecord::with(['transaction.contact', 'hrUser'])
+        $records = HrSellRecord::with(['transaction.contact', 'transaction.location', 'hrUser'])
             ->where('business_id', $businessId)
             ->when($request->filled('search'), function ($q) use ($request) {
                 $search = '%' . $request->input('search') . '%';
@@ -28,6 +29,13 @@ class HrSellController extends Controller
                     $query->where('internal_note', 'like', $search)
                         ->orWhereHas('transaction', fn ($transaction) => $transaction->where('invoice_no', 'like', $search))
                         ->orWhereHas('transaction.contact', fn ($contact) => $contact->where('name', 'like', $search));
+                });
+            })
+            ->when($request->filled('location_id'), function ($q) use ($request) {
+                $locationId = $request->input('location_id');
+                $q->where(function ($query) use ($locationId) {
+                    $query->where('location_id', $locationId)
+                        ->orWhereHas('transaction', fn ($transaction) => $transaction->where('location_id', $locationId));
                 });
             })
             ->when($request->filled('hr_user_id'), fn ($q) => $q->where('hr_user_id', $request->input('hr_user_id')))
@@ -41,12 +49,16 @@ class HrSellController extends Controller
             ->appends($request->query());
 
         $users = User::forDropdown($businessId, false, false, true);
+        $businessLocations = BusinessLocation::forDropdown($businessId, false);
         $statuses = ['draft', 'active', 'on_hold', 'completed', 'cancelled'];
         $approvalStatuses = ['pending', 'approved', 'rejected'];
         $followUpStatuses = ['none', 'scheduled', 'called', 'completed', 'missed'];
         $unlinkedSales = Transaction::where('business_id', $businessId)
             ->where('type', 'sell')
             ->where('status', 'final')
+            ->when($request->filled('location_id'), fn ($q) => $q->where('location_id', $request->input('location_id')))
+            ->when($request->filled('start_date'), fn ($q) => $q->whereDate('transaction_date', '>=', $request->input('start_date')))
+            ->when($request->filled('end_date'), fn ($q) => $q->whereDate('transaction_date', '<=', $request->input('end_date')))
             ->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))->from('hr_sell_records as h')->whereColumn('h.transaction_id', 'transactions.id')->whereNull('h.deleted_at');
             })
@@ -54,7 +66,7 @@ class HrSellController extends Controller
             ->limit(100)
             ->get(['id', 'invoice_no', 'transaction_date', 'final_total']);
 
-        return view('hrsellmanagement::sales.index', compact('records', 'users', 'unlinkedSales', 'statuses', 'approvalStatuses', 'followUpStatuses'));
+        return view('hrsellmanagement::sales.index', compact('records', 'users', 'businessLocations', 'unlinkedSales', 'statuses', 'approvalStatuses', 'followUpStatuses'));
     }
 
     public function link(Request $request)

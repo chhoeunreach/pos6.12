@@ -3,16 +3,17 @@
 @section('module_content')
 <div class="box box-primary"><div class="box-body">
 <form method="get" action="{{ route('hr-sell.reports.index') }}"><div class="row">
+<div class="col-md-2"><label>Location / Branch</label><select name="location_id" class="form-control select2"><option value="">All locations</option>@foreach($businessLocations as $id => $name)<option value="{{ $id }}" @selected((string) request('location_id') === (string) $id)>{{ $name }}</option>@endforeach</select></div>
 <div class="col-md-3"><label>Search</label><input name="search" class="form-control" value="{{ request('search') }}" placeholder="Invoice, customer, note"></div>
 <div class="col-md-2"><label>Start</label><input type="date" name="start_date" class="form-control" value="{{ request('start_date') }}"></div>
 <div class="col-md-2"><label>End</label><input type="date" name="end_date" class="form-control" value="{{ request('end_date') }}"></div>
 <div class="col-md-3"><label>HR Staff</label><select name="hr_user_id" class="form-control select2"><option value="">All</option>@foreach($users as $id => $name)<option value="{{ $id }}" @selected((string) request('hr_user_id') === (string) $id)>{{ $name }}</option>@endforeach</select></div>
-<div class="col-md-2"><label>Status</label><select name="status" class="form-control"><option value="">All</option>@foreach($statuses as $status)<option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>@endforeach</select></div>
 </div>
 <div class="row" style="margin-top:8px;">
+<div class="col-md-3"><label>Status</label><select name="status" class="form-control"><option value="">All</option>@foreach($statuses as $status)<option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>@endforeach</select></div>
 <div class="col-md-3"><label>Approval</label><select name="approval_status" class="form-control"><option value="">All</option>@foreach($approvalStatuses as $status)<option value="{{ $status }}" @selected(request('approval_status') === $status)>{{ ucfirst($status) }}</option>@endforeach</select></div>
 <div class="col-md-3"><label>Follow-up Status</label><select name="follow_up_status" class="form-control"><option value="">All</option>@foreach($followUpStatuses as $status)<option value="{{ $status }}" @selected(request('follow_up_status') === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>@endforeach</select></div>
-<div class="col-md-6" style="padding-top:24px;"><button class="btn btn-primary">Filter</button> <a class="btn btn-default" href="{{ route('hr-sell.reports.index') }}">Reset</a> <a class="btn btn-success" href="{{ route('hr-sell.reports.export', request()->all()) }}">Export All Filtered</a></div>
+<div class="col-md-3" style="padding-top:24px;"><button class="btn btn-primary">Filter</button> <a class="btn btn-default" href="{{ route('hr-sell.reports.index') }}">Reset</a> <a class="btn btn-success" href="{{ route('hr-sell.reports.export', request()->all()) }}">Export All Filtered</a></div>
 </div></form>
 </div></div>
 <div class="row">

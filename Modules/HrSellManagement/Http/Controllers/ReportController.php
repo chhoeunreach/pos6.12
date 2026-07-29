@@ -2,6 +2,7 @@
 
 namespace Modules\HrSellManagement\Http\Controllers;
 
+use App\BusinessLocation;
 use App\Exports\ArrayExport;
 use App\User;
 use Illuminate\Http\Request;
@@ -16,11 +17,12 @@ class ReportController extends Controller
         abort_unless($this->canReport(), 403);
         [$rows, $summary] = $this->reportData($request, true);
         $users = User::forDropdown((int) session('user.business_id'), false, false, true);
+        $businessLocations = BusinessLocation::forDropdown((int) session('user.business_id'), false);
         $statuses = ['draft', 'active', 'on_hold', 'completed', 'cancelled'];
         $approvalStatuses = ['pending', 'approved', 'rejected'];
         $followUpStatuses = ['none', 'scheduled', 'called', 'completed', 'missed'];
 
-        return view('hrsellmanagement::reports.index', compact('rows', 'summary', 'users', 'statuses', 'approvalStatuses', 'followUpStatuses'));
+        return view('hrsellmanagement::reports.index', compact('rows', 'summary', 'users', 'businessLocations', 'statuses', 'approvalStatuses', 'followUpStatuses'));
     }
 
     public function export(Request $request)
@@ -89,7 +91,7 @@ class ReportController extends Controller
         return DB::table('hr_sell_records as h')
             ->join('transactions as t', 'h.transaction_id', '=', 't.id')
             ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
-            ->leftJoin('business_locations as bl', 'h.location_id', '=', 'bl.id')
+            ->leftJoin('business_locations as bl', 'bl.id', '=', DB::raw('COALESCE(h.location_id, t.location_id)'))
             ->leftJoin('users as u', 'h.hr_user_id', '=', 'u.id')
             ->leftJoin('users as s', 'h.supervisor_id', '=', 's.id')
             ->leftJoin('users as cb', 'h.created_by', '=', 'cb.id')
@@ -105,6 +107,13 @@ class ReportController extends Controller
             })
             ->when($request->filled('start_date'), fn ($q) => $q->whereDate('t.transaction_date', '>=', $request->input('start_date')))
             ->when($request->filled('end_date'), fn ($q) => $q->whereDate('t.transaction_date', '<=', $request->input('end_date')))
+            ->when($request->filled('location_id'), function ($q) use ($request) {
+                $locationId = $request->input('location_id');
+                $q->where(function ($query) use ($locationId) {
+                    $query->where('h.location_id', $locationId)
+                        ->orWhere('t.location_id', $locationId);
+                });
+            })
             ->when($request->filled('hr_user_id'), fn ($q) => $q->where('h.hr_user_id', $request->input('hr_user_id')))
             ->when($request->filled('status'), fn ($q) => $q->where('h.status', $request->input('status')))
             ->when($request->filled('approval_status'), fn ($q) => $q->where('h.approval_status', $request->input('approval_status')))
