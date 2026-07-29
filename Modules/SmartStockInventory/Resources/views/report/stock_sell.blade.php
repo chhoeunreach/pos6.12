@@ -51,6 +51,30 @@
                         <th>User Name</th>
                     </tr>
                 </thead>
+                <tfoot>
+                    <tr class="bg-gray">
+                        <th colspan="8" class="text-right">Total</th>
+                        <th class="text-right"><span id="stock_sell_footer_quantity">0</span></th>
+                        <th></th>
+                        <th></th>
+                        <th class="text-right"><span id="stock_sell_footer_total">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_profit_loss">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_cash">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_wing">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_aba">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_acleda">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_true_money">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_card">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_other">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_voido">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_monthly">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_paid">0</span></th>
+                        <th class="text-right"><span id="stock_sell_footer_due">0</span></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     @endcomponent
@@ -79,6 +103,33 @@
         $('#sell_list_filter_date_range').on('cancel.daterangepicker', function() {
             $('#sell_list_filter_date_range').val('');
             stock_sell_report_table.ajax.reload();
+        });
+
+        function ssiFormatFooterMoney(value) {
+            return __currency_trans_from_en(parseFloat(value || 0), true);
+        }
+
+        function ssiFormatFooterQty(value) {
+            return __currency_trans_from_en(parseFloat(value || 0), false);
+        }
+
+        $('#stock_sell_report_table').on('xhr.dt', function(e, settings, json) {
+            var totals = json && json.footer_totals ? json.footer_totals : {};
+
+            $('#stock_sell_footer_quantity').html(ssiFormatFooterQty(totals.quantity));
+            $('#stock_sell_footer_total').html(ssiFormatFooterMoney(totals.total));
+            $('#stock_sell_footer_profit_loss').html(ssiFormatFooterMoney(totals.profit_loss));
+            $('#stock_sell_footer_cash').html(ssiFormatFooterMoney(totals.cash));
+            $('#stock_sell_footer_wing').html(ssiFormatFooterMoney(totals.wing));
+            $('#stock_sell_footer_aba').html(ssiFormatFooterMoney(totals.aba));
+            $('#stock_sell_footer_acleda').html(ssiFormatFooterMoney(totals.acleda));
+            $('#stock_sell_footer_true_money').html(ssiFormatFooterMoney(totals.true_money));
+            $('#stock_sell_footer_card').html(ssiFormatFooterMoney(totals.card));
+            $('#stock_sell_footer_other').html(ssiFormatFooterMoney(totals.other));
+            $('#stock_sell_footer_voido').html(ssiFormatFooterMoney(totals.voido));
+            $('#stock_sell_footer_monthly').html(ssiFormatFooterMoney(totals.monthly));
+            $('#stock_sell_footer_paid').html(ssiFormatFooterMoney(totals.paid));
+            $('#stock_sell_footer_due').html(ssiFormatFooterMoney(totals.due));
         });
 
         stock_sell_report_table = $('#stock_sell_report_table').DataTable({

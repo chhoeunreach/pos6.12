@@ -4069,6 +4069,26 @@ class ReportController extends Controller
                     ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
             }
 
+            $footer_totals = DB::query()
+                ->fromSub((clone $sells)->toBase(), 'stock_sell_report_totals')
+                ->selectRaw('
+                    COALESCE(SUM(quantity), 0) as quantity,
+                    COALESCE(SUM(total), 0) as total,
+                    COALESCE(SUM(profit_loss), 0) as profit_loss,
+                    COALESCE(SUM(cash), 0) as cash,
+                    COALESCE(SUM(wing), 0) as wing,
+                    COALESCE(SUM(aba), 0) as aba,
+                    COALESCE(SUM(acleda), 0) as acleda,
+                    COALESCE(SUM(true_money), 0) as true_money,
+                    COALESCE(SUM(card), 0) as card,
+                    COALESCE(SUM(other), 0) as other,
+                    COALESCE(SUM(voido), 0) as voido,
+                    COALESCE(SUM(monthly), 0) as monthly,
+                    COALESCE(SUM(paid), 0) as paid,
+                    COALESCE(SUM(due), 0) as due
+                ')
+                ->first();
+
             return Datatables::of($sells)
                 ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
                 ->addColumn('i_t', function ($row) {
@@ -4127,6 +4147,7 @@ class ReportController extends Controller
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
                 ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }
 

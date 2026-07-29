@@ -215,12 +215,12 @@ class ReportController extends Controller
     private function sellTypeMap(): array
     {
         return [
-            'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'លក់']],
-            'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'buy_in', 'buyin', 'ទិញចូល']],
-            'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'ជួសជុល']],
-            'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'materials', 'សម្ភារ']],
-            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'អ៊ុត']],
-            'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'icloud_cus', 'icloudcus']],
+            'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'Sell', 'លក់', 'Sell / លក់', 'Sell/លក់']],
+            'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'Buy In', 'buy_in', 'buyin', 'ទិញចូល', 'Buy In / ទិញចូល', 'Buy In/ទិញចូល', 'ទិញចូល / Buy In', 'ទិញចូល/Buy In']],
+            'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'Repair', 'ជួសជុល', 'Repair / ជួសជុល', 'Repair/ជួសជុល', 'ជួសជុល / Repair', 'ជួសជុល/Repair']],
+            'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'Material', 'materials', 'Materials', 'សម្ភារ', 'Material / សម្ភារ', 'Material/សម្ភារ', 'សម្ភារ / Material', 'សម្ភារ/Material']],
+            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'Iron', 'អ៊ុត', 'Iron / អ៊ុត', 'Iron/អ៊ុត', 'អ៊ុត / Iron', 'អ៊ុត/Iron']],
+            'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'iCloud Cus', 'icloud_cus', 'icloudcus']],
         ];
     }
 
