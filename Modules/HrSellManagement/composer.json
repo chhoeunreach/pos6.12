@@ -1,0 +1,10 @@
+{
+    "name": "modules/hrsellmanagement",
+    "description": "HR Sell Management module for UltimatePOS",
+    "type": "laravel-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\HrSellManagement\\": ""
+        }
+    }
+}

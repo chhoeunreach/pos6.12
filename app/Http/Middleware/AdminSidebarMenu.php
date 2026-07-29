@@ -918,9 +918,30 @@ class AdminSidebarMenu
         } else {
             $moduleUtil = new ModuleUtil;
             $moduleUtil->getModuleData('modifyAdminMenu');
+            $this->loadHrSellManagementMenuFallback();
         }
 
         return $next($request);
+    }
+
+    private function loadHrSellManagementMenuFallback(): void
+    {
+        if (! class_exists(\Modules\HrSellManagement\Http\Controllers\DataController::class)) {
+            return;
+        }
+
+        if (! empty(\App\System::getProperty('hrsellmanagement_version')) || ! empty(\App\System::getProperty('hr_sell_management_version'))) {
+            return;
+        }
+
+        $statusesPath = base_path('modules_statuses.json');
+        $statuses = file_exists($statusesPath) ? (json_decode(file_get_contents($statusesPath), true) ?: []) : [];
+
+        if (empty($statuses['HrSellManagement'])) {
+            return;
+        }
+
+        (new \Modules\HrSellManagement\Http\Controllers\DataController())->modifyAdminMenu();
     }
 
     private function loadServiceModuleMenus(string $functionName): void

@@ -33,6 +33,7 @@
     "MismatchFixer": true,
     "LoanManagement": true,
     "WarrantyCardPrint": true,
+    "HrSellManagement": true,
     "Loan": true,
     "Accessory": false,
     "Service": false,

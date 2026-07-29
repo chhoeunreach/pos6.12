@@ -1,0 +1,14 @@
+{
+    "name": "HrSellManagement",
+    "alias": "hrsellmanagement",
+    "description": "HR sales management, approval, commission, follow-up, and reports for UltimatePOS sales.",
+    "keywords": ["hr", "sell", "sales", "commission", "report"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\HrSellManagement\\Providers\\HrSellManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
