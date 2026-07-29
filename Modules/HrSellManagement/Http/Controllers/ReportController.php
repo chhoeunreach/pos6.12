@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
@@ -44,6 +45,93 @@ class ReportController extends Controller
         ])->all();
 
         return Excel::download(new ArrayExport($exportRows), 'hr_sell_report_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
+    public function edit($report_id)
+    {
+        abort_unless($this->canEditReport(), 403);
+
+        $report = $this->findReport($report_id);
+        [$hrBranches, $hrSellTypes] = $this->filterOptions();
+        $selectedSellType = $this->normalizeSellTypeKey($report->service_type);
+
+        if ($selectedSellType !== '' && ! $hrSellTypes->has($selectedSellType)) {
+            $hrSellTypes->put($selectedSellType, $this->sellTypeLabel($report->service_type));
+        }
+
+        return view('hrsellmanagement::reports.partials.edit_modal', compact('report', 'hrBranches', 'hrSellTypes', 'selectedSellType'));
+    }
+
+    public function update(Request $request, $report_id)
+    {
+        abort_unless($this->canEditReport(), 403);
+
+        $report = $this->findReport($report_id);
+        $data = $request->validate([
+            'invoice_no' => 'nullable|string|max:191',
+            'original_invoice_no' => 'nullable|string|max:191',
+            'created_at' => 'required|date',
+            'branch_name' => 'nullable|string|max:191',
+            'customer_name' => 'nullable|string|max:191',
+            'customer_phone' => 'nullable|string|max:50',
+            'seller_name' => 'nullable|string|max:191',
+            'service_type' => 'nullable|string|max:191',
+            'total_amount' => 'nullable|numeric|min:0',
+            'note' => 'nullable|string|max:3000',
+        ]);
+
+        $updates = [
+            'invoice_no' => $data['invoice_no'] ?? null,
+            'original_invoice_no' => $data['original_invoice_no'] ?? null,
+            'created_at' => date('Y-m-d H:i:s', strtotime($data['created_at'])),
+            'branch_name' => $data['branch_name'] ?? null,
+            'customer_name' => $data['customer_name'] ?? null,
+            'customer_phone' => $data['customer_phone'] ?? null,
+            'seller_name' => $data['seller_name'] ?? null,
+            'service_type' => $this->sellTypeLabel($data['service_type'] ?? $report->service_type),
+            'total_amount' => $data['total_amount'] ?? 0,
+            'note' => $data['note'] ?? null,
+        ];
+
+        if (Schema::connection('hr')->hasColumn('sell_out_reports', 'updated_at')) {
+            $updates['updated_at'] = now();
+        }
+
+        DB::connection('hr')->table('sell_out_reports')->where('id', $report->id)->update($updates);
+        $this->logReportAction('report_updated', $report->id, $report, $updates, $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => 1, 'msg' => 'HR sell report updated']);
+        }
+
+        return redirect()->route('hr-sell.reports.index', $request->query())->with('status', ['success' => 1, 'msg' => 'HR sell report updated']);
+    }
+
+    public function destroy(Request $request, $report_id)
+    {
+        abort_unless($this->canDeleteReport(), 403);
+
+        $report = $this->findReport($report_id);
+
+        DB::connection('hr')->transaction(function () use ($report) {
+            if (Schema::connection('hr')->hasTable('sell_out_report_photos')) {
+                DB::connection('hr')->table('sell_out_report_photos')->where('sell_out_report_id', $report->id)->delete();
+            }
+
+            if (Schema::connection('hr')->hasTable('sell_out_report_lines')) {
+                DB::connection('hr')->table('sell_out_report_lines')->where('sell_out_report_id', $report->id)->delete();
+            }
+
+            DB::connection('hr')->table('sell_out_reports')->where('id', $report->id)->delete();
+        });
+
+        $this->logReportAction('report_deleted', $report->id, $report, null, $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => 1, 'msg' => 'HR sell report deleted']);
+        }
+
+        return back()->with('status', ['success' => 1, 'msg' => 'HR sell report deleted']);
     }
 
     private function reportData(Request $request, bool $paginate): array
@@ -278,10 +366,57 @@ class ReportController extends Controller
         ];
     }
 
+    private function findReport($report_id)
+    {
+        $report = DB::connection('hr')
+            ->table('sell_out_reports')
+            ->where('id', $report_id)
+            ->first();
+
+        abort_if(empty($report), 404);
+
+        return $report;
+    }
+
+    private function logReportAction(string $action, int $reportId, $oldData = null, $newData = null, ?Request $request = null): void
+    {
+        try {
+            DB::table('hr_sell_logs')->insert([
+                'business_id' => (int) session('user.business_id'),
+                'hr_sell_record_id' => null,
+                'action' => $action,
+                'user_id' => auth()->id(),
+                'user_name' => optional(auth()->user())->username ?: optional(auth()->user())->name,
+                'old_data' => $oldData ? json_encode($oldData) : null,
+                'new_data' => $newData ? json_encode($newData) : null,
+                'ip_address' => $request?->ip(),
+                'note' => 'HR sell report ID: ' . $reportId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('Unable to write HR Sell report log: ' . $e->getMessage());
+        }
+    }
+
     private function canReport(): bool
     {
         $user = auth()->user();
 
-        return $user->can('hr_sell.report') || $user->can('hr_sell.view') || $user->can('superadmin') || $user->can('business_settings.access');
+        return $user->can('hr_sell.report') || $user->can('superadmin') || $user->can('business_settings.access');
+    }
+
+    private function canEditReport(): bool
+    {
+        $user = auth()->user();
+
+        return $user->can('hr_sell.report.edit') || $user->can('hr_sell.update') || $user->can('superadmin') || $user->can('business_settings.access');
+    }
+
+    private function canDeleteReport(): bool
+    {
+        $user = auth()->user();
+
+        return $user->can('hr_sell.report.delete') || $user->can('superadmin') || $user->can('business_settings.access');
     }
 }

@@ -100,6 +100,8 @@ return new class extends Migration {
             'hr_sell.update',
             'hr_sell.approve',
             'hr_sell.report',
+            'hr_sell.report.edit',
+            'hr_sell.report.delete',
             'hr_sell.settings',
         ] as $permission) {
             Permission::firstOrCreate(['name' => $permission], ['guard_name' => 'web']);

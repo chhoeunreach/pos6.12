@@ -14,7 +14,7 @@ class SettingsController extends Controller
 
     public function index()
     {
-        abort_unless(auth()->user()->can('hr_sell.settings'), 403);
+        abort_unless($this->canSettings(), 403);
         $setting = $this->service->setting((int) session('user.business_id'));
 
         return view('hrsellmanagement::settings.index', compact('setting'));
@@ -22,7 +22,7 @@ class SettingsController extends Controller
 
     public function update(Request $request)
     {
-        abort_unless(auth()->user()->can('hr_sell.settings'), 403);
+        abort_unless($this->canSettings(), 403);
         $data = $request->validate([
             'commission_type' => 'required|string|in:percent,fixed',
             'commission_value' => 'required|numeric|min:0',
@@ -38,5 +38,12 @@ class SettingsController extends Controller
         $setting->save();
 
         return back()->with('status', ['success' => 1, 'msg' => 'HR sell settings updated']);
+    }
+
+    private function canSettings(): bool
+    {
+        $user = auth()->user();
+
+        return $user->can('hr_sell.settings') || $user->can('superadmin') || $user->can('business_settings.access');
     }
 }

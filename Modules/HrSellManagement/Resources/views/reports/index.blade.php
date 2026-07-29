@@ -1,6 +1,11 @@
 @extends('hrsellmanagement::layouts.master')
 @section('page_title', 'HR Sell Reports')
 @section('module_content')
+@php
+    $currentUser = auth()->user();
+    $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
+    $canDeleteReport = $currentUser->can('hr_sell.report.delete') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
+@endphp
 <style>
     #hr_sell_report_filter_box {
         border: 1px solid #e7edf3;
@@ -266,7 +271,17 @@
                         </td>
                         <td class="text-right">{{ number_format((float) $row->total_qty, 2) }}</td>
                         <td class="text-right">{{ number_format((float) $row->total_amount, 2) }}</td>
-                        <td><button type="button" class="btn btn-xs btn-primary btn-modal" data-href="{{ route('hr-sell.sales.pos_detail', [$row->id]) }}" data-container=".view_modal"><i class="fa fa-eye"></i> View</button></td>
+                        <td>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-xs btn-primary btn-modal" data-href="{{ route('hr-sell.sales.pos_detail', [$row->id]) }}" data-container=".view_modal"><i class="fa fa-eye"></i> View</button>
+                                @if($canEditReport)
+                                    <button type="button" class="btn btn-xs btn-info btn-modal" data-href="{{ route('hr-sell.reports.edit', [$row->id]) }}" data-container=".view_modal"><i class="fa fa-edit"></i> Edit</button>
+                                @endif
+                                @if($canDeleteReport)
+                                    <button type="button" class="btn btn-xs btn-danger js-delete-hr-sell-report" data-href="{{ route('hr-sell.reports.destroy', [$row->id]) }}"><i class="fa fa-trash"></i> Delete</button>
+                                @endif
+                            </div>
+                        </td>
                     </tr>
                 @empty
                     <tr><td colspan="12" class="text-center text-muted">No HR sell report data found for selected filters.</td></tr>
@@ -455,6 +470,58 @@ $(function() {
     $('.hr_sell_report_photo_modal').on('hidden.bs.modal', function() {
         $('.view_modal').css('z-index', '');
         $(this).find('.hr-sell-photo-preview').attr('src', '');
+    });
+
+    $(document).on('click', '.js-delete-hr-sell-report', function(e) {
+        e.preventDefault();
+
+        var href = $(this).data('href');
+        var deleteReport = function() {
+            $.ajax({
+                url: href,
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    _method: 'DELETE'
+                },
+                success: function(result) {
+                    if (result.success) {
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success(result.msg);
+                        }
+
+                        window.location.reload();
+                    } else if (typeof toastr !== 'undefined') {
+                        toastr.error(result.msg || 'Unable to delete HR sell report');
+                    }
+                },
+                error: function(xhr) {
+                    var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Unable to delete HR sell report';
+
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(message);
+                    } else {
+                        alert(message);
+                    }
+                }
+            });
+        };
+
+        if (typeof swal !== 'undefined') {
+            swal({
+                title: 'Delete HR sell report?',
+                text: 'This will delete the report, product lines, and photos from the HR sell database.',
+                icon: 'warning',
+                buttons: true,
+                dangerMode: true
+            }).then(function(confirmDelete) {
+                if (confirmDelete) {
+                    deleteReport();
+                }
+            });
+        } else if (confirm('Delete this HR sell report?')) {
+            deleteReport();
+        }
     });
 });
 </script>
