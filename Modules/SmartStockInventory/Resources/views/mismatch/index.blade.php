@@ -44,7 +44,7 @@
 @endsection
 @section('module_js')
 <script>
-$(function(){ $('#ssi_mismatch_table').DataTable({pageLength:25});
+$(function(){
 $(document).on('click','.preview-fix-btn',function(){
  const d=$(this).data();
  $.post("{{ ssi_route('ssi.mismatch.preview_fix') }}",{_token:"{{ csrf_token() }}",product_id:d.product_id,variation_id:d.variation_id,location_id:d.location_id,problem_type:d.problem_type},function(resp){

@@ -150,6 +150,15 @@ class SmartStockAccessMiddleware
     private function requiredPermissionForRoute(string $routeName): ?string
     {
         $map = [
+            'ssi.enterprise.audit.index' => 'ssi.audit.view',
+            'ssi.enterprise.audit.store' => 'ssi.audit.create',
+            'ssi.enterprise.audit.show' => 'ssi.audit.view',
+            'ssi.enterprise.audit.start' => 'ssi.audit.update',
+            'ssi.enterprise.audit.items.verify' => 'ssi.audit.verify',
+            'ssi.enterprise.audit.approve' => 'ssi.audit.approve',
+            'ssi.enterprise.scanner.mobile' => 'ssi.audit.scan',
+            'ssi.enterprise.scanner.scan' => 'ssi.audit.scan',
+            'ssi.enterprise.report.index' => 'ssi.audit.report',
             'ssi.dashboard' => 'stock_inventory.view',
             'ssi.dashboard.detail' => 'stock_inventory.view',
             'ssi.dashboard.export' => 'stock_inventory.export',

@@ -39,5 +39,5 @@
 {{ $sessions->links() }}</div></div>
 @endsection
 @section('module_js')
-<script>$(function(){ $('#ssi_enterprise_session_table').DataTable({pageLength:25}); });</script>
+<script></script>
 @endsection

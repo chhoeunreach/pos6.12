@@ -16,6 +16,8 @@
                 ['label' => 'Dashboard', 'url' => $ssiRoute('ssi.dashboard'), 'active' => ['smart-stock-inventory/dashboard']],
                 ['label' => 'Inventory Count', 'url' => $ssiRoute('ssi.count.index'), 'active' => ['smart-stock-inventory/count']],
                 ['label' => 'Enterprise Count', 'url' => $ssiRoute('ssi.count.enterprise'), 'active' => ['smart-stock-inventory/count/enterprise']],
+                ['label' => 'Enterprise Audit', 'url' => $ssiRoute('ssi.enterprise.audit.index'), 'active' => ['smart-stock-inventory/enterprise/audits']],
+                ['label' => 'Enterprise Reports', 'url' => $ssiRoute('ssi.enterprise.report.index'), 'active' => ['smart-stock-inventory/enterprise/reports']],
                 ['label' => 'Verification Report', 'url' => $ssiRoute('ssi.verification.index'), 'active' => ['smart-stock-inventory/verification']],
                 ['label' => 'Mismatch Detector', 'url' => $ssiRoute('ssi.mismatch.index'), 'active' => ['smart-stock-inventory/mismatch']],
                 ['label' => 'Movement History', 'url' => $ssiRoute('ssi.movement.index'), 'active' => ['smart-stock-inventory/movement']],

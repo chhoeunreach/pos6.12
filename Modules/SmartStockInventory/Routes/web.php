@@ -12,6 +12,16 @@ Route::middleware(['web', 'auth'])->prefix('smart-stock-inventory')->group(funct
 Route::middleware([
     'web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'ssi.access',
 ])->prefix('smart-stock-inventory')->group(function () {
+    Route::get('/enterprise/audits', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'index'])->name('ssi.enterprise.audit.index');
+    Route::post('/enterprise/audits', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'store'])->name('ssi.enterprise.audit.store');
+    Route::get('/enterprise/audits/{audit}', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'show'])->name('ssi.enterprise.audit.show');
+    Route::post('/enterprise/audits/{audit}/start', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'start'])->name('ssi.enterprise.audit.start');
+    Route::post('/enterprise/audits/{audit}/items/{item}/verify', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'verifyItem'])->name('ssi.enterprise.audit.items.verify');
+    Route::post('/enterprise/audits/{audit}/approve', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiAuditController', 'approve'])->name('ssi.enterprise.audit.approve');
+    Route::get('/enterprise/audits/{audit}/scanner', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiScannerController', 'mobile'])->name('ssi.enterprise.scanner.mobile');
+    Route::post('/enterprise/audits/{audit}/scan', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiScannerController', 'scan'])->name('ssi.enterprise.scanner.scan');
+    Route::get('/enterprise/reports', ['\Modules\SmartStockInventory\Http\Controllers\Enterprise\SsiReportController', 'index'])->name('ssi.enterprise.report.index');
+
     Route::get('/dashboard', ['\Modules\SmartStockInventory\Http\Controllers\DashboardController', 'index'])->name('ssi.dashboard');
     Route::get('/dashboard/detail/{metric}', ['\Modules\SmartStockInventory\Http\Controllers\DashboardController', 'detail'])->name('ssi.dashboard.detail');
     Route::get('/dashboard/export', ['\Modules\SmartStockInventory\Http\Controllers\DashboardController', 'export'])->name('ssi.dashboard.export');

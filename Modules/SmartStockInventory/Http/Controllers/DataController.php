@@ -84,7 +84,7 @@ class DataController extends Controller
     {
         $user = auth()->user();
         $hasSuperAdminAccess = $this->hasSuperAdminAccess($user);
-        if (! $this->isReachAdmin() && ! $hasSuperAdminAccess && ! $user->can('stock_inventory.view')) {
+        if (! $this->isReachAdmin() && ! $hasSuperAdminAccess && ! $user->can('stock_inventory.view') && ! $user->can('ssi.audit.view')) {
             return;
         }
 
@@ -92,21 +92,26 @@ class DataController extends Controller
             $hasSuperAdminAccess = $this->hasSuperAdminAccess(auth()->user());
             $root = $menu->dropdown(
                 'Stock Inventory',
-                function ($sub) {
+                function ($sub) use ($hasSuperAdminAccess) {
                     $sub->url(ssi_route('ssi.dashboard'), 'Dashboard', ['icon' => 'fa fa-dashboard']);
                     $sub->url(ssi_route('ssi.count.index'), 'Inventory Count', ['icon' => 'fa fa-list']);
                     $sub->url(ssi_route('ssi.count.enterprise'), 'Enterprise Count', ['icon' => 'fa fa-tasks']);
+                    if ($hasSuperAdminAccess || auth()->user()->can('ssi.audit.view')) {
+                        $sub->url(ssi_route('ssi.enterprise.audit.index'), 'Enterprise Audit', ['icon' => 'fa fa-clipboard']);
+                    }
                     $sub->url(ssi_route('ssi.verification.index'), 'Verification Report', ['icon' => 'fa fa-check-square-o']);
                     $sub->url(ssi_route('ssi.mismatch.index'), 'Mismatch Detector', ['icon' => 'fa fa-exclamation-triangle']);
                     $sub->url(ssi_route('ssi.movement.index'), 'Movement History', ['icon' => 'fa fa-exchange']);
                     $sub->url(ssi_route('ssi.imei.index'), 'IMEI Management', ['icon' => 'fa fa-mobile']);
                     $sub->url(ssi_route('ssi.lot.index'), 'Lot Management', ['icon' => 'fa fa-tags']);
-                    $hasSuperAdminAccess = $this->hasSuperAdminAccess(auth()->user());
                     if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.logs')) {
                         $sub->url(ssi_route('ssi.fix_logs'), 'Fix Logs', ['icon' => 'fa fa-history']);
                     }
                     if ($hasSuperAdminAccess || auth()->user()->can('stock_inventory.report')) {
                         $sub->url(ssi_route('ssi.count.reports'), 'Inventory Reports', ['icon' => 'fa fa-bar-chart']);
+                    }
+                    if ($hasSuperAdminAccess || auth()->user()->can('ssi.audit.report')) {
+                        $sub->url(ssi_route('ssi.enterprise.report.index'), 'Enterprise Reports', ['icon' => 'fa fa-pie-chart']);
                     }
                     if ($hasSuperAdminAccess || auth()->user()->can('stock_report.view')) {
                         $sub->url(ssi_route('ssi.report.stock_sell'), 'Stock Sell Report', ['icon' => 'fa fa-file-text-o']);

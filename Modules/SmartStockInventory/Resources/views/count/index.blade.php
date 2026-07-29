@@ -65,5 +65,5 @@
 @endsection
 
 @section('module_js')
-<script>$(function(){ $('#ssi_count_table').DataTable({pageLength:25}); $('.select2').select2(); });</script>
+<script>$(function(){ $('.select2').select2(); });</script>
 @endsection

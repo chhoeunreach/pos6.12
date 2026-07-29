@@ -43,7 +43,7 @@
         @endcomponent
     @endif
     <div class="box-body table-responsive">
-        <table class="table table-bordered table-striped datatable" id="ssi_dashboard_detail_table">
+        <table class="table table-bordered table-striped" id="ssi_dashboard_detail_table">
             <thead>
                 <tr>
                     @foreach($headers as $h)<th>{{ $h }}</th>@endforeach
