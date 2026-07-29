@@ -85,14 +85,14 @@ class DashboardController extends Controller
 
             $topSellTypes = $this->filteredPosQuery($filters)
                 ->select(
-                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'sell' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END as sell_type_key"),
-                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'Sell / លក់' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END as sell_type_name"),
+                    DB::raw($this->sellTypeSqlCase('service_type', 'key') . ' as sell_type_key'),
+                    DB::raw($this->sellTypeSqlCase('service_type', 'label') . ' as sell_type_name'),
                     DB::raw('COUNT(*) as sale_count'),
                     DB::raw('COALESCE(SUM(total_amount), 0) as sale_total')
                 )
                 ->groupBy(
-                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'sell' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END"),
-                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'Sell / លក់' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END")
+                    DB::raw($this->sellTypeSqlCase('service_type', 'key')),
+                    DB::raw($this->sellTypeSqlCase('service_type', 'label'))
                 )
                 ->orderByDesc('sale_total')
                 ->limit(10)
@@ -106,6 +106,7 @@ class DashboardController extends Controller
                     'sor.customer_phone',
                     'sor.branch_name',
                     'sor.service_type',
+                    DB::raw($this->sellTypeSqlCase('sor.service_type', 'label') . ' as service_type_label'),
                     'sor.total_amount',
                     'sor.created_at',
                     'u.username as staff_code',
@@ -160,11 +161,7 @@ class DashboardController extends Controller
             ->when(! empty($filters['end_date']), fn ($q) => $q->where($prefix . 'created_at', '<=', $filters['end_date'] . ' 23:59:59'))
             ->when(! empty($filters['branch_name']), fn ($q) => $q->whereRaw('TRIM(' . $prefix . 'branch_name) = ?', [$filters['branch_name']]))
             ->when(! empty($filters['sell_type']), function ($q) use ($filters, $prefix) {
-                if ($this->isSellType($filters['sell_type'])) {
-                    $q->whereIn($prefix . 'service_type', ['sell', 'លក់']);
-                } else {
-                    $q->where($prefix . 'service_type', $filters['sell_type']);
-                }
+                $q->whereIn($prefix . 'service_type', $this->sellTypeValues($filters['sell_type']));
             });
     }
 
@@ -189,18 +186,63 @@ class DashboardController extends Controller
             ->where('service_type', '!=', '')
             ->orderBy('service_type')
             ->pluck('service_type')
-            ->mapWithKeys(fn ($type) => [$this->isSellType($type) ? 'sell' : $type => $this->sellTypeLabel($type)])
+            ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
             ->unique();
     }
 
-    private function isSellType(?string $type): bool
+    private function sellTypeMap(): array
     {
-        return in_array($type, ['sell', 'លក់'], true);
+        return [
+            'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'លក់']],
+            'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'buy_in', 'buyin', 'ទិញចូល']],
+            'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'ជួសជុល']],
+            'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'materials', 'សម្ភារ']],
+            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'អ៊ុត']],
+            'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'icloud_cus', 'icloudcus']],
+        ];
+    }
+
+    private function normalizeSellTypeKey(?string $type): string
+    {
+        $normalized = mb_strtolower(trim((string) $type));
+
+        foreach ($this->sellTypeMap() as $key => $config) {
+            if (in_array($normalized, array_map(fn ($value) => mb_strtolower($value), $config['values']), true)) {
+                return $key;
+            }
+        }
+
+        return trim((string) $type);
     }
 
     private function sellTypeLabel(?string $type): string
     {
-        return $this->isSellType($type) ? 'Sell / លក់' : ($type ?: '-');
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['label'] ?? ($type ?: '-');
+    }
+
+    private function sellTypeValues(?string $type): array
+    {
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['values'] ?? [$type];
+    }
+
+    private function sellTypeSqlCase(string $column, string $mode): string
+    {
+        $cases = collect($this->sellTypeMap())->map(function ($config, $key) use ($column, $mode) {
+            $values = collect($config['values'])
+                ->map(fn ($value) => "'" . str_replace("'", "''", mb_strtolower($value)) . "'")
+                ->implode(', ');
+            $result = $mode === 'key' ? $key : $config['label'];
+
+            return "WHEN LOWER(TRIM({$column})) IN ({$values}) THEN '" . str_replace("'", "''", $result) . "'";
+        })->implode(' ');
+
+        return "CASE {$cases} ELSE COALESCE(NULLIF(TRIM({$column}), ''), 'Unknown') END";
     }
 
     private function managedDashboardData(int $businessId, string $today): array

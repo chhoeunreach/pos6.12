@@ -239,7 +239,7 @@
                         <td>{{ $row->customer_name ?: '-' }}</td>
                         <td>{{ $row->customer_phone ?: '-' }}</td>
                         <td>{{ $row->staff_name ?: $row->seller_name }} @if(! empty($row->staff_code))<small class="text-muted">({{ $row->staff_code }})</small>@endif</td>
-                        <td>{{ in_array($row->service_type, ['sell', 'លក់']) ? 'Sell / លក់' : ($row->service_type ?: '-') }}</td>
+                        <td>{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
                         <td>
                             @php($products = collect(explode('|||', (string) $row->product_names))->filter()->take(5))
                             @if($products->isNotEmpty())

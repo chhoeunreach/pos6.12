@@ -114,6 +114,8 @@ class HrSellController extends Controller
                 abort(404);
             }
 
+            $report->service_type_label = $this->sellTypeLabel($report->service_type);
+
             $report->lines = DB::connection('hr')
                 ->table('sell_out_report_lines')
                 ->where('sell_out_report_id', $report_id)
@@ -214,9 +216,8 @@ class HrSellController extends Controller
                 ->where('service_type', '!=', '')
                 ->orderBy('service_type')
                 ->pluck('service_type')
-                ->mapWithKeys(function ($type) {
-                    return [in_array($type, ['sell', 'លក់']) ? 'sell' : $type => in_array($type, ['sell', 'លក់']) ? 'Sell / លក់' : $type];
-                });
+                ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
+                ->unique();
 
             $sellers = DB::connection('hr')
                 ->table('sell_out_reports as sor')
@@ -262,11 +263,7 @@ class HrSellController extends Controller
                 ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
                 ->when($request->filled('sell_type'), function ($q) use ($request) {
                     $sellType = $request->input('sell_type');
-                    if (in_array($sellType, ['sell', 'លក់'])) {
-                        $q->whereIn('sor.service_type', ['sell', 'លក់']);
-                    } else {
-                        $q->where('sor.service_type', $sellType);
-                    }
+                    $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
                 })
                 ->when($request->filled('seller_key'), function ($q) use ($request) {
                     $sellerKey = $request->input('seller_key');
@@ -294,6 +291,12 @@ class HrSellController extends Controller
                 ->paginate(50, ['*'], 'pos_hr_page')
                 ->appends($request->query());
 
+            $rows->getCollection()->transform(function ($row) {
+                $row->service_type_label = $this->sellTypeLabel($row->service_type);
+
+                return $row;
+            });
+
             return [$rows, $branches, $sellTypes, $sellers];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load POS HR sell list in HrSellManagement: ' . $e->getMessage());
@@ -312,6 +315,47 @@ class HrSellController extends Controller
 
             return [$emptyRows, collect(), collect(), collect()];
         }
+    }
+
+    private function sellTypeMap(): array
+    {
+        return [
+            'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'លក់']],
+            'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'buy_in', 'buyin', 'ទិញចូល']],
+            'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'ជួសជុល']],
+            'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'materials', 'សម្ភារ']],
+            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'អ៊ុត']],
+            'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'icloud_cus', 'icloudcus']],
+        ];
+    }
+
+    private function normalizeSellTypeKey(?string $type): string
+    {
+        $normalized = mb_strtolower(trim((string) $type));
+
+        foreach ($this->sellTypeMap() as $key => $config) {
+            if (in_array($normalized, array_map(fn ($value) => mb_strtolower($value), $config['values']), true)) {
+                return $key;
+            }
+        }
+
+        return trim((string) $type);
+    }
+
+    private function sellTypeLabel(?string $type): string
+    {
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['label'] ?? ($type ?: '-');
+    }
+
+    private function sellTypeValues(?string $type): array
+    {
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['values'] ?? [$type];
     }
 
 }

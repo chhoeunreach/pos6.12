@@ -38,7 +38,7 @@
                     <strong>Customer:</strong> {{ $report->customer_name ?: '-' }}<br>
                     <strong>Phone:</strong> {{ $report->customer_phone ?: '-' }}<br>
                     <strong>Total:</strong> {{ number_format((float) $report->total_amount, 2) }}<br>
-                    <strong>Sell Type:</strong> {{ in_array($report->service_type, ['sell', 'លក់']) ? 'Sell / លក់' : ($report->service_type ?: '-') }}
+                    <strong>Sell Type:</strong> {{ $report->service_type_label ?? ($report->service_type ?: '-') }}
                 </div>
             </div>
 

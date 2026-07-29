@@ -147,7 +147,7 @@
 <td>{{ $sale->customer_name }}</td>
 <td>{{ $sale->customer_phone }}</td>
 <td>{{ $sale->staff_name ?: $sale->seller_name }} @if(! empty($sale->staff_code))<small class="text-muted">({{ $sale->staff_code }})</small>@endif</td>
-<td>{{ $sale->service_type }}</td>
+<td>{{ $sale->service_type_label ?? $sale->service_type }}</td>
 <td>{{ number_format((float) $sale->total_amount, 2) }}</td>
 <td><button type="button" class="btn btn-xs btn-primary btn-modal hr-sell-action-btn" data-href="{{ route('hr-sell.sales.pos_detail', [$sale->id]) }}" data-container=".view_modal"><i class="fa fa-eye"></i> View</button></td>
 </tr>

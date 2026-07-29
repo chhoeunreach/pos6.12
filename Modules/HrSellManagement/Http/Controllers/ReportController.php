@@ -73,6 +73,13 @@ class ReportController extends Controller
                 ? $rowsQuery->paginate(50, ['*'], 'hr_report_page')->appends($request->query())
                 : $rowsQuery->get();
 
+            $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
+            $rowCollection->transform(function ($row) {
+                $row->service_type_label = $this->sellTypeLabel($row->service_type);
+
+                return $row;
+            });
+
             return [$rows, $summary];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR Sell report data: ' . $e->getMessage());
@@ -114,11 +121,7 @@ class ReportController extends Controller
             ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
             ->when($request->filled('sell_type'), function ($q) use ($request) {
                 $sellType = $request->input('sell_type');
-                if ($this->isSellType($sellType)) {
-                    $q->whereIn('sor.service_type', ['sell', 'លក់']);
-                } else {
-                    $q->where('sor.service_type', $sellType);
-                }
+                $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
             })
             ->when($request->filled('seller_key'), function ($q) use ($request) {
                 $sellerKey = $request->input('seller_key');
@@ -177,7 +180,7 @@ class ReportController extends Controller
                 ->where('service_type', '!=', '')
                 ->orderBy('service_type')
                 ->pluck('service_type')
-                ->mapWithKeys(fn ($type) => [$this->isSellType($type) ? 'sell' : $type => $this->sellTypeLabel($type)])
+                ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
                 ->unique();
 
             $sellers = DB::connection('hr')
@@ -209,14 +212,45 @@ class ReportController extends Controller
         }
     }
 
-    private function isSellType(?string $type): bool
+    private function sellTypeMap(): array
     {
-        return in_array($type, ['sell', 'លក់'], true);
+        return [
+            'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'លក់']],
+            'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'buy_in', 'buyin', 'ទិញចូល']],
+            'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'ជួសជុល']],
+            'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'materials', 'សម្ភារ']],
+            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'អ៊ុត']],
+            'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'icloud_cus', 'icloudcus']],
+        ];
+    }
+
+    private function normalizeSellTypeKey(?string $type): string
+    {
+        $normalized = mb_strtolower(trim((string) $type));
+
+        foreach ($this->sellTypeMap() as $key => $config) {
+            if (in_array($normalized, array_map(fn ($value) => mb_strtolower($value), $config['values']), true)) {
+                return $key;
+            }
+        }
+
+        return trim((string) $type);
     }
 
     private function sellTypeLabel(?string $type): string
     {
-        return $this->isSellType($type) ? 'Sell / លក់' : ($type ?: '-');
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['label'] ?? ($type ?: '-');
+    }
+
+    private function sellTypeValues(?string $type): array
+    {
+        $key = $this->normalizeSellTypeKey($type);
+        $map = $this->sellTypeMap();
+
+        return $map[$key]['values'] ?? [$type];
     }
 
     private function looksLikeUsername(string $sellerKey): bool
