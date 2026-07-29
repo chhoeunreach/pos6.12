@@ -64,10 +64,15 @@ class DashboardController extends Controller
                 ->select(
                     DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as user_name"),
                     DB::raw("NULLIF(TRIM(u.username), '') as username"),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CONCAT('seller:', TRIM(sor.seller_name))) as seller_key"),
                     DB::raw('COUNT(*) as sale_count'),
                     DB::raw('COALESCE(SUM(sor.total_amount), 0) as sale_total')
                 )
-                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"), DB::raw("NULLIF(TRIM(u.username), '')"))
+                ->groupBy(
+                    DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"),
+                    DB::raw("NULLIF(TRIM(u.username), '')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CONCAT('seller:', TRIM(sor.seller_name)))")
+                )
                 ->orderByDesc('sale_total')
                 ->limit(10)
                 ->get();

@@ -84,6 +84,21 @@
         box-shadow: 0 6px 16px rgba(31, 45, 61, 0.16);
         transform: translateY(-1px);
     }
+
+    .hr-sell-dashboard-row-link {
+        color: inherit;
+        display: block;
+    }
+
+    .hr-sell-dashboard-row-link:hover,
+    .hr-sell-dashboard-row-link:focus {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .hr-sell-clickable-row:hover td {
+        background: #f5fbff;
+    }
 </style>
 
 @unless($hrConnectionOk)
@@ -169,7 +184,12 @@
 <thead><tr><th>Staff</th><th>Sales</th><th>Total</th></tr></thead>
 <tbody>
 @forelse($topHr as $row)
-<tr><td>{{ $row->user_name }} @if(! empty($row->username))<small class="text-muted">({{ $row->username }})</small>@endif</td><td>{{ number_format((float) $row->sale_count, 0) }}</td><td>{{ number_format((float) $row->sale_total, 2) }}</td></tr>
+@php($staffReportUrl = route('hr-sell.reports.index', array_filter(array_merge($dashboardReportFilters, ['seller_key' => $row->seller_key ?? null]))))
+<tr class="hr-sell-clickable-row">
+<td><a class="hr-sell-dashboard-row-link" href="{{ $staffReportUrl }}">{{ $row->user_name }} @if(! empty($row->username))<small class="text-muted">({{ $row->username }})</small>@endif</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $staffReportUrl }}">{{ number_format((float) $row->sale_count, 0) }}</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $staffReportUrl }}">{{ number_format((float) $row->sale_total, 2) }}</a></td>
+</tr>
 @empty
 <tr><td colspan="3" class="text-center text-muted">No HR staff sales found.</td></tr>
 @endforelse
@@ -187,7 +207,12 @@
 <thead><tr><th>Branch</th><th>Sales</th><th>Total</th></tr></thead>
 <tbody>
 @forelse($topBranches as $row)
-<tr><td>{{ $row->branch_name }}</td><td>{{ number_format((float) $row->sale_count, 0) }}</td><td>{{ number_format((float) $row->sale_total, 2) }}</td></tr>
+@php($branchReportUrl = route('hr-sell.reports.index', array_filter(array_merge($dashboardReportFilters, ['branch_name' => $row->branch_name === 'Unknown' ? null : $row->branch_name]))))
+<tr class="hr-sell-clickable-row">
+<td><a class="hr-sell-dashboard-row-link" href="{{ $branchReportUrl }}">{{ $row->branch_name }}</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $branchReportUrl }}">{{ number_format((float) $row->sale_count, 0) }}</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $branchReportUrl }}">{{ number_format((float) $row->sale_total, 2) }}</a></td>
+</tr>
 @empty
 <tr><td colspan="3" class="text-center text-muted">No branch sales found.</td></tr>
 @endforelse
@@ -205,7 +230,12 @@
 <thead><tr><th>Sell Type</th><th>Sales</th><th>Total</th></tr></thead>
 <tbody>
 @forelse($topSellTypes as $row)
-<tr><td>{{ $row->sell_type_name }}</td><td>{{ number_format((float) $row->sale_count, 0) }}</td><td>{{ number_format((float) $row->sale_total, 2) }}</td></tr>
+@php($typeReportUrl = route('hr-sell.reports.index', array_filter(array_merge($dashboardReportFilters, ['sell_type' => $row->sell_type_key ?? null]))))
+<tr class="hr-sell-clickable-row">
+<td><a class="hr-sell-dashboard-row-link" href="{{ $typeReportUrl }}">{{ $row->sell_type_name }}</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $typeReportUrl }}">{{ number_format((float) $row->sale_count, 0) }}</a></td>
+<td><a class="hr-sell-dashboard-row-link" href="{{ $typeReportUrl }}">{{ number_format((float) $row->sale_total, 2) }}</a></td>
+</tr>
 @empty
 <tr><td colspan="3" class="text-center text-muted">No sell type sales found.</td></tr>
 @endforelse
