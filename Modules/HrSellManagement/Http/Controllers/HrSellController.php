@@ -105,7 +105,7 @@ class HrSellController extends Controller
                 ->select(
                     'sor.*',
                     DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
-                    'u.employee_code as staff_code',
+                    'u.username as staff_code',
                     'u.avatar as staff_avatar'
                 )
                 ->first();
@@ -221,17 +221,23 @@ class HrSellController extends Controller
             $sellers = DB::connection('hr')
                 ->table('sell_out_reports as sor')
                 ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
-                ->selectRaw("COALESCE(CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name))) as seller_key")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name))) as seller_key")
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as seller_name")
+                ->selectRaw("NULLIF(TRIM(u.username), '') as username")
                 ->where(function ($q) {
                     $q->whereNotNull('sor.user_id')
                         ->orWhere(function ($query) {
                             $query->whereNotNull('sor.seller_name')->where('sor.seller_name', '!=', '');
                         });
                 })
-                ->groupBy('seller_key', 'seller_name')
+                ->groupBy('seller_key', 'seller_name', 'username')
                 ->orderBy('seller_name')
-                ->pluck('seller_name', 'seller_key');
+                ->get()
+                ->mapWithKeys(function ($seller) {
+                    $label = trim(($seller->username ? $seller->username . ' - ' : '') . $seller->seller_name);
+
+                    return [$seller->seller_key => $label ?: 'Unknown'];
+                });
 
             $query = DB::connection('hr')
                 ->table('sell_out_reports as sor')
@@ -246,6 +252,7 @@ class HrSellController extends Controller
                     'sor.total_amount',
                     'sor.created_at',
                     'sor.service_type',
+                    'u.username as staff_code',
                     DB::raw('COALESCE(u.name, sor.seller_name) as staff_name')
                 );
 
@@ -265,6 +272,8 @@ class HrSellController extends Controller
                     $sellerKey = $request->input('seller_key');
                     if (str_starts_with($sellerKey, 'seller:')) {
                         $q->whereRaw('TRIM(sor.seller_name) = ?', [substr($sellerKey, 7)]);
+                    } elseif (preg_match('/^[A-Za-z]+[A-Za-z0-9_-]*\d+[A-Za-z0-9_-]*$/', $sellerKey)) {
+                        $q->whereRaw('TRIM(u.username) = ?', [$sellerKey]);
                     } else {
                         $q->where('sor.user_id', $sellerKey);
                     }
@@ -276,6 +285,7 @@ class HrSellController extends Controller
                             ->orWhere('sor.customer_phone', 'like', $search)
                             ->orWhere('sor.customer_name', 'like', $search)
                             ->orWhere('sor.seller_name', 'like', $search)
+                            ->orWhere('u.username', 'like', $search)
                             ->orWhere('u.name', 'like', $search);
                     });
                 });
