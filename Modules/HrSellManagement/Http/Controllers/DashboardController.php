@@ -2,41 +2,52 @@
 
 namespace Modules\HrSellManagement\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         abort_unless($this->canOpen(), 403);
 
         $businessId = (int) session('user.business_id');
         $today = now()->toDateString();
+        $filters = [
+            'start_date' => $request->input('start_date') ?: $today,
+            'end_date' => $request->input('end_date') ?: $today,
+            'branch_name' => $request->input('branch_name'),
+            'sell_type' => $request->input('sell_type'),
+        ];
 
-        $pos = $this->posHrDashboardData($today);
+        $pos = $this->posHrDashboardData($filters);
         $managed = $this->managedDashboardData($businessId, $today);
 
         return view('hrsellmanagement::dashboard.index', [
             'metrics' => array_merge($pos['metrics'], $managed['metrics']),
             'topHr' => $pos['topHr'],
             'topBranches' => $pos['topBranches'],
+            'topSellTypes' => $pos['topSellTypes'],
             'recent' => $pos['recent'],
+            'hrBranches' => $pos['branches'],
+            'hrSellTypes' => $pos['sellTypes'],
+            'filters' => $filters,
             'hrConnectionOk' => $pos['ok'],
             'hrConnectionMessage' => $pos['message'],
         ]);
     }
 
-    private function posHrDashboardData(string $today): array
+    private function posHrDashboardData(array $filters): array
     {
         try {
-            $base = DB::connection('hr')->table('sell_out_reports');
+            $base = $this->filteredPosQuery($filters);
+            $branches = $this->hrBranches();
+            $sellTypes = $this->hrSellTypes();
 
             $metrics = [
-                'pos_total_sales' => (float) (clone $base)->sum('total_amount'),
-                'pos_total_count' => (int) (clone $base)->count(),
-                'pos_today_sales' => (float) (clone $base)->whereDate('created_at', $today)->sum('total_amount'),
-                'pos_today_count' => (int) (clone $base)->whereDate('created_at', $today)->count(),
+                'pos_filtered_sales' => (float) (clone $base)->sum('total_amount'),
+                'pos_filtered_count' => (int) (clone $base)->count(),
                 'pos_branch_count' => (int) (clone $base)->whereNotNull('branch_name')->where('branch_name', '!=', '')->distinct()->count('branch_name'),
                 'pos_seller_count' => (int) (clone $base)->where(function ($q) {
                     $q->whereNotNull('seller_name')->where('seller_name', '!=', '')
@@ -44,25 +55,24 @@ class DashboardController extends Controller
                 })->count(DB::raw("DISTINCT COALESCE(CAST(user_id AS CHAR), NULLIF(TRIM(seller_name), ''))")),
             ];
 
-            $metrics['pos_average_sale'] = $metrics['pos_total_count'] > 0
-                ? round($metrics['pos_total_sales'] / $metrics['pos_total_count'], 2)
+            $metrics['pos_average_sale'] = $metrics['pos_filtered_count'] > 0
+                ? round($metrics['pos_filtered_sales'] / $metrics['pos_filtered_count'], 2)
                 : 0;
 
-            $topHr = DB::connection('hr')
-                ->table('sell_out_reports as sor')
+            $topHr = $this->filteredPosQuery($filters, 'sor')
                 ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
                 ->select(
                     DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as user_name"),
+                    DB::raw("NULLIF(TRIM(u.username), '') as username"),
                     DB::raw('COUNT(*) as sale_count'),
                     DB::raw('COALESCE(SUM(sor.total_amount), 0) as sale_total')
                 )
-                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"))
+                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"), DB::raw("NULLIF(TRIM(u.username), '')"))
                 ->orderByDesc('sale_total')
                 ->limit(10)
                 ->get();
 
-            $topBranches = DB::connection('hr')
-                ->table('sell_out_reports')
+            $topBranches = $this->filteredPosQuery($filters)
                 ->select(
                     DB::raw("COALESCE(NULLIF(TRIM(branch_name), ''), 'Unknown') as branch_name"),
                     DB::raw('COUNT(*) as sale_count'),
@@ -73,8 +83,22 @@ class DashboardController extends Controller
                 ->limit(10)
                 ->get();
 
-            $recent = DB::connection('hr')
-                ->table('sell_out_reports as sor')
+            $topSellTypes = $this->filteredPosQuery($filters)
+                ->select(
+                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'sell' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END as sell_type_key"),
+                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'Sell / លក់' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END as sell_type_name"),
+                    DB::raw('COUNT(*) as sale_count'),
+                    DB::raw('COALESCE(SUM(total_amount), 0) as sale_total')
+                )
+                ->groupBy(
+                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'sell' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END"),
+                    DB::raw("CASE WHEN service_type IN ('sell', 'លក់') THEN 'Sell / លក់' ELSE COALESCE(NULLIF(TRIM(service_type), ''), 'Unknown') END")
+                )
+                ->orderByDesc('sale_total')
+                ->limit(10)
+                ->get();
+
+            $recent = $this->filteredPosQuery($filters, 'sor')
                 ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
                 ->select(
                     'sor.invoice_no',
@@ -84,6 +108,7 @@ class DashboardController extends Controller
                     'sor.service_type',
                     'sor.total_amount',
                     'sor.created_at',
+                    'u.username as staff_code',
                     DB::raw('COALESCE(u.name, sor.seller_name) as staff_name')
                 )
                 ->orderByDesc('sor.created_at')
@@ -96,7 +121,10 @@ class DashboardController extends Controller
                 'metrics' => $metrics,
                 'topHr' => $topHr,
                 'topBranches' => $topBranches,
+                'topSellTypes' => $topSellTypes,
                 'recent' => $recent,
+                'branches' => $branches,
+                'sellTypes' => $sellTypes,
             ];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR Sell dashboard POS data: ' . $e->getMessage());
@@ -105,19 +133,74 @@ class DashboardController extends Controller
                 'ok' => false,
                 'message' => $e->getMessage(),
                 'metrics' => [
-                    'pos_total_sales' => 0,
-                    'pos_total_count' => 0,
-                    'pos_today_sales' => 0,
-                    'pos_today_count' => 0,
+                    'pos_filtered_sales' => 0,
+                    'pos_filtered_count' => 0,
                     'pos_average_sale' => 0,
                     'pos_branch_count' => 0,
                     'pos_seller_count' => 0,
                 ],
                 'topHr' => collect(),
                 'topBranches' => collect(),
+                'topSellTypes' => collect(),
                 'recent' => collect(),
+                'branches' => collect(),
+                'sellTypes' => collect(),
             ];
         }
+    }
+
+    private function filteredPosQuery(array $filters, ?string $alias = null)
+    {
+        $table = $alias ? "sell_out_reports as {$alias}" : 'sell_out_reports';
+        $prefix = $alias ? "{$alias}." : '';
+
+        return DB::connection('hr')
+            ->table($table)
+            ->when(! empty($filters['start_date']), fn ($q) => $q->where($prefix . 'created_at', '>=', $filters['start_date'] . ' 00:00:00'))
+            ->when(! empty($filters['end_date']), fn ($q) => $q->where($prefix . 'created_at', '<=', $filters['end_date'] . ' 23:59:59'))
+            ->when(! empty($filters['branch_name']), fn ($q) => $q->whereRaw('TRIM(' . $prefix . 'branch_name) = ?', [$filters['branch_name']]))
+            ->when(! empty($filters['sell_type']), function ($q) use ($filters, $prefix) {
+                if ($this->isSellType($filters['sell_type'])) {
+                    $q->whereIn($prefix . 'service_type', ['sell', 'លក់']);
+                } else {
+                    $q->where($prefix . 'service_type', $filters['sell_type']);
+                }
+            });
+    }
+
+    private function hrBranches()
+    {
+        return DB::connection('hr')
+            ->table('sell_out_reports')
+            ->selectRaw('DISTINCT TRIM(branch_name) as branch_name')
+            ->whereNotNull('branch_name')
+            ->where('branch_name', '!=', '')
+            ->orderBy('branch_name')
+            ->pluck('branch_name', 'branch_name');
+    }
+
+    private function hrSellTypes()
+    {
+        return DB::connection('hr')
+            ->table('sell_out_reports')
+            ->select('service_type')
+            ->distinct()
+            ->whereNotNull('service_type')
+            ->where('service_type', '!=', '')
+            ->orderBy('service_type')
+            ->pluck('service_type')
+            ->mapWithKeys(fn ($type) => [$this->isSellType($type) ? 'sell' : $type => $this->sellTypeLabel($type)])
+            ->unique();
+    }
+
+    private function isSellType(?string $type): bool
+    {
+        return in_array($type, ['sell', 'លក់'], true);
+    }
+
+    private function sellTypeLabel(?string $type): string
+    {
+        return $this->isSellType($type) ? 'Sell / លក់' : ($type ?: '-');
     }
 
     private function managedDashboardData(int $businessId, string $today): array
