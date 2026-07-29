@@ -2,10 +2,10 @@
 
 namespace Modules\HrSellManagement\Http\Controllers;
 
-use App\BusinessLocation;
 use App\Transaction;
 use App\User;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\HrSellManagement\Entities\HrSellRecord;
@@ -20,53 +20,9 @@ class HrSellController extends Controller
     public function index(Request $request)
     {
         abort_unless($this->canOpen(), 403);
-        $businessId = (int) session('user.business_id');
-        $records = HrSellRecord::with(['transaction.contact', 'transaction.location', 'hrUser'])
-            ->where('business_id', $businessId)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $search = '%' . $request->input('search') . '%';
-                $q->where(function ($query) use ($search) {
-                    $query->where('internal_note', 'like', $search)
-                        ->orWhereHas('transaction', fn ($transaction) => $transaction->where('invoice_no', 'like', $search))
-                        ->orWhereHas('transaction.contact', fn ($contact) => $contact->where('name', 'like', $search));
-                });
-            })
-            ->when($request->filled('location_id'), function ($q) use ($request) {
-                $locationId = $request->input('location_id');
-                $q->where(function ($query) use ($locationId) {
-                    $query->where('location_id', $locationId)
-                        ->orWhereHas('transaction', fn ($transaction) => $transaction->where('location_id', $locationId));
-                });
-            })
-            ->when($request->filled('hr_user_id'), fn ($q) => $q->where('hr_user_id', $request->input('hr_user_id')))
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
-            ->when($request->filled('approval_status'), fn ($q) => $q->where('approval_status', $request->input('approval_status')))
-            ->when($request->filled('follow_up_status'), fn ($q) => $q->where('follow_up_status', $request->input('follow_up_status')))
-            ->when($request->filled('start_date'), fn ($q) => $q->whereHas('transaction', fn ($transaction) => $transaction->whereDate('transaction_date', '>=', $request->input('start_date'))))
-            ->when($request->filled('end_date'), fn ($q) => $q->whereHas('transaction', fn ($transaction) => $transaction->whereDate('transaction_date', '<=', $request->input('end_date'))))
-            ->latest()
-            ->paginate(50)
-            ->appends($request->query());
+        [$posHrSales, $hrBranches, $hrSellTypes, $hrSellers] = $this->posHrSellListData($request);
 
-        $users = User::forDropdown($businessId, false, false, true);
-        $businessLocations = BusinessLocation::forDropdown($businessId, false);
-        $statuses = ['draft', 'active', 'on_hold', 'completed', 'cancelled'];
-        $approvalStatuses = ['pending', 'approved', 'rejected'];
-        $followUpStatuses = ['none', 'scheduled', 'called', 'completed', 'missed'];
-        $unlinkedSales = Transaction::where('business_id', $businessId)
-            ->where('type', 'sell')
-            ->where('status', 'final')
-            ->when($request->filled('location_id'), fn ($q) => $q->where('location_id', $request->input('location_id')))
-            ->when($request->filled('start_date'), fn ($q) => $q->whereDate('transaction_date', '>=', $request->input('start_date')))
-            ->when($request->filled('end_date'), fn ($q) => $q->whereDate('transaction_date', '<=', $request->input('end_date')))
-            ->whereNotExists(function ($q) {
-                $q->select(DB::raw(1))->from('hr_sell_records as h')->whereColumn('h.transaction_id', 'transactions.id')->whereNull('h.deleted_at');
-            })
-            ->latest('transaction_date')
-            ->limit(100)
-            ->get(['id', 'invoice_no', 'transaction_date', 'final_total']);
-
-        return view('hrsellmanagement::sales.index', compact('records', 'users', 'businessLocations', 'unlinkedSales', 'statuses', 'approvalStatuses', 'followUpStatuses'));
+        return view('hrsellmanagement::sales.index', compact('posHrSales', 'hrBranches', 'hrSellTypes', 'hrSellers'));
     }
 
     public function link(Request $request)
@@ -137,6 +93,96 @@ class HrSellController extends Controller
         return back()->with('status', ['success' => 1, 'msg' => 'Note saved']);
     }
 
+    public function posDetail($report_id)
+    {
+        abort_unless($this->canOpen(), 403);
+
+        try {
+            $report = DB::connection('hr')
+                ->table('sell_out_reports as sor')
+                ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+                ->where('sor.id', $report_id)
+                ->select(
+                    'sor.*',
+                    DB::raw('COALESCE(u.name, sor.seller_name) as staff_name'),
+                    'u.employee_code as staff_code',
+                    'u.avatar as staff_avatar'
+                )
+                ->first();
+
+            if (empty($report)) {
+                abort(404);
+            }
+
+            $report->lines = DB::connection('hr')
+                ->table('sell_out_report_lines')
+                ->where('sell_out_report_id', $report_id)
+                ->orderBy('id')
+                ->get();
+
+            $report->photos = DB::connection('hr')
+                ->table('sell_out_report_photos')
+                ->where('sell_out_report_id', $report_id)
+                ->orderBy('id')
+                ->get();
+
+            return view('hrsellmanagement::sales.partials.pos_detail_modal', compact('report'));
+        } catch (\Throwable $e) {
+            \Log::warning('HR Sell POS detail error: ' . $e->getMessage());
+            abort(404);
+        }
+    }
+
+    public function posPhoto($photo_id)
+    {
+        abort_unless($this->canOpen(), 403);
+
+        try {
+            $photo = DB::connection('hr')
+                ->table('sell_out_report_photos')
+                ->where('id', $photo_id)
+                ->first();
+
+            if (empty($photo)) {
+                abort(404);
+            }
+
+            $relativePath = ltrim($photo->photo_path ?? '', '/\\');
+            if ($relativePath === '' || strpos($relativePath, '..') !== false) {
+                abort(404);
+            }
+
+            $relativePath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+            $candidateRoots = array_filter([
+                env('HR_SELL_OUT_PHOTO_PATH'),
+                env('HR_STORAGE_PATH'),
+                storage_path('app/public'),
+                public_path('storage'),
+            ]);
+
+            foreach ($candidateRoots as $root) {
+                $root = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $root), '\\/');
+                $path = $root . DIRECTORY_SEPARATOR . $relativePath;
+
+                if (is_file($path)) {
+                    return response()->file($path, [
+                        'Content-Type' => mime_content_type($path) ?: 'image/jpeg',
+                        'Cache-Control' => 'public, max-age=86400',
+                    ]);
+                }
+            }
+
+            if (! empty($photo->photo_url)) {
+                return redirect()->away($photo->photo_url);
+            }
+
+            abort(404);
+        } catch (\Throwable $e) {
+            \Log::warning('HR Sell POS photo error: ' . $e->getMessage());
+            abort(404);
+        }
+    }
+
     private function authorizeBusiness(HrSellRecord $record): void
     {
         abort_unless((int) $record->business_id === (int) session('user.business_id'), 403);
@@ -148,4 +194,114 @@ class HrSellController extends Controller
 
         return $user->can('hr_sell.view') || $user->can('superadmin') || $user->can('business_settings.access');
     }
+
+    private function posHrSellListData(Request $request): array
+    {
+        try {
+            $branches = DB::connection('hr')
+                ->table('sell_out_reports')
+                ->selectRaw('DISTINCT TRIM(branch_name) as branch_name')
+                ->whereNotNull('branch_name')
+                ->where('branch_name', '!=', '')
+                ->orderBy('branch_name')
+                ->pluck('branch_name', 'branch_name');
+
+            $sellTypes = DB::connection('hr')
+                ->table('sell_out_reports')
+                ->select('service_type')
+                ->distinct()
+                ->whereNotNull('service_type')
+                ->where('service_type', '!=', '')
+                ->orderBy('service_type')
+                ->pluck('service_type')
+                ->mapWithKeys(function ($type) {
+                    return [in_array($type, ['sell', 'លក់']) ? 'sell' : $type => in_array($type, ['sell', 'លក់']) ? 'Sell / លក់' : $type];
+                });
+
+            $sellers = DB::connection('hr')
+                ->table('sell_out_reports as sor')
+                ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+                ->selectRaw("COALESCE(CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name))) as seller_key")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as seller_name")
+                ->where(function ($q) {
+                    $q->whereNotNull('sor.user_id')
+                        ->orWhere(function ($query) {
+                            $query->whereNotNull('sor.seller_name')->where('sor.seller_name', '!=', '');
+                        });
+                })
+                ->groupBy('seller_key', 'seller_name')
+                ->orderBy('seller_name')
+                ->pluck('seller_name', 'seller_key');
+
+            $query = DB::connection('hr')
+                ->table('sell_out_reports as sor')
+                ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+                ->select(
+                    'sor.id',
+                    'sor.invoice_no',
+                    'sor.customer_phone',
+                    'sor.customer_name',
+                    'sor.seller_name',
+                    'sor.branch_name',
+                    'sor.total_amount',
+                    'sor.created_at',
+                    'sor.service_type',
+                    DB::raw('COALESCE(u.name, sor.seller_name) as staff_name')
+                );
+
+            $query
+                ->when($request->filled('start_date'), fn ($q) => $q->where('sor.created_at', '>=', $request->input('start_date') . ' 00:00:00'))
+                ->when($request->filled('end_date'), fn ($q) => $q->where('sor.created_at', '<=', $request->input('end_date') . ' 23:59:59'))
+                ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
+                ->when($request->filled('sell_type'), function ($q) use ($request) {
+                    $sellType = $request->input('sell_type');
+                    if (in_array($sellType, ['sell', 'លក់'])) {
+                        $q->whereIn('sor.service_type', ['sell', 'លក់']);
+                    } else {
+                        $q->where('sor.service_type', $sellType);
+                    }
+                })
+                ->when($request->filled('seller_key'), function ($q) use ($request) {
+                    $sellerKey = $request->input('seller_key');
+                    if (str_starts_with($sellerKey, 'seller:')) {
+                        $q->whereRaw('TRIM(sor.seller_name) = ?', [substr($sellerKey, 7)]);
+                    } else {
+                        $q->where('sor.user_id', $sellerKey);
+                    }
+                })
+                ->when($request->filled('search'), function ($q) use ($request) {
+                    $search = '%' . $request->input('search') . '%';
+                    $q->where(function ($query) use ($search) {
+                        $query->where('sor.invoice_no', 'like', $search)
+                            ->orWhere('sor.customer_phone', 'like', $search)
+                            ->orWhere('sor.customer_name', 'like', $search)
+                            ->orWhere('sor.seller_name', 'like', $search)
+                            ->orWhere('u.name', 'like', $search);
+                    });
+                });
+
+            $rows = $query->orderByDesc('sor.created_at')
+                ->paginate(50, ['*'], 'pos_hr_page')
+                ->appends($request->query());
+
+            return [$rows, $branches, $sellTypes, $sellers];
+        } catch (\Throwable $e) {
+            \Log::warning('Unable to load POS HR sell list in HrSellManagement: ' . $e->getMessage());
+
+            $emptyRows = new LengthAwarePaginator(
+                [],
+                0,
+                50,
+                (int) $request->input('pos_hr_page', 1),
+                [
+                    'path' => $request->url(),
+                    'pageName' => 'pos_hr_page',
+                    'query' => $request->query(),
+                ]
+            );
+
+            return [$emptyRows, collect(), collect(), collect()];
+        }
+    }
+
 }

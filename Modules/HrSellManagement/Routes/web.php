@@ -13,6 +13,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/', ['\Modules\HrSellManagement\Http\Controllers\DashboardController', 'index'])->name('dashboard');
         Route::get('/sales', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'index'])->name('sales.index');
         Route::post('/sales/link', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'link'])->name('sales.link');
+        Route::get('/sales/pos-detail/{report_id}', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'posDetail'])->name('sales.pos_detail');
+        Route::get('/sales/pos-photo/{photo_id}', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'posPhoto'])->name('sales.pos_photo');
         Route::get('/sales/{hrSell}', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'show'])->name('sales.show');
         Route::post('/sales/{hrSell}', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'update'])->name('sales.update');
         Route::post('/sales/{hrSell}/approve', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'approve'])->name('sales.approve');

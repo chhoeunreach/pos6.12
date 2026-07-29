@@ -44,14 +44,9 @@ class DataController extends Controller
                     'active' => request()->is('hr-sell'),
                 ]);
 
-                $sub->url(route('hr-sell.sales.index', ['mode' => 'link']), 'Sell From HR', [
-                    'icon' => 'fa fa-users',
-                    'active' => request()->is('hr-sell/sales') && request()->query('mode') === 'link',
-                ]);
-
                 $sub->url(route('hr-sell.sales.index'), 'HR Sell List', [
                     'icon' => 'fa fa-list',
-                    'active' => (request()->is('hr-sell/sales') || request()->is('hr-sell/sales/*')) && request()->query('mode') !== 'link',
+                    'active' => request()->is('hr-sell/sales') || request()->is('hr-sell/sales/*'),
                 ]);
 
                 if ($user->can('hr_sell.report') || $user->can('superadmin') || $user->can('business_settings.access')) {
