@@ -51,7 +51,7 @@
             width: 210mm;
             min-height: 297mm;
             margin: 0 auto 18px;
-            padding: 10mm 14mm 8mm;
+            padding: 8mm 8mm 6mm;
             background: #fff;
         }
         .kh-moul { font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif; font-weight: 400; }
@@ -67,35 +67,34 @@
 
         .header {
             position: relative;
-            min-height: 24mm;
-            padding-right: 6mm;
+            min-height: 28mm;
         }
         .brand-row {
             display: grid;
-            grid-template-columns: 32mm 1fr 32mm;
+            grid-template-columns: 31mm 1fr 31mm;
             position: relative;
             align-items: center;
-            min-height: 21mm;
+            min-height: 24mm;
         }
         .logo-wrap {
-            width: 28mm;
-            height: 21mm;
+            width: 24mm;
+            height: 22mm;
             text-align: left;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         .logo {
-            max-width: 28mm;
-            max-height: 21mm;
+            max-width: 24mm;
+            max-height: 22mm;
             object-fit: contain;
         }
         .brand-title {
             color: #ff8a00;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
-            font-weight: 400;
-            font-size: 23px;
-            line-height: 1.18;
+            font-weight: 700;
+            font-size: 29px;
+            line-height: 1.16;
             text-align: center;
             white-space: nowrap;
         }
@@ -104,20 +103,20 @@
         }
         .tagline {
             margin-top: 2mm;
-            padding-bottom: 0.7mm;
+            padding-bottom: 1mm;
             border-bottom: 1.5px solid #ff8a00;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
-            font-size: 10px;
-            line-height: 1.35;
-            text-align: center;
+            font-size: 10.4px;
+            line-height: 1.32;
+            text-align: left;
         }
 
         .info-grid {
             display: grid;
             grid-template-columns: 1.08fr 1.25fr 1.08fr;
-            gap: 7mm;
-            margin-top: 1.8mm;
-            margin-bottom: 1.5mm;
+            gap: 9mm;
+            margin-top: 7mm;
+            margin-bottom: 3mm;
         }
         .info-table {
             width: 100%;
@@ -125,10 +124,10 @@
             table-layout: fixed;
         }
         .info-table td {
-            padding: 1.5mm 0;
+            padding: 1mm 0;
             vertical-align: middle;
             border: none;
-            font-size: 11.4px;
+            font-size: 11.8px;
             line-height: 1.35;
         }
         .info-table .label {
@@ -136,14 +135,14 @@
             color: #7f9bb1;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-weight: 700;
-            font-size: 11.6px;
+            font-size: 11.8px;
         }
         .info-table .value {
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-weight: 700;
         }
         .address-row {
-            padding: 1.5mm 0 2.5mm;
+            padding: 1.3mm 0 2.4mm;
             border-bottom: 1.5px solid #ff8a00;
         }
         .address-row .blue-label {
@@ -158,11 +157,12 @@
         .print-table th,
         .print-table td {
             border: 1px solid #1f2933;
-            padding: 0.58mm 0.72mm;
+            padding: 0.55mm 0.68mm;
             text-align: center;
             vertical-align: middle;
-            font-size: 9px;
-            line-height: 1.25;
+            font-size: 9.3px;
+            line-height: 1.22;
+            font-weight: 700;
         }
         .print-table th {
             background: #f4f6f8;
@@ -192,16 +192,18 @@
         .product-title-text {
             padding: 1.55mm 1.8mm 1.35mm;
             text-align: center;
-            font-size: 20px;
-            line-height: 1.14;
+            font-size: 15.5px;
+            line-height: 1.2;
+            font-weight: 700;
         }
         .date-bar {
             border-left: 1px solid #1f2933;
             padding: 1.55mm 2mm 1.35mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             text-align: center;
-            font-size: 18px;
-            line-height: 1.14;
+            font-size: 11px;
+            line-height: 1.2;
+            font-weight: 700;
         }
         .summary-row td {
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
@@ -242,7 +244,7 @@
         }
         .print-table .summary-terms td {
             border: 0;
-            padding: 0.35mm 0;
+            padding: 0.28mm 0;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-size: 9.8px;
             text-align: left;
@@ -260,10 +262,10 @@
         .print-table .summary-totals td {
             border: 0;
             border-bottom: 1px solid #c7ced4;
-            padding: 1.02mm 1.45mm;
+            padding: 0.76mm 1.25mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
-            font-size: 9.8px;
-            line-height: 1.28;
+            font-size: 9.7px;
+            line-height: 1.2;
         }
         .print-table .summary-totals tr:last-child td {
             border-bottom: 0;
@@ -290,18 +292,19 @@
         }
         .schedule-table th,
         .schedule-table td {
-            padding: 0.52mm 0.62mm;
-            font-size: 8.55px;
-            line-height: 1.22;
+            padding: 0.46mm 0.56mm;
+            font-size: 8.8px;
+            line-height: 1.18;
+            font-weight: 700;
         }
         .schedule-table th {
             background: #f4f6f8;
-            font-size: 8.8px;
+            font-size: 9px;
             border-top: 1.7px solid #1f2933;
             border-bottom: 1.35px solid #1f2933;
         }
         .schedule-table tbody tr {
-            height: 5.38mm;
+            height: 5.2mm;
         }
         .schedule-table tbody tr:nth-child(even) td {
             background: #fbfcfd;
@@ -355,7 +358,7 @@
             color: blue;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-weight: 700;
-            font-size: 9.8px;
+            font-size: 10.2px;
             text-align: right;
         }
         .warranty-line {
@@ -366,8 +369,8 @@
         .signature-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            margin-top: 2.4mm;
-            min-height: 19.5mm;
+            margin-top: 3.4mm;
+            min-height: 22mm;
             break-inside: avoid;
             page-break-inside: avoid;
         }
@@ -375,27 +378,27 @@
             text-align: center;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-weight: 700;
-            font-size: 17px;
+            font-size: 14px;
             line-height: 1.35;
         }
         .signature-name {
-            margin-top: 6.5mm;
+            margin-top: 7.2mm;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
-            font-size: 15px;
+            font-size: 11.5px;
         }
         .signature-line {
-            width: 43mm;
+            width: 37mm;
             border-top: 1.1px solid #000;
             margin: 3.2mm auto 0;
         }
         .notice {
             border-top: 1.6px solid #ff8a00;
             border-bottom: 1.6px solid #ff8a00;
-            padding: 2.3mm 3.8mm;
+            padding: 2mm 3.4mm;
             text-align: center;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
-            font-size: 8.9px;
-            line-height: 1.42;
+            font-size: 8.5px;
+            line-height: 1.38;
             break-inside: avoid;
             page-break-inside: avoid;
         }
@@ -403,19 +406,19 @@
             color: red;
             font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer UI', Arial, sans-serif;
             font-weight: 700;
-            font-size: 10.8px;
+            font-size: 10.2px;
         }
         .payment-area {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12mm;
-            padding-top: 2.1mm;
+            gap: 18mm;
+            padding-top: 3.5mm;
             align-items: end;
             break-inside: avoid;
             page-break-inside: avoid;
         }
         .payment-card {
-            min-height: 38mm;
+            min-height: 42mm;
             text-align: center;
         }
         .payment-card .caption {
@@ -425,8 +428,8 @@
             font-size: 9px;
             margin-bottom: 1mm;
         }
-        .qr-large { max-width: 32mm; max-height: 32mm; }
-        .qr-small { max-width: 26mm; max-height: 26mm; }
+        .qr-large { max-width: 36mm; max-height: 36mm; }
+        .qr-small { max-width: 28mm; max-height: 28mm; }
         .transfer-number {
             margin: 2.2mm 0 2.4mm;
             font-size: 12px;
@@ -451,84 +454,88 @@
         }
         .nowrap { white-space: nowrap; }
         .page.loan-print-compact {
-            padding: 5.8mm 9.4mm 4.4mm;
+            padding: 6mm 7.2mm 4.8mm;
         }
         .loan-print-compact .header {
-            min-height: 18.7mm;
+            min-height: 28mm;
         }
         .loan-print-compact .brand-row {
-            min-height: 16mm;
+            min-height: 23.5mm;
         }
         .loan-print-compact .logo-wrap {
             width: 23mm;
-            height: 16mm;
+            height: 21.5mm;
         }
         .loan-print-compact .logo {
             max-width: 23mm;
-            max-height: 16mm;
+            max-height: 21.5mm;
         }
         .loan-print-compact .brand-title {
-            font-size: 22px;
+            font-size: 28px;
+            line-height: 1.16;
         }
         .loan-print-compact .tagline {
-            margin-top: 0.8mm;
-            padding-bottom: 0.6mm;
-            font-size: 9.4px;
+            margin-top: 1.6mm;
+            padding-bottom: 1mm;
+            font-size: 10.2px;
             line-height: 1.3;
         }
         .loan-print-compact .info-grid {
-            margin-top: 0.55mm;
-            margin-bottom: 0.55mm;
-            gap: 6mm;
+            margin-top: 6.8mm;
+            margin-bottom: 2.8mm;
+            gap: 8mm;
         }
         .loan-print-compact .info-table {
             width: 100%;
         }
         .loan-print-compact .info-table td {
-            padding: 0.48mm 0;
-            font-size: 10.2px;
+            padding: 0.9mm 0;
+            font-size: 11.2px;
             line-height: 1.28;
         }
         .loan-print-compact .info-table .label {
-            font-size: 10.25px;
+            font-size: 11.2px;
         }
         .loan-print-compact .address-row {
-            padding: 0.35mm 0 0.9mm;
-            font-size: 17px;
+            padding: 1mm 0 2.2mm;
+            font-size: 11.4px;
         }
         .loan-print-compact .product-title-text,
         .loan-print-compact .date-bar {
-            padding-top: 1.15mm;
-            padding-bottom: 1.05mm;
-            font-size: 17px;
-            line-height: 1.22;
+            padding-top: 0.8mm;
+            padding-bottom: 0.7mm;
+            font-size: 12px;
+            line-height: 1.18;
+        }
+        .loan-print-compact .product-title-text {
+            font-size: 14px;
         }
         .loan-print-compact .summary-terms-cell {
-            padding: 1.45mm 2.4mm !important;
+            padding: 1.1mm 2.1mm !important;
         }
         .loan-print-compact .print-table .summary-terms td {
-            padding: 0.32mm 0;
+            padding: 0.25mm 0;
         }
         .loan-print-compact .print-table .summary-totals td {
-            padding: 0.88mm 1.4mm;
+            padding: 0.68mm 1.2mm;
         }
         .loan-print-compact .print-table th,
         .loan-print-compact .print-table td {
-            padding: 0.43mm 0.58mm;
-            font-size: 8.45px;
-            line-height: 1.18;
+            padding: 0.46mm 0.56mm;
+            font-size: 8.8px;
+            line-height: 1.16;
         }
         .loan-print-compact .schedule-table tbody tr {
-            height: 5mm;
+            height: 5.15mm;
         }
         .loan-print-compact .schedule-table th,
         .loan-print-compact .schedule-table td {
-            padding: 0.38mm 0.52mm;
-            font-size: 8px;
-            line-height: 1.16;
+            padding: 0.42mm 0.5mm;
+            font-size: 8.45px;
+            line-height: 1.14;
         }
         .loan-print-compact .schedule-table th {
-            font-size: 8.35px;
+            font-size: 8.75px;
         }
         .loan-print-compact .payment-method-cell,
         .loan-print-compact .payment-date-cell {
@@ -541,16 +548,16 @@
             border-radius: 1.25mm;
         }
         .loan-print-compact .signature-row {
-            margin-top: 1.3mm;
-            min-height: 16.8mm;
+            margin-top: 3.2mm;
+            min-height: 22mm;
         }
         .loan-print-compact .signature-name {
-            margin-top: 3.8mm;
+            margin-top: 6mm;
         }
         .loan-print-compact .notice {
-            padding: 1.55mm 3mm;
-            font-size: 8.15px;
-            line-height: 1.3;
+            padding: 1.7mm 3mm;
+            font-size: 8.25px;
+            line-height: 1.34;
         }
         .loan-print-compact .notice .title {
             font-size: 10px;
@@ -560,23 +567,23 @@
             line-height: 1.25;
         }
         .loan-print-compact .payment-area {
-            padding-top: 0.95mm;
-            gap: 9mm;
+            padding-top: 3mm;
+            gap: 17mm;
         }
         .loan-print-compact .payment-card {
-            min-height: 35mm;
+            min-height: 41mm;
         }
         .loan-print-compact .payment-card .caption {
             font-size: 8.75px;
             margin-bottom: 0.6mm;
         }
         .loan-print-compact .qr-large {
-            max-width: 31mm;
-            max-height: 31mm;
+            max-width: 35mm;
+            max-height: 35mm;
         }
         .loan-print-compact .qr-small {
-            max-width: 25mm;
-            max-height: 25mm;
+            max-width: 28mm;
+            max-height: 28mm;
         }
         .loan-print-compact .transfer-number {
             margin: 1mm 0 0.8mm;
@@ -590,7 +597,7 @@
             font-size: 7.55px;
         }
 
-        @page { size: A4 portrait; margin: 6mm; }
+        @page { size: A4 portrait; margin: 5mm; }
         @media print {
             body {
                 background: #fff;
@@ -602,55 +609,55 @@
                 width: auto;
                 min-height: auto;
                 margin: 0;
-                padding: 3.8mm 6.4mm 3.2mm;
+                padding: 3.5mm 5.6mm 3mm;
             }
             .page.loan-print-compact {
-                padding: 3.2mm 5.8mm 2.8mm;
+                padding: 3.2mm 5.2mm 2.8mm;
             }
             .print-table th,
             .print-table td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
             .info-grid {
-                gap: 5.8mm;
-                margin-top: 0.55mm;
-                margin-bottom: 0.55mm;
+                gap: 7mm;
+                margin-top: 6.2mm;
+                margin-bottom: 2.5mm;
             }
             .info-table {
                 width: 100%;
             }
             .address-row {
-                padding: 0.35mm 0 0.9mm;
+                padding: 0.85mm 0 2mm;
             }
             .schedule-table th,
             .schedule-table td {
-                padding: 0.38mm 0.52mm;
-                font-size: 8px;
-                line-height: 1.16;
+                padding: 0.42mm 0.5mm;
+                font-size: 8.45px;
+                line-height: 1.14;
             }
             .loan-print-compact .schedule-table th,
             .loan-print-compact .schedule-table td {
-                padding: 0.35mm 0.48mm;
-                font-size: 7.9px;
-                line-height: 1.14;
+                padding: 0.38mm 0.48mm;
+                font-size: 8.25px;
+                line-height: 1.12;
             }
             .loan-print-compact .schedule-table tbody tr {
-                height: 4.95mm;
+                height: 5mm;
             }
             .contact-line {
                 font-size: 9.5px;
             }
             .signature-row {
-                margin-top: 1.1mm;
-                min-height: 16mm;
+                margin-top: 3mm;
+                min-height: 21mm;
             }
             .signature-name {
-                margin-top: 3.6mm;
+                margin-top: 5.8mm;
             }
             .signature-line {
                 margin-top: 2.2mm;
             }
             .notice {
-                padding: 1.45mm 3mm;
-                font-size: 8px;
+                padding: 1.55mm 3mm;
+                font-size: 8.1px;
                 line-height: 1.28;
             }
             .notice .title {
@@ -661,23 +668,23 @@
                 line-height: 1.22;
             }
             .payment-area {
-                gap: 9mm;
-                padding-top: 0.95mm;
+                gap: 16mm;
+                padding-top: 2.6mm;
             }
             .payment-card {
-                min-height: 35mm;
+                min-height: 40mm;
             }
             .payment-card .caption {
                 font-size: 8.65px;
                 margin-bottom: 0.7mm;
             }
             .qr-large {
-                max-width: 31mm;
-                max-height: 31mm;
+                max-width: 34mm;
+                max-height: 34mm;
             }
             .qr-small {
-                max-width: 25mm;
-                max-height: 25mm;
+                max-width: 27mm;
+                max-height: 27mm;
             }
             .transfer-number {
                 margin: 1.6mm 0 1mm;
