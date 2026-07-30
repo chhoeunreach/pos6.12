@@ -56,7 +56,12 @@ class DataController extends Controller
                 if ($user->can('hr_sell.report') || $user->can('superadmin') || $user->can('business_settings.access')) {
                     $sub->url(route('hr-sell.reports.index'), 'Reports', [
                         'icon' => 'fa fa-bar-chart',
-                        'active' => request()->is('hr-sell/reports*'),
+                        'active' => request()->is('hr-sell/reports') || request()->is('hr-sell/reports/*/edit'),
+                    ]);
+
+                    $sub->url(route('hr-sell.reports.staff'), 'Staff Sell Report', [
+                        'icon' => 'fa fa-user',
+                        'active' => request()->is('hr-sell/reports/staff*'),
                     ]);
                 }
 

@@ -47,6 +47,61 @@ class ReportController extends Controller
         return Excel::download(new ArrayExport($exportRows), 'hr_sell_report_' . now()->format('Ymd_His') . '.xlsx');
     }
 
+    public function staff(Request $request)
+    {
+        abort_unless($this->canReport(), 403);
+
+        $request = $this->withDefaultStaffReportDates($request);
+        [$summaryRows, $lineRows, $totals, $period, $topSellers, $trafficRows] = $this->staffReportData($request, true);
+        [$hrBranches, $hrSellTypes, $hrSellers] = $this->filterOptions();
+
+        return view('hrsellmanagement::reports.staff', compact('summaryRows', 'lineRows', 'totals', 'period', 'topSellers', 'trafficRows', 'hrBranches', 'hrSellTypes', 'hrSellers'));
+    }
+
+    public function staffExport(Request $request)
+    {
+        abort_unless($this->canReport(), 403);
+
+        $request = $this->withDefaultStaffReportDates($request);
+        $staffReport = $this->staffReportData($request, false);
+        $summaryRows = $staffReport[0];
+        $lineRows = $staffReport[1];
+        $period = $staffReport[3];
+        $type = $request->input('export_type') === 'lines' ? 'lines' : 'summary';
+
+        if ($type === 'lines') {
+            $exportRows = $lineRows->map(fn ($row) => [
+                'Period' => $row->period_label,
+                'Date' => $row->created_at,
+                'Invoice' => $row->invoice_no,
+                'Branch' => $row->branch_name,
+                'Seller Username' => $row->staff_code,
+                'Seller' => $row->staff_name,
+                'Sell Type' => $this->sellTypeLabel($row->service_type),
+                'Product' => $row->product_name,
+                'SKU' => $row->sku,
+                'Serial / IMEI' => $row->serial_identifier,
+                'Qty' => $row->qty,
+                'Price' => $row->unit_price,
+                'Total' => $row->line_total,
+            ])->all();
+        } else {
+            $exportRows = $summaryRows->map(fn ($row) => [
+                'Period' => $row->period_label,
+                'Seller Username' => $row->staff_code,
+                'Seller' => $row->staff_name,
+                'Branch' => $row->branch_name,
+                'Sales' => $row->sale_count,
+                'Lines' => $row->line_count,
+                'Qty' => $row->total_qty,
+                'Average Price' => $row->average_price,
+                'Total' => $row->sale_total,
+            ])->all();
+        }
+
+        return Excel::download(new ArrayExport($exportRows), 'hr_staff_sell_' . $period . '_' . $type . '_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
     public function edit($report_id)
     {
         abort_unless($this->canEditReport(), 403);
@@ -174,6 +229,230 @@ class ReportController extends Controller
 
             return [$this->emptyRows($request), $this->emptySummary()];
         }
+    }
+
+    private function staffReportData(Request $request, bool $paginate): array
+    {
+        try {
+            $period = $request->input('period') === 'monthly' ? 'monthly' : 'daily';
+            $periodExpr = $period === 'monthly'
+                ? "DATE_FORMAT(sor.created_at, '%Y-%m')"
+                : 'DATE(sor.created_at)';
+            $lineExpressions = $this->hrLineAmountExpressions();
+            $base = $this->baseStaffLineQuery($request, $periodExpr, $lineExpressions);
+
+            $totals = (array) (clone $base)->selectRaw('
+                COUNT(DISTINCT sor.id) as sale_count,
+                COUNT(sol.id) as line_count,
+                COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty,
+                COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as sale_total
+            ')->first();
+            $totals['average_price'] = (float) ($totals['total_qty'] ?? 0) > 0
+                ? (float) ($totals['sale_total'] ?? 0) / (float) $totals['total_qty']
+                : 0;
+
+            $topSellers = (clone $base)
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
+                ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
+                ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
+                ->selectRaw('COUNT(sol.id) as line_count')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as sale_total')
+                ->groupBy(
+                    DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown')"),
+                    DB::raw("NULLIF(TRIM(u.username), '')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')")
+                )
+                ->orderByDesc('sale_total')
+                ->orderByDesc('sale_count')
+                ->limit(10)
+                ->get()
+                ->values()
+                ->map(function ($row, $index) {
+                    $row->rank = $index + 1;
+                    $row->average_price = (float) $row->total_qty > 0 ? (float) $row->sale_total / (float) $row->total_qty : 0;
+
+                    return $row;
+                });
+
+            $trafficRows = (clone $base)
+                ->selectRaw($periodExpr . ' as period_label')
+                ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
+                ->selectRaw('COUNT(sol.id) as line_count')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as sale_total')
+                ->groupBy(DB::raw($periodExpr))
+                ->orderBy('period_label')
+                ->get()
+                ->map(function ($row) {
+                    $row->average_price = (float) $row->total_qty > 0 ? (float) $row->sale_total / (float) $row->total_qty : 0;
+
+                    return $row;
+                });
+
+            $summaryQuery = (clone $base)
+                ->selectRaw($periodExpr . ' as period_label')
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
+                ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
+                ->selectRaw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown') as branch_name")
+                ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
+                ->selectRaw('COUNT(sol.id) as line_count')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as sale_total')
+                ->groupBy(
+                    DB::raw($periodExpr),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown')"),
+                    DB::raw("NULLIF(TRIM(u.username), '')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown')")
+                )
+                ->orderByDesc('period_label')
+                ->orderByDesc('sale_total');
+
+            $summaryRows = $paginate
+                ? $summaryQuery->paginate(50, ['*'], 'staff_summary_page')->appends($request->query())
+                : $summaryQuery->get();
+
+            $summaryCollection = method_exists($summaryRows, 'getCollection') ? $summaryRows->getCollection() : $summaryRows;
+            $summaryCollection->transform(function ($row) {
+                $row->average_price = (float) $row->total_qty > 0 ? (float) $row->sale_total / (float) $row->total_qty : 0;
+
+                return $row;
+            });
+
+            $lineRows = $this->emptyRows($request, 100, 'staff_lines_page');
+            if ($request->boolean('show_lines') || ! $paginate) {
+                $linesQuery = (clone $base)
+                    ->selectRaw($periodExpr . ' as period_label')
+                    ->select(
+                        'sor.id as report_id',
+                        'sor.invoice_no',
+                        'sor.branch_name',
+                        'sor.created_at',
+                        'sor.service_type',
+                        'sol.product_name',
+                        'sol.sku'
+                    )
+                    ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
+                    ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
+                    ->selectRaw($lineExpressions['serial'] . ' as serial_identifier')
+                    ->selectRaw($lineExpressions['qty'] . ' as qty')
+                    ->selectRaw($lineExpressions['price'] . ' as unit_price')
+                    ->selectRaw($lineExpressions['total'] . ' as line_total')
+                    ->orderByDesc('sor.created_at')
+                    ->orderByDesc('sor.id')
+                    ->orderBy('sol.id');
+
+                $lineRows = $paginate
+                    ? $linesQuery->paginate(100, ['*'], 'staff_lines_page')->appends($request->query())
+                    : $linesQuery->get();
+
+                $lineCollection = method_exists($lineRows, 'getCollection') ? $lineRows->getCollection() : $lineRows;
+                $lineCollection->transform(function ($row) {
+                    $row->service_type_label = $this->sellTypeLabel($row->service_type);
+
+                    return $row;
+                });
+            }
+
+            return [$summaryRows, $lineRows, $totals, $period, $topSellers, $trafficRows];
+        } catch (\Throwable $e) {
+            \Log::warning('Unable to load HR staff sell report data: ' . $e->getMessage());
+
+            return [$this->emptyRows($request, 50, 'staff_summary_page'), $this->emptyRows($request, 100, 'staff_lines_page'), $this->emptySummary(), $request->input('period') === 'monthly' ? 'monthly' : 'daily', collect(), collect()];
+        }
+    }
+
+    private function baseStaffLineQuery(Request $request, string $periodExpr, array $lineExpressions)
+    {
+        return DB::connection('hr')
+            ->table('sell_out_reports as sor')
+            ->join('sell_out_report_lines as sol', 'sol.sell_out_report_id', '=', 'sor.id')
+            ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
+            ->when($request->filled('start_date'), fn ($q) => $q->where('sor.created_at', '>=', $request->input('start_date') . ' 00:00:00'))
+            ->when($request->filled('end_date'), fn ($q) => $q->where('sor.created_at', '<=', $request->input('end_date') . ' 23:59:59'))
+            ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
+            ->when($request->filled('sell_type'), function ($q) use ($request) {
+                $q->whereIn('sor.service_type', $this->sellTypeValues($request->input('sell_type')));
+            })
+            ->when($request->filled('seller_key'), function ($q) use ($request) {
+                $sellerKey = $request->input('seller_key');
+                if (str_starts_with($sellerKey, 'seller:')) {
+                    $q->whereRaw('TRIM(sor.seller_name) = ?', [substr($sellerKey, 7)]);
+                } elseif ($this->looksLikeUsername($sellerKey)) {
+                    $q->whereRaw('TRIM(u.username) = ?', [$sellerKey]);
+                } else {
+                    $q->where('sor.user_id', $sellerKey);
+                }
+            })
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = '%' . $request->input('search') . '%';
+                $q->where(function ($query) use ($search) {
+                    $query->where('sor.invoice_no', 'like', $search)
+                        ->orWhere('sor.customer_phone', 'like', $search)
+                        ->orWhere('sor.customer_name', 'like', $search)
+                        ->orWhere('sor.seller_name', 'like', $search)
+                        ->orWhere('u.username', 'like', $search)
+                        ->orWhere('u.name', 'like', $search)
+                        ->orWhere('sol.product_name', 'like', $search)
+                        ->orWhere('sol.sku', 'like', $search)
+                        ->orWhere('sol.serial_number', 'like', $search)
+                        ->orWhere('sol.imei', 'like', $search)
+                        ->orWhere('sol.imei2', 'like', $search)
+                        ->orWhere('sol.primary_identifier', 'like', $search);
+                });
+            });
+    }
+
+    private function hrLineAmountExpressions(): array
+    {
+        $qtyColumn = $this->firstHrLineColumn(['qty', 'quantity', 'sale_qty', 'product_qty']);
+        $priceColumn = $this->firstHrLineColumn(['unit_price', 'price', 'sell_price', 'selling_price', 'product_price']);
+        $totalColumn = $this->firstHrLineColumn(['line_total', 'total', 'total_amount', 'subtotal', 'amount']);
+
+        $qtyExpr = $qtyColumn ? 'COALESCE(sol.' . $qtyColumn . ', 0)' : '1';
+        $reportLineCountExpr = "(SELECT COUNT(*) FROM sell_out_report_lines as sol_count WHERE sol_count.sell_out_report_id = sor.id)";
+        $totalExpr = $totalColumn
+            ? 'COALESCE(sol.' . $totalColumn . ', 0)'
+            : ($priceColumn ? '(' . $qtyExpr . ' * COALESCE(sol.' . $priceColumn . ', 0))' : '(COALESCE(sor.total_amount, 0) / NULLIF(' . $reportLineCountExpr . ', 0))');
+        $priceExpr = $priceColumn
+            ? 'COALESCE(sol.' . $priceColumn . ', 0)'
+            : ($totalColumn ? '(' . $totalExpr . ' / NULLIF(' . $qtyExpr . ', 0))' : '0');
+
+        return [
+            'qty' => $qtyExpr,
+            'price' => $priceExpr,
+            'total' => $totalExpr,
+            'serial' => "NULLIF(TRIM(CONCAT_WS(' / ', NULLIF(sol.serial_number, ''), NULLIF(sol.imei, ''), NULLIF(sol.imei2, ''), NULLIF(sol.primary_identifier, ''))), '')",
+        ];
+    }
+
+    private function firstHrLineColumn(array $columns): ?string
+    {
+        foreach ($columns as $column) {
+            if (Schema::connection('hr')->hasColumn('sell_out_report_lines', $column)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    private function withDefaultStaffReportDates(Request $request): Request
+    {
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            return $request;
+        }
+
+        $period = $request->input('period') === 'monthly' ? 'monthly' : 'daily';
+        $request->merge([
+            'start_date' => $period === 'monthly' ? now()->startOfMonth()->toDateString() : now()->toDateString(),
+            'end_date' => now()->toDateString(),
+        ]);
+
+        return $request;
     }
 
     private function selectReportRows($query)
@@ -307,7 +586,7 @@ class ReportController extends Controller
             'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'Buy In', 'buy_in', 'buyin', 'ទិញចូល', 'Buy In / ទិញចូល', 'Buy In/ទិញចូល', 'ទិញចូល / Buy In', 'ទិញចូល/Buy In']],
             'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'Repair', 'ជួសជុល', 'Repair / ជួសជុល', 'Repair/ជួសជុល', 'ជួសជុល / Repair', 'ជួសជុល/Repair']],
             'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'Material', 'materials', 'Materials', 'សម្ភារ', 'Material / សម្ភារ', 'Material/សម្ភារ', 'សម្ភារ / Material', 'សម្ភារ/Material']],
-            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'Iron', 'អ៊ុត', 'Iron / អ៊ុត', 'Iron/អ៊ុត', 'អ៊ុត / Iron', 'អ៊ុត/Iron']],
+            'iron' => ['label' => 'Iron / អ៊ុត', 'values' => ['iron', 'Iron', 'អ៊ុត', 'Iron / អ៊ុត', 'Iron/អ៊ុត', 'អ៊ុត / Iron', 'អ៊ុត/Iron', 'Scots', 'scots']],
             'icloud_cus' => ['label' => 'iCloud Cus', 'values' => ['icloud cus', 'iCloud Cus', 'icloud_cus', 'icloudcus']],
         ];
     }
@@ -346,11 +625,11 @@ class ReportController extends Controller
         return (bool) preg_match('/^[A-Za-z]+[A-Za-z0-9_-]*\d+[A-Za-z0-9_-]*$/', $sellerKey);
     }
 
-    private function emptyRows(Request $request): LengthAwarePaginator
+    private function emptyRows(Request $request, int $perPage = 50, string $pageName = 'hr_report_page'): LengthAwarePaginator
     {
-        return new LengthAwarePaginator([], 0, 50, (int) $request->input('hr_report_page', 1), [
+        return new LengthAwarePaginator([], 0, $perPage, (int) $request->input($pageName, 1), [
             'path' => $request->url(),
-            'pageName' => 'hr_report_page',
+            'pageName' => $pageName,
             'query' => $request->query(),
         ]);
     }
@@ -363,6 +642,8 @@ class ReportController extends Controller
             'sale_total' => 0,
             'average_sale' => 0,
             'total_qty' => 0,
+            'line_count' => 0,
+            'average_price' => 0,
         ];
     }
 
