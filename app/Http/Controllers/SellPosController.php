@@ -357,8 +357,21 @@ class SellPosController extends Controller
             return ['', ''];
         }
 
+        $location_name = trim((string) $location->name);
         $code = $location->location_id;
         $group = config("hr.location_group_map.{$code}");
+        $mappedSellType = is_array($group) ? ($group[1] ?? '') : '';
+
+        $branchFromLocationName = $this->resolveHrBranchNameFromLocationName($location_name);
+        if (!empty($branchFromLocationName)) {
+            $cache[$location_id] = [$branchFromLocationName, $mappedSellType];
+            return [$branchFromLocationName, $mappedSellType];
+        }
+
+        if (!empty($location_name)) {
+            $cache[$location_id] = [$location_name, $mappedSellType];
+            return [$location_name, $mappedSellType];
+        }
 
         if (is_array($group) && count($group) >= 2) {
             $cache[$location_id] = [$group[0], $group[1]];
@@ -369,17 +382,39 @@ class SellPosController extends Controller
             return [$group, ''];
         }
 
-        $location_name = $location->name;
-        $map = config('hr.location_group_map', []);
-        foreach ($map as $branch => $entry) {
-            if (is_array($entry) && str_starts_with($location_name, $branch)) {
-                $cache[$location_id] = [$branch, $entry[1] ?? ''];
-                return [$branch, $entry[1] ?? ''];
+        $cache[$location_id] = [$location_name, ''];
+        return [$location_name, ''];
+    }
+
+    private function resolveHrBranchNameFromLocationName($location_name)
+    {
+        if (empty($location_name)) {
+            return '';
+        }
+
+        $candidateBranches = collect(config('hr.location_group_map', []))
+            ->map(function ($entry) {
+                return is_array($entry) ? ($entry[0] ?? '') : $entry;
+            });
+
+        try {
+            $candidateBranches = $candidateBranches->merge($this->getHrSellListBranches());
+        } catch (\Exception $e) {
+            \Log::warning('Unable to resolve HR branch from location name: ' . $e->getMessage());
+        }
+
+        foreach ($candidateBranches->filter()->unique()->values() as $branchName) {
+            $branchName = trim((string) $branchName);
+            if ($branchName === '') {
+                continue;
+            }
+
+            if ($location_name === $branchName || str_starts_with($location_name, $branchName) || str_starts_with($branchName, $location_name)) {
+                return $branchName;
             }
         }
 
-        $cache[$location_id] = [$location_name, ''];
-        return [$location_name, ''];
+        return '';
     }
 
     private function getHrSellOutReports($location_id = null, $date_from = null, $date_to = null, $sell_type = null, $page = 1, $per_page = 50, $branch_name = null)
@@ -427,7 +462,11 @@ class SellPosController extends Controller
                     }
                 })
                 ->when(!empty($searchNames), function ($query) use ($searchNames) {
-                    $query->whereIn('sor.branch_name', $searchNames);
+                    $query->where(function ($query) use ($searchNames) {
+                        foreach ($searchNames as $name) {
+                            $query->orWhereRaw('TRIM(sor.branch_name) LIKE ?', ['%' . trim((string) $name) . '%']);
+                        }
+                    });
                 })
                 ->when(!empty($date_from), function ($query) use ($date_from) {
                     $query->where('sor.created_at', '>=', $date_from . ' 00:00:00');
@@ -659,7 +698,11 @@ class SellPosController extends Controller
                 ->orderBy('service_type');
 
             if (!empty($searchNames)) {
-                $query->whereIn('branch_name', $searchNames);
+                $query->where(function ($query) use ($searchNames) {
+                    foreach ($searchNames as $name) {
+                        $query->orWhereRaw('TRIM(branch_name) LIKE ?', ['%' . trim((string) $name) . '%']);
+                    }
+                });
             }
 
             return $query->get()->pluck('service_type');
@@ -674,10 +717,9 @@ class SellPosController extends Controller
         try {
             return DB::connection('hr')
                 ->table('sell_out_reports')
-                ->select('branch_name')
+                ->selectRaw('DISTINCT TRIM(branch_name) as branch_name')
                 ->whereNotNull('branch_name')
                 ->where('branch_name', '!=', '')
-                ->distinct()
                 ->orderBy('branch_name')
                 ->get()
                 ->pluck('branch_name');

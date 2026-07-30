@@ -25,9 +25,15 @@
         <div class="sell-list-filter-field">
             <label>Branch</label>
             <select class="sell-list-filter-branch form-control">
-                @php $defaultHrBranch = $default_hr_branch ?? ''; @endphp
-                @if (!empty($hr_branches))
-                    @foreach ($hr_branches as $branch)
+                @php
+                    $defaultHrBranch = $default_hr_branch ?? '';
+                    $hrBranchOptions = collect($hr_branches ?? []);
+                @endphp
+                @if (!empty($defaultHrBranch) && !$hrBranchOptions->contains($defaultHrBranch))
+                    <option value="{{ $defaultHrBranch }}" selected>{{ $defaultHrBranch }}</option>
+                @endif
+                @if ($hrBranchOptions->isNotEmpty())
+                    @foreach ($hrBranchOptions as $branch)
                         <option value="{{ $branch }}" {{ $branch === $defaultHrBranch ? 'selected' : '' }}>{{ $branch }}</option>
                     @endforeach
                 @endif
