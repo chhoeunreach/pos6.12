@@ -89,6 +89,7 @@
         height: 100%;
         background: #2f80aa;
     }
+
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_staff_sell_filter_box">

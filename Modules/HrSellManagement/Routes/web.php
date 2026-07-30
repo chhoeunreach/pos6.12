@@ -11,6 +11,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
     ->as('hr-sell.')
     ->group(function () {
         Route::get('/', ['\Modules\HrSellManagement\Http\Controllers\DashboardController', 'index'])->name('dashboard');
+        Route::get('/sales-traffic', ['\Modules\HrSellManagement\Http\Controllers\DashboardController', 'salesTraffic'])->name('dashboard.sales_traffic');
         Route::get('/sales', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'index'])->name('sales.index');
         Route::post('/sales/link', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'link'])->name('sales.link');
         Route::get('/sales/pos-detail/{report_id}', ['\Modules\HrSellManagement\Http\Controllers\HrSellController', 'posDetail'])->name('sales.pos_detail');

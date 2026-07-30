@@ -38,6 +38,34 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function salesTraffic(Request $request)
+    {
+        abort_unless($this->canOpen(), 403);
+
+        $period = $request->input('period') === 'monthly' ? 'monthly' : 'daily';
+        $today = now()->toDateString();
+        $filters = [
+            'start_date' => $request->input('start_date') ?: ($period === 'monthly' ? now()->startOfMonth()->toDateString() : $today),
+            'end_date' => $request->input('end_date') ?: $today,
+            'branch_name' => $request->input('branch_name'),
+            'sell_type' => $request->input('sell_type'),
+        ];
+
+        $data = $this->salesTrafficData($filters, $period);
+
+        return view('hrsellmanagement::dashboard.sales_traffic', [
+            'filters' => $filters,
+            'period' => $period,
+            'metrics' => $data['metrics'],
+            'trafficRows' => $data['trafficRows'],
+            'locationCards' => $data['locationCards'],
+            'hrBranches' => $data['branches'],
+            'hrSellTypes' => $data['sellTypes'],
+            'hrConnectionOk' => $data['ok'],
+            'hrConnectionMessage' => $data['message'],
+        ]);
+    }
+
     private function posHrDashboardData(array $filters): array
     {
         try {
@@ -149,6 +177,100 @@ class DashboardController extends Controller
                 'topBranches' => collect(),
                 'topSellTypes' => collect(),
                 'recent' => collect(),
+                'branches' => collect(),
+                'sellTypes' => collect(),
+            ];
+        }
+    }
+
+    private function salesTrafficData(array $filters, string $period): array
+    {
+        try {
+            $periodExpr = $period === 'monthly'
+                ? "DATE_FORMAT(created_at, '%Y-%m')"
+                : 'DATE(created_at)';
+            $locationPeriodExpr = $period === 'monthly'
+                ? "DATE_FORMAT(created_at, '%Y-%m')"
+                : 'DATE(created_at)';
+            $base = $this->filteredPosQuery($filters);
+            $branches = $this->hrBranches();
+            $sellTypes = $this->hrSellTypes();
+
+            $metrics = [
+                'sale_count' => (int) (clone $base)->count(),
+                'sale_total' => (float) (clone $base)->sum('total_amount'),
+                'location_count' => (int) (clone $base)->whereNotNull('branch_name')->where('branch_name', '!=', '')->distinct()->count('branch_name'),
+                'average_sale' => 0,
+            ];
+            $metrics['average_sale'] = $metrics['sale_count'] > 0 ? $metrics['sale_total'] / $metrics['sale_count'] : 0;
+
+            $trafficRows = (clone $base)
+                ->selectRaw($periodExpr . ' as period_label')
+                ->selectRaw('COUNT(*) as sale_count')
+                ->selectRaw('COALESCE(SUM(total_amount), 0) as sale_total')
+                ->groupBy(DB::raw($periodExpr))
+                ->orderBy('period_label')
+                ->get();
+
+            $locationRows = (clone $base)
+                ->selectRaw($locationPeriodExpr . ' as period_label')
+                ->selectRaw("COALESCE(NULLIF(TRIM(branch_name), ''), 'Unknown') as branch_name")
+                ->selectRaw('COUNT(*) as sale_count')
+                ->selectRaw('COALESCE(SUM(total_amount), 0) as sale_total')
+                ->groupBy(
+                    DB::raw($locationPeriodExpr),
+                    DB::raw("COALESCE(NULLIF(TRIM(branch_name), ''), 'Unknown')")
+                )
+                ->orderByDesc('period_label')
+                ->orderByDesc('sale_total')
+                ->get()
+                ->groupBy('period_label')
+                ->flatMap(function ($rows) {
+                    return $rows->values()->map(function ($row, $index) {
+                        $row->rank = $index + 1;
+
+                        return $row;
+                    });
+                })
+                ->values();
+
+            $locationCards = $locationRows
+                ->groupBy('branch_name')
+                ->map(function ($rows, $branchName) {
+                    return (object) [
+                        'branch_name' => $branchName,
+                        'sale_count' => $rows->sum('sale_count'),
+                        'sale_total' => $rows->sum('sale_total'),
+                        'average_sale' => (float) $rows->sum('sale_count') > 0 ? (float) $rows->sum('sale_total') / (float) $rows->sum('sale_count') : 0,
+                        'rows' => $rows,
+                    ];
+                })
+                ->sortByDesc('sale_total')
+                ->values();
+
+            return [
+                'ok' => true,
+                'message' => null,
+                'metrics' => $metrics,
+                'trafficRows' => $trafficRows,
+                'locationCards' => $locationCards,
+                'branches' => $branches,
+                'sellTypes' => $sellTypes,
+            ];
+        } catch (\Throwable $e) {
+            \Log::warning('Unable to load HR Sales Traffic dashboard data: ' . $e->getMessage());
+
+            return [
+                'ok' => false,
+                'message' => $e->getMessage(),
+                'metrics' => [
+                    'sale_count' => 0,
+                    'sale_total' => 0,
+                    'location_count' => 0,
+                    'average_sale' => 0,
+                ],
+                'trafficRows' => collect(),
+                'locationCards' => collect(),
                 'branches' => collect(),
                 'sellTypes' => collect(),
             ];

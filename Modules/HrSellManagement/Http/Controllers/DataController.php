@@ -47,6 +47,11 @@ class DataController extends Controller
                         'active' => request()->is('hr-sell'),
                     ]);
 
+                    $sub->url(route('hr-sell.dashboard.sales_traffic'), 'Sales Traffic Dashboard', [
+                        'icon' => 'fa fa-line-chart',
+                        'active' => request()->is('hr-sell/sales-traffic*'),
+                    ]);
+
                     $sub->url(route('hr-sell.sales.index'), 'HR Sell List', [
                         'icon' => 'fa fa-list',
                         'active' => request()->is('hr-sell/sales') || request()->is('hr-sell/sales/*'),
