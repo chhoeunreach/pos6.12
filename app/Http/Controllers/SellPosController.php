@@ -3234,28 +3234,57 @@ class SellPosController extends Controller
         try {
             $api_token = $request->header('API-TOKEN');
             $api_settings = $this->moduleUtil->getApiSettings($api_token);
+            if (empty($api_settings)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid API token.',
+                ], 401);
+            }
 
             $business_id = $api_settings->business_id;
             $location_id = $api_settings->location_id;
 
             $input = $request->only(['products', 'customer_id', 'addresses']);
+            $input['addresses'] = $input['addresses'] ?? [];
+            $input['products'] = $this->normalizeEcommerceOrderProducts($input['products'] ?? []);
 
             //check if all stocks are available
-            $variation_ids = [];
-            foreach ($input['products'] as $product_data) {
-                $variation_ids[] = $product_data['variation_id'];
+            if (empty($input['products']) || empty($input['customer_id'])) {
+                return $this->respond([
+                    'success' => false,
+                    'error_messages' => ['Customer and products are required.'],
+                ]);
             }
 
+            $variation_ids = array_keys($input['products']);
             $variations_details = $this->getVariationsDetails($business_id, $location_id, $variation_ids);
             $is_valid = true;
             $error_messages = [];
             $sell_lines = [];
             $final_total = 0;
+            $found_variation_ids = $variations_details->pluck('id')->all();
+            $missing_variation_ids = array_diff($variation_ids, $found_variation_ids);
+
+            foreach ($missing_variation_ids as $missing_variation_id) {
+                $is_valid = false;
+                $error_messages[] = 'Invalid variation_id: ' . $missing_variation_id;
+            }
+
             foreach ($variations_details as $variation_details) {
+                if (empty($variation_details->product)) {
+                    $is_valid = false;
+                    $error_messages[] = 'Invalid product for variation_id: ' . $variation_details->id;
+                    continue;
+                }
+
+                $requested_product = $input['products'][$variation_details->id];
+                $requested_quantity = $requested_product['quantity'];
+                $available_quantity = optional($variation_details->variation_location_details->first())->qty_available;
+
                 if ($variation_details->product->enable_stock == 1) {
-                    if (empty($variation_details->variation_location_details[0]) || $variation_details->variation_location_details[0]->qty_available < $input['products'][$variation_details->id]['quantity']) {
+                    if ($available_quantity === null || $available_quantity < $requested_quantity) {
                         $is_valid = false;
-                        $error_messages[] = 'Only ' . $variation_details->variation_location_details[0]->qty_available . ' ' . $variation_details->product->unit->short_name . ' of ' . $input['products'][$variation_details->id]['product_name'] . ' available';
+                        $error_messages[] = 'Only ' . (float) ($available_quantity ?? 0) . ' ' . $variation_details->product->unit->short_name . ' of ' . $requested_product['product_name'] . ' available';
                     }
                 }
 
@@ -3266,13 +3295,13 @@ class SellPosController extends Controller
                     'unit_price' => $variation_details->unit_price_inc_tax,
                     'unit_price_inc_tax' => $variation_details->unit_price_inc_tax,
                     'variation_id' => $variation_details->id,
-                    'quantity' => $input['products'][$variation_details->id]['quantity'],
+                    'quantity' => $requested_quantity,
                     'item_tax' => 0,
                     'enable_stock' => $variation_details->product->enable_stock,
                     'tax_id' => null,
                 ];
 
-                $final_total += ($input['products'][$variation_details->id]['quantity'] * $variation_details->unit_price_inc_tax);
+                $final_total += ($requested_quantity * $variation_details->unit_price_inc_tax);
             }
 
             if (!$is_valid) {
@@ -3294,6 +3323,13 @@ class SellPosController extends Controller
             $customer = Contact::where('business_id', $business_id)
                 ->whereIn('type', ['customer', 'both'])
                 ->find($input['customer_id']);
+
+            if (empty($customer)) {
+                return $this->respond([
+                    'success' => false,
+                    'error_messages' => ['Invalid customer_id.'],
+                ]);
+            }
 
             $order_data = [
                 'business_id' => $business_id,
@@ -3352,6 +3388,7 @@ class SellPosController extends Controller
                 'success' => 1,
                 'transaction' => $transaction,
                 'receipt' => $receipt,
+                'print' => $receipt,
             ];
         } catch (\Exception $e) {
             DB::rollBack();
@@ -3373,6 +3410,38 @@ class SellPosController extends Controller
         }
 
         return $this->respond($output);
+    }
+
+    private function normalizeEcommerceOrderProducts($products)
+    {
+        $normalized = [];
+
+        foreach ((array) $products as $key => $product) {
+            if (! is_array($product)) {
+                continue;
+            }
+
+            $variation_id = $product['variation_id'] ?? (is_numeric($key) ? null : $key);
+            if (empty($variation_id)) {
+                continue;
+            }
+
+            $quantity = $product['quantity'] ?? $product['qty'] ?? 0;
+            $quantity = (float) $quantity;
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            $normalized[(int) $variation_id] = [
+                'variation_id' => (int) $variation_id,
+                'quantity' => $quantity,
+                'product_name' => $product['product_name'] ?? $product['name'] ?? $product['sku'] ?? ('Variation ' . $variation_id),
+                'sku' => $product['sku'] ?? null,
+                'color' => $product['color'] ?? null,
+            ];
+        }
+
+        return $normalized;
     }
 
     private function getVariationsDetails($business_id, $location_id, $variation_ids)

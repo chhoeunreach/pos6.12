@@ -542,6 +542,7 @@ class ModuleUtil extends Util
     public function getApiSettings($api_token)
     {
         $settings = \Modules\Ecommerce\Entities\EcomApiSetting::where('api_token', $api_token)
+                                ->where('is_active', 1)
                                 ->first();
 
         return $settings;
