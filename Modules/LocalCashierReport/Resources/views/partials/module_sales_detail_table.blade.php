@@ -126,6 +126,7 @@
                     <th class="all-sale-location-column">Location</th>
                     <th>Group</th>
                     <th class="all-sale-cashier-column">User/Cashier</th>
+                    <th>Sell note</th>
                 @else
                     <th class="all-sale-cashier-column">User/Cashier</th>
                 @endif
@@ -230,6 +231,7 @@
                             </span>
                         </td>
                         <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
+                        <td>{{ $row['sell_note_number'] ?? '' }}</td>
                     @else
                         <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
                     @endif
@@ -275,6 +277,7 @@
                     {{ $fmt($saleRows->sum(fn ($row) => (float) ($row['due'] ?? 0))) }}
                 </th>
                 @if($isAllSaleTable)
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>

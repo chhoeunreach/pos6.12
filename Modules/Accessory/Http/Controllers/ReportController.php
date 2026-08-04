@@ -4116,4 +4116,3 @@ class ReportController extends Controller
         return view('accessory::report.gst_purchase_report')->with(compact('suppliers', 'taxes'));
     }
 }
-

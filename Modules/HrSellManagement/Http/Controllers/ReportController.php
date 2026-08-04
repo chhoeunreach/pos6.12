@@ -316,8 +316,30 @@ class ReportController extends Controller
                 : $summaryQuery->get();
 
             $summaryCollection = method_exists($summaryRows, 'getCollection') ? $summaryRows->getCollection() : $summaryRows;
-            $summaryCollection->transform(function ($row) {
+            $summaryCollection->transform(function ($row) use ($request, $period) {
                 $row->average_price = (float) $row->total_qty > 0 ? (float) $row->sale_total / (float) $row->total_qty : 0;
+                $periodLabel = $row->period_label ?? ($request->input('start_date') ?: now()->toDateString());
+                $row->period_label = $periodLabel;
+                $detailQuery = $request->except(['staff_summary_page', 'staff_lines_page']);
+                $detailQuery['show_lines'] = 1;
+                $detailQuery['seller_key'] = $row->seller_key;
+
+                if (! empty($row->branch_name) && $row->branch_name !== 'Unknown') {
+                    $detailQuery['branch_name'] = $row->branch_name;
+                }
+
+                if ($period === 'monthly') {
+                    $month = preg_match('/^\d{4}-\d{2}$/', $periodLabel)
+                        ? \Carbon\Carbon::createFromFormat('Y-m', $periodLabel)
+                        : \Carbon\Carbon::parse($periodLabel);
+                    $detailQuery['start_date'] = $month->copy()->startOfMonth()->toDateString();
+                    $detailQuery['end_date'] = $month->copy()->endOfMonth()->toDateString();
+                } else {
+                    $detailQuery['start_date'] = $periodLabel;
+                    $detailQuery['end_date'] = $periodLabel;
+                }
+
+                $row->detail_url = route('hr-sell.reports.staff', $detailQuery) . '#hr_staff_sell_lines';
 
                 return $row;
             });
@@ -352,6 +374,7 @@ class ReportController extends Controller
                 $lineCollection = method_exists($lineRows, 'getCollection') ? $lineRows->getCollection() : $lineRows;
                 $lineCollection->transform(function ($row) {
                     $row->service_type_label = $this->sellTypeLabel($row->service_type);
+                    $row->detail_url = route('hr-sell.sales.pos_detail', [$row->report_id]);
 
                     return $row;
                 });

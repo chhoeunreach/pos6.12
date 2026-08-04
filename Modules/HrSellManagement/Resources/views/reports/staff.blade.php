@@ -4,6 +4,7 @@
 @php
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('period');
     $showLines = request()->boolean('show_lines');
+    $filterBodyStyle = $hasActiveFilters ? '' : 'display:none;';
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -90,6 +91,14 @@
         background: #2f80aa;
     }
 
+    .hr-staff-clickable-row {
+        cursor: pointer;
+    }
+
+    .hr-staff-clickable-row:hover > td {
+        background: #eef7fb !important;
+    }
+
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_staff_sell_filter_box">
@@ -99,15 +108,15 @@
             <button type="button" class="btn btn-box-tool hr-staff-sell-filter-button" title="{{ $hasActiveFilters ? 'Collapse filters' : 'Expand filters' }}"><i class="fa {{ $hasActiveFilters ? 'fa-minus' : 'fa-plus' }}"></i></button>
         </div>
     </div>
-    <div class="box-body" id="hr_staff_sell_filter_body" @unless($hasActiveFilters) style="display:none;" @endunless>
+    <div class="box-body" id="hr_staff_sell_filter_body" style="{{ $filterBodyStyle }}">
         <form method="get" action="{{ route('hr-sell.reports.staff') }}">
             <div class="row">
                 <div class="col-md-2">
                     <div class="form-group">
                         <label>Period:</label>
                         <select name="period" class="form-control">
-                            <option value="daily" @selected($period === 'daily')>Daily</option>
-                            <option value="monthly" @selected($period === 'monthly')>Monthly</option>
+                            <option value="daily" {{ $period === 'daily' ? 'selected' : '' }}>Daily</option>
+                            <option value="monthly" {{ $period === 'monthly' ? 'selected' : '' }}>Monthly</option>
                         </select>
                     </div>
                 </div>
@@ -128,7 +137,7 @@
                         <select name="branch_name" class="form-control select2">
                             <option value="">All</option>
                             @foreach($hrBranches as $branch => $name)
-                                <option value="{{ $branch }}" @selected((string) request('branch_name') === (string) $branch)>{{ $name }}</option>
+                                <option value="{{ $branch }}" {{ (string) request('branch_name') === (string) $branch ? 'selected' : '' }}>{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -139,7 +148,7 @@
                         <select name="seller_key" class="form-control select2">
                             <option value="">All</option>
                             @foreach($hrSellers as $key => $name)
-                                <option value="{{ $key }}" @selected((string) request('seller_key') === (string) $key)>{{ $name }}</option>
+                                <option value="{{ $key }}" {{ (string) request('seller_key') === (string) $key ? 'selected' : '' }}>{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -152,7 +161,7 @@
                         <select name="sell_type" class="form-control select2">
                             <option value="">All</option>
                             @foreach($hrSellTypes as $type => $name)
-                                <option value="{{ $type }}" @selected((string) request('sell_type') === (string) $type)>{{ $name }}</option>
+                                <option value="{{ $type }}" {{ (string) request('sell_type') === (string) $type ? 'selected' : '' }}>{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -167,7 +176,7 @@
                     <div class="form-group">
                         <label>&nbsp;</label>
                         <div class="checkbox" style="margin-top: 7px;">
-                            <label><input type="checkbox" name="show_lines" value="1" @checked($showLines)> Show sale lines</label>
+                            <label><input type="checkbox" name="show_lines" value="1" {{ $showLines ? 'checked' : '' }}> Show sale lines</label>
                         </div>
                     </div>
                 </div>
@@ -213,20 +222,17 @@
         <div class="box box-primary">
             <div class="box-header"><h4>Top Seller Range</h4></div>
             <div class="box-body">
-                @if($topSeller)
+                @foreach(collect([$topSeller])->filter() as $topSeller)
                     <h3 style="margin-top:0;">{{ $topSeller->staff_name }}</h3>
-                    @if(! empty($topSeller->staff_code))
-                        <p class="text-muted" style="margin-top:-8px;">{{ $topSeller->staff_code }}</p>
-                    @endif
+                    {!! ! empty($topSeller->staff_code) ? '<p class="text-muted" style="margin-top:-8px;">' . e($topSeller->staff_code) . '</p>' : '' !!}
                     <table class="table table-condensed">
                         <tr><th>Rank</th><td class="text-right">#{{ $topSeller->rank }}</td></tr>
                         <tr><th>Sales</th><td class="text-right">{{ number_format((float) $topSeller->sale_count, 0) }}</td></tr>
                         <tr><th>Qty</th><td class="text-right">{{ number_format((float) $topSeller->total_qty, 2) }}</td></tr>
                         <tr><th>Total</th><td class="text-right">{{ number_format((float) $topSeller->sale_total, 2) }}</td></tr>
                     </table>
-                @else
-                    <p class="text-muted">No top seller for selected range.</p>
-                @endif
+                @endforeach
+                {!! empty($topSeller) ? '<p class="text-muted">No top seller for selected range.</p>' : '' !!}
             </div>
         </div>
     </div>
@@ -245,16 +251,18 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($topSellers as $seller)
+                        @foreach($topSellers as $seller)
                             <tr>
                                 <td><span class="hr-staff-rank-badge">{{ $seller->rank }}</span></td>
-                                <td>{{ $seller->staff_name }} @if(! empty($seller->staff_code))<small class="text-muted">({{ $seller->staff_code }})</small>@endif</td>
+                                <td>
+                                    {{ $seller->staff_name }}
+                                    {!! ! empty($seller->staff_code) ? '<small class="text-muted">(' . e($seller->staff_code) . ')</small>' : '' !!}
+                                </td>
                                 <td class="text-right">{{ number_format((float) $seller->sale_count, 0) }}</td>
                                 <td class="text-right">{{ number_format((float) $seller->sale_total, 2) }}</td>
                             </tr>
-                        @empty
-                            <tr><td colspan="4" class="text-center text-muted">No seller ranking for selected range.</td></tr>
-                        @endforelse
+                        @endforeach
+                        {!! $topSellers->isEmpty() ? '<tr><td colspan="4" class="text-center text-muted">No seller ranking for selected range.</td></tr>' : '' !!}
                     </tbody>
                 </table>
             </div>
@@ -275,10 +283,10 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($trafficRows as $traffic)
+                        @foreach($trafficRows as $traffic)
                             @php($trafficPercent = min(100, round(((float) $traffic->sale_total / $maxTrafficTotal) * 100)))
                             <tr>
-                                <td>{{ $traffic->period_label }}</td>
+                                <td>{{ $traffic->period_label ?? '-' }}</td>
                                 <td class="text-right">{{ number_format((float) $traffic->sale_count, 0) }}</td>
                                 <td class="text-right">{{ number_format((float) $traffic->sale_total, 2) }}</td>
                                 <td class="hr-staff-traffic-bar">
@@ -287,9 +295,8 @@
                                     </div>
                                 </td>
                             </tr>
-                        @empty
-                            <tr><td colspan="4" class="text-center text-muted">No sales traffic for selected range.</td></tr>
-                        @endforelse
+                        @endforeach
+                        {!! $trafficRows->isEmpty() ? '<tr><td colspan="4" class="text-center text-muted">No sales traffic for selected range.</td></tr>' : '' !!}
                     </tbody>
                 </table>
             </div>
@@ -311,23 +318,27 @@
                     <th class="text-right">Qty</th>
                     <th class="text-right">Avg Price</th>
                     <th class="text-right">Total</th>
+                    <th>Detail</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($summaryRows as $row)
-                    <tr>
-                        <td>{{ $row->period_label }}</td>
-                        <td>{{ $row->staff_name }} @if(! empty($row->staff_code))<small class="text-muted">({{ $row->staff_code }})</small>@endif</td>
+                @foreach($summaryRows as $row)
+                    <tr class="hr-staff-clickable-row" data-href="{{ $row->detail_url }}">
+                        <td>{{ $row->period_label ?? '-' }}</td>
+                        <td>
+                            {{ $row->staff_name }}
+                            {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                        </td>
                         <td>{{ $row->branch_name }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_count, 0) }}</td>
                         <td class="text-right">{{ number_format((float) $row->line_count, 0) }}</td>
                         <td class="text-right">{{ number_format((float) $row->total_qty, 2) }}</td>
                         <td class="text-right">{{ number_format((float) $row->average_price, 2) }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_total, 2) }}</td>
+                        <td><a class="btn btn-xs btn-primary" href="{{ $row->detail_url }}"><i class="fa fa-eye"></i> View</a></td>
                     </tr>
-                @empty
-                    <tr><td colspan="8" class="text-center text-muted">No staff sell data found for selected filters.</td></tr>
-                @endforelse
+                @endforeach
+                {!! count($summaryRows) === 0 ? '<tr><td colspan="9" class="text-center text-muted">No staff sell data found for selected filters.</td></tr>' : '' !!}
             </tbody>
         </table>
         <div class="clearfix">
@@ -337,8 +348,7 @@
     </div>
 </div>
 
-@if($showLines)
-    <div class="box box-info">
+    <div class="box box-info" id="hr_staff_sell_lines" style="{{ $showLines ? '' : 'display:none;' }}">
         <div class="box-header"><h4>Sale Lines</h4></div>
         <div class="box-body table-responsive">
             <table class="table table-bordered table-striped">
@@ -359,12 +369,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($lineRows as $row)
-                        <tr>
-                            <td>{{ $row->period_label }}</td>
-                            <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ route('hr-sell.sales.pos_detail', [$row->report_id]) }}" data-container=".view_modal">{{ $row->invoice_no }}</button></td>
+                    @foreach($lineRows as $row)
+                        <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
+                            <td>{{ $row->period_label ?? '-' }}</td>
+                            <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
                             <td>{{ $row->created_at }}</td>
-                            <td>{{ $row->staff_name }} @if(! empty($row->staff_code))<small class="text-muted">({{ $row->staff_code }})</small>@endif</td>
+                            <td>
+                                {{ $row->staff_name }}
+                                {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                            </td>
                             <td>{{ $row->branch_name }}</td>
                             <td>{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
                             <td>{{ $row->product_name ?: '-' }}</td>
@@ -374,9 +387,8 @@
                             <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
                             <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
                         </tr>
-                    @empty
-                        <tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>
-                    @endforelse
+                    @endforeach
+                    {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                 </tbody>
             </table>
             <div class="clearfix">
@@ -385,7 +397,6 @@
             </div>
         </div>
     </div>
-@endif
 @endsection
 
 @section('module_js')
@@ -450,6 +461,26 @@ $(function() {
         }
         e.preventDefault();
         setFilterExpanded(filterBox.hasClass('collapsed-box'));
+    });
+
+    $(document).on('click', '.hr-staff-clickable-row', function(e) {
+        if ($(e.target).closest('a, button, input, select, textarea, label').length) {
+            return;
+        }
+
+        var href = $(this).data('href');
+        if (!href) {
+            return;
+        }
+
+        if ($(this).hasClass('hr-staff-line-detail-row')) {
+            $('.view_modal').load(href, function() {
+                $(this).modal('show');
+            });
+            return;
+        }
+
+        window.location.href = href;
     });
 });
 </script>

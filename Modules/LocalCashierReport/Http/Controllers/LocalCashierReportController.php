@@ -984,6 +984,7 @@ class LocalCashierReportController extends Controller
                 'i_t' => $itText !== '' ? $itText : '-',
                 'cashier_id' => (int) $line->created_by,
                 'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
+                'sell_note_number' => $this->numericText($sellNote),
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
                 'phone_number' => $this->resolveCustomerPhone($line->customer_phone ?? null, $line->staff_note ?? null),
@@ -1389,6 +1390,7 @@ class LocalCashierReportController extends Controller
                 'i_t' => $itText !== '' ? $itText : '-',
                 'cashier_id' => (int) $line->created_by,
                 'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
+                'sell_note_number' => $this->numericText($sellNote),
                 'location_id' => (int) $line->location_id,
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
                 'customer_name' => (string) ($line->customer_name ?? 'Walk-In Customer'),
@@ -2111,6 +2113,14 @@ class LocalCashierReportController extends Controller
         }
 
         return $amount;
+    }
+
+    private function numericText($value): string
+    {
+        $number = preg_replace('/\D+/', '', (string) ($value ?? '')) ?? '';
+        $number = ltrim($number, '0');
+
+        return $number !== '' ? $number : '';
     }
 
     private function currencySymbol(): string
