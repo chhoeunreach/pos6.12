@@ -200,13 +200,13 @@ class SellReturnController extends Controller
                                 <ul class="dropdown-menu dropdown-menu-right" role="menu">
                                     <li>
                                         <a href="#" class="btn-modal" data-container=".view_modal" 
-                                            data-href="' . action('App\Http\Controllers\SellReturnController@show', [$row->parent_sale_id]) . '">
+                                            data-href="' . action('App\Http\Controllers\SellReturnController@show', [$row->id]) . '">
                                             <i class="fas fa-eye" aria-hidden="true"></i> ' . __('messages.view') . '
                                         </a>
                                     </li>
                                     <li>
                                         <a href="' . action('App\Http\Controllers\SellReturnController@add', [$row->parent_sale_id]) . '">
-                                            <i class="fa fa-edit" aria-hidden="true"></i> ' . __('messages.edit') . '
+                                            <i class="fa fa-plus" aria-hidden="true"></i> ' . __('messages.add') . ' ' . __('lang_v1.sell_return') . '
                                         </a>
                                     </li>
                                     <li>
@@ -287,7 +287,7 @@ class SellReturnController extends Controller
                 ->setRowAttr([
                     'data-href' => function ($row) {
                         if (auth()->user()->can('sell.view')) {
-                            return action([\App\Http\Controllers\SellReturnController::class, 'show'], [$row->parent_sale_id]);
+                            return action([\App\Http\Controllers\SellReturnController::class, 'show'], [$row->id]);
                         } else {
                             return '';
                         }
@@ -354,7 +354,7 @@ class SellReturnController extends Controller
         }
 
         $sell = Transaction::where('business_id', $business_id)
-            ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
+            ->with(['sell_lines', 'location', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
             ->find($id);
 
         foreach ($sell->sell_lines as $key => $value) {
@@ -364,6 +364,10 @@ class SellReturnController extends Controller
             }
 
             $sell->sell_lines[$key]->formatted_qty = $this->transactionUtil->num_f($value->quantity, false, null, true);
+            $remaining_qty = max(0, $value->quantity - $value->quantity_returned);
+            $sell->sell_lines[$key]->formatted_returned_qty = $this->transactionUtil->num_f($value->quantity_returned, false, null, true);
+            $sell->sell_lines[$key]->remaining_qty = $remaining_qty;
+            $sell->sell_lines[$key]->formatted_remaining_qty = $this->transactionUtil->num_f($remaining_qty, false, null, true);
         }
 
         return view('sell_return.add')
@@ -445,9 +449,12 @@ class SellReturnController extends Controller
         $business_id = request()->session()->get('user.business_id');
         $query = Transaction::where('business_id', $business_id)
             ->where('id', $id)
+            ->where('type', 'sell_return')
             ->with(
                 'contact',
-                'return_parent',
+                'return_parent_sell',
+                'return_parent_sell.contact',
+                'return_parent_sell.location',
                 'tax',
                 'sell_lines',
                 'sell_lines.product',
@@ -460,9 +467,9 @@ class SellReturnController extends Controller
             );
 
         if (!auth()->user()->can('access_sell_return') && auth()->user()->can('access_own_sell_return')) {
-            $sells->where('created_by', request()->session()->get('user.id'));
+            $query->where('created_by', request()->session()->get('user.id'));
         }
-        $sell = $query->first();
+        $sell = $query->firstOrFail();
 
         foreach ($sell->sell_lines as $key => $value) {
             if (!empty($value->sub_unit_id)) {
@@ -472,29 +479,29 @@ class SellReturnController extends Controller
         }
 
         $sell_taxes = [];
-        if (!empty($sell->return_parent->tax)) {
-            if ($sell->return_parent->tax->is_tax_group) {
-                $sell_taxes = $this->transactionUtil->sumGroupTaxDetails($this->transactionUtil->groupTaxDetails($sell->return_parent->tax, $sell->return_parent->tax_amount));
+        if (!empty($sell->tax)) {
+            if ($sell->tax->is_tax_group) {
+                $sell_taxes = $this->transactionUtil->sumGroupTaxDetails($this->transactionUtil->groupTaxDetails($sell->tax, $sell->tax_amount));
             } else {
-                $sell_taxes[$sell->return_parent->tax->name] = $sell->return_parent->tax_amount;
+                $sell_taxes[$sell->tax->name] = $sell->tax_amount;
             }
         }
 
         $total_discount = 0;
-        if ($sell->return_parent->discount_type == 'fixed') {
-            $total_discount = $sell->return_parent->discount_amount;
-        } elseif ($sell->return_parent->discount_type == 'percentage') {
-            $discount_percent = $sell->return_parent->discount_amount;
+        if ($sell->discount_type == 'fixed') {
+            $total_discount = $sell->discount_amount;
+        } elseif ($sell->discount_type == 'percentage') {
+            $discount_percent = $sell->discount_amount;
             if ($discount_percent == 100) {
-                $total_discount = $sell->return_parent->total_before_tax;
+                $total_discount = $sell->total_before_tax;
             } else {
-                $total_after_discount = $sell->return_parent->final_total - $sell->return_parent->tax_amount;
+                $total_after_discount = $sell->final_total - $sell->tax_amount;
                 $total_before_discount = $total_after_discount * 100 / (100 - $discount_percent);
                 $total_discount = $total_before_discount - $total_after_discount;
             }
         }
 
-        $activities = Activity::forSubject($sell->return_parent)
+        $activities = Activity::forSubject($sell)
             ->with(['causer', 'subject'])
             ->latest()
             ->get();
@@ -527,30 +534,32 @@ class SellReturnController extends Controller
                     ->with(['sell_lines', 'payment_lines']);
 
                 if (!auth()->user()->can('access_sell_return') && auth()->user()->can('access_own_sell_return')) {
-                    $sells->where('created_by', request()->session()->get('user.id'));
+                    $query->where('created_by', request()->session()->get('user.id'));
                 }
-                $sell_return = $query->first();
+                $sell_return = $query->firstOrFail();
 
-                $sell_lines = TransactionSellLine::where('transaction_id',
-                    $sell_return->return_parent_id)
-                    ->get();
+                $parent_sell_lines = TransactionSellLine::where('transaction_id', $sell_return->return_parent_id)
+                    ->get()
+                    ->keyBy('id');
 
                 if (!empty($sell_return)) {
                     $transaction_payments = $sell_return->payment_lines;
 
-                    foreach ($sell_lines as $sell_line) {
-                        if ($sell_line->quantity_returned > 0) {
-                            $quantity = 0;
-                            $quantity_before = $this->transactionUtil->num_f($sell_line->quantity_returned);
+                    foreach ($sell_return->sell_lines as $return_line) {
+                        $sell_line = $parent_sell_lines->get($return_line->parent_sell_line_id);
 
-                            $sell_line->quantity_returned = 0;
+                        if (!empty($sell_line) && $return_line->quantity > 0) {
+                            $quantity_before = $sell_line->quantity_returned;
+                            $quantity = max(0, $quantity_before - $return_line->quantity);
+
+                            $sell_line->quantity_returned = $quantity;
                             $sell_line->save();
 
                             //update quantity sold in corresponding purchase lines
-                            $this->transactionUtil->updateQuantitySoldFromSellLine($sell_line, 0, $quantity_before);
+                            $this->transactionUtil->updateQuantitySoldFromSellLine($sell_line, $quantity, $quantity_before, false);
 
                             // Update quantity in variation location details
-                            $this->productUtil->updateProductQuantity($sell_return->location_id, $sell_line->product_id, $sell_line->variation_id, 0, $quantity_before);
+                            $this->productUtil->updateProductQuantity($sell_return->location_id, $sell_line->product_id, $sell_line->variation_id, $quantity, $quantity_before, null, false);
                         }
                     }
 

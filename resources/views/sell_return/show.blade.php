@@ -1,22 +1,25 @@
 <div class="modal-dialog modal-xl no-print" role="document">
   <div class="modal-content">
+    @php
+      $parent_sell = $sell->return_parent_sell;
+    @endphp
     <div class="modal-header">
     <button type="button" class="close no-print" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-    <h4 class="modal-title" id="modalTitle"> @lang('lang_v1.sell_return') (<b>@lang('sale.invoice_no'):</b> {{ $sell->return_parent->invoice_no }})
+    <h4 class="modal-title" id="modalTitle"> @lang('lang_v1.sell_return') (<b>@lang('sale.invoice_no'):</b> {{ $sell->invoice_no }})
     </h4>
 </div>
 <div class="modal-body">
    <div class="row">
       <div class="col-sm-6 col-xs-6">
         <h4>@lang('lang_v1.sell_return_details'):</h4>
-        <strong>@lang('lang_v1.return_date'):</strong> {{@format_date($sell->return_parent->transaction_date)}}<br>
+        <strong>@lang('lang_v1.return_date'):</strong> {{@format_date($sell->transaction_date)}}<br>
         <strong>@lang('contact.customer'):</strong> {{ $sell->contact->name }} <br>
         <strong>@lang('purchase.business_location'):</strong> {{ $sell->location->name }}
       </div>
       <div class="col-sm-6 col-xs-6">
         <h4>@lang('lang_v1.sell_details'):</h4>
-        <strong>@lang('sale.invoice_no'):</strong> {{ $sell->invoice_no }} <br>
-        <strong>@lang('messages.date'):</strong> {{@format_date($sell->transaction_date)}}
+        <strong>@lang('sale.invoice_no'):</strong> {{ $parent_sell->invoice_no ?? '' }} <br>
+        <strong>@lang('messages.date'):</strong> @if(!empty($parent_sell)) {{@format_date($parent_sell->transaction_date)}} @endif
       </div>
     </div>
     <br>
@@ -42,7 +45,7 @@
             @endphp
             @foreach($sell->sell_lines as $sell_line)
 
-            @if($sell_line->quantity_returned == 0)
+            @if($sell_line->quantity == 0)
                 @continue
             @endif
 
@@ -67,10 +70,10 @@
                     <td>{{ $sell_line->lot_details->lot_number ?? '--' }}</td>
                 @endif
                 <td><span class="display_currency" data-currency_symbol="true">{{ $sell_line->unit_price_inc_tax }}</span></td>
-                <td>{{@format_quantity($sell_line->quantity_returned)}} {{$unit_name}}</td>
+                <td>{{@format_quantity($sell_line->quantity)}} {{$unit_name}}</td>
                 <td>
                   @php
-                    $line_total = $sell_line->unit_price_inc_tax * $sell_line->quantity_returned;
+                    $line_total = $sell_line->unit_price_inc_tax * $sell_line->quantity;
                     $total_before_tax += $line_total ;
                   @endphp
                   <span class="display_currency" data-currency_symbol="true">{{$line_total}}</span>
@@ -93,8 +96,8 @@
         <tr>
           <th>@lang('lang_v1.return_discount'): </th>
           <td><b>(-)</b></td>
-          <td class="text-right">@if($sell->return_parent->discount_type == 'percentage')
-              @<strong><small>{{$sell->return_parent->discount_amount}}%</small></strong> -
+          <td class="text-right">@if($sell->discount_type == 'percentage')
+              <strong><small>{{$sell->discount_amount}}%</small></strong> -
               @endif
           <span class="display_currency pull-right" data-currency_symbol="true">{{ $total_discount }}</span></td>
         </tr>
@@ -115,7 +118,7 @@
         <tr>
           <th>@lang('lang_v1.return_total'):</th>
           <td></td>
-          <td><span class="display_currency pull-right" data-currency_symbol="true" >{{ $sell->return_parent->final_total }}</span></td>
+          <td><span class="display_currency pull-right" data-currency_symbol="true" >{{ $sell->final_total }}</span></td>
         </tr>
       </table>
     </div>
@@ -128,7 +131,7 @@
   </div>
 </div>
 <div class="modal-footer">
-    <a href="#" class="print-invoice tw-dw-btn tw-dw-btn-primary tw-text-white" data-href="{{action([\App\Http\Controllers\SellReturnController::class, 'printInvoice'], [$sell->return_parent->id])}}"><i class="fa fa-print" aria-hidden="true"></i> @lang("messages.print")</a>
+    <a href="#" class="print-invoice tw-dw-btn tw-dw-btn-primary tw-text-white" data-href="{{action([\App\Http\Controllers\SellReturnController::class, 'printInvoice'], [$sell->id])}}"><i class="fa fa-print" aria-hidden="true"></i> @lang("messages.print")</a>
       <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white no-print" data-dismiss="modal">@lang( 'messages.close' )</button>
     </div>
   </div>
