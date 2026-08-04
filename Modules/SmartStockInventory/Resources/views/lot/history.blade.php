@@ -145,6 +145,7 @@
                     d.end_date = $('#lot_history_end_date').val();
                 }
             },
+            order: [[0, 'desc']],
             columns: [
                 { data: 'movement_date', name: 'movement_date' },
                 { data: 'location_name', name: 'location_name' },

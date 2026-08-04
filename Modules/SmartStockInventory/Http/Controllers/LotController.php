@@ -347,7 +347,9 @@ class LotController extends BaseSmartStockController
                 $movementUnion = $adjustmentMovements;
             }
 
-            $movements = DB::query()->fromSub($movementUnion, 'lot_movements');
+            $movements = DB::query()
+                ->fromSub($movementUnion, 'lot_movements')
+                ->orderByDesc('movement_date');
 
             return DataTables::of($movements)
                 ->addColumn('transaction_id', function ($row) {
