@@ -67,6 +67,7 @@
                                     <option value="all">{{ __('messages.all') }}</option>
                                     <option value="purchase">{{ __('purchase.purchase') }}</option>
                                     <option value="sell">{{ __('sale.sale') }}</option>
+                                    <option value="transfer">{{ __('lang_v1.stock_transfers') }}</option>
                                     <option value="adjustment">{{ __('stock_adjustment.stock_adjustment') }}</option>
                                 </select>
                             </div>

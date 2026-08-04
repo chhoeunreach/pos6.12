@@ -199,17 +199,32 @@ class LotController extends BaseSmartStockController
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $applyCommonFilters = function ($query, $tableAlias = 't') use ($permittedLocations, $locationId, $startDate, $endDate, $lot) {
+            $applyCommonFilters = function ($query, $tableAlias = 't', $locationFilter = null) use ($permittedLocations, $locationId, $startDate, $endDate, $lot) {
                 if ($permittedLocations !== 'all') {
-                    $query->whereIn($tableAlias . '.location_id', $permittedLocations);
+                    if (is_callable($locationFilter)) {
+                        $locationFilter($query, $permittedLocations);
+                    } else {
+                        $query->whereIn($tableAlias . '.location_id', $permittedLocations);
+                    }
                 }
                 if (! empty($locationId)) {
-                    $query->where($tableAlias . '.location_id', $locationId);
+                    if (is_callable($locationFilter)) {
+                        $locationFilter($query, [$locationId]);
+                    } else {
+                        $query->where($tableAlias . '.location_id', $locationId);
+                    }
                 }
                 $query->where('pl.lot_number', $lot);
                 if (! empty($startDate) && ! empty($endDate)) {
                     $query->whereRaw("DATE({$tableAlias}.transaction_date) BETWEEN ? AND ?", [$startDate, $endDate]);
                 }
+            };
+
+            $transferLocationFilter = function ($query, array $locationIds) {
+                $query->where(function ($q) use ($locationIds) {
+                    $q->whereIn('t.location_id', $locationIds)
+                        ->orWhereIn('t_in.location_id', $locationIds);
+                });
             };
 
             $purchaseMovements = DB::table('purchase_lines as pl')
@@ -220,6 +235,7 @@ class LotController extends BaseSmartStockController
                 ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
                 ->leftJoin('contacts as supplier', 't.contact_id', '=', 'supplier.id')
                 ->where('t.business_id', $businessId)
+                ->where('t.type', '!=', 'purchase_transfer')
                 ->whereNotNull('pl.lot_number');
 
             $applyCommonFilters($purchaseMovements, 't');
@@ -251,25 +267,30 @@ class LotController extends BaseSmartStockController
                 ->join('variations as v', 'pl.variation_id', '=', 'v.id')
                 ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
                 ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->leftJoin('transactions as t_in', function ($join) {
+                    $join->on('t_in.transfer_parent_id', '=', 't.id')
+                        ->where('t_in.type', '=', 'purchase_transfer');
+                })
+                ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
                 ->leftJoin('contacts as customer', 't.contact_id', '=', 'customer.id')
                 ->where('t.business_id', $businessId)
                 ->whereNotNull('pl.lot_number')
                 ->whereNotNull('tspl.sell_line_id');
 
-            $applyCommonFilters($sellMovements, 't');
+            $applyCommonFilters($sellMovements, 't', $transferLocationFilter);
 
             $sellMovements = $sellMovements->select([
                 DB::raw('t.transaction_date as movement_date'),
-                DB::raw("'sell' as movement_type"),
+                DB::raw("CASE WHEN t.type = 'sell_transfer' THEN 'transfer' ELSE 'sell' END as movement_type"),
                 DB::raw('t.id as transaction_id'),
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
-                DB::raw('bl.name as location_name'),
+                DB::raw("CASE WHEN t.type = 'sell_transfer' THEN CONCAT('Out: ', COALESCE(bl.name, ''), ' -> In: ', COALESCE(bl_to.name, '')) ELSE bl.name END as location_name"),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
                 DB::raw('pl.exp_date as exp_date'),
-                DB::raw("COALESCE(t.invoice_no, t.ref_no, '') as ref_no"),
+                DB::raw("COALESCE(t.ref_no, t.invoice_no, '') as ref_no"),
                 DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, '') as contact"),
                 DB::raw('0 as qty_in'),
                 DB::raw('(COALESCE(tspl.quantity, 0) - COALESCE(tspl.qty_returned, 0)) as qty_out'),
@@ -317,6 +338,10 @@ class LotController extends BaseSmartStockController
             if (empty($movementType) || $movementType === 'all') {
                 $movementUnion->unionAll($sellMovements)->unionAll($adjustmentMovements);
             } elseif ($movementType === 'sell') {
+                $sellMovements->where('t.type', '!=', 'sell_transfer');
+                $movementUnion = $sellMovements;
+            } elseif ($movementType === 'transfer') {
+                $sellMovements->where('t.type', 'sell_transfer');
                 $movementUnion = $sellMovements;
             } elseif ($movementType === 'adjustment') {
                 $movementUnion = $adjustmentMovements;
@@ -355,6 +380,8 @@ class LotController extends BaseSmartStockController
                         return __('purchase.purchase');
                     } elseif ($row->movement_type === 'sell') {
                         return __('sale.sale');
+                    } elseif ($row->movement_type === 'transfer') {
+                        return 'sell_transfer';
                     } elseif ($row->movement_type === 'adjustment') {
                         return __('stock_adjustment.stock_adjustment');
                     }
