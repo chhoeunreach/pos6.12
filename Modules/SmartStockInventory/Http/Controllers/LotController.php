@@ -290,7 +290,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
                 DB::raw('pl.exp_date as exp_date'),
-                DB::raw("COALESCE(t.ref_no, t.invoice_no, '') as ref_no"),
+                DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
                 DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, '') as contact"),
                 DB::raw('0 as qty_in'),
                 DB::raw('(COALESCE(tspl.quantity, 0) - COALESCE(tspl.qty_returned, 0)) as qty_out'),
