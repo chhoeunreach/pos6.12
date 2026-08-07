@@ -55,7 +55,7 @@ class StockTransferController extends Controller
      */
     public function index()
     {
-        if (! auth()->user()->can('stock_transfer.view') && ! auth()->user()->can('stock_transfer.create') && ! auth()->user()->can('stock_transfer.view_own')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.view') && ! auth()->user()->can('stock_transfer.create') && ! auth()->user()->can('stock_transfer.view_own')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -82,7 +82,7 @@ class StockTransferController extends Controller
                     ->where('transactions.business_id', $business_id)
                     ->where('transactions.type', 'sell_transfer');
 
-                    if (! auth()->user()->can('stock_transfer.view') && auth()->user()->can('stock_transfer.view_own')) {
+                    if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.view') && auth()->user()->can('stock_transfer.view_own')) {
                         $stock_transfers->where('t2.created_by', request()->session()->get('user.id'));
                     }
 
@@ -164,14 +164,15 @@ class StockTransferController extends Controller
             return Datatables::of($stock_transfers)
                 ->addColumn('action', function ($row) use ($edit_days) {
                     $html = '';
-                    if (auth()->user()->can('stock_transfer.view') || auth()->user()->can('stock_transfer.view_own')) {
+                    $is_env_administrator = $this->isEnvAdministrator();
+                    if ($is_env_administrator || auth()->user()->can('stock_transfer.view') || auth()->user()->can('stock_transfer.view_own')) {
                         $html .= '<button type="button" title="'.__('stock_adjustment.view_details').'" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-accent btn-modal" data-container=".view_modal" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'show'], [$row->id]).'"><i class="fa fa-eye" aria-hidden="true"></i> '.__('messages.view').'</button>';
                     }
 
                     $html .= ' <a href="#" class="print-invoice tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'printInvoice'], [$row->id]).'"><i class="fa fa-print" aria-hidden="true"></i> '.__('messages.print').'</a>';
 
                     // Retransfer allowed only for completed (final) transfers
-                    if (in_array($row->status, ['final', 'completed']) && auth()->user()->can('stock_transfer.create')) {
+                    if (in_array($row->status, ['final', 'completed']) && ($is_env_administrator || auth()->user()->can('stock_transfer.create'))) {
                         $html .= ' <a href="'.action([\App\Http\Controllers\StockTransferController::class, 'retransfer'], [$row->id]).'" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-secondary"><i class="fa fa-random" aria-hidden="true"></i> Retransfer</a>';
                     }
 
@@ -184,7 +185,7 @@ class StockTransferController extends Controller
                         <button type="button" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'destroy'], [$row->id]).'" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-error delete_stock_transfer"><i class="fa fa-trash" aria-hidden="true"></i> '.__('messages.delete').'</button>';
                     }
 
-                    if ($row->status != 'final' && auth()->user()->can('stock_transfer.update')) {
+                    if (($row->status != 'final' || $is_env_administrator) && ($is_env_administrator || auth()->user()->can('stock_transfer.update'))) {
                         $html .= '&nbsp;
                         <a href="'.action([\App\Http\Controllers\StockTransferController::class, 'edit'], [$row->id]).'" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary"><i class="fa fa-edit" aria-hidden="true"></i> '.__('messages.edit').'</a>';
                     }
@@ -212,7 +213,8 @@ class StockTransferController extends Controller
                     $row->status = $row->status == 'final' ? 'completed' : $row->status;
                     $status = $statuses[$row->status];
                     $status_color = ! empty($this->status_colors[$row->status]) ? $this->status_colors[$row->status] : 'bg-gray';
-                    $status = $row->status != 'completed' ? '<a href="#" class="stock_transfer_status" data-status="'.$row->status.'" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'updateStatus'], [$row->id]).'"><span class="label '.$status_color.'">'.$statuses[$row->status].'</span></a>' : '<span class="label '.$status_color.'">'.$statuses[$row->status].'</span>';
+                    $can_update_status = $this->isEnvAdministrator() || auth()->user()->can('stock_transfer.update');
+                    $status = ($row->status != 'completed' || $this->isEnvAdministrator()) && $can_update_status ? '<a href="#" class="stock_transfer_status" data-status="'.$row->status.'" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'updateStatus'], [$row->id]).'"><span class="label '.$status_color.'">'.$statuses[$row->status].'</span></a>' : '<span class="label '.$status_color.'">'.$statuses[$row->status].'</span>';
 
                     return $status;
                 })
@@ -238,7 +240,7 @@ class StockTransferController extends Controller
      */
     public function create()
     {
-        if (! auth()->user()->can('stock_transfer.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -266,6 +268,25 @@ class StockTransferController extends Controller
             'in_transit' => __('lang_v1.in_transit'),
             'completed' => __('restaurant.completed'),
         ];
+    }
+
+    private function isEnvAdministrator(): bool
+    {
+        $user = auth()->user();
+        if (empty($user) || empty($user->username)) {
+            return false;
+        }
+
+        $administrator_list = (string) config('constants.administrator_usernames', '');
+        if ($administrator_list === '') {
+            return false;
+        }
+
+        $administrator_usernames = array_filter(array_map(function ($username) {
+            return strtolower(trim($username));
+        }, explode(',', $administrator_list)));
+
+        return in_array(strtolower($user->username), $administrator_usernames);
     }
 
     private function getHrTechnicianStaff()
@@ -301,7 +322,7 @@ class StockTransferController extends Controller
      */
     public function store(Request $request)
     {
-        if (! auth()->user()->can('stock_transfer.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -791,6 +812,10 @@ class StockTransferController extends Controller
      */
     public function edit($id)
     {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.update')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $business_id = request()->session()->get('user.business_id');
 
         $business_locations = BusinessLocation::forDropdown($business_id);
@@ -799,14 +824,18 @@ class StockTransferController extends Controller
 
         $sell_transfer = Transaction::where('business_id', $business_id)
                 ->where('type', 'sell_transfer')
-                ->where('status', '!=', 'final')
+                ->when(! $this->isEnvAdministrator(), function ($query) {
+                    $query->where('status', '!=', 'final');
+                })
                 ->with(['sell_lines'])
                 ->findOrFail($id);
 
         $purchase_transfer = Transaction::where('business_id',
                 $business_id)
                 ->where('transfer_parent_id', $id)
-                ->where('status', '!=', 'received')
+                ->when(! $this->isEnvAdministrator(), function ($query) {
+                    $query->where('status', '!=', 'received');
+                })
                 ->where('type', 'purchase_transfer')
                 ->first();
 
@@ -837,6 +866,29 @@ class StockTransferController extends Controller
                     $lot_number->qty_formated = $this->productUtil->num_f($lot_number->qty_available);
                     $lot_numbers[] = $lot_number;
                 }
+
+                // Admin bypass: a completed transfer may have fully consumed its
+                // lot (quantity_sold incremented), so the used lot is excluded by
+                // the query above. Re-add it so the lot still shows as in a normal edit.
+                if ($this->isEnvAdministrator() && ! empty($sell_line->lot_no_line_id)) {
+                    $used_lot_in_list = false;
+                    foreach ($lot_numbers as $lot_number) {
+                        if ($lot_number->purchase_line_id == $sell_line->lot_no_line_id) {
+                            $used_lot_in_list = true;
+                            break;
+                        }
+                    }
+                    if (! $used_lot_in_list) {
+                        $used_lot = PurchaseLine::where('id', $sell_line->lot_no_line_id)
+                                ->select('id as purchase_line_id', 'lot_number', 'exp_date')
+                                ->first();
+                        if (! empty($used_lot)) {
+                            $used_lot->qty_available = $sell_line->quantity;
+                            $used_lot->qty_formated = $this->productUtil->num_f($used_lot->qty_available);
+                            $lot_numbers[] = $used_lot;
+                        }
+                    }
+                }
             }
             $product->lot_numbers = $lot_numbers;
 
@@ -857,7 +909,7 @@ class StockTransferController extends Controller
      */
     public function retransfer($id)
     {
-        if (! auth()->user()->can('stock_transfer.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -985,7 +1037,7 @@ class StockTransferController extends Controller
      */
     public function downloadImportTemplate()
     {
-        if (! auth()->user()->can('stock_transfer.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -1022,7 +1074,7 @@ class StockTransferController extends Controller
     public function importLines(Request $request)
     {
         try {
-            if (! auth()->user()->can('stock_transfer.create')) {
+            if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.create')) {
                 abort(403, 'Unauthorized action.');
             }
 
@@ -1314,7 +1366,7 @@ class StockTransferController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (! auth()->user()->can('purchase.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('purchase.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -1329,6 +1381,7 @@ class StockTransferController extends Controller
             $sell_transfer = Transaction::where('business_id', $business_id)
                     ->where('type', 'sell_transfer')
                     ->findOrFail($id);
+            $sell_transfer_was_completed = in_array($sell_transfer->status, ['final', 'completed']);
 
             $sell_transfer_before = $sell_transfer->replicate();
 
@@ -1458,7 +1511,7 @@ class StockTransferController extends Controller
 
             //Decrease product stock from sell location
             //And increase product stock at purchase location
-            if ($status == 'completed') {
+            if ($status == 'completed' && ! $sell_transfer_was_completed) {
                 foreach ($products as $product) {
                     if ($product['enable_stock']) {
                         $decrease_qty = $this->productUtil
@@ -1527,7 +1580,7 @@ class StockTransferController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
-        if (! auth()->user()->can('stock_transfer.update')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.update')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -1549,7 +1602,7 @@ class StockTransferController extends Controller
             $status = $request->input('status');
 
             DB::beginTransaction();
-            if ($status == 'completed' && $sell_transfer->status != 'completed') {
+            if ($status == 'completed' && ! in_array($sell_transfer->status, ['final', 'completed'])) {
                 foreach ($sell_transfer->sell_lines as $sell_line) {
                     if ($sell_line->product->enable_stock) {
                         $this->productUtil->decreaseProductQuantity(

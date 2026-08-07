@@ -16,8 +16,6 @@ class LocalCashierReportController extends Controller
 {
     private const DETAIL_ROW_LIMIT = 1000;
     private const COLLECTION_PAYMENT_GROUP = 'Collection Payment';
-    private const INSTALLMENT_CUSTOMER_GROUP = 'រំលស់';
-
     public function __construct(private Util $util)
     {
     }
@@ -1500,7 +1498,6 @@ class LocalCashierReportController extends Controller
             ->where('t.status', 'final')
             ->whereBetween(DB::raw('DATE(tp.paid_on)'), [$filters['start_date'], $filters['end_date']])
             ->whereRaw('DATE(t.transaction_date) < DATE(tp.paid_on)')
-            ->whereRaw("COALESCE(NULLIF(TRIM(pcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') <> ?", [self::INSTALLMENT_CUSTOMER_GROUP])
             ->whereIn('t.location_id', $filters['location_ids'])
             ->where('tp.amount', '>', 0)
             ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
@@ -1552,10 +1549,6 @@ class LocalCashierReportController extends Controller
         $displayedPaymentIds = $rows->pluck('payment_id')->map(fn ($id) => (int) $id)->flip();
         foreach ($summaryRows as $row) {
             $customerGroupName = trim((string) ($row->customer_group_name ?? ''));
-            if ($customerGroupName === self::INSTALLMENT_CUSTOMER_GROUP) {
-                continue;
-            }
-
             $method = (string) ($row->method ?? 'cash');
             $amount = (float) ($row->amount ?? 0);
             $transactionId = (int) ($row->transaction_id ?? 0);

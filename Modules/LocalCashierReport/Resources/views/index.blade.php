@@ -295,7 +295,7 @@
                         $name = (string) ($customerGroupRow['name'] ?? 'លក់');
                         return ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'Collection Payment' => 4][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
                     })->values() as $customerGroupRow)
-                        <tr class="customer-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'Collection Payment' ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
+                        <tr class="customer-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (in_array($customerGroupRow['name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main customer-group-breakdown-name">
                                 <span class="customer-group-breakdown-label">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
                                 <span class="qty-badge">(Qty: {{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
@@ -911,10 +911,10 @@
                         <tbody>
                         @foreach($report['detail_rows'] as $row)
                             @if(($row['row_type'] ?? 'sale') === 'customer_group_separator')
-                                <tr class="customer-group-separator {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-separator' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-separator' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'loan-payment-separator' : 'normal-separator')) }}">
+                                <tr class="customer-group-separator {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-separator' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-separator' : (in_array($row['customer_group_name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment-separator' : 'normal-separator')) }}">
                                     <td></td>
                                     <td class="group-separator-label">{{ $row['customer_group_name'] ?? 'លក់' }}</td>
-                                    <td class="group-separator-note">{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'Installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'AEON' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'Collection payment' : 'Sale')) }}</td>
+                                    <td class="group-separator-note">{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'Installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'AEON' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'Collection payment' : (($row['customer_group_name'] ?? '') === 'Customer Payment' ? 'Customer payment' : 'Sale'))) }}</td>
                                     <td></td>
                                     <td></td>
                                     <td></td>
@@ -935,7 +935,7 @@
                                 </tr>
                                 @continue
                             @endif
-                            <tr class="{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-customer-row' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-customer-row' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'loan-payment-customer-row' : 'normal-customer-row')) }}">
+                            <tr class="{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-customer-row' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-customer-row' : (in_array($row['customer_group_name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment-customer-row' : 'normal-customer-row')) }}">
                                 <td>
                                     @if(($row['row_source'] ?? 'sell') !== 'loan_payment')
                                         @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
@@ -967,7 +967,7 @@
                                 <td>{{ $row['location_name'] }}</td>
                                 <td>{{ $row['customer_name'] ?? '-' }}</td>
                                 <td>
-                                    <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'loan-payment' : 'normal')) }}">
+                                    <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (in_array($row['customer_group_name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment' : 'normal')) }}">
                                         {{ $row['customer_group_name'] ?? 'លក់' }}
                                     </span>
                                 </td>
@@ -2724,6 +2724,11 @@
     border-top: 2px solid #059669;
     color: #065f46;
 }
+#local_cashier_report_app .sheet-table tbody tr.cashier-group-breakdown-row.customer-payment-breakdown-row td {
+    background: #ecfdf5;
+    border-top: 2px solid #059669;
+    color: #065f46;
+}
 #local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator td {
     background: #f8fafc;
     border-top: 2px solid #cbd5e1;
@@ -2741,6 +2746,10 @@
     color: #1e40af;
 }
 #local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator.loan-payment-separator td {
+    background: #ecfdf5;
+    color: #065f46;
+}
+#local_cashier_report_app .sheet-table tbody tr.dashboard-customer-group-separator.customer-payment-separator td {
     background: #ecfdf5;
     color: #065f46;
 }

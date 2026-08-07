@@ -1539,7 +1539,9 @@ class CreateStandaloneLoanService
 
             if (count($media) < 2) {
                 foreach ($handles as $handle) {
-                    fclose($handle);
+                    if (is_resource($handle)) {
+                        fclose($handle);
+                    }
                 }
                 if (count($validPaths) === 1) {
                     $result = $this->sendTelegramPhotoPath($token, $chatId, $validPaths[0], $chunkIndex === 0 ? $caption : null);
@@ -1559,7 +1561,9 @@ class CreateStandaloneLoanService
                 ]);
             } finally {
                 foreach ($handles as $handle) {
-                    fclose($handle);
+                    if (is_resource($handle)) {
+                        fclose($handle);
+                    }
                 }
             }
 
@@ -1606,7 +1610,9 @@ class CreateStandaloneLoanService
                 basename($photoPath)
             )->post("https://api.telegram.org/bot{$token}/sendPhoto", $payload);
         } finally {
-            fclose($handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
 
         return $response->successful()

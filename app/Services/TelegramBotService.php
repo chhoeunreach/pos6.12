@@ -115,7 +115,9 @@ class TelegramBotService
                 $filename
             )->post($this->baseUrl() . '/sendDocument', $payload);
         } finally {
-            fclose($handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
 
         return $this->resultFromResponse($response, 'sendDocument');
@@ -220,7 +222,9 @@ class TelegramBotService
                 $filename
             )->post($this->baseUrl() . '/sendPhoto', $this->sendPhotoPayload($chat_id, $caption));
         } finally {
-            fclose($handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
 
         return $this->resultFromResponse($response, 'sendPhoto');
