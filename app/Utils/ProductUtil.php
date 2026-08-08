@@ -2162,16 +2162,13 @@ class ProductUtil extends Util
                                 ->leftjoin('transactions as return', 'transactions.return_parent_id', '=', 'return.id')
                                 ->leftjoin('purchase_lines as rpl',
                                     'rpl.transaction_id', '=', 'return.id')
-                                ->leftjoin('transaction_sell_lines as rsl',
-                                        'rsl.transaction_id', '=', 'return.id')
                                 ->leftjoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
                                 ->where('transactions.location_id', $location_id)
                                 ->where(function ($q) use ($variation_id) {
                                     $q->where('sl.variation_id', $variation_id)
                                         ->orWhere('pl.variation_id', $variation_id)
                                         ->orWhere('al.variation_id', $variation_id)
-                                        ->orWhere('rpl.variation_id', $variation_id)
-                                        ->orWhere('rsl.variation_id', $variation_id);
+                                        ->orWhere('rpl.variation_id', $variation_id);
                                 })
                                 ->whereIn('transactions.type', ['sell', 'purchase', 'stock_adjustment', 'opening_stock', 'sell_transfer', 'purchase_transfer', 'production_purchase', 'purchase_return', 'sell_return', 'production_sell'])
                                 ->select(
@@ -2179,7 +2176,7 @@ class ProductUtil extends Util
                                     'transactions.type as transaction_type',
                                     'sl.quantity as sell_line_quantity',
                                     'pl.quantity as purchase_line_quantity',
-                                    'rsl.quantity_returned as sell_return',
+                                    'sl.quantity as sell_return',
                                     'rpl.quantity_returned as purchase_return',
                                     'al.quantity as stock_adjusted',
                                     'pl.quantity_returned as combined_purchase_return',
@@ -2342,7 +2339,7 @@ class ProductUtil extends Util
                 $stock_history_array[] = array_merge($temp_array, [
                     'quantity_change' => $quantity_change,
                     'stock' => $this->roundQuantity($stock),
-                    'type' => 'purchase_transfer',
+                    'type' => 'sell_return',
                     'type_label' => __('lang_v1.sell_return'),
                     'ref_no' => $stock_line->invoice_no,
                     'stock_in_second_unit' => $this->roundQuantity($stock_in_second_unit),
