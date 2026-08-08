@@ -49,6 +49,7 @@
                         <th class="text-right">Due</th>
                         <th>Location</th>
                         <th>Customer Group Name</th>
+                        <th>Sell Note</th>
                     </tr>
                 </thead>
                 <tfoot>
@@ -70,6 +71,7 @@
                         <th class="text-right"><span id="stock_sell_footer_monthly">0</span></th>
                         <th class="text-right"><span id="stock_sell_footer_paid">0</span></th>
                         <th class="text-right"><span id="stock_sell_footer_due">0</span></th>
+                        <th></th>
                         <th></th>
                         <th></th>
                     </tr>
@@ -177,6 +179,7 @@
                 { data: 'due', name: 'due', searchable: false, className: 'text-right' },
                 { data: 'location', name: 'bl.name' },
                 { data: 'customer_group', name: 'tcg.name' },
+                { data: 'sell_note', name: 't.additional_notes' },
             ],
             fnDrawCallback: function() {
                 __currency_convert_recursively($('#stock_sell_report_table'));

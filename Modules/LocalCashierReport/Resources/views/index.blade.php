@@ -771,7 +771,7 @@
         @php
             $expenseRows = collect($report['expense_detail_rows'] ?? []);
             $collectionPaymentRows = collect($report['collection_payment_detail_rows'] ?? []);
-            $customerDuePaymentRows = collect($report['customer_due_payment_detail_rows'] ?? []);
+            $dueCustomerRows = collect($report['due_customer_detail_rows'] ?? []);
             $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
             $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
             $detailMeta = $report['detail_meta'] ?? [];
@@ -781,7 +781,7 @@
                 ['label' => 'accessory sales', 'displayed' => $detailMeta['accessory_displayed'] ?? 0, 'total' => $detailMeta['accessory_total'] ?? 0],
                 ['label' => 'service sales', 'displayed' => $detailMeta['service_displayed'] ?? 0, 'total' => $detailMeta['service_total'] ?? 0],
                 ['label' => 'collection payments', 'displayed' => $detailMeta['collection_payment_displayed'] ?? 0, 'total' => $detailMeta['collection_payment_total'] ?? 0],
-                ['label' => 'customer payments', 'displayed' => $detailMeta['customer_due_payment_displayed'] ?? 0, 'total' => $detailMeta['customer_due_payment_total'] ?? 0],
+                ['label' => 'due customers', 'displayed' => $detailMeta['due_customer_displayed'] ?? 0, 'total' => $detailMeta['due_customer_total'] ?? 0],
                 ['label' => 'expenses', 'displayed' => $detailMeta['expense_displayed'] ?? 0, 'total' => $detailMeta['expense_total'] ?? 0],
             ])->filter(fn ($row) => (int) $row['total'] > (int) $row['displayed'])->values();
         @endphp
@@ -810,10 +810,10 @@
                         <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">Collection Payment</a>
                     </li>
                     <li role="presentation">
-                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Customer Payment</a>
+                        <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
                     </li>
                     <li role="presentation">
-                        <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
+                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Due Customer</a>
                     </li>
                 </ul>
                 <div class="table-meta">
@@ -823,7 +823,7 @@
                     <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} accessory sales</span>
                     <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} service sales</span>
                     <span>{{ number_format($detailMeta['collection_payment_displayed'] ?? $collectionPaymentRows->count()) }} / {{ number_format($detailMeta['collection_payment_total'] ?? $collectionPaymentRows->count()) }} collection payments</span>
-                    <span>{{ number_format($detailMeta['customer_due_payment_displayed'] ?? $customerDuePaymentRows->count()) }} / {{ number_format($detailMeta['customer_due_payment_total'] ?? $customerDuePaymentRows->count()) }} customer payments</span>
+                    <span>{{ number_format($detailMeta['due_customer_displayed'] ?? $dueCustomerRows->count()) }} / {{ number_format($detailMeta['due_customer_total'] ?? $dueCustomerRows->count()) }} due customers</span>
                     <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} expenses</span>
                 </div>
             </div>
@@ -1121,8 +1121,8 @@
                     </div>
                     <div role="tabpanel" class="tab-pane" id="customer_due_payments_detail_tab">
                         @php
-                            $customerPaymentLocations = $customerDuePaymentRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
-                            $customerPaymentCashiers = $customerDuePaymentRows->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                            $dueCustomerLocations = $dueCustomerRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                            $dueCustomerCashiers = $dueCustomerRows->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_customer_due_payment_table_filters" aria-expanded="false" aria-controls="local_cashier_customer_due_payment_table_filters">
@@ -1135,7 +1135,7 @@
                                     <div class="form-group">
                                         <label>Location</label>
                                         <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="All locations">
-                                            @foreach($customerPaymentLocations as $locationName)
+                                            @foreach($dueCustomerLocations as $locationName)
                                                 <option value="{{ $locationName }}">{{ $locationName }}</option>
                                             @endforeach
                                         </select>
@@ -1149,7 +1149,7 @@
                                     <div class="form-group">
                                         <label>Cashier</label>
                                         <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="All cashiers">
-                                            @foreach($customerPaymentCashiers as $cashierName)
+                                            @foreach($dueCustomerCashiers as $cashierName)
                                                 <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                             @endforeach
                                         </select>
@@ -1166,26 +1166,23 @@
                                 <thead>
                                     <tr>
                                         <th>Action</th>
-                                        <th>Date</th>
-                                        <th>Receipt No</th>
+                                        <th>Invoice Date</th>
+                                        <th>Invoice No</th>
                                         <th>Customer</th>
                                         <th>Phone</th>
-                                        <th>Invoice No</th>
-                                        <th>Invoice Date</th>
                                         <th class="all-sale-location-column">Location</th>
                                         <th class="all-sale-cashier-column">Cashier</th>
-                                        <th>Method</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
-                                        @endforeach
-                                        <th class="text-right">Amount Paid</th>
-                                        <th class="text-right">Previous Due</th>
+                                        <th>Payment Status</th>
+                                        <th class="text-right">Invoice Total</th>
+                                        <th class="text-right">Paid</th>
                                         <th class="text-right">Remaining Due</th>
-                                        <th>Note</th>
+                                        <th>Must Pay By</th>
+                                        <th>Reminder</th>
+                                        <th>Days</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($customerDuePaymentRows as $row)
+                                    @foreach($dueCustomerRows as $row)
                                         <tr>
                                             <td>
                                                 @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
@@ -1199,34 +1196,32 @@
                                                 @endcanany
                                             </td>
                                             <td>{{ $row['date'] }}</td>
-                                            <td>{{ $row['receipt_no'] }}</td>
+                                            <td>{{ $row['invoice_no'] }}</td>
                                             <td>{{ $row['customer_name'] }}</td>
                                             <td>{{ $row['phone_number'] }}</td>
-                                            <td>{{ $row['invoice_no'] }}</td>
-                                            <td>{{ $row['invoice_date'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['cashier_name'] }}</td>
-                                            <td>{{ $row['method_label'] }}</td>
-                                            @foreach($report['payment_columns'] as $method)
-                                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
-                                            @endforeach
-                                            <td class="text-right">{{ $fmt($row['amount']) }}</td>
-                                            <td class="text-right @if(($row['previous_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['previous_due']) }}</td>
+                                            <td>{{ ucfirst($row['payment_status']) }}</td>
+                                            <td class="text-right">{{ $fmt($row['invoice_total']) }}</td>
+                                            <td class="text-right">{{ $fmt($row['amount_paid']) }}</td>
                                             <td class="text-right @if(($row['remaining_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['remaining_due']) }}</td>
-                                            <td>{{ $row['note'] }}</td>
+                                            <td>{{ $row['pay_by_date'] }}</td>
+                                            <td>
+                                                <span class="label {{ ($row['reminder_status'] ?? '') === 'Overdue' ? 'label-danger' : ((($row['reminder_status'] ?? '') === 'Due soon') ? 'label-warning' : 'label-info') }}">
+                                                    {{ $row['reminder_status'] }}
+                                                </span>
+                                            </td>
+                                            <td class="text-right @if(($row['days_remaining'] ?? 0) < 0) due-negative @endif">{{ $row['days_remaining'] }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
-                                        <th colspan="10" class="text-right">Total</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $fmt($customerDuePaymentRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0))) }}</th>
-                                        @endforeach
-                                        <th class="text-right">{{ $fmt($customerDuePaymentRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
-                                        <th class="text-right">{{ $fmt($customerDuePaymentRows->sum(fn ($row) => (float) ($row['previous_due'] ?? 0))) }}</th>
-                                        <th class="text-right">{{ $fmt($customerDuePaymentRows->sum(fn ($row) => (float) ($row['remaining_due'] ?? 0))) }}</th>
-                                        <th></th>
+                                        <th colspan="8" class="text-right">Total</th>
+                                        <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['invoice_total'] ?? 0))) }}</th>
+                                        <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['amount_paid'] ?? 0))) }}</th>
+                                        <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['remaining_due'] ?? 0))) }}</th>
+                                        <th colspan="3"></th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1649,7 +1644,7 @@
                 paging: true,
                 searching: true,
                 ordering: true,
-                order: [[7, 'asc'], [1, 'desc']],
+                order: [[13, 'asc'], [1, 'asc']],
                 info: true,
                 autoWidth: false,
                 pageLength: 25,

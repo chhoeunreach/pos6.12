@@ -219,6 +219,11 @@ class StockReportController extends Controller
                     $i_t = trim($sell_note.($sell_note !== '' && $staff_note_last4 !== '' ? '-' : '').$staff_note_last4);
                     return $i_t !== '' ? $i_t : '-';
                 })
+                ->addColumn('sell_note', function ($row) {
+                    $sell_note = trim((string) $row->additional_notes);
+
+                    return $sell_note !== '' ? $sell_note : '-';
+                })
                 ->editColumn('quantity', function ($row) {
                     return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
                 })

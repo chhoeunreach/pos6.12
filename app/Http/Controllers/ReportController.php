@@ -4098,6 +4098,11 @@ class ReportController extends Controller
 
                     return $i_t !== '' ? $i_t : '-';
                 })
+                ->addColumn('sell_note', function ($row) {
+                    $sell_note = trim((string) $row->additional_notes);
+
+                    return $sell_note !== '' ? $sell_note : '-';
+                })
                 ->editColumn('quantity', function ($row) {
                     return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
                 })

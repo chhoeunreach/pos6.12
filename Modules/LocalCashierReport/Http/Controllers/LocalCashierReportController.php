@@ -269,6 +269,7 @@ class LocalCashierReportController extends Controller
         $paymentTypes = $this->util->payment_types(null, false, $businessId);
         $loanPaymentData = $this->getLoanPaymentData($filters, $paymentTypes);
         $customerDuePaymentData = $this->getCustomerDuePaymentData($filters, $paymentTypes, self::DETAIL_ROW_LIMIT);
+        $dueCustomerData = $this->getDueCustomerData($filters, self::DETAIL_ROW_LIMIT);
 
         $transactionIds = $baseTransactions->pluck('id')->all();
         $cashierIds = $baseTransactions->pluck('created_by')->unique()->values()->all();
@@ -1071,6 +1072,7 @@ class LocalCashierReportController extends Controller
             'detail_rows' => $groupedDetailRows,
             'collection_payment_detail_rows' => $collectionPaymentDetailRows,
             'customer_due_payment_detail_rows' => $customerDuePaymentData['rows'],
+            'due_customer_detail_rows' => $dueCustomerData['rows'],
             'expense_detail_rows' => $expenseDetailResult['rows'],
             'accessory_sale_detail_rows' => $accessorySaleDetailResult['rows'],
             'service_sale_detail_rows' => $serviceSaleDetailResult['rows'],
@@ -1082,6 +1084,8 @@ class LocalCashierReportController extends Controller
                 'collection_payment_displayed' => count($collectionPaymentDetailRows),
                 'customer_due_payment_total' => $customerDuePaymentData['detail_total'],
                 'customer_due_payment_displayed' => count($customerDuePaymentData['rows']),
+                'due_customer_total' => $dueCustomerData['detail_total'],
+                'due_customer_displayed' => count($dueCustomerData['rows']),
                 'expense_total' => $expenseDetailResult['total'],
                 'expense_displayed' => count($expenseDetailResult['rows']),
                 'accessory_total' => $accessorySaleDetailResult['total'],
@@ -1608,6 +1612,112 @@ class LocalCashierReportController extends Controller
 
             return $row;
         }, $rows);
+    }
+
+    private function getDueCustomerData(array $filters, int $limit): array
+    {
+        $empty = [
+            'rows' => [],
+            'detail_total' => 0,
+        ];
+
+        if (($filters['customer_group'] ?? '') === self::COLLECTION_PAYMENT_GROUP) {
+            return $empty;
+        }
+
+        $businessId = (int) session('user.business_id');
+        $paidSubquery = DB::table('transaction_payments')
+            ->select(
+                'transaction_id',
+                DB::raw('SUM(IF(is_return = 1, -1 * amount, amount)) as paid_amount')
+            )
+            ->groupBy('transaction_id');
+
+        $query = DB::table('transactions as t')
+            ->leftJoinSub($paidSubquery, 'paid', function ($join) {
+                $join->on('paid.transaction_id', '=', 't.id');
+            })
+            ->leftJoin('contacts as c', 'c.id', '=', 't.contact_id')
+            ->leftJoin('customer_groups as tcg', 'tcg.id', '=', 't.customer_group_id')
+            ->leftJoin('customer_groups as ccg', 'ccg.id', '=', 'c.customer_group_id')
+            ->leftJoin('business_locations as l', 'l.id', '=', 't.location_id')
+            ->leftJoin('users as u', 'u.id', '=', 't.created_by')
+            ->where('t.business_id', $businessId)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+            ->whereIn('t.location_id', $filters['location_ids'])
+            ->whereRaw('(t.final_total - COALESCE(paid.paid_amount, 0)) > 0.00001')
+            ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
+                $query->whereIn('t.created_by', $filters['user_ids']);
+            })
+            ->when(! empty($filters['payment_status']), function ($query) use ($filters) {
+                $query->where('t.payment_status', $filters['payment_status']);
+            })
+            ->when(! empty($filters['customer_group']) && $filters['customer_group'] !== 'Customer Payment', function ($query) use ($filters) {
+                $query->whereRaw(
+                    "CASE
+                        WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
+                        WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
+                        ELSE ?
+                    END = ?",
+                    ['រំលស់', 'រំលស់', 'អ៊ីអន', 'អ៊ីអន', 'លក់', $filters['customer_group']]
+                );
+            })
+            ->select(
+                't.id as transaction_id',
+                't.invoice_no',
+                't.transaction_date',
+                't.final_total',
+                't.payment_status',
+                't.staff_note',
+                't.additional_notes',
+                't.location_id',
+                't.created_by',
+                DB::raw('COALESCE(paid.paid_amount, 0) as paid_amount'),
+                'l.name as location_name',
+                DB::raw("COALESCE(NULLIF(TRIM(c.mobile), ''), NULLIF(TRIM(c.landline), ''), NULLIF(TRIM(c.alternate_number), '')) as customer_phone"),
+                DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,''))), ''), 'Walk-In Customer') as customer_name"),
+                DB::raw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as cashier_name")
+            )
+            ->orderBy('t.transaction_date', 'asc')
+            ->orderBy('t.id', 'asc');
+
+        $total = (clone $query)->count();
+        $rows = (clone $query)->limit($limit)->get();
+        $today = Carbon::today();
+
+        return [
+            'detail_total' => $total,
+            'rows' => $rows->map(function ($row) use ($today) {
+                $invoiceDate = Carbon::parse($row->transaction_date);
+                $payByDate = $invoiceDate->copy()->addMonth();
+                $daysRemaining = $today->diffInDays($payByDate, false);
+                $status = $daysRemaining < 0
+                    ? 'Overdue'
+                    : ($daysRemaining <= 7 ? 'Due soon' : 'Remind staff');
+
+                return [
+                    'transaction_id' => (int) $row->transaction_id,
+                    'date' => $invoiceDate->format('Y-m-d H:i'),
+                    'invoice_no' => (string) ($row->invoice_no ?: ('#' . $row->transaction_id)),
+                    'customer_name' => (string) ($row->customer_name ?? 'Walk-In Customer'),
+                    'phone_number' => $this->resolveCustomerPhone($row->customer_phone ?? null, $row->staff_note ?? null),
+                    'location_id' => (int) ($row->location_id ?? 0),
+                    'location_name' => (string) ($row->location_name ?? 'N/A'),
+                    'cashier_id' => (int) ($row->created_by ?? 0),
+                    'cashier_name' => trim((string) ($row->cashier_name ?? '')) ?: 'N/A',
+                    'invoice_total' => (float) ($row->final_total ?? 0),
+                    'amount_paid' => (float) ($row->paid_amount ?? 0),
+                    'remaining_due' => max((float) ($row->final_total ?? 0) - (float) ($row->paid_amount ?? 0), 0),
+                    'pay_by_date' => $payByDate->format('Y-m-d'),
+                    'days_remaining' => $daysRemaining,
+                    'reminder_status' => $status,
+                    'payment_status' => (string) ($row->payment_status ?? '-'),
+                    'note' => (string) ($row->additional_notes ?? ''),
+                ];
+            })->all(),
+        ];
     }
 
     private function normalizeCollectionPaymentRows(array $rows, array $paymentColumns, $cashierMap, $locationMap, array $paymentTypes): array
