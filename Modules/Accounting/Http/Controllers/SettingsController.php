@@ -57,10 +57,36 @@ class SettingsController extends Controller
         $accounting_settings = $this->accountingUtil->getAccountingSettings($business_id);
 
         $business_locations = BusinessLocation::where('business_id', $business_id)->get();
+        $mapped_account_ids = [];
+        foreach ($business_locations as $business_location) {
+            $default_map = ! empty($business_location->accounting_default_map)
+                ? json_decode($business_location->accounting_default_map, true)
+                : [];
+
+            $default_map = is_array($default_map) ? $default_map : [];
+            $business_location->accounting_default_map_array = $default_map;
+
+            foreach ($default_map as $map_details) {
+                if (! is_array($map_details)) {
+                    continue;
+                }
+
+                foreach (['payment_account', 'deposit_to'] as $account_field) {
+                    if (! empty($map_details[$account_field])) {
+                        $mapped_account_ids[] = $map_details[$account_field];
+                    }
+                }
+            }
+        }
+
+        $selected_account_options = AccountingAccount::where('business_id', $business_id)
+                                    ->whereIn('id', array_unique($mapped_account_ids))
+                                    ->pluck('name', 'id')
+                                    ->toArray();
 
          $expence_categories = ExpenseCategory::where('business_id', $business_id)->get();
 
-        return view('accounting::settings.index')->with(compact('account_sub_types', 'account_types', 'accounting_settings', 'business_locations', 'expence_categories'));
+        return view('accounting::settings.index')->with(compact('account_sub_types', 'account_types', 'accounting_settings', 'business_locations', 'expence_categories', 'selected_account_options'));
     }
 
     public function resetData()
@@ -127,8 +153,8 @@ class SettingsController extends Controller
                         ->update(['accounting_settings' => json_encode($accounting_settings)]);
             
             //Update accounting_default_map for each locations
-            $accounting_default_map = $request->get('accounting_default_map');
-            foreach($accounting_default_map as $location_id => $details){
+            $accounting_default_map = $request->get('accounting_default_map', []);
+            foreach ($accounting_default_map as $location_id => $details) {
                 BusinessLocation::where('id', $location_id)
                     ->update(['accounting_default_map' => json_encode($details)]);
             }

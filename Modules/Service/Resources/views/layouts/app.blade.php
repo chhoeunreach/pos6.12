@@ -59,7 +59,7 @@
             @include('service::layouts.partials.sidebar')
         @endif
 
-        @if (in_array($_SERVER['REMOTE_ADDR'], $whitelist))
+        @if (in_array($request->ip(), $whitelist, true))
             <input type="hidden" id="__is_localhost" value="true">
         @endif
 

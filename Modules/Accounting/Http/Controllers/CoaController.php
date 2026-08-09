@@ -1278,35 +1278,39 @@ class CoaController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $account = AccountingAccount::where('business_id', $business_id)
+                                ->with(['detail_type'])
+                                ->findOrFail($id);
+
+        $account_types = AccountingAccountType::accounting_primary_type();
+        $account_sub_types = AccountingAccountType::where('account_primary_type', $account->account_primary_type)
+                                        ->where('account_type', 'sub_type')
+                                        ->where(function ($q) use ($business_id) {
+                                            $q->whereNull('business_id')
+                                                ->orWhere('business_id', $business_id);
+                                        })
+                                        ->get();
+        $account_detail_types = AccountingAccountType::where('parent_id', $account->account_sub_type_id)
+                                ->where('account_type', 'detail_type')
+                                ->where(function ($q) use ($business_id) {
+                                    $q->whereNull('business_id')
+                                        ->orWhere('business_id', $business_id);
+                                })
+                                ->get();
+
+        $parent_accounts = AccountingAccount::where('business_id', $business_id)
+                                ->where('account_sub_type_id', $account->account_sub_type_id)
+                                ->whereNull('parent_account_id')
+                                ->where('id', '!=', $account->id)
+                                ->get();
+
+        $view_data = compact('account_types', 'account', 'account_sub_types', 'account_detail_types', 'parent_accounts');
+
         if (request()->ajax()) {
-            $account = AccountingAccount::where('business_id', $business_id)
-                                    ->with(['detail_type'])
-                                    ->find($id);
-
-            $account_types = AccountingAccountType::accounting_primary_type();
-            $account_sub_types = AccountingAccountType::where('account_primary_type', $account->account_primary_type)
-                                            ->where('account_type', 'sub_type')
-                                            ->where(function ($q) use ($business_id) {
-                                                $q->whereNull('business_id')
-                                                    ->orWhere('business_id', $business_id);
-                                            })
-                                            ->get();
-            $account_detail_types = AccountingAccountType::where('parent_id', $account->account_sub_type_id)
-                                    ->where('account_type', 'detail_type')
-                                    ->where(function ($q) use ($business_id) {
-                                        $q->whereNull('business_id')
-                                            ->orWhere('business_id', $business_id);
-                                    })
-                                    ->get();
-
-            $parent_accounts = AccountingAccount::where('business_id', $business_id)
-                                    ->where('account_sub_type_id', $account->account_sub_type_id)
-                                    ->whereNull('parent_account_id')
-                                    ->get();
-
-            return view('accounting::chart_of_accounts.edit')->with(compact('account_types', 'account',
-                                                'account_sub_types', 'account_detail_types', 'parent_accounts'));
+            return view('accounting::chart_of_accounts.edit')->with($view_data);
         }
+
+        return view('accounting::chart_of_accounts.edit_page')->with($view_data);
     }
 
     /**
@@ -1334,7 +1338,7 @@ class CoaController extends Controller
             $input['parent_account_id'] = ! empty($input['parent_account_id'])
             && $input['parent_account_id'] !== 'null' ? $input['parent_account_id'] : null;
 
-            $account = AccountingAccount::find($id);
+            $account = AccountingAccount::where('business_id', $business_id)->findOrFail($id);
             $account->update($input);
 
             DB::commit();

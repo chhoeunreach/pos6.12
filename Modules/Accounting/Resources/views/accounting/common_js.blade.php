@@ -1,6 +1,32 @@
 <script type="text/javascript">
 $(document).ready( function(){
-    $("select.accounts-dropdown").select2({
+    $("select.accounts-dropdown").not('.accounts-dropdown-lazy').select2({
+        ajax: {
+            url: '{{route("accounts-dropdown")}}',
+            dataType: 'json',
+            processResults: function (data) {
+                return {
+                    results: data
+                }
+            },
+        },
+        escapeMarkup: function(markup) {
+            return markup;
+        },
+        templateResult: function(data) {
+            return data.html;
+        },
+        templateSelection: function(data) {
+            return data.text;
+        }
+    });
+});
+$(document).on('mouseenter focus', 'select.accounts-dropdown-lazy', function(){
+    if ($(this).hasClass('select2-hidden-accessible')) {
+        return;
+    }
+
+    $(this).select2({
         ajax: {
             url: '{{route("accounts-dropdown")}}',
             dataType: 'json',
