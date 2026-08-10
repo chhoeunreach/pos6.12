@@ -1645,7 +1645,6 @@ class LocalCashierReportController extends Controller
             ->where('t.business_id', $businessId)
             ->where('t.type', 'sell')
             ->where('t.status', 'final')
-            ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
             ->whereIn('t.location_id', $filters['location_ids'])
             ->whereRaw('(t.final_total - COALESCE(paid.paid_amount, 0)) > 0.00001')
             ->whereRaw(
