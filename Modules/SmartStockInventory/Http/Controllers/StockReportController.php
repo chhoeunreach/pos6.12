@@ -29,7 +29,7 @@ class StockReportController extends Controller
     private function copySafeDateCell($date)
     {
         $formatted_date = $this->transactionUtil->format_date($date);
-        $export_date = ! empty($date) ? date('d-M-Y', strtotime($date)) : '';
+        $export_date = $formatted_date;
 
         return '<span data-export-value="'.e($export_date).'">'.e($formatted_date).'</span>';
     }
