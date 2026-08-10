@@ -965,6 +965,22 @@ class ContactController extends Controller
                     return $this->moduleUtil->expiredResponse();
                 }
 
+                $contact = Contact::where('business_id', $business_id)->find($id);
+                if (empty($contact)) {
+                    abort(404);
+                }
+
+                $expected_contact_db_id = (int) $request->input('expected_contact_db_id', 0);
+                if ($expected_contact_db_id > 0 && $expected_contact_db_id !== (int) $contact->id) {
+                    abort(409, 'Contact form does not match the contact being updated. Please reload and try again.');
+                }
+
+                $expected_contact_number = trim((string) $request->input('expected_contact_number', ''));
+                $current_contact_number = trim((string) ($contact->contact_id ?? ''));
+                if ($expected_contact_number !== '' && $current_contact_number !== '' && $expected_contact_number !== $current_contact_number) {
+                    abort(409, 'Contact number changed or request target is wrong. Please reload and try again.');
+                }
+
                 $output = $this->contactUtil->updateContact($input, $id, $business_id);
 
                 event(new ContactCreatedOrModified($output['data'], 'updated'));

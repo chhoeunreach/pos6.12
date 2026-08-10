@@ -159,6 +159,47 @@ $(document).ready(function () {
         return str.trim();
     }
 
+    function __looks_like_display_date(str) {
+        str = $.trim(String(str || ''));
+        if (str === '') {
+            return false;
+        }
+
+        // Match app-rendered dates such as 10-08-2026, 10/08/2026,
+        // 10-Aug-2026, with optional time after the date.
+        return /^(\d{1,2})([-\/])(\d{1,2}|[A-Za-z]{3,})([-\/])(\d{2}|\d{4})(\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?)?$/i.test(str);
+    }
+
+    function __preserve_clipboard_date_text(str) {
+        str = $.trim(String(str || ''));
+        if (!__looks_like_display_date(str)) {
+            return str;
+        }
+
+        // Zero-width non-joiner keeps Excel/Sheets from changing dd-mm-yyyy
+        // into month-first dates when pasted, while remaining visually unchanged.
+        return '\u200C' + str;
+    }
+
+    function __format_datatable_export_cell(data, node, options) {
+        options = options || {};
+
+        var $node = $(node);
+        var $quantityElement = $node.find('[data-is_quantity="true"]');
+
+        if ($quantityElement.length > 0) {
+            return $quantityElement.attr('data-orig-value');
+        }
+
+        var value = __remove_currency_symbol(data);
+
+        if (options.preserveDateText) {
+            value = __preserve_clipboard_date_text(value);
+        }
+
+        return value;
+    }
+
     function __stock_report_copy_date() {
         if (typeof moment !== 'undefined') {
             return moment().format(typeof moment_date_format !== 'undefined' ? moment_date_format : 'YYYY-MM-DD');
@@ -181,7 +222,7 @@ $(document).ready(function () {
                 return 'Date\t' + line;
             }
 
-            return date + '\t' + line;
+            return __preserve_clipboard_date_text(date) + '\t' + line;
         }).join('\n');
     }
 
@@ -194,14 +235,7 @@ $(document).ready(function () {
                 columns: ':visible',
                 format: {
                     body: function(data, row, column, node) {
-                        var $node = $(node);
-                        var $quantityElement = $node.find('[data-is_quantity="true"]');
-
-                        if ($quantityElement.length > 0) {
-                            return $quantityElement.attr('data-orig-value');
-                        }
-
-                        return __remove_currency_symbol(data);
+                        return __format_datatable_export_cell(data, node, { preserveDateText: true });
                     },
                     footer: function(data, row, column, node) {
                         return __remove_currency_symbol(data);
@@ -234,15 +268,7 @@ $(document).ready(function () {
                 columns: ':visible',
                 format: {
                     body: function(data, row, column, node) {
-                        // Check if the node or its children have data-is_quantity="true"
-                        var $node = $(node);
-                        var $quantityElement = $node.find('[data-is_quantity="true"]');
-                        
-                        if ($quantityElement.length > 0) {
-                            return $quantityElement.attr('data-orig-value');
-                        }
-                        // Remove currency symbol from the cell data
-                        return __remove_currency_symbol(data);
+                        return __format_datatable_export_cell(data, node);
                     },
                     footer: function(data, row, column, node) {
                         // Remove currency symbol from the footer data
@@ -265,14 +291,7 @@ $(document).ready(function () {
                 columns: ':visible',
                 format: {
                     body: function(data, row, column, node) {
-                        // Check if the node or its children have data-is_quantity="true"
-                        var $node = $(node);
-                        var $quantityElement = $node.find('[data-is_quantity="true"]');
-                        if ($quantityElement.length > 0) {
-                            return $quantityElement.attr('data-orig-value');
-                        }
-                        // Remove currency symbol from the cell data
-                        return __remove_currency_symbol(data);
+                        return __format_datatable_export_cell(data, node);
                     },
                     footer: function(data, row, column, node) {
                         // Remove currency symbol from the footer data

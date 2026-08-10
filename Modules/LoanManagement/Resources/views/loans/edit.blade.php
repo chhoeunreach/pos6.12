@@ -151,6 +151,7 @@
 }
 .lm-edit-wizard .lm-wiz-stat small { display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .lm-edit-wizard .lm-wiz-stat strong { display: block; margin-top: 3px; color: #0f172a; font-size: 15px; }
+.lm-edit-wizard .lm-wiz-stat .lm-wiz-input { height: 30px; margin-top: 4px; padding: 0 8px; border-radius: 6px; font-size: 14px; font-weight: 700; }
 .lm-edit-wizard .lm-wiz-subtitle {
     margin: -5px 0 12px; color: #64748b; font-size: 12px; line-height: 1.45;
 }
@@ -434,6 +435,9 @@
 
     <form id="wizEditForm" method="POST" action="{{ route('loan-management.loans.update', $editRouteParams) }}" style="display:flex; flex-direction:column;">
         @csrf
+        <input type="hidden" name="expected_loan_id" value="{{ $loanRow->id }}">
+        <input type="hidden" name="expected_loan_number" value="{{ $loanRow->loan_number ?? '' }}">
+        <input type="hidden" name="expected_customer_id" value="{{ $loanRow->customer_id ?? '' }}">
 
         <div class="lm-wiz-steps-wrap" id="wizStepsWrap">
 
@@ -531,10 +535,12 @@
                 <div class="lm-wiz-card">
                     <div class="lm-wiz-section-title"><i class="fa fa-user"></i> Customer Information</div>
                     <div class="lm-wiz-subtitle">Identity, contact, address, guarantor, and customer reference details.</div>
-                    <input type="hidden" name="customer_id" value="{{ old('customer_id', $loanRow->customer_id ?? '') }}">
                     <input type="hidden" name="main_contact_id" value="{{ old('main_contact_id', $mainContactId ?? '') }}">
                     <div class="lm-wiz-stat-strip">
-                        <div class="lm-wiz-stat"><small>Customer ID</small><strong>{{ $loanRow->customer_id ?? '-' }}</strong></div>
+                        <div class="lm-wiz-stat">
+                            <small>Customer ID</small>
+                            <input type="number" name="customer_id" class="lm-wiz-input" min="0" step="1" value="{{ old('customer_id', $loanRow->customer_id ?? '') }}">
+                        </div>
                         <div class="lm-wiz-stat"><small>Main Contact</small><strong>{{ $mainContactId ?: '-' }}</strong></div>
                         <div class="lm-wiz-stat"><small>ID Card</small><strong>{{ $loanRow->id_card_number ?? '-' }}</strong></div>
                         <div class="lm-wiz-stat"><small>Phone</small><strong>{{ $editCustomerPhone ?: '-' }}</strong></div>

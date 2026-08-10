@@ -270,6 +270,42 @@ class StaffMobileLoanController extends Controller
         }
 
         $data = $this->validatedLoanData($request, false);
+        if (! empty($data['loan_number']) && ! empty($loan->loan_number) && (string) $data['loan_number'] !== (string) $loan->loan_number) {
+            return $this->fail('Loan number does not match this loan. Please reload and try again.', 409, (object) []);
+        }
+
+        $submittedCustomerId = (int) ($data['customer_id'] ?? 0);
+        $loanCustomerId = (int) ($loan->customer_id ?? 0);
+        $targetCustomerId = $submittedCustomerId > 0 ? $submittedCustomerId : $loanCustomerId;
+        $customerChanged = $submittedCustomerId > 0 && $submittedCustomerId !== $loanCustomerId;
+        $targetCustomer = null;
+        if ($submittedCustomerId > 0 && Schema::connection($this->conn)->hasTable('loan_customers')) {
+            $targetCustomer = DB::connection($this->conn)
+                ->table('loan_customers')
+                ->where('id', $submittedCustomerId)
+                ->first();
+            if (! $targetCustomer) {
+                return $this->fail('Selected loan customer does not exist.', 422, (object) []);
+            }
+        }
+
+        if ($customerChanged && $targetCustomer) {
+            $data['customer_name'] = $targetCustomer->khmer_name
+                ?? $targetCustomer->name
+                ?? $data['customer_name']
+                ?? null;
+            $data['customer_phone'] = $targetCustomer->phone
+                ?? $targetCustomer->login_phone
+                ?? $targetCustomer->mobile
+                ?? $data['customer_phone']
+                ?? null;
+            $data['customer_address'] = $targetCustomer->address ?? $data['customer_address'] ?? null;
+            $data['id_card_number'] = $targetCustomer->id_card_number
+                ?? $targetCustomer->national_id
+                ?? $data['id_card_number']
+                ?? null;
+        }
+
         $items = (array) ($data['items'] ?? []);
         $firstItem = is_array($items[0] ?? null) ? $items[0] : [];
         $qty = max(1, (int) ($firstItem['qty'] ?? 1));
@@ -285,6 +321,7 @@ class StaffMobileLoanController extends Controller
         DB::connection($this->conn)->table('loans')->where('id', $loanId)->update(
             $this->onlyExistingColumns('loans', [
                 'customer_name_snapshot' => $data['customer_name'] ?? null,
+                'customer_id' => $targetCustomerId > 0 ? $targetCustomerId : null,
                 'customer_phone_snapshot' => $data['customer_phone'] ?? null,
                 'business_location_id' => $data['business_location_id'] ?? null,
                 'collector_id' => $data['assigned_collector_id'] ?? null,
@@ -312,8 +349,10 @@ class StaffMobileLoanController extends Controller
         );
 
         $this->upsertFirstLoanItem($loanId, $firstItem, $unitPrice, $qty);
-        $this->updateLoanCustomer((int) ($loan->customer_id ?? 0), $data);
-        $this->storeMobileCustomerDocuments((int) ($loan->customer_id ?? 0), $loanId, $data);
+        if (! $customerChanged) {
+            $this->updateLoanCustomer($targetCustomerId, $data);
+        }
+        $this->storeMobileCustomerDocuments($targetCustomerId, $loanId, $data);
 
         $fresh = Loan::query()->where('id', $loanId)->first();
 

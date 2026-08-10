@@ -30,6 +30,9 @@
 @endphp
 <input type="hidden" id="item_addition_method" value="{{$business_details->item_addition_method}}">
 	{!! Form::open(['url' => action([\App\Http\Controllers\SellPosController::class, 'update'], ['po' => $transaction->id ]), 'method' => 'put', 'id' => 'edit_sell_form', 'files' => true, 'data-transaction-id' => $transaction->id ]) !!}
+	<input type="hidden" name="expected_transaction_id" value="{{ $transaction->id }}">
+	<input type="hidden" name="expected_invoice_no" value="{{ $transaction->invoice_no ?? '' }}">
+	<input type="hidden" name="expected_contact_id" value="{{ $transaction->contact_id ?? '' }}">
 
 	{!! Form::hidden('location_id', $transaction->location_id, ['id' => 'location_id', 'data-receipt_printer_type' => !empty($location_printer_type) ? $location_printer_type : 'browser', 'data-default_payment_accounts' => $transaction->location->default_payment_accounts]); !!}
 

@@ -54,6 +54,8 @@
                 @csrf
                 @method('PUT')
                 <input type="hidden" name="create_mode" id="create_mode" value="new">
+                <input type="hidden" name="expected_customer_id" value="{{ $customerRow->id }}">
+                <input type="hidden" name="expected_customer_code" value="{{ $customerRow->customer_code ?? '' }}">
                 @include('loanmanagement::customers.partials.form')
                 <button type="submit" class="btn btn-primary">Update Customer</button>
                 <a href="{{ route('loan-management.customers') }}" class="btn btn-default">Back to List</a>

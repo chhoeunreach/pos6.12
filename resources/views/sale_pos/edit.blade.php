@@ -17,6 +17,9 @@
 	@endphp
 	{!! Form::open(['url' => action([\App\Http\Controllers\SellPosController::class, 'update'], [$transaction->id]), 'method' => 'post', 'id' => 'edit_pos_sell_form' ]) !!}
 	{{ method_field('PUT') }}
+	<input type="hidden" name="expected_transaction_id" value="{{ $transaction->id }}">
+	<input type="hidden" name="expected_invoice_no" value="{{ $transaction->invoice_no ?? '' }}">
+	<input type="hidden" name="expected_contact_id" value="{{ $transaction->contact_id ?? '' }}">
 	<div class="row" style="margin:0;">
 		<div class="col-md-12" style="padding:0;">
 			<div class="row tw-flex lg:tw-flex-row md:tw-flex-col sm:tw-flex-col tw-flex-col tw-items-stretch" style="gap: 4px; margin: 0; padding: 0;">

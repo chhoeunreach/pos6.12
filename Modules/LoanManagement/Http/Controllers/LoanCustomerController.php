@@ -119,6 +119,20 @@ class LoanCustomerController extends Controller
 
     public function update(UpdateLoanCustomerRequest $request, int $customer)
     {
+        $customerRow = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
+        abort_if(! $customerRow, 404);
+
+        if ((int) $request->input('expected_customer_id', 0) > 0
+            && (int) $request->input('expected_customer_id') !== (int) $customerRow->id) {
+            abort(409, 'Customer form does not match the customer being updated. Please reload and try again.');
+        }
+
+        $expectedCustomerCode = trim((string) $request->input('expected_customer_code', ''));
+        $currentCustomerCode = trim((string) ($customerRow->customer_code ?? ''));
+        if ($expectedCustomerCode !== '' && $currentCustomerCode !== '' && $expectedCustomerCode !== $currentCustomerCode) {
+            abort(409, 'Customer code changed or request target is wrong. Please reload and try again.');
+        }
+
         $data = $request->validated();
         unset($data['customer_photo']);
         if ($request->hasFile('customer_photo')) {

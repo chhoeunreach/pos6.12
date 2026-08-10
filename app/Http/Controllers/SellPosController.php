@@ -2048,8 +2048,12 @@ class SellPosController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $is_direct_sale = false;
+
         try {
             $input = $request->except('_token');
+            $business_id = $request->session()->get('user.business_id');
+            $user_id = $request->session()->get('user.id');
 
             //status is send as quotation from edit sales screen.
             $input['is_quotation'] = 0;
@@ -2066,10 +2070,29 @@ class SellPosController extends Controller
                 $input['is_quotation'] = 0;
             }
 
-            $is_direct_sale = false;
+            // The route id is the primary key. Hidden invoice/customer values are only
+            // stale-form guards to stop one invoice edit from touching another invoice.
+            $transaction_before = Transaction::where('business_id', $business_id)->findOrFail($id);
+
+            if ((int) $request->input('expected_transaction_id', 0) > 0
+                && (int) $request->input('expected_transaction_id') !== (int) $transaction_before->id) {
+                abort(409, 'Invoice form does not match the invoice being updated. Please reload and try again.');
+            }
+
+            $expected_invoice_no = trim((string) $request->input('expected_invoice_no', ''));
+            $current_invoice_no = trim((string) ($transaction_before->invoice_no ?? ''));
+            if ($expected_invoice_no !== '' && $current_invoice_no !== '' && $expected_invoice_no !== $current_invoice_no) {
+                abort(409, 'Invoice number changed or request target is wrong. Please reload and try again.');
+            }
+
+            if ((int) $request->input('expected_contact_id', 0) > 0
+                && (int) $request->input('expected_contact_id') !== (int) $transaction_before->contact_id) {
+                abort(409, 'Invoice customer changed or request target is wrong. Please reload and try again.');
+            }
+
+            unset($input['expected_transaction_id'], $input['expected_invoice_no'], $input['expected_contact_id']);
+
             if (!empty($input['products'])) {
-                //Get transaction value before updating.
-                $transaction_before = Transaction::find($id);
                 $status_before = $transaction_before->status;
                 $rp_earned_before = $transaction_before->rp_earned;
                 $rp_redeemed_before = $transaction_before->rp_redeemed;
@@ -2118,8 +2141,6 @@ class SellPosController extends Controller
                     return redirect()->action([\App\Http\Controllers\CashRegisterController::class, 'create']);
                 }
 
-                $business_id = $request->session()->get('user.business_id');
-                $user_id = $request->session()->get('user.id');
                 $commsn_agnt_setting = $request->session()->get('business.sales_cmsn_agnt');
 
                 $discount = ['discount_type' => $input['discount_type'],
@@ -2428,7 +2449,9 @@ class SellPosController extends Controller
                 ];
             }
         } catch (\Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
             $output = ['success' => 0,
                 'msg' => __('messages.something_went_wrong'),

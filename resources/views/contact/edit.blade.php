@@ -18,6 +18,8 @@
   @endphp
 
     {!! Form::open(['url' => $url, 'method' => 'PUT', 'id' => 'contact_edit_form']) !!}
+    <input type="hidden" name="expected_contact_db_id" value="{{ $contact->id }}">
+    <input type="hidden" name="expected_contact_number" value="{{ $contact->contact_id ?? '' }}">
 
     <div class="modal-header">
       <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>

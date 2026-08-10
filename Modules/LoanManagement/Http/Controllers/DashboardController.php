@@ -130,13 +130,17 @@ class DashboardController extends Controller
         abort_unless(Schema::connection('mysql_loan')->hasTable('loans'), 404);
 
         $columns = Schema::connection('mysql_loan')->getColumnListing('loans');
-        $exists = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->exists();
-        abort_unless($exists, 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_unless($loanRow, 404);
 
         $data = $request->validate([
+            'expected_loan_id' => ['nullable', 'integer', 'min:1'],
+            'expected_loan_number' => ['nullable', 'string', 'max:191'],
+            'expected_customer_id' => ['nullable', 'integer', 'min:0'],
             'loan_date' => ['nullable', 'date'],
             'source_invoice_no' => ['nullable', 'string', 'max:191'],
             'source_type' => ['nullable', 'string', 'max:30'],
+            'customer_id' => ['nullable', 'integer', 'min:0'],
             'customer_name_snapshot' => ['nullable', 'string', 'max:191'],
             'customer_phone_snapshot' => ['nullable', 'string', 'max:50'],
             'customer_address_snapshot' => ['nullable', 'string', 'max:1000'],
@@ -177,6 +181,51 @@ class DashboardController extends Controller
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'items.*.line_total' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        if (! empty($data['expected_loan_id']) && (int) $data['expected_loan_id'] !== (int) $loan) {
+            abort(409, 'Loan form does not match the loan being updated. Please reload and try again.');
+        }
+
+        $expectedLoanNumber = trim((string) ($data['expected_loan_number'] ?? ''));
+        $currentLoanNumber = trim((string) ($loanRow->loan_number ?? ''));
+        if ($expectedLoanNumber !== '' && $currentLoanNumber !== '' && $expectedLoanNumber !== $currentLoanNumber) {
+            abort(409, 'Loan number changed or request target is wrong. Please reload and try again.');
+        }
+
+        if (isset($data['expected_customer_id'])
+            && (int) $data['expected_customer_id'] !== (int) ($loanRow->customer_id ?? 0)) {
+            abort(409, 'Loan customer link changed or request target is wrong. Please reload and try again.');
+        }
+
+        $submittedCustomerId = (int) ($data['customer_id'] ?? 0);
+        $customerChanged = $submittedCustomerId > 0 && $submittedCustomerId !== (int) ($loanRow->customer_id ?? 0);
+        $targetCustomerRow = null;
+        if ($submittedCustomerId > 0 && Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            $targetCustomerRow = DB::connection('mysql_loan')
+                ->table('loan_customers')
+                ->where('id', $submittedCustomerId)
+                ->first();
+            abort_unless($targetCustomerRow, 422, 'Selected loan customer does not exist.');
+        }
+
+        if ($customerChanged && $targetCustomerRow) {
+            $data['customer_name_snapshot'] = $targetCustomerRow->khmer_name
+                ?? $targetCustomerRow->name
+                ?? $data['customer_name_snapshot']
+                ?? null;
+            $data['customer_phone_snapshot'] = $targetCustomerRow->phone
+                ?? $targetCustomerRow->login_phone
+                ?? $targetCustomerRow->mobile
+                ?? $data['customer_phone_snapshot']
+                ?? null;
+            $data['customer_address_snapshot'] = $targetCustomerRow->address ?? $data['customer_address_snapshot'] ?? null;
+            $data['id_card_number'] = $targetCustomerRow->id_card_number
+                ?? $targetCustomerRow->national_id
+                ?? $data['id_card_number']
+                ?? null;
+        }
+
+        unset($data['expected_loan_id'], $data['expected_loan_number'], $data['expected_customer_id']);
 
         $updates = [];
         foreach ($data as $column => $value) {

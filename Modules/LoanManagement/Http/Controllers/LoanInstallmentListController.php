@@ -4954,6 +4954,9 @@ class LoanInstallmentListController extends Controller
                 'recovery_score' => 'nullable|integer|min:0|max:65535',
                 'delete_items' => 'nullable|array',
                 'delete_items.*' => 'integer|min:1',
+                'expected_loan_id' => 'nullable|integer|min:1',
+                'expected_loan_number' => 'nullable|string|max:191',
+                'expected_customer_id' => 'nullable|integer|min:0',
             ]);
 
             if (! empty($data['business_location_id']) && $this->loanTableExists('loan_business_locations')) {
@@ -4993,7 +4996,61 @@ class LoanInstallmentListController extends Controller
             abort_if(! $this->loanTableExists('loans'), 404);
             $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
             abort_if(! $loanRow, 404);
-            $loanCustomerId = (int) ($loanRow->customer_id ?? $data['customer_id'] ?? 0);
+
+            if (
+                ! empty($data['expected_loan_id'])
+                && (int) $data['expected_loan_id'] !== (int) $loan
+            ) {
+                abort(409, 'Loan form does not match the loan being updated. Please reload and try again.');
+            }
+
+            $expectedLoanNumber = trim((string) ($data['expected_loan_number'] ?? ''));
+            $currentLoanNumber = trim((string) ($loanRow->loan_number ?? ''));
+            if ($expectedLoanNumber !== '' && $currentLoanNumber !== '' && $expectedLoanNumber !== $currentLoanNumber) {
+                abort(409, 'Loan number changed or request target is wrong. Please reload and try again.');
+            }
+
+            $originalLoanCustomerId = (int) ($loanRow->customer_id ?? 0);
+            $submittedCustomerId = (int) ($data['customer_id'] ?? 0);
+            $loanCustomerId = $submittedCustomerId > 0 ? $submittedCustomerId : $originalLoanCustomerId;
+            $customerChanged = $submittedCustomerId > 0 && $submittedCustomerId !== $originalLoanCustomerId;
+            $targetCustomerRow = null;
+
+            if ($submittedCustomerId > 0 && $this->loanTableExists('loan_customers')) {
+                $targetCustomerRow = DB::connection('mysql_loan')
+                    ->table('loan_customers')
+                    ->where('id', $submittedCustomerId)
+                    ->first();
+                abort_unless($targetCustomerRow, 422, 'Selected loan customer does not exist.');
+            }
+
+            if (
+                isset($data['expected_customer_id'])
+                && (int) $data['expected_customer_id'] !== $originalLoanCustomerId
+            ) {
+                abort(409, 'Loan customer link changed or request target is wrong. Please reload and try again.');
+            }
+
+            unset($data['expected_loan_id'], $data['expected_loan_number'], $data['expected_customer_id']);
+
+            if ($customerChanged && $targetCustomerRow) {
+                $data['customer_name_snapshot'] = $targetCustomerRow->khmer_name
+                    ?? $targetCustomerRow->name
+                    ?? $data['customer_name_snapshot']
+                    ?? null;
+                $data['customer_khmer_name'] = $targetCustomerRow->khmer_name ?? $data['customer_khmer_name'] ?? null;
+                $data['customer_english_name'] = $targetCustomerRow->name ?? $data['customer_english_name'] ?? null;
+                $data['customer_phone_snapshot'] = $targetCustomerRow->phone
+                    ?? $targetCustomerRow->login_phone
+                    ?? $targetCustomerRow->mobile
+                    ?? $data['customer_phone_snapshot']
+                    ?? null;
+                $data['customer_address_snapshot'] = $targetCustomerRow->address ?? $data['customer_address_snapshot'] ?? null;
+                $data['id_card_number'] = $targetCustomerRow->id_card_number
+                    ?? $targetCustomerRow->national_id
+                    ?? $data['id_card_number']
+                    ?? null;
+            }
 
             if (! empty($data['id_card_ocr_fields']['id_card_number']) && empty($data['id_card_number'])) {
                 $data['id_card_number'] = $data['id_card_ocr_fields']['id_card_number'];
@@ -5011,7 +5068,7 @@ class LoanInstallmentListController extends Controller
             $existingCustomerName = null;
             $existingCustomerKhmerName = null;
             if ($loanCustomerId > 0 && $this->loanTableExists('loan_customers')) {
-                $existingCustomer = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->first();
+                $existingCustomer = $targetCustomerRow ?: DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanCustomerId)->first();
                 if ($existingCustomer) {
                     $existingCustomerName = $existingCustomer->name ?? null;
                     $existingCustomerKhmerName = $existingCustomer->khmer_name ?? null;
