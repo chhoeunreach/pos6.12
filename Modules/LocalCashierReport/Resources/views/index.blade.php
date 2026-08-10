@@ -1194,6 +1194,13 @@
                                                         <i class="fas fa-eye"></i>
                                                     </a>
                                                 @endcanany
+                                                @can('sell.payments')
+                                                    <a class="btn btn-xs btn-success add_payment_modal action-icon-btn"
+                                                       href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$row['transaction_id']]) }}"
+                                                       title="Pay off">
+                                                        <i class="fas fa-money-bill-alt"></i>
+                                                    </a>
+                                                @endcan
                                             </td>
                                             <td>{{ $row['date'] }}</td>
                                             <td>{{ $row['invoice_no'] }}</td>
@@ -1413,9 +1420,13 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade payment_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel"></div>
+<div class="modal fade edit_payment_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel"></div>
 @endsection
 
 @section('javascript')
+<script src="{{ asset('js/payment.js?v=' . $asset_v) }}"></script>
 <script>
     $(function () {
         $('#local_cashier_report_app .select2').select2();
