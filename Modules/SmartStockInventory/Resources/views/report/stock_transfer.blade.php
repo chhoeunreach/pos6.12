@@ -186,12 +186,12 @@ $(document).ready(function() {
         stock_transfer_report_table.ajax.reload();
     });
 
-    function ssiStockTransferCellText(cell, preserveDateText) {
+    function ssiStockTransferCellText(cell) {
         var $cell = $(cell);
         var exportValue = $cell.find('[data-export-value]').attr('data-export-value');
 
         if (typeof exportValue !== 'undefined') {
-            return preserveDateText ? '\u200C' + exportValue : exportValue;
+            return exportValue;
         }
 
         return $.trim($cell.text());
@@ -207,7 +207,7 @@ $(document).ready(function() {
         });
         $('#stock_transfer_report_table tbody tr').each(function() {
             $(this).find('td').each(function() {
-                tableData += ssiStockTransferCellText(this, true) + '\t';
+                tableData += ssiStockTransferCellText(this) + '\t';
             });
             tableData += '\n';
         });
@@ -229,7 +229,7 @@ $(document).ready(function() {
         });
         $('#stock_transfer_report_table tbody tr').each(function() {
             $(this).find('td').each(function() {
-                csvData += '"' + ssiStockTransferCellText(this, false).replace(/"/g, '""') + '",';
+                csvData += '"' + ssiStockTransferCellText(this).replace(/"/g, '""') + '",';
             });
             csvData += '\n';
         });

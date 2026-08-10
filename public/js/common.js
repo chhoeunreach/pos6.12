@@ -189,7 +189,7 @@ $(document).ready(function () {
 
         if ($exportElement.length > 0) {
             var exportValue = $exportElement.attr('data-export-value');
-            return options.preserveDateText ? __preserve_clipboard_date_text(exportValue) : exportValue;
+            return exportValue;
         }
 
         var $quantityElement = $node.find('[data-is_quantity="true"]');
