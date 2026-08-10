@@ -785,6 +785,33 @@
             $dueCustomerRows = collect($report['due_customer_detail_rows'] ?? []);
             $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
             $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
+            $allSaleCustomerPaymentRows = $customerPaymentRows->map(function ($row) {
+                $amount = (float) ($row['amount'] ?? 0);
+
+                return [
+                    'row_type' => 'sale',
+                    'row_source' => 'customer_payment',
+                    'transaction_id' => (int) ($row['transaction_id'] ?? 0),
+                    'date' => (string) ($row['date'] ?? ''),
+                    'invoice_no' => (string) ($row['invoice_no'] ?? ($row['receipt_no'] ?? '')),
+                    'i_t' => 'CP',
+                    'customer_name' => (string) ($row['customer_name'] ?? '-'),
+                    'phone_number' => (string) ($row['phone_number'] ?? ''),
+                    'sku' => (string) ($row['receipt_no'] ?? '-'),
+                    'product_name' => 'Customer Payment',
+                    'quantity' => null,
+                    'unit_price' => null,
+                    'line_total' => null,
+                    'paid' => $amount,
+                    'payments' => (array) ($row['payments'] ?? []),
+                    'due' => 0.0,
+                    'location_name' => (string) ($row['location_name'] ?? 'N/A'),
+                    'cashier_name' => (string) ($row['cashier_name'] ?? 'N/A'),
+                    'customer_group_name' => 'សងប្រាក់',
+                    'sell_note_number' => (string) ($row['note'] ?? ''),
+                ];
+            });
+            $allSaleRows = $allSaleRows->merge($allSaleCustomerPaymentRows)->values();
             $detailMeta = $report['detail_meta'] ?? [];
             $detailLimit = (int) ($detailMeta['limit'] ?? 1000);
             $hasLimitedDetails = collect([
@@ -820,9 +847,6 @@
                     </li>
                     <li role="presentation">
                         <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">Collection Payment</a>
-                    </li>
-                    <li role="presentation">
-                        <a href="#customer_payments_detail_tab" aria-controls="customer_payments_detail_tab" role="tab" data-toggle="tab">Customer Payment</a>
                     </li>
                     <li role="presentation">
                         <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
