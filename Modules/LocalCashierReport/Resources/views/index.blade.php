@@ -771,6 +771,7 @@
         @php
             $expenseRows = collect($report['expense_detail_rows'] ?? []);
             $collectionPaymentRows = collect($report['collection_payment_detail_rows'] ?? []);
+            $customerPaymentRows = collect($report['customer_due_payment_detail_rows'] ?? []);
             $dueCustomerRows = collect($report['due_customer_detail_rows'] ?? []);
             $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
             $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
@@ -781,7 +782,8 @@
                 ['label' => 'accessory sales', 'displayed' => $detailMeta['accessory_displayed'] ?? 0, 'total' => $detailMeta['accessory_total'] ?? 0],
                 ['label' => 'service sales', 'displayed' => $detailMeta['service_displayed'] ?? 0, 'total' => $detailMeta['service_total'] ?? 0],
                 ['label' => 'collection payments', 'displayed' => $detailMeta['collection_payment_displayed'] ?? 0, 'total' => $detailMeta['collection_payment_total'] ?? 0],
-                ['label' => 'due customers', 'displayed' => $detailMeta['due_customer_displayed'] ?? 0, 'total' => $detailMeta['due_customer_total'] ?? 0],
+                ['label' => 'customer payments', 'displayed' => $detailMeta['customer_due_payment_displayed'] ?? 0, 'total' => $detailMeta['customer_due_payment_total'] ?? 0],
+                ['label' => 'customer due', 'displayed' => $detailMeta['due_customer_displayed'] ?? 0, 'total' => $detailMeta['due_customer_total'] ?? 0],
                 ['label' => 'expenses', 'displayed' => $detailMeta['expense_displayed'] ?? 0, 'total' => $detailMeta['expense_total'] ?? 0],
             ])->filter(fn ($row) => (int) $row['total'] > (int) $row['displayed'])->values();
         @endphp
@@ -810,10 +812,13 @@
                         <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">Collection Payment</a>
                     </li>
                     <li role="presentation">
+                        <a href="#customer_payments_detail_tab" aria-controls="customer_payments_detail_tab" role="tab" data-toggle="tab">Customer Payment</a>
+                    </li>
+                    <li role="presentation">
                         <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
                     </li>
                     <li role="presentation">
-                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Due Customer</a>
+                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Customer Due</a>
                     </li>
                 </ul>
                 <div class="table-meta">
@@ -823,7 +828,8 @@
                     <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} accessory sales</span>
                     <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} service sales</span>
                     <span>{{ number_format($detailMeta['collection_payment_displayed'] ?? $collectionPaymentRows->count()) }} / {{ number_format($detailMeta['collection_payment_total'] ?? $collectionPaymentRows->count()) }} collection payments</span>
-                    <span>{{ number_format($detailMeta['due_customer_displayed'] ?? $dueCustomerRows->count()) }} / {{ number_format($detailMeta['due_customer_total'] ?? $dueCustomerRows->count()) }} due customers</span>
+                    <span>{{ number_format($detailMeta['customer_due_payment_displayed'] ?? $customerPaymentRows->count()) }} / {{ number_format($detailMeta['customer_due_payment_total'] ?? $customerPaymentRows->count()) }} customer payments</span>
+                    <span>{{ number_format($detailMeta['due_customer_displayed'] ?? $dueCustomerRows->count()) }} / {{ number_format($detailMeta['due_customer_total'] ?? $dueCustomerRows->count()) }} customer due</span>
                     <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} expenses</span>
                 </div>
             </div>
@@ -1114,6 +1120,119 @@
                                             <th class="text-right">{{ $fmt($collectionPaymentRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0))) }}</th>
                                         @endforeach
                                         <th class="text-right">{{ $fmt($collectionPaymentRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="customer_payments_detail_tab">
+                        @php
+                            $customerPaymentLocations = $customerPaymentRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                            $customerPaymentCashiers = $customerPaymentRows->pluck('cashier_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+                        @endphp
+                        <div class="sale-table-filter-toggle">
+                            <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_customer_payment_table_filters" aria-expanded="false" aria-controls="local_cashier_customer_payment_table_filters">
+                                <i class="fa fa-filter"></i> Filters
+                            </button>
+                        </div>
+                        <div class="collapse" id="local_cashier_customer_payment_table_filters">
+                            <div class="row all-sale-table-filters">
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group">
+                                        <label>Location</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="All locations">
+                                            @foreach($customerPaymentLocations as $locationName)
+                                                <option value="{{ $locationName }}">{{ $locationName }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="all-sale-filter-actions">
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">Select All</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group">
+                                        <label>Cashier</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="All cashiers">
+                                            @foreach($customerPaymentCashiers as $cashierName)
+                                                <option value="{{ $cashierName }}">{{ $cashierName }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="all-sale-filter-actions">
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">Select All</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped ajax_view" id="local_cashier_customer_payment_table" style="width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Payment Date</th>
+                                        <th>Receipt No</th>
+                                        <th>Invoice No</th>
+                                        <th>Invoice Date</th>
+                                        <th>Customer</th>
+                                        <th>Phone</th>
+                                        <th class="all-sale-location-column">Location</th>
+                                        <th class="all-sale-cashier-column">Cashier</th>
+                                        <th>Method</th>
+                                        @foreach($report['payment_columns'] as $method)
+                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                        @endforeach
+                                        <th class="text-right">Amount Paid</th>
+                                        <th class="text-right">Previous Due</th>
+                                        <th class="text-right">Remaining Due</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($customerPaymentRows as $row)
+                                        <tr>
+                                            <td>
+                                                @canany(['sell.view', 'direct_sell.view', 'view_own_sell_only'])
+                                                    <a class="btn btn-xs btn-default btn-modal action-icon-btn action-view"
+                                                       href="#"
+                                                       data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
+                                                       data-container=".view_modal"
+                                                       title="View Invoice">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                @endcanany
+                                            </td>
+                                            <td>{{ $row['date'] }}</td>
+                                            <td>{{ $row['receipt_no'] }}</td>
+                                            <td>{{ $row['invoice_no'] }}</td>
+                                            <td>{{ $row['invoice_date'] }}</td>
+                                            <td>{{ $row['customer_name'] }}</td>
+                                            <td>{{ $row['phone_number'] }}</td>
+                                            <td>{{ $row['location_name'] }}</td>
+                                            <td>{{ $row['cashier_name'] }}</td>
+                                            <td>{{ $row['method_label'] }}</td>
+                                            @foreach($report['payment_columns'] as $method)
+                                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                            @endforeach
+                                            <td class="text-right">{{ $fmt($row['amount']) }}</td>
+                                            <td class="text-right">{{ $fmt($row['previous_due']) }}</td>
+                                            <td class="text-right @if(($row['remaining_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['remaining_due']) }}</td>
+                                            <td>{{ $row['note'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot>
+                                    <tr class="detail-total-row">
+                                        <th colspan="10" class="text-right">Total</th>
+                                        @foreach($report['payment_columns'] as $method)
+                                            <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0))) }}</th>
+                                        @endforeach
+                                        <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
+                                        <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) ($row['previous_due'] ?? 0))) }}</th>
+                                        <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) ($row['remaining_due'] ?? 0))) }}</th>
+                                        <th></th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1686,6 +1805,42 @@
                 ]
             });
         }
+        if ($.fn.DataTable && $('#local_cashier_customer_payment_table').length) {
+            $('#local_cashier_customer_payment_table').DataTable({
+                paging: true,
+                searching: true,
+                ordering: true,
+                order: [[7, 'asc'], [1, 'desc']],
+                info: true,
+                autoWidth: false,
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                pagingType: 'full_numbers',
+                scrollX: true,
+                responsive: false,
+                dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
+                language: {
+                    search: 'Search:',
+                    lengthMenu: 'Show _MENU_ entries',
+                    zeroRecords: 'No data available in table',
+                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                    infoEmpty: 'Showing 0 to 0 of 0 entries'
+                },
+                buttons: [
+                    localCashierCopyButton({
+                        withoutHeader: true,
+                        columns: function(index, data, node) {
+                            return index !== 0 && $(node).is(':visible');
+                        }
+                    }),
+                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                ]
+            });
+        }
         if ($.fn.DataTable && $('#local_cashier_collection_payment_table').length) {
             $('#local_cashier_collection_payment_table').DataTable({
                 paging: true,
@@ -2196,50 +2351,62 @@
 #local_cashier_report_app .all-sale-filter-actions .btn + .btn {
     margin-left: 4px;
 }
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dt-buttons {
     margin-bottom: 8px;
 }
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons {
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper > .row:first-child,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper > .row:first-child,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper > .row:first-child {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+}
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dataTables_filter,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dataTables_filter,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dataTables_filter {
     margin-bottom: 8px;
 }
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter {
-    margin-bottom: 8px;
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter input,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter input,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dataTables_filter input,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dataTables_filter input,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dataTables_filter input {
+    width: 260px;
 }
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter {
-    margin-bottom: 8px;
-}
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_filter input {
-    width: 220px;
-}
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_filter input {
-    width: 220px;
-}
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_length select {
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dataTables_length select,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_length select,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dataTables_length select,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dataTables_length select,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dataTables_length select {
     min-width: 78px;
 }
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dataTables_length select {
-    min-width: 78px;
-}
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons {
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dt-buttons,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dt-buttons {
     text-align: center;
 }
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons {
-    text-align: center;
-}
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn {
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dt-buttons .btn,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dt-buttons .btn,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dt-buttons .btn {
     border: 1px solid #c7cfdb;
     background: #fff;
     color: #5d6b82;
 }
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn {
-    border: 1px solid #c7cfdb;
-    background: #fff;
-    color: #5d6b82;
-}
-#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn:hover {
-    background: #f5f8fc;
-}
-#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn:hover {
+#local_cashier_report_app #local_cashier_sales_detail_table_wrapper .dt-buttons .btn:hover,
+#local_cashier_report_app #local_cashier_expenses_detail_table_wrapper .dt-buttons .btn:hover,
+#local_cashier_report_app #local_cashier_collection_payment_table_wrapper .dt-buttons .btn:hover,
+#local_cashier_report_app #local_cashier_customer_payment_table_wrapper .dt-buttons .btn:hover,
+#local_cashier_report_app #local_cashier_customer_due_payment_table_wrapper .dt-buttons .btn:hover {
     background: #f5f8fc;
 }
 #local_cashier_report_app #local_cashier_accessory_sales_detail_table_wrapper .dt-buttons,

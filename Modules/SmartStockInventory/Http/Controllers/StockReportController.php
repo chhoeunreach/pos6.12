@@ -26,6 +26,13 @@ class StockReportController extends Controller
         $this->transactionUtil = $transactionUtil;
     }
 
+    private function copySafeDateCell($date)
+    {
+        $formatted_date = $this->transactionUtil->format_date($date);
+
+        return '<span data-export-value="'.e($formatted_date).'">'.e($formatted_date).'</span>';
+    }
+
     public function stockSellReport(Request $request)
     {
         if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
@@ -212,7 +219,9 @@ class StockReportController extends Controller
                 ->first();
 
             return Datatables::of($sells)
-                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('transaction_date', function ($row) {
+                    return $this->copySafeDateCell($row->transaction_date);
+                })
                 ->addColumn('i_t', function ($row) {
                     $sell_note = trim((string) $row->additional_notes);
                     $staff_note_last4 = substr(trim((string) $row->staff_note), -4);
@@ -272,7 +281,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }
@@ -386,7 +395,9 @@ class StockReportController extends Controller
             }
 
             return Datatables::of($purchases)
-                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('transaction_date', function ($row) {
+                    return $this->copySafeDateCell($row->transaction_date);
+                })
                 ->editColumn('quantity', function ($row) {
                     return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
                 })
@@ -429,7 +440,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['quantity', 'purchase_price', 'subtotal', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['transaction_date', 'quantity', 'purchase_price', 'subtotal', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->make(true);
         }
 
@@ -545,7 +556,9 @@ class StockReportController extends Controller
             );
 
             $datatable = Datatables::of($query)
-                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('transaction_date', function ($row) {
+                    return $this->copySafeDateCell($row->transaction_date);
+                })
                 ->editColumn('qty', function ($row) {
                     return $this->transactionUtil->num_f($row->qty, false, null, true);
                 })
@@ -616,7 +629,7 @@ class StockReportController extends Controller
                         $query->whereRaw('1 = 0');
                     }
                 })
-                ->rawColumns([])
+                ->rawColumns(['transaction_date'])
                 ->make(true);
 
             return $datatable;
@@ -696,7 +709,9 @@ class StockReportController extends Controller
             }
 
             return Datatables::of($purchase_returns)
-                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('date', function ($row) {
+                    return $this->copySafeDateCell($row->date);
+                })
                 ->editColumn('quantity', function ($row) {
                     return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
                 })
@@ -706,7 +721,7 @@ class StockReportController extends Controller
                 ->editColumn('total', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
                 })
-                ->rawColumns(['quantity', 'purchase_price', 'total'])
+                ->rawColumns(['date', 'quantity', 'purchase_price', 'total'])
                 ->make(true);
         }
 
@@ -792,7 +807,9 @@ class StockReportController extends Controller
             }
 
             return Datatables::of($sell_returns)
-                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('date', function ($row) {
+                    return $this->copySafeDateCell($row->date);
+                })
                 ->editColumn('quantity', function ($row) {
                     return '<span data-orig-value="'.$row->quantity.'">'.$this->transactionUtil->num_f($row->quantity, false).'</span>';
                 })
@@ -802,7 +819,7 @@ class StockReportController extends Controller
                 ->editColumn('total', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
                 })
-                ->rawColumns(['quantity', 'unit_price', 'total'])
+                ->rawColumns(['date', 'quantity', 'unit_price', 'total'])
                 ->make(true);
         }
 
@@ -871,7 +888,9 @@ class StockReportController extends Controller
             }
 
             return Datatables::of($adjustments)
-                ->editColumn('date', '{{@format_date($date)}}')
+                ->editColumn('date', function ($row) {
+                    return $this->copySafeDateCell($row->date);
+                })
                 ->editColumn('adjusted_qty', function ($row) {
                     return '<span data-orig-value="'.$row->adjusted_qty.'">'.$this->transactionUtil->num_f($row->adjusted_qty, false).'</span>';
                 })
@@ -881,7 +900,7 @@ class StockReportController extends Controller
                 ->editColumn('previous_qty', function ($row) {
                     return '<span data-orig-value="'.$row->previous_qty.'">'.$this->transactionUtil->num_f($row->previous_qty, false).'</span>';
                 })
-                ->rawColumns(['adjusted_qty', 'difference', 'previous_qty'])
+                ->rawColumns(['date', 'adjusted_qty', 'difference', 'previous_qty'])
                 ->make(true);
         }
 

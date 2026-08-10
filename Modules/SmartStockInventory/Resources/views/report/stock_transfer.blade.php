@@ -186,17 +186,28 @@ $(document).ready(function() {
         stock_transfer_report_table.ajax.reload();
     });
 
+    function ssiStockTransferCellText(cell, preserveDateText) {
+        var $cell = $(cell);
+        var exportValue = $cell.find('[data-export-value]').attr('data-export-value');
+
+        if (typeof exportValue !== 'undefined') {
+            return preserveDateText ? '\u200C' + exportValue : exportValue;
+        }
+
+        return $.trim($cell.text());
+    }
+
     $('#copy_table_btn').click(function() {
         var tableData = '';
         $('#stock_transfer_report_table thead tr').each(function() {
             $(this).find('th').each(function() {
-                tableData += $(this).text() + '\t';
+                tableData += $.trim($(this).text()) + '\t';
             });
             tableData += '\n';
         });
         $('#stock_transfer_report_table tbody tr').each(function() {
             $(this).find('td').each(function() {
-                tableData += $(this).text() + '\t';
+                tableData += ssiStockTransferCellText(this, true) + '\t';
             });
             tableData += '\n';
         });
@@ -212,13 +223,13 @@ $(document).ready(function() {
         var csvData = '\uFEFF';
         $('#stock_transfer_report_table thead tr').each(function() {
             $(this).find('th').each(function() {
-                csvData += '"' + $(this).text() + '",';
+                csvData += '"' + $.trim($(this).text()).replace(/"/g, '""') + '",';
             });
             csvData += '\n';
         });
         $('#stock_transfer_report_table tbody tr').each(function() {
             $(this).find('td').each(function() {
-                csvData += '"' + $(this).text() + '",';
+                csvData += '"' + ssiStockTransferCellText(this, false).replace(/"/g, '""') + '",';
             });
             csvData += '\n';
         });

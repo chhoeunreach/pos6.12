@@ -185,6 +185,13 @@ $(document).ready(function () {
         options = options || {};
 
         var $node = $(node);
+        var $exportElement = $node.find('[data-export-value]');
+
+        if ($exportElement.length > 0) {
+            var exportValue = $exportElement.attr('data-export-value');
+            return options.preserveDateText ? __preserve_clipboard_date_text(exportValue) : exportValue;
+        }
+
         var $quantityElement = $node.find('[data-is_quantity="true"]');
 
         if ($quantityElement.length > 0) {

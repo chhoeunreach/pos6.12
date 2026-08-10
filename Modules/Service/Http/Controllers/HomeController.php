@@ -473,7 +473,9 @@ class HomeController extends Controller
         }
         $notifications_data = $this->commonUtil->parseNotifications($notifications);
 
-        return view('service::layouts.partials.notification_list', compact('notifications_data'));
+        return response()->view('service::layouts.partials.notification_list', compact('notifications_data'))
+            ->header('X-Notifications-Has-More', $notifications->hasMorePages() ? '1' : '0')
+            ->header('X-Notifications-Current-Page', $notifications->currentPage());
     }
 
     /**
@@ -633,4 +635,3 @@ class HomeController extends Controller
         return ['address' => $response];
     }
 }
-

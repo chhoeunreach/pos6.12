@@ -2426,22 +2426,42 @@ $(document).on('click', 'a.view_invoice_url', function(e) {
 $(document).on('click', '.load_more_notifications', function(e) {
     e.preventDefault();
     var this_link = $(this);
+    if (this_link.data('loading')) {
+        return false;
+    }
+
+    this_link.data('loading', true);
     this_link.text(LANG.loading + '...');
-    this_link.attr('disabled', true);
     var page = parseInt($('input#notification_page').val()) + 1;
     var href = '/load-more-notifications?page=' + page;
     $.ajax({
         url: href,
         dataType: 'html',
-        success: function(result) {
-            if ($('li.no-notification').length == 0) {
+        success: function(result, status, xhr) {
+            var has_more = xhr.getResponseHeader('X-Notifications-Has-More') === '1';
+            var $result = $($.parseHTML($.trim(result), document, true));
+            var $notifications = $result.filter('li.notification-li').not('.no-notification');
+
+            if ($notifications.length) {
+                $('li.no-notification').remove();
+                $('ul#notifications_list').append($notifications);
+            } else if ($('ul#notifications_list li.notification-li').length == 0) {
                 $('ul#notifications_list').append(result);
-                // $(result).append(this_link.closest('li'));
             }
 
-            this_link.text(LANG.load_more);
-            this_link.removeAttr('disabled');
             $('input#notification_page').val(page);
+            if (!has_more) {
+                this_link.closest('li.load_more_li').addClass('hide');
+            }
+        },
+        error: function() {
+            this_link.text(LANG.load_more);
+        },
+        complete: function() {
+            this_link.data('loading', false);
+            if (!this_link.closest('li.load_more_li').hasClass('hide')) {
+                this_link.text(LANG.load_more);
+            }
         },
     });
     return false;
