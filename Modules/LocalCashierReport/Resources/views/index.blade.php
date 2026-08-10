@@ -61,6 +61,36 @@
             ->merge($accessorySaleRows)
             ->merge($serviceSaleRows)
             ->values();
+        $staticPaymentAmount = function ($row, $column) {
+            $payments = (array) data_get($row, 'payments', []);
+            $sources = (array) data_get($column, 'source_methods', []);
+            $amount = 0.0;
+            foreach ($sources as $source) {
+                $amount += (float) ($payments[$source] ?? 0);
+            }
+
+            return $amount;
+        };
+        $staticPaymentLabelForMethod = function ($method) use ($staticPaymentColumns, $report) {
+            $method = (string) $method;
+            foreach ((array) $staticPaymentColumns as $column) {
+                if (in_array($method, (array) ($column['source_methods'] ?? []), true)) {
+                    return (string) ($column['label'] ?? ($report['payment_labels'][$method] ?? $method));
+                }
+            }
+
+            return (string) ($report['payment_labels'][$method] ?? $method);
+        };
+        $staticPaymentMethodSort = function ($method) use ($staticPaymentColumns) {
+            $method = (string) $method;
+            foreach ((array) $staticPaymentColumns as $index => $column) {
+                if (in_array($method, (array) ($column['source_methods'] ?? []), true)) {
+                    return $index;
+                }
+            }
+
+            return 999;
+        };
         $moduleDashboardSummary = function ($rows, $tabTarget) use ($report, $filters) {
             $rows = collect($rows ?? []);
 
@@ -1181,8 +1211,8 @@
                                         <th class="all-sale-location-column">Location</th>
                                         <th class="all-sale-cashier-column">Cashier</th>
                                         <th>Method</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                        @foreach($staticPaymentColumns as $column)
+                                            <th class="text-right">{{ $column['label'] ?? '' }}</th>
                                         @endforeach
                                         <th class="text-right">Amount Paid</th>
                                         <th class="text-right">Previous Due</th>
@@ -1212,9 +1242,9 @@
                                             <td>{{ $row['phone_number'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['cashier_name'] }}</td>
-                                            <td>{{ $row['method_label'] }}</td>
-                                            @foreach($report['payment_columns'] as $method)
-                                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                            <td data-order="{{ $staticPaymentMethodSort($row['method'] ?? '') }}">{{ $staticPaymentLabelForMethod($row['method'] ?? '') }}</td>
+                                            @foreach($staticPaymentColumns as $column)
+                                                <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
                                             @endforeach
                                             <td class="text-right">{{ $fmt($row['amount']) }}</td>
                                             <td class="text-right">{{ $fmt($row['previous_due']) }}</td>
@@ -1226,8 +1256,8 @@
                                 <tfoot>
                                     <tr class="detail-total-row">
                                         <th colspan="10" class="text-right">Total</th>
-                                        @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0))) }}</th>
+                                        @foreach($staticPaymentColumns as $column)
+                                            <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => $staticPaymentAmount($row, $column))) }}</th>
                                         @endforeach
                                         <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) ($row['amount'] ?? 0))) }}</th>
                                         <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => (float) ($row['previous_due'] ?? 0))) }}</th>
@@ -1810,7 +1840,7 @@
                 paging: true,
                 searching: true,
                 ordering: true,
-                order: [[7, 'asc'], [1, 'desc']],
+                order: [[9, 'asc'], [7, 'asc'], [1, 'desc']],
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
