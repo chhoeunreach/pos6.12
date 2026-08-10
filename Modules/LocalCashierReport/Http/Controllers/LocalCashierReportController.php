@@ -1652,8 +1652,8 @@ class LocalCashierReportController extends Controller
                     WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
                     WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
                     ELSE ?
-                END <> ?",
-                ['រំលស់', 'រំលស់', 'អ៊ីអន', 'អ៊ីអន', 'លក់', 'រំលស់']
+                END NOT IN (?, ?)",
+                ['រំលស់', 'រំលស់', 'អ៊ីអន', 'អ៊ីអន', 'លក់', 'រំលស់', 'អ៊ីអន']
             )
             ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
                 $query->whereIn('t.created_by', $filters['user_ids']);
