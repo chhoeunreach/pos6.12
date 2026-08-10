@@ -1648,6 +1648,14 @@ class LocalCashierReportController extends Controller
             ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
             ->whereIn('t.location_id', $filters['location_ids'])
             ->whereRaw('(t.final_total - COALESCE(paid.paid_amount, 0)) > 0.00001')
+            ->whereRaw(
+                "CASE
+                    WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
+                    WHEN COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), '') = ? THEN ?
+                    ELSE ?
+                END <> ?",
+                ['រំលស់', 'រំលស់', 'អ៊ីអន', 'អ៊ីអន', 'លក់', 'រំលស់']
+            )
             ->when(! empty($filters['user_ids']), function ($query) use ($filters) {
                 $query->whereIn('t.created_by', $filters['user_ids']);
             })
