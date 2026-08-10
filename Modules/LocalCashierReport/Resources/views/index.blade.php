@@ -71,26 +71,6 @@
 
             return $amount;
         };
-        $staticPaymentLabelForMethod = function ($method) use ($staticPaymentColumns, $report) {
-            $method = (string) $method;
-            foreach ((array) $staticPaymentColumns as $column) {
-                if (in_array($method, (array) ($column['source_methods'] ?? []), true)) {
-                    return (string) ($column['label'] ?? ($report['payment_labels'][$method] ?? $method));
-                }
-            }
-
-            return (string) ($report['payment_labels'][$method] ?? $method);
-        };
-        $staticPaymentMethodSort = function ($method) use ($staticPaymentColumns) {
-            $method = (string) $method;
-            foreach ((array) $staticPaymentColumns as $index => $column) {
-                if (in_array($method, (array) ($column['source_methods'] ?? []), true)) {
-                    return $index;
-                }
-            }
-
-            return 999;
-        };
         $moduleDashboardSummary = function ($rows, $tabTarget) use ($report, $filters) {
             $rows = collect($rows ?? []);
 
@@ -1210,7 +1190,6 @@
                                         <th>Phone</th>
                                         <th class="all-sale-location-column">Location</th>
                                         <th class="all-sale-cashier-column">Cashier</th>
-                                        <th>Method</th>
                                         @foreach($staticPaymentColumns as $column)
                                             <th class="text-right">{{ $column['label'] ?? '' }}</th>
                                         @endforeach
@@ -1242,7 +1221,6 @@
                                             <td>{{ $row['phone_number'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['cashier_name'] }}</td>
-                                            <td data-order="{{ $staticPaymentMethodSort($row['method'] ?? '') }}">{{ $staticPaymentLabelForMethod($row['method'] ?? '') }}</td>
                                             @foreach($staticPaymentColumns as $column)
                                                 <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
                                             @endforeach
@@ -1255,7 +1233,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
-                                        <th colspan="10" class="text-right">Total</th>
+                                        <th colspan="9" class="text-right">Total</th>
                                         @foreach($staticPaymentColumns as $column)
                                             <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => $staticPaymentAmount($row, $column))) }}</th>
                                         @endforeach
@@ -1840,7 +1818,7 @@
                 paging: true,
                 searching: true,
                 ordering: true,
-                order: [[9, 'asc'], [7, 'asc'], [1, 'desc']],
+                order: [[7, 'asc'], [1, 'desc']],
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
