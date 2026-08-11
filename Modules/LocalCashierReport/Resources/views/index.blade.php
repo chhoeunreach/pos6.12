@@ -878,6 +878,12 @@
                         <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
                     </li>
                     <li role="presentation">
+                        <a href="#customer_payments_detail_tab" aria-controls="customer_payments_detail_tab" role="tab" data-toggle="tab">Customer Payment</a>
+                    </li>
+                    <li role="presentation">
+                        <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">Collection Payment</a>
+                    </li>
+                    <li role="presentation">
                         <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Customer Due</a>
                     </li>
                 </ul>
