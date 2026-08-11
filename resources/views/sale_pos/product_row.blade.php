@@ -101,9 +101,13 @@
   			if(!empty($product->sell_line_note)){
   				$sell_line_note = $product->sell_line_note;
   			}
-			  if(!empty($so_line)){
+  			if(!empty($so_line)){
   				$sell_line_note = $so_line->sell_line_note;
   			}
+			$line_grade = !empty($product->grade) ? $product->grade : '';
+			if(!empty($so_line) && !empty($so_line->grade)){
+				$line_grade = $so_line->grade;
+			}
   		@endphp
 
 		@if(!empty($discount))
@@ -198,8 +202,20 @@
 	@endif
 	@if(!empty($is_direct_sell))
   		<br>
-  		<textarea class="form-control" name="products[{{$row_count}}][sell_line_note]" rows="2">{{$sell_line_note}}</textarea>
-  		<p class="help-block"><small>@lang('lang_v1.sell_line_description_help')</small></p>
+		<div class="row">
+			<div class="col-sm-8">
+				<textarea class="form-control" name="products[{{$row_count}}][sell_line_note]" rows="2">{{$sell_line_note}}</textarea>
+				<p class="help-block"><small>@lang('lang_v1.sell_line_description_help')</small></p>
+			</div>
+			<div class="col-sm-4">
+				<select class="form-control" name="products[{{$row_count}}][grade]">
+					<option value="">Grad</option>
+					@foreach(['A', 'B', 'C'] as $grade)
+						<option value="{{$grade}}" @if($line_grade == $grade) selected @endif>Grade {{$grade}}</option>
+					@endforeach
+				</select>
+			</div>
+		</div>
 	@endif
 	</td>
 

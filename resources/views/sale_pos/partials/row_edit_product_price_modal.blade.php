@@ -44,10 +44,19 @@
 						{!! Form::select("products[$row_count][warranty_id]", $warranties, $warranty_id, ['placeholder' => __('messages.please_select'), 'class' => 'form-control']); !!}
 					</div>
 				@endif
-				<div class="form-group col-xs-12">
+				<div class="form-group col-xs-12 col-sm-8">
 		      		<label>@lang('lang_v1.description')</label>
 		      		<textarea class="form-control" name="products[{{$row_count}}][sell_line_note]" rows="3">{{$sell_line_note}}</textarea>
 		      		<p class="help-block">@lang('lang_v1.sell_line_description_help')</p>
+		      	</div>
+				<div class="form-group col-xs-12 col-sm-4">
+		      		<label>Grad</label>
+					<select class="form-control" name="products[{{$row_count}}][grade]">
+						<option value="">Grad</option>
+						@foreach(['A', 'B', 'C'] as $grade)
+							<option value="{{$grade}}" @if($line_grade == $grade) selected @endif>Grade {{$grade}}</option>
+						@endforeach
+					</select>
 		      	</div>
 			</div>
 		</div>

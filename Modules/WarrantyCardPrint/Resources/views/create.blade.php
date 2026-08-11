@@ -22,9 +22,19 @@
                         <label>Phone Number</label>
                         <input type="text" class="form-control js-card-input" id="manual_serial" data-target="preview_serial" placeholder="016469756">
                     </div>
-                    <div class="form-group">
-                        <label>Serial / IMEI</label>
-                        <input type="text" class="form-control js-card-input" id="manual_line_note" data-target="preview_line_note" placeholder="JHKHDFKSHFKS">
+                    <div class="row">
+                        <div class="col-sm-8">
+                            <div class="form-group">
+                                <label>Serial / IMEI</label>
+                                <input type="text" class="form-control js-card-input" id="manual_line_note" data-target="preview_line_note" placeholder="JHKHDFKSHFKS">
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="form-group">
+                                <label>Grad</label>
+                                <input type="text" class="form-control js-card-input" id="manual_grade" data-target="preview_grade" placeholder="A">
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Warranty Text</label>
@@ -65,6 +75,7 @@
                         <div class="manual-row-1 manual-field-1 text-left" id="preview_product_code"></div>
                         <div class="manual-row-1b manual-field-2 text-left" id="preview_serial"></div>
                         <div class="manual-row-2 manual-field-3 text-left" id="preview_line_note"></div>
+                        <div class="manual-row-2b manual-field-7 text-left" id="preview_grade"></div>
                         <div class="manual-row-3 manual-field-4 text-left" id="preview_warranty_text"></div>
                         <div class="manual-row-4 manual-field-5" id="preview_start_date"></div>
                         <div class="manual-row-4 manual-field-6" id="preview_end_date"></div>
@@ -120,7 +131,14 @@
 }
 .manual-row-2 {
     position: absolute;
-    width: 62mm;
+    width: 42mm;
+    height: 5mm;
+    line-height: 5mm;
+    white-space: nowrap;
+}
+.manual-row-2b {
+    position: absolute;
+    width: 18mm;
     height: 5mm;
     line-height: 5mm;
     white-space: nowrap;
@@ -156,6 +174,14 @@
     padding-left: 2mm;
 }
 .manual-field-3 {
+    left: 14mm;
+    top: 15.5mm;
+    font-family: 'NewTimes', serif;
+    font-weight: bold;
+    font-size: 12px;
+    padding-left: 2mm;
+}
+.manual-field-7 {
     right: 3mm;
     top: 15.5mm;
     font-family: 'NewTimes', serif;

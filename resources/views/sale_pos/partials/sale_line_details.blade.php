@@ -40,6 +40,9 @@
                 @if(!empty($sell_line->sell_line_note))
                 <br> {{$sell_line->sell_line_note}}
                 @endif
+                @if(!empty($sell_line->grade))
+                <br> Grad: {{$sell_line->grade}}
+                @endif
                 @if($is_warranty_enabled && !empty($sell_line->warranties->first()) )
                     <br><small>{{$sell_line->warranties->first()->display_name ?? ''}} - {{ @format_date($sell_line->warranties->first()->getEndDate($sell->transaction_date))}}</small>
                     @if(!empty($sell_line->warranties->first()->description))

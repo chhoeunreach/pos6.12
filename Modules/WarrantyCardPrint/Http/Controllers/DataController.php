@@ -98,7 +98,14 @@ class DataController extends Controller
 }
 .manual-row-2 {
     position: absolute;
-    width: 62mm;
+    width: 42mm;
+    height: 5mm;
+    line-height: 5mm;
+    white-space: nowrap;
+}
+.manual-row-2b {
+    position: absolute;
+    width: 18mm;
     height: 5mm;
     line-height: 5mm;
     white-space: nowrap;
@@ -134,6 +141,14 @@ class DataController extends Controller
     padding-left: 2mm;
 }
 .manual-field-3 {
+    left: 14mm;
+    top: 15.5mm;
+    font-family: 'NewTimes', serif;
+    font-weight: bold;
+    font-size: 12px;
+    padding-left: 2mm;
+}
+.manual-field-7 {
     right: 3mm;
     top: 15.5mm;
     font-family: 'NewTimes', serif;

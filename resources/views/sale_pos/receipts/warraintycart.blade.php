@@ -64,7 +64,16 @@ body {
 /* Other rows */
 .row-2 {
     position: absolute;
-    width: 62mm;
+    width: 42mm;
+    height: 5mm;
+    font-size: 9px;
+    line-height: 5mm;
+    white-space: nowrap;
+}
+
+.row-2b {
+    position: absolute;
+    width: 18mm;
     height: 5mm;
     font-size: 9px;
     line-height: 5mm;
@@ -112,6 +121,15 @@ body {
 }
 
 .field-3 {
+    left: 14mm;
+    top: 15.5mm;
+    font-weight: bold;
+    font-family: 'NewTimes', serif;
+    font-size: 12px;
+    padding-left: 2mm;
+}
+
+.field-7 {
     right: 3mm;
     top: 15.5mm;
     font-weight: bold;
@@ -210,7 +228,11 @@ body {
             $middleText = $line['lot_number_raw'] ?? $line['lot_number'] ?? '';
         }
      @endphp
+     @php
+        $gradeText = $line['grade'] ?? '';
+     @endphp
      <div class="row-2 field-3 text-left">{!! nl2br(e($middleText)) !!}</div>
+     <div class="row-2b field-7 text-left">{{ $gradeText }}</div>
     <!-- <div class="row-3 field-4 text-left"> {{ $line['name'] ?? '' }}  {{$line['variation']}}</div> -->
      <div class="row-3 field-4 text-left">{!! '&#x1798;&#x17C9;&#x17B6;&#x179F;&#x17CA;&#x17B8;&#x1793;&#x1790;&#x17D2;&#x1798;&#x200B;&#x200B;&#x20;&#x1793;&#x17B7;&#x1784;&#x1798;&#x17B7;&#x1793;&#x1792;&#x17B6;&#x1793;&#x17B6;&#x1781;&#x17BB;&#x179F;&#x1785;&#x17C6;&#x1796;&#x17C4;&#x17C7;&#x1791;&#x17C6;&#x179A;&#x1784;&#x17CB;&#x178A;&#x17BE;&#x1798;&#x1793;&#x17B9;&#x1784;&#x1798;&#x17B7;&#x1793;&#x1792;&#x17B6;&#x1793;&#x17B6;&#x1780;&#x17B6;&#x179A;&#x1785;&#x17BC;&#x179B;&#x1791;&#x17B9;&#x1780;' !!}</div>
      <!-- <div class="row-3 field-4 text-left">

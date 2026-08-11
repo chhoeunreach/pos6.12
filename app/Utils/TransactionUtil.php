@@ -25,6 +25,7 @@ use App\TransactionSellLinesPurchaseLines;
 use App\Variation;
 use App\VariationLocationDetails;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\CashRegister;
 
@@ -386,6 +387,10 @@ class TransactionUtil extends Util
                     'secondary_unit_quantity' => ! empty($product['secondary_unit_quantity']) ? $this->num_uf($product['secondary_unit_quantity']) : 0,
                 ];
 
+                if (Schema::hasColumn('transaction_sell_lines', 'grade')) {
+                    $line['grade'] = ! empty($product['grade']) ? $product['grade'] : null;
+                }
+
                 foreach ($extra_line_parameters as $key => $value) {
                     $line[$key] = isset($product[$value]) ? $product[$value] : '';
                 }
@@ -591,7 +596,7 @@ class TransactionUtil extends Util
         }
 
         //Update sell lines.
-        $sell_line->fill(['product_id' => $product['product_id'],
+        $sell_line_data = ['product_id' => $product['product_id'],
             'variation_id' => $product['variation_id'],
             'quantity' => $uf_data ? $this->num_uf($product['quantity']) * $multiplier : $product['quantity'] * $multiplier,
             'unit_price_before_discount' => $unit_price_before_discount,
@@ -605,7 +610,13 @@ class TransactionUtil extends Util
             'sub_unit_id' => ! empty($product['sub_unit_id']) ? $product['sub_unit_id'] : null,
             'res_service_staff_id' => ! empty($product['res_service_staff_id']) ? $product['res_service_staff_id'] : null,
             'secondary_unit_quantity' => ! empty($product['secondary_unit_quantity']) ? $this->num_uf($product['secondary_unit_quantity']) : 0,
-        ]);
+        ];
+
+        if (Schema::hasColumn('transaction_sell_lines', 'grade')) {
+            $sell_line_data['grade'] = ! empty($product['grade']) ? $product['grade'] : null;
+        }
+
+        $sell_line->fill($sell_line_data);
         $sell_line->save();
 
         //Set warranty
@@ -2089,6 +2100,7 @@ class TransactionUtil extends Util
                 'line_discount_amount_uf' => $line->line_discount_amount,
                 'line_discount_type_uf' => $line->line_discount_type,
                 'sell_line_note_raw' => ! empty($line->sell_line_note) ? $line->sell_line_note : '',
+                'grade' => $line->grade ?? '',
                 'lot_number_raw' => ! empty($line->lot_details->lot_number) ? $line->lot_details->lot_number : '',
             ];
 
