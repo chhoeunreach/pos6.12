@@ -126,7 +126,7 @@ body {
     font-weight: bold;
     font-family: 'NewTimes', serif;
     font-size: 12px;
-    padding-left: 2mm;
+    padding-left: 8mm;
 }
 
 .field-7 {

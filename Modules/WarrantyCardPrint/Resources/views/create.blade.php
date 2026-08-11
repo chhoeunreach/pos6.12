@@ -179,7 +179,7 @@
     font-family: 'NewTimes', serif;
     font-weight: bold;
     font-size: 12px;
-    padding-left: 2mm;
+    padding-left: 8mm;
 }
 .manual-field-7 {
     right: 3mm;

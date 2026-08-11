@@ -27,7 +27,8 @@ class LocalCashierReportController extends Controller
 
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
-        $filters = $this->validatedFilters($request, $locations->pluck('id')->all());
+        $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
         $cashiers = $this->getCashiers($businessId, $filters['location_ids']);
         $report = $this->getReportData($filters);
 
@@ -52,7 +53,8 @@ class LocalCashierReportController extends Controller
 
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
-        $filters = $this->validatedFilters($request, $locations->pluck('id')->all());
+        $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
         $report = $this->getReportData($filters);
 
         $rows = [];
@@ -81,7 +83,8 @@ class LocalCashierReportController extends Controller
 
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
-        $filters = $this->validatedFilters($request, $locations->pluck('id')->all());
+        $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
         $report = $this->getReportData($filters);
 
         $selectedLocations = $locations->whereIn('id', $filters['location_ids'])->pluck('name')->all();
@@ -2165,7 +2168,7 @@ class LocalCashierReportController extends Controller
         return in_array(strtolower($value), ['', 'null', 'n/a', 'na', '-'], true) ? '' : $value;
     }
 
-    private function validatedFilters(Request $request, array $defaultLocationIds): array
+    private function validatedFilters(Request $request, array $defaultLocationIds, array $accessibleLocationIds): array
     {
         $today = Carbon::now()->format('Y-m-d');
         $validated = $request->validate([
@@ -2185,7 +2188,11 @@ class LocalCashierReportController extends Controller
             'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report,business_location_report',
         ]);
 
-        $locationIds = ! empty($validated['location_ids']) ? array_values(array_unique($validated['location_ids'])) : $defaultLocationIds;
+        $accessibleLocationIds = array_values(array_unique(array_map('intval', $accessibleLocationIds)));
+        $defaultLocationIds = array_values(array_intersect(array_unique(array_map('intval', $defaultLocationIds)), $accessibleLocationIds));
+        $requestedLocationIds = ! empty($validated['location_ids']) ? array_values(array_unique(array_map('intval', $validated['location_ids']))) : [];
+        $locationIds = ! empty($requestedLocationIds) ? array_values(array_intersect($requestedLocationIds, $accessibleLocationIds)) : $defaultLocationIds;
+        $locationIds = ! empty($locationIds) ? $locationIds : $accessibleLocationIds;
 
         return [
             'start_date' => ! empty($validated['start_date']) ? Carbon::parse($validated['start_date'])->format('Y-m-d') : $today,
@@ -2199,6 +2206,39 @@ class LocalCashierReportController extends Controller
             'qty_type' => $validated['qty_type'] ?? 'invoice_count',
             'style_mode' => $validated['style_mode'] ?? 'classic_plain',
         ];
+    }
+
+    private function defaultLocationIds(Request $request, int $businessId, array $accessibleLocationIds): array
+    {
+        $accessibleLocationIds = array_values(array_unique(array_map('intval', $accessibleLocationIds)));
+        if (empty($accessibleLocationIds)) {
+            return [];
+        }
+
+        if (Schema::hasTable('cash_registers')) {
+            $registerLocationId = DB::table('cash_registers')
+                ->where('business_id', $businessId)
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'open')
+                ->orderByDesc('id')
+                ->value('location_id');
+
+            if (! empty($registerLocationId) && in_array((int) $registerLocationId, $accessibleLocationIds, true)) {
+                return [(int) $registerLocationId];
+            }
+        }
+
+        $permittedLocations = $request->user()->permitted_locations($businessId);
+        if ($permittedLocations !== 'all') {
+            $permittedLocationIds = array_values(array_unique(array_map('intval', (array) $permittedLocations)));
+            $defaultLocationIds = array_values(array_intersect($permittedLocationIds, $accessibleLocationIds));
+
+            if (! empty($defaultLocationIds)) {
+                return $defaultLocationIds;
+            }
+        }
+
+        return $accessibleLocationIds;
     }
 
     private function buildPaymentColumns(array $methodsWithAmount, array $paymentTypes): array

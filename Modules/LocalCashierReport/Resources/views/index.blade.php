@@ -14,7 +14,18 @@
 <section class="content-header no-print">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Local Cashier Report</h1>
     @php
-        $baseQuery = request()->query();
+        $baseQuery = array_merge(request()->query(), [
+            'start_date' => $filters['start_date'],
+            'end_date' => $filters['end_date'],
+            'location_ids' => array_values(array_unique(array_map('intval', $filters['location_ids'] ?? []))),
+            'user_ids' => array_values(array_unique(array_map('intval', $filters['user_ids'] ?? []))),
+            'brand_ids' => array_values(array_unique(array_map('intval', $filters['brand_ids'] ?? []))),
+            'payment_methods' => array_values(array_unique($filters['payment_methods'] ?? [])),
+            'customer_group' => $filters['customer_group'] ?? '',
+            'payment_status' => $filters['payment_status'] ?? '',
+            'qty_type' => $filters['qty_type'] ?? 'invoice_count',
+            'style_mode' => $filters['style_mode'] ?? 'classic_plain',
+        ]);
         $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain']);
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
         $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);
@@ -171,8 +182,8 @@
             </div>
             <div class="col-md-12">
                 <button type="submit" class="btn btn-primary">Search</button>
-                <a href="{{ route('local-cashier-report.export', request()->query()) }}" class="btn btn-success">Export Excel</a>
-                <a href="{{ route('local-cashier-report.print', request()->query()) }}" target="_blank" class="btn btn-info">Print</a>
+                <a href="{{ route('local-cashier-report.export', $baseQuery) }}" class="btn btn-success">Export Excel</a>
+                <a href="{{ route('local-cashier-report.print', $baseQuery) }}" target="_blank" class="btn btn-info">Print</a>
             </div>
         </form>
     @endcomponent
@@ -194,7 +205,7 @@
             <tbody>
                 @foreach($report['rows'] as $row)
                     @php
-                        $userDetailQuery = array_merge(request()->query(), [
+                        $userDetailQuery = array_merge($baseQuery, [
                             'style_mode' => 'classic_plain',
                             'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
                         ]);
@@ -210,7 +221,7 @@
                         </td>
                         @foreach($report['payment_columns'] as $method)
                             @php
-                                $userPaymentDetailQuery = array_merge(request()->query(), [
+                                $userPaymentDetailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'user_ids' => [(int) ($row['cashier_id'] ?? 0)],
                                     'payment_methods' => [(string) $method],
@@ -274,7 +285,7 @@
                         <td class="name-main">
                             {{ $row['location_name'] }}
                             @php
-                                $detailQuery = array_merge(request()->query(), [
+                                $detailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'location_ids' => [(int) $row['location_id']],
                                 ]);
@@ -287,7 +298,7 @@
                         <td class="text-right">{{ $fmt($row['total']) }}</td>
                         @foreach($report['payment_columns'] as $method)
                             @php
-                                $locationPaymentDetailQuery = array_merge(request()->query(), [
+                                $locationPaymentDetailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'location_ids' => [(int) ($row['location_id'] ?? 0)],
                                     'payment_methods' => [(string) $method],
@@ -388,7 +399,7 @@
                 @forelse($dashboardCashierGroupRows as $customerGroupRow)
                     @php
                         $dashboardCustomerGroup = (string) ($customerGroupRow['name'] ?? 'លក់');
-                        $dashboardDetailQuery = array_merge(request()->query(), [
+                        $dashboardDetailQuery = array_merge($baseQuery, [
                             'style_mode' => 'classic_plain',
                             'user_ids' => [(int) ($customerGroupRow['cashier_id'] ?? 0)],
                             'customer_group' => $dashboardCustomerGroup,
@@ -539,7 +550,7 @@
                     <tbody>
                         @foreach($report['summary_user'] as $r)
                             @php
-                                $userDetailQuery = array_merge(request()->query(), [
+                                $userDetailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'user_ids' => [(int) ($r['id'] ?? 0)],
                                 ]);
@@ -567,7 +578,7 @@
                     <tbody>
                         @foreach($report['summary_location'] as $r)
                             @php
-                                $locationDetailQuery = array_merge(request()->query(), [
+                                $locationDetailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'location_ids' => [(int) ($r['id'] ?? 0)],
                                 ]);
@@ -595,7 +606,7 @@
                     <tbody>
                         @foreach($report['summary_brand'] as $r)
                             @php
-                                $brandDetailQuery = array_merge(request()->query(), [
+                                $brandDetailQuery = array_merge($baseQuery, [
                                     'style_mode' => 'classic_plain',
                                     'brand_ids' => [(int) ($r['id'] ?? 0)],
                                 ]);
@@ -663,7 +674,7 @@
                         <tbody>
                             @foreach($report['summary_user'] as $r)
                                 @php
-                                    $userDetailQuery = array_merge(request()->query(), [
+                                    $userDetailQuery = array_merge($baseQuery, [
                                         'style_mode' => 'classic_plain',
                                         'user_ids' => [(int) ($r['id'] ?? 0)],
                                     ]);
@@ -693,7 +704,7 @@
                         <tbody>
                             @foreach($report['summary_location'] as $r)
                                 @php
-                                    $locationDetailQuery = array_merge(request()->query(), [
+                                    $locationDetailQuery = array_merge($baseQuery, [
                                         'style_mode' => 'classic_plain',
                                         'location_ids' => [(int) ($r['id'] ?? 0)],
                                     ]);
@@ -723,7 +734,7 @@
                         <tbody>
                             @foreach($report['summary_customer_group'] ?? [] as $r)
                                 @php
-                                    $customerGroupDetailQuery = array_merge(request()->query(), [
+                                    $customerGroupDetailQuery = array_merge($baseQuery, [
                                         'style_mode' => 'classic_plain',
                                         'customer_group' => (string) ($r['name'] ?? ''),
                                     ]);
@@ -753,7 +764,7 @@
                         <tbody>
                             @foreach($report['summary_brand'] as $r)
                                 @php
-                                    $brandDetailQuery = array_merge(request()->query(), [
+                                    $brandDetailQuery = array_merge($baseQuery, [
                                         'style_mode' => 'classic_plain',
                                         'brand_ids' => [(int) ($r['id'] ?? 0)],
                                     ]);
