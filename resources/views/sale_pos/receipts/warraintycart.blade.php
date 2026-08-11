@@ -246,7 +246,9 @@ body {
 		{{ $receipt_details->invoice_date ? \Carbon\Carbon::parse($receipt_details->invoice_date)->format('  d  /  m  /  Y') : '' }}
 	</div>
 	<div class="row-4 field-6">
-		{{ $receipt_details->invoice_date ? \Carbon\Carbon::parse($receipt_details->invoice_date)->addYear()->format('  d  /  m  /  Y') : '' }}
+		{{ !empty($line['warranty_end_date_raw'])
+            ? \Carbon\Carbon::parse($line['warranty_end_date_raw'])->format('  d  /  m  /  Y')
+            : ($receipt_details->invoice_date ? \Carbon\Carbon::parse($receipt_details->invoice_date)->addYear()->format('  d  /  m  /  Y') : '') }}
 	</div>
 </div>
 @endforeach

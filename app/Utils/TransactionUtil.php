@@ -2189,6 +2189,7 @@ class TransactionUtil extends Util
             //Set warranty data if enabled
             if ($is_warranty_enabled && ! empty($line->warranties->first())) {
                 $warranty = $line->warranties->first();
+                $line_array['warranty_end_date_raw'] = $warranty->getEndDate($line->transaction->transaction_date);
                 if (! empty($il->common_settings['show_warranty_name'])) {
                     $line_array['warranty_name'] = $warranty->name;
                 }
