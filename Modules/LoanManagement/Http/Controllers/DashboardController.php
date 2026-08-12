@@ -991,7 +991,9 @@ class DashboardController extends Controller
 
     protected function dashboardPaymentBaseQuery(array $filters)
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')) {
+        if (! Schema::connection('mysql_loan')->hasTable('loan_payments')
+            || ! Schema::connection('mysql_loan')->hasTable('loans')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id')) {
             return null;
         }
 
@@ -1000,12 +1002,10 @@ class DashboardController extends Controller
             return null;
         }
 
-        $query = DB::connection('mysql_loan')->table('loan_payments as p');
-        $canJoinLoans = Schema::connection('mysql_loan')->hasTable('loans')
-            && Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id');
-        if ($canJoinLoans) {
-            $query->leftJoin('loans as l', 'l.id', '=', 'p.loan_id');
-        }
+        $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $query = DB::connection('mysql_loan')
+            ->table('loan_payments as p')
+            ->join('loans as l', 'l.id', '=', 'p.loan_id');
 
         $query->whereDate('p.'.$dateColumn, '>=', $filters['date_from'])
             ->whereDate('p.'.$dateColumn, '<=', $filters['date_to']);
@@ -1014,14 +1014,25 @@ class DashboardController extends Controller
             $query->whereNull('p.deleted_at');
         }
         if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status')) {
-            $query->whereRaw('LOWER(COALESCE(p.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")');
+            $query->where(function ($statusQuery) {
+                $statusQuery->whereIn('p.status', ['paid', 'confirmed', ''])
+                    ->orWhereNull('p.status');
+            });
         }
 
-        if ($canJoinLoans) {
-            $this->applyDashboardLoanLocationAndSearchFilters($query, $filters, 'l');
-            if (Schema::connection('mysql_loan')->hasColumn('loans', 'deleted_at')) {
-                $query->whereNull('l.deleted_at');
-            }
+        if (Schema::connection('mysql_loan')->hasColumn('loans', 'loan_date')
+            && Schema::connection('mysql_loan')->hasColumn('loans', 'down_payment')) {
+            $query->where(function ($paymentQuery) use ($dateColumn, $amountExpr) {
+                $paymentQuery->whereNull('l.down_payment')
+                    ->orWhere('l.down_payment', '<=', 0)
+                    ->orWhereRaw('DATE(p.'.$dateColumn.') <> DATE(l.loan_date)')
+                    ->orWhereRaw('ABS(('.$amountExpr.') - l.down_payment) > 0.0001');
+            });
+        }
+
+        $this->applyDashboardLoanLocationAndSearchFilters($query, $filters, 'l');
+        if (Schema::connection('mysql_loan')->hasColumn('loans', 'deleted_at')) {
+            $query->whereNull('l.deleted_at');
         }
 
         return $query;

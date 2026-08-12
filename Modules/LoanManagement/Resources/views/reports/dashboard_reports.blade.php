@@ -214,10 +214,16 @@
         word-break: normal;
         overflow-wrap: anywhere;
     }
+    .lm-report-table .lm-col-date {
+        width: 78px !important;
+        min-width: 78px;
+        max-width: 78px;
+        white-space: nowrap;
+    }
     .lm-report-table .lm-col-loan {
-        width: 116px !important;
-        min-width: 116px;
-        max-width: 116px;
+        width: 96px !important;
+        min-width: 96px;
+        max-width: 96px;
         white-space: nowrap;
     }
     .lm-report-table td {
@@ -812,6 +818,7 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
                                         <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
@@ -824,12 +831,12 @@
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
+                                            <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</td>
                                             <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.payments.show', $payment->id) }}"
                                                           data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">{{ $payment->loan_number ?? '-' }}</span>
-                                                    <small>{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
                                                 </span>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
