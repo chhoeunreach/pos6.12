@@ -506,15 +506,17 @@ class DashboardController extends Controller
     protected function buildDashboardReports(array $filters, ?array $recentActivityFilters = null): array
     {
         $recentActivityFilters = $recentActivityFilters ?: $filters;
+        $recentLoans = $this->dashboardRecentLoans($recentActivityFilters);
+        $recentPayments = $this->dashboardRecentPayments($recentActivityFilters);
 
         return [
             'cards' => array_merge($this->dashboardLoanCards($filters), $this->dashboardPaymentCards($filters)),
             'loanStatusRows' => $this->dashboardLoanStatusRows($filters),
             'collectionRows' => $this->dashboardCollectionRows($filters),
             'collectionPeriodLabel' => $this->dashboardCollectionPeriodLabel($filters['period'] ?? 'daily'),
-            'paymentMethodRows' => $this->dashboardPaymentMethodRows($recentActivityFilters),
-            'recentLoans' => $this->dashboardRecentLoans($recentActivityFilters),
-            'recentPayments' => $this->dashboardRecentPayments($recentActivityFilters),
+            'paymentMethodRows' => $this->dashboardPaymentMethodRowsFromActivity($recentPayments, $recentLoans),
+            'recentLoans' => $recentLoans,
+            'recentPayments' => $recentPayments,
         ];
     }
 
@@ -731,6 +733,61 @@ class DashboardController extends Controller
         });
 
         return array_values($summary);
+    }
+
+    protected function dashboardPaymentMethodRowsFromActivity($recentPayments, $recentLoans): array
+    {
+        $summary = [];
+
+        foreach ($recentPayments as $payment) {
+            $type = 'monthly';
+            if (! isset($summary[$type])) {
+                $summary[$type] = $this->emptyDashboardPaymentSummaryRow($type);
+            }
+
+            $amount = (float) ($payment->amount ?? 0);
+            $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
+            $summary[$type]['count']++;
+            $summary[$type][$bucket] += $amount;
+            $summary[$type]['total'] += $amount;
+        }
+
+        foreach ($recentLoans as $loan) {
+            $type = 'loan';
+            if (! isset($summary[$type])) {
+                $summary[$type] = $this->emptyDashboardPaymentSummaryRow($type);
+            }
+
+            $amount = (float) ($loan->balance_amount ?? 0);
+            $bucket = $this->dashboardPaymentMethodBucket((string) ($loan->payment_method ?? ''));
+            $summary[$type]['count']++;
+            $summary[$type][$bucket] += $amount;
+            $summary[$type]['total'] += $amount;
+        }
+
+        uksort($summary, function ($left, $right) {
+            $order = ['monthly' => 0, 'loan' => 1];
+
+            return ($order[$left] ?? 99) <=> ($order[$right] ?? 99) ?: strcmp($left, $right);
+        });
+
+        return array_values($summary);
+    }
+
+    protected function emptyDashboardPaymentSummaryRow(string $type): array
+    {
+        return [
+            'label' => $this->dashboardPaymentTypeLabel($type),
+            'count' => 0,
+            'cash' => 0.0,
+            'aba' => 0.0,
+            'acleda' => 0.0,
+            'wing' => 0.0,
+            'et' => 0.0,
+            'card' => 0.0,
+            'other' => 0.0,
+            'total' => 0.0,
+        ];
     }
 
     protected function dashboardPaymentTypeKey(string $type): string
