@@ -28,7 +28,36 @@
             })
             ->implode(' + ');
     };
+    $normalizeDuplicateKey = function ($value) {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '' || $value === '-') {
+            return '';
+        }
+
+        return strtolower(preg_replace('/\s+/', ' ', $value));
+    };
+    $duplicateCounts = function ($rows, $field) use ($normalizeDuplicateKey) {
+        return collect($rows ?? [])
+            ->map(fn ($row) => $normalizeDuplicateKey(data_get($row, $field)))
+            ->filter()
+            ->countBy();
+    };
+    $duplicateReason = function ($row, $loanCounts, $customerCounts) use ($normalizeDuplicateKey, $t) {
+        $reasons = [];
+        if (($loanCounts[$normalizeDuplicateKey($row->loan_number ?? '')] ?? 0) > 1) {
+            $reasons[] = $t('Duplicate Loan #', 'លេខកម្ចីស្ទួន');
+        }
+        if (($customerCounts[$normalizeDuplicateKey($row->customer_name ?? '')] ?? 0) > 1) {
+            $reasons[] = $t('Duplicate Customer', 'អតិថិជនស្ទួន');
+        }
+
+        return implode(' / ', $reasons);
+    };
     $cards = $payload['cards'] ?? [];
+    $recentPaymentLoanCounts = $duplicateCounts($payload['recentPayments'] ?? [], 'loan_number');
+    $recentPaymentCustomerCounts = $duplicateCounts($payload['recentPayments'] ?? [], 'customer_name');
+    $recentLoanLoanCounts = $duplicateCounts($payload['recentLoans'] ?? [], 'loan_number');
+    $recentLoanCustomerCounts = $duplicateCounts($payload['recentLoans'] ?? [], 'customer_name');
     $period = $filters['period'] ?? 'daily';
     $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
     $periodTitle = ['daily' => $t('Daily', 'ប្រចាំថ្ងៃ'), 'monthly' => $t('Monthly', 'ប្រចាំខែ'), 'yearly' => $t('Yearly', 'ប្រចាំឆ្នាំ')][$period] ?? $t('Daily', 'ប្រចាំថ្ងៃ');
@@ -139,6 +168,15 @@
     }
     .lm-report-table > tbody > tr:nth-child(even) > td {
         background: #f8fafc;
+    }
+    .lm-report-table > tbody > tr.lm-duplicate-row > td,
+    .lm-report-table > tbody > tr.lm-duplicate-row:nth-child(even) > td {
+        background: #fff7ed;
+        border-top-color: #fdba74 !important;
+        border-bottom-color: #fdba74 !important;
+    }
+    .lm-report-table > tbody > tr.lm-duplicate-row > td:first-child {
+        border-left: 4px solid #f97316 !important;
     }
     .lm-report-table > tfoot > tr > th {
         background: #eaf4ff;
@@ -386,6 +424,10 @@
         }
         body.lm-print-recent-only .lm-report-table > tbody > tr:nth-child(even) > td {
             background: #f8fafc !important;
+        }
+        body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row > td,
+        body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row:nth-child(even) > td {
+            background: #fff2cc !important;
         }
         .lm-main,
         .lm-content,
@@ -699,7 +741,8 @@
                                 </thead>
                                 <tbody>
                                     @foreach($payload['recentPayments'] as $paymentIndex => $payment)
-                                        <tr>
+                                        @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
+                                        <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
                                             <td>
                                                 {{ $payment->loan_number ?? '-' }}
@@ -731,7 +774,8 @@
                                 </thead>
                                 <tbody>
                                     @foreach($payload['recentLoans'] as $loanIndex => $loan)
-                                        <tr>
+                                        @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
+                                        <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
                                             <td>
                                                 <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
