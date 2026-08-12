@@ -260,7 +260,69 @@
             padding: 12px !important;
         }
         #admin-loan-react-root #tabs-navigation-container button {
-            padding: 8px 12px !important;
+            position: relative !important;
+            min-height: 44px !important;
+            padding: 9px 14px !important;
+            border: 1px solid transparent !important;
+            border-bottom-width: 3px !important;
+            border-radius: 10px 10px 0 0 !important;
+            background: transparent !important;
+            color: #475569 !important;
+            font-weight: 800 !important;
+            white-space: nowrap !important;
+        }
+        #admin-loan-react-root #tabs-navigation-container button:hover {
+            background: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+            border-bottom-color: #94a3b8 !important;
+            color: #0f172a !important;
+        }
+        #admin-loan-react-root #tabs-navigation-container button[class*="border-emerald-600"] {
+            background: #ecfdf5 !important;
+            border-color: #a7f3d0 !important;
+            border-bottom-color: #059669 !important;
+            color: #047857 !important;
+            box-shadow: inset 0 -3px 0 #059669, 0 8px 18px rgba(5, 150, 105, .12) !important;
+        }
+        #admin-loan-react-root #tabs-navigation-container button[class*="border-emerald-600"] svg {
+            color: #059669 !important;
+            stroke-width: 2.5 !important;
+        }
+        #admin-loan-react-root #tabs-navigation-container button[class*="border-emerald-600"]::after {
+            content: "";
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            bottom: -5px;
+            height: 3px;
+            border-radius: 999px;
+            background: #059669;
+        }
+        #admin-loan-react-root .admin-loan-search-wrap-fixed {
+            position: relative !important;
+        }
+        #admin-loan-react-root .admin-loan-search-wrap-fixed > span {
+            position: absolute !important;
+            inset: 0 auto 0 0 !important;
+            z-index: 2 !important;
+            display: inline-flex !important;
+            width: 36px !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding-left: 0 !important;
+            color: #94a3b8 !important;
+            pointer-events: none !important;
+        }
+        #admin-loan-react-root .admin-loan-search-wrap-fixed > span svg {
+            width: 16px !important;
+            height: 16px !important;
+        }
+        #admin-loan-react-root .admin-loan-search-input-fixed {
+            height: 38px !important;
+            padding-left: 38px !important;
+            padding-right: 14px !important;
+            line-height: 1.4 !important;
+            text-indent: 0 !important;
         }
         #admin-loan-react-root [class~="min-w-[2000px]"] {
             min-width: max-content !important;
@@ -751,6 +813,33 @@
                     clearInterval(exportButtonSync);
                 }
             }, 150);
+
+            function fixAdminLoanSearchFields() {
+                ['year-search-input', 'monthly-search-input'].forEach(function (id) {
+                    var input = document.getElementById(id);
+                    if (!input) {
+                        return;
+                    }
+                    input.classList.add('admin-loan-search-input-fixed');
+                    if (input.parentElement) {
+                        input.parentElement.classList.add('admin-loan-search-wrap-fixed');
+                    }
+                });
+            }
+
+            var searchFixAttempts = 0;
+            var searchFixSync = setInterval(function () {
+                searchFixAttempts += 1;
+                fixAdminLoanSearchFields();
+                if (searchFixAttempts > 60) {
+                    clearInterval(searchFixSync);
+                }
+            }, 150);
+            document.addEventListener('click', function () {
+                setTimeout(fixAdminLoanSearchFields, 100);
+            }, true);
+            document.addEventListener('focusin', fixAdminLoanSearchFields, true);
+            document.addEventListener('input', fixAdminLoanSearchFields, true);
 
             document.addEventListener('click', function (event) {
                 var button = event.target && event.target.closest ? event.target.closest('#export-xlsx-btn, #export-csv-btn') : null;
