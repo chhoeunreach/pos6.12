@@ -198,20 +198,6 @@
         text-align: center;
         white-space: nowrap;
     }
-    .lm-report-table .lm-action-col {
-        width: 32px !important;
-        min-width: 32px;
-        max-width: 32px;
-        text-align: center;
-        white-space: nowrap;
-    }
-    .lm-report-table .lm-view-detail-btn {
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        border-radius: 4px;
-        line-height: 24px;
-    }
     .lm-report-table td {
         word-break: break-word;
     }
@@ -227,6 +213,17 @@
     }
     .lm-loan-ref-line small {
         color: #64748b;
+    }
+    .lm-detail-link {
+        color: #2563eb;
+        cursor: pointer;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .lm-detail-link:hover,
+    .lm-detail-link:focus {
+        color: #1d4ed8;
+        text-decoration: underline;
     }
     .lm-payment-method-summary th {
         background: #dbeafe;
@@ -472,6 +469,9 @@
         body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row > td,
         body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row:nth-child(even) > td {
             background: #fff2cc !important;
+        }
+        body.lm-print-recent-only .lm-loan-ref-line small {
+            display: none !important;
         }
         .lm-main,
         .lm-content,
@@ -776,7 +776,6 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
-                                        <th class="lm-action-col no-print">{{ $t('View', 'មើល') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
@@ -789,17 +788,11 @@
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
-                                            <td class="lm-action-col no-print">
-                                                <button type="button"
-                                                        class="btn btn-xs btn-info lm-view-detail-btn js-loan-recent-detail-modal"
-                                                        data-url="{{ route('loan-management.payments.show', $payment->id) }}"
-                                                        data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">
-                                                    <i class="fa fa-eye"></i>
-                                                </button>
-                                            </td>
                                             <td>
                                                 <span class="lm-loan-ref-line">
-                                                    <span>{{ $payment->loan_number ?? '-' }}</span>
+                                                    <span class="lm-detail-link js-loan-recent-detail-modal"
+                                                          data-url="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                          data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">{{ $payment->loan_number ?? '-' }}</span>
                                                     <small>{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
                                                 </span>
                                             </td>
@@ -819,7 +812,6 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
-                                        <th class="lm-action-col no-print">{{ $t('View', 'មើល') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
@@ -833,17 +825,11 @@
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
-                                            <td class="lm-action-col no-print">
-                                                <button type="button"
-                                                        class="btn btn-xs btn-info lm-view-detail-btn js-loan-recent-detail-modal"
-                                                        data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
-                                                        data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">
-                                                    <i class="fa fa-eye"></i>
-                                                </button>
-                                            </td>
                                             <td>
                                                 <span class="lm-loan-ref-line">
-                                                    <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
+                                                    <span class="lm-detail-link js-loan-recent-detail-modal"
+                                                          data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
+                                                          data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</span>
                                                     <small>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</small>
                                                 </span>
                                                 <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
@@ -914,28 +900,28 @@
                         text: '<i class="fa fa-copy" aria-hidden="true"></i> Copy',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
+                        exportOptions: {columns: ':visible'}
                     },
                     {
                         extend: 'csv',
                         text: '<i class="fa fa-file-csv" aria-hidden="true"></i> Export CSV',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
+                        exportOptions: {columns: ':visible'}
                     },
                     {
                         extend: 'excel',
                         text: '<i class="fa fa-file-excel" aria-hidden="true"></i> Export Excel',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
+                        exportOptions: {columns: ':visible'}
                     },
                     {
                         extend: 'print',
                         text: '<i class="fa fa-print" aria-hidden="true"></i> Print',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible:not(.lm-action-col)', stripHtml: true}
+                        exportOptions: {columns: ':visible', stripHtml: true}
                     },
                     {
                         extend: 'colvis',
@@ -947,7 +933,7 @@
                         text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> Export PDF',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
+                        exportOptions: {columns: ':visible'}
                     }
                 ];
             }
@@ -965,7 +951,7 @@
                     order: [],
                     scrollX: true,
                     columnDefs: [
-                        {targets: [0, 1], orderable: false, searchable: false}
+                        {targets: 0, orderable: false, searchable: false}
                     ],
                     language: {
                         search: '',
