@@ -134,7 +134,7 @@
         gap: 16px;
     }
     .lm-recent-table-wrap {
-        padding: 12px;
+        padding: 8px;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         background: #fff;
@@ -150,13 +150,19 @@
     .lm-report-table {
         margin-bottom: 0;
         background: #fff;
-        font-size: 12px;
+        font-size: 11px;
+    }
+    .lm-report-table > thead > tr > th,
+    .lm-report-table > tbody > tr > td,
+    .lm-report-table > tfoot > tr > th {
+        padding: 5px 6px !important;
+        line-height: 1.25;
     }
     .lm-report-table > thead > tr > th {
         background: #eef6fc;
         color: #111827;
         border-color: #cbd5e1 !important;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 800;
         vertical-align: middle !important;
         white-space: nowrap;
@@ -186,11 +192,41 @@
         font-variant-numeric: tabular-nums;
     }
     .lm-report-table .lm-col-no {
-        width: 34px !important;
-        min-width: 34px;
-        max-width: 34px;
+        width: 26px !important;
+        min-width: 26px;
+        max-width: 26px;
         text-align: center;
         white-space: nowrap;
+    }
+    .lm-report-table .lm-action-col {
+        width: 32px !important;
+        min-width: 32px;
+        max-width: 32px;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .lm-report-table .lm-view-detail-btn {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 4px;
+        line-height: 24px;
+    }
+    .lm-report-table td {
+        word-break: break-word;
+    }
+    .lm-report-table small {
+        font-size: 10px;
+    }
+    .lm-loan-ref-line {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        white-space: nowrap;
+    }
+    .lm-loan-ref-line small {
+        color: #64748b;
     }
     .lm-payment-method-summary th {
         background: #dbeafe;
@@ -207,8 +243,8 @@
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin: 0 0 10px;
+        gap: 5px;
+        margin: 0 0 6px;
     }
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child:before,
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child:after {
@@ -216,19 +252,27 @@
     }
     .lm-recent-table-wrap .dataTables_length select,
     .lm-recent-table-wrap .dataTables_filter input {
-        height: 32px;
+        height: 28px;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
         box-shadow: none;
+        font-size: 11px;
     }
     .lm-recent-table-wrap .dataTables_filter input {
-        min-width: 180px;
+        min-width: 135px;
     }
     .lm-recent-table-wrap .dt-buttons {
         display: inline-flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 5px;
+        gap: 3px;
+    }
+    .lm-recent-table-wrap .dt-buttons .dt-button,
+    .lm-recent-table-wrap .dt-buttons a.dt-button,
+    .lm-recent-table-wrap .dt-buttons button.dt-button {
+        padding: 3px 7px !important;
+        font-size: 11px !important;
+        line-height: 1.3 !important;
     }
     .lm-panel-actions {
         display: flex;
@@ -732,6 +776,7 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-action-col no-print">{{ $t('View', 'មើល') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
@@ -744,9 +789,19 @@
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
+                                            <td class="lm-action-col no-print">
+                                                <button type="button"
+                                                        class="btn btn-xs btn-info lm-view-detail-btn js-loan-recent-detail-modal"
+                                                        data-url="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                        data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">
+                                                    <i class="fa fa-eye"></i>
+                                                </button>
+                                            </td>
                                             <td>
-                                                {{ $payment->loan_number ?? '-' }}
-                                                <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
+                                                <span class="lm-loan-ref-line">
+                                                    <span>{{ $payment->loan_number ?? '-' }}</span>
+                                                    <small>{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
+                                                </span>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
                                             <td title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
@@ -764,6 +819,7 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-action-col no-print">{{ $t('View', 'មើល') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
@@ -777,8 +833,19 @@
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
+                                            <td class="lm-action-col no-print">
+                                                <button type="button"
+                                                        class="btn btn-xs btn-info lm-view-detail-btn js-loan-recent-detail-modal"
+                                                        data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
+                                                        data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">
+                                                    <i class="fa fa-eye"></i>
+                                                </button>
+                                            </td>
                                             <td>
-                                                <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
+                                                <span class="lm-loan-ref-line">
+                                                    <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
+                                                    <small>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</small>
+                                                </span>
                                                 <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
@@ -847,28 +914,28 @@
                         text: '<i class="fa fa-copy" aria-hidden="true"></i> Copy',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
+                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
                     },
                     {
                         extend: 'csv',
                         text: '<i class="fa fa-file-csv" aria-hidden="true"></i> Export CSV',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
+                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
                     },
                     {
                         extend: 'excel',
                         text: '<i class="fa fa-file-excel" aria-hidden="true"></i> Export Excel',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
+                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
                     },
                     {
                         extend: 'print',
                         text: '<i class="fa fa-print" aria-hidden="true"></i> Print',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible', stripHtml: true}
+                        exportOptions: {columns: ':visible:not(.lm-action-col)', stripHtml: true}
                     },
                     {
                         extend: 'colvis',
@@ -880,7 +947,7 @@
                         text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> Export PDF',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
                         title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
+                        exportOptions: {columns: ':visible:not(.lm-action-col)'}
                     }
                 ];
             }
@@ -898,7 +965,7 @@
                     order: [],
                     scrollX: true,
                     columnDefs: [
-                        {targets: 0, orderable: false}
+                        {targets: [0, 1], orderable: false, searchable: false}
                     ],
                     language: {
                         search: '',
@@ -906,6 +973,34 @@
                     }
                 });
             });
+        }
+
+        if (window.jQuery) {
+            jQuery(document).off('click.loanRecentDetailModal')
+                .on('click.loanRecentDetailModal', '.js-loan-recent-detail-modal', function () {
+                    var url = jQuery(this).data('url');
+                    var title = jQuery(this).data('title') || 'Detail';
+
+                    if (!url || !jQuery('.view_modal').length) {
+                        return;
+                    }
+
+                    jQuery('.view_modal').html(
+                        '<div class="modal-dialog modal-xl" role="document" style="width:96%;max-width:1280px;">' +
+                            '<div class="modal-content">' +
+                                '<div class="modal-header">' +
+                                    '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                        '<span aria-hidden="true">&times;</span>' +
+                                    '</button>' +
+                                    '<h4 class="modal-title">' + jQuery('<div>').text(title).html() + '</h4>' +
+                                '</div>' +
+                                '<div class="modal-body" style="padding:0;height:86vh;">' +
+                                    '<iframe src="' + jQuery('<div>').text(url).html() + '" style="width:100%;height:100%;border:0;" title="' + jQuery('<div>').text(title).html() + '"></iframe>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>'
+                    ).modal('show');
+                });
         }
 
         if (window.jQuery) {
