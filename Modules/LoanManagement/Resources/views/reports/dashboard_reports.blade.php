@@ -821,7 +821,7 @@
                                         <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
                                         <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                        <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
+                                        <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
@@ -855,10 +855,11 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
                                         <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
-                                        <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
+                                        <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
@@ -868,12 +869,12 @@
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
+                                            <td class="lm-col-date">{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
                                             <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
                                                           data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</span>
-                                                    <small>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</small>
                                                 </span>
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
