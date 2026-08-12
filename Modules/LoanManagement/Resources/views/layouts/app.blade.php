@@ -80,7 +80,7 @@
                         @endunless
 
                         <main class="lm-content">
-                            @unless($isLoanEmbeddedModal)
+                            @unless($isLoanEmbeddedModal || trim($__env->yieldContent('hide_breadcrumb')) === '1')
                                 @include('loanmanagement::layouts.breadcrumb')
                             @endunless
                             <div class="container-fluid lm-workspace">

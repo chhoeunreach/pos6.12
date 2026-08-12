@@ -398,8 +398,15 @@ class DashboardController extends Controller
 
     protected function dashboardReportFilters(Request $request): array
     {
-        $dateFrom = $request->input('date_from', now()->startOfMonth()->toDateString());
+        $dateFrom = $request->input('date_from', now()->toDateString());
         $dateTo = $request->input('date_to', now()->toDateString());
+        $dateRange = trim((string) $request->input('date_range', ''));
+        if ($dateRange !== '' && str_contains($dateRange, '~')) {
+            [$rangeFrom, $rangeTo] = array_map('trim', explode('~', $dateRange, 2));
+            $dateFrom = $rangeFrom;
+            $dateTo = $rangeTo;
+        }
+
         $period = strtolower((string) $request->input('period', 'daily'));
         if (! in_array($period, ['daily', 'monthly', 'yearly'], true)) {
             $period = 'daily';
@@ -408,7 +415,7 @@ class DashboardController extends Controller
         try {
             $dateFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
         } catch (\Throwable $e) {
-            $dateFrom = now()->startOfMonth()->toDateString();
+            $dateFrom = now()->toDateString();
         }
 
         try {

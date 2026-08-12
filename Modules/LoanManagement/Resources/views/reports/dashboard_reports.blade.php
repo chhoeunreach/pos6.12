@@ -1,5 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', $isKhmer ? 'របាយការណ៍ផ្ទាំងគ្រប់គ្រង' : 'Dashboard Reports')
+@section('hide_breadcrumb', '1')
 
 @php
     $t = fn ($en, $km) => $isKhmer ? $km : $en;
@@ -79,6 +80,7 @@
     $recentActivityReportTitle = $recentActivityDateFrom->isSameDay($recentActivityDateTo)
         ? $t('Daily Activity Report for '.$recentActivityDateFrom->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ថ្ងៃទី '.$recentActivityDateFrom->format('d-m-Y'))
         : $t('Daily Activity Report from '.$recentActivityDateFrom->format('d-M-Y').' to '.$recentActivityDateTo->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ចាប់ពី '.$recentActivityDateFrom->format('d-m-Y').' ដល់ '.$recentActivityDateTo->format('d-m-Y'));
+    $dashboardDateRange = \Carbon\Carbon::parse($filters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($filters['date_to'])->format('d-M-Y');
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
             return '-';
@@ -127,6 +129,30 @@
         background: #0f172a;
         color: #fff;
         box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+    }
+    .lm-dashboard-report-filter .box-body {
+        padding-bottom: 8px;
+    }
+    .lm-dashboard-report-filter .form-group {
+        margin-bottom: 10px;
+    }
+    .lm-dashboard-report-filter .filter-actions {
+        display: flex;
+        gap: 6px;
+        padding-top: 24px;
+    }
+    .lm-recent-filter-card .filter-actions {
+        display: flex;
+        gap: 6px;
+        padding-top: 24px;
+    }
+    .lm-recent-filter-card .filter-actions.pull-right {
+        justify-content: flex-end;
+        width: 100%;
+    }
+    .lm-recent-filter-card .box-header .filter-actions {
+        align-items: center;
+        padding-top: 0;
     }
     .lm-recent-panel-grid {
         display: grid;
@@ -224,6 +250,22 @@
         width: 132px !important;
         min-width: 132px;
         max-width: 132px;
+        white-space: nowrap;
+    }
+    .lm-report-table .lm-col-payment-loan {
+        width: 1% !important;
+        min-width: 74px;
+        white-space: nowrap;
+    }
+    .lm-report-table .lm-col-payment-loan .lm-loan-ref-line,
+    .lm-report-table .lm-col-payment-loan .lm-loan-ref-line > span:first-child {
+        max-width: none;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .lm-report-table .lm-col-payment-amount {
+        width: 1% !important;
+        min-width: 72px;
         white-space: nowrap;
     }
     .lm-report-table td {
@@ -565,14 +607,46 @@
 @endsection
 
 @section('content_body')
-<section class="content-header">
-    <h1>{{ $t('Dashboard Reports', 'របាយការណ៍ផ្ទាំងគ្រប់គ្រង') }}</h1>
-</section>
-
 <section class="content">
-    <div class="lm-report-tabs" role="navigation" aria-label="Loan dashboard pages">
-        <a href="{{ route('loan-management.dashboard') }}" class="lm-report-tab">{{ $t('Dashboard', 'ផ្ទាំងគ្រប់គ្រង') }}</a>
-        <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-report-tab is-active">{{ $t('Dashboard Reports', 'របាយការណ៍ផ្ទាំងគ្រប់គ្រង') }}</a>
+    <div class="box box-primary lm-dashboard-report-filter lm-recent-filter-card lm-report-no-print">
+        <div class="box-header with-border">
+            <h3 class="box-title">
+                <a data-toggle="collapse" href="#loanDashboardReportFilterCollapse" aria-expanded="false">
+                    <i class="fa fa-filter" aria-hidden="true"></i>{{ $t('Filters', 'តម្រង') }}
+                </a>
+            </h3>
+        </div>
+        <div class="box-body panel-collapse collapse" id="loanDashboardReportFilterCollapse">
+            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanDashboardReportFilterForm">
+                <input type="hidden" name="recent_location_id" value="{{ $recentActivityFilters['location_id'] ?? '' }}">
+                <input type="hidden" name="recent_search" value="{{ $recentActivityFilters['search'] ?? '' }}">
+                <input type="hidden" name="recent_date_from" value="{{ $recentActivityFilters['date_from'] ?? '' }}">
+                <input type="hidden" name="recent_date_to" value="{{ $recentActivityFilters['date_to'] ?? '' }}">
+                <input type="hidden" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
+                <input type="hidden" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
+                <input type="hidden" name="period" value="{{ $filters['period'] ?? 'daily' }}">
+                <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6">
+                        <div class="form-group">
+                            <label>{{ $t('Location', 'ទីតាំង') }}</label>
+                            <select name="location_id" class="form-control select2" style="width:100%">
+                                <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
+                                @foreach($locations as $id => $name)
+                                    <option value="{{ $id }}" {{ (string) ($filters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="form-group">
+                            <label>{{ $t('Date Range', 'ចន្លោះថ្ងៃ') }}</label>
+                            <input type="text" name="date_range" id="loanDashboardReportDateRange" class="form-control" placeholder="{{ $t('Select a date range', 'ជ្រើសរើសចន្លោះថ្ងៃ') }}" value="{{ $dashboardDateRange }}" readonly>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="lm-report-print-title">
@@ -623,99 +697,9 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="box box-solid collapsed-box lm-dashboard-report-collapse">
-                <div class="box-header with-border">
-                    <h3 class="box-title">{{ $t('Loan Report by Status', 'របាយការណ៍កម្ចីតាមស្ថានភាព') }}</h3>
-                    <div class="box-tools pull-right">
-                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
-                            <i class="fa fa-plus"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>{{ $t('Status', 'ស្ថានភាព') }}</th>
-                                <th class="text-right">{{ $t('Loans', 'កម្ចី') }}</th>
-                                <th class="text-right">{{ $t('Principal', 'ប្រាក់ដើម') }}</th>
-                                <th class="text-right">{{ $t('Paid', 'បានបង់') }}</th>
-                                <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($payload['loanStatusRows'] as $row)
-                                <tr>
-                                    <td><span class="label label-default">{{ ucfirst(str_replace('_', ' ', $row->status ?? 'unknown')) }}</span></td>
-                                    <td class="text-right">{{ $number($row->loan_count ?? 0) }}</td>
-                                    <td class="text-right">{{ $money($row->principal_total ?? 0) }}</td>
-                                    <td class="text-right">{{ $money($row->paid_total ?? 0) }}</td>
-                                    <td class="text-right">{{ $money($row->balance_total ?? 0) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="5" class="text-center text-muted">{{ $t('No loan data found.', 'រកមិនឃើញទិន្នន័យកម្ចី') }}</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="box box-solid collapsed-box lm-dashboard-report-collapse">
-                <div class="box-header with-border">
-                    <h3 class="box-title">{{ $periodTitle }} {{ $t('Collected Payment Report', 'របាយការណ៍ប្រមូលប្រាក់') }}</h3>
-                    <div class="box-tools pull-right">
-                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
-                            <i class="fa fa-plus"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>{{ $periodLabel }}</th>
-                                <th class="text-right">{{ $t('Payments', 'ការបង់ប្រាក់') }}</th>
-                                <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($payload['collectionRows'] as $row)
-                                <tr>
-                                    <td>{{ $formatPeriod($row->period_key ?? null) }}</td>
-                                    <td class="text-right">{{ $number($row->payment_count ?? 0) }}</td>
-                                    <td class="text-right">{{ $money($row->payment_total ?? 0) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="3" class="text-center text-muted">{{ $t('No collection data found.', 'រកមិនឃើញទិន្នន័យប្រមូលប្រាក់') }}</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="row lm-recent-activity-row">
         <div class="col-md-12 lm-report-no-print">
             <div class="box box-solid lm-recent-activity-panel">
-                <div class="box-header with-border">
-                    <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
-                    <div class="box-tools pull-right lm-panel-actions">
-                        <button type="button" class="btn btn-primary btn-sm lm-panel-action-btn" onclick="window.loanExportRecentActivityExcel()">
-                            <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
-                        </button>
-                        <button type="button" class="btn btn-success btn-sm lm-panel-action-btn" onclick="window.loanPrintRecentActivity()">
-                            <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
-                        </button>
-                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
-                            <i class="fa fa-minus"></i>
-                        </button>
-                    </div>
-                </div>
                 <div class="box-body">
                     <div class="box box-primary lm-recent-filter-card">
                         <div class="box-header with-border">
@@ -724,6 +708,14 @@
                                     <i class="fa fa-filter" aria-hidden="true"></i>{{ $t('Filters', 'តម្រង') }}
                                 </a>
                             </h3>
+                            <div class="box-tools pull-right filter-actions">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="window.loanExportRecentActivityExcel()">
+                                    <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm" onclick="window.loanPrintRecentActivity()">
+                                    <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
+                                </button>
+                            </div>
                         </div>
                         <div class="box-body panel-collapse collapse" id="loanRecentActivityFilterCollapse">
                             <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanRecentActivityFilterForm">
@@ -819,10 +811,10 @@
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
-                                        <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th class="lm-col-payment-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
-                                        <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
+                                        <th class="text-right lm-col-payment-amount">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
                                 </thead>
@@ -832,7 +824,7 @@
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
                                             <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-y') : '-' }}</td>
-                                            <td class="lm-col-loan">
+                                            <td class="lm-col-payment-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.payments.show', $payment->id) }}"
@@ -841,7 +833,7 @@
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
                                             <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
-                                            <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
+                                            <td class="text-right lm-col-payment-amount">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
                                     @endforeach
@@ -897,73 +889,86 @@
 <script>
     (function () {
     var initLoanDashboardReports = function () {
-        var form = document.getElementById('loanRecentActivityFilterForm');
-        if (!form) {
-            return;
-        }
+        var displayDateFormat = window.moment_date_format || 'DD-MMM-YYYY';
+        var bindFilterForm = function (formId, rangeId, startDate, endDate, eventNamespace) {
+            var form = document.getElementById(formId);
+            if (!form) {
+                return;
+            }
+            var fromField = formId === 'loanRecentActivityFilterForm' ? 'recent_date_from' : 'date_from';
+            var toField = formId === 'loanRecentActivityFilterForm' ? 'recent_date_to' : 'date_to';
 
-        var submitTimer = null;
-        var scheduleSubmit = function (delay) {
-            window.clearTimeout(submitTimer);
-            submitTimer = window.setTimeout(function () {
-                form.submit();
-            }, delay || 150);
-        };
+            var submitTimer = null;
+            var scheduleSubmit = function (delay) {
+                window.clearTimeout(submitTimer);
+                submitTimer = window.setTimeout(function () {
+                    form.submit();
+                }, delay || 150);
+            };
 
-        form.querySelectorAll('select').forEach(function (field) {
-            field.addEventListener('change', function () {
-                scheduleSubmit(100);
-            });
-        });
-
-        if (window.jQuery) {
-            jQuery('#loanRecentActivityFilterForm .select2').select2({
-                width: '100%'
-            }).on('change', function () {
-                scheduleSubmit(100);
-            });
-        }
-
-        if (window.jQuery && jQuery.fn.daterangepicker && window.moment) {
-            var displayDateFormat = window.moment_date_format || 'DD-MMM-YYYY';
-            var recentDateRangeSettings = window.dateRangeSettings
-                ? jQuery.extend(true, {}, window.dateRangeSettings)
-                : {};
-
-            recentDateRangeSettings = jQuery.extend(true, recentDateRangeSettings, {
-                autoUpdateInput: true,
-                startDate: moment('{{ $recentActivityFilters['date_from'] }}'),
-                endDate: moment('{{ $recentActivityFilters['date_to'] }}'),
-                parentEl: 'body',
-                opens: 'right',
-                drops: 'auto',
-                locale: jQuery.extend(true, {}, recentDateRangeSettings.locale || {}, {
-                    format: displayDateFormat,
-                    cancelLabel: 'Clear'
-                })
-            });
-
-            jQuery('#loanRecentActivityDateRange')
-                .daterangepicker(recentDateRangeSettings, function (start, end) {
-                    jQuery('#loanRecentActivityDateRange').val(start.format(displayDateFormat) + ' ~ ' + end.format(displayDateFormat));
-                    scheduleSubmit(100);
-                })
-                .on('apply.daterangepicker', function (event, picker) {
-                    jQuery(this).val(picker.startDate.format(displayDateFormat) + ' ~ ' + picker.endDate.format(displayDateFormat));
-                    scheduleSubmit(100);
-                })
-                .on('cancel.daterangepicker', function () {
-                    jQuery(this).val('');
+            form.querySelectorAll('select').forEach(function (field) {
+                field.addEventListener('change', function () {
                     scheduleSubmit(100);
                 });
-
-            jQuery('#loanRecentActivityDateRange').off('click.loanRecentDateRange').on('click.loanRecentDateRange', function () {
-                var picker = jQuery(this).data('daterangepicker');
-                if (picker) {
-                    picker.show();
-                }
             });
-        }
+
+            if (window.jQuery) {
+                jQuery('#' + formId + ' .select2').select2({
+                    width: '100%'
+                }).on('change', function () {
+                    scheduleSubmit(100);
+                });
+            }
+
+            if (window.jQuery && jQuery.fn.daterangepicker && window.moment) {
+                var dateRangeSettings = window.dateRangeSettings
+                    ? jQuery.extend(true, {}, window.dateRangeSettings)
+                    : {};
+
+                dateRangeSettings = jQuery.extend(true, dateRangeSettings, {
+                    autoUpdateInput: true,
+                    startDate: moment(startDate),
+                    endDate: moment(endDate),
+                    parentEl: 'body',
+                    opens: 'right',
+                    drops: 'auto',
+                    locale: jQuery.extend(true, {}, dateRangeSettings.locale || {}, {
+                        format: displayDateFormat,
+                        cancelLabel: 'Clear'
+                    })
+                });
+
+                jQuery('#' + rangeId)
+                    .daterangepicker(dateRangeSettings, function (start, end) {
+                        jQuery('#' + rangeId).val(start.format(displayDateFormat) + ' ~ ' + end.format(displayDateFormat));
+                        jQuery(form).find('[name="' + fromField + '"]').val(start.format('YYYY-MM-DD'));
+                        jQuery(form).find('[name="' + toField + '"]').val(end.format('YYYY-MM-DD'));
+                        scheduleSubmit(100);
+                    })
+                    .on('apply.daterangepicker', function (event, picker) {
+                        jQuery(this).val(picker.startDate.format(displayDateFormat) + ' ~ ' + picker.endDate.format(displayDateFormat));
+                        jQuery(form).find('[name="' + fromField + '"]').val(picker.startDate.format('YYYY-MM-DD'));
+                        jQuery(form).find('[name="' + toField + '"]').val(picker.endDate.format('YYYY-MM-DD'));
+                        scheduleSubmit(100);
+                    })
+                    .on('cancel.daterangepicker', function () {
+                        jQuery(this).val('');
+                        jQuery(form).find('[name="' + fromField + '"]').val('');
+                        jQuery(form).find('[name="' + toField + '"]').val('');
+                        scheduleSubmit(100);
+                    });
+
+                jQuery('#' + rangeId).off('click.' + eventNamespace).on('click.' + eventNamespace, function () {
+                    var picker = jQuery(this).data('daterangepicker');
+                    if (picker) {
+                        picker.show();
+                    }
+                });
+            }
+        };
+
+        bindFilterForm('loanDashboardReportFilterForm', 'loanDashboardReportDateRange', '{{ $filters['date_from'] }}', '{{ $filters['date_to'] }}', 'loanDashboardDateRange');
+        bindFilterForm('loanRecentActivityFilterForm', 'loanRecentActivityDateRange', '{{ $recentActivityFilters['date_from'] }}', '{{ $recentActivityFilters['date_to'] }}', 'loanRecentDateRange');
 
         if (window.jQuery && jQuery.fn.DataTable) {
             var recentActivityExportTitle = @json($recentActivityReportTitle);
