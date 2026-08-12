@@ -112,6 +112,18 @@
         .collapsed-box .box-body {
             display: block !important;
         }
+        body.lm-print-recent-only .content-header,
+        body.lm-print-recent-only .content > * {
+            display: none !important;
+        }
+        body.lm-print-recent-only .content > .lm-recent-activity-row {
+            display: block !important;
+        }
+        body.lm-print-recent-only .lm-recent-activity-row .col-md-12,
+        body.lm-print-recent-only .lm-recent-activity-panel {
+            display: block !important;
+            width: 100% !important;
+        }
         .lm-main,
         .lm-content,
         .lm-workspace,
@@ -359,16 +371,16 @@
         </div>
     </div>
 
-    <div class="row">
+    <div class="row lm-recent-activity-row">
         <div class="col-md-12 lm-report-no-print">
-            <div class="box box-solid">
+            <div class="box box-solid lm-recent-activity-panel">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                     <div class="box-tools pull-right lm-panel-actions">
                         <a href="{{ route('loan-management.reports.payment-summary-by-type', request()->query()) }}" class="btn btn-default btn-xs" title="{{ $t('Filter and print full payment summary', 'ចម្រោះ និងបោះពុម្ពសង្ខេបការបង់ប្រាក់') }}">
                             <i class="fa fa-filter"></i> {{ $t('Filter / Print', 'ចម្រោះ / បោះពុម្ព') }}
                         </a>
-                        <button type="button" class="btn btn-success btn-xs" onclick="window.print();" title="{{ $t('Print current report', 'បោះពុម្ពរបាយការណ៍បច្ចុប្បន្ន') }}">
+                        <button type="button" class="btn btn-success btn-xs" onclick="window.loanPrintRecentActivity();" title="{{ $t('Print recent activity only', 'បោះពុម្ពតែសកម្មភាពថ្មីៗ') }}">
                             <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
                         </button>
                     </div>
@@ -489,4 +501,14 @@
         </div>
     </div>
 </section>
+
+<script>
+    window.loanPrintRecentActivity = function () {
+        document.body.classList.add('lm-print-recent-only');
+        window.print();
+        window.setTimeout(function () {
+            document.body.classList.remove('lm-print-recent-only');
+        }, 500);
+    };
+</script>
 @endsection
