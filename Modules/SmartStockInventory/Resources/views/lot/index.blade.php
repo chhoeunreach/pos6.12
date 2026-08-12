@@ -95,6 +95,8 @@
             processing: true,
             serverSide: true,
             fixedHeader: false,
+            pageLength: 25,
+            lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
             ajax: {
                 url: '{{ ssi_route("ssi.lot.index") }}',
                 data: function(d) {

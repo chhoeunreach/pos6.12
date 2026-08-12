@@ -14,6 +14,7 @@
         [
             'items' => [
                 ['label' => $lmText('Dashboard', 'ផ្ទាំងគ្រប់គ្រង'), 'icon' => 'fa fa-home', 'route' => 'loan-management.dashboard', 'can' => 'loan_management.dashboard.view|loan_management.view', 'tone' => 'blue'],
+                ['label' => $lmText('Dashboard Reports', 'របាយការណ៍ផ្ទាំងគ្រប់គ្រង'), 'icon' => 'fa fa-line-chart', 'route' => 'loan-management.reports.dashboard', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'green'],
             ],
         ],
         [

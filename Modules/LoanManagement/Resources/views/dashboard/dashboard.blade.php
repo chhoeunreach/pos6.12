@@ -2811,7 +2811,10 @@
     </button>
 
     <div class="lm-dashboard-tabs" role="tablist" aria-label="Loan dashboard tabs">
-        <button type="button" class="lm-dashboard-tab is-active" data-dashboard-tab="overview" aria-pressed="true">Overview</button>
+        <button type="button" class="lm-dashboard-tab is-active" data-dashboard-tab="overview" aria-pressed="true">Dashboard</button>
+        @if(Route::has('loan-management.reports.dashboard'))
+            <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-dashboard-tab" aria-pressed="false">Dashboard Reports</a>
+        @endif
         <button type="button" class="lm-dashboard-tab" data-dashboard-tab="live" aria-pressed="false">Live Chat</button>
     </div>
 
