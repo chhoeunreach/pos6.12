@@ -866,12 +866,55 @@ class DashboardController extends Controller
             ->selectRaw('l.'.$loanDateColumn.' as loan_date')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'status') ? 'l.status' : '"unknown"').' as status')
             ->selectRaw($this->coalesceSql('loans', 'l', ['principal_amount', 'financed_amount']).' as principal_amount')
-            ->selectRaw($this->coalesceSql('loans', 'l', ['total_amount', 'total_payable_amount', 'principal_amount']).' as payment_amount')
+            ->selectRaw($this->coalesceSql('loans', 'l', ['down_payment'], '0').' as payment_amount')
             ->orderByDesc('l.'.$loanDateColumn)
             ->orderByDesc('l.id')
             ->get();
 
-        return $this->appendRecentLoanPaymentInfo($this->appendRecentLoanProducts($loans));
+        return $this->appendRecentLoanPaymentInfo($this->appendRecentLoanDepositAmounts($this->appendRecentLoanProducts($loans)));
+    }
+
+    protected function appendRecentLoanDepositAmounts($loans)
+    {
+        if ($loans->isEmpty()
+            || ! Schema::connection('mysql_loan')->hasTable('loan_payments')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id')) {
+            return $loans;
+        }
+
+        $loanIds = $loans->pluck('id')->filter()->values()->all();
+        if (empty($loanIds)) {
+            return $loans;
+        }
+
+        $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $query = DB::connection('mysql_loan')
+            ->table('loan_payments as p')
+            ->whereIn('p.loan_id', $loanIds);
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'deleted_at')) {
+            $query->whereNull('p.deleted_at');
+        }
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            $query->whereIn('p.payment_type', ['loan', 'initial', 'down_payment', 'downpayment', 'deposit']);
+        } elseif (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+            $query->whereNull('p.schedule_id');
+        }
+
+        $depositAmounts = $query
+            ->selectRaw('p.loan_id')
+            ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as deposit_amount')
+            ->groupBy('p.loan_id')
+            ->pluck('deposit_amount', 'loan_id');
+
+        foreach ($loans as $loan) {
+            $depositAmount = (float) ($depositAmounts->get($loan->id) ?? 0);
+            if ($depositAmount > 0) {
+                $loan->payment_amount = $depositAmount;
+            }
+        }
+
+        return $loans;
     }
 
     protected function appendRecentLoanProducts($loans)
