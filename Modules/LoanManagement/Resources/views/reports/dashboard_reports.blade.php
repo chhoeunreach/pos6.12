@@ -337,33 +337,23 @@
         line-height: 1.35;
     }
     .lm-recent-filter-card {
-        margin-bottom: 12px;
-        border: 1px solid #dce7f0;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
-        overflow: hidden;
-    }
-    .lm-recent-filter-card.box-primary {
-        border-top: 0;
+        margin-bottom: 15px;
+        border-top-color: #3c8dbc;
+        box-shadow: none;
     }
     .lm-recent-filter-card > .box-header {
-        min-height: 52px;
-        border-bottom: 1px solid #edf2f7;
-        background: #fff;
-        padding: 13px 15px;
+        border-bottom: 1px solid #f4f4f4;
+        cursor: pointer;
     }
-    .lm-recent-filter-card > .box-header .box-title {
-        color: #5da8d6;
-        font-size: 20px;
-        font-weight: 500;
+    .lm-recent-filter-card > .box-header .box-title a {
+        color: #444;
+        text-decoration: none;
     }
     .lm-recent-filter-card > .box-header .box-title .fa {
-        color: #5da8d6;
-        margin-right: 6px;
+        margin-right: 5px;
     }
     .lm-recent-filter-card > .box-body {
-        padding: 22px 16px 26px;
-        background: #fff;
+        padding: 15px;
     }
     .lm-report-filter-box .form-group,
     .lm-recent-filter-card .form-group {
@@ -721,11 +711,15 @@
                     </div>
                 </div>
                 <div class="box-body">
-                    <div class="box lm-recent-filter-card">
-                        <div class="box-header with-border" data-toggle="collapse" data-target="#loanRecentActivityFilterCollapse" aria-expanded="false" style="cursor:pointer;">
-                            <h3 class="box-title"><i class="fa fa-filter"></i>{{ $t('Filters', 'តម្រង') }}</h3>
+                    <div class="box box-primary lm-recent-filter-card">
+                        <div class="box-header with-border">
+                            <h3 class="box-title">
+                                <a data-toggle="collapse" href="#loanRecentActivityFilterCollapse" aria-expanded="false">
+                                    <i class="fa fa-filter" aria-hidden="true"></i>{{ $t('Filters', 'តម្រង') }}
+                                </a>
+                            </h3>
                         </div>
-                        <div class="box-body collapse" id="loanRecentActivityFilterCollapse">
+                        <div class="box-body panel-collapse collapse" id="loanRecentActivityFilterCollapse">
                             <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanRecentActivityFilterForm">
                                 <input type="hidden" name="period" value="{{ $period }}">
                                 <input type="hidden" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
@@ -736,7 +730,7 @@
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label>{{ $t('Location', 'ទីតាំង') }}</label>
-                                            <select name="recent_location_id" class="form-control" style="width:100%">
+                                            <select name="recent_location_id" class="form-control select2" style="width:100%">
                                                 <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
                                                 @foreach($locations as $id => $name)
                                                     <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -747,7 +741,7 @@
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label>{{ $t('Date Range', 'ចន្លោះថ្ងៃ') }}</label>
-                                            <input type="text" name="recent_date_range" id="loanRecentActivityDateRange" class="form-control" value="{{ $recentActivityDateRange }}" readonly>
+                                            <input type="text" name="recent_date_range" id="loanRecentActivityDateRange" class="form-control" placeholder="{{ $t('Select a date range', 'ជ្រើសរើសចន្លោះថ្ងៃ') }}" value="{{ $recentActivityDateRange }}" readonly>
                                         </div>
                                     </div>
                                 </div>
@@ -914,25 +908,46 @@
             });
         });
 
+        if (window.jQuery) {
+            jQuery('#loanRecentActivityFilterForm .select2').select2({
+                width: '100%'
+            }).on('change', function () {
+                scheduleSubmit(100);
+            });
+        }
+
         if (window.jQuery && jQuery.fn.daterangepicker && window.moment) {
-            jQuery('#loanRecentActivityDateRange').daterangepicker(
-                {
-                    autoUpdateInput: true,
-                    startDate: moment('{{ $recentActivityFilters['date_from'] }}'),
-                    endDate: moment('{{ $recentActivityFilters['date_to'] }}'),
-                    parentEl: 'body',
-                    opens: 'right',
-                    drops: 'auto',
-                    locale: {
-                        format: 'DD-MMM-YYYY',
-                        cancelLabel: 'Clear'
-                    }
-                },
-                function (start, end) {
-                    jQuery('#loanRecentActivityDateRange').val(start.format('DD-MMM-YYYY') + ' ~ ' + end.format('DD-MMM-YYYY'));
+            var displayDateFormat = window.moment_date_format || 'DD-MMM-YYYY';
+            var recentDateRangeSettings = window.dateRangeSettings
+                ? jQuery.extend(true, {}, window.dateRangeSettings)
+                : {};
+
+            recentDateRangeSettings = jQuery.extend(true, recentDateRangeSettings, {
+                autoUpdateInput: true,
+                startDate: moment('{{ $recentActivityFilters['date_from'] }}'),
+                endDate: moment('{{ $recentActivityFilters['date_to'] }}'),
+                parentEl: 'body',
+                opens: 'right',
+                drops: 'auto',
+                locale: jQuery.extend(true, {}, recentDateRangeSettings.locale || {}, {
+                    format: displayDateFormat,
+                    cancelLabel: 'Clear'
+                })
+            });
+
+            jQuery('#loanRecentActivityDateRange')
+                .daterangepicker(recentDateRangeSettings, function (start, end) {
+                    jQuery('#loanRecentActivityDateRange').val(start.format(displayDateFormat) + ' ~ ' + end.format(displayDateFormat));
                     scheduleSubmit(100);
-                }
-            );
+                })
+                .on('apply.daterangepicker', function (event, picker) {
+                    jQuery(this).val(picker.startDate.format(displayDateFormat) + ' ~ ' + picker.endDate.format(displayDateFormat));
+                    scheduleSubmit(100);
+                })
+                .on('cancel.daterangepicker', function () {
+                    jQuery(this).val('');
+                    scheduleSubmit(100);
+                });
 
             jQuery('#loanRecentActivityDateRange').off('click.loanRecentDateRange').on('click.loanRecentDateRange', function () {
                 var picker = jQuery(this).data('daterangepicker');
