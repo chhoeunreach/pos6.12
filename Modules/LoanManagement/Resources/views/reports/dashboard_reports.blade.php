@@ -206,6 +206,12 @@
         word-break: normal;
         overflow-wrap: anywhere;
     }
+    .lm-report-table .lm-col-loan {
+        width: 116px !important;
+        min-width: 116px;
+        max-width: 116px;
+        white-space: nowrap;
+    }
     .lm-report-table td {
         word-break: break-word;
     }
@@ -218,8 +224,14 @@
         gap: 5px;
         max-width: 100%;
         white-space: nowrap;
+        overflow: hidden;
+    }
+    .lm-loan-ref-line > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .lm-loan-ref-line small {
+        flex: 0 0 auto;
         color: #64748b;
     }
     .lm-detail-link {
@@ -248,7 +260,8 @@
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child {
         display: flex;
         align-items: center;
-        gap: 5px;
+        justify-content: space-between;
+        gap: 8px;
         margin: 0 0 6px;
     }
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child:before,
@@ -278,6 +291,16 @@
         padding: 3px 7px !important;
         font-size: 11px !important;
         line-height: 1.3 !important;
+    }
+    .lm-recent-table-wrap .dataTables_wrapper .row:first-child > [class*="col-sm-"] {
+        float: none;
+        width: auto;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .lm-recent-table-wrap .dataTables_wrapper .row:first-child > .col-sm-8 {
+        flex: 1;
+        text-align: center;
     }
     .lm-panel-actions {
         display: flex;
@@ -787,7 +810,7 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
-                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
@@ -799,7 +822,7 @@
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
-                                            <td>
+                                            <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.payments.show', $payment->id) }}"
@@ -823,7 +846,7 @@
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
-                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
                                         <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
@@ -836,7 +859,7 @@
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
-                                            <td>
+                                            <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
@@ -924,13 +947,6 @@
                         exportOptions: {columns: ':visible'}
                     },
                     {
-                        extend: 'csv',
-                        text: '<i class="fa fa-file-csv" aria-hidden="true"></i> Export CSV',
-                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
-                        title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
-                    },
-                    {
                         extend: 'excel',
                         text: '<i class="fa fa-file-excel" aria-hidden="true"></i> Export Excel',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
@@ -949,13 +965,6 @@
                         text: '<i class="fa fa-columns" aria-hidden="true"></i> Column visibility',
                         className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2'
                     },
-                    {
-                        extend: 'pdf',
-                        text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> Export PDF',
-                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
-                        title: recentActivityExportTitle,
-                        exportOptions: {columns: ':visible'}
-                    }
                 ];
             }
 
