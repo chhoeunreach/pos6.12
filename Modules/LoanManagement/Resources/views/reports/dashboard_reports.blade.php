@@ -124,6 +124,27 @@
             display: block !important;
             width: 100% !important;
         }
+        body.lm-print-recent-only .lm-recent-panel-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8mm !important;
+            align-items: start !important;
+        }
+        body.lm-print-recent-only .lm-recent-panel-grid > .table-responsive {
+            display: block !important;
+            width: 100% !important;
+            overflow: visible !important;
+            page-break-inside: avoid;
+        }
+        body.lm-print-recent-only .lm-recent-panel-grid .table {
+            width: 100% !important;
+            table-layout: fixed;
+        }
+        body.lm-print-recent-only .lm-recent-panel-grid th,
+        body.lm-print-recent-only .lm-recent-panel-grid td {
+            white-space: normal !important;
+            word-break: break-word;
+        }
         .lm-main,
         .lm-content,
         .lm-workspace,
