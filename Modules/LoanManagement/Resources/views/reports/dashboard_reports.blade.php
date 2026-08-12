@@ -139,6 +139,12 @@
         border-radius: 8px;
         background: #fff;
     }
+    .lm-recent-table-wrap .dataTables_wrapper,
+    .lm-recent-table-wrap .dataTables_scroll,
+    .lm-recent-table-wrap .dataTables_scrollHead,
+    .lm-recent-table-wrap .dataTables_scrollBody {
+        width: 100% !important;
+    }
     .lm-recent-panel-heading {
         margin: 0 0 10px;
         padding-bottom: 8px;
@@ -148,9 +154,11 @@
         font-weight: 800;
     }
     .lm-report-table {
+        width: 100% !important;
         margin-bottom: 0;
         background: #fff;
         font-size: 11px;
+        table-layout: auto;
     }
     .lm-report-table > thead > tr > th,
     .lm-report-table > tbody > tr > td,
@@ -979,7 +987,8 @@
                     pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
                     lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
                     order: [],
-                    scrollX: true,
+                    autoWidth: false,
+                    scrollX: false,
                     columnDefs: [
                         {targets: 0, orderable: false, searchable: false}
                     ],
