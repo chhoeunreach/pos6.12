@@ -1664,12 +1664,13 @@ class ProductUtil extends Util
         //Include search
         // Guard: skip variations.product_keywords column if missing from DB
         $hasProductKeywords = Schema::hasColumn('variations', 'product_keywords');
+        $lotQtyAvailableSql = $this->lotQuantityAvailableSql('pl');
 
         if (! empty($search_term)) {
 
             //Search with like condition
             if ($search_type == 'like') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', 'like', '%'.$search_term.'%');
                     }
@@ -1683,9 +1684,9 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere(function ($query) use ($search_term, $location_id) {
+                        $query->orWhere(function ($query) use ($search_term, $location_id, $lotQtyAvailableSql) {
                             $query->where('pl.lot_number', 'like', '%'.$search_term.'%')
-                                ->whereRaw('(pl.quantity - (pl.quantity_sold + pl.quantity_adjusted + pl.quantity_returned + pl.mfg_quantity_used)) > 0');
+                                ->whereRaw($lotQtyAvailableSql.' > 0');
 
                             if (! empty($location_id)) {
                                 $query->where('plt.location_id', $location_id);
@@ -1714,7 +1715,7 @@ class ProductUtil extends Util
 
             //Search with exact condition
             if ($search_type == 'exact') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords) {
+                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', $search_term);
                     }
@@ -1728,9 +1729,9 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere(function ($query) use ($search_term, $location_id) {
+                        $query->orWhere(function ($query) use ($search_term, $location_id, $lotQtyAvailableSql) {
                             $query->where('pl.lot_number', $search_term)
-                                ->whereRaw('(pl.quantity - (pl.quantity_sold + pl.quantity_adjusted + pl.quantity_returned + pl.mfg_quantity_used)) > 0');
+                                ->whereRaw($lotQtyAvailableSql.' > 0');
 
                             if (! empty($location_id)) {
                                 $query->where('plt.location_id', $location_id);
@@ -2832,6 +2833,33 @@ class ProductUtil extends Util
         }
 
         return $output;
+    }
+
+    protected function lotQuantityAvailableSql(string $purchaseLineAlias): string
+    {
+        $alias = $purchaseLineAlias;
+
+        $sold_qty_sql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
+            FROM transaction_sell_lines_purchase_lines AS tspl
+            INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
+            INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
+            WHERE tspl.purchase_line_id = {$alias}.id
+                AND tspl.sell_line_id IS NOT NULL
+                AND sale_tx.type != 'sell_transfer')";
+
+        $transfer_out_sql = "(SELECT COALESCE(SUM(tsl_transfer.quantity - COALESCE(tsl_transfer.quantity_returned, 0)), 0)
+            FROM transaction_sell_lines AS tsl_transfer
+            INNER JOIN transactions AS transfer_tx ON tsl_transfer.transaction_id = transfer_tx.id
+            WHERE tsl_transfer.lot_no_line_id = {$alias}.id
+                AND transfer_tx.type = 'sell_transfer'
+                AND transfer_tx.status = 'final')";
+
+        return "(COALESCE({$alias}.quantity, 0)
+            - COALESCE({$alias}.quantity_returned, 0)
+            - COALESCE({$alias}.quantity_adjusted, 0)
+            - COALESCE({$alias}.mfg_quantity_used, 0)
+            - {$sold_qty_sql}
+            - {$transfer_out_sql})";
     }
   
 }

@@ -4200,6 +4200,8 @@ class TransactionUtil extends Util
      */
     public function getLotNumbersFromVariation($variation_id, $business_id, $location_id, $exclude_empty_lot = false)
     {
+        $qty_available_sql = $this->lotQuantityAvailableSql('purchase_lines');
+
         $query = PurchaseLine::join(
             'transactions as T',
             'purchase_lines.transaction_id',
@@ -4215,14 +4217,44 @@ class TransactionUtil extends Util
             $query->whereNotNull('purchase_lines.lot_number');
         }
         if ($exclude_empty_lot) {
-            $query->whereRaw('(purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned) < purchase_lines.quantity');
+            $query->whereRaw("$qty_available_sql > 0");
         } else {
-            $query->whereRaw('(purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned) <= purchase_lines.quantity');
+            $query->whereRaw("$qty_available_sql >= 0");
         }
 
-        $purchase_lines = $query->select('purchase_lines.id as purchase_line_id', 'lot_number', 'purchase_lines.exp_date as exp_date', DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned)) AS qty_available'))->get();
+        $purchase_lines = $query->select('purchase_lines.id as purchase_line_id', 'lot_number', 'purchase_lines.exp_date as exp_date', DB::raw("$qty_available_sql AS qty_available"))
+            ->orderBy('T.transaction_date', 'desc')
+            ->orderBy('purchase_lines.id', 'desc')
+            ->get();
 
         return $purchase_lines;
+    }
+
+    public function lotQuantityAvailableSql(string $purchaseLineAlias): string
+    {
+        $alias = $purchaseLineAlias;
+
+        $sold_qty_sql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
+            FROM transaction_sell_lines_purchase_lines AS tspl
+            INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
+            INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
+            WHERE tspl.purchase_line_id = {$alias}.id
+                AND tspl.sell_line_id IS NOT NULL
+                AND sale_tx.type != 'sell_transfer')";
+
+        $transfer_out_sql = "(SELECT COALESCE(SUM(tsl_transfer.quantity - COALESCE(tsl_transfer.quantity_returned, 0)), 0)
+            FROM transaction_sell_lines AS tsl_transfer
+            INNER JOIN transactions AS transfer_tx ON tsl_transfer.transaction_id = transfer_tx.id
+            WHERE tsl_transfer.lot_no_line_id = {$alias}.id
+                AND transfer_tx.type = 'sell_transfer'
+                AND transfer_tx.status = 'final')";
+
+        return "(COALESCE({$alias}.quantity, 0)
+            - COALESCE({$alias}.quantity_returned, 0)
+            - COALESCE({$alias}.quantity_adjusted, 0)
+            - COALESCE({$alias}.mfg_quantity_used, 0)
+            - {$sold_qty_sql}
+            - {$transfer_out_sql})";
     }
 
     /**

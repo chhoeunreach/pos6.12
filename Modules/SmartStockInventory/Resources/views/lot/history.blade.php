@@ -106,8 +106,7 @@
                                     <th>{{ __('lang_v1.type') }}</th>
                                     <th>{{ __('purchase.ref_no') }}</th>
                                     <th>{{ __('contact.contact') }}</th>
-                                    <th>{{ __('lang_v1.qty_in') }}</th>
-                                    <th>{{ __('lang_v1.qty_out') }}</th>
+                                    <th>{{ __('sale.qty') }}</th>
                                     <th>{{ __('sale.notes') }}</th>
                                 </tr>
                             </thead>
@@ -156,8 +155,7 @@
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
                 { data: 'contact', name: 'contact' },
-                { data: 'qty_in', name: 'qty_in', searchable: false },
-                { data: 'qty_out', name: 'qty_out', searchable: false },
+                { data: 'qty', name: 'qty', searchable: false, orderable: false },
                 { data: 'notes', name: 'notes', searchable: false },
                 { data: 'transaction_id', name: 'transaction_id', visible: false, searchable: false },
                 { data: 'transaction_type', name: 'transaction_type', visible: false, searchable: false },

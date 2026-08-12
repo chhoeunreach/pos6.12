@@ -27,7 +27,6 @@ class LotController extends BaseSmartStockController
                 ->leftJoin('units', 'products.unit_id', '=', 'units.id')
                 ->join('variations as v', 'products.id', '=', 'v.product_id')
                 ->join('purchase_lines as pl', 'v.id', '=', 'pl.variation_id')
-                ->leftJoin('transaction_sell_lines_purchase_lines as tspl', 'pl.id', '=', 'tspl.purchase_line_id')
                 ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
                 ->whereNotNull('pl.lot_number');
 
@@ -56,21 +55,14 @@ class LotController extends BaseSmartStockController
 
             $stockStatus = $request->input('stock_status');
 
-            $stockJoin = '';
-            $stockWhere = [];
-            $stockBindings = [];
-            if ($permittedLocations !== 'all') {
-                $stockJoin = ' LEFT JOIN transactions as t2 on pls.transaction_id=t2.id';
-                $placeholders = implode(', ', array_fill(0, count($permittedLocations), '?'));
-                $stockWhere[] = "t2.location_id IN ($placeholders)";
-                $stockBindings = array_merge($stockBindings, array_map('intval', $permittedLocations));
-            }
-            if (! empty($locationId)) {
-                $stockJoin = ' LEFT JOIN transactions as t2 on pls.transaction_id=t2.id';
-                $stockWhere[] = 't2.location_id = ?';
-                $stockBindings[] = (int) $locationId;
-            }
-            $stockWhereSql = ! empty($stockWhere) ? 'WHERE ' . implode(' AND ', $stockWhere) . ' AND ' : 'WHERE ';
+            $lotQtyAvailableSql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('pl');
+            $normalSoldSql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
+                FROM transaction_sell_lines_purchase_lines AS tspl
+                INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
+                INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
+                WHERE tspl.purchase_line_id = pl.id
+                    AND tspl.sell_line_id IS NOT NULL
+                    AND sale_tx.type != 'sell_transfer')";
 
             $selectBase = $query->select(
                 'products.name as product',
@@ -78,12 +70,12 @@ class LotController extends BaseSmartStockController
                 'v.sub_sku as sku',
                 'pl.lot_number',
                 'pl.exp_date as exp_date',
-                DB::raw('COALESCE(SUM(IF(tspl.sell_line_id IS NULL, 0, (tspl.quantity - tspl.qty_returned)) ), 0) as total_sold'),
-                DB::raw('COALESCE(SUM(IF(tspl.stock_adjustment_line_id IS NULL, 0, tspl.quantity ) ), 0) as total_adjusted'),
+                DB::raw("SUM($normalSoldSql) as total_sold"),
+                DB::raw('COALESCE(SUM(pl.quantity_adjusted), 0) as total_adjusted'),
                 'products.type',
                 'units.short_name as unit'
             )
-                ->selectRaw("(COALESCE((SELECT SUM(quantity - quantity_returned) from purchase_lines as pls$stockJoin $stockWhereSql variation_id = v.id AND lot_number = pl.lot_number), 0) - SUM(COALESCE((tspl.quantity - tspl.qty_returned), 0))) as stock", $stockBindings)
+                ->selectRaw("SUM($lotQtyAvailableSql) as stock")
                 ->groupBy('v.id')
                 ->groupBy('pl.lot_number');
 
@@ -179,8 +171,9 @@ class LotController extends BaseSmartStockController
             'Product' => trim(($r->product_name ?? '-') . (($r->variation_name ?? '') && ($r->variation_name ?? '') !== 'DUMMY' ? ' - ' . $r->variation_name : '')),
             'Location' => $r->location_name ?? '-',
             'Expiry Date' => $r->expiry_date ?? '-',
-            'Qty In' => $r->qty_in,
-            'Qty Out' => $r->qty_out,
+            'Qty' => $r->movement_type === 'transfer'
+                ? 'Move ' . max((float) $r->qty_in, (float) $r->qty_out)
+                : ((float) $r->qty_in > 0 ? '+' . (float) $r->qty_in : '-' . (float) $r->qty_out),
             'Balance' => $r->balance_qty,
             'Date' => $r->movement_date,
         ])->all();
@@ -305,6 +298,11 @@ class LotController extends BaseSmartStockController
                     $join->on('t_in.transfer_parent_id', '=', 't.id')
                         ->where('t_in.type', '=', 'purchase_transfer');
                 })
+                ->leftJoin('purchase_lines as pl_in', function ($join) {
+                    $join->on('pl_in.transaction_id', '=', 't_in.id')
+                        ->on('pl_in.variation_id', '=', 'tsl.variation_id')
+                        ->on('pl_in.lot_number', '=', 'pl.lot_number');
+                })
                 ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
                 ->where('t.business_id', $businessId)
                 ->where('t.type', 'sell_transfer')
@@ -326,7 +324,7 @@ class LotController extends BaseSmartStockController
                 DB::raw('pl.exp_date as exp_date'),
                 DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
                 DB::raw("'' as contact"),
-                DB::raw('0 as qty_in'),
+                DB::raw('(COALESCE(pl_in.quantity, 0) - COALESCE(pl_in.quantity_returned, 0)) as qty_in'),
                 DB::raw('COALESCE(tsl.quantity, 0) as qty_out'),
                 DB::raw('u.short_name as unit'),
                 DB::raw("COALESCE(t.additional_notes, '') as notes"),
@@ -421,13 +419,22 @@ class LotController extends BaseSmartStockController
                     }
                     return $row->movement_type;
                 })
-                ->editColumn('qty_in', function ($row) {
-                    $qty = (float) ($row->qty_in ?? 0);
-                    return '<span data-is_quantity="true" class="display_currency qty_in" data-currency_symbol=false data-orig-value="' . $qty . '" data-unit="' . e($row->unit) . '">' . $qty . '</span> ' . e($row->unit);
-                })
-                ->editColumn('qty_out', function ($row) {
-                    $qty = (float) ($row->qty_out ?? 0);
-                    return '<span data-is_quantity="true" class="display_currency qty_out" data-currency_symbol=false data-orig-value="' . $qty . '" data-unit="' . e($row->unit) . '">' . $qty . '</span> ' . e($row->unit);
+                ->addColumn('qty', function ($row) {
+                    $qtyIn = (float) ($row->qty_in ?? 0);
+                    $qtyOut = (float) ($row->qty_out ?? 0);
+                    $qty = max($qtyIn, $qtyOut);
+                    $unit = e($row->unit);
+                    $qtyHtml = '<span data-is_quantity="true" class="display_currency qty" data-currency_symbol=false data-orig-value="' . $qty . '" data-unit="' . $unit . '">' . $qty . '</span> ' . $unit;
+
+                    if ($row->movement_type === 'transfer') {
+                        return '<span class="text-info">Move ' . $qtyHtml . '</span>';
+                    }
+
+                    if ($qtyIn > 0) {
+                        return '<span class="text-success">+' . $qtyHtml . '</span>';
+                    }
+
+                    return '<span class="text-danger">-' . $qtyHtml . '</span>';
                 })
                 ->editColumn('exp_date', function ($row) {
                     if (! empty($row->exp_date)) {
@@ -435,7 +442,7 @@ class LotController extends BaseSmartStockController
                     }
                     return '--';
                 })
-                ->rawColumns(['qty_in', 'qty_out', 'ref_no'])
+                ->rawColumns(['qty', 'ref_no'])
                 ->make(true);
         }
 
@@ -460,19 +467,16 @@ class LotController extends BaseSmartStockController
             )
             ->first();
 
+        $lotQtyAvailableSql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('pl');
+
         $stockQty = DB::table('purchase_lines as pl')
-            ->leftJoin('transactions as t', 'pl.transaction_id', '=', 't.id')
-            ->leftJoin('transaction_sell_lines_purchase_lines as tspl', 'pl.id', '=', 'tspl.purchase_line_id')
+            ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
             ->where('pl.lot_number', $lot)
             ->where('t.business_id', $businessId)
-            ->select(
-                DB::raw('COALESCE(SUM(pl.quantity - pl.quantity_returned), 0) as total_purchased'),
-                DB::raw("COALESCE(SUM(CASE WHEN tspl.sell_line_id IS NOT NULL THEN (tspl.quantity - tspl.qty_returned) ELSE 0 END), 0) as total_sold"),
-                DB::raw("COALESCE(SUM(CASE WHEN tspl.stock_adjustment_line_id IS NOT NULL THEN tspl.quantity ELSE 0 END), 0) as total_adjusted")
-            )
+            ->select(DB::raw("COALESCE(SUM($lotQtyAvailableSql), 0) as current_stock"))
             ->first();
 
-        $currentStock = ($stockQty->total_purchased ?? 0) - ($stockQty->total_sold ?? 0) - ($stockQty->total_adjusted ?? 0);
+        $currentStock = (float) ($stockQty->current_stock ?? 0);
 
         return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock'));
     }

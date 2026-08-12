@@ -1296,6 +1296,8 @@ class ProductController extends Controller
                 && in_array('lot', $search_fields, true)
                 && (int) request()->input('group_by_purchase_line', 0) === 1
             ) {
+                $lot_qty_available_sql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('purchase_lines');
+
                 $lot_rows = \App\PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
                     ->join('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
                     ->join('products as p', 'v.product_id', '=', 'p.id')
@@ -1305,7 +1307,7 @@ class ProductController extends Controller
                     ->where('p.type', '!=', 'modifier')
                     ->whereNotNull('purchase_lines.lot_number')
                     ->where('purchase_lines.lot_number', 'like', '%' . $search_term . '%')
-                    ->whereRaw('(purchase_lines.quantity - purchase_lines.quantity_sold - purchase_lines.quantity_adjusted - purchase_lines.quantity_returned - purchase_lines.mfg_quantity_used) > 0')
+                    ->whereRaw("$lot_qty_available_sql > 0")
                     ->select([
                         'p.id as product_id',
                         'p.name',
@@ -1313,7 +1315,7 @@ class ProductController extends Controller
                         'p.enable_stock',
                         'v.id as variation_id',
                         'v.name as variation',
-                        \DB::raw('(purchase_lines.quantity - purchase_lines.quantity_sold - purchase_lines.quantity_adjusted - purchase_lines.quantity_returned - purchase_lines.mfg_quantity_used) as qty_available'),
+                        \DB::raw("$lot_qty_available_sql as qty_available"),
                         'v.sell_price_inc_tax as selling_price',
                         'v.sub_sku',
                         'v.product_keywords',
@@ -1321,6 +1323,8 @@ class ProductController extends Controller
                         'purchase_lines.id as purchase_line_id',
                         'purchase_lines.lot_number',
                     ])
+                    ->orderBy('t.transaction_date', 'desc')
+                    ->orderBy('purchase_lines.id', 'desc')
                     ->orderBy('qty_available', 'desc')
                     ->limit(25)
                     ->get();
