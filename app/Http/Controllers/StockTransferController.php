@@ -563,6 +563,7 @@ class StockTransferController extends Controller
                                 'sell_lines.variations',
                                 'sell_lines.variations.product_variation',
                                 'sell_lines.lot_details',
+                                'sell_lines.sell_line_purchase_lines.purchase_line',
                                 'sell_lines.sub_unit',
                                 'location',
                                 'sell_lines.product.unit'
@@ -774,6 +775,7 @@ class StockTransferController extends Controller
                                     'sell_lines.variations',
                                     'sell_lines.variations.product_variation',
                                     'sell_lines.lot_details',
+                                    'sell_lines.sell_line_purchase_lines.purchase_line',
                                     'location',
                                     'sell_lines.product.unit'
                                 )

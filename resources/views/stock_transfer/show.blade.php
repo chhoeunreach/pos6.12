@@ -90,15 +90,42 @@
 				                - {{ $sell_lines->variations->name}}
 				               @endif
 				               - {{ $sell_lines->variations->sub_sku}}
-				               @if($lot_n_exp_enabled && !empty($sell_lines->lot_details))
+				               @php
+				                 $line_lots = [];
+				                 if ($lot_n_exp_enabled) {
+				                   if (!empty($sell_lines->sell_line_purchase_lines)) {
+				                     foreach ($sell_lines->sell_line_purchase_lines as $mapped_purchase_line) {
+				                       $purchase_line = $mapped_purchase_line->purchase_line ?? null;
+				                       if (!empty($purchase_line) && (!empty($purchase_line->lot_number) || !empty($purchase_line->exp_date))) {
+				                         $lot_key = ($purchase_line->lot_number ?? '') . '|' . ($purchase_line->exp_date ?? '');
+				                         $line_lots[$lot_key] = [
+				                           'lot_number' => $purchase_line->lot_number ?? '',
+				                           'exp_date' => $purchase_line->exp_date ?? null,
+				                         ];
+				                       }
+				                     }
+				                   }
+				                   if (empty($line_lots) && !empty($sell_lines->lot_details)) {
+				                     $lot_key = ($sell_lines->lot_details->lot_number ?? '') . '|' . ($sell_lines->lot_details->exp_date ?? '');
+				                     $line_lots[$lot_key] = [
+				                       'lot_number' => $sell_lines->lot_details->lot_number ?? '',
+				                       'exp_date' => $sell_lines->lot_details->exp_date ?? null,
+				                     ];
+				                   }
+				                 }
+				               @endphp
+				               @if(!empty($line_lots))
 				                <br>
 				                <strong>@lang('lang_v1.lot_n_expiry'):</strong> 
-				                @if(!empty($sell_lines->lot_details->lot_number))
-				                  {{$sell_lines->lot_details->lot_number}}
-				                @endif
-				                @if(!empty($sell_lines->lot_details->exp_date))
-				                  - {{@format_date($sell_lines->lot_details->exp_date)}}
-				                @endif
+				                @foreach($line_lots as $line_lot)
+				                  @if(!$loop->first), @endif
+				                  @if(!empty($line_lot['lot_number']))
+				                    {{$line_lot['lot_number']}}
+				                  @endif
+				                  @if(!empty($line_lot['exp_date']))
+				                    - {{@format_date($line_lot['exp_date'])}}
+				                  @endif
+				                @endforeach
 				               @endif
 				            </td>
 				            <td>{{ @format_quantity($sell_lines->quantity) }} @if(!empty($sell_lines->sub_unit)) {{$sell_lines->sub_unit->short_name}} @else {{$sell_lines->product->unit->short_name}} @endif</td>

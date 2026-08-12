@@ -44,6 +44,7 @@ class SendStockTransferPdfJob implements ShouldQueue
                 'sell_lines.product',
                 'sell_lines.variations',
                 'sell_lines.lot_details',
+                'sell_lines.sell_line_purchase_lines.purchase_line',
                 'sell_lines.sub_unit',
                 'location',
                 'sell_lines.product.unit'
