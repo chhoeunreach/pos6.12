@@ -70,7 +70,7 @@ class DashboardController extends Controller
         $this->allow('loan_management.view');
 
         $filters = $this->dashboardReportFilters($request);
-        $recentActivityFilters = $this->paymentSummaryFilters($request);
+        $recentActivityFilters = $this->recentActivityFilters($request);
 
         return view('loanmanagement::reports.dashboard_reports', [
             'filters' => $filters,
@@ -457,6 +457,36 @@ class DashboardController extends Controller
             'period' => 'daily',
             'location_id' => $request->filled('location_id') ? trim((string) $request->input('location_id')) : null,
             'search' => trim((string) $request->input('search', '')),
+        ];
+    }
+
+    protected function recentActivityFilters(Request $request): array
+    {
+        $dateFrom = $request->input('recent_date_from', now()->toDateString());
+        $dateTo = $request->input('recent_date_to', now()->toDateString());
+
+        try {
+            $dateFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+        } catch (\Throwable $e) {
+            $dateFrom = now()->toDateString();
+        }
+
+        try {
+            $dateTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+        } catch (\Throwable $e) {
+            $dateTo = now()->toDateString();
+        }
+
+        if ($dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        return [
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'period' => 'daily',
+            'location_id' => $request->filled('recent_location_id') ? trim((string) $request->input('recent_location_id')) : null,
+            'search' => trim((string) $request->input('recent_search', '')),
         ];
     }
 
