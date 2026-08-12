@@ -274,61 +274,6 @@
         </div>
     </div>
 
-    <div class="box box-solid">
-        <div class="box-header with-border">
-            <h3 class="box-title">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h3>
-        </div>
-        <div class="box-body table-responsive">
-            <table class="table table-bordered lm-payment-method-summary">
-                <thead>
-                    <tr>
-                        <th>{{ $t('Type', 'ប្រភេទ') }}</th>
-                        <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
-                        <th>ABA</th>
-                        <th>ACLEDA</th>
-                        <th>WING</th>
-                        <th>E&amp;T</th>
-                        <th>CARD</th>
-                        <th>{{ $t('Other', 'ផ្សេងៗ') }}</th>
-                        <th>{{ $t('Total', 'បង់សរុប') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($payload['paymentMethodRows'] as $row)
-                        <tr>
-                            <td><strong>{{ $row['label'] }}</strong></td>
-                            <td class="text-right">{{ $money($row['cash'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['aba'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['acleda'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['wing'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['et'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['card'] ?? 0) }}</td>
-                            <td class="text-right">{{ $money($row['other'] ?? 0) }}</td>
-                            <td class="text-right"><strong>{{ $money($row['total'] ?? 0) }}</strong></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="9" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
-                    @endforelse
-                </tbody>
-                @if(!empty($payload['paymentMethodRows']))
-                    <tfoot>
-                        <tr>
-                            <th>{{ $t('Total', 'សរុប') }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('cash')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('aba')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('acleda')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('wing')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('et')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('card')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('other')) }}</th>
-                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('total')) }}</th>
-                        </tr>
-                    </tfoot>
-                @endif
-            </table>
-        </div>
-    </div>
-
     <div class="row">
         <div class="col-md-6">
             <div class="box box-solid collapsed-box">
@@ -410,8 +355,64 @@
             <div class="box box-solid">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
+                    <div class="box-tools pull-right">
+                        <a href="{{ route('loan-management.reports.payment-summary-by-type', request()->query()) }}" class="btn btn-box-tool" title="{{ $t('Open full payment summary', 'បើកសង្ខេបការបង់ប្រាក់ពេញ') }}">
+                            <i class="fa fa-external-link"></i>
+                        </a>
+                    </div>
                 </div>
                 <div class="box-body">
+                    <div class="table-responsive">
+                        <h4 class="lm-recent-panel-heading">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h4>
+                        <table class="table table-bordered lm-payment-method-summary">
+                            <thead>
+                                <tr>
+                                    <th>{{ $t('Type', 'ប្រភេទ') }}</th>
+                                    <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
+                                    <th>ABA</th>
+                                    <th>ACLEDA</th>
+                                    <th>WING</th>
+                                    <th>E&amp;T</th>
+                                    <th>CARD</th>
+                                    <th>{{ $t('Other', 'ផ្សេងៗ') }}</th>
+                                    <th>{{ $t('Total', 'បង់សរុប') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($payload['paymentMethodRows'] as $row)
+                                    <tr>
+                                        <td><strong>{{ $row['label'] }}</strong></td>
+                                        <td class="text-right">{{ $money($row['cash'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['aba'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['acleda'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['wing'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['et'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['card'] ?? 0) }}</td>
+                                        <td class="text-right">{{ $money($row['other'] ?? 0) }}</td>
+                                        <td class="text-right"><strong>{{ $money($row['total'] ?? 0) }}</strong></td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="9" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
+                                @endforelse
+                            </tbody>
+                            @if(!empty($payload['paymentMethodRows']))
+                                <tfoot>
+                                    <tr>
+                                        <th>{{ $t('Total', 'សរុប') }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('cash')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('aba')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('acleda')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('wing')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('et')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('card')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('other')) }}</th>
+                                        <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('total')) }}</th>
+                                    </tr>
+                                </tfoot>
+                            @endif
+                        </table>
+                    </div>
+
                     <div class="lm-recent-panel-grid">
                         <div class="table-responsive">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>

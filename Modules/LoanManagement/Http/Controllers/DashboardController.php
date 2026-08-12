@@ -79,6 +79,20 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function paymentSummaryByType(Request $request)
+    {
+        $this->allow('loan_management.view');
+
+        $filters = $this->dashboardReportFilters($request);
+
+        return view('loanmanagement::reports.payment_summary_by_type', [
+            'filters' => $filters,
+            'rows' => $this->dashboardPaymentMethodRows($filters),
+            'locations' => $this->loanReportLocationOptions(),
+            'isKhmer' => $this->loanReportIsKhmer(),
+        ]);
+    }
+
     public function adminLoan(Request $request)
     {
         $this->allow('loan_management.view');
