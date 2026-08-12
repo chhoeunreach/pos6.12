@@ -147,6 +147,13 @@
     .lm-report-table .text-right {
         font-variant-numeric: tabular-nums;
     }
+    .lm-report-table .lm-col-no {
+        width: 34px !important;
+        min-width: 34px;
+        max-width: 34px;
+        text-align: center;
+        white-space: nowrap;
+    }
     .lm-payment-method-summary th {
         background: #dbeafe;
         color: #0f172a;
@@ -497,7 +504,7 @@
 
     <div class="row">
         <div class="col-md-6">
-            <div class="box box-solid collapsed-box">
+            <div class="box box-solid collapsed-box lm-dashboard-report-collapse">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Loan Report by Status', 'របាយការណ៍កម្ចីតាមស្ថានភាព') }}</h3>
                     <div class="box-tools pull-right">
@@ -506,7 +513,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="box-body table-responsive" style="display: none;">
+                <div class="box-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
                             <tr>
@@ -536,7 +543,7 @@
         </div>
 
         <div class="col-md-6">
-            <div class="box box-solid collapsed-box">
+            <div class="box box-solid collapsed-box lm-dashboard-report-collapse">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $periodTitle }} {{ $t('Collected Payment Report', 'របាយការណ៍ប្រមូលប្រាក់') }}</h3>
                     <div class="box-tools pull-right">
@@ -545,7 +552,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="box-body table-responsive" style="display: none;">
+                <div class="box-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
                             <tr>
@@ -682,7 +689,7 @@
                             <table class="table table-bordered table-hover loan-recent-activity-datatable lm-report-table" id="loan_recent_payments_table">
                                 <thead>
                                     <tr>
-                                        <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
@@ -693,7 +700,7 @@
                                 <tbody>
                                     @foreach($payload['recentPayments'] as $paymentIndex => $payment)
                                         <tr>
-                                            <td>{{ $paymentIndex + 1 }}</td>
+                                            <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
                                             <td>
                                                 {{ $payment->loan_number ?? '-' }}
                                                 <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
@@ -713,7 +720,7 @@
                             <table class="table table-bordered table-hover loan-recent-activity-datatable lm-report-table" id="loan_recent_loans_table">
                                 <thead>
                                     <tr>
-                                        <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
+                                        <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
@@ -725,7 +732,7 @@
                                 <tbody>
                                     @foreach($payload['recentLoans'] as $loanIndex => $loan)
                                         <tr>
-                                            <td>{{ $loanIndex + 1 }}</td>
+                                            <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
                                             <td>
                                                 <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
                                                 <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
@@ -855,6 +862,34 @@
                     }
                 });
             });
+        }
+
+        if (window.jQuery) {
+            jQuery('.lm-dashboard-report-collapse').each(function () {
+                var $box = jQuery(this);
+                var $body = $box.children('.box-body');
+                var $icon = $box.find('[data-widget="collapse"] .fa').first();
+
+                if ($box.hasClass('collapsed-box')) {
+                    $body.hide();
+                    $icon.removeClass('fa-minus').addClass('fa-plus');
+                }
+            });
+
+            jQuery(document).off('click.loanDashboardReportCollapse')
+                .on('click.loanDashboardReportCollapse', '.lm-dashboard-report-collapse [data-widget="collapse"]', function (event) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+
+                    var $box = jQuery(this).closest('.lm-dashboard-report-collapse');
+                    var $body = $box.children('.box-body');
+                    var $icon = jQuery(this).find('.fa').first();
+                    var isCollapsed = $box.hasClass('collapsed-box');
+
+                    $body.stop(true, true).slideToggle(160);
+                    $box.toggleClass('collapsed-box', ! isCollapsed);
+                    $icon.toggleClass('fa-plus', ! isCollapsed).toggleClass('fa-minus', isCollapsed);
+                });
         }
 
     })();

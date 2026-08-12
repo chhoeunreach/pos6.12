@@ -802,7 +802,6 @@ class DashboardController extends Controller
             ->selectRaw($this->coalesceSql('loans', 'l', ['balance_amount', 'amount_balance']).' as balance_amount')
             ->orderByDesc('l.'.$loanDateColumn)
             ->orderByDesc('l.id')
-            ->limit(15)
             ->get();
 
         return $this->appendRecentLoanPaymentInfo($this->appendRecentLoanProducts($loans));
@@ -943,7 +942,6 @@ class DashboardController extends Controller
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status') ? 'p.status' : '"confirmed"').' as status')
             ->orderByDesc('p.'.$dateColumn)
             ->orderByDesc('p.id')
-            ->limit(15)
             ->get();
 
         return $this->appendRecentPaymentMethodDetails($payments);
