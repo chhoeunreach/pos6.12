@@ -175,7 +175,13 @@
 
             if (!empty($lot_n_exp_enabled)) {
               $line_lots = [];
-              if (!empty($line->sell_line_purchase_lines)) {
+              if (!empty($line->lot_details)) {
+                $lot_key = ($line->lot_details->lot_number ?? '') . '|' . ($line->lot_details->exp_date ?? null);
+                $line_lots[$lot_key] = [
+                  'lot_number' => $line->lot_details->lot_number ?? '',
+                  'exp_date' => $line->lot_details->exp_date ?? null,
+                ];
+              } elseif (!empty($line->sell_line_purchase_lines)) {
                 foreach ($line->sell_line_purchase_lines as $mapped_purchase_line) {
                   $purchase_line = $mapped_purchase_line->purchase_line ?? null;
                   if (!empty($purchase_line) && (!empty($purchase_line->lot_number) || !empty($purchase_line->exp_date))) {
@@ -186,13 +192,6 @@
                     ];
                   }
                 }
-              }
-              if (empty($line_lots) && !empty($line->lot_details)) {
-                $lot_key = ($line->lot_details->lot_number ?? '') . '|' . ($line->lot_details->exp_date ?? null);
-                $line_lots[$lot_key] = [
-                  'lot_number' => $line->lot_details->lot_number ?? '',
-                  'exp_date' => $line->lot_details->exp_date ?? null,
-                ];
               }
 
               foreach ($line_lots as $line_lot) {
