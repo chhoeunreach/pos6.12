@@ -58,6 +58,29 @@
         color: #fff;
         box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
     }
+    .lm-recent-panel-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .lm-recent-panel-heading {
+        margin: 0 0 8px;
+        color: #334155;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    .lm-payment-method-summary th {
+        background: #dbeafe;
+        color: #0f172a;
+        text-align: center;
+        vertical-align: middle !important;
+    }
+    .lm-payment-method-summary td {
+        vertical-align: middle !important;
+    }
+    .lm-payment-method-summary tfoot th {
+        background: #eff6ff;
+    }
     .lm-report-print-title {
         display: none;
     }
@@ -126,6 +149,11 @@
         }
         a[href]:after {
             content: "" !important;
+        }
+    }
+    @media (max-width: 991px) {
+        .lm-recent-panel-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -246,6 +274,61 @@
         </div>
     </div>
 
+    <div class="box box-solid">
+        <div class="box-header with-border">
+            <h3 class="box-title">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h3>
+        </div>
+        <div class="box-body table-responsive">
+            <table class="table table-bordered lm-payment-method-summary">
+                <thead>
+                    <tr>
+                        <th>{{ $t('Type', 'ប្រភេទ') }}</th>
+                        <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
+                        <th>ABA</th>
+                        <th>ACLEDA</th>
+                        <th>WING</th>
+                        <th>E&amp;T</th>
+                        <th>CARD</th>
+                        <th>{{ $t('Other', 'ផ្សេងៗ') }}</th>
+                        <th>{{ $t('Total', 'បង់សរុប') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($payload['paymentMethodRows'] as $row)
+                        <tr>
+                            <td><strong>{{ $row['label'] }}</strong></td>
+                            <td class="text-right">{{ $money($row['cash'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['aba'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['acleda'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['wing'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['et'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['card'] ?? 0) }}</td>
+                            <td class="text-right">{{ $money($row['other'] ?? 0) }}</td>
+                            <td class="text-right"><strong>{{ $money($row['total'] ?? 0) }}</strong></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="9" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
+                    @endforelse
+                </tbody>
+                @if(!empty($payload['paymentMethodRows']))
+                    <tfoot>
+                        <tr>
+                            <th>{{ $t('Total', 'សរុប') }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('cash')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('aba')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('acleda')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('wing')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('et')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('card')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('other')) }}</th>
+                            <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('total')) }}</th>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-6">
             <div class="box box-solid collapsed-box">
@@ -323,72 +406,71 @@
     </div>
 
     <div class="row">
-        <div class="col-md-6 lm-report-no-print">
+        <div class="col-md-12 lm-report-no-print">
             <div class="box box-solid">
                 <div class="box-header with-border">
-                    <h3 class="box-title">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h3>
+                    <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                 </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-hover">
-                        <thead>
-                            <tr>
-                                <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
-                                <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
-                                <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($payload['recentLoans'] as $loan)
-                                <tr>
-                                    <td>
-                                        <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
-                                        <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
-                                    </td>
-                                    <td>{{ $loan->customer_name ?: '-' }}</td>
-                                    <td>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
-                                    <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent loans found.', 'រកមិនឃើញកម្ចីថ្មីៗ') }}</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                <div class="box-body">
+                    <div class="lm-recent-panel-grid">
+                        <div class="table-responsive">
+                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th>{{ $t('Customer', 'អតិថិជន') }}</th>
+                                        <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
+                                        <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($payload['recentLoans'] as $loan)
+                                        <tr>
+                                            <td>
+                                                <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
+                                                <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
+                                            </td>
+                                            <td>{{ $loan->customer_name ?: '-' }}</td>
+                                            <td>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
+                                            <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent loans found.', 'រកមិនឃើញកម្ចីថ្មីៗ') }}</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
 
-        <div class="col-md-6 lm-report-no-print">
-            <div class="box box-solid">
-                <div class="box-header with-border">
-                    <h3 class="box-title">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h3>
-                </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-hover">
-                        <thead>
-                            <tr>
-                                <th>{{ $t('Receipt', 'បង្កាន់ដៃ') }}</th>
-                                <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
-                                <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($payload['recentPayments'] as $payment)
-                                <tr>
-                                    <td>
-                                        <a href="{{ route('loan-management.payments.show', $payment->id) }}">{{ $payment->receipt_number ?? ('#'.$payment->id) }}</a>
-                                        <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
-                                    </td>
-                                    <td>{{ $payment->loan_number ?? '-' }}</td>
-                                    <td>{{ $payment->customer_name ?: '-' }}</td>
-                                    <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
+                        <div class="table-responsive">
+                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h4>
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>{{ $t('Receipt', 'បង្កាន់ដៃ') }}</th>
+                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th>{{ $t('Customer', 'អតិថិជន') }}</th>
+                                        <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($payload['recentPayments'] as $payment)
+                                        <tr>
+                                            <td>
+                                                <a href="{{ route('loan-management.payments.show', $payment->id) }}">{{ $payment->receipt_number ?? ('#'.$payment->id) }}</a>
+                                                <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
+                                            </td>
+                                            <td>{{ $payment->loan_number ?? '-' }}</td>
+                                            <td>{{ $payment->customer_name ?: '-' }}</td>
+                                            <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

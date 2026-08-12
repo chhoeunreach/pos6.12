@@ -421,6 +421,7 @@ class DashboardController extends Controller
             'loanStatusRows' => $this->dashboardLoanStatusRows($filters),
             'collectionRows' => $this->dashboardCollectionRows($filters),
             'collectionPeriodLabel' => $this->dashboardCollectionPeriodLabel($filters['period'] ?? 'daily'),
+            'paymentMethodRows' => $this->dashboardPaymentMethodRows($filters),
             'recentLoans' => $this->dashboardRecentLoans($filters),
             'recentPayments' => $this->dashboardRecentPayments($filters),
         ];
@@ -579,6 +580,114 @@ class DashboardController extends Controller
             'monthly' => $this->loanReportText('Month', 'ខែ'),
             'yearly' => $this->loanReportText('Year', 'ឆ្នាំ'),
         ][$period] ?? $this->loanReportText('Date', 'ថ្ងៃ');
+    }
+
+    protected function dashboardPaymentMethodRows(array $filters): array
+    {
+        $query = $this->dashboardPaymentBaseQuery($filters);
+        if (! $query) {
+            return [];
+        }
+
+        $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $typeExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')
+            ? 'LOWER(COALESCE(p.payment_type, "loan"))'
+            : '"loan"';
+        $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_method_snapshot')
+            ? 'p.payment_method_snapshot'
+            : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '"Cash"');
+
+        $rows = $query
+            ->selectRaw($typeExpr.' as payment_type')
+            ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as payment_method')
+            ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as payment_total')
+            ->groupBy('payment_type', 'payment_method')
+            ->get();
+
+        $summary = [];
+        foreach ($rows as $row) {
+            $type = $this->dashboardPaymentTypeKey((string) ($row->payment_type ?? 'loan'));
+            if (! isset($summary[$type])) {
+                $summary[$type] = [
+                    'label' => $this->dashboardPaymentTypeLabel($type),
+                    'cash' => 0.0,
+                    'aba' => 0.0,
+                    'acleda' => 0.0,
+                    'wing' => 0.0,
+                    'et' => 0.0,
+                    'card' => 0.0,
+                    'other' => 0.0,
+                    'total' => 0.0,
+                ];
+            }
+
+            $amount = (float) ($row->payment_total ?? 0);
+            $bucket = $this->dashboardPaymentMethodBucket((string) ($row->payment_method ?? ''));
+            $summary[$type][$bucket] += $amount;
+            $summary[$type]['total'] += $amount;
+        }
+
+        uksort($summary, function ($left, $right) {
+            $order = ['loan' => 0, 'monthly' => 1];
+
+            return ($order[$left] ?? 99) <=> ($order[$right] ?? 99) ?: strcmp($left, $right);
+        });
+
+        return array_values($summary);
+    }
+
+    protected function dashboardPaymentTypeKey(string $type): string
+    {
+        $type = strtolower(trim($type));
+
+        if (in_array($type, ['monthly', 'collection', 'installment'], true)) {
+            return 'monthly';
+        }
+
+        if (in_array($type, ['loan', 'initial', 'down_payment', 'downpayment', 'deposit'], true)) {
+            return 'loan';
+        }
+
+        return $type !== '' ? $type : 'loan';
+    }
+
+    protected function dashboardPaymentTypeLabel(string $type): string
+    {
+        if ($type === 'monthly') {
+            return $this->loanReportText('Monthly Collection', 'ប្រមូលប្រាក់ប្រចាំខែ');
+        }
+
+        if ($type === 'loan') {
+            return $this->loanReportText('Loan', 'កម្ចី');
+        }
+
+        return ucwords(str_replace('_', ' ', $type));
+    }
+
+    protected function dashboardPaymentMethodBucket(string $method): string
+    {
+        $method = strtoupper(trim($method));
+
+        if ($method === '' || str_contains($method, 'CASH')) {
+            return 'cash';
+        }
+        if (str_contains($method, 'ABA')) {
+            return 'aba';
+        }
+        if (str_contains($method, 'ACLEDA')) {
+            return 'acleda';
+        }
+        if (str_contains($method, 'WING')) {
+            return 'wing';
+        }
+        if (str_contains($method, 'E&T') || str_contains($method, 'E T') || str_contains($method, 'ET')) {
+            return 'et';
+        }
+        if (str_contains($method, 'CARD') || str_contains($method, 'VISA') || str_contains($method, 'MASTER')) {
+            return 'card';
+        }
+
+        return 'other';
     }
 
     protected function dashboardRecentLoans(array $filters)
