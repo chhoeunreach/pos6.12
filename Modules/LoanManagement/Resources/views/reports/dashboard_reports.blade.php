@@ -1093,12 +1093,136 @@
     }
     })();
 
+    var loanRecentActivityEsc = function (value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    };
+
+    var loanRecentActivityTableFromDataTable = function (selector, title) {
+        var table = window.jQuery ? jQuery(selector)[0] : null;
+        if (!table) {
+            return '';
+        }
+
+        var data = {header: [], body: []};
+        if (jQuery.fn.DataTable && jQuery.fn.DataTable.isDataTable(table)) {
+            var api = jQuery(table).DataTable();
+            data = api.buttons && api.buttons.exportData
+                ? api.buttons.exportData({
+                    columns: ':visible',
+                    modifier: {search: 'applied', order: 'applied', page: 'all'},
+                    stripHtml: true,
+                    format: {
+                        body: function (cell) {
+                            return jQuery('<div>').html(cell == null ? '' : cell).text().replace(/\s+/g, ' ').trim();
+                        },
+                        header: function (cell) {
+                            return jQuery('<div>').html(cell == null ? '' : cell).text().replace(/\s+/g, ' ').trim();
+                        }
+                    }
+                })
+                : data;
+        } else {
+            jQuery(table).find('thead th').each(function () {
+                data.header.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
+            });
+            jQuery(table).find('tbody tr').each(function () {
+                var row = [];
+                jQuery(this).find('td').each(function () {
+                    row.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
+                });
+                data.body.push(row);
+            });
+        }
+
+        var html = '<h3>' + loanRecentActivityEsc(title) + '</h3><table><thead><tr>';
+        data.header.forEach(function (heading) {
+            html += '<th>' + loanRecentActivityEsc(heading) + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        data.body.forEach(function (row) {
+            html += '<tr>';
+            row.forEach(function (cell) {
+                html += '<td>' + loanRecentActivityEsc(cell) + '</td>';
+            });
+            html += '</tr>';
+        });
+
+        return html + '</tbody></table>';
+    };
+
+    var loanRecentActivityTableFromDom = function (selector, title) {
+        var table = window.jQuery ? jQuery(selector)[0] : null;
+        if (!table) {
+            return '';
+        }
+
+        var html = '<h3>' + loanRecentActivityEsc(title) + '</h3><table><thead><tr>';
+        jQuery(table).find('thead th').each(function () {
+            html += '<th>' + loanRecentActivityEsc(jQuery(this).text().replace(/\s+/g, ' ').trim()) + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        jQuery(table).find('tbody tr').each(function () {
+            html += '<tr>';
+            jQuery(this).find('td').each(function () {
+                html += '<td>' + loanRecentActivityEsc(jQuery(this).text().replace(/\s+/g, ' ').trim()) + '</td>';
+            });
+            html += '</tr>';
+        });
+        html += '</tbody>';
+        var footer = jQuery(table).find('tfoot tr');
+        if (footer.length) {
+            html += '<tfoot>';
+            footer.each(function () {
+                html += '<tr>';
+                jQuery(this).find('th,td').each(function () {
+                    html += '<th>' + loanRecentActivityEsc(jQuery(this).text().replace(/\s+/g, ' ').trim()) + '</th>';
+                });
+                html += '</tr>';
+            });
+            html += '</tfoot>';
+        }
+
+        return html + '</table>';
+    };
+
     window.loanPrintRecentActivity = function () {
-        document.body.classList.add('lm-print-recent-only');
-        window.print();
+        var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
+        html += '<style>';
+        html += '@page{size:A4 landscape;margin:10mm}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;font-size:11px}';
+        html += 'h2{margin:0 0 10px;padding:12px 14px;border-top:1px solid #94a3b8;border-bottom:2px solid #111827;background:#dbeafe;color:#0000ff;text-align:center;font-size:22px;line-height:1.3}';
+        html += 'h3{margin:12px 0 5px;padding:5px 8px;border:1px solid #9ca3af;background:#e5f0fb;text-align:center;font-size:13px}';
+        html += 'table{width:100%;border-collapse:collapse;margin:0 0 10px;table-layout:auto}th,td{border:1px solid #9ca3af;padding:4px 5px;vertical-align:top;word-break:break-word}';
+        html += 'th{background:#dbeafe;text-align:center;font-weight:700}td{text-align:left}td.amount,td.count{text-align:right}.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm;align-items:start}.recent-grid td,.recent-grid th{font-size:9px}';
+        html += '</style></head><body>';
+        html += '<h2>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</h2>';
+        html += loanRecentActivityTableFromDom('.lm-payment-method-summary', @json($t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ')));
+        html += '<div class="recent-grid">';
+        html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ'))) + '</div>';
+        html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ'))) + '</div>';
+        html += '</div></body></html>';
+
+        var printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            document.body.classList.add('lm-print-recent-only');
+            window.print();
+            window.setTimeout(function () {
+                document.body.classList.remove('lm-print-recent-only');
+            }, 500);
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
         window.setTimeout(function () {
-            document.body.classList.remove('lm-print-recent-only');
-        }, 500);
+            printWindow.print();
+            printWindow.close();
+        }, 300);
     };
 
     window.loanExportRecentActivityExcel = function () {
