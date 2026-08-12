@@ -1,7 +1,13 @@
 @php
+    use Modules\LoanManagement\Helpers\LoanMenuHelper;
+
     $isKhmer = $isKhmer ?? session('user.language', config('app.locale')) === 'km';
     $text = fn ($en, $km) => $isKhmer ? $km : $en;
     $years = range((int) now()->format('Y'), 2000);
+    $moduleCssPath = base_path('Modules/LoanManagement/Resources/assets/css/loan-management.css');
+    $moduleJsPath = base_path('Modules/LoanManagement/Resources/assets/js/loan-management.js');
+    $loanBadgeCounts = LoanMenuHelper::badgeCounts();
+    $loanLanguage = session('user.language', config('app.locale'));
     $adminRows = collect($payload['adminRows'] ?? [])->sortBy('year')->map(function ($row) {
         return [
             'id' => (string) $row['year'],
@@ -93,16 +99,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $text('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</title>
+    @include('layouts.partials.css')
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-tfrm5V5v.css') }}">
+    @if (file_exists($moduleCssPath))
+        <style>{!! file_get_contents($moduleCssPath) !!}</style>
+    @endif
     <style>
         html,
         body {
             margin: 0;
             min-height: 100%;
             background: #f8fafc;
+        }
+        body.admin-loan-page {
+            overflow: hidden;
+        }
+        .admin-loan-shell {
+            display: flex;
+            min-height: 100vh;
+            width: 100%;
+            background: #f8fafc;
+        }
+        .admin-loan-main {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 100vh;
+            overflow: auto;
+            background: #f8fafc;
+        }
+        body.lm-sidebar-collapsed .admin-loan-main {
+            width: calc(100% - var(--lm-sidebar-rail-width));
+        }
+        .admin-loan-sidebar-toggle {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 950;
+            display: none;
+            width: 38px;
+            height: 38px;
+            border: 0;
+            border-radius: 10px;
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 10px 25px rgba(37, 99, 235, .25);
         }
         html[lang="km"],
         html[lang="km"] body,
@@ -540,6 +583,14 @@
             }
         }
         @media (max-width: 767px) {
+            .admin-loan-sidebar-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .admin-loan-filter {
+                padding-left: 58px;
+            }
             .admin-loan-filter-grid {
                 grid-template-columns: 1fr;
             }
@@ -558,54 +609,62 @@
         }
     </style>
 </head>
-<body>
-    <div class="admin-loan-filter">
-        <form method="GET" action="{{ route('loan-management.admin-loan') }}" id="adminLoanFilter">
-            <div class="admin-loan-filter-grid">
-                <div>
-                    <label>{{ $text('Start Year', 'ឆ្នាំចាប់ផ្តើម') }}</label>
-                    <select name="start_year">
-                        @foreach($years as $year)
-                            <option value="{{ $year }}" {{ (int) $filters['start_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label>{{ $text('End Year', 'ឆ្នាំបញ្ចប់') }}</label>
-                    <select name="end_year">
-                        @foreach($years as $year)
-                            <option value="{{ $year }}" {{ (int) $filters['end_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label>{{ $text('Location', 'សាខា') }}</label>
-                    <select name="location_id">
-                        <option value="">{{ $text('All Locations', 'សាខាទាំងអស់') }}</option>
-                        @foreach($locations as $id => $name)
-                            <option value="{{ $id }}" {{ (string) $filters['location_id'] === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label>{{ $text('Search', 'ស្វែងរក') }}</label>
-                    <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="{{ $text('Loan #, invoice, customer, phone', 'លេខកម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
-                </div>
-                <button type="submit">{{ $text('Filter', 'ចម្រោះ') }}</button>
-                <a href="{{ route('loan-management.admin-loan') }}">{{ $text('Reset', 'កំណត់ឡើងវិញ') }}</a>
-                <div class="admin-language-switch" aria-label="Language">
-                    <button type="button" class="{{ $isKhmer ? '' : 'active' }}" data-admin-language="en">EN</button>
-                    <button type="button" class="{{ $isKhmer ? 'active' : '' }}" data-admin-language="km">ខ្មែរ</button>
-                </div>
+<body class="admin-loan-page loan-management-page lm-language-{{ $loanLanguage }} hold-transition skin-blue-light sidebar-mini tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
+    <div class="admin-loan-shell lm-app" id="loanManagementApp">
+        @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
+        <main class="admin-loan-main" id="loanManagementMain">
+            <button type="button" class="admin-loan-sidebar-toggle" id="loanSidebarToggle" aria-label="Toggle sidebar">
+                <i class="fa fa-bars"></i>
+            </button>
+            <div class="admin-loan-filter">
+                <form method="GET" action="{{ route('loan-management.admin-loan') }}" id="adminLoanFilter">
+                    <div class="admin-loan-filter-grid">
+                        <div>
+                            <label>{{ $text('Start Year', 'ឆ្នាំចាប់ផ្តើម') }}</label>
+                            <select name="start_year">
+                                @foreach($years as $year)
+                                    <option value="{{ $year }}" {{ (int) $filters['start_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label>{{ $text('End Year', 'ឆ្នាំបញ្ចប់') }}</label>
+                            <select name="end_year">
+                                @foreach($years as $year)
+                                    <option value="{{ $year }}" {{ (int) $filters['end_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label>{{ $text('Location', 'សាខា') }}</label>
+                            <select name="location_id">
+                                <option value="">{{ $text('All Locations', 'សាខាទាំងអស់') }}</option>
+                                @foreach($locations as $id => $name)
+                                    <option value="{{ $id }}" {{ (string) $filters['location_id'] === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label>{{ $text('Search', 'ស្វែងរក') }}</label>
+                            <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="{{ $text('Loan #, invoice, customer, phone', 'លេខកម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
+                        </div>
+                        <button type="submit">{{ $text('Filter', 'ចម្រោះ') }}</button>
+                        <a href="{{ route('loan-management.admin-loan') }}">{{ $text('Reset', 'កំណត់ឡើងវិញ') }}</a>
+                        <div class="admin-language-switch" aria-label="Language">
+                            <button type="button" class="{{ $isKhmer ? '' : 'active' }}" data-admin-language="en">EN</button>
+                            <button type="button" class="{{ $isKhmer ? 'active' : '' }}" data-admin-language="km">ខ្មែរ</button>
+                        </div>
+                    </div>
+                </form>
+                <form method="POST" action="{{ route('loan-management.language.switch') }}" id="adminLanguageForm" style="display:none;">
+                    @csrf
+                    <input type="hidden" name="language" id="adminLanguageInput" value="{{ $isKhmer ? 'km' : 'en' }}">
+                </form>
             </div>
-        </form>
-        <form method="POST" action="{{ route('loan-management.language.switch') }}" id="adminLanguageForm" style="display:none;">
-            @csrf
-            <input type="hidden" name="language" id="adminLanguageInput" value="{{ $isKhmer ? 'km' : 'en' }}">
-        </form>
-    </div>
-    <div id="admin-loan-react-root">
-        <div id="root"></div>
+            <div id="admin-loan-react-root">
+                <div id="root"></div>
+            </div>
+        </main>
     </div>
     <div class="admin-loan-detail-modal" id="adminLoanDetailModal" aria-hidden="true">
         <div class="admin-loan-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="adminLoanDetailTitle">
@@ -821,7 +880,10 @@
                     closeAdminLoanDetailModal();
                 }
             });
-        })();
-</script>
-</body>
-</html>
+	        })();
+	</script>
+	@if (file_exists($moduleJsPath))
+	    <script>{!! file_get_contents($moduleJsPath) !!}</script>
+	@endif
+	</body>
+	</html>

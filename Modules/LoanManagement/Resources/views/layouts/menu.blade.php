@@ -16,7 +16,7 @@
     </a>
     <ul class="treeview-menu">
         <li><a href="{{ $lmUrl('loan-management.dashboard.index', [], '/loan-management/dashboard/main') }}"><i class="fa fa-dashboard"></i> Dashboard</a></li>
-        <li><a href="{{ $lmUrl('loan-management.admin-loan', [], '/loan-management/admin-loan') }}" target="_blank" rel="noopener"><i class="fa fa-line-chart"></i> {{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</a></li>
+        <li><a href="{{ $lmUrl('loan-management.admin-loan', [], '/loan-management/admin-loan') }}"><i class="fa fa-line-chart"></i> {{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</a></li>
 
         <li class="treeview">
             <a href="#"><i class="fa fa-phone"></i> Collection Cases <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>

@@ -74,7 +74,7 @@
                 ['label' => $lmText('Loan Reports', 'របាយការណ៍កម្ចី'), 'icon' => 'fa fa-pie-chart', 'tone' => 'blue', 'children' => [
                     ['label' => $lmText('Installment Reports', 'របាយការណ៍រំលស់'), 'route' => 'loan-management.reports.index', 'can' => 'loan_management.reports.view|loan_management.view'],
                     ['label' => $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ'), 'route' => 'loan-management.reports.yearly-loan-summary', 'can' => 'loan_management.reports.view|loan_management.view'],
-                    ['label' => $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី'), 'route' => 'loan-management.admin-loan', 'can' => 'loan_management.dashboard.view|loan_management.view', 'target' => '_blank'],
+                    ['label' => $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី'), 'route' => 'loan-management.admin-loan', 'can' => 'loan_management.dashboard.view|loan_management.view'],
                 ]],
                 ['label' => $lmText('Collection Reports', 'របាយការណ៍ប្រមូលប្រាក់'), 'icon' => 'fa fa-bar-chart', 'route' => 'loan-management.collection.reports', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
                 ['label' => $lmText('Financial Reports', 'របាយការណ៍ហិរញ្ញវត្ថុ'), 'icon' => 'fa fa-file-excel-o', 'route' => 'loan-management.reports.payments', 'can' => 'loan_management.reports.view|loan_management.view', 'tone' => 'blue'],
@@ -205,7 +205,7 @@
         @endforeach
     </nav>
 
-    <a href="{{ $sidebarUrl('loan-management.admin-loan') }}" class="lm-admin-card" target="_blank" rel="noopener">
+    <a href="{{ $sidebarUrl('loan-management.admin-loan') }}" class="lm-admin-card">
         <span class="lm-admin-avatar">AD<span></span></span>
         <span class="lm-admin-info">
             <strong>{{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</strong>
