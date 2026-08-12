@@ -6,6 +6,21 @@
     $money = fn ($value) => '$ '.number_format((float) ($value ?? 0), 2);
     $number = fn ($value) => number_format((float) ($value ?? 0), 0);
     $cards = $payload['cards'] ?? [];
+    $period = $filters['period'] ?? 'daily';
+    $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
+    $periodTitle = ['daily' => $t('Daily', 'ប្រចាំថ្ងៃ'), 'monthly' => $t('Monthly', 'ប្រចាំខែ'), 'yearly' => $t('Yearly', 'ប្រចាំឆ្នាំ')][$period] ?? $t('Daily', 'ប្រចាំថ្ងៃ');
+    $formatPeriod = function ($value) use ($period) {
+        if (empty($value)) {
+            return '-';
+        }
+        if ($period === 'monthly') {
+            return \Carbon\Carbon::createFromFormat('Y-m', (string) $value)->format('m-Y');
+        }
+        if ($period === 'yearly') {
+            return (string) $value;
+        }
+        return \Carbon\Carbon::parse($value)->format('d-m-Y');
+    };
 @endphp
 
 @section('loan_css')
@@ -43,6 +58,76 @@
         color: #fff;
         box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
     }
+    .lm-report-print-title {
+        display: none;
+    }
+    @media print {
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+        body {
+            background: #fff !important;
+            color: #111827 !important;
+        }
+        .lm-sidebar,
+        .lm-header,
+        .lm-breadcrumb-wrap,
+        .lm-report-tabs,
+        .lm-report-filter-box,
+        .lm-report-no-print,
+        .main-footer,
+        .no-print {
+            display: none !important;
+        }
+        .lm-main,
+        .lm-content,
+        .lm-workspace,
+        .content,
+        .container-fluid {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+        }
+        .content-header {
+            padding: 0 0 8px !important;
+        }
+        .lm-report-print-title {
+            display: block;
+            margin: 0 0 10px;
+            text-align: center;
+        }
+        .lm-report-print-title h2 {
+            margin: 0 0 4px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .lm-report-print-title p {
+            margin: 0;
+            font-size: 11px;
+            color: #4b5563;
+        }
+        .info-box,
+        .box {
+            border: 1px solid #d1d5db !important;
+            box-shadow: none !important;
+            page-break-inside: avoid;
+        }
+        .box-header,
+        .box-body {
+            padding: 8px !important;
+        }
+        .table > thead > tr > th,
+        .table > tbody > tr > td {
+            padding: 4px 5px !important;
+            font-size: 10px !important;
+            border-color: #d1d5db !important;
+        }
+        a[href]:after {
+            content: "" !important;
+        }
+    }
 </style>
 @endsection
 
@@ -57,20 +142,25 @@
         <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-report-tab is-active">{{ $t('Dashboard Reports', 'របាយការណ៍ផ្ទាំងគ្រប់គ្រង') }}</a>
     </div>
 
-    <div class="box box-primary">
+    <div class="lm-report-print-title">
+        <h2>{{ $periodTitle }} {{ $t('Loan and Collection Report', 'របាយការណ៍កម្ចី និងការប្រមូលប្រាក់') }}</h2>
+        <p>{{ \Carbon\Carbon::parse($filters['date_from'])->format('d-m-Y') }} - {{ \Carbon\Carbon::parse($filters['date_to'])->format('d-m-Y') }}</p>
+    </div>
+
+    <div class="box box-primary lm-report-filter-box">
         <div class="box-header with-border">
             <h3 class="box-title">{{ $t('Filters', 'តម្រង') }}</h3>
         </div>
         <div class="box-body">
             <form method="GET" action="{{ route('loan-management.reports.dashboard') }}">
                 <div class="row">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="form-group">
                             <label>{{ $t('Search', 'ស្វែងរក') }}</label>
                             <input type="text" name="search" class="form-control" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $t('Loan, invoice, customer, phone', 'កម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="form-group">
                             <label>{{ $t('Location', 'ទីតាំង') }}</label>
                             <select name="location_id" class="form-control">
@@ -78,6 +168,16 @@
                                 @foreach($locations as $id => $name)
                                     <option value="{{ $id }}" {{ (string) ($filters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
                                 @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>{{ $t('Report Type', 'ប្រភេទរបាយការណ៍') }}</label>
+                            <select name="period" class="form-control">
+                                <option value="daily" {{ $period === 'daily' ? 'selected' : '' }}>{{ $t('Daily', 'ប្រចាំថ្ងៃ') }}</option>
+                                <option value="monthly" {{ $period === 'monthly' ? 'selected' : '' }}>{{ $t('Monthly', 'ប្រចាំខែ') }}</option>
+                                <option value="yearly" {{ $period === 'yearly' ? 'selected' : '' }}>{{ $t('Yearly', 'ប្រចាំឆ្នាំ') }}</option>
                             </select>
                         </div>
                     </div>
@@ -96,6 +196,7 @@
                     <div class="col-md-2" style="padding-top:25px;">
                         <button type="submit" class="btn btn-primary"><i class="fa fa-filter"></i> {{ $t('Filter', 'ចម្រោះ') }}</button>
                         <a href="{{ route('loan-management.reports.dashboard') }}" class="btn btn-default"><i class="fa fa-refresh"></i></a>
+                        <button type="button" class="btn btn-success" onclick="window.print();"><i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}</button>
                     </div>
                 </div>
             </form>
@@ -183,21 +284,21 @@
         <div class="col-md-6">
             <div class="box box-solid">
                 <div class="box-header with-border">
-                    <h3 class="box-title">{{ $t('Collected Payment by Day', 'ការប្រមូលប្រាក់តាមថ្ងៃ') }}</h3>
+                    <h3 class="box-title">{{ $periodTitle }} {{ $t('Collected Payment Report', 'របាយការណ៍ប្រមូលប្រាក់') }}</h3>
                 </div>
                 <div class="box-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
                             <tr>
-                                <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
+                                <th>{{ $periodLabel }}</th>
                                 <th class="text-right">{{ $t('Payments', 'ការបង់ប្រាក់') }}</th>
                                 <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($payload['dailyCollectionRows'] as $row)
+                            @forelse($payload['collectionRows'] as $row)
                                 <tr>
-                                    <td>{{ ! empty($row->paid_day) ? \Carbon\Carbon::parse($row->paid_day)->format('d-m-Y') : '-' }}</td>
+                                    <td>{{ $formatPeriod($row->period_key ?? null) }}</td>
                                     <td class="text-right">{{ $number($row->payment_count ?? 0) }}</td>
                                     <td class="text-right">{{ $money($row->payment_total ?? 0) }}</td>
                                 </tr>
@@ -212,7 +313,7 @@
     </div>
 
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-6 lm-report-no-print">
             <div class="box box-solid">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h3>
@@ -247,7 +348,7 @@
             </div>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-6 lm-report-no-print">
             <div class="box box-solid">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h3>

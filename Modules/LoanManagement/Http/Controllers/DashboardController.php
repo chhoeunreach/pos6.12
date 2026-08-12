@@ -384,6 +384,10 @@ class DashboardController extends Controller
     {
         $dateFrom = $request->input('date_from', now()->startOfMonth()->toDateString());
         $dateTo = $request->input('date_to', now()->toDateString());
+        $period = strtolower((string) $request->input('period', 'daily'));
+        if (! in_array($period, ['daily', 'monthly', 'yearly'], true)) {
+            $period = 'daily';
+        }
 
         try {
             $dateFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
@@ -404,6 +408,7 @@ class DashboardController extends Controller
         return [
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
+            'period' => $period,
             'location_id' => $request->filled('location_id') ? trim((string) $request->input('location_id')) : null,
             'search' => trim((string) $request->input('search', '')),
         ];
@@ -414,7 +419,8 @@ class DashboardController extends Controller
         return [
             'cards' => array_merge($this->dashboardLoanCards($filters), $this->dashboardPaymentCards($filters)),
             'loanStatusRows' => $this->dashboardLoanStatusRows($filters),
-            'dailyCollectionRows' => $this->dashboardDailyCollectionRows($filters),
+            'collectionRows' => $this->dashboardCollectionRows($filters),
+            'collectionPeriodLabel' => $this->dashboardCollectionPeriodLabel($filters['period'] ?? 'daily'),
             'recentLoans' => $this->dashboardRecentLoans($filters),
             'recentPayments' => $this->dashboardRecentPayments($filters),
         ];
@@ -519,7 +525,7 @@ class DashboardController extends Controller
             ->get();
     }
 
-    protected function dashboardDailyCollectionRows(array $filters)
+    protected function dashboardCollectionRows(array $filters)
     {
         $query = $this->dashboardPaymentBaseQuery($filters);
         if (! $query) {
@@ -528,15 +534,51 @@ class DashboardController extends Controller
 
         $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
         $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
+        $period = $this->dashboardCollectionPeriodExpression($filters['period'] ?? 'daily', 'p', $dateColumn);
 
         return $query
-            ->selectRaw('DATE(p.'.$dateColumn.') as paid_day')
+            ->selectRaw($period['select'].' as period_key')
             ->selectRaw('COUNT(*) as payment_count')
             ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as payment_total')
-            ->groupBy('paid_day')
-            ->orderByDesc('paid_day')
-            ->limit(31)
+            ->groupBy(DB::raw($period['group_by']))
+            ->orderByDesc('period_key')
+            ->limit($period['limit'])
             ->get();
+    }
+
+    protected function dashboardCollectionPeriodExpression(string $period, string $alias, string $dateColumn): array
+    {
+        $qualifiedDate = $alias.'.'.$dateColumn;
+
+        if ($period === 'yearly') {
+            return [
+                'select' => 'YEAR('.$qualifiedDate.')',
+                'group_by' => 'YEAR('.$qualifiedDate.')',
+                'limit' => 50,
+            ];
+        }
+
+        if ($period === 'monthly') {
+            return [
+                'select' => 'DATE_FORMAT('.$qualifiedDate.', "%Y-%m")',
+                'group_by' => 'DATE_FORMAT('.$qualifiedDate.', "%Y-%m")',
+                'limit' => 120,
+            ];
+        }
+
+        return [
+            'select' => 'DATE('.$qualifiedDate.')',
+            'group_by' => 'DATE('.$qualifiedDate.')',
+            'limit' => 366,
+        ];
+    }
+
+    protected function dashboardCollectionPeriodLabel(string $period): string
+    {
+        return [
+            'monthly' => $this->loanReportText('Month', 'ខែ'),
+            'yearly' => $this->loanReportText('Year', 'ឆ្នាំ'),
+        ][$period] ?? $this->loanReportText('Date', 'ថ្ងៃ');
     }
 
     protected function dashboardRecentLoans(array $filters)
