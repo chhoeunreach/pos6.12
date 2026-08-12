@@ -852,7 +852,7 @@
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
                                         <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
-                                        <th class="text-right">{{ $t('Total Deposit Amount', 'ចំនួនប្រាក់កក់សរុប') }}</th>
+                                        <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
                                 </thead>
