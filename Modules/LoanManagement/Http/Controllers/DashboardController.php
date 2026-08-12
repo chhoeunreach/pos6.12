@@ -825,6 +825,7 @@ class DashboardController extends Controller
         $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_method_snapshot')
             ? 'p.payment_method_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '""');
+        $noteExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'note') ? 'p.note' : '""';
 
         return $query
             ->selectRaw('p.id')
@@ -833,6 +834,7 @@ class DashboardController extends Controller
             ->selectRaw($loanNumberExpr.' as loan_number')
             ->selectRaw($customerExpr.' as customer_name')
             ->selectRaw($methodExpr.' as payment_method')
+            ->selectRaw($noteExpr.' as note')
             ->selectRaw($amountExpr.' as amount')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status') ? 'p.status' : '"confirmed"').' as status')
             ->orderByDesc('p.'.$dateColumn)

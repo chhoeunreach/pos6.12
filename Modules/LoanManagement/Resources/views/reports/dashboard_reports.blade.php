@@ -505,25 +505,29 @@
                             <table class="table table-bordered table-hover">
                                 <thead>
                                     <tr>
-                                        <th>{{ $t('Receipt', 'បង្កាន់ដៃ') }}</th>
+                                        <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
+                                        <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
+                                        <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse($payload['recentPayments'] as $payment)
+                                    @forelse($payload['recentPayments'] as $paymentIndex => $payment)
                                         <tr>
+                                            <td>{{ $paymentIndex + 1 }}</td>
                                             <td>
-                                                <a href="{{ route('loan-management.payments.show', $payment->id) }}">{{ $payment->receipt_number ?? ('#'.$payment->id) }}</a>
+                                                {{ $payment->loan_number ?? '-' }}
                                                 <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
                                             </td>
-                                            <td>{{ $payment->loan_number ?? '-' }}</td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
+                                            <td>{{ $payment->payment_method ?: '-' }}</td>
                                             <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
+                                            <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
+                                        <tr><td colspan="6" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
