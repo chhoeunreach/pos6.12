@@ -791,7 +791,7 @@ class DashboardController extends Controller
         $query = DB::connection('mysql_loan')->table('loans as l');
         $this->applyDashboardLoanFilters($query, $filters, 'l', $loanDateColumn);
 
-        return $query
+        $loans = $query
             ->selectRaw('l.id')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'loan_number') ? 'l.loan_number' : 'CONCAT("Loan #", l.id)').' as loan_number')
             ->selectRaw($this->coalesceSql('loans', 'l', ['customer_name_snapshot'], '""').' as customer_name')
@@ -803,6 +803,64 @@ class DashboardController extends Controller
             ->orderByDesc('l.id')
             ->limit(15)
             ->get();
+
+        return $this->appendRecentLoanPaymentInfo($loans);
+    }
+
+    protected function appendRecentLoanPaymentInfo($loans)
+    {
+        foreach ($loans as $loan) {
+            $loan->payment_method = '-';
+            $loan->payment_note = '-';
+        }
+
+        if ($loans->isEmpty()
+            || ! Schema::connection('mysql_loan')->hasTable('loan_payments')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id')) {
+            return $loans;
+        }
+
+        $loanIds = $loans->pluck('id')->filter()->values()->all();
+        if (empty($loanIds)) {
+            return $loans;
+        }
+
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
+        if (! $dateColumn) {
+            return $loans;
+        }
+
+        $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_method_snapshot')
+            ? 'p.payment_method_snapshot'
+            : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '""');
+        $noteExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'note') ? 'p.note' : '""';
+
+        $payments = DB::connection('mysql_loan')
+            ->table('loan_payments as p')
+            ->whereIn('p.loan_id', $loanIds)
+            ->when(Schema::connection('mysql_loan')->hasColumn('loan_payments', 'deleted_at'), fn ($query) => $query->whereNull('p.deleted_at'))
+            ->selectRaw('p.id, p.loan_id')
+            ->selectRaw($methodExpr.' as payment_method')
+            ->selectRaw($noteExpr.' as note')
+            ->orderByDesc('p.'.$dateColumn)
+            ->orderByDesc('p.id')
+            ->get()
+            ->unique('loan_id')
+            ->keyBy('loan_id');
+
+        $payments = $this->appendRecentPaymentMethodDetails($payments->values())->keyBy('loan_id');
+
+        foreach ($loans as $loan) {
+            $payment = $payments->get($loan->id);
+            if (! $payment) {
+                continue;
+            }
+
+            $loan->payment_method = $payment->payment_method ?: '-';
+            $loan->payment_note = $payment->note ?: '-';
+        }
+
+        return $loans;
     }
 
     protected function dashboardRecentPayments(array $filters)

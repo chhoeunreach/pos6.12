@@ -22,6 +22,11 @@
         'search' => $recentActivityFilters['search'],
     ]);
     $recentActivityDateRange = \Carbon\Carbon::parse($recentActivityFilters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($recentActivityFilters['date_to'])->format('d-M-Y');
+    $recentActivityDateFrom = \Carbon\Carbon::parse($recentActivityFilters['date_from']);
+    $recentActivityDateTo = \Carbon\Carbon::parse($recentActivityFilters['date_to']);
+    $recentActivityReportTitle = $recentActivityDateFrom->isSameDay($recentActivityDateTo)
+        ? $t('Daily Activity Report for '.$recentActivityDateFrom->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ថ្ងៃទី '.$recentActivityDateFrom->format('d-m-Y'))
+        : $t('Daily Activity Report from '.$recentActivityDateFrom->format('d-M-Y').' to '.$recentActivityDateTo->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ចាប់ពី '.$recentActivityDateFrom->format('d-m-Y').' ដល់ '.$recentActivityDateTo->format('d-m-Y'));
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
             return '-';
@@ -108,6 +113,18 @@
         border-radius: 6px;
         font-weight: 700;
     }
+    .lm-recent-report-title {
+        margin: 0 0 12px;
+        padding: 12px 16px;
+        border-top: 1px solid #94a3b8;
+        border-bottom: 2px solid #111827;
+        background: #dbeafe;
+        color: #0000ff;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.35;
+    }
     .lm-recent-filter-card {
         margin-bottom: 12px;
         border: 1px solid #dce7f0;
@@ -189,18 +206,45 @@
         body.lm-print-recent-only .lm-recent-activity-panel {
             display: block !important;
             width: 100% !important;
+            border: 0 !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+        body.lm-print-recent-only .lm-recent-activity-panel,
+        body.lm-print-recent-only .lm-recent-activity-panel .box-body,
+        body.lm-print-recent-only .lm-recent-activity-panel .table-responsive {
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+        body.lm-print-recent-only .lm-recent-report-title {
+            margin: 0 0 4mm !important;
+            padding: 5mm 4mm !important;
+            font-size: 20px !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+        }
+        body.lm-print-recent-only .lm-payment-method-summary {
+            margin-bottom: 5mm !important;
+            page-break-after: auto !important;
+            break-after: auto !important;
         }
         body.lm-print-recent-only .lm-recent-panel-grid {
             display: grid !important;
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 8mm !important;
+            gap: 5mm !important;
             align-items: start !important;
+            page-break-before: auto !important;
+            break-before: auto !important;
         }
         body.lm-print-recent-only .lm-recent-panel-grid > .table-responsive {
             display: block !important;
             width: 100% !important;
             overflow: visible !important;
-            page-break-inside: avoid;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
         }
         body.lm-print-recent-only .lm-recent-panel-grid .table {
             width: 100% !important;
@@ -408,6 +452,9 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                     <div class="box-tools pull-right lm-panel-actions">
+                        <button type="button" class="btn btn-success btn-sm lm-panel-action-btn" onclick="window.loanPrintRecentActivity()">
+                            <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
+                        </button>
                         <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
                             <i class="fa fa-minus"></i>
                         </button>
@@ -447,6 +494,8 @@
                             </form>
                         </div>
                     </div>
+
+                    <h2 class="lm-recent-report-title">{{ $recentActivityReportTitle }}</h2>
 
                     <div class="table-responsive">
                         <h4 class="lm-recent-panel-heading">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h4>
@@ -505,7 +554,7 @@
                     <div class="lm-recent-panel-grid">
                         <div class="table-responsive">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h4>
-                            <table class="table table-bordered table-hover">
+                            <table class="table table-bordered table-hover loan-recent-activity-datatable" id="loan_recent_payments_table">
                                 <thead>
                                     <tr>
                                         <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
@@ -517,7 +566,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse($payload['recentPayments'] as $paymentIndex => $payment)
+                                    @foreach($payload['recentPayments'] as $paymentIndex => $payment)
                                         <tr>
                                             <td>{{ $paymentIndex + 1 }}</td>
                                             <td>
@@ -529,38 +578,38 @@
                                             <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
-                                    @empty
-                                        <tr><td colspan="6" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
-                                    @endforelse
+                                    @endforeach
                                 </tbody>
                             </table>
                         </div>
 
                         <div class="table-responsive">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
-                            <table class="table table-bordered table-hover">
+                            <table class="table table-bordered table-hover loan-recent-activity-datatable" id="loan_recent_loans_table">
                                 <thead>
                                     <tr>
+                                        <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                        <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
+                                        <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
+                                        <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse($payload['recentLoans'] as $loan)
+                                    @foreach($payload['recentLoans'] as $loanIndex => $loan)
                                         <tr>
+                                            <td>{{ $loanIndex + 1 }}</td>
                                             <td>
                                                 <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
                                                 <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
-                                            <td>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
+                                            <td>{{ $loan->payment_method ?: '-' }}</td>
                                             <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
+                                            <td>{{ $loan->payment_note ?: '-' }}</td>
                                         </tr>
-                                    @empty
-                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent loans found.', 'រកមិនឃើញកម្ចីថ្មីៗ') }}</td></tr>
-                                    @endforelse
+                                    @endforeach
                                 </tbody>
                             </table>
                         </div>
@@ -608,6 +657,77 @@
                     scheduleSubmit(100);
                 }
             );
+        }
+
+        if (window.jQuery && jQuery.fn.DataTable) {
+            var recentActivityExportTitle = @json($recentActivityReportTitle);
+            var recentActivityButtons = [];
+            if (jQuery.fn.dataTable.Buttons) {
+                recentActivityButtons = [
+                    {
+                        extend: 'copy',
+                        text: '<i class="fa fa-copy" aria-hidden="true"></i> Copy',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        title: recentActivityExportTitle,
+                        exportOptions: {columns: ':visible'}
+                    },
+                    {
+                        extend: 'csv',
+                        text: '<i class="fa fa-file-csv" aria-hidden="true"></i> Export CSV',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        title: recentActivityExportTitle,
+                        exportOptions: {columns: ':visible'}
+                    },
+                    {
+                        extend: 'excel',
+                        text: '<i class="fa fa-file-excel" aria-hidden="true"></i> Export Excel',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        title: recentActivityExportTitle,
+                        exportOptions: {columns: ':visible'}
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fa fa-print" aria-hidden="true"></i> Print',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        title: recentActivityExportTitle,
+                        exportOptions: {columns: ':visible', stripHtml: true}
+                    },
+                    {
+                        extend: 'colvis',
+                        text: '<i class="fa fa-columns" aria-hidden="true"></i> Column visibility',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2'
+                    },
+                    {
+                        extend: 'pdf',
+                        text: '<i class="fa fa-file-pdf" aria-hidden="true"></i> Export PDF',
+                        className: 'tw-dw-btn-xs tw-dw-btn tw-dw-btn-outline tw-my-2',
+                        title: recentActivityExportTitle,
+                        exportOptions: {columns: ':visible'}
+                    }
+                ];
+            }
+
+            jQuery('.loan-recent-activity-datatable').each(function () {
+                if (jQuery.fn.DataTable.isDataTable(this)) {
+                    return;
+                }
+
+                jQuery(this).DataTable({
+                    dom: '<"row margin-bottom-20 text-center"<"col-sm-1"l><"col-sm-8"B><"col-sm-3"f> r>tip',
+                    buttons: recentActivityButtons,
+                    pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
+                    lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
+                    order: [],
+                    scrollX: true,
+                    columnDefs: [
+                        {targets: 0, orderable: false}
+                    ],
+                    language: {
+                        search: '',
+                        searchPlaceholder: 'Search ...'
+                    }
+                });
+            });
         }
 
     })();
