@@ -215,15 +215,15 @@
         overflow-wrap: anywhere;
     }
     .lm-report-table .lm-col-date {
-        width: 78px !important;
-        min-width: 78px;
-        max-width: 78px;
+        width: 60px !important;
+        min-width: 60px;
+        max-width: 60px;
         white-space: nowrap;
     }
     .lm-report-table .lm-col-loan {
-        width: 96px !important;
-        min-width: 96px;
-        max-width: 96px;
+        width: 132px !important;
+        min-width: 132px;
+        max-width: 132px;
         white-space: nowrap;
     }
     .lm-report-table td {
@@ -597,7 +597,7 @@
                 <div class="info-box-content">
                     <span class="info-box-text">{{ $t('Collected Payments', 'ប្រាក់ប្រមូលបាន') }}</span>
                     <span class="info-box-number">{{ $money($cards['collection_total'] ?? 0) }}</span>
-                    <small>{{ $number($cards['payment_count'] ?? 0) }} {{ $t('payments', 'ការបង់ប្រាក់') }}</small>
+                    <small>{{ $number($cards['collection_count'] ?? 0) }} {{ $t('payments', 'ការបង់ប្រាក់') }}</small>
                 </div>
             </div>
         </div>
@@ -607,7 +607,7 @@
                 <div class="info-box-content">
                     <span class="info-box-text">{{ $t('Loan/Deposit Payments', 'ប្រាក់កក់កម្ចី') }}</span>
                     <span class="info-box-number">{{ $money($cards['deposit_total'] ?? 0) }}</span>
-                    <small>{{ $t('Total paid', 'សរុបបានបង់') }} {{ $money($cards['payment_total'] ?? 0) }}</small>
+                    <small>{{ $number($cards['deposit_count'] ?? 0) }} {{ $t('payments', 'ការបង់ប្រាក់') }}</small>
                 </div>
             </div>
         </div>
@@ -831,7 +831,7 @@
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
-                                            <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</td>
+                                            <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-y') : '-' }}</td>
                                             <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
@@ -869,7 +869,7 @@
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
-                                            <td class="lm-col-date">{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
+                                            <td class="lm-col-date">{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-y') : '-' }}</td>
                                             <td class="lm-col-loan">
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"

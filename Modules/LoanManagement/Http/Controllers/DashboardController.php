@@ -554,6 +554,8 @@ class DashboardController extends Controller
     {
         $empty = [
             'payment_count' => 0,
+            'collection_count' => 0,
+            'deposit_count' => 0,
             'payment_total' => 0.0,
             'collection_total' => 0.0,
             'deposit_total' => 0.0,
@@ -565,13 +567,14 @@ class DashboardController extends Controller
         }
 
         $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
-        $typeExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type') ? 'LOWER(COALESCE(p.payment_type, ""))' : '""';
-        $scheduleCheck = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id') ? 'p.schedule_id IS NOT NULL' : '0';
-        $collectionCase = 'CASE WHEN '.$typeExpr.' = "monthly" OR ('.$typeExpr.' = "" AND '.$scheduleCheck.') THEN '.$amountExpr.' ELSE 0 END';
-        $depositCase = 'CASE WHEN '.$typeExpr.' IN ("loan", "initial", "down_payment", "downpayment", "deposit") OR ('.$typeExpr.' = "" AND NOT ('.$scheduleCheck.')) THEN '.$amountExpr.' ELSE 0 END';
+        $typeExpr = $this->dashboardPaymentTypeExpression('p');
+        $collectionCase = 'CASE WHEN ('.$typeExpr.') = "monthly" THEN '.$amountExpr.' ELSE 0 END';
+        $depositCase = 'CASE WHEN ('.$typeExpr.') = "loan" THEN '.$amountExpr.' ELSE 0 END';
 
         $row = $query
             ->selectRaw('COUNT(*) as payment_count')
+            ->selectRaw('SUM(CASE WHEN ('.$typeExpr.') = "monthly" THEN 1 ELSE 0 END) as collection_count')
+            ->selectRaw('SUM(CASE WHEN ('.$typeExpr.') = "loan" THEN 1 ELSE 0 END) as deposit_count')
             ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as payment_total')
             ->selectRaw('COALESCE(SUM('.$collectionCase.'), 0) as collection_total')
             ->selectRaw('COALESCE(SUM('.$depositCase.'), 0) as deposit_total')
@@ -579,6 +582,8 @@ class DashboardController extends Controller
 
         return [
             'payment_count' => (int) ($row->payment_count ?? 0),
+            'collection_count' => (int) ($row->collection_count ?? 0),
+            'deposit_count' => (int) ($row->deposit_count ?? 0),
             'payment_total' => (float) ($row->payment_total ?? 0),
             'collection_total' => (float) ($row->collection_total ?? 0),
             'deposit_total' => (float) ($row->deposit_total ?? 0),
@@ -612,7 +617,7 @@ class DashboardController extends Controller
 
     protected function dashboardCollectionRows(array $filters)
     {
-        $query = $this->dashboardPaymentBaseQuery($filters);
+        $query = $this->dashboardPaymentBaseQuery($filters, true);
         if (! $query) {
             return collect();
         }
@@ -674,9 +679,7 @@ class DashboardController extends Controller
         }
 
         $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
-        $typeExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')
-            ? 'LOWER(COALESCE(p.payment_type, "loan"))'
-            : '"loan"';
+        $typeExpr = $this->dashboardPaymentTypeExpression('p');
         $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_method_snapshot')
             ? 'p.payment_method_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '"Cash"');
@@ -715,7 +718,7 @@ class DashboardController extends Controller
         }
 
         uksort($summary, function ($left, $right) {
-            $order = ['loan' => 0, 'monthly' => 1];
+            $order = ['monthly' => 0, 'loan' => 1];
 
             return ($order[$left] ?? 99) <=> ($order[$right] ?? 99) ?: strcmp($left, $right);
         });
@@ -735,13 +738,13 @@ class DashboardController extends Controller
             return 'loan';
         }
 
-        return $type !== '' ? $type : 'loan';
+        return $type !== '' ? $type : 'monthly';
     }
 
     protected function dashboardPaymentTypeLabel(string $type): string
     {
         if ($type === 'monthly') {
-            return $this->loanReportText('Monthly Collection', 'ប្រមូលប្រាក់ប្រចាំខែ');
+            return $this->loanReportText('Collected Payments', 'ប្រាក់ប្រមូលបាន');
         }
 
         if ($type === 'loan') {
@@ -907,7 +910,7 @@ class DashboardController extends Controller
 
     protected function dashboardRecentPayments(array $filters)
     {
-        $query = $this->dashboardPaymentBaseQuery($filters);
+        $query = $this->dashboardPaymentBaseQuery($filters, true);
         if (! $query) {
             return collect();
         }
@@ -989,7 +992,7 @@ class DashboardController extends Controller
         return $payments;
     }
 
-    protected function dashboardPaymentBaseQuery(array $filters)
+    protected function dashboardPaymentBaseQuery(array $filters, bool $excludeInitialDownPayments = false)
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_payments')
             || ! Schema::connection('mysql_loan')->hasTable('loans')
@@ -1020,7 +1023,8 @@ class DashboardController extends Controller
             });
         }
 
-        if (Schema::connection('mysql_loan')->hasColumn('loans', 'loan_date')
+        if ($excludeInitialDownPayments
+            && Schema::connection('mysql_loan')->hasColumn('loans', 'loan_date')
             && Schema::connection('mysql_loan')->hasColumn('loans', 'down_payment')) {
             $query->where(function ($paymentQuery) use ($dateColumn, $amountExpr) {
                 $paymentQuery->whereNull('l.down_payment')
@@ -1036,6 +1040,27 @@ class DashboardController extends Controller
         }
 
         return $query;
+    }
+
+    protected function dashboardPaymentTypeExpression(string $alias = 'p'): string
+    {
+        $prefix = $alias.'.';
+
+        if (! Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+                return 'CASE WHEN '.$prefix.'schedule_id IS NULL THEN "loan" ELSE "monthly" END';
+            }
+
+            return '"monthly"';
+        }
+
+        $type = 'LOWER(TRIM(COALESCE('.$prefix.'payment_type, "")))';
+
+        return 'CASE
+            WHEN '.$type.' IN ("loan", "initial", "down_payment", "downpayment", "deposit", "customer_deposit", "customer_deposit_payment") THEN "loan"
+            WHEN '.$type.' IN ("monthly", "collection", "installment", "") THEN "monthly"
+            ELSE '.$type.'
+        END';
     }
 
     protected function applyDashboardLoanFilters($query, array $filters, string $loanAlias, string $dateColumn): void

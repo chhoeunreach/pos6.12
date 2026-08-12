@@ -26,8 +26,51 @@
         'payment_ref_no' => __('account.payment_ref_no'),
         'payment_doc' => 'Payment Doc',
         'payment_note' => __('lang_v1.payment_note'),
+        'note_date_time' => 'Date time',
     ];
 @endphp
+
+<style>
+    #loan_payment_add_form .loan-payment-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0;
+    }
+    #loan_payment_add_form .loan-payment-note-group {
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+    }
+    #loan_payment_add_form .loan-payment-note-group .payment-line-note {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    #loan_payment_add_form .loan-payment-note-group .add-payment-note-datetime {
+        width: 38px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        color: #475569;
+    }
+    #loan_payment_add_form .payment-note-datetime {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    #loan_payment_add_form .loan-payment-line-action {
+        display: flex;
+        justify-content: center;
+        padding-top: 24px;
+    }
+    #loan_payment_add_form .remove-loan-payment-line {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 4px;
+    }
+</style>
 
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
@@ -241,11 +284,17 @@
                                 <div class="col-md-2">
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_note', __('lang_v1.payment_note') . ':') !!}
-                                        <input type="text" name="payment_lines[0][note]" id="payment_lines_0_note" class="form-control">
+                                        <div class="loan-payment-note-group">
+                                            <input type="text" name="payment_lines[0][note]" id="payment_lines_0_note" class="form-control payment-line-note">
+                                            <button type="button" class="btn btn-default add-payment-note-datetime" title="Add date time">
+                                                <i class="fa fa-calendar"></i>
+                                            </button>
+                                        </div>
+                                        <input type="datetime-local" class="payment-note-datetime" tabindex="-1">
                                     </div>
                                 </div>
-                                <div class="col-md-1">
-                                    <button type="button" class="btn btn-danger btn-sm remove-loan-payment-line" style="margin-top:25px;" disabled>
+                                <div class="col-md-1 loan-payment-line-action">
+                                    <button type="button" class="btn btn-danger btn-sm remove-loan-payment-line" disabled>
                                         <i class="fa fa-times"></i>
                                     </button>
                                 </div>
@@ -350,6 +399,51 @@ $(function () {
 
     function moneyText(value) {
         return (parseFloat(value) || 0).toFixed(2);
+    }
+
+    function localDateTimeValue(date) {
+        var pad = function (value) {
+            return String(value).padStart(2, '0');
+        };
+
+        return [
+            date.getFullYear(),
+            pad(date.getMonth() + 1),
+            pad(date.getDate())
+        ].join('-') + 'T' + [pad(date.getHours()), pad(date.getMinutes())].join(':');
+    }
+
+    function noteDateTimeText(value) {
+        if (!value) {
+            return '';
+        }
+
+        var parts = value.split('T');
+        var dateParts = (parts[0] || '').split('-');
+        var time = (parts[1] || '').slice(0, 5);
+        if (dateParts.length !== 3 || !time) {
+            return value;
+        }
+
+        return dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0] + ' ' + time;
+    }
+
+    function appendDateTimeToNote($line) {
+        var $picker = $line.find('.payment-note-datetime');
+        var $note = $line.find('.payment-line-note');
+        var value = $picker.val();
+
+        if (!value) {
+            value = localDateTimeValue(new Date());
+            $picker.val(value);
+        }
+
+        var text = noteDateTimeText(value);
+        var current = $.trim($note.val() || '');
+        if (text && current.indexOf(text) === -1) {
+            $note.val($.trim((current ? current + ' ' : '') + text)).trigger('input');
+        }
+        $note.focus();
     }
 
     function paymentCopyAmounts() {
@@ -566,9 +660,13 @@ $(function () {
                     '</div></div>',
                 '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_note">' + labels.payment_note + ':</label>',
-                    '<input type="text" name="payment_lines[' + index + '][note]" id="payment_lines_' + index + '_note" class="form-control">',
+                    '<div class="loan-payment-note-group">',
+                        '<input type="text" name="payment_lines[' + index + '][note]" id="payment_lines_' + index + '_note" class="form-control payment-line-note">',
+                        '<button type="button" class="btn btn-default add-payment-note-datetime" title="' + labels.note_date_time + '"><i class="fa fa-calendar"></i></button>',
+                    '</div>',
+                    '<input type="datetime-local" class="payment-note-datetime" tabindex="-1">',
                     '</div></div>',
-                '<div class="col-md-1"><button type="button" class="btn btn-danger btn-sm remove-loan-payment-line" style="margin-top:25px;"><i class="fa fa-times"></i></button></div>',
+                '<div class="col-md-1 loan-payment-line-action"><button type="button" class="btn btn-danger btn-sm remove-loan-payment-line"><i class="fa fa-times"></i></button></div>',
             '</div>'
         ].join('');
 
@@ -590,6 +688,24 @@ $(function () {
     $form.on('focus click', '.payment-line-doc', function () {
         $form.find('.payment-line-doc').removeClass('active-payment-doc-input');
         $(this).addClass('active-payment-doc-input');
+    });
+
+    $form.on('click', '.add-payment-note-datetime', function () {
+        var $line = $(this).closest('.loan-payment-line');
+        var $picker = $line.find('.payment-note-datetime');
+        if (!$picker.val()) {
+            $picker.val(localDateTimeValue(new Date()));
+        }
+        var picker = $picker[0];
+        if (picker && typeof picker.showPicker === 'function') {
+            picker.showPicker();
+            return;
+        }
+        $picker.trigger('focus').trigger('click');
+    });
+
+    $form.on('change', '.payment-note-datetime', function () {
+        appendDateTimeToNote($(this).closest('.loan-payment-line'));
     });
 
     $form.on('paste', function (event) {
