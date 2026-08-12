@@ -5,6 +5,23 @@
     $t = fn ($en, $km) => $isKhmer ? $km : $en;
     $money = fn ($value) => '$ '.number_format((float) ($value ?? 0), 2);
     $number = fn ($value) => number_format((float) ($value ?? 0), 0);
+    $shortMethod = function ($value) {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '' || $value === '-') {
+            return '-';
+        }
+
+        return collect(preg_split('/\s*,\s*/', $value))
+            ->filter()
+            ->map(function ($part) {
+                $part = preg_replace('/\s+\$\s*/', ' $', trim($part));
+                $part = preg_replace('/\.00\b/', '', $part);
+                $part = preg_replace('/\s+/', ' ', $part);
+
+                return $part;
+            })
+            ->implode(' + ');
+    };
     $cards = $payload['cards'] ?? [];
     $period = $filters['period'] ?? 'daily';
     $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
@@ -574,7 +591,7 @@
                                                 <br><small class="text-muted">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '-' }}</small>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
-                                            <td>{{ $payment->payment_method ?: '-' }}</td>
+                                            <td title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
                                             <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
@@ -591,6 +608,7 @@
                                         <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
+                                        <th>{{ $t('Product', 'ទំនិញ') }}</th>
                                         <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
@@ -605,7 +623,8 @@
                                                 <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
-                                            <td>{{ $loan->payment_method ?: '-' }}</td>
+                                            <td>{{ $loan->product_name ?: '-' }}</td>
+                                            <td title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
                                             <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
                                             <td>{{ $loan->payment_note ?: '-' }}</td>
                                         </tr>

@@ -795,6 +795,7 @@ class DashboardController extends Controller
             ->selectRaw('l.id')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'loan_number') ? 'l.loan_number' : 'CONCAT("Loan #", l.id)').' as loan_number')
             ->selectRaw($this->coalesceSql('loans', 'l', ['customer_name_snapshot'], '""').' as customer_name')
+            ->selectRaw($this->coalesceSql('loans', 'l', ['product_name_snapshot'], '""').' as product_name')
             ->selectRaw('l.'.$loanDateColumn.' as loan_date')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'status') ? 'l.status' : '"unknown"').' as status')
             ->selectRaw($this->coalesceSql('loans', 'l', ['principal_amount', 'financed_amount']).' as principal_amount')
@@ -804,7 +805,49 @@ class DashboardController extends Controller
             ->limit(15)
             ->get();
 
-        return $this->appendRecentLoanPaymentInfo($loans);
+        return $this->appendRecentLoanPaymentInfo($this->appendRecentLoanProducts($loans));
+    }
+
+    protected function appendRecentLoanProducts($loans)
+    {
+        foreach ($loans as $loan) {
+            $loan->product_name = trim((string) ($loan->product_name ?? '')) ?: '-';
+        }
+
+        if ($loans->isEmpty()
+            || ! Schema::connection('mysql_loan')->hasTable('loan_items')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_items', 'loan_id')) {
+            return $loans;
+        }
+
+        $loanIds = $loans->pluck('id')->filter()->values()->all();
+        if (empty($loanIds)) {
+            return $loans;
+        }
+
+        $productExpr = $this->coalesceSql('loan_items', 'li', ['product_name_snapshot', 'product_name'], '""');
+        $query = DB::connection('mysql_loan')
+            ->table('loan_items as li')
+            ->whereIn('li.loan_id', $loanIds);
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_items', 'deleted_at')) {
+            $query->whereNull('li.deleted_at');
+        }
+
+        $products = $query
+            ->selectRaw('li.loan_id')
+            ->selectRaw('GROUP_CONCAT(DISTINCT NULLIF(TRIM('.$productExpr.'), "") ORDER BY li.id SEPARATOR " | ") as product_name')
+            ->groupBy('li.loan_id')
+            ->pluck('product_name', 'loan_id');
+
+        foreach ($loans as $loan) {
+            $productName = trim((string) ($products->get($loan->id) ?? ''));
+            if ($productName !== '') {
+                $loan->product_name = $productName;
+            }
+        }
+
+        return $loans;
     }
 
     protected function appendRecentLoanPaymentInfo($loans)
