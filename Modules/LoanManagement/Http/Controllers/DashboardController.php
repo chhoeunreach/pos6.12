@@ -464,6 +464,12 @@ class DashboardController extends Controller
     {
         $dateFrom = $request->input('recent_date_from', now()->toDateString());
         $dateTo = $request->input('recent_date_to', now()->toDateString());
+        $dateRange = trim((string) $request->input('recent_date_range', ''));
+        if ($dateRange !== '' && str_contains($dateRange, '~')) {
+            [$rangeFrom, $rangeTo] = array_map('trim', explode('~', $dateRange, 2));
+            $dateFrom = $rangeFrom;
+            $dateTo = $rangeTo;
+        }
 
         try {
             $dateFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();

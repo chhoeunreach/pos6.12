@@ -21,7 +21,7 @@
         'location_id' => $recentActivityFilters['location_id'],
         'search' => $recentActivityFilters['search'],
     ]);
-    $recentActivityResetQuery = request()->except(['recent_date_from', 'recent_date_to', 'recent_location_id', 'recent_search']);
+    $recentActivityDateRange = \Carbon\Carbon::parse($recentActivityFilters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($recentActivityFilters['date_to'])->format('d-M-Y');
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
             return '-';
@@ -110,9 +110,47 @@
     }
     .lm-recent-filter-card {
         margin-bottom: 12px;
+        border: 1px solid #dce7f0;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
+        overflow: hidden;
     }
+    .lm-recent-filter-card.box-primary {
+        border-top: 0;
+    }
+    .lm-recent-filter-card > .box-header {
+        min-height: 52px;
+        border-bottom: 1px solid #edf2f7;
+        background: #fff;
+        padding: 13px 15px;
+    }
+    .lm-recent-filter-card > .box-header .box-title {
+        color: #5da8d6;
+        font-size: 20px;
+        font-weight: 500;
+    }
+    .lm-recent-filter-card > .box-header .box-title .fa {
+        color: #5da8d6;
+        margin-right: 6px;
+    }
+    .lm-recent-filter-card > .box-body {
+        padding: 22px 16px 26px;
+        background: #fff;
+    }
+    .lm-report-filter-box .form-group,
     .lm-recent-filter-card .form-group {
-        margin-bottom: 0;
+        margin-bottom: 18px;
+    }
+    .lm-recent-filter-card label {
+        color: #111827;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .lm-recent-filter-card .form-control {
+        height: 36px;
+        border-color: #d1d9e6;
+        border-radius: 0;
+        box-shadow: none;
     }
     .lm-report-print-title {
         display: none;
@@ -245,62 +283,6 @@
         <p>{{ \Carbon\Carbon::parse($filters['date_from'])->format('d-m-Y') }} - {{ \Carbon\Carbon::parse($filters['date_to'])->format('d-m-Y') }}</p>
     </div>
 
-    <div class="box box-primary lm-report-filter-box">
-        <div class="box-header with-border">
-            <h3 class="box-title">{{ $t('Filters', 'តម្រង') }}</h3>
-        </div>
-        <div class="box-body">
-            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}">
-                <div class="row">
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>{{ $t('Search', 'ស្វែងរក') }}</label>
-                            <input type="text" name="search" class="form-control" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $t('Loan, invoice, customer, phone', 'កម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>{{ $t('Location', 'ទីតាំង') }}</label>
-                            <select name="location_id" class="form-control">
-                                <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
-                                @foreach($locations as $id => $name)
-                                    <option value="{{ $id }}" {{ (string) ($filters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>{{ $t('Report Type', 'ប្រភេទរបាយការណ៍') }}</label>
-                            <select name="period" class="form-control">
-                                <option value="daily" {{ $period === 'daily' ? 'selected' : '' }}>{{ $t('Daily', 'ប្រចាំថ្ងៃ') }}</option>
-                                <option value="monthly" {{ $period === 'monthly' ? 'selected' : '' }}>{{ $t('Monthly', 'ប្រចាំខែ') }}</option>
-                                <option value="yearly" {{ $period === 'yearly' ? 'selected' : '' }}>{{ $t('Yearly', 'ប្រចាំឆ្នាំ') }}</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>{{ $t('Date From', 'ចាប់ពីថ្ងៃ') }}</label>
-                            <input type="date" name="date_from" class="form-control" value="{{ $filters['date_from'] ?? '' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>{{ $t('Date To', 'ដល់ថ្ងៃ') }}</label>
-                            <input type="date" name="date_to" class="form-control" value="{{ $filters['date_to'] ?? '' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2" style="padding-top:25px;">
-                        <button type="submit" class="btn btn-primary"><i class="fa fa-filter"></i> {{ $t('Filter', 'ចម្រោះ') }}</button>
-                        <a href="{{ route('loan-management.reports.dashboard') }}" class="btn btn-default"><i class="fa fa-refresh"></i></a>
-                        <button type="button" class="btn btn-success" onclick="window.print();"><i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <div class="row">
         <div class="col-md-3 col-sm-6 col-xs-12">
             <div class="info-box">
@@ -426,37 +408,25 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                     <div class="box-tools pull-right lm-panel-actions">
-                        <a href="{{ route('loan-management.reports.payment-summary-by-type', $recentActivityFilterQuery) }}" class="btn btn-primary btn-xs lm-panel-action-btn" title="{{ $t('Open filter and print page', 'បើកទំព័រចម្រោះ និងបោះពុម្ព') }}">
-                            <i class="fa fa-calendar-check-o"></i> {{ $t('Filter Report', 'ចម្រោះរបាយការណ៍') }}
-                        </a>
-                        <button type="button" class="btn btn-success btn-xs lm-panel-action-btn" onclick="window.loanPrintRecentActivity();" title="{{ $t('Print recent activity only', 'បោះពុម្ពតែសកម្មភាពថ្មីៗ') }}">
-                            <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
-                        </button>
                         <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
                             <i class="fa fa-minus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="box-body">
-                    <div class="box box-primary lm-recent-filter-card">
-                        <div class="box-header with-border">
-                            <h3 class="box-title">{{ $t('Filters', 'តម្រង') }}</h3>
+                    <div class="box lm-recent-filter-card">
+                        <div class="box-header with-border" data-toggle="collapse" data-target="#loanRecentActivityFilterCollapse" aria-expanded="false" style="cursor:pointer;">
+                            <h3 class="box-title"><i class="fa fa-filter"></i>{{ $t('Filters', 'តម្រង') }}</h3>
                         </div>
-                        <div class="box-body">
-                            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}">
+                        <div class="box-body collapse" id="loanRecentActivityFilterCollapse">
+                            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanRecentActivityFilterForm">
                                 <input type="hidden" name="period" value="{{ $period }}">
                                 <input type="hidden" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
                                 <input type="hidden" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
                                 <input type="hidden" name="location_id" value="{{ $filters['location_id'] ?? '' }}">
                                 <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
                                 <div class="row">
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label>{{ $t('Search', 'ស្វែងរក') }}</label>
-                                            <input type="text" name="recent_search" class="form-control" value="{{ $recentActivityFilters['search'] ?? '' }}" placeholder="{{ $t('Loan, invoice, customer, phone', 'កម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-3">
                                         <div class="form-group">
                                             <label>{{ $t('Location', 'ទីតាំង') }}</label>
                                             <select name="recent_location_id" class="form-control" style="width:100%">
@@ -467,28 +437,11 @@
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-3">
                                         <div class="form-group">
-                                            <label>{{ $t('Date From', 'ចាប់ពីថ្ងៃ') }}</label>
-                                            <input type="date" name="recent_date_from" class="form-control" value="{{ $recentActivityFilters['date_from'] ?? now()->toDateString() }}">
+                                            <label>{{ $t('Date Range', 'ចន្លោះថ្ងៃ') }}</label>
+                                            <input type="text" name="recent_date_range" id="loanRecentActivityDateRange" class="form-control" value="{{ $recentActivityDateRange }}" readonly>
                                         </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="form-group">
-                                            <label>{{ $t('Date To', 'ដល់ថ្ងៃ') }}</label>
-                                            <input type="date" name="recent_date_to" class="form-control" value="{{ $recentActivityFilters['date_to'] ?? now()->toDateString() }}">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4 text-right" style="padding-top:25px;">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fa fa-filter"></i> {{ $t('Filter', 'ចម្រោះ') }}
-                                        </button>
-                                        <a href="{{ route('loan-management.reports.dashboard', $recentActivityResetQuery) }}" class="btn btn-default">
-                                            <i class="fa fa-refresh"></i>
-                                        </a>
-                                        <button type="button" class="btn btn-success" onclick="window.loanPrintRecentActivity();">
-                                            <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
-                                        </button>
                                     </div>
                                 </div>
                             </form>
@@ -612,6 +565,46 @@
 </section>
 
 <script>
+    (function () {
+        var form = document.getElementById('loanRecentActivityFilterForm');
+        if (!form) {
+            return;
+        }
+
+        var submitTimer = null;
+        var scheduleSubmit = function (delay) {
+            window.clearTimeout(submitTimer);
+            submitTimer = window.setTimeout(function () {
+                form.submit();
+            }, delay || 150);
+        };
+
+        form.querySelectorAll('select').forEach(function (field) {
+            field.addEventListener('change', function () {
+                scheduleSubmit(100);
+            });
+        });
+
+        if (window.jQuery && jQuery.fn.daterangepicker && window.moment) {
+            jQuery('#loanRecentActivityDateRange').daterangepicker(
+                {
+                    autoUpdateInput: true,
+                    startDate: moment('{{ $recentActivityFilters['date_from'] }}'),
+                    endDate: moment('{{ $recentActivityFilters['date_to'] }}'),
+                    locale: {
+                        format: 'DD-MMM-YYYY',
+                        cancelLabel: 'Clear'
+                    }
+                },
+                function (start, end) {
+                    jQuery('#loanRecentActivityDateRange').val(start.format('DD-MMM-YYYY') + ' ~ ' + end.format('DD-MMM-YYYY'));
+                    scheduleSubmit(100);
+                }
+            );
+        }
+
+    })();
+
     window.loanPrintRecentActivity = function () {
         document.body.classList.add('lm-print-recent-only');
         window.print();
