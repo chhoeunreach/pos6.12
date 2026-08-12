@@ -617,7 +617,7 @@ class DashboardController extends Controller
             return collect();
         }
 
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at']);
         $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
         $period = $this->dashboardCollectionPeriodExpression($filters['period'] ?? 'daily', 'p', $dateColumn);
 
@@ -867,7 +867,7 @@ class DashboardController extends Controller
             return $loans;
         }
 
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at']);
         if (! $dateColumn) {
             return $loans;
         }
@@ -912,7 +912,7 @@ class DashboardController extends Controller
             return collect();
         }
 
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at']);
         $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
         $canJoinLoans = Schema::connection('mysql_loan')->hasTable('loans')
             && Schema::connection('mysql_loan')->hasColumn('loan_payments', 'loan_id');
@@ -995,7 +995,7 @@ class DashboardController extends Controller
             return null;
         }
 
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at']);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at']);
         if (! $dateColumn) {
             return null;
         }
@@ -1290,7 +1290,7 @@ class DashboardController extends Controller
         }
 
         $columns = Schema::connection('mysql_loan')->getColumnListing('loan_payments');
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at'], $columns);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at'], $columns);
         if (! $dateColumn) {
             return collect();
         }
@@ -1382,7 +1382,7 @@ class DashboardController extends Controller
         }
 
         $columns = Schema::connection('mysql_loan')->getColumnListing('loan_payments');
-        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_date', 'payment_date', 'paid_at', 'created_at'], $columns);
+        $dateColumn = $this->firstLoanReportColumn('loan_payments', ['paid_on', 'paid_date', 'payment_date', 'paid_at', 'created_at'], $columns);
         if (! $dateColumn) {
             return collect();
         }

@@ -198,6 +198,14 @@
         text-align: center;
         white-space: nowrap;
     }
+    .lm-report-table .lm-col-method {
+        width: 82px !important;
+        min-width: 82px;
+        max-width: 82px;
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
     .lm-report-table td {
         word-break: break-word;
     }
@@ -670,6 +678,9 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                     <div class="box-tools pull-right lm-panel-actions">
+                        <button type="button" class="btn btn-primary btn-sm lm-panel-action-btn" onclick="window.loanExportRecentActivityExcel()">
+                            <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
+                        </button>
                         <button type="button" class="btn btn-success btn-sm lm-panel-action-btn" onclick="window.loanPrintRecentActivity()">
                             <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
                         </button>
@@ -778,7 +789,7 @@
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                        <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
+                                        <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
@@ -797,7 +808,7 @@
                                                 </span>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
-                                            <td title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
+                                            <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
                                             <td class="text-right">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
@@ -815,7 +826,7 @@
                                         <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
-                                        <th>{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
+                                        <th class="lm-col-method">{{ $t('Method Type', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
@@ -836,7 +847,7 @@
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
                                             <td>{{ $loan->product_name ?: '-' }}</td>
-                                            <td title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
+                                            <td class="lm-col-method" title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
                                             <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
                                             <td>{{ $loan->payment_note ?: '-' }}</td>
                                         </tr>
@@ -1025,6 +1036,69 @@
         window.setTimeout(function () {
             document.body.classList.remove('lm-print-recent-only');
         }, 500);
+    };
+
+    window.loanExportRecentActivityExcel = function () {
+        var esc = function (value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        };
+        var tableFromDataTable = function (selector, title) {
+            var table = window.jQuery ? jQuery(selector)[0] : null;
+            if (!table || !jQuery.fn.DataTable || !jQuery.fn.DataTable.isDataTable(table)) {
+                return '';
+            }
+
+            var api = jQuery(table).DataTable();
+            var data = api.buttons && api.buttons.exportData
+                ? api.buttons.exportData({
+                    columns: ':visible',
+                    modifier: {search: 'applied', order: 'applied', page: 'all'},
+                    stripHtml: true
+                })
+                : {header: [], body: []};
+            var html = '<h3>' + esc(title) + '</h3><table border="1"><thead><tr>';
+
+            data.header.forEach(function (heading) {
+                html += '<th>' + esc(heading) + '</th>';
+            });
+            html += '</tr></thead><tbody>';
+            data.body.forEach(function (row) {
+                html += '<tr>';
+                row.forEach(function (cell) {
+                    html += '<td>' + esc(cell) + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            return html + '</tbody></table><br>';
+        };
+        var summaryTable = document.querySelector('.lm-payment-method-summary');
+        var html = '<html><head><meta charset="UTF-8"></head><body>';
+
+        html += '<h2>' + esc(@json($recentActivityReportTitle)) + '</h2>';
+        if (summaryTable) {
+            html += '<h3>' + esc(@json($t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ'))) + '</h3>';
+            html += summaryTable.outerHTML;
+            html += '<br>';
+        }
+        html += tableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ')));
+        html += tableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ')));
+        html += '</body></html>';
+
+        var blob = new Blob([html], {type: 'application/vnd.ms-excel;charset=utf-8;'});
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'daily-activity-report-{{ now()->format('YmdHis') }}.xls';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.setTimeout(function () {
+            URL.revokeObjectURL(link.href);
+        }, 1000);
     };
 </script>
 @endsection
