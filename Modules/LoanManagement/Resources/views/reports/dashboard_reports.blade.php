@@ -248,11 +248,16 @@
 
     <div class="row">
         <div class="col-md-6">
-            <div class="box box-solid">
+            <div class="box box-solid collapsed-box">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Loan Report by Status', 'របាយការណ៍កម្ចីតាមស្ថានភាព') }}</h3>
+                    <div class="box-tools pull-right">
+                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
+                            <i class="fa fa-plus"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="box-body table-responsive">
+                <div class="box-body table-responsive" style="display: none;">
                     <table class="table table-bordered table-striped">
                         <thead>
                             <tr>
@@ -282,11 +287,16 @@
         </div>
 
         <div class="col-md-6">
-            <div class="box box-solid">
+            <div class="box box-solid collapsed-box">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $periodTitle }} {{ $t('Collected Payment Report', 'របាយការណ៍ប្រមូលប្រាក់') }}</h3>
+                    <div class="box-tools pull-right">
+                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
+                            <i class="fa fa-plus"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="box-body table-responsive">
+                <div class="box-body table-responsive" style="display: none;">
                     <table class="table table-bordered table-striped">
                         <thead>
                             <tr>
