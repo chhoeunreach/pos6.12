@@ -81,6 +81,12 @@
     .lm-payment-method-summary tfoot th {
         background: #eff6ff;
     }
+    .lm-panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+    }
     .lm-report-print-title {
         display: none;
     }
@@ -355,10 +361,13 @@
             <div class="box box-solid">
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
-                    <div class="box-tools pull-right">
-                        <a href="{{ route('loan-management.reports.payment-summary-by-type', request()->query()) }}" class="btn btn-box-tool" title="{{ $t('Open full payment summary', 'បើកសង្ខេបការបង់ប្រាក់ពេញ') }}">
-                            <i class="fa fa-external-link"></i>
+                    <div class="box-tools pull-right lm-panel-actions">
+                        <a href="{{ route('loan-management.reports.payment-summary-by-type', request()->query()) }}" class="btn btn-default btn-xs" title="{{ $t('Filter and print full payment summary', 'ចម្រោះ និងបោះពុម្ពសង្ខេបការបង់ប្រាក់') }}">
+                            <i class="fa fa-filter"></i> {{ $t('Filter / Print', 'ចម្រោះ / បោះពុម្ព') }}
                         </a>
+                        <button type="button" class="btn btn-success btn-xs" onclick="window.print();" title="{{ $t('Print current report', 'បោះពុម្ពរបាយការណ៍បច្ចុប្បន្ន') }}">
+                            <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
+                        </button>
                     </div>
                 </div>
                 <div class="box-body">

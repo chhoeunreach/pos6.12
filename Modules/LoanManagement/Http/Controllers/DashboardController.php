@@ -83,7 +83,7 @@ class DashboardController extends Controller
     {
         $this->allow('loan_management.view');
 
-        $filters = $this->dashboardReportFilters($request);
+        $filters = $this->paymentSummaryFilters($request);
 
         return view('loanmanagement::reports.payment_summary_by_type', [
             'filters' => $filters,
@@ -423,6 +423,36 @@ class DashboardController extends Controller
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'period' => $period,
+            'location_id' => $request->filled('location_id') ? trim((string) $request->input('location_id')) : null,
+            'search' => trim((string) $request->input('search', '')),
+        ];
+    }
+
+    protected function paymentSummaryFilters(Request $request): array
+    {
+        $dateFrom = $request->input('date_from', now()->toDateString());
+        $dateTo = $request->input('date_to', now()->toDateString());
+
+        try {
+            $dateFrom = \Carbon\Carbon::parse($dateFrom)->toDateString();
+        } catch (\Throwable $e) {
+            $dateFrom = now()->toDateString();
+        }
+
+        try {
+            $dateTo = \Carbon\Carbon::parse($dateTo)->toDateString();
+        } catch (\Throwable $e) {
+            $dateTo = now()->toDateString();
+        }
+
+        if ($dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        return [
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'period' => 'daily',
             'location_id' => $request->filled('location_id') ? trim((string) $request->input('location_id')) : null,
             'search' => trim((string) $request->input('search', '')),
         ];
