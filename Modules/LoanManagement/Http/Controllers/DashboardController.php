@@ -70,10 +70,12 @@ class DashboardController extends Controller
         $this->allow('loan_management.view');
 
         $filters = $this->dashboardReportFilters($request);
+        $recentActivityFilters = $this->paymentSummaryFilters($request);
 
         return view('loanmanagement::reports.dashboard_reports', [
             'filters' => $filters,
-            'payload' => $this->buildDashboardReports($filters),
+            'recentActivityFilters' => $recentActivityFilters,
+            'payload' => $this->buildDashboardReports($filters, $recentActivityFilters),
             'locations' => $this->loanReportLocationOptions(),
             'isKhmer' => $this->loanReportIsKhmer(),
         ]);
@@ -458,16 +460,18 @@ class DashboardController extends Controller
         ];
     }
 
-    protected function buildDashboardReports(array $filters): array
+    protected function buildDashboardReports(array $filters, ?array $recentActivityFilters = null): array
     {
+        $recentActivityFilters = $recentActivityFilters ?: $filters;
+
         return [
             'cards' => array_merge($this->dashboardLoanCards($filters), $this->dashboardPaymentCards($filters)),
             'loanStatusRows' => $this->dashboardLoanStatusRows($filters),
             'collectionRows' => $this->dashboardCollectionRows($filters),
             'collectionPeriodLabel' => $this->dashboardCollectionPeriodLabel($filters['period'] ?? 'daily'),
-            'paymentMethodRows' => $this->dashboardPaymentMethodRows($filters),
-            'recentLoans' => $this->dashboardRecentLoans($filters),
-            'recentPayments' => $this->dashboardRecentPayments($filters),
+            'paymentMethodRows' => $this->dashboardPaymentMethodRows($recentActivityFilters),
+            'recentLoans' => $this->dashboardRecentLoans($recentActivityFilters),
+            'recentPayments' => $this->dashboardRecentPayments($recentActivityFilters),
         ];
     }
 

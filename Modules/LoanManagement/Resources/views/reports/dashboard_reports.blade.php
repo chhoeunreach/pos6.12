@@ -9,9 +9,17 @@
     $period = $filters['period'] ?? 'daily';
     $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
     $periodTitle = ['daily' => $t('Daily', 'ប្រចាំថ្ងៃ'), 'monthly' => $t('Monthly', 'ប្រចាំខែ'), 'yearly' => $t('Yearly', 'ប្រចាំឆ្នាំ')][$period] ?? $t('Daily', 'ប្រចាំថ្ងៃ');
+    $recentActivityFilters = $recentActivityFilters ?? [
+        'date_from' => now()->toDateString(),
+        'date_to' => now()->toDateString(),
+        'location_id' => null,
+        'search' => '',
+    ];
     $recentActivityFilterQuery = array_merge(request()->query(), [
-        'date_from' => request()->input('date_from', now()->toDateString()),
-        'date_to' => request()->input('date_to', now()->toDateString()),
+        'date_from' => $recentActivityFilters['date_from'],
+        'date_to' => $recentActivityFilters['date_to'],
+        'location_id' => $recentActivityFilters['location_id'],
+        'search' => $recentActivityFilters['search'],
     ]);
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
@@ -99,6 +107,16 @@
         border-radius: 6px;
         font-weight: 700;
     }
+    .lm-recent-filter-box {
+        margin-bottom: 12px;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+    .lm-recent-filter-box .form-group {
+        margin-bottom: 0;
+    }
     .lm-report-print-title {
         display: none;
     }
@@ -116,6 +134,7 @@
         .lm-breadcrumb-wrap,
         .lm-report-tabs,
         .lm-report-filter-box,
+        .lm-recent-filter-box,
         .box-tools,
         .main-footer,
         .no-print {
@@ -416,9 +435,49 @@
                         <button type="button" class="btn btn-success btn-xs lm-panel-action-btn" onclick="window.loanPrintRecentActivity();" title="{{ $t('Print recent activity only', 'បោះពុម្ពតែសកម្មភាពថ្មីៗ') }}">
                             <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
                         </button>
+                        <button type="button" class="btn btn-box-tool" data-widget="collapse" title="{{ $t('Expand / Collapse', 'ពង្រីក / បង្រួម') }}">
+                            <i class="fa fa-minus"></i>
+                        </button>
                     </div>
                 </div>
                 <div class="box-body">
+                    <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" class="lm-recent-filter-box">
+                        <input type="hidden" name="period" value="{{ $period }}">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>{{ $t('Date From', 'ចាប់ពីថ្ងៃ') }}</label>
+                                    <input type="date" name="date_from" class="form-control" value="{{ $recentActivityFilters['date_from'] ?? now()->toDateString() }}">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>{{ $t('Date To', 'ដល់ថ្ងៃ') }}</label>
+                                    <input type="date" name="date_to" class="form-control" value="{{ $recentActivityFilters['date_to'] ?? now()->toDateString() }}">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>{{ $t('Location', 'ទីតាំង') }}</label>
+                                    <select name="location_id" class="form-control">
+                                        <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
+                                        @foreach($locations as $id => $name)
+                                            <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3" style="padding-top:25px;">
+                                <button type="submit" class="btn btn-primary btn-sm lm-panel-action-btn">
+                                    <i class="fa fa-filter"></i> {{ $t('Apply Filter', 'អនុវត្តតម្រង') }}
+                                </button>
+                                <a href="{{ route('loan-management.reports.dashboard') }}" class="btn btn-default btn-sm">
+                                    <i class="fa fa-refresh"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+
                     <div class="table-responsive">
                         <h4 class="lm-recent-panel-heading">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h4>
                         <table class="table table-bordered lm-payment-method-summary">
