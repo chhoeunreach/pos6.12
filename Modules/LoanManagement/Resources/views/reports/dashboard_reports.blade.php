@@ -102,13 +102,50 @@
     .lm-recent-panel-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
+        gap: 16px;
+    }
+    .lm-recent-table-wrap {
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
     }
     .lm-recent-panel-heading {
-        margin: 0 0 8px;
-        color: #334155;
+        margin: 0 0 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e5e7eb;
+        color: #1f2937;
         font-size: 14px;
-        font-weight: 700;
+        font-weight: 800;
+    }
+    .lm-report-table {
+        margin-bottom: 0;
+        background: #fff;
+        font-size: 12px;
+    }
+    .lm-report-table > thead > tr > th {
+        background: #eef6fc;
+        color: #111827;
+        border-color: #cbd5e1 !important;
+        font-size: 12px;
+        font-weight: 800;
+        vertical-align: middle !important;
+        white-space: nowrap;
+    }
+    .lm-report-table > tbody > tr > td,
+    .lm-report-table > tfoot > tr > th {
+        border-color: #e5e7eb !important;
+        vertical-align: top !important;
+    }
+    .lm-report-table > tbody > tr:nth-child(even) > td {
+        background: #f8fafc;
+    }
+    .lm-report-table > tfoot > tr > th {
+        background: #eaf4ff;
+        font-weight: 800;
+    }
+    .lm-report-table .text-right {
+        font-variant-numeric: tabular-nums;
     }
     .lm-payment-method-summary th {
         background: #dbeafe;
@@ -121,6 +158,32 @@
     }
     .lm-payment-method-summary tfoot th {
         background: #eff6ff;
+    }
+    .lm-recent-table-wrap .dataTables_wrapper .row:first-child {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px;
+    }
+    .lm-recent-table-wrap .dataTables_wrapper .row:first-child:before,
+    .lm-recent-table-wrap .dataTables_wrapper .row:first-child:after {
+        display: none;
+    }
+    .lm-recent-table-wrap .dataTables_length select,
+    .lm-recent-table-wrap .dataTables_filter input {
+        height: 32px;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        box-shadow: none;
+    }
+    .lm-recent-table-wrap .dataTables_filter input {
+        min-width: 180px;
+    }
+    .lm-recent-table-wrap .dt-buttons {
+        display: inline-flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 5px;
     }
     .lm-panel-actions {
         display: flex;
@@ -277,6 +340,45 @@
         body.lm-print-recent-only .lm-recent-panel-grid td {
             white-space: normal !important;
             word-break: break-word;
+        }
+        body.lm-print-recent-only .dataTables_wrapper .row:first-child,
+        body.lm-print-recent-only .dataTables_info,
+        body.lm-print-recent-only .dataTables_paginate {
+            display: none !important;
+        }
+        body.lm-print-recent-only .lm-recent-table-wrap {
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: #fff !important;
+        }
+        body.lm-print-recent-only .lm-recent-panel-heading {
+            margin: 0 0 2mm !important;
+            padding: 2mm 3mm !important;
+            border: 1px solid #9ca3af !important;
+            background: #e5f0fb !important;
+            color: #111827 !important;
+            text-align: center;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+        }
+        body.lm-print-recent-only .lm-report-table {
+            border-collapse: collapse !important;
+            font-size: 9px !important;
+        }
+        body.lm-print-recent-only .lm-report-table > thead > tr > th {
+            background: #dbeafe !important;
+            color: #111827 !important;
+            font-size: 9px !important;
+            font-weight: 800 !important;
+            text-align: center;
+        }
+        body.lm-print-recent-only .lm-report-table > tbody > tr > td,
+        body.lm-print-recent-only .lm-report-table > tfoot > tr > th {
+            border: 1px solid #9ca3af !important;
+        }
+        body.lm-print-recent-only .lm-report-table > tbody > tr:nth-child(even) > td {
+            background: #f8fafc !important;
         }
         .lm-main,
         .lm-content,
@@ -522,7 +624,7 @@
 
                     <div class="table-responsive">
                         <h4 class="lm-recent-panel-heading">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h4>
-                        <table class="table table-bordered lm-payment-method-summary">
+                        <table class="table table-bordered lm-payment-method-summary lm-report-table">
                             <thead>
                                 <tr>
                                     <th>{{ $t('Type', 'ប្រភេទ') }}</th>
@@ -575,9 +677,9 @@
                     </div>
 
                     <div class="lm-recent-panel-grid">
-                        <div class="table-responsive">
+                        <div class="table-responsive lm-recent-table-wrap">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h4>
-                            <table class="table table-bordered table-hover loan-recent-activity-datatable" id="loan_recent_payments_table">
+                            <table class="table table-bordered table-hover loan-recent-activity-datatable lm-report-table" id="loan_recent_payments_table">
                                 <thead>
                                     <tr>
                                         <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
@@ -606,9 +708,9 @@
                             </table>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="table-responsive lm-recent-table-wrap">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
-                            <table class="table table-bordered table-hover loan-recent-activity-datatable" id="loan_recent_loans_table">
+                            <table class="table table-bordered table-hover loan-recent-activity-datatable lm-report-table" id="loan_recent_loans_table">
                                 <thead>
                                     <tr>
                                         <th style="width:45px;">{{ $t('No', 'ល.រ') }}</th>
