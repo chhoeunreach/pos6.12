@@ -984,8 +984,8 @@
                 jQuery(this).DataTable({
                     dom: '<"row margin-bottom-20 text-center"<"col-sm-1"l><"col-sm-8"B><"col-sm-3"f> r>tip',
                     buttons: recentActivityButtons,
-                    pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
-                    lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
+                    pageLength: -1,
+                    lengthMenu: [[-1, 25, 50, 100], ['All', 25, 50, 100]],
                     order: [],
                     autoWidth: false,
                     scrollX: false,
