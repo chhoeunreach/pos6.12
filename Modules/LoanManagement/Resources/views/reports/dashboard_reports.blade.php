@@ -843,7 +843,6 @@
                                                           data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</span>
                                                     <small>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</small>
                                                 </span>
-                                                <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
                                             <td>{{ $loan->product_name ?: '-' }}</td>
@@ -864,6 +863,7 @@
 
 <script>
     (function () {
+    var initLoanDashboardReports = function () {
         var form = document.getElementById('loanRecentActivityFilterForm');
         if (!form) {
             return;
@@ -889,6 +889,9 @@
                     autoUpdateInput: true,
                     startDate: moment('{{ $recentActivityFilters['date_from'] }}'),
                     endDate: moment('{{ $recentActivityFilters['date_to'] }}'),
+                    parentEl: 'body',
+                    opens: 'right',
+                    drops: 'auto',
                     locale: {
                         format: 'DD-MMM-YYYY',
                         cancelLabel: 'Clear'
@@ -899,6 +902,13 @@
                     scheduleSubmit(100);
                 }
             );
+
+            jQuery('#loanRecentActivityDateRange').off('click.loanRecentDateRange').on('click.loanRecentDateRange', function () {
+                var picker = jQuery(this).data('daterangepicker');
+                if (picker) {
+                    picker.show();
+                }
+            });
         }
 
         if (window.jQuery && jQuery.fn.DataTable) {
@@ -1028,6 +1038,13 @@
                 });
         }
 
+    };
+
+    if (window.jQuery) {
+        jQuery(initLoanDashboardReports);
+    } else {
+        document.addEventListener('DOMContentLoaded', initLoanDashboardReports);
+    }
     })();
 
     window.loanPrintRecentActivity = function () {
@@ -1057,7 +1074,15 @@
                 ? api.buttons.exportData({
                     columns: ':visible',
                     modifier: {search: 'applied', order: 'applied', page: 'all'},
-                    stripHtml: true
+                    stripHtml: true,
+                    format: {
+                        body: function (data) {
+                            return jQuery('<div>').html(data == null ? '' : data).text().replace(/\s+/g, ' ').trim();
+                        },
+                        header: function (data) {
+                            return jQuery('<div>').html(data == null ? '' : data).text().replace(/\s+/g, ' ').trim();
+                        }
+                    }
                 })
                 : {header: [], body: []};
             var html = '<h3>' + esc(title) + '</h3><table border="1"><thead><tr>';
@@ -1076,15 +1101,9 @@
 
             return html + '</tbody></table><br>';
         };
-        var summaryTable = document.querySelector('.lm-payment-method-summary');
         var html = '<html><head><meta charset="UTF-8"></head><body>';
 
         html += '<h2>' + esc(@json($recentActivityReportTitle)) + '</h2>';
-        if (summaryTable) {
-            html += '<h3>' + esc(@json($t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ'))) + '</h3>';
-            html += summaryTable.outerHTML;
-            html += '<br>';
-        }
         html += tableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ')));
         html += tableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ')));
         html += '</body></html>';
