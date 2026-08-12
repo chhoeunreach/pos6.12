@@ -404,6 +404,7 @@
         background: #dbeafe;
         color: #0000ff;
         text-align: center;
+        font-family: "Khmer OS Muol", "Khmer OS Moul", "Moul", "Kantumruy Pro", serif;
         font-size: 24px;
         font-weight: 700;
         line-height: 1.35;
@@ -1216,7 +1217,7 @@
         var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
         html += '<style>';
         html += '@page{size:A4 landscape;margin:10mm}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;font-size:11px}';
-        html += 'h2{margin:0 0 10px;padding:12px 14px;border-top:1px solid #94a3b8;border-bottom:2px solid #111827;background:#dbeafe;color:#0000ff;text-align:center;font-size:22px;line-height:1.3}';
+        html += 'h2{margin:0 0 10px;padding:12px 14px;border-top:1px solid #94a3b8;border-bottom:2px solid #111827;background:#dbeafe;color:#0000ff;text-align:center;font-family:"Khmer OS Muol","Khmer OS Moul","Moul","Kantumruy Pro",serif;font-size:22px;line-height:1.3}';
         html += 'h3{margin:12px 0 5px;padding:5px 8px;border:1px solid #9ca3af;background:#e5f0fb;text-align:center;font-size:13px}';
         html += 'table{width:100%;border-collapse:collapse;margin:0 0 10px;table-layout:auto}th,td{border:1px solid #9ca3af;padding:4px 5px;vertical-align:top;word-break:break-word}';
         html += 'th{background:#dbeafe;text-align:center;font-weight:700}td{text-align:left}td.amount,td.count{text-align:right}.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm;align-items:start}.recent-grid td,.recent-grid th{font-size:9px}';
