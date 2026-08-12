@@ -510,7 +510,7 @@ class DashboardController extends Controller
         $recentPayments = $this->dashboardRecentPayments($recentActivityFilters);
 
         return [
-            'cards' => array_merge($this->dashboardLoanCards($filters), $this->dashboardPaymentCards($filters)),
+            'cards' => array_merge($this->dashboardLoanCards($filters), $this->dashboardPaymentCardsFromActivity($recentPayments, $recentLoans)),
             'loanStatusRows' => $this->dashboardLoanStatusRows($filters),
             'collectionRows' => $this->dashboardCollectionRows($filters),
             'collectionPeriodLabel' => $this->dashboardCollectionPeriodLabel($filters['period'] ?? 'daily'),
@@ -596,6 +596,32 @@ class DashboardController extends Controller
             'payment_total' => (float) ($row->payment_total ?? 0),
             'collection_total' => (float) ($row->collection_total ?? 0),
             'deposit_total' => (float) ($row->deposit_total ?? 0),
+        ];
+    }
+
+    protected function dashboardPaymentCardsFromActivity($recentPayments, $recentLoans): array
+    {
+        $collectionCount = 0;
+        $collectionTotal = 0.0;
+        foreach ($recentPayments as $payment) {
+            $collectionCount++;
+            $collectionTotal += (float) ($payment->amount ?? 0);
+        }
+
+        $depositCount = 0;
+        $depositTotal = 0.0;
+        foreach ($recentLoans as $loan) {
+            $depositCount++;
+            $depositTotal += (float) ($loan->payment_amount ?? 0);
+        }
+
+        return [
+            'payment_count' => $collectionCount + $depositCount,
+            'collection_count' => $collectionCount,
+            'deposit_count' => $depositCount,
+            'payment_total' => $collectionTotal + $depositTotal,
+            'collection_total' => $collectionTotal,
+            'deposit_total' => $depositTotal,
         ];
     }
 
@@ -808,11 +834,11 @@ class DashboardController extends Controller
     protected function dashboardPaymentTypeLabel(string $type): string
     {
         if ($type === 'monthly') {
-            return $this->loanReportText('Collected Payments', 'ប្រាក់ប្រមូលបាន');
+            return $this->loanReportText('Recent Collected Payments Reports', 'របាយការណ៍ការបង់ប្រាក់ថ្មីៗ');
         }
 
         if ($type === 'loan') {
-            return $this->loanReportText('Loan', 'កម្ចី');
+            return $this->loanReportText('Loans Reports', 'របាយការណ៍កម្ចី');
         }
 
         return ucwords(str_replace('_', ' ', $type));

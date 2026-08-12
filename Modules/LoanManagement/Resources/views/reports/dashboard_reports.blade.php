@@ -750,7 +750,6 @@
                     <h2 class="lm-recent-report-title">{{ $recentActivityReportTitle }}</h2>
 
                     <div class="table-responsive">
-                        <h4 class="lm-recent-panel-heading">{{ $t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ') }}</h4>
                         <table class="table table-bordered lm-payment-method-summary lm-report-table">
                             <thead>
                                 <tr>
@@ -1138,7 +1137,7 @@
             });
         }
 
-        var html = '<h3>' + loanRecentActivityEsc(title) + '</h3><table><thead><tr>';
+        var html = (title ? '<h3>' + loanRecentActivityEsc(title) + '</h3>' : '') + '<table><thead><tr>';
         data.header.forEach(function (heading) {
             html += '<th>' + loanRecentActivityEsc(heading) + '</th>';
         });
@@ -1160,7 +1159,7 @@
             return '';
         }
 
-        var html = '<h3>' + loanRecentActivityEsc(title) + '</h3><table><thead><tr>';
+        var html = (title ? '<h3>' + loanRecentActivityEsc(title) + '</h3>' : '') + '<table><thead><tr>';
         jQuery(table).find('thead th').each(function () {
             html += '<th>' + loanRecentActivityEsc(jQuery(this).text().replace(/\s+/g, ' ').trim()) + '</th>';
         });
@@ -1199,7 +1198,7 @@
         html += 'th{background:#dbeafe;text-align:center;font-weight:700}td{text-align:left}td.amount,td.count{text-align:right}.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm;align-items:start}.recent-grid td,.recent-grid th{font-size:9px}';
         html += '</style></head><body>';
         html += '<h2>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</h2>';
-        html += loanRecentActivityTableFromDom('.lm-payment-method-summary', @json($t('Payment Summary by Type', 'សង្ខេបការបង់ប្រាក់តាមប្រភេទ')));
+        html += loanRecentActivityTableFromDom('.lm-payment-method-summary', '');
         html += '<div class="recent-grid">';
         html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ'))) + '</div>';
         html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ'))) + '</div>';
