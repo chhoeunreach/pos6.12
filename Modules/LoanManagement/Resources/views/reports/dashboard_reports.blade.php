@@ -9,6 +9,10 @@
     $period = $filters['period'] ?? 'daily';
     $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
     $periodTitle = ['daily' => $t('Daily', 'ប្រចាំថ្ងៃ'), 'monthly' => $t('Monthly', 'ប្រចាំខែ'), 'yearly' => $t('Yearly', 'ប្រចាំឆ្នាំ')][$period] ?? $t('Daily', 'ប្រចាំថ្ងៃ');
+    $recentActivityFilterQuery = array_merge(request()->query(), [
+        'date_from' => request()->input('date_from', now()->toDateString()),
+        'date_to' => request()->input('date_to', now()->toDateString()),
+    ]);
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
             return '-';
@@ -86,6 +90,14 @@
         flex-wrap: wrap;
         gap: 6px;
         justify-content: flex-end;
+    }
+    .lm-panel-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+        border-radius: 6px;
+        font-weight: 700;
     }
     .lm-report-print-title {
         display: none;
@@ -398,10 +410,10 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">{{ $t('Recent Activity', 'សកម្មភាពថ្មីៗ') }}</h3>
                     <div class="box-tools pull-right lm-panel-actions">
-                        <a href="{{ route('loan-management.reports.payment-summary-by-type', request()->query()) }}" class="btn btn-default btn-xs" title="{{ $t('Filter and print full payment summary', 'ចម្រោះ និងបោះពុម្ពសង្ខេបការបង់ប្រាក់') }}">
-                            <i class="fa fa-filter"></i> {{ $t('Filter / Print', 'ចម្រោះ / បោះពុម្ព') }}
+                        <a href="{{ route('loan-management.reports.payment-summary-by-type', $recentActivityFilterQuery) }}" class="btn btn-primary btn-xs lm-panel-action-btn" title="{{ $t('Open filter and print page', 'បើកទំព័រចម្រោះ និងបោះពុម្ព') }}">
+                            <i class="fa fa-calendar-check-o"></i> {{ $t('Filter Report', 'ចម្រោះរបាយការណ៍') }}
                         </a>
-                        <button type="button" class="btn btn-success btn-xs" onclick="window.loanPrintRecentActivity();" title="{{ $t('Print recent activity only', 'បោះពុម្ពតែសកម្មភាពថ្មីៗ') }}">
+                        <button type="button" class="btn btn-success btn-xs lm-panel-action-btn" onclick="window.loanPrintRecentActivity();" title="{{ $t('Print recent activity only', 'បោះពុម្ពតែសកម្មភាពថ្មីៗ') }}">
                             <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
                         </button>
                     </div>
@@ -460,35 +472,6 @@
 
                     <div class="lm-recent-panel-grid">
                         <div class="table-responsive">
-                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
-                            <table class="table table-bordered table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
-                                        <th>{{ $t('Customer', 'អតិថិជន') }}</th>
-                                        <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
-                                        <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($payload['recentLoans'] as $loan)
-                                        <tr>
-                                            <td>
-                                                <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
-                                                <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
-                                            </td>
-                                            <td>{{ $loan->customer_name ?: '-' }}</td>
-                                            <td>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
-                                            <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
-                                        </tr>
-                                    @empty
-                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent loans found.', 'រកមិនឃើញកម្ចីថ្មីៗ') }}</td></tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="table-responsive">
                             <h4 class="lm-recent-panel-heading">{{ $t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ') }}</h4>
                             <table class="table table-bordered table-hover">
                                 <thead>
@@ -512,6 +495,35 @@
                                         </tr>
                                     @empty
                                         <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent payments found.', 'រកមិនឃើញការបង់ប្រាក់ថ្មីៗ') }}</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-responsive">
+                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th>{{ $t('Customer', 'អតិថិជន') }}</th>
+                                        <th>{{ $t('Date', 'ថ្ងៃ') }}</th>
+                                        <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($payload['recentLoans'] as $loan)
+                                        <tr>
+                                            <td>
+                                                <a href="{{ route('loan-management.loans.view', $loan->id) }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</a>
+                                                <br><small class="text-muted">{{ ucfirst($loan->status ?? '-') }}</small>
+                                            </td>
+                                            <td>{{ $loan->customer_name ?: '-' }}</td>
+                                            <td>{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-Y') : '-' }}</td>
+                                            <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="4" class="text-center text-muted">{{ $t('No recent loans found.', 'រកមិនឃើញកម្ចីថ្មីៗ') }}</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
