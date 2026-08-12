@@ -77,9 +77,33 @@
     $recentActivityDateRange = \Carbon\Carbon::parse($recentActivityFilters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($recentActivityFilters['date_to'])->format('d-M-Y');
     $recentActivityDateFrom = \Carbon\Carbon::parse($recentActivityFilters['date_from']);
     $recentActivityDateTo = \Carbon\Carbon::parse($recentActivityFilters['date_to']);
+    $khmerMonths = [
+        1 => 'មករា',
+        2 => 'កុម្ភៈ',
+        3 => 'មីនា',
+        4 => 'មេសា',
+        5 => 'ឧសភា',
+        6 => 'មិថុនា',
+        7 => 'កក្កដា',
+        8 => 'សីហា',
+        9 => 'កញ្ញា',
+        10 => 'តុលា',
+        11 => 'វិច្ឆិកា',
+        12 => 'ធ្នូ',
+    ];
+    $khmerDigits = ['0' => '០', '1' => '១', '2' => '២', '3' => '៣', '4' => '៤', '5' => '៥', '6' => '៦', '7' => '៧', '8' => '៨', '9' => '៩'];
+    $toKhmerNumber = fn ($value) => strtr((string) $value, $khmerDigits);
+    $khmerReportDate = function ($date) use ($khmerMonths, $toKhmerNumber) {
+        $date = $date instanceof \Carbon\Carbon ? $date : \Carbon\Carbon::parse($date);
+
+        return $toKhmerNumber($date->format('j')).' ខែ'.($khmerMonths[(int) $date->format('n')] ?? $date->format('m')).' ឆ្នាំ'.$toKhmerNumber($date->format('Y'));
+    };
+    $recentActivityLocationName = trim((string) ($locations[$recentActivityFilters['location_id'] ?? null] ?? Session::get('business.name', 'កម្ពុជាក្រោម')));
+    $recentActivityLocationName = $recentActivityLocationName !== '' ? $recentActivityLocationName : 'កម្ពុជាក្រោម';
+    $recentActivityReportPrefix = 'គ្នាយើង-'.$recentActivityLocationName.' ';
     $recentActivityReportTitle = $recentActivityDateFrom->isSameDay($recentActivityDateTo)
-        ? $t('Daily Activity Report for '.$recentActivityDateFrom->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ថ្ងៃទី '.$recentActivityDateFrom->format('d-m-Y'))
-        : $t('Daily Activity Report from '.$recentActivityDateFrom->format('d-M-Y').' to '.$recentActivityDateTo->format('d-M-Y'), 'របាយការណ៍សកម្មភាពប្រចាំថ្ងៃ ចាប់ពី '.$recentActivityDateFrom->format('d-m-Y').' ដល់ '.$recentActivityDateTo->format('d-m-Y'));
+        ? $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom)
+        : $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom).' ដល់ថ្ងៃទី'.$khmerReportDate($recentActivityDateTo);
     $dashboardDateRange = \Carbon\Carbon::parse($filters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($filters['date_to'])->format('d-M-Y');
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
