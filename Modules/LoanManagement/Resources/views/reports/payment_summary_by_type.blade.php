@@ -158,6 +158,7 @@
                 <thead>
                     <tr>
                         <th>{{ $t('Type', 'ប្រភេទ') }}</th>
+                        <th class="text-right">{{ $t('Count', 'ចំនួន') }}</th>
                         <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
                         <th>ABA</th>
                         <th>ACLEDA</th>
@@ -172,6 +173,7 @@
                     @forelse($rows as $row)
                         <tr>
                             <td><strong>{{ $row['label'] }}</strong></td>
+                            <td class="text-right">{{ number_format((float) ($row['count'] ?? 0), 0) }}</td>
                             <td class="text-right">{{ $money($row['cash'] ?? 0) }}</td>
                             <td class="text-right">{{ $money($row['aba'] ?? 0) }}</td>
                             <td class="text-right">{{ $money($row['acleda'] ?? 0) }}</td>
@@ -182,13 +184,14 @@
                             <td class="text-right"><strong>{{ $money($row['total'] ?? 0) }}</strong></td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
                     @endforelse
                 </tbody>
                 @if(!empty($rows))
                     <tfoot>
                         <tr>
                             <th>{{ $t('Total', 'សរុប') }}</th>
+                            <th class="text-right">{{ number_format((float) collect($rows)->sum('count'), 0) }}</th>
                             <th class="text-right">{{ $money(collect($rows)->sum('cash')) }}</th>
                             <th class="text-right">{{ $money(collect($rows)->sum('aba')) }}</th>
                             <th class="text-right">{{ $money(collect($rows)->sum('acleda')) }}</th>

@@ -684,6 +684,7 @@ class DashboardController extends Controller
         $rows = $query
             ->selectRaw($typeExpr.' as payment_type')
             ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as payment_method')
+            ->selectRaw('COUNT(*) as payment_count')
             ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as payment_total')
             ->groupBy('payment_type', 'payment_method')
             ->get();
@@ -694,6 +695,7 @@ class DashboardController extends Controller
             if (! isset($summary[$type])) {
                 $summary[$type] = [
                     'label' => $this->dashboardPaymentTypeLabel($type),
+                    'count' => 0,
                     'cash' => 0.0,
                     'aba' => 0.0,
                     'acleda' => 0.0,
@@ -707,6 +709,7 @@ class DashboardController extends Controller
 
             $amount = (float) ($row->payment_total ?? 0);
             $bucket = $this->dashboardPaymentMethodBucket((string) ($row->payment_method ?? ''));
+            $summary[$type]['count'] += (int) ($row->payment_count ?? 0);
             $summary[$type][$bucket] += $amount;
             $summary[$type]['total'] += $amount;
         }
@@ -827,7 +830,7 @@ class DashboardController extends Controller
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '""');
         $noteExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'note') ? 'p.note' : '""';
 
-        return $query
+        $payments = $query
             ->selectRaw('p.id')
             ->selectRaw($receiptExpr.' as receipt_number')
             ->selectRaw('p.'.$dateColumn.' as paid_date')
@@ -841,6 +844,50 @@ class DashboardController extends Controller
             ->orderByDesc('p.id')
             ->limit(15)
             ->get();
+
+        return $this->appendRecentPaymentMethodDetails($payments);
+    }
+
+    protected function appendRecentPaymentMethodDetails($payments)
+    {
+        if ($payments->isEmpty()
+            || ! Schema::connection('mysql_loan')->hasTable('loan_payment_details')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_id')) {
+            return $payments;
+        }
+
+        $paymentIds = $payments->pluck('id')->filter()->values()->all();
+        if (empty($paymentIds)) {
+            return $payments;
+        }
+
+        $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_method_snapshot')
+            ? 'd.payment_method_snapshot'
+            : (Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'method') ? 'd.method' : '"Cash"');
+        $amountExpr = $this->coalesceSql('loan_payment_details', 'd', ['amount_base', 'amount'], '0');
+
+        $details = DB::connection('mysql_loan')
+            ->table('loan_payment_details as d')
+            ->whereIn('d.payment_id', $paymentIds)
+            ->selectRaw('d.payment_id')
+            ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as method_name')
+            ->selectRaw($amountExpr.' as amount')
+            ->orderBy('d.id')
+            ->get()
+            ->groupBy('payment_id');
+
+        foreach ($payments as $payment) {
+            $rows = $details->get($payment->id, collect());
+            if ($rows->isEmpty()) {
+                continue;
+            }
+
+            $payment->payment_method = $rows
+                ->map(fn ($row) => trim((string) $row->method_name).' $'.number_format((float) ($row->amount ?? 0), 2))
+                ->implode(', ');
+        }
+
+        return $payments;
     }
 
     protected function dashboardPaymentBaseQuery(array $filters)

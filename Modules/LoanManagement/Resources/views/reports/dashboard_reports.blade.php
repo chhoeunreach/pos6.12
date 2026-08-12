@@ -454,6 +454,7 @@
                             <thead>
                                 <tr>
                                     <th>{{ $t('Type', 'ប្រភេទ') }}</th>
+                                    <th class="text-right">{{ $t('Count', 'ចំនួន') }}</th>
                                     <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
                                     <th>ABA</th>
                                     <th>ACLEDA</th>
@@ -468,6 +469,7 @@
                                 @forelse($payload['paymentMethodRows'] as $row)
                                     <tr>
                                         <td><strong>{{ $row['label'] }}</strong></td>
+                                        <td class="text-right">{{ $number($row['count'] ?? 0) }}</td>
                                         <td class="text-right">{{ $money($row['cash'] ?? 0) }}</td>
                                         <td class="text-right">{{ $money($row['aba'] ?? 0) }}</td>
                                         <td class="text-right">{{ $money($row['acleda'] ?? 0) }}</td>
@@ -478,13 +480,14 @@
                                         <td class="text-right"><strong>{{ $money($row['total'] ?? 0) }}</strong></td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="9" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
+                                    <tr><td colspan="10" class="text-center text-muted">{{ $t('No payment summary found.', 'រកមិនឃើញសង្ខេបការបង់ប្រាក់') }}</td></tr>
                                 @endforelse
                             </tbody>
                             @if(!empty($payload['paymentMethodRows']))
                                 <tfoot>
                                     <tr>
                                         <th>{{ $t('Total', 'សរុប') }}</th>
+                                        <th class="text-right">{{ $number(collect($payload['paymentMethodRows'])->sum('count')) }}</th>
                                         <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('cash')) }}</th>
                                         <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('aba')) }}</th>
                                         <th class="text-right">{{ $money(collect($payload['paymentMethodRows'])->sum('acleda')) }}</th>
