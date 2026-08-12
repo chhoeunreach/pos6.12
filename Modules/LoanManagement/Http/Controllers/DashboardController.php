@@ -758,7 +758,7 @@ class DashboardController extends Controller
                 $summary[$type] = $this->emptyDashboardPaymentSummaryRow($type);
             }
 
-            $amount = (float) ($loan->balance_amount ?? 0);
+            $amount = (float) ($loan->payment_amount ?? 0);
             $bucket = $this->dashboardPaymentMethodBucket((string) ($loan->payment_method ?? ''));
             $summary[$type]['count']++;
             $summary[$type][$bucket] += $amount;
@@ -866,7 +866,7 @@ class DashboardController extends Controller
             ->selectRaw('l.'.$loanDateColumn.' as loan_date')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'status') ? 'l.status' : '"unknown"').' as status')
             ->selectRaw($this->coalesceSql('loans', 'l', ['principal_amount', 'financed_amount']).' as principal_amount')
-            ->selectRaw($this->coalesceSql('loans', 'l', ['balance_amount', 'amount_balance']).' as balance_amount')
+            ->selectRaw($this->coalesceSql('loans', 'l', ['total_amount', 'total_payable_amount', 'principal_amount']).' as payment_amount')
             ->orderByDesc('l.'.$loanDateColumn)
             ->orderByDesc('l.id')
             ->get();

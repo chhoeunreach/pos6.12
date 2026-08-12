@@ -852,7 +852,7 @@
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
                                         <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
-                                        <th class="text-right">{{ $t('Balance', 'សមតុល្យ') }}</th>
+                                        <th class="text-right">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
                                         <th>{{ $t('Note', 'ចំណាំ') }}</th>
                                     </tr>
                                 </thead>
@@ -872,7 +872,7 @@
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
                                             <td>{{ $loan->product_name ?: '-' }}</td>
                                             <td class="lm-col-method" title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
-                                            <td class="text-right">{{ $money($loan->balance_amount ?? 0) }}</td>
+                                            <td class="text-right">{{ $money($loan->payment_amount ?? 0) }}</td>
                                             <td>{{ $loan->payment_note ?: '-' }}</td>
                                         </tr>
                                     @endforeach
