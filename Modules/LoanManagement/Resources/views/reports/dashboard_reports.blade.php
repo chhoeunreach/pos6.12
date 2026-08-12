@@ -104,10 +104,13 @@
         .lm-breadcrumb-wrap,
         .lm-report-tabs,
         .lm-report-filter-box,
-        .lm-report-no-print,
+        .box-tools,
         .main-footer,
         .no-print {
             display: none !important;
+        }
+        .collapsed-box .box-body {
+            display: block !important;
         }
         .lm-main,
         .lm-content,
