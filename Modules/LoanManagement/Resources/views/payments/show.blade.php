@@ -31,6 +31,11 @@
                 border-radius: 0;
                 box-shadow: none;
             }
+            .lm-payment-method-full {
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: normal;
+            }
         </style>
     @endsection
 @endif
@@ -64,8 +69,8 @@
             </div>
             <hr>
             <div class="row">
-                <div class="col-md-3"><strong>Method:</strong><br>{{ $method }}</div>
-                <div class="col-md-3"><strong>Type:</strong><br>{{ ucfirst($payment->payment_type ?? 'monthly') }}</div>
+                <div class="col-md-4 lm-payment-method-full"><strong>Method:</strong><br>{{ $method }}</div>
+                <div class="col-md-2"><strong>Type:</strong><br>{{ ucfirst($payment->payment_type ?? 'monthly') }}</div>
                 <div class="col-md-3"><strong>Reference:</strong><br>{{ $payment->reference_number ?? '-' }}</div>
                 <div class="col-md-3"><strong>Received By:</strong><br>{{ $payment->received_by_name_snapshot ?? $payment->collected_by_name_snapshot ?? '-' }}</div>
             </div>
@@ -128,7 +133,7 @@
                 <tbody>
                     @forelse($details as $detail)
                         <tr>
-                            <td>{{ $detail->payment_method_snapshot ?? $detail->method ?? '-' }}</td>
+                            <td class="lm-payment-method-full">{{ $detail->payment_method_snapshot ?? $detail->method ?? '-' }}</td>
                             <td class="text-right">$ {{ number_format((float) ($detail->amount_base ?? $detail->amount ?? 0), 2) }}</td>
                             <td>{{ $detail->currency ?? '-' }}</td>
                             <td>{{ $detail->reference_number ?? $detail->transaction_no ?? '-' }}</td>
@@ -136,7 +141,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td>{{ $method }}</td>
+                            <td class="lm-payment-method-full">{{ $method }}</td>
                             <td class="text-right">$ {{ number_format($amount, 2) }}</td>
                             <td>{{ $payment->currency ?? $payment->base_currency ?? '-' }}</td>
                             <td>{{ $payment->reference_number ?? '-' }}</td>

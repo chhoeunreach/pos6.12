@@ -260,9 +260,9 @@
         white-space: nowrap;
     }
     .lm-report-table .lm-col-method {
-        width: 82px !important;
-        min-width: 82px;
-        max-width: 82px;
+        width: 160px !important;
+        min-width: 140px;
+        max-width: 240px;
         white-space: normal;
         word-break: normal;
         overflow-wrap: anywhere;
@@ -859,7 +859,7 @@
                                                 </span>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
-                                            <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
+                                            <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">{{ $payment->payment_method ?: '-' }}</td>
                                             <td class="text-right lm-col-payment-amount">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
@@ -898,7 +898,7 @@
                                             </td>
                                             <td>{{ $loan->customer_name ?: '-' }}</td>
                                             <td>{{ $loan->product_name ?: '-' }}</td>
-                                            <td class="lm-col-method" title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
+                                            <td class="lm-col-method" title="{{ $loan->payment_method ?: '-' }}">{{ $loan->payment_method ?: '-' }}</td>
                                             <td class="text-right">{{ $money($loan->payment_amount ?? 0) }}</td>
                                             <td>{{ $loan->payment_note ?: '-' }}</td>
                                         </tr>
