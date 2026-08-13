@@ -16,16 +16,19 @@
             ->filter()
             ->map(function ($part) {
                 $part = preg_replace('/\s+\$\s*/', ' $', trim($part));
-                $part = preg_replace('/^.*\((ABA|ACLEDA|WING|E&T|CARD|CASH)\)/iu', '$1', $part);
-                $part = preg_replace('/.*ABA.*/iu', 'ABA'.(preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.$m[0] : ''), $part);
-                $part = preg_replace('/.*ACLEDA.*/iu', 'ACLEDA'.(preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.$m[0] : ''), $part);
-                $part = preg_replace('/.*WING.*/iu', 'WING'.(preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.$m[0] : ''), $part);
-                $part = preg_replace('/.*E&T.*/iu', 'E&T'.(preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.$m[0] : ''), $part);
-                $part = preg_replace('/.*CARD.*/iu', 'CARD'.(preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.$m[0] : ''), $part);
-                $part = preg_replace('/\.00\b/', '', $part);
-                $part = preg_replace('/\s+/', ' ', $part);
+                $amount = preg_match('/\$\s*[\d,.]+/', $part, $m) ? ' '.preg_replace('/\s+/', '', $m[0]) : '';
 
-                return $part;
+                foreach (['ABA', 'ACLEDA', 'WING', 'E&T', 'CARD', 'CASH'] as $method) {
+                    if (preg_match('/'.preg_quote($method, '/').'/iu', $part)) {
+                        return $method.$amount;
+                    }
+                }
+
+                if (preg_match('/\(([^)]+)\)/u', $part, $m)) {
+                    return trim($m[1]).$amount;
+                }
+
+                return trim(preg_replace('/\$\s*[\d,.]+/', '', $part)).$amount;
             })
             ->implode(' + ');
     };
