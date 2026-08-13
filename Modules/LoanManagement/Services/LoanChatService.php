@@ -866,10 +866,18 @@ class LoanChatService
                 }
             });
         }
-        if (! empty($filters['location_id']) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
-            $query->whereHas('customer', function ($inner) use ($filters) {
-                $inner->where('business_location_id', (int) $filters['location_id']);
-            });
+        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+            $locationIds = array_values(array_filter(array_map('intval', (array) ($filters['location_ids'] ?? []))));
+            if (! empty($filters['location_id'])) {
+                $locationIds[] = (int) $filters['location_id'];
+            }
+            $locationIds = array_values(array_unique(array_filter($locationIds)));
+
+            if (! empty($locationIds)) {
+                $query->whereHas('customer', function ($inner) use ($locationIds) {
+                    $inner->whereIn('business_location_id', $locationIds);
+                });
+            }
         }
 
         match ($view) {

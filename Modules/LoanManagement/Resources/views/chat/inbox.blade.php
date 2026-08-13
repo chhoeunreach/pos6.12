@@ -5,15 +5,25 @@
     $isEmbedded = request()->boolean('_lm_embed');
     $chatLocationOptions = collect();
     $chatLocationText = 'All locations';
+    $chatDefaultLocationId = null;
     try {
         if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
             $chatUser = auth()->user();
+            $chatBankDetails = $chatUser && !empty($chatUser->bank_details) ? json_decode($chatUser->bank_details, true) : [];
+            $chatBankBranchId = (int) ($chatBankDetails['branch_id'] ?? $chatBankDetails['branch'] ?? 0);
             $chatPermitted = $chatUser ? $chatUser->permitted_locations() : [];
             $chatLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
             if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
                 $chatLocationQuery->whereNull('deleted_at');
             }
-            if ($chatPermitted !== 'all' && !($chatUser && ($chatUser->can('access_all_locations') || $chatUser->can('loan_management.chat.admin')))) {
+            if ($chatBankBranchId > 0) {
+                $chatLocationQuery->where(function ($q) use ($chatBankBranchId) {
+                    $q->where('id', $chatBankBranchId);
+                    if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                        $q->orWhere('main_location_id', $chatBankBranchId);
+                    }
+                });
+            } elseif ($chatPermitted !== 'all' && !($chatUser && ($chatUser->can('access_all_locations') || $chatUser->can('loan_management.chat.admin')))) {
                 $chatMainLocationIds = array_values(array_filter((array) $chatPermitted));
                 if (!empty($chatMainLocationIds) && \Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
                     $chatLocationQuery->where(function ($q) use ($chatMainLocationIds) {
@@ -29,6 +39,7 @@
             $chatLocationText = $chatLocationOptions->count() === 1
                 ? (string) ($chatLocationOptions->first()->name ?? 'My location')
                 : ($chatLocationOptions->count() > 1 ? 'Multiple locations' : 'No location');
+            $chatDefaultLocationId = $chatLocationOptions->count() === 1 ? (int) ($chatLocationOptions->first()->id ?? 0) : null;
         }
     } catch (\Throwable $e) {
         $chatLocationOptions = collect();
@@ -143,7 +154,7 @@
                     <select id="chatLocationFilter" aria-label="Filter by location">
                         <option value="">All branches</option>
                         @foreach($chatLocationOptions as $location)
-                            <option value="{{ (int) $location->id }}">{{ $location->name }}</option>
+                            <option value="{{ (int) $location->id }}" {{ (string) $chatDefaultLocationId === (string) $location->id ? 'selected' : '' }}>{{ $location->name }}</option>
                         @endforeach
                     </select>
                     <select id="chatPriorityFilter" aria-label="Filter by priority">

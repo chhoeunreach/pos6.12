@@ -63,7 +63,18 @@ class LoanChatController extends Controller
 
         $webSupportInbox = $request->is('loan-management/chat-api/*') || $request->is('loan-management/chat-api/chats');
         $adminInbox = $this->isAdmin() || $webSupportInbox;
-        $rows = $this->chatService->getStaffInbox((int) auth()->id(), $adminInbox, $request->all())->take(200);
+        $filters = $request->all();
+        if (empty($filters['location_id'])) {
+            $bankBranchLocationIds = $this->userBankBranchLoanLocationIds(auth()->user());
+            if (count($bankBranchLocationIds) === 1) {
+                $filters['location_id'] = $bankBranchLocationIds[0];
+                $request->merge(['location_id' => $bankBranchLocationIds[0]]);
+            } elseif (count($bankBranchLocationIds) > 1) {
+                $filters['location_ids'] = $bankBranchLocationIds;
+                $request->merge(['location_ids' => $bankBranchLocationIds]);
+            }
+        }
+        $rows = $this->chatService->getStaffInbox((int) auth()->id(), $adminInbox, $filters)->take(200);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
         $data = ChatThreadResource::collection($rows)->resolve();
@@ -332,6 +343,45 @@ class LoanChatController extends Controller
         return view('loanmanagement::chat.inbox', ['initialThreadId' => $thread]);
     }
 
+    protected function userBankBranchLoanLocationIds($user): array
+    {
+        $branchId = $this->userBankBranchId($user);
+        if ($branchId <= 0) {
+            return [];
+        }
+
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return [$branchId];
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_business_locations')
+            ->where(function ($q) use ($branchId) {
+                $q->where('id', $branchId);
+                if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                    $q->orWhere('main_location_id', $branchId);
+                }
+            });
+
+        return $query->pluck('id')->map(fn ($id) => (int) $id)->all() ?: [$branchId];
+    }
+
+    protected function userBankBranchId($user): int
+    {
+        if (! $user) {
+            return 0;
+        }
+
+        $details = $user->bank_details ?? null;
+        if (is_string($details)) {
+            $details = json_decode($details, true) ?: [];
+        }
+        if (! is_array($details)) {
+            return 0;
+        }
+
+        return (int) ($details['branch_id'] ?? $details['branch'] ?? 0);
+    }
+
     protected function appendCustomerChatTargets(array $threads, Request $request): array
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
@@ -349,9 +399,14 @@ class LoanChatController extends Controller
         if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'deleted_at')) {
             $query->whereNull('deleted_at');
         }
+        $locationIds = array_values(array_filter(array_map('intval', (array) $request->input('location_ids', []))));
         $locationId = (int) $request->input('location_id', 0);
-        if ($locationId > 0 && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
-            $query->where('business_location_id', $locationId);
+        if ($locationId > 0) {
+            $locationIds[] = $locationId;
+        }
+        $locationIds = array_values(array_unique(array_filter($locationIds)));
+        if (! empty($locationIds) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+            $query->whereIn('business_location_id', $locationIds);
         }
 
         $search = trim((string) $request->input('search', ''));

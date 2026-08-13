@@ -56,6 +56,11 @@ class LoanTelegramChatController extends Controller
             return [];
         }
 
+        $bankBranchLocationIds = $this->userBankBranchLoanLocationIds($user);
+        if (! empty($bankBranchLocationIds)) {
+            return $bankBranchLocationIds;
+        }
+
         if ($this->isAdmin() || $user->can('access_all_locations')) {
             return null;
         }
@@ -81,6 +86,41 @@ class LoanTelegramChatController extends Controller
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+    }
+
+    protected function userBankBranchLoanLocationIds($user): array
+    {
+        $branchId = $this->userBankBranchId($user);
+        if ($branchId <= 0) {
+            return [];
+        }
+
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return [$branchId];
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_business_locations')
+            ->where(function ($q) use ($branchId) {
+                $q->where('id', $branchId);
+                if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                    $q->orWhere('main_location_id', $branchId);
+                }
+            });
+
+        return $query->pluck('id')->map(fn ($id) => (int) $id)->all() ?: [$branchId];
+    }
+
+    protected function userBankBranchId($user): int
+    {
+        $details = $user->bank_details ?? null;
+        if (is_string($details)) {
+            $details = json_decode($details, true) ?: [];
+        }
+        if (! is_array($details)) {
+            return 0;
+        }
+
+        return (int) ($details['branch_id'] ?? $details['branch'] ?? 0);
     }
 
     protected function canAccessCustomerLocation(int $customerId): bool

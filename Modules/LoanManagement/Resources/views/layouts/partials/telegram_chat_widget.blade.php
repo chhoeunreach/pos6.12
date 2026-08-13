@@ -13,15 +13,25 @@
     $tgPollMs = (int) config('loanmanagement.chat_polling_seconds', 5) * 1000;
     $tgUserLocationOptions = collect();
     $tgUserLocationText = 'All locations';
+    $tgDefaultLocationId = null;
     try {
         if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
             $tgUser = auth()->user();
+            $tgBankDetails = $tgUser && !empty($tgUser->bank_details) ? json_decode($tgUser->bank_details, true) : [];
+            $tgBankBranchId = (int) ($tgBankDetails['branch_id'] ?? $tgBankDetails['branch'] ?? 0);
             $tgPermitted = $tgUser ? $tgUser->permitted_locations() : [];
             $tgLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
             if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
                 $tgLocationQuery->whereNull('deleted_at');
             }
-            if ($tgPermitted !== 'all' && !($tgUser && ($tgUser->can('access_all_locations') || $tgUser->can('loan_management.chat.admin')))) {
+            if ($tgBankBranchId > 0) {
+                $tgLocationQuery->where(function ($q) use ($tgBankBranchId) {
+                    $q->where('id', $tgBankBranchId);
+                    if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                        $q->orWhere('main_location_id', $tgBankBranchId);
+                    }
+                });
+            } elseif ($tgPermitted !== 'all' && !($tgUser && ($tgUser->can('access_all_locations') || $tgUser->can('loan_management.chat.admin')))) {
                 $tgMainLocationIds = array_values(array_filter((array) $tgPermitted));
                 if (!empty($tgMainLocationIds) && \Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
                     $tgLocationQuery->where(function ($q) use ($tgMainLocationIds) {
@@ -37,6 +47,7 @@
             $tgUserLocationText = $tgUserLocationOptions->count() === 1
                 ? (string) ($tgUserLocationOptions->first()->name ?? 'My location')
                 : ($tgUserLocationOptions->count() > 1 ? 'Multiple locations' : 'No location');
+            $tgDefaultLocationId = $tgUserLocationOptions->count() === 1 ? (int) ($tgUserLocationOptions->first()->id ?? 0) : null;
         }
     } catch (\Throwable $e) {
         $tgUserLocationOptions = collect();
@@ -142,7 +153,7 @@
                 <select id="lmTgLocationFilter" aria-label="Filter by location">
                     <option value="">All branches</option>
                     @foreach($tgUserLocationOptions as $location)
-                        <option value="{{ (int) $location->id }}">{{ $location->name }}</option>
+                        <option value="{{ (int) $location->id }}" {{ (string) $tgDefaultLocationId === (string) $location->id ? 'selected' : '' }}>{{ $location->name }}</option>
                     @endforeach
                 </select>
                 <select id="lmTgLinkedFilter" aria-label="Filter by Telegram link">
