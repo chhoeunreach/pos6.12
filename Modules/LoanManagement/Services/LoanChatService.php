@@ -22,6 +22,7 @@ use Modules\LoanManagement\Events\LoanChatThreadClosed;
 class LoanChatService
 {
     public const STAFF_SIDE_TYPES = ['staff', 'admin'];
+    protected array $locationNameCache = [];
 
     public static function hasThreadColumn($column): bool
     {
@@ -648,6 +649,8 @@ class LoanChatService
             ? (self::hasThreadColumn('typing_staff_at') ? $thread->typing_staff_at : null)
             : (self::hasThreadColumn('typing_customer_at') ? $thread->typing_customer_at : null);
         $customer = $this->threadCustomer($thread);
+        $locationId = $customer && $customer->business_location_id !== null ? (int) $customer->business_location_id : null;
+        $locationName = $this->customerLocationName($customer);
         $staff = $this->staffUser($thread);
         $assignedStaff = $this->assignedStaffUser($thread);
         $staffName = $staff ? $this->formatUserName($staff) : '';
@@ -664,6 +667,8 @@ class LoanChatService
             'avatar_url' => $this->getAvatarUrl($thread, $viewerType),
             'customer_name' => (string) ($customer->name ?? ''),
             'customer_phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+            'location_id' => $locationId,
+            'location_name' => $locationName,
             'staff_name' => $staffName,
             'assigned_staff_name' => $assignedStaffName,
             'assigned_staff_id' => $thread->assigned_staff_id === null ? null : (int) $thread->assigned_staff_id,
@@ -768,6 +773,7 @@ class LoanChatService
         return [
             'customer_name' => (string) ($customer->name ?? ''),
             'phone' => (string) ($customer->phone ?? $customer->login_phone ?? ''),
+            'location_name' => $this->customerLocationName($customer),
             'loan_number' => (string) ($loan->loan_number ?? ''),
             'overdue_days' => (int) ($loan->days_past_due ?? $loan->overdue_days ?? 0),
             'balance' => (float) ($loan->balance ?? $loan->remaining_balance ?? $loan->outstanding_amount ?? 0),
@@ -858,6 +864,11 @@ class LoanChatService
                 if (self::hasThreadColumn('assigned_staff_id')) {
                     $inner->orWhere('assigned_staff_id', (int) $filters['staff_id']);
                 }
+            });
+        }
+        if (! empty($filters['location_id']) && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+            $query->whereHas('customer', function ($inner) use ($filters) {
+                $inner->where('business_location_id', (int) $filters['location_id']);
             });
         }
 
@@ -1101,6 +1112,34 @@ class LoanChatService
         }
 
         return $thread->customer_id ? LoanCustomer::query()->find($thread->customer_id) : null;
+    }
+
+    protected function customerLocationName(?LoanCustomer $customer): string
+    {
+        if (! $customer) {
+            return '';
+        }
+
+        $snapshot = trim((string) ($customer->business_location_name_snapshot ?? ''));
+        if ($snapshot !== '') {
+            return $snapshot;
+        }
+
+        $locationId = (int) ($customer->business_location_id ?? 0);
+        if ($locationId <= 0) {
+            return '';
+        }
+        if (array_key_exists($locationId, $this->locationNameCache)) {
+            return $this->locationNameCache[$locationId];
+        }
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return $this->locationNameCache[$locationId] = '';
+        }
+
+        return $this->locationNameCache[$locationId] = (string) DB::connection('mysql_loan')
+            ->table('loan_business_locations')
+            ->where('id', $locationId)
+            ->value('name');
     }
 
     protected function staffUser(LoanChatThread $thread)

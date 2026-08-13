@@ -349,6 +349,10 @@ class LoanChatController extends Controller
         if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'deleted_at')) {
             $query->whereNull('deleted_at');
         }
+        $locationId = (int) $request->input('location_id', 0);
+        if ($locationId > 0 && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+            $query->where('business_location_id', $locationId);
+        }
 
         $search = trim((string) $request->input('search', ''));
         if ($search !== '') {
@@ -369,15 +373,24 @@ class LoanChatController extends Controller
 
             $name = (string) ($customer->name ?? $customer->khmer_name ?? 'Customer');
             $phone = (string) ($customer->phone ?? $customer->login_phone ?? '');
+            $locationName = (string) ($customer->business_location_name_snapshot ?? '');
+            if ($locationName === '' && ! empty($customer->business_location_id) && Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+                $locationName = (string) DB::connection('mysql_loan')
+                    ->table('loan_business_locations')
+                    ->where('id', (int) $customer->business_location_id)
+                    ->value('name');
+            }
             $threads[] = [
                 'id' => null,
                 'customer_id' => (int) $customer->id,
                 'thread_number' => '',
                 'display_name' => $name,
-                'display_subtitle' => trim($phone.($phone ? ' - ' : '').'New chat'),
+                'display_subtitle' => collect([$phone, $locationName, 'New chat'])->filter()->implode(' - '),
                 'avatar_url' => '',
                 'customer_name' => $name,
                 'customer_phone' => $phone,
+                'location_id' => $customer->business_location_id === null ? null : (int) $customer->business_location_id,
+                'location_name' => $locationName,
                 'staff_name' => '',
                 'assigned_staff_name' => '',
                 'assigned_staff_id' => null,

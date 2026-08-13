@@ -1,7 +1,39 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Live Chat')
 
-@php($isEmbedded = request()->boolean('_lm_embed'))
+@php
+    $isEmbedded = request()->boolean('_lm_embed');
+    $chatLocationOptions = collect();
+    $chatLocationText = 'All locations';
+    try {
+        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            $chatUser = auth()->user();
+            $chatPermitted = $chatUser ? $chatUser->permitted_locations() : [];
+            $chatLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
+            if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
+                $chatLocationQuery->whereNull('deleted_at');
+            }
+            if ($chatPermitted !== 'all' && !($chatUser && ($chatUser->can('access_all_locations') || $chatUser->can('loan_management.chat.admin')))) {
+                $chatMainLocationIds = array_values(array_filter((array) $chatPermitted));
+                if (!empty($chatMainLocationIds) && \Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                    $chatLocationQuery->where(function ($q) use ($chatMainLocationIds) {
+                        $q->whereIn('main_location_id', $chatMainLocationIds)->orWhereIn('id', $chatMainLocationIds);
+                    });
+                } elseif (!empty($chatMainLocationIds)) {
+                    $chatLocationQuery->whereIn('id', $chatMainLocationIds);
+                } else {
+                    $chatLocationQuery->whereRaw('1 = 0');
+                }
+            }
+            $chatLocationOptions = $chatLocationQuery->orderBy('name')->get(['id', 'name']);
+            $chatLocationText = $chatLocationOptions->count() === 1
+                ? (string) ($chatLocationOptions->first()->name ?? 'My location')
+                : ($chatLocationOptions->count() > 1 ? 'Multiple locations' : 'No location');
+        }
+    } catch (\Throwable $e) {
+        $chatLocationOptions = collect();
+    }
+@endphp
 
 @section('loan_css')
 <style>
@@ -32,7 +64,11 @@
     .lm-chat-inbox{border-right:1px solid #e5e7eb;background:#f8fafc;display:flex;flex-direction:column;min-width:0;min-height:0}
     .lm-chat-toolbar{padding:14px;border-bottom:1px solid #e5e7eb;background:#fff}
     .lm-chat-toolbar h3{margin:0 0 10px;font-size:18px;font-weight:700;color:#0f172a}
+    .lm-chat-current-location{font-size:12px;color:#64748b;margin:-4px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .lm-chat-search{height:36px;border:1px solid #d1d5db;border-radius:18px;padding:0 14px;width:100%;outline:none}
+    .lm-chat-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .lm-chat-filter-grid select{height:34px;border:1px solid #d1d5db;border-radius:17px;padding:0 10px;background:#fff;font-size:12px;outline:none;min-width:0}
+    .lm-chat-filter-grid select:focus,.lm-chat-search:focus{border-color:#0ea5e9}
     .lm-chat-tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;border-bottom:1px solid #e5e7eb;background:#fff}
     .lm-chat-tab{white-space:nowrap;border:1px solid #d1d5db;background:#fff;border-radius:16px;padding:6px 10px;font-size:12px;color:#475569;cursor:pointer}
     .lm-chat-tab.active{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
@@ -101,7 +137,23 @@
         <aside class="lm-chat-inbox">
             <div class="lm-chat-toolbar">
                 <h3>Staff Support Inbox</h3>
-                <input type="text" class="lm-chat-search" id="chatSearch" placeholder="Search customer, phone, loan">
+                <div class="lm-chat-current-location"><i class="fa fa-map-marker"></i> {{ $chatLocationText }}</div>
+                <input type="text" class="lm-chat-search" id="chatSearch" placeholder="Search customer, phone, loan, location">
+                <div class="lm-chat-filter-grid">
+                    <select id="chatLocationFilter" aria-label="Filter by location">
+                        <option value="">All branches</option>
+                        @foreach($chatLocationOptions as $location)
+                            <option value="{{ (int) $location->id }}">{{ $location->name }}</option>
+                        @endforeach
+                    </select>
+                    <select id="chatPriorityFilter" aria-label="Filter by priority">
+                        <option value="">All priority</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
             </div>
             <div class="lm-chat-tabs" id="chatTabs">
                 <button class="lm-chat-tab active" data-view="all">All</button>
@@ -272,7 +324,12 @@
         }
         if (inboxLoading) return;
         inboxLoading = true;
-        apiGet(chatBaseUrl, {view: activeView, search: $('#chatSearch').val() || ''}).then(function(resp){
+        apiGet(chatBaseUrl, {
+            view: activeView,
+            search: $('#chatSearch').val() || '',
+            location_id: $('#chatLocationFilter').val() || '',
+            priority: $('#chatPriorityFilter').val() || ''
+        }).then(function(resp){
             threads = apiData(resp) || [];
             renderCards(threads);
             renderThreads();
@@ -298,7 +355,11 @@
         var q = ($('#chatSearch').val() || '').toLowerCase();
         var list = $('#chatList').empty();
         var filtered = threads.filter(function(r){
-            var hay = [r.display_name, r.display_subtitle, r.customer_name, r.customer_phone, r.last_message].join(' ').toLowerCase();
+            var priority = $('#chatPriorityFilter').val() || '';
+            var locationId = $('#chatLocationFilter').val() || '';
+            var hay = [r.display_name, r.display_subtitle, r.customer_name, r.customer_phone, r.location_name, r.last_message].join(' ').toLowerCase();
+            if (priority && r.priority !== priority) return false;
+            if (locationId && String(r.location_id || '') !== String(locationId)) return false;
             return !q || hay.indexOf(q) >= 0;
         });
         if (!filtered.length) {
@@ -310,13 +371,22 @@
             var item = $('<div class="lm-chat-item" data-id="'+(r.id || '')+'" data-customer-id="'+(r.customer_id || '')+'" data-new-chat="'+(r.is_customer_only ? '1' : '0')+'">'+
                 '<div class="lm-chat-avatar '+(r.is_online ? 'online' : '')+'">'+initials(r.display_name)+'</div>'+
                 '<div style="min-width:0"><div class="lm-chat-title">'+esc(r.display_name)+'</div>'+
-                '<div class="lm-chat-subtitle">'+esc(r.display_subtitle || '')+'</div>'+
+                '<div class="lm-chat-subtitle">'+esc(threadSubtitle(r))+'</div>'+
                 '<div class="lm-chat-preview">'+esc(r.typing ? 'Typing...' : (r.last_sender_name ? r.last_sender_name + ': ' : '') + (r.last_message || 'No messages yet'))+'</div></div>'+
                 '<div style="text-align:right"><span class="lm-priority '+esc(r.status === 'new' ? 'new' : (r.priority || ''))+'">'+esc(r.status === 'new' ? 'new' : (r.priority || 'normal'))+'</span><div style="margin-top:6px">'+badge+'</div></div>'+
             '</div>');
             if (String(r.id) === String(activeThread)) item.addClass('active');
             list.append(item);
         });
+    }
+
+    function threadSubtitle(row){
+        var subtitle = row.display_subtitle || '';
+        var location = row.location_name || '';
+        if (!location || subtitle.indexOf(location) >= 0) {
+            return subtitle;
+        }
+        return [subtitle, location].filter(Boolean).join(' · ');
     }
 
     function loadThread(id, markRead){
@@ -361,6 +431,7 @@
         var rows = [
             ['Customer', info.customer_name],
             ['Phone', info.phone],
+            ['Location', info.location_name],
             ['Loan #', info.loan_number],
             ['Overdue Days', info.overdue_days],
             ['Balance', money(info.balance)],
@@ -424,6 +495,10 @@
         renderThreads();
         if (searchTimer) window.clearTimeout(searchTimer);
         searchTimer = window.setTimeout(function(){ loadInbox(false); }, 350);
+    });
+    $('#chatLocationFilter, #chatPriorityFilter').on('change', function(){
+        renderThreads();
+        loadInbox(false);
     });
     $('#messageText').on('input', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/typing', {}); });
     $('#messageForm').on('submit', function(e){

@@ -11,6 +11,36 @@
     $tgBoundName = $tgBound ? (trim((string) ($customerRow->khmer_name ?? '')) ?: trim((string) ($customerRow->name ?? ''))) : '';
     $tgBoundLinked = $tgBound ? !empty($customerRow->telegram_chat_id) : false;
     $tgPollMs = (int) config('loanmanagement.chat_polling_seconds', 5) * 1000;
+    $tgUserLocationOptions = collect();
+    $tgUserLocationText = 'All locations';
+    try {
+        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            $tgUser = auth()->user();
+            $tgPermitted = $tgUser ? $tgUser->permitted_locations() : [];
+            $tgLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
+            if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
+                $tgLocationQuery->whereNull('deleted_at');
+            }
+            if ($tgPermitted !== 'all' && !($tgUser && ($tgUser->can('access_all_locations') || $tgUser->can('loan_management.chat.admin')))) {
+                $tgMainLocationIds = array_values(array_filter((array) $tgPermitted));
+                if (!empty($tgMainLocationIds) && \Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                    $tgLocationQuery->where(function ($q) use ($tgMainLocationIds) {
+                        $q->whereIn('main_location_id', $tgMainLocationIds)->orWhereIn('id', $tgMainLocationIds);
+                    });
+                } elseif (!empty($tgMainLocationIds)) {
+                    $tgLocationQuery->whereIn('id', $tgMainLocationIds);
+                } else {
+                    $tgLocationQuery->whereRaw('1 = 0');
+                }
+            }
+            $tgUserLocationOptions = $tgLocationQuery->orderBy('name')->get(['id', 'name']);
+            $tgUserLocationText = $tgUserLocationOptions->count() === 1
+                ? (string) ($tgUserLocationOptions->first()->name ?? 'My location')
+                : ($tgUserLocationOptions->count() > 1 ? 'Multiple locations' : 'No location');
+        }
+    } catch (\Throwable $e) {
+        $tgUserLocationOptions = collect();
+    }
 @endphp
 <style>
     #lmTgFab{position:fixed;right:26px;bottom:26px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#6dc9f7,#2894e0);color:#fff;border:0;box-shadow:0 6px 20px rgba(41,148,224,.5);font-size:25px;cursor:pointer;z-index:4998;display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
@@ -30,8 +60,10 @@
     .lm-tg-sidebar{width:300px;flex:0 0 300px;border-right:1px solid #e5e7eb;background:#f7f9fb;display:flex;flex-direction:column;min-height:0}
     .lm-tg-sidebar-head{padding:14px 14px 10px;flex:0 0 auto}
     .lm-tg-sidebar-head h4{margin:0 0 10px;font-size:16px;font-weight:700;color:#0f172a}
-    .lm-tg-sidebar-head input{width:100%;border:1px solid #d1d5db;border-radius:18px;padding:8px 14px;font-size:12.5px;outline:none;box-sizing:border-box;background:#fff}
-    .lm-tg-sidebar-head input:focus{border-color:#54a9eb}
+    .lm-tg-current-location{font-size:11px;color:#64748b;margin:-4px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .lm-tg-sidebar-head input,.lm-tg-sidebar-head select{width:100%;border:1px solid #d1d5db;border-radius:18px;padding:8px 14px;font-size:12.5px;outline:none;box-sizing:border-box;background:#fff}
+    .lm-tg-sidebar-head input:focus,.lm-tg-sidebar-head select:focus{border-color:#54a9eb}
+    .lm-tg-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}
     .lm-tg-contact-list{flex:1 1 auto;overflow-y:auto;min-height:0;padding:4px 8px 10px}
     .lm-tg-contact{display:flex;align-items:center;gap:10px;padding:9px 8px;cursor:pointer;border-radius:9px;margin-bottom:2px}
     .lm-tg-contact:hover{background:#eef4fb}
@@ -104,7 +136,21 @@
     <aside class="lm-tg-sidebar">
         <div class="lm-tg-sidebar-head">
             <h4><i class="fa fa-telegram"></i> Chats</h4>
+            <div class="lm-tg-current-location"><i class="fa fa-map-marker"></i> {{ $tgUserLocationText }}</div>
             <input type="text" id="lmTgSearchInput" placeholder="Search name, phone or code" autocomplete="off">
+            <div class="lm-tg-filter-row">
+                <select id="lmTgLocationFilter" aria-label="Filter by location">
+                    <option value="">All branches</option>
+                    @foreach($tgUserLocationOptions as $location)
+                        <option value="{{ (int) $location->id }}">{{ $location->name }}</option>
+                    @endforeach
+                </select>
+                <select id="lmTgLinkedFilter" aria-label="Filter by Telegram link">
+                    <option value="">All</option>
+                    <option value="linked">Linked</option>
+                    <option value="unlinked">Not linked</option>
+                </select>
+            </div>
         </div>
         <div class="lm-tg-contact-list" id="lmTgContactList">
             <div class="lm-tg-empty-side">Loading contacts...</div>
@@ -239,7 +285,7 @@
         profile = profile || {};
         var name = profileName(profile);
         var isLinked = typeof profile.telegram_linked === 'boolean' ? profile.telegram_linked : !!linked;
-        var details = profile.subtitle || profile.phone || profile.customer_code || '';
+        var details = profile.subtitle || [profile.phone, profile.customer_code, profile.location_name].filter(Boolean).join(' · ') || '';
 
         if (profile.avatar_url) {
             $('#lmTgHeaderAvatar').html('<img src="' + esc(profile.avatar_url) + '" alt="">');
@@ -311,7 +357,8 @@
         contacts.forEach(function(r){
             if (!r.customer_id) return;
             var name = r.display_name || r.customer_name || 'Customer';
-            var sub = r.last_message ? ((r.last_sender_name ? r.last_sender_name + ': ' : '') + r.last_message) : (r.display_subtitle || r.customer_phone || 'New chat');
+            var fallbackSub = [r.customer_phone, r.location_name].filter(Boolean).join(' · ') || 'New chat';
+            var sub = r.last_message ? ((r.last_sender_name ? r.last_sender_name + ': ' : '') + r.last_message) : (r.display_subtitle || fallbackSub);
             var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-tg-contact-badge">' + Number(r.unread_count) + '</span>' : '';
             var avatar = r.avatar_url
                 ? '<img src="' + esc(r.avatar_url) + '" alt="">'
@@ -327,7 +374,12 @@
     }
 
     function loadContacts(search){
-        return apiGet(chatBaseUrl + '?search=' + encodeURIComponent(search || '')).then(function(resp){
+        var params = [
+            'search=' + encodeURIComponent(search || ''),
+            'location_id=' + encodeURIComponent($('#lmTgLocationFilter').val() || ''),
+            'telegram_status=' + encodeURIComponent($('#lmTgLinkedFilter').val() || '')
+        ];
+        return apiGet(chatBaseUrl + '?' + params.join('&')).then(function(resp){
             renderContacts(listData(resp));
         }).catch(function(){});
     }
@@ -418,6 +470,9 @@
         var q = $(this).val();
         if (searchTimer) window.clearTimeout(searchTimer);
         searchTimer = window.setTimeout(function(){ loadContacts(q); }, 300);
+    });
+    $('#lmTgLocationFilter, #lmTgLinkedFilter').on('change', function(){
+        loadContacts($('#lmTgSearchInput').val());
     });
 
     var sendingMessage = false;

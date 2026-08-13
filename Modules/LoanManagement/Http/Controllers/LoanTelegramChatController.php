@@ -112,7 +112,11 @@ class LoanTelegramChatController extends Controller
 
         $rows = $this->chatService->listContactsForStaff(
             trim((string) $request->input('search', '')),
-            $this->permittedLoanLocationIds()
+            $this->permittedLoanLocationIds(),
+            [
+                'location_id' => $request->input('location_id'),
+                'telegram_status' => $request->input('telegram_status'),
+            ]
         );
 
         return $this->ok('Chats loaded', $rows->values()->all());

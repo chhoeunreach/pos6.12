@@ -21,6 +21,8 @@ use Modules\LoanManagement\Jobs\RelayChatMessageToTelegramJob;
  */
 class TelegramChatService
 {
+    protected array $locationNameCache = [];
+
     public function findOrCreateThread(int $customerId): LoanTelegramChatThread
     {
         $existing = LoanTelegramChatThread::query()
@@ -123,8 +125,17 @@ class TelegramChatService
      * customer-only rows for customers who don't have a thread yet. Optionally scoped to a
      * set of permitted loan_business_locations ids (null = unrestricted).
      */
-    public function listContactsForStaff(string $search = '', ?array $locationIds = null): Collection
+    public function listContactsForStaff(string $search = '', ?array $locationIds = null, array $filters = []): Collection
     {
+        $filterLocationId = (int) ($filters['location_id'] ?? 0);
+        if ($filterLocationId > 0) {
+            if ($locationIds !== null && ! in_array($filterLocationId, $locationIds, true)) {
+                return collect();
+            }
+            $locationIds = [$filterLocationId];
+        }
+        $telegramStatus = (string) ($filters['telegram_status'] ?? '');
+
         $threads = LoanTelegramChatThread::query()
             ->where('status', 'open')
             ->with('customer')
@@ -150,6 +161,9 @@ class TelegramChatService
 
             $existingCustomerIds[(int) $customer->id] = true;
             $profile = $this->customerProfile($customer);
+            if (! $this->passesTelegramStatus($profile['telegram_linked'], $telegramStatus)) {
+                continue;
+            }
             $rows->push([
                 'id' => (int) $thread->id,
                 'customer_id' => (int) $customer->id,
@@ -157,6 +171,8 @@ class TelegramChatService
                 'customer_name' => $profile['display_name'],
                 'customer_phone' => $profile['phone'],
                 'display_subtitle' => $profile['subtitle'],
+                'location_id' => $profile['location_id'],
+                'location_name' => $profile['location_name'],
                 'avatar_url' => $profile['avatar_url'],
                 'last_message' => (string) ($thread->last_message ?? ''),
                 'last_message_type' => (string) ($thread->last_message_type ?? 'text'),
@@ -197,6 +213,9 @@ class TelegramChatService
             }
 
             $profile = $this->customerProfile($customer);
+            if (! $this->passesTelegramStatus($profile['telegram_linked'], $telegramStatus)) {
+                continue;
+            }
             $rows->push([
                 'id' => null,
                 'customer_id' => (int) $customer->id,
@@ -204,6 +223,8 @@ class TelegramChatService
                 'customer_name' => $profile['display_name'],
                 'customer_phone' => $profile['phone'],
                 'display_subtitle' => $profile['subtitle'],
+                'location_id' => $profile['location_id'],
+                'location_name' => $profile['location_name'],
                 'avatar_url' => $profile['avatar_url'],
                 'last_message' => '',
                 'last_message_type' => 'text',
@@ -229,6 +250,8 @@ class TelegramChatService
             'display_name' => $profile['display_name'],
             'customer_name' => $profile['display_name'],
             'customer_phone' => $profile['phone'],
+            'location_id' => $profile['location_id'],
+            'location_name' => $profile['location_name'],
             'telegram_linked' => $profile['telegram_linked'],
             'avatar_url' => $profile['avatar_url'],
             'customer_profile' => $profile,
@@ -482,7 +505,8 @@ class TelegramChatService
     protected function customerMatchesSearch(LoanCustomer $customer, string $search): bool
     {
         $needle = mb_strtolower($search);
-        foreach ([$customer->name, $customer->khmer_name, $customer->phone, $customer->login_phone, $customer->customer_code] as $field) {
+        $locationName = $this->customerLocationName($customer);
+        foreach ([$customer->name, $customer->khmer_name, $customer->phone, $customer->login_phone, $customer->customer_code, $locationName] as $field) {
             if ($field && str_contains(mb_strtolower((string) $field), $needle)) {
                 return true;
             }
@@ -495,7 +519,8 @@ class TelegramChatService
         $name = trim((string) ($customer->khmer_name ?? '')) ?: trim((string) ($customer->name ?? '')) ?: 'Customer';
         $phone = trim((string) ($customer->phone ?? '')) ?: trim((string) ($customer->login_phone ?? ''));
         $code = trim((string) ($customer->customer_code ?? ''));
-        $subtitle = trim($phone.($phone && $code ? ' · ' : '').$code);
+        $locationName = $this->customerLocationName($customer);
+        $subtitle = collect([$phone, $code, $locationName])->filter()->implode(' · ');
 
         return [
             'id' => (int) ($customer->id ?? 0),
@@ -503,10 +528,43 @@ class TelegramChatService
             'phone' => $phone,
             'customer_code' => $code,
             'subtitle' => $subtitle,
+            'location_id' => $customer->business_location_id === null ? null : (int) $customer->business_location_id,
+            'location_name' => $locationName,
             'telegram_username' => trim((string) ($customer->telegram_username ?? '')),
             'telegram_linked' => ! empty($customer->telegram_chat_id),
             'avatar_url' => $this->customerAvatarUrl($customer),
         ];
+    }
+
+    protected function passesTelegramStatus(bool $linked, string $status): bool
+    {
+        return $status === ''
+            || ($status === 'linked' && $linked)
+            || ($status === 'unlinked' && ! $linked);
+    }
+
+    protected function customerLocationName($customer): string
+    {
+        $snapshot = trim((string) ($customer->business_location_name_snapshot ?? ''));
+        if ($snapshot !== '') {
+            return $snapshot;
+        }
+
+        $locationId = (int) ($customer->business_location_id ?? 0);
+        if ($locationId <= 0) {
+            return '';
+        }
+        if (array_key_exists($locationId, $this->locationNameCache)) {
+            return $this->locationNameCache[$locationId];
+        }
+        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+            return $this->locationNameCache[$locationId] = '';
+        }
+
+        return $this->locationNameCache[$locationId] = (string) DB::connection('mysql_loan')
+            ->table('loan_business_locations')
+            ->where('id', $locationId)
+            ->value('name');
     }
 
     protected function customerAvatarUrl($customer): string
