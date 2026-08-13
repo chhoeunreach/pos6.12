@@ -552,18 +552,14 @@ class LoanInstallmentListController extends Controller
                     continue;
                 }
 
-                $amount = min($remainingPayment, $remainingSchedule);
                 $line = clone $payment;
                 $line->_print_schedule_id = $row->id;
-                $line->_print_amount = $amount;
+                $line->_print_amount = $remainingPayment;
                 $allocated->push($line);
 
-                $remainingPayment -= $amount;
-                $scheduleRemaining[$row->id] = $remainingSchedule - $amount;
-
-                if ($remainingPayment <= 0) {
-                    break;
-                }
+                $scheduleRemaining[$row->id] = max(0, round($remainingSchedule - $remainingPayment, 2));
+                $remainingPayment = 0;
+                break;
             }
 
             if ($remainingPayment > 0) {
@@ -3284,8 +3280,8 @@ class LoanInstallmentListController extends Controller
             ->orderBy('id')
             ->get();
 
-        $remaining = $amount;
-        foreach ($schedules as $schedule) {
+        $remaining = round($amount, 2);
+        foreach ($schedules as $index => $schedule) {
             if ($remaining <= 0) {
                 break;
             }
@@ -3295,22 +3291,62 @@ class LoanInstallmentListController extends Controller
                 continue;
             }
 
-            $applied = min($remaining, $due);
             $existingPaidAmount = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
-            $newPaid = $existingPaidAmount + $applied;
-            $newBalance = max(0, $due - $applied);
+            $newPaid = round($existingPaidAmount + $remaining, 2);
+            $newBalance = max(0, round($due - $remaining, 2));
+            $creditToNextInstallments = max(0, round($remaining - $due, 2));
 
             DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
                 'amount_paid' => $newPaid,
                 'paid_amount' => $newPaid,
+                'paid_value' => $newPaid,
                 'amount_balance' => $newBalance,
                 'balance_amount' => $newBalance,
                 'status' => $newBalance <= 0 ? 'paid' : 'partial',
                 'paid_at' => $newBalance <= 0 ? $paidAt : null,
+                'paid_date' => $newBalance <= 0 ? substr($paidAt, 0, 10) : null,
                 'updated_at' => now(),
             ]));
 
-            $remaining -= $applied;
+            if ($creditToNextInstallments > 0) {
+                $this->applyInstallmentCreditToFutureBalances(
+                    $schedules->slice($index + 1)->values(),
+                    $creditToNextInstallments
+                );
+            }
+
+            break;
+        }
+    }
+
+    protected function applyInstallmentCreditToFutureBalances($schedules, float $credit): void
+    {
+        $remainingCredit = round($credit, 2);
+
+        foreach ($schedules as $schedule) {
+            if ($remainingCredit <= 0) {
+                break;
+            }
+
+            $status = strtolower((string) ($schedule->status ?? ''));
+            if (in_array($status, ['paid', 'completed', 'pay off', 'pay_off', 'payoff'], true)) {
+                continue;
+            }
+
+            $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? $schedule->schedule_amount ?? $schedule->amount_due ?? 0);
+            if ($balance <= 0) {
+                continue;
+            }
+
+            $newBalance = max(0, round($balance - $remainingCredit, 2));
+            $remainingCredit = max(0, round($remainingCredit - $balance, 2));
+
+            DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [
+                'amount_balance' => $newBalance,
+                'balance_amount' => $newBalance,
+                'status' => $newBalance <= 0 ? 'paid' : ($status === 'partial' ? 'partial' : 'unpaid'),
+                'updated_at' => now(),
+            ]));
         }
     }
 

@@ -707,7 +707,17 @@
     $scheduleRowsForPrint = $installments->take($fixedScheduleRowCount)->values();
     $schedulePrincipalTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->installment_value ?? 0));
     $scheduleInterestTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
-    $scheduleTotalAmount = $scheduleRowsForPrint->sum(fn ($row) => round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2));
+    $scheduleTotalAmount = $scheduleRowsForPrint->sum(function ($row) {
+        $total = round((float) ($row->installment_value ?? 0) + (float) ($row->benefit_value ?? 0), 2);
+        if ($total <= 0) {
+            $total = (float) ($row->amount_due ?? $row->schedule_amount ?? 0);
+        }
+
+        $paid = (float) ($row->paid_value ?? $row->paid_amount ?? $row->amount_paid ?? 0);
+        $balance = round((float) ($row->balance_amount ?? $row->amount_balance ?? max(0, $total - $paid)), 2);
+
+        return $paid <= 0 && $balance > 0 && $balance < $total ? $balance : $total;
+    });
     $downPayment = (float) ($loanRow->down_payment ?? 0);
     $loanAmount = (float) ($loanRow->principal_amount ?? max(0, $productTotal - $downPayment));
     if ($productTotal <= 0 && ($loanAmount > 0 || $downPayment > 0)) {
@@ -1022,13 +1032,22 @@
                             $rowTotal = (float) ($row->amount_due ?? 0);
                         }
                         $rowPayments = $paymentsBySchedule->get($row->id, collect());
-                        $paid = (float) ($row->paid_value ?? $rowPayments->sum(fn ($p) => (float) ($p->total_paid_base ?? $p->amount ?? 0)));
+                        $rowPaymentAmount = round((float) $rowPayments->sum(fn ($p) => (float) ($p->_print_amount ?? $p->total_paid_base ?? $p->amount ?? 0)), 2);
+                        $storedPaid = (float) ($row->paid_value ?? $row->paid_amount ?? $row->amount_paid ?? 0);
+                        $rowBalance = round((float) ($row->balance_amount ?? $row->amount_balance ?? max(0, $rowTotal - $storedPaid)), 2);
+                        $isCreditOnlyRow = $rowPaymentAmount <= 0 && $storedPaid > 0 && $rowBalance > 0 && $rowBalance < $rowTotal;
+                        $paid = $isCreditOnlyRow ? 0 : ($rowPaymentAmount > 0 ? $rowPaymentAmount : $storedPaid);
+                        if ($isCreditOnlyRow || ($paid <= 0 && $rowBalance > 0 && $rowBalance < $rowTotal)) {
+                            $rowTotal = $rowBalance;
+                        }
                         $discount = (float) ($row->discount_amount ?? 0);
                         $storedStatus = strtolower((string) ($row->status ?? ''));
                         $isPayOff = in_array($storedStatus, ['pay off', 'pay_off', 'payoff'], true);
-                        $rowStatus = ($isPayOff || ($paid + $discount >= $rowTotal && $rowTotal > 0))
+                        $rowStatus = $isCreditOnlyRow
+                            ? 'Unpaid'
+                            : (($isPayOff || ($paid + $discount >= $rowTotal && $rowTotal > 0))
                             ? ($isPayOff ? 'Pay Off' : 'Paid')
-                            : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? ''));
+                            : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? '')));
                         $rowStatusClass = in_array(strtolower($rowStatus), ['paid', 'pay off'], true)
                             ? 'status-paid'
                             : (strtolower($rowStatus) === 'partial' ? 'status-partial' : 'status-unpaid');
