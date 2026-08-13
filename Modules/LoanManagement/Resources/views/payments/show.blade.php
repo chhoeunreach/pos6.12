@@ -2,25 +2,56 @@
 @section('title', 'Payment Detail')
 
 @php
+    $isEmbeddedModal = request()->boolean('_lm_modal');
     $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? ('Payment #'.$payment->id);
     $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
     $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
     $method = $payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? '-';
 @endphp
 
+@if($isEmbeddedModal)
+    @section('hide_breadcrumb', '1')
+    @section('loan_css')
+        @parent
+        <style>
+            body.loan-management-embedded-modal {
+                background: #fff !important;
+            }
+            body.loan-management-embedded-modal .lm-content,
+            body.loan-management-embedded-modal .lm-workspace {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #fff !important;
+            }
+            body.loan-management-embedded-modal .content {
+                padding: 10px 12px !important;
+            }
+            body.loan-management-embedded-modal .box {
+                margin-bottom: 10px;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        </style>
+    @endsection
+@endif
+
 @section('content_body')
-<section class="content-header">
-    <h1>Payment Detail</h1>
-</section>
+@unless($isEmbeddedModal)
+    <section class="content-header">
+        <h1>Payment Detail</h1>
+    </section>
+@endunless
 
 <section class="content">
     <div class="box box-primary">
         <div class="box-header with-border">
             <h3 class="box-title">{{ $receipt }}</h3>
             <div class="box-tools">
-                <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
+                @unless($isEmbeddedModal)
+                    <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
+                @endunless
                 @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.payment|loan_management.payments.create|loan_management.edit'))
-                    <a href="{{ route('loan-management.payments.edit', $payment->id) }}" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i> Edit</a>
+                    <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i> Edit Payment</a>
                 @endif
             </div>
         </div>

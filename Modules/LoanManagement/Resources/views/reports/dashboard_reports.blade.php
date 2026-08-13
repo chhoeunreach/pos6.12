@@ -1065,6 +1065,10 @@
                         return;
                     }
 
+                    if (url.indexOf('_lm_modal=1') === -1) {
+                        url += (url.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
+                    }
+
                     jQuery('.view_modal').html(
                         '<div class="modal-dialog modal-xl" role="document" style="width:96%;max-width:1280px;">' +
                             '<div class="modal-content">' +

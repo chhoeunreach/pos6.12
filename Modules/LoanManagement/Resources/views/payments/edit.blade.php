@@ -1,29 +1,63 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Edit Payment')
 
-@section('content_body')
 @php
+    $isEmbeddedModal = request()->boolean('_lm_modal');
     $backCustomerId = request('customer_id') ?: ($loan->customer_id ?? $payment->customer_id ?? null);
 @endphp
-<section class="content-header">
-    <h1>Edit Payment</h1>
-</section>
+
+@if($isEmbeddedModal)
+    @section('hide_breadcrumb', '1')
+    @section('loan_css')
+        @parent
+        <style>
+            body.loan-management-embedded-modal {
+                background: #fff !important;
+            }
+            body.loan-management-embedded-modal .lm-content,
+            body.loan-management-embedded-modal .lm-workspace {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #fff !important;
+            }
+            body.loan-management-embedded-modal .content {
+                padding: 10px 12px !important;
+            }
+            body.loan-management-embedded-modal .box {
+                margin-bottom: 10px;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        </style>
+    @endsection
+@endif
+
+@section('content_body')
+@unless($isEmbeddedModal)
+    <section class="content-header">
+        <h1>Edit Payment</h1>
+    </section>
+@endunless
 
 <section class="content">
     <div class="box box-primary">
         <div class="box-header with-border">
             <h3 class="box-title">{{ $payment->receipt_number ?? $payment->payment_ref_no ?? ('Payment #'.$payment->id) }}</h3>
-            <div class="box-tools pull-right">
-                @if(!empty($backCustomerId))
-                    <a href="{{ route('loan-management.customers.edit', $backCustomerId) }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back to Customer</a>
-                @endif
-                <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
-            </div>
+            @unless($isEmbeddedModal)
+                <div class="box-tools pull-right">
+                    @if(!empty($backCustomerId))
+                        <a href="{{ route('loan-management.customers.edit', $backCustomerId) }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back to Customer</a>
+                    @endif
+                    <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
+                </div>
+            @endunless
         </div>
-        <form method="POST" action="{{ route('loan-management.payments.update', $payment->id) }}">
+        <form method="POST" action="{{ route('loan-management.payments.update', ['payment' => $payment->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}">
             @csrf
             @method('PUT')
-            @if(!empty($backCustomerId))
+            @if($isEmbeddedModal)
+                <input type="hidden" name="return_to" value="{{ route('loan-management.payments.show', ['payment' => $payment->id, '_lm_modal' => 1]) }}">
+            @elseif(!empty($backCustomerId))
                 <input type="hidden" name="return_to" value="{{ route('loan-management.customers.edit', $backCustomerId) }}">
             @endif
             <div class="box-body">
@@ -106,7 +140,9 @@
                 </div>
             </div>
             <div class="box-footer text-right">
-                @if(!empty($backCustomerId))
+                @if($isEmbeddedModal)
+                    <a href="{{ route('loan-management.payments.show', ['payment' => $payment->id, '_lm_modal' => 1]) }}" class="btn btn-default">Cancel</a>
+                @elseif(!empty($backCustomerId))
                     <a href="{{ route('loan-management.customers.edit', $backCustomerId) }}" class="btn btn-default">Back to Customer</a>
                 @else
                     <a href="{{ route('loan-management.payments.index') }}" class="btn btn-default">Cancel</a>
