@@ -10,17 +10,24 @@
         if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
             $chatUser = auth()->user();
             $chatBankDetails = $chatUser && !empty($chatUser->bank_details) ? json_decode($chatUser->bank_details, true) : [];
-            $chatBankBranchId = (int) ($chatBankDetails['branch_id'] ?? $chatBankDetails['branch'] ?? 0);
+            $chatBankBranch = trim((string) ($chatBankDetails['branch_id'] ?? $chatBankDetails['branch'] ?? ''));
             $chatPermitted = $chatUser ? $chatUser->permitted_locations() : [];
             $chatLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
             if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
                 $chatLocationQuery->whereNull('deleted_at');
             }
-            if ($chatBankBranchId > 0) {
-                $chatLocationQuery->where(function ($q) use ($chatBankBranchId) {
-                    $q->where('id', $chatBankBranchId);
-                    if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
-                        $q->orWhere('main_location_id', $chatBankBranchId);
+            if ($chatBankBranch !== '') {
+                $chatLocationQuery->where(function ($q) use ($chatBankBranch) {
+                    if (is_numeric($chatBankBranch)) {
+                        $q->where('id', (int) $chatBankBranch);
+                        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                            $q->orWhere('main_location_id', (int) $chatBankBranch);
+                        }
+                    } else {
+                        $q->where('name', $chatBankBranch);
+                        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'location_code')) {
+                            $q->orWhere('location_code', $chatBankBranch);
+                        }
                     }
                 });
             } elseif ($chatPermitted !== 'all' && !($chatUser && ($chatUser->can('access_all_locations') || $chatUser->can('loan_management.chat.admin')))) {

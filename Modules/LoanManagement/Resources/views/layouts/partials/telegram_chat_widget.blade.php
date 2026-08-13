@@ -18,17 +18,24 @@
         if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
             $tgUser = auth()->user();
             $tgBankDetails = $tgUser && !empty($tgUser->bank_details) ? json_decode($tgUser->bank_details, true) : [];
-            $tgBankBranchId = (int) ($tgBankDetails['branch_id'] ?? $tgBankDetails['branch'] ?? 0);
+            $tgBankBranch = trim((string) ($tgBankDetails['branch_id'] ?? $tgBankDetails['branch'] ?? ''));
             $tgPermitted = $tgUser ? $tgUser->permitted_locations() : [];
             $tgLocationQuery = \Illuminate\Support\Facades\DB::connection('mysql_loan')->table('loan_business_locations');
             if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
                 $tgLocationQuery->whereNull('deleted_at');
             }
-            if ($tgBankBranchId > 0) {
-                $tgLocationQuery->where(function ($q) use ($tgBankBranchId) {
-                    $q->where('id', $tgBankBranchId);
-                    if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
-                        $q->orWhere('main_location_id', $tgBankBranchId);
+            if ($tgBankBranch !== '') {
+                $tgLocationQuery->where(function ($q) use ($tgBankBranch) {
+                    if (is_numeric($tgBankBranch)) {
+                        $q->where('id', (int) $tgBankBranch);
+                        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                            $q->orWhere('main_location_id', (int) $tgBankBranch);
+                        }
+                    } else {
+                        $q->where('name', $tgBankBranch);
+                        if (\Illuminate\Support\Facades\Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'location_code')) {
+                            $q->orWhere('location_code', $tgBankBranch);
+                        }
                     }
                 });
             } elseif ($tgPermitted !== 'all' && !($tgUser && ($tgUser->can('access_all_locations') || $tgUser->can('loan_management.chat.admin')))) {

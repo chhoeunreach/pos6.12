@@ -90,37 +90,44 @@ class LoanTelegramChatController extends Controller
 
     protected function userBankBranchLoanLocationIds($user): array
     {
-        $branchId = $this->userBankBranchId($user);
-        if ($branchId <= 0) {
+        $branch = $this->userBankBranchValue($user);
+        if ($branch === '') {
             return [];
         }
 
         if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
-            return [$branchId];
+            return is_numeric($branch) ? [(int) $branch] : [];
         }
 
         $query = DB::connection('mysql_loan')->table('loan_business_locations')
-            ->where(function ($q) use ($branchId) {
-                $q->where('id', $branchId);
-                if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
-                    $q->orWhere('main_location_id', $branchId);
+            ->where(function ($q) use ($branch) {
+                if (is_numeric($branch)) {
+                    $q->where('id', (int) $branch);
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'main_location_id')) {
+                        $q->orWhere('main_location_id', (int) $branch);
+                    }
+                } else {
+                    $q->where('name', $branch);
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'location_code')) {
+                        $q->orWhere('location_code', $branch);
+                    }
                 }
             });
 
-        return $query->pluck('id')->map(fn ($id) => (int) $id)->all() ?: [$branchId];
+        return $query->pluck('id')->map(fn ($id) => (int) $id)->all() ?: (is_numeric($branch) ? [(int) $branch] : []);
     }
 
-    protected function userBankBranchId($user): int
+    protected function userBankBranchValue($user): string
     {
         $details = $user->bank_details ?? null;
         if (is_string($details)) {
             $details = json_decode($details, true) ?: [];
         }
         if (! is_array($details)) {
-            return 0;
+            return '';
         }
 
-        return (int) ($details['branch_id'] ?? $details['branch'] ?? 0);
+        return trim((string) ($details['branch_id'] ?? $details['branch'] ?? ''));
     }
 
     protected function canAccessCustomerLocation(int $customerId): bool
