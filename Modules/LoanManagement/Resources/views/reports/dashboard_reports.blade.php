@@ -260,12 +260,12 @@
         white-space: nowrap;
     }
     .lm-report-table .lm-col-method {
-        width: 160px !important;
-        min-width: 140px;
-        max-width: 240px;
-        white-space: normal;
+        width: auto !important;
+        min-width: 0;
+        max-width: none;
+        white-space: nowrap;
         word-break: normal;
-        overflow-wrap: anywhere;
+        overflow-wrap: normal;
     }
     .lm-report-table .lm-col-date {
         width: 60px !important;
@@ -274,14 +274,14 @@
         white-space: nowrap;
     }
     .lm-report-table .lm-col-loan {
-        width: 132px !important;
-        min-width: 132px;
-        max-width: 132px;
+        width: auto !important;
+        min-width: 0;
+        max-width: none;
         white-space: nowrap;
     }
     .lm-report-table .lm-col-payment-loan {
-        width: 1% !important;
-        min-width: 74px;
+        width: auto !important;
+        min-width: 0;
         white-space: nowrap;
     }
     .lm-report-table .lm-col-payment-loan .lm-loan-ref-line,
@@ -294,6 +294,11 @@
         width: 1% !important;
         min-width: 72px;
         white-space: nowrap;
+    }
+    .lm-report-table td.lm-col-method,
+    .lm-report-table td.lm-col-loan,
+    .lm-report-table td.lm-col-payment-loan {
+        width: 1%;
     }
     .lm-report-table td {
         word-break: break-word;
@@ -1042,7 +1047,7 @@
                     pageLength: -1,
                     lengthMenu: [[-1, 25, 50, 100], ['All', 25, 50, 100]],
                     order: [],
-                    autoWidth: false,
+                    autoWidth: true,
                     scrollX: false,
                     columnDefs: [
                         {targets: 0, orderable: false, searchable: false}
