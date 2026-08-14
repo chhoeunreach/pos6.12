@@ -642,6 +642,124 @@ class LotController extends BaseSmartStockController
 
         $currentStock = (float) ($stockQty->current_stock ?? 0);
 
+        if ($lotInfo) {
+            $stockLocations = DB::table('purchase_lines as pl')
+                ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                ->where('pl.lot_number', $lot)
+                ->where('t.business_id', $businessId)
+                ->select('bl.name as location_name')
+                ->selectRaw("COALESCE(SUM($lotQtyAvailableSql), 0) as current_stock")
+                ->groupBy('t.location_id', 'bl.name')
+                ->havingRaw('current_stock > 0')
+                ->orderBy('bl.name')
+                ->get()
+                ->pluck('location_name')
+                ->filter()
+                ->values();
+
+            if ($stockLocations->isNotEmpty()) {
+                $lotInfo->location_name = $stockLocations->implode(', ');
+            } else {
+                $latestPurchaseLocation = DB::table('purchase_lines as pl')
+                    ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->select([
+                        DB::raw('t.transaction_date as movement_date'),
+                        DB::raw('bl.name as location_name'),
+                    ]);
+
+                $latestSellLocation = DB::table('transaction_sell_lines_purchase_lines as tspl')
+                    ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+                    ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
+                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->whereNotNull('tspl.sell_line_id')
+                    ->select([
+                        DB::raw('t.transaction_date as movement_date'),
+                        DB::raw('bl.name as location_name'),
+                    ]);
+
+                $latestReturnLocation = DB::table('transaction_sell_lines as return_tsl')
+                    ->join('purchase_lines as pl', 'return_tsl.lot_no_line_id', '=', 'pl.id')
+                    ->join('transactions as t', 'return_tsl.transaction_id', '=', 't.id')
+                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->where('t.type', 'sell_return')
+                    ->whereNotNull('return_tsl.parent_sell_line_id')
+                    ->select([
+                        DB::raw('t.transaction_date as movement_date'),
+                        DB::raw('bl.name as location_name'),
+                    ]);
+
+                $latestAdjustmentLocation = DB::table('transaction_sell_lines_purchase_lines as tspl')
+                    ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+                    ->join('stock_adjustment_lines as sal', 'tspl.stock_adjustment_line_id', '=', 'sal.id')
+                    ->join('transactions as t', 'sal.transaction_id', '=', 't.id')
+                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->where('t.type', 'stock_adjustment')
+                    ->whereNotNull('tspl.stock_adjustment_line_id')
+                    ->select([
+                        DB::raw('t.transaction_date as movement_date'),
+                        DB::raw('bl.name as location_name'),
+                    ]);
+
+                $latestTransferOutLocation = DB::table('transaction_sell_lines as tsl')
+                    ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
+                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->where('t.type', 'sell_transfer')
+                    ->whereNotNull('tsl.lot_no_line_id')
+                    ->select([
+                        DB::raw('t.transaction_date as movement_date'),
+                        DB::raw('bl.name as location_name'),
+                    ]);
+
+                $latestTransferInLocation = DB::table('transaction_sell_lines as tsl')
+                    ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
+                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+                    ->leftJoin('transactions as t_in', function ($join) {
+                        $join->on('t_in.transfer_parent_id', '=', 't.id')
+                            ->where('t_in.type', '=', 'purchase_transfer');
+                    })
+                    ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
+                    ->where('pl.lot_number', $lot)
+                    ->where('t.business_id', $businessId)
+                    ->where('t.type', 'sell_transfer')
+                    ->whereNotNull('tsl.lot_no_line_id')
+                    ->select([
+                        DB::raw('COALESCE(t_in.transaction_date, t.transaction_date) as movement_date'),
+                        DB::raw('bl_to.name as location_name'),
+                    ]);
+
+                $latestLocationUnion = $latestPurchaseLocation
+                    ->unionAll($latestSellLocation)
+                    ->unionAll($latestReturnLocation)
+                    ->unionAll($latestAdjustmentLocation)
+                    ->unionAll($latestTransferOutLocation)
+                    ->unionAll($latestTransferInLocation);
+
+                $latestLocation = DB::query()
+                    ->fromSub($latestLocationUnion, 'lot_locations')
+                    ->whereNotNull('location_name')
+                    ->orderByDesc('movement_date')
+                    ->value('location_name');
+
+                if (! empty($latestLocation)) {
+                    $lotInfo->location_name = $latestLocation;
+                }
+            }
+        }
+
         return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock'));
     }
 
