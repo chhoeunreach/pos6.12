@@ -2,6 +2,100 @@
 
 @section('page_title', __('lang_v1.lot_history') . ' - ' . $lot)
 
+@section('css')
+<style>
+    #lot_history_report {
+        color: #111827;
+    }
+
+    #lot_history_report thead th {
+        color: #163b82;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    #lot_history_report tbody td {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    #lot_history_report tbody td.lot-timeline-date {
+        padding-left: 26px;
+        position: relative;
+    }
+
+    #lot_history_report tbody td.lot-timeline-date:before {
+        background: #1d4ed8;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(29, 78, 216, .35);
+        content: "";
+        height: 8px;
+        left: 7px;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 8px;
+        z-index: 2;
+    }
+
+    #lot_history_report tbody td.lot-timeline-date:after {
+        background: #d1d5db;
+        content: "";
+        left: 10px;
+        position: absolute;
+        top: -12px;
+        bottom: -12px;
+        width: 1px;
+        z-index: 1;
+    }
+
+    #lot_history_report tbody tr:first-child td.lot-timeline-date:after {
+        top: 50%;
+    }
+
+    #lot_history_report tbody tr:last-child td.lot-timeline-date:after {
+        bottom: 50%;
+    }
+
+    #lot_history_report tbody tr.lot-row-purchase td.lot-timeline-date:before,
+    #lot_history_report tbody tr.lot-row-transfer_in td.lot-timeline-date:before,
+    #lot_history_report tbody tr.lot-row-sell_return td.lot-timeline-date:before {
+        background: #15803d;
+    }
+
+    #lot_history_report tbody tr.lot-row-sell td.lot-timeline-date:before,
+    #lot_history_report tbody tr.lot-row-adjustment td.lot-timeline-date:before {
+        background: #dc2626;
+    }
+
+    #lot_history_report tbody tr.lot-row-transfer_out td.lot-timeline-date:before {
+        background: #7c3aed;
+    }
+
+    .lot-status {
+        font-weight: 700;
+    }
+
+    .lot-status-stock {
+        color: #15803d;
+    }
+
+    .lot-status-sold {
+        color: #dc2626;
+    }
+
+    .lot-status-transferred {
+        color: #7c3aed;
+    }
+
+    .lot-status-adjusted {
+        color: #1d4ed8;
+    }
+</style>
+@endsection
+
 @section('module_content')
 
 <section class="content-header">
@@ -98,16 +192,18 @@
                             <thead>
                                 <tr>
                                     <th>{{ __('messages.date') }}</th>
-                                    <th>{{ __('purchase.business_location') }}</th>
-                                    <th>SKU</th>
-                                    <th>{{ __('business.product') }}</th>
                                     <th>{{ __('lang_v1.lot_number') }}</th>
-                                    <th>{{ __('product.exp_date') }}</th>
-                                    <th>{{ __('lang_v1.type') }}</th>
-                                    <th>{{ __('purchase.ref_no') }}</th>
-                                    <th>{{ __('contact.contact') }}</th>
-                                    <th>{{ __('sale.qty') }}</th>
-                                    <th>{{ __('sale.notes') }}</th>
+                                    <th>{{ __('product.sku') }}</th>
+                                    <th>{{ __('business.product') }}</th>
+                                    <th>Type</th>
+                                    <th>Ref No.</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>{{ __('lang_v1.qty_in') }}</th>
+                                    <th>{{ __('lang_v1.qty_out') }}</th>
+                                    <th>Balance</th>
+                                    <th>{{ __('sale.status') }}</th>
+                                    <th>{{ __('report.user') }}</th>
                                 </tr>
                             </thead>
                         </table>
@@ -145,18 +241,26 @@
                 }
             },
             order: [[0, 'desc']],
+            createdRow: function(row, data) {
+                if (data.movement_type_key) {
+                    $(row).addClass('lot-row-' + data.movement_type_key);
+                }
+            },
             columns: [
-                { data: 'movement_date', name: 'movement_date' },
-                { data: 'location_name', name: 'location_name' },
+                { data: 'movement_date', name: 'movement_date', className: 'lot-timeline-date' },
+                { data: 'lot_number', name: 'lot_number' },
                 { data: 'sku', name: 'sku' },
                 { data: 'product', name: 'product' },
-                { data: 'lot_number', name: 'lot_number' },
-                { data: 'exp_date', name: 'exp_date' },
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
-                { data: 'contact', name: 'contact' },
-                { data: 'qty', name: 'qty', searchable: false, orderable: false },
-                { data: 'notes', name: 'notes', searchable: false },
+                { data: 'from_location', name: 'from_location' },
+                { data: 'to_location', name: 'to_location' },
+                { data: 'qty_in', name: 'qty_in', searchable: false },
+                { data: 'qty_out', name: 'qty_out', searchable: false },
+                { data: 'balance_qty', name: 'balance_qty', searchable: false },
+                { data: 'status', name: 'status', searchable: false, orderable: false },
+                { data: 'user_name', name: 'user_name' },
+                { data: 'movement_type_key', name: 'movement_type_key', visible: false, searchable: false },
                 { data: 'transaction_id', name: 'transaction_id', visible: false, searchable: false },
                 { data: 'transaction_type', name: 'transaction_type', visible: false, searchable: false },
             ],
