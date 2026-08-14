@@ -856,6 +856,7 @@
                                 <tbody>
                                     @foreach($payload['recentPayments'] as $paymentIndex => $payment)
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
+                                        @php($paymentDocUrl = $payment->payment_doc_url ?? null)
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
                                             <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-y') : '-' }}</td>
@@ -869,9 +870,9 @@
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
                                             <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">
-                                                <a href="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                <a href="{{ $paymentDocUrl ?: route('loan-management.payments.show', $payment->id) }}"
                                                    class="lm-detail-link js-loan-recent-detail-modal"
-                                                   data-url="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                   data-url="{{ $paymentDocUrl ?: route('loan-management.payments.show', $payment->id) }}"
                                                    data-title="{{ $t('Payment Doc', 'ឯកសារបង់ប្រាក់') }}">{{ $shortMethod($payment->payment_method ?? '-') }}</a>
                                             </td>
                                             <td class="text-right lm-col-payment-amount">{{ $money($payment->amount ?? 0) }}</td>

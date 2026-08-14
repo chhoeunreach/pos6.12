@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use App\Exports\ArrayExport;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -1076,11 +1077,12 @@ class DashboardController extends Controller
             ->selectRaw($noteExpr.' as note')
             ->selectRaw($amountExpr.' as amount')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status') ? 'p.status' : '"confirmed"').' as status')
+            ->when(Schema::connection('mysql_loan')->hasColumn('loan_payments', 'proof_file_id'), fn ($query) => $query->addSelect('p.proof_file_id'))
             ->orderByDesc('p.'.$dateColumn)
             ->orderByDesc('p.id')
             ->get();
 
-        return $this->appendRecentPaymentMethodDetails($payments);
+        return $this->appendRecentPaymentDocUrls($this->appendRecentPaymentMethodDetails($payments));
     }
 
     protected function appendRecentPaymentMethodDetails($payments)
@@ -1123,6 +1125,78 @@ class DashboardController extends Controller
         }
 
         return $payments;
+    }
+
+    protected function appendRecentPaymentDocUrls($payments)
+    {
+        if ($payments->isEmpty() || ! Schema::connection('mysql_loan')->hasTable('loan_files')) {
+            return $payments;
+        }
+
+        $paymentIds = $payments->pluck('id')->filter()->values()->all();
+        if (empty($paymentIds)) {
+            return $payments;
+        }
+
+        $files = collect();
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'proof_file_id')) {
+            $proofFileIds = $payments->pluck('proof_file_id')->filter()->unique()->values()->all();
+            if (! empty($proofFileIds)) {
+                $proofFiles = DB::connection('mysql_loan')
+                    ->table('loan_files')
+                    ->whereIn('id', $proofFileIds)
+                    ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->get()
+                    ->keyBy('id');
+
+                foreach ($payments as $payment) {
+                    $file = $proofFiles->get($payment->proof_file_id ?? null);
+                    if ($file) {
+                        $files->put((int) $payment->id, $file);
+                    }
+                }
+            }
+        }
+
+        $missingPaymentIds = collect($paymentIds)
+            ->reject(fn ($paymentId) => $files->has((int) $paymentId))
+            ->values()
+            ->all();
+
+        if (! empty($missingPaymentIds)) {
+            DB::connection('mysql_loan')
+                ->table('loan_files')
+                ->whereIn('fileable_id', $missingPaymentIds)
+                ->where('category', 'payment_doc')
+                ->whereIn('fileable_type', ['loan_payment', \Modules\LoanManagement\Entities\LoanPayment::class])
+                ->when(Schema::connection('mysql_loan')->hasColumn('loan_files', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->orderByDesc('id')
+                ->get()
+                ->each(function ($file) use ($files) {
+                    $paymentId = (int) ($file->fileable_id ?? 0);
+                    if ($paymentId > 0 && ! $files->has($paymentId)) {
+                        $files->put($paymentId, $file);
+                    }
+                });
+        }
+
+        foreach ($payments as $payment) {
+            $file = $files->get((int) $payment->id);
+            $payment->payment_doc_url = $this->loanFileUrl($file);
+        }
+
+        return $payments;
+    }
+
+    protected function loanFileUrl($file): ?string
+    {
+        $path = $file->path ?? $file->file_path ?? null;
+        if (! $file || empty($path)) {
+            return null;
+        }
+
+        return Storage::disk($file->disk ?? 'public')->url($path);
     }
 
     protected function dashboardPaymentBaseQuery(array $filters, bool $excludeInitialDownPayments = false)
