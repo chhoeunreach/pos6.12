@@ -861,13 +861,19 @@
                                             <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-y') : '-' }}</td>
                                             <td class="lm-col-payment-loan">
                                                 <span class="lm-loan-ref-line">
-                                                    <span class="lm-detail-link js-loan-recent-detail-modal"
-                                                          data-url="{{ route('loan-management.payments.show', $payment->id) }}"
-                                                          data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">{{ $payment->loan_number ?? '-' }}</span>
+                                                    <a href="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                       class="lm-detail-link js-loan-recent-detail-modal"
+                                                       data-url="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                       data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">{{ $payment->loan_number ?? '-' }}</a>
                                                 </span>
                                             </td>
                                             <td>{{ $payment->customer_name ?: '-' }}</td>
-                                            <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">{{ $shortMethod($payment->payment_method ?? '-') }}</td>
+                                            <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">
+                                                <a href="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                   class="lm-detail-link js-loan-recent-detail-modal"
+                                                   data-url="{{ route('loan-management.payments.show', $payment->id) }}"
+                                                   data-title="{{ $t('Payment Doc', 'ឯកសារបង់ប្រាក់') }}">{{ $shortMethod($payment->payment_method ?? '-') }}</a>
+                                            </td>
                                             <td class="text-right lm-col-payment-amount">{{ $money($payment->amount ?? 0) }}</td>
                                             <td>{{ $payment->note ?: '-' }}</td>
                                         </tr>
@@ -1065,13 +1071,15 @@
 
         if (window.jQuery) {
             jQuery(document).off('click.loanRecentDetailModal')
-                .on('click.loanRecentDetailModal', '.js-loan-recent-detail-modal', function () {
+                .on('click.loanRecentDetailModal', '.js-loan-recent-detail-modal', function (event) {
                     var url = jQuery(this).data('url');
                     var title = jQuery(this).data('title') || 'Detail';
 
                     if (!url || !jQuery('.view_modal').length) {
                         return;
                     }
+
+                    event.preventDefault();
 
                     if (url.indexOf('_lm_modal=1') === -1) {
                         url += (url.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
