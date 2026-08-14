@@ -482,21 +482,25 @@
             </header>
 
             <section class="ssi-page" id="scrollable-container">
-                <div class="ssi-page-header">
-                    <h1>{{ $pageTitle }}</h1>
-                </div>
+                @unless($__env->yieldContent('hide_page_header'))
+                    <div class="ssi-page-header">
+                        <h1>{{ $pageTitle }}</h1>
+                    </div>
+                @endunless
 
                 <section class="content" id="ssi_app" style="font-size:14px;">
-                    <div class="ssi-action-bar btn-group">
-                        <a class="btn btn-xs btn-primary" href="{{ ssi_route('ssi.count.index') }}">Add</a>
-                        <a class="btn btn-xs btn-info" href="{{ ssi_route('ssi.count.index') }}">Edit</a>
-                        <a class="btn btn-xs btn-success" href="{{ ssi_route('ssi.settings.index') }}">Update</a>
-                        <a class="btn btn-xs btn-danger" href="{{ ssi_route('ssi.count.index') }}">Delete</a>
-                        <a class="btn btn-xs btn-warning" href="{{ ssi_route('ssi.mismatch.index') }}">Fix</a>
-                        <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.fix_logs') }}">Rollback</a>
-                        <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.count.export', ['session_id' => request('session_id')]) }}">Export</a>
-                        <a class="btn btn-xs btn-default" href="#" onclick="window.print();return false;">Print</a>
-                    </div>
+                    @unless($__env->yieldContent('hide_action_bar'))
+                        <div class="ssi-action-bar btn-group">
+                            <a class="btn btn-xs btn-primary" href="{{ ssi_route('ssi.count.index') }}">Add</a>
+                            <a class="btn btn-xs btn-info" href="{{ ssi_route('ssi.count.index') }}">Edit</a>
+                            <a class="btn btn-xs btn-success" href="{{ ssi_route('ssi.settings.index') }}">Update</a>
+                            <a class="btn btn-xs btn-danger" href="{{ ssi_route('ssi.count.index') }}">Delete</a>
+                            <a class="btn btn-xs btn-warning" href="{{ ssi_route('ssi.mismatch.index') }}">Fix</a>
+                            <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.fix_logs') }}">Rollback</a>
+                            <a class="btn btn-xs btn-default" href="{{ ssi_route('ssi.count.export', ['session_id' => request('session_id')]) }}">Export</a>
+                            <a class="btn btn-xs btn-default" href="#" onclick="window.print();return false;">Print</a>
+                        </div>
+                    @endunless
                     @if(session('status'))
                         <div class="alert alert-{{ session('status.success') ? 'success' : 'danger' }}">{{ session('status.msg') }}</div>
                     @endif

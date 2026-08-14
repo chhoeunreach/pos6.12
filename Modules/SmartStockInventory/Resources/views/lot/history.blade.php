@@ -1,6 +1,8 @@
 @extends('smartstockinventory::layouts.master')
 
 @section('page_title', __('lang_v1.lot_history') . ' - ' . $lot)
+@section('hide_page_header', '1')
+@section('hide_action_bar', '1')
 
 @section('css')
 <style>
@@ -137,13 +139,15 @@
     <div class="row">
         <div class="col-md-12">
             <div class="box box-default" id="lot_history_filter_box">
-                <div class="box-header with-border">
+                <div class="box-header with-border" id="toggle_lot_history_filters" style="cursor:pointer;">
                     <h3 class="box-title">{{ __('report.filters') }}</h3>
                     <div class="box-tools pull-right">
-                        <button type="button" class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                        <button type="button" class="btn btn-box-tool" title="{{ __('report.filters') }}">
+                            <i class="fa fa-plus"></i>
+                        </button>
                     </div>
                 </div>
-                <div class="box-body">
+                <div class="box-body" id="lot_history_filters_body" style="display:none;">
                     <form id="lot_history_filter_form" class="row">
                         <div class="col-md-3">
                             <div class="form-group">
@@ -181,9 +185,6 @@
         <div class="col-md-12">
             <div class="box box-primary">
                 <div class="box-body">
-                    <div class="alert alert-warning">
-                        @lang('lang_v1.lot_history_note')
-                    </div>
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped" id="lot_history_report">
                             <thead>
@@ -259,6 +260,11 @@
 
         $('#location_id, #movement_type').on('change', function() {
             lotHistoryTable.ajax.reload();
+        });
+
+        $('#toggle_lot_history_filters').on('click', function() {
+            $('#lot_history_filters_body').slideToggle(150);
+            $(this).find('i').toggleClass('fa-minus fa-plus');
         });
     });
 </script>
