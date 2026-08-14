@@ -60,7 +60,6 @@
     }
 
     #lot_history_report tbody tr.lot-row-purchase td.lot-timeline-date:before,
-    #lot_history_report tbody tr.lot-row-transfer_in td.lot-timeline-date:before,
     #lot_history_report tbody tr.lot-row-sell_return td.lot-timeline-date:before {
         background: #15803d;
     }
@@ -70,7 +69,7 @@
         background: #dc2626;
     }
 
-    #lot_history_report tbody tr.lot-row-transfer_out td.lot-timeline-date:before {
+    #lot_history_report tbody tr.lot-row-transfer td.lot-timeline-date:before {
         background: #7c3aed;
     }
 
@@ -122,13 +121,11 @@
                         <div class="col-md-2">
                             <strong>{{ __('product.exp_date') }}:</strong> {{ $lotInfo->exp_date ? $lotInfo->exp_date : '--' }}
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-md-3">
                             <strong>{{ __('sale.stock') }}:</strong> <span class="
                                 @if($currentStock > 0) text-green @else text-red @endif
                             ">{{ number_format($currentStock) }} {{ $lotInfo->unit ?? '' }}</span>
-                        </div>
-                        <div class="col-md-2">
-                            <strong>{{ __('purchase.business_location') }}:</strong> {{ $lotInfo->location_name ?? '--' }}
+                            <span class="text-muted">({{ $lotInfo->location_name ?? '--' }})</span>
                         </div>
                     </div>
                 </div>
@@ -197,10 +194,7 @@
                                     <th>{{ __('business.product') }}</th>
                                     <th>Type</th>
                                     <th>Ref No.</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>{{ __('lang_v1.qty_in') }}</th>
-                                    <th>{{ __('lang_v1.qty_out') }}</th>
+                                    <th>Location</th>
                                     <th>Balance</th>
                                     <th>{{ __('sale.status') }}</th>
                                     <th>{{ __('report.user') }}</th>
@@ -240,7 +234,7 @@
                     d.end_date = $('#lot_history_end_date').val();
                 }
             },
-            order: [[0, 'desc']],
+            ordering: false,
             createdRow: function(row, data) {
                 if (data.movement_type_key) {
                     $(row).addClass('lot-row-' + data.movement_type_key);
@@ -253,10 +247,7 @@
                 { data: 'product', name: 'product' },
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
-                { data: 'from_location', name: 'from_location' },
-                { data: 'to_location', name: 'to_location' },
-                { data: 'qty_in', name: 'qty_in', searchable: false },
-                { data: 'qty_out', name: 'qty_out', searchable: false },
+                { data: 'location_display', name: 'location_display' },
                 { data: 'balance_qty', name: 'balance_qty', searchable: false },
                 { data: 'status', name: 'status', searchable: false, orderable: false },
                 { data: 'user_name', name: 'user_name' },

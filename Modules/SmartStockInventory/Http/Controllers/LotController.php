@@ -242,8 +242,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw("'-' as from_location"),
-                DB::raw('bl.name as to_location'),
+                DB::raw('bl.name as location_display'),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
@@ -282,8 +281,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw('bl.name as from_location'),
-                DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, 'Customer') as to_location"),
+                DB::raw('bl.name as location_display'),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
@@ -321,8 +319,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, 'Customer') as from_location"),
-                DB::raw('bl.name as to_location'),
+                DB::raw('bl.name as location_display'),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
@@ -363,70 +360,21 @@ class LotController extends BaseSmartStockController
 
             $transferMovements = $transferMovements->select([
                 DB::raw('t.transaction_date as movement_date'),
-                DB::raw("'transfer_out' as movement_type"),
+                DB::raw("'transfer' as movement_type"),
                 DB::raw('2 as movement_sort'),
                 DB::raw('t.id as transaction_id'),
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw('bl.name as from_location'),
-                DB::raw('bl_to.name as to_location'),
+                DB::raw("CONCAT('From ', COALESCE(bl.name, '-'), ' to ', COALESCE(bl_to.name, '-')) as location_display"),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
                 DB::raw('pl.exp_date as exp_date'),
                 DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
                 DB::raw("'' as contact"),
-                DB::raw('0 as qty_in'),
+                DB::raw('CASE WHEN pl_in.id IS NULL THEN COALESCE(tsl.quantity, 0) ELSE (COALESCE(pl_in.quantity, 0) - COALESCE(pl_in.quantity_returned, 0)) END as qty_in'),
                 DB::raw('COALESCE(tsl.quantity, 0) as qty_out'),
-                DB::raw('u.short_name as unit'),
-                DB::raw("COALESCE(t.additional_notes, '') as notes"),
-                DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
-            ]);
-
-            $transferInMovements = DB::table('transaction_sell_lines as tsl')
-                ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
-                ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
-                ->join('products as p', 'tsl.product_id', '=', 'p.id')
-                ->join('variations as v', 'tsl.variation_id', '=', 'v.id')
-                ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
-                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                ->leftJoin('transactions as t_in', function ($join) {
-                    $join->on('t_in.transfer_parent_id', '=', 't.id')
-                        ->where('t_in.type', '=', 'purchase_transfer');
-                })
-                ->leftJoin('purchase_lines as pl_in', function ($join) {
-                    $join->on('pl_in.transaction_id', '=', 't_in.id')
-                        ->on('pl_in.variation_id', '=', 'tsl.variation_id')
-                        ->on('pl_in.lot_number', '=', 'pl.lot_number');
-                })
-                ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
-                ->leftJoin('users as creator', 't.created_by', '=', 'creator.id')
-                ->where('t.business_id', $businessId)
-                ->where('t.type', 'sell_transfer')
-                ->whereNotNull('tsl.lot_no_line_id')
-                ->whereNotNull('pl.lot_number');
-
-            $applyCommonFilters($transferInMovements, 't', $transferLocationFilter);
-
-            $transferInMovements = $transferInMovements->select([
-                DB::raw('COALESCE(t_in.transaction_date, t.transaction_date) as movement_date'),
-                DB::raw("'transfer_in' as movement_type"),
-                DB::raw('3 as movement_sort'),
-                DB::raw('COALESCE(t_in.id, t.id) as transaction_id'),
-                DB::raw("COALESCE(t_in.type, t.type) as transaction_type"),
-                DB::raw('COALESCE(t_in.location_id, t.location_id) as location_id'),
-                DB::raw('bl_to.name as location_name'),
-                DB::raw('bl.name as from_location'),
-                DB::raw('bl_to.name as to_location'),
-                DB::raw('v.sub_sku as sku'),
-                DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
-                DB::raw('pl.lot_number as lot_number'),
-                DB::raw('pl.exp_date as exp_date'),
-                DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
-                DB::raw("'' as contact"),
-                DB::raw('(COALESCE(pl_in.quantity, 0) - COALESCE(pl_in.quantity_returned, 0)) as qty_in'),
-                DB::raw('0 as qty_out'),
                 DB::raw('u.short_name as unit'),
                 DB::raw("COALESCE(t.additional_notes, '') as notes"),
                 DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
@@ -456,8 +404,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("t.type as transaction_type"),
                 DB::raw('t.location_id as location_id'),
                 DB::raw('bl.name as location_name'),
-                DB::raw('bl.name as from_location'),
-                DB::raw('bl.name as to_location'),
+                DB::raw('bl.name as location_display'),
                 DB::raw('v.sub_sku as sku'),
                 DB::raw("CONCAT(p.name, IF(v.name != 'DUMMY', CONCAT(' (', v.name, ')'), '')) as product"),
                 DB::raw('pl.lot_number as lot_number'),
@@ -476,14 +423,13 @@ class LotController extends BaseSmartStockController
 
             if (empty($movementType) || $movementType === 'all') {
                 $movementUnion->unionAll($transferMovements)
-                    ->unionAll($transferInMovements)
                     ->unionAll($sellMovements)
                     ->unionAll($sellReturnMovements)
                     ->unionAll($adjustmentMovements);
             } elseif ($movementType === 'sell') {
                 $movementUnion = $sellMovements->unionAll($sellReturnMovements);
             } elseif ($movementType === 'transfer') {
-                $movementUnion = $transferMovements->unionAll($transferInMovements);
+                $movementUnion = $transferMovements;
             } elseif ($movementType === 'adjustment') {
                 $movementUnion = $adjustmentMovements;
             }
@@ -503,7 +449,19 @@ class LotController extends BaseSmartStockController
                 $row->balance_qty = $balance;
 
                 return $row;
-            });
+            })->sort(function ($a, $b) {
+                $dateCompare = (strtotime((string) $b->movement_date) ?: 0) <=> (strtotime((string) $a->movement_date) ?: 0);
+                if ($dateCompare !== 0) {
+                    return $dateCompare;
+                }
+
+                $sortCompare = ((int) ($b->movement_sort ?? 0)) <=> ((int) ($a->movement_sort ?? 0));
+                if ($sortCompare !== 0) {
+                    return $sortCompare;
+                }
+
+                return ((int) ($b->transaction_id ?? 0)) <=> ((int) ($a->transaction_id ?? 0));
+            })->values();
 
             return DataTables::of($movementRows)
                 ->addColumn('transaction_id', function ($row) {
@@ -541,10 +499,8 @@ class LotController extends BaseSmartStockController
                         return __('sale.sale');
                     } elseif ($row->movement_type === 'sell_return') {
                         return 'Cancel Sell';
-                    } elseif ($row->movement_type === 'transfer_out') {
-                        return 'Stock Transfer (Out)';
-                    } elseif ($row->movement_type === 'transfer_in') {
-                        return 'Stock Transfer (In)';
+                    } elseif ($row->movement_type === 'transfer') {
+                        return __('lang_v1.stock_transfers');
                     } elseif ($row->movement_type === 'adjustment') {
                         return __('stock_adjustment.stock_adjustment');
                     }
@@ -580,7 +536,7 @@ class LotController extends BaseSmartStockController
                     if ($row->movement_type === 'sell') {
                         return '<span class="lot-status lot-status-sold">Sold</span>';
                     }
-                    if ($row->movement_type === 'transfer_out') {
+                    if ($row->movement_type === 'transfer') {
                         return '<span class="lot-status lot-status-transferred">Transferred</span>';
                     }
                     if ($row->movement_type === 'adjustment') {
@@ -595,11 +551,8 @@ class LotController extends BaseSmartStockController
                     }
                     return '--';
                 })
-                ->editColumn('from_location', function ($row) {
-                    return e($row->from_location ?: '-');
-                })
-                ->editColumn('to_location', function ($row) {
-                    return e($row->to_location ?: '-');
+                ->editColumn('location_display', function ($row) {
+                    return e($row->location_display ?: '-');
                 })
                 ->editColumn('user_name', function ($row) {
                     $userName = trim((string) ($row->user_name ?? ''));
@@ -661,102 +614,7 @@ class LotController extends BaseSmartStockController
             if ($stockLocations->isNotEmpty()) {
                 $lotInfo->location_name = $stockLocations->implode(', ');
             } else {
-                $latestPurchaseLocation = DB::table('purchase_lines as pl')
-                    ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
-                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->select([
-                        DB::raw('t.transaction_date as movement_date'),
-                        DB::raw('bl.name as location_name'),
-                    ]);
-
-                $latestSellLocation = DB::table('transaction_sell_lines_purchase_lines as tspl')
-                    ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
-                    ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
-                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
-                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->whereNotNull('tspl.sell_line_id')
-                    ->select([
-                        DB::raw('t.transaction_date as movement_date'),
-                        DB::raw('bl.name as location_name'),
-                    ]);
-
-                $latestReturnLocation = DB::table('transaction_sell_lines as return_tsl')
-                    ->join('purchase_lines as pl', 'return_tsl.lot_no_line_id', '=', 'pl.id')
-                    ->join('transactions as t', 'return_tsl.transaction_id', '=', 't.id')
-                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->where('t.type', 'sell_return')
-                    ->whereNotNull('return_tsl.parent_sell_line_id')
-                    ->select([
-                        DB::raw('t.transaction_date as movement_date'),
-                        DB::raw('bl.name as location_name'),
-                    ]);
-
-                $latestAdjustmentLocation = DB::table('transaction_sell_lines_purchase_lines as tspl')
-                    ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
-                    ->join('stock_adjustment_lines as sal', 'tspl.stock_adjustment_line_id', '=', 'sal.id')
-                    ->join('transactions as t', 'sal.transaction_id', '=', 't.id')
-                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->where('t.type', 'stock_adjustment')
-                    ->whereNotNull('tspl.stock_adjustment_line_id')
-                    ->select([
-                        DB::raw('t.transaction_date as movement_date'),
-                        DB::raw('bl.name as location_name'),
-                    ]);
-
-                $latestTransferOutLocation = DB::table('transaction_sell_lines as tsl')
-                    ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
-                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
-                    ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->where('t.type', 'sell_transfer')
-                    ->whereNotNull('tsl.lot_no_line_id')
-                    ->select([
-                        DB::raw('t.transaction_date as movement_date'),
-                        DB::raw('bl.name as location_name'),
-                    ]);
-
-                $latestTransferInLocation = DB::table('transaction_sell_lines as tsl')
-                    ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
-                    ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
-                    ->leftJoin('transactions as t_in', function ($join) {
-                        $join->on('t_in.transfer_parent_id', '=', 't.id')
-                            ->where('t_in.type', '=', 'purchase_transfer');
-                    })
-                    ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
-                    ->where('pl.lot_number', $lot)
-                    ->where('t.business_id', $businessId)
-                    ->where('t.type', 'sell_transfer')
-                    ->whereNotNull('tsl.lot_no_line_id')
-                    ->select([
-                        DB::raw('COALESCE(t_in.transaction_date, t.transaction_date) as movement_date'),
-                        DB::raw('bl_to.name as location_name'),
-                    ]);
-
-                $latestLocationUnion = $latestPurchaseLocation
-                    ->unionAll($latestSellLocation)
-                    ->unionAll($latestReturnLocation)
-                    ->unionAll($latestAdjustmentLocation)
-                    ->unionAll($latestTransferOutLocation)
-                    ->unionAll($latestTransferInLocation);
-
-                $latestLocation = DB::query()
-                    ->fromSub($latestLocationUnion, 'lot_locations')
-                    ->whereNotNull('location_name')
-                    ->orderByDesc('movement_date')
-                    ->value('location_name');
-
-                if (! empty($latestLocation)) {
-                    $lotInfo->location_name = $latestLocation;
-                }
+                $lotInfo->location_name = null;
             }
         }
 
