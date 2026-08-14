@@ -43,6 +43,12 @@
         width: 100%;
     }
     #loan_payment_add_form .loan-payment-note-group .payment-line-note {
+        flex: 1 1 auto;
+        min-height: 38px;
+        max-height: 180px;
+        resize: none;
+        overflow-y: hidden;
+        line-height: 1.45;
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
     }
@@ -285,7 +291,7 @@
                                     <div class="form-group">
                                         {!! Form::label('payment_lines_0_note', __('lang_v1.payment_note') . ':') !!}
                                         <div class="loan-payment-note-group">
-                                            <input type="text" name="payment_lines[0][note]" id="payment_lines_0_note" class="form-control payment-line-note">
+                                            <textarea name="payment_lines[0][note]" id="payment_lines_0_note" class="form-control payment-line-note" rows="1" placeholder="Add payment note"></textarea>
                                             <button type="button" class="btn btn-default add-payment-note-datetime" title="Add date time">
                                                 <i class="fa fa-calendar"></i>
                                             </button>
@@ -426,6 +432,23 @@ $(function () {
         }
 
         return dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0] + ' ' + time;
+    }
+
+    function resizePaymentNoteField(field) {
+        if (!field) {
+            return;
+        }
+
+        field.style.height = 'auto';
+        var height = Math.max(field.scrollHeight, 38);
+        field.style.overflowY = height > 180 ? 'auto' : 'hidden';
+        field.style.height = Math.min(height, 180) + 'px';
+    }
+
+    function resizePaymentNotes($scope) {
+        $scope.find('.payment-line-note').each(function () {
+            resizePaymentNoteField(this);
+        });
     }
 
     function appendDateTimeToNote($line) {
@@ -661,7 +684,7 @@ $(function () {
                 '<div class="col-md-2"><div class="form-group">',
                     '<label for="payment_lines_' + index + '_note">' + labels.payment_note + ':</label>',
                     '<div class="loan-payment-note-group">',
-                        '<input type="text" name="payment_lines[' + index + '][note]" id="payment_lines_' + index + '_note" class="form-control payment-line-note">',
+                        '<textarea name="payment_lines[' + index + '][note]" id="payment_lines_' + index + '_note" class="form-control payment-line-note" rows="1" placeholder="Add payment note"></textarea>',
                         '<button type="button" class="btn btn-default add-payment-note-datetime" title="' + labels.note_date_time + '"><i class="fa fa-calendar"></i></button>',
                     '</div>',
                     '<input type="datetime-local" class="payment-note-datetime" tabindex="-1">',
@@ -671,6 +694,7 @@ $(function () {
         ].join('');
 
         $form.find('.loan-payment-lines').append(row);
+        resizePaymentNotes($form.find('.loan-payment-lines'));
         refreshRemoveButtons();
         updateLoanPaymentTotal();
     });
@@ -706,6 +730,10 @@ $(function () {
 
     $form.on('change', '.payment-note-datetime', function () {
         appendDateTimeToNote($(this).closest('.loan-payment-line'));
+    });
+
+    $form.on('input', '.payment-line-note', function () {
+        resizePaymentNoteField(this);
     });
 
     $form.on('paste', function (event) {
@@ -824,5 +852,6 @@ $(function () {
     refreshRemoveButtons();
     updateScheduleDisplay();
     updateLoanPaymentTotal();
+    resizePaymentNotes($form);
 });
 </script>
