@@ -209,7 +209,7 @@ $(document).ready(function () {
 
     function __stock_report_copy_date() {
         if (typeof moment !== 'undefined') {
-            return moment().format(typeof moment_date_format !== 'undefined' ? moment_date_format : 'YYYY-MM-DD');
+            return moment().format('YYYY-MM-DD');
         }
 
         return new Date().toISOString().slice(0, 10);
@@ -229,7 +229,7 @@ $(document).ready(function () {
                 return 'Date\t' + line;
             }
 
-            return __preserve_clipboard_date_text(date) + '\t' + line;
+            return date + '\t' + line;
         }).join('\n');
     }
 
