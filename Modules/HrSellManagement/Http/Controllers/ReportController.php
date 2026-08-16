@@ -17,9 +17,9 @@ class ReportController extends Controller
         abort_unless($this->canReport(), 403);
 
         [$rows, $summary] = $this->reportData($request, true);
-        [$hrBranches, $hrSellTypes, $hrSellers] = $this->filterOptions();
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
 
-        return view('hrsellmanagement::reports.index', compact('rows', 'summary', 'hrBranches', 'hrSellTypes', 'hrSellers'));
+        return view('hrsellmanagement::reports.index', compact('rows', 'summary', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
     }
 
     public function export(Request $request)
@@ -53,9 +53,9 @@ class ReportController extends Controller
 
         $request = $this->withDefaultStaffReportDates($request);
         [$summaryRows, $lineRows, $totals, $period, $topSellers, $trafficRows] = $this->staffReportData($request, true);
-        [$hrBranches, $hrSellTypes, $hrSellers] = $this->filterOptions();
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
 
-        return view('hrsellmanagement::reports.staff', compact('summaryRows', 'lineRows', 'totals', 'period', 'topSellers', 'trafficRows', 'hrBranches', 'hrSellTypes', 'hrSellers'));
+        return view('hrsellmanagement::reports.staff', compact('summaryRows', 'lineRows', 'totals', 'period', 'topSellers', 'trafficRows', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
     }
 
     public function staffExport(Request $request)
@@ -400,6 +400,9 @@ class ReportController extends Controller
             ->when($request->filled('sell_type'), function ($q) use ($request) {
                 $q->whereIn('sor.service_type', $this->sellTypeValues($request->input('sell_type')));
             })
+            ->when($request->filled('department_id') && $this->canFilterByDepartment(), function ($q) use ($request) {
+                $q->where('u.department_id', $request->input('department_id'));
+            })
             ->when($request->filled('seller_key'), function ($q) use ($request) {
                 $sellerKey = $request->input('seller_key');
                 if (str_starts_with($sellerKey, 'seller:')) {
@@ -513,6 +516,9 @@ class ReportController extends Controller
                 $sellType = $request->input('sell_type');
                 $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
             })
+            ->when($request->filled('department_id') && $this->canFilterByDepartment(), function ($q) use ($request) {
+                $q->where('u.department_id', $request->input('department_id'));
+            })
             ->when($request->filled('seller_key'), function ($q) use ($request) {
                 $sellerKey = $request->input('seller_key');
                 if (str_starts_with($sellerKey, 'seller:')) {
@@ -594,12 +600,76 @@ class ReportController extends Controller
                     return [$seller->seller_key => $label ?: 'Unknown'];
                 });
 
-            return [$branches, $sellTypes, $sellers];
+            $departments = $this->hrDepartments();
+
+            return [$branches, $sellTypes, $sellers, $departments];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR Sell report filters: ' . $e->getMessage());
 
-            return [collect(), collect(), collect()];
+            return [collect(), collect(), collect(), collect()];
         }
+    }
+
+    private function hrDepartments()
+    {
+        $labelColumn = $this->departmentLabelColumn();
+
+        if (! $this->canFilterByDepartment() || empty($labelColumn)) {
+            return collect();
+        }
+
+        return DB::connection('hr')
+            ->table('departments')
+            ->select('id', $labelColumn)
+            ->whereNotNull($labelColumn)
+            ->where($labelColumn, '!=', '')
+            ->orderBy($labelColumn)
+            ->pluck($labelColumn, 'id');
+    }
+
+    private function canFilterByDepartment(): bool
+    {
+        static $canFilter;
+
+        if ($canFilter !== null) {
+            return $canFilter;
+        }
+
+        try {
+            $schema = Schema::connection('hr');
+
+            $canFilter = $schema->hasTable('departments')
+                && $schema->hasTable('users')
+                && $schema->hasColumn('users', 'department_id')
+                && ! empty($this->departmentLabelColumn());
+        } catch (\Throwable $e) {
+            $canFilter = false;
+        }
+
+        return $canFilter;
+    }
+
+    private function departmentLabelColumn(): ?string
+    {
+        static $labelColumn;
+
+        if ($labelColumn !== null) {
+            return $labelColumn;
+        }
+
+        try {
+            $schema = Schema::connection('hr');
+
+            foreach (['dept_name', 'name', 'department_name', 'title'] as $column) {
+                if ($schema->hasColumn('departments', $column)) {
+                    return $labelColumn = $column;
+                }
+            }
+        } catch (\Throwable $e) {
+            return $labelColumn = '';
+        }
+
+        return $labelColumn = '';
     }
 
     private function sellTypeMap(): array

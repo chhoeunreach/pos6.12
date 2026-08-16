@@ -5,6 +5,7 @@ namespace Modules\HrSellManagement\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
@@ -19,6 +20,7 @@ class DashboardController extends Controller
             'end_date' => $request->input('end_date') ?: $today,
             'branch_name' => $request->input('branch_name'),
             'sell_type' => $request->input('sell_type'),
+            'department_id' => $request->input('department_id'),
         ];
 
         $pos = $this->posHrDashboardData($filters);
@@ -32,6 +34,7 @@ class DashboardController extends Controller
             'recent' => $pos['recent'],
             'hrBranches' => $pos['branches'],
             'hrSellTypes' => $pos['sellTypes'],
+            'hrDepartments' => $pos['departments'],
             'filters' => $filters,
             'hrConnectionOk' => $pos['ok'],
             'hrConnectionMessage' => $pos['message'],
@@ -49,6 +52,7 @@ class DashboardController extends Controller
             'end_date' => $request->input('end_date') ?: $today,
             'branch_name' => $request->input('branch_name'),
             'sell_type' => $request->input('sell_type'),
+            'department_id' => $request->input('department_id'),
         ];
 
         $data = $this->salesTrafficData($filters, $period);
@@ -61,6 +65,7 @@ class DashboardController extends Controller
             'locationCards' => $data['locationCards'],
             'hrBranches' => $data['branches'],
             'hrSellTypes' => $data['sellTypes'],
+            'hrDepartments' => $data['departments'],
             'hrConnectionOk' => $data['ok'],
             'hrConnectionMessage' => $data['message'],
         ]);
@@ -72,6 +77,7 @@ class DashboardController extends Controller
             $base = $this->filteredPosQuery($filters);
             $branches = $this->hrBranches();
             $sellTypes = $this->hrSellTypes();
+            $departments = $this->hrDepartments();
 
             $metrics = [
                 'pos_filtered_sales' => (float) (clone $base)->sum('total_amount'),
@@ -159,6 +165,7 @@ class DashboardController extends Controller
                 'recent' => $recent,
                 'branches' => $branches,
                 'sellTypes' => $sellTypes,
+                'departments' => $departments,
             ];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR Sell dashboard POS data: ' . $e->getMessage());
@@ -179,6 +186,7 @@ class DashboardController extends Controller
                 'recent' => collect(),
                 'branches' => collect(),
                 'sellTypes' => collect(),
+                'departments' => collect(),
             ];
         }
     }
@@ -195,6 +203,7 @@ class DashboardController extends Controller
             $base = $this->filteredPosQuery($filters);
             $branches = $this->hrBranches();
             $sellTypes = $this->hrSellTypes();
+            $departments = $this->hrDepartments();
 
             $metrics = [
                 'sale_count' => (int) (clone $base)->count(),
@@ -256,6 +265,7 @@ class DashboardController extends Controller
                 'locationCards' => $locationCards,
                 'branches' => $branches,
                 'sellTypes' => $sellTypes,
+                'departments' => $departments,
             ];
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR Sales Traffic dashboard data: ' . $e->getMessage());
@@ -273,6 +283,7 @@ class DashboardController extends Controller
                 'locationCards' => collect(),
                 'branches' => collect(),
                 'sellTypes' => collect(),
+                'departments' => collect(),
             ];
         }
     }
@@ -289,6 +300,14 @@ class DashboardController extends Controller
             ->when(! empty($filters['branch_name']), fn ($q) => $q->whereRaw('TRIM(' . $prefix . 'branch_name) = ?', [$filters['branch_name']]))
             ->when(! empty($filters['sell_type']), function ($q) use ($filters, $prefix) {
                 $q->whereIn($prefix . 'service_type', $this->sellTypeValues($filters['sell_type']));
+            })
+            ->when(! empty($filters['department_id']) && $this->canFilterByDepartment(), function ($q) use ($filters, $prefix) {
+                $q->whereExists(function ($departmentQuery) use ($filters, $prefix) {
+                    $departmentQuery->select(DB::raw(1))
+                        ->from('users as department_users')
+                        ->whereColumn('department_users.id', $prefix . 'user_id')
+                        ->where('department_users.department_id', $filters['department_id']);
+                });
             });
     }
 
@@ -315,6 +334,68 @@ class DashboardController extends Controller
             ->pluck('service_type')
             ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
             ->unique();
+    }
+
+    private function hrDepartments()
+    {
+        $labelColumn = $this->departmentLabelColumn();
+
+        if (! $this->canFilterByDepartment() || empty($labelColumn)) {
+            return collect();
+        }
+
+        return DB::connection('hr')
+            ->table('departments')
+            ->select('id', $labelColumn)
+            ->whereNotNull($labelColumn)
+            ->where($labelColumn, '!=', '')
+            ->orderBy($labelColumn)
+            ->pluck($labelColumn, 'id');
+    }
+
+    private function canFilterByDepartment(): bool
+    {
+        static $canFilter;
+
+        if ($canFilter !== null) {
+            return $canFilter;
+        }
+
+        try {
+            $schema = Schema::connection('hr');
+
+            $canFilter = $schema->hasTable('departments')
+                && $schema->hasTable('users')
+                && $schema->hasColumn('users', 'department_id')
+                && ! empty($this->departmentLabelColumn());
+        } catch (\Throwable $e) {
+            $canFilter = false;
+        }
+
+        return $canFilter;
+    }
+
+    private function departmentLabelColumn(): ?string
+    {
+        static $labelColumn;
+
+        if ($labelColumn !== null) {
+            return $labelColumn;
+        }
+
+        try {
+            $schema = Schema::connection('hr');
+
+            foreach (['dept_name', 'name', 'department_name', 'title'] as $column) {
+                if ($schema->hasColumn('departments', $column)) {
+                    return $labelColumn = $column;
+                }
+            }
+        } catch (\Throwable $e) {
+            return $labelColumn = '';
+        }
+
+        return $labelColumn = '';
     }
 
     private function sellTypeMap(): array

@@ -2,7 +2,7 @@
 @section('page_title', 'Sales Traffic Dashboard')
 @section('module_content')
 @php
-    $hasActiveFilters = ! empty($filters['branch_name']) || ! empty($filters['sell_type']) || ! empty($filters['start_date']) || ! empty($filters['end_date']) || $period !== 'daily';
+    $hasActiveFilters = ! empty($filters['branch_name']) || ! empty($filters['department_id']) || ! empty($filters['sell_type']) || ! empty($filters['start_date']) || ! empty($filters['end_date']) || $period !== 'daily';
     $maxTrafficTotal = max((float) $trafficRows->max('sale_total'), 1);
     $maxLocationTotal = max((float) $locationCards->max('sale_total'), 1);
 @endphp
@@ -158,13 +158,24 @@
                         <input type="hidden" name="end_date" id="hr_sales_traffic_end_date" value="{{ $filters['end_date'] }}">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-group">
                         <label>Location / Branch:</label>
                         <select name="branch_name" class="form-control select2">
                             <option value="">All</option>
                             @foreach($hrBranches as $branch => $name)
                                 <option value="{{ $branch }}" @selected((string) ($filters['branch_name'] ?? '') === (string) $branch)>{{ $name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Department:</label>
+                        <select name="department_id" class="form-control select2">
+                            <option value="">All</option>
+                            @foreach($hrDepartments as $departmentId => $departmentName)
+                                <option value="{{ $departmentId }}" @selected((string) ($filters['department_id'] ?? '') === (string) $departmentId)>{{ $departmentName }}</option>
                             @endforeach
                         </select>
                     </div>

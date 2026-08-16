@@ -114,7 +114,7 @@
 @endunless
 
 @php($canOpenReports = auth()->user()->can('hr_sell.report') || auth()->user()->can('superadmin') || auth()->user()->can('business_settings.access'))
-@php($hasActiveFilters = ! empty($filters['branch_name']) || ! empty($filters['sell_type']) || (($filters['start_date'] ?? now()->toDateString()) !== now()->toDateString()) || (($filters['end_date'] ?? now()->toDateString()) !== now()->toDateString()))
+@php($hasActiveFilters = ! empty($filters['branch_name']) || ! empty($filters['sell_type']) || ! empty($filters['department_id']) || (($filters['start_date'] ?? now()->toDateString()) !== now()->toDateString()) || (($filters['end_date'] ?? now()->toDateString()) !== now()->toDateString()))
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_dashboard_filter_box">
 <div class="box-header with-border hr-sell-dashboard-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_dashboard_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
 <h4 class="box-title"><i class="fa fa-filter"></i> Filters</h4>
@@ -125,16 +125,17 @@
 <div class="box-body" id="hr_sell_dashboard_filter_body" @unless($hasActiveFilters) style="display:none;" @endunless>
 <form method="get" action="{{ route('hr-sell.dashboard') }}">
 <div class="row {{ $canOpenReports ? '' : 'hr-sell-report-links-disabled' }}">
-<div class="col-md-3"><div class="form-group"><label>Location / Branch:</label><select name="branch_name" class="form-control select2"><option value="">All</option>@foreach($hrBranches as $branch => $name)<option value="{{ $branch }}" @selected((string) ($filters['branch_name'] ?? '') === (string) $branch)>{{ $name }}</option>@endforeach</select></div></div>
-<div class="col-md-3"><div class="form-group"><label>Sell Type:</label><select name="sell_type" class="form-control select2"><option value="">All</option>@foreach($hrSellTypes as $type => $name)<option value="{{ $type }}" @selected((string) ($filters['sell_type'] ?? '') === (string) $type)>{{ $name }}</option>@endforeach</select></div></div>
+<div class="col-md-2"><div class="form-group"><label>Location / Branch:</label><select name="branch_name" class="form-control select2"><option value="">All</option>@foreach($hrBranches as $branch => $name)<option value="{{ $branch }}" @selected((string) ($filters['branch_name'] ?? '') === (string) $branch)>{{ $name }}</option>@endforeach</select></div></div>
+<div class="col-md-2"><div class="form-group"><label>Department:</label><select name="department_id" class="form-control select2"><option value="">All</option>@foreach($hrDepartments as $departmentId => $departmentName)<option value="{{ $departmentId }}" @selected((string) ($filters['department_id'] ?? '') === (string) $departmentId)>{{ $departmentName }}</option>@endforeach</select></div></div>
+<div class="col-md-2"><div class="form-group"><label>Sell Type:</label><select name="sell_type" class="form-control select2"><option value="">All</option>@foreach($hrSellTypes as $type => $name)<option value="{{ $type }}" @selected((string) ($filters['sell_type'] ?? '') === (string) $type)>{{ $name }}</option>@endforeach</select></div></div>
 <div class="col-md-3"><div class="form-group"><label>Date Range:</label><div class="input-group"><span class="input-group-addon"><i class="fa fa-calendar"></i></span><input type="text" id="hr_sell_dashboard_date_range" class="form-control" readonly placeholder="{{ __('lang_v1.select_a_date_range') }}"></div><input type="hidden" name="start_date" id="hr_sell_dashboard_start_date" value="{{ $filters['start_date'] ?? now()->toDateString() }}"><input type="hidden" name="end_date" id="hr_sell_dashboard_end_date" value="{{ $filters['end_date'] ?? now()->toDateString() }}"></div></div>
-<div class="col-md-3"><div class="hr-sell-dashboard-actions"><button class="btn btn-primary"><i class="fa fa-filter"></i> Filter</button> <a class="btn btn-default" href="{{ route('hr-sell.dashboard') }}">Today</a> @if($canOpenReports)<a class="btn btn-success" href="{{ route('hr-sell.reports.index', array_filter(['branch_name' => $filters['branch_name'] ?? null, 'sell_type' => $filters['sell_type'] ?? null, 'start_date' => $filters['start_date'] ?? null, 'end_date' => $filters['end_date'] ?? null])) }}"><i class="fa fa-bar-chart"></i> Full Report</a>@endif</div></div>
+<div class="col-md-3"><div class="hr-sell-dashboard-actions"><button class="btn btn-primary"><i class="fa fa-filter"></i> Filter</button> <a class="btn btn-default" href="{{ route('hr-sell.dashboard') }}">Today</a> @if($canOpenReports)<a class="btn btn-success" href="{{ route('hr-sell.reports.index', array_filter(['branch_name' => $filters['branch_name'] ?? null, 'department_id' => $filters['department_id'] ?? null, 'sell_type' => $filters['sell_type'] ?? null, 'start_date' => $filters['start_date'] ?? null, 'end_date' => $filters['end_date'] ?? null])) }}"><i class="fa fa-bar-chart"></i> Full Report</a>@endif</div></div>
 </div>
 </form>
 </div>
 </div>
 
-@php($dashboardReportFilters = array_filter(['branch_name' => $filters['branch_name'] ?? null, 'sell_type' => $filters['sell_type'] ?? null, 'start_date' => $filters['start_date'] ?? null, 'end_date' => $filters['end_date'] ?? null]))
+@php($dashboardReportFilters = array_filter(['branch_name' => $filters['branch_name'] ?? null, 'department_id' => $filters['department_id'] ?? null, 'sell_type' => $filters['sell_type'] ?? null, 'start_date' => $filters['start_date'] ?? null, 'end_date' => $filters['end_date'] ?? null]))
 <div class="row {{ $canOpenReports ? '' : 'hr-sell-report-links-disabled' }}">
 @foreach([
     ['Sales Amount', $metrics['pos_filtered_sales'], 'bg-aqua', 'fa-money'],
