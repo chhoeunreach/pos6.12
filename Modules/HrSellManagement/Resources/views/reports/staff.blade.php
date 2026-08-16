@@ -2,7 +2,7 @@
 @section('page_title', 'Staff Sell Report')
 @section('module_content')
 @php
-    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('period');
+    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('period');
     $showLines = request()->boolean('show_lines');
     $filterBodyStyle = $hasActiveFilters ? '' : 'display:none;';
 @endphp
@@ -131,7 +131,7 @@
                         <input type="hidden" name="end_date" id="hr_staff_sell_end_date" value="{{ request('end_date') }}">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-group">
                         <label>Location / Branch:</label>
                         <select name="branch_name" class="form-control select2">
@@ -142,7 +142,18 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Department:</label>
+                        <select name="department_id" class="form-control select2">
+                            <option value="">All</option>
+                            @foreach($hrDepartments as $departmentId => $departmentName)
+                                <option value="{{ $departmentId }}" {{ (string) request('department_id') === (string) $departmentId ? 'selected' : '' }}>{{ $departmentName }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Seller:</label>
                         <select name="seller_key" class="form-control select2">
