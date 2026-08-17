@@ -721,12 +721,13 @@ class DashboardController extends Controller
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '"Cash"');
 
         $rows = $query
+            ->selectRaw('p.id')
             ->selectRaw($typeExpr.' as payment_type')
             ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as payment_method')
-            ->selectRaw('COUNT(*) as payment_count')
-            ->selectRaw('COALESCE(SUM('.$amountExpr.'), 0) as payment_total')
-            ->groupBy('payment_type', 'payment_method')
+            ->selectRaw($amountExpr.' as amount')
             ->get();
+
+        $rows = $this->appendRecentPaymentMethodDetails($rows);
 
         $summary = [];
         foreach ($rows as $row) {
@@ -746,11 +747,8 @@ class DashboardController extends Controller
                 ];
             }
 
-            $amount = (float) ($row->payment_total ?? 0);
-            $bucket = $this->dashboardPaymentMethodBucket((string) ($row->payment_method ?? ''));
-            $summary[$type]['count'] += (int) ($row->payment_count ?? 0);
-            $summary[$type][$bucket] += $amount;
-            $summary[$type]['total'] += $amount;
+            $summary[$type]['count']++;
+            $this->addDashboardPaymentSummaryAmounts($summary[$type], $row, (float) ($row->amount ?? 0), (string) ($row->payment_method ?? ''));
         }
 
         uksort($summary, function ($left, $right) {
@@ -772,11 +770,8 @@ class DashboardController extends Controller
                 $summary[$type] = $this->emptyDashboardPaymentSummaryRow($type);
             }
 
-            $amount = (float) ($payment->amount ?? 0);
-            $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
             $summary[$type]['count']++;
-            $summary[$type][$bucket] += $amount;
-            $summary[$type]['total'] += $amount;
+            $this->addDashboardPaymentSummaryAmounts($summary[$type], $payment, (float) ($payment->amount ?? 0), (string) ($payment->payment_method ?? ''));
         }
 
         foreach ($recentLoans as $loan) {
@@ -785,11 +780,8 @@ class DashboardController extends Controller
                 $summary[$type] = $this->emptyDashboardPaymentSummaryRow($type);
             }
 
-            $amount = (float) ($loan->payment_amount ?? 0);
-            $bucket = $this->dashboardPaymentMethodBucket((string) ($loan->payment_method ?? ''));
             $summary[$type]['count']++;
-            $summary[$type][$bucket] += $amount;
-            $summary[$type]['total'] += $amount;
+            $this->addDashboardPaymentSummaryAmounts($summary[$type], $loan, (float) ($loan->payment_amount ?? 0), (string) ($loan->payment_method ?? ''));
         }
 
         uksort($summary, function ($left, $right) {
@@ -799,6 +791,26 @@ class DashboardController extends Controller
         });
 
         return array_values($summary);
+    }
+
+    protected function addDashboardPaymentSummaryAmounts(array &$summaryRow, $source, float $fallbackAmount, string $fallbackMethod): void
+    {
+        $hasSplitAmounts = false;
+        foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $bucket) {
+            $property = $bucket.'_amount';
+            if (isset($source->{$property})) {
+                $amount = (float) ($source->{$property} ?? 0);
+                $summaryRow[$bucket] += $amount;
+                $hasSplitAmounts = $hasSplitAmounts || abs($amount) > 0.0001;
+            }
+        }
+
+        if (! $hasSplitAmounts) {
+            $bucket = $this->dashboardPaymentMethodBucket($fallbackMethod);
+            $summaryRow[$bucket] += $fallbackAmount;
+        }
+
+        $summaryRow['total'] += $fallbackAmount;
     }
 
     protected function emptyDashboardPaymentSummaryRow(string $type): array
@@ -991,6 +1003,10 @@ class DashboardController extends Controller
         foreach ($loans as $loan) {
             $loan->payment_method = '-';
             $loan->payment_note = '-';
+            foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
+                $loan->{$methodBucket.'_amount'} = 0.0;
+            }
+            $loan->bank_amount = 0.0;
         }
 
         if ($loans->isEmpty()
@@ -1013,30 +1029,44 @@ class DashboardController extends Controller
             ? 'p.payment_method_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '""');
         $noteExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'note') ? 'p.note' : '""';
+        $amountExpr = $this->coalesceSql('loan_payments', 'p', ['total_paid_base', 'total_paid', 'amount_base', 'amount'], '0');
 
-        $payments = DB::connection('mysql_loan')
+        $paymentsQuery = DB::connection('mysql_loan')
             ->table('loan_payments as p')
             ->whereIn('p.loan_id', $loanIds)
-            ->when(Schema::connection('mysql_loan')->hasColumn('loan_payments', 'deleted_at'), fn ($query) => $query->whereNull('p.deleted_at'))
+            ->when(Schema::connection('mysql_loan')->hasColumn('loan_payments', 'deleted_at'), fn ($query) => $query->whereNull('p.deleted_at'));
+
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'payment_type')) {
+            $paymentsQuery->whereIn('p.payment_type', ['loan', 'initial', 'down_payment', 'downpayment', 'deposit']);
+        } elseif (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+            $paymentsQuery->whereNull('p.schedule_id');
+        }
+
+        $payments = $paymentsQuery
             ->selectRaw('p.id, p.loan_id')
             ->selectRaw($methodExpr.' as payment_method')
             ->selectRaw($noteExpr.' as note')
+            ->selectRaw($amountExpr.' as amount')
             ->orderByDesc('p.'.$dateColumn)
             ->orderByDesc('p.id')
-            ->get()
-            ->unique('loan_id')
-            ->keyBy('loan_id');
+            ->get();
 
-        $payments = $this->appendRecentPaymentMethodDetails($payments->values())->keyBy('loan_id');
+        $paymentsByLoan = $this->appendRecentPaymentMethodDetails($payments)->groupBy('loan_id');
 
         foreach ($loans as $loan) {
-            $payment = $payments->get($loan->id);
-            if (! $payment) {
+            $loanPayments = $paymentsByLoan->get($loan->id, collect());
+            if ($loanPayments->isEmpty()) {
                 continue;
             }
 
-            $loan->payment_method = $payment->payment_method ?: '-';
-            $loan->payment_note = $payment->note ?: '-';
+            $loan->payment_amount = (float) $loanPayments->sum('amount');
+            $loan->payment_method = $loanPayments->pluck('payment_method')->filter()->unique()->implode(', ') ?: '-';
+            $loan->payment_note = $loanPayments->pluck('note')->filter()->unique()->implode(', ') ?: '-';
+            foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
+                $property = $methodBucket.'_amount';
+                $loan->{$property} = (float) $loanPayments->sum($property);
+            }
+            $loan->bank_amount = (float) $loanPayments->sum('bank_amount');
         }
 
         return $loans;
@@ -1132,7 +1162,9 @@ class DashboardController extends Controller
             || ! Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_id')) {
             foreach ($payments as $payment) {
                 $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
-                $payment->cash_amount = $bucket === 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
+                    $payment->{$methodBucket.'_amount'} = $bucket === $methodBucket ? (float) ($payment->amount ?? 0) : 0.0;
+                }
                 $payment->bank_amount = $bucket !== 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
                 $payment->payment_channel = $payment->payment_method ?: '-';
                 $payment->transaction_no = null;
@@ -1169,7 +1201,9 @@ class DashboardController extends Controller
             $rows = $details->get($payment->id, collect());
             if ($rows->isEmpty()) {
                 $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
-                $payment->cash_amount = $bucket === 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
+                    $payment->{$methodBucket.'_amount'} = $bucket === $methodBucket ? (float) ($payment->amount ?? 0) : 0.0;
+                }
                 $payment->bank_amount = $bucket !== 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
                 $payment->payment_channel = $payment->payment_method ?: '-';
                 $payment->transaction_no = null;
@@ -1179,9 +1213,11 @@ class DashboardController extends Controller
             $payment->payment_method = $rows
                 ->map(fn ($row) => trim((string) $row->method_name).' $'.number_format((float) ($row->amount ?? 0), 2))
                 ->implode(', ');
-            $payment->cash_amount = (float) $rows
-                ->filter(fn ($row) => $this->dashboardPaymentMethodBucket((string) ($row->method_name ?? '')) === 'cash')
-                ->sum('amount');
+            foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
+                $payment->{$methodBucket.'_amount'} = (float) $rows
+                    ->filter(fn ($row) => $this->dashboardPaymentMethodBucket((string) ($row->method_name ?? '')) === $methodBucket)
+                    ->sum('amount');
+            }
             $payment->bank_amount = (float) $rows
                 ->reject(fn ($row) => $this->dashboardPaymentMethodBucket((string) ($row->method_name ?? '')) === 'cash')
                 ->sum('amount');
