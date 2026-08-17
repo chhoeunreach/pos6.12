@@ -1066,6 +1066,35 @@ class DashboardController extends Controller
             ? 'p.payment_method_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'channel') ? 'p.channel' : '""');
         $noteExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'note') ? 'p.note' : '""';
+        $receivedByExpr = Schema::connection('mysql_loan')->hasColumn('loan_payments', 'received_by_name_snapshot')
+            ? 'p.received_by_name_snapshot'
+            : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'collected_by_name_snapshot') ? 'p.collected_by_name_snapshot' : '""');
+        $paymentTypeExpr = $this->dashboardPaymentTypeExpression('p');
+        $principalExpr = $this->coalesceSql('loan_payments', 'p', ['principal_paid'], '0');
+        $interestExpr = $this->coalesceSql('loan_payments', 'p', ['interest_paid'], '0');
+        $penaltyExpr = $this->coalesceSql('loan_payments', 'p', ['penalty_amount'], '0');
+        $customerPhoneExpr = Schema::connection('mysql_loan')->hasColumn('loans', 'customer_phone_snapshot') ? 'l.customer_phone_snapshot' : '""';
+        $loanMonthCountExpr = Schema::connection('mysql_loan')->hasColumn('loans', 'duration_months')
+            ? 'l.duration_months'
+            : (Schema::connection('mysql_loan')->hasColumn('loans', 'installment_count') ? 'l.installment_count' : '0');
+        $customerEmailExpr = '""';
+        $customerNameExprForExport = $customerExpr;
+        if (Schema::connection('mysql_loan')->hasTable('loan_customers') && Schema::connection('mysql_loan')->hasColumn('loans', 'customer_id')) {
+            $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
+            $customerPhoneExpr = Schema::connection('mysql_loan')->hasColumn('loan_customers', 'phone')
+                ? 'COALESCE(NULLIF(c.phone, ""), '.$customerPhoneExpr.')'
+                : $customerPhoneExpr;
+            $customerEmailExpr = Schema::connection('mysql_loan')->hasColumn('loan_customers', 'email') ? 'c.email' : '""';
+            $customerNameExprForExport = Schema::connection('mysql_loan')->hasColumn('loan_customers', 'name')
+                ? 'COALESCE(NULLIF(c.name, ""), '.$customerExpr.')'
+                : $customerExpr;
+        }
+        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules') && Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+            $query->leftJoin('loan_payment_schedules as s', 's.id', '=', 'p.schedule_id');
+            $scheduleNumberExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_schedules', 'installment_no') ? 's.installment_no' : 'NULL';
+        } else {
+            $scheduleNumberExpr = 'NULL';
+        }
 
         $payments = $query
             ->selectRaw('p.id')
@@ -1073,9 +1102,20 @@ class DashboardController extends Controller
             ->selectRaw('p.'.$dateColumn.' as paid_date')
             ->selectRaw($loanNumberExpr.' as loan_number')
             ->selectRaw($customerExpr.' as customer_name')
+            ->selectRaw($customerPhoneExpr.' as customer_phone')
+            ->selectRaw($loanMonthCountExpr.' as month_count')
+            ->selectRaw($paymentTypeExpr.' as payment_type')
             ->selectRaw($methodExpr.' as payment_method')
             ->selectRaw($noteExpr.' as note')
+            ->selectRaw($receivedByExpr.' as received_by_name')
             ->selectRaw($amountExpr.' as amount')
+            ->selectRaw($principalExpr.' as principal_amount')
+            ->selectRaw($interestExpr.' as interest_amount')
+            ->selectRaw($penaltyExpr.' as penalty_amount')
+            ->selectRaw($customerEmailExpr.' as customer_email')
+            ->selectRaw($customerNameExprForExport.' as export_customer_name')
+            ->selectRaw($scheduleNumberExpr.' as number_of_month')
+            ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loans', 'status') ? 'l.status' : '""').' as loan_status')
             ->selectRaw((Schema::connection('mysql_loan')->hasColumn('loan_payments', 'status') ? 'p.status' : '"confirmed"').' as status')
             ->when(Schema::connection('mysql_loan')->hasColumn('loan_payments', 'proof_file_id'), fn ($query) => $query->addSelect('p.proof_file_id'))
             ->orderByDesc('p.'.$dateColumn)
@@ -1090,6 +1130,14 @@ class DashboardController extends Controller
         if ($payments->isEmpty()
             || ! Schema::connection('mysql_loan')->hasTable('loan_payment_details')
             || ! Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_id')) {
+            foreach ($payments as $payment) {
+                $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
+                $payment->cash_amount = $bucket === 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                $payment->bank_amount = $bucket !== 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                $payment->payment_channel = $payment->payment_method ?: '-';
+                $payment->transaction_no = null;
+            }
+
             return $payments;
         }
 
@@ -1102,6 +1150,9 @@ class DashboardController extends Controller
             ? 'd.payment_method_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'method') ? 'd.method' : '"Cash"');
         $amountExpr = $this->coalesceSql('loan_payment_details', 'd', ['amount_base', 'amount'], '0');
+        $transactionExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'transaction_no')
+            ? 'd.transaction_no'
+            : (Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'reference_number') ? 'd.reference_number' : 'NULL');
 
         $details = DB::connection('mysql_loan')
             ->table('loan_payment_details as d')
@@ -1109,6 +1160,7 @@ class DashboardController extends Controller
             ->selectRaw('d.payment_id')
             ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as method_name')
             ->selectRaw($amountExpr.' as amount')
+            ->selectRaw($transactionExpr.' as transaction_no')
             ->orderBy('d.id')
             ->get()
             ->groupBy('payment_id');
@@ -1116,12 +1168,25 @@ class DashboardController extends Controller
         foreach ($payments as $payment) {
             $rows = $details->get($payment->id, collect());
             if ($rows->isEmpty()) {
+                $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
+                $payment->cash_amount = $bucket === 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                $payment->bank_amount = $bucket !== 'cash' ? (float) ($payment->amount ?? 0) : 0.0;
+                $payment->payment_channel = $payment->payment_method ?: '-';
+                $payment->transaction_no = null;
                 continue;
             }
 
             $payment->payment_method = $rows
                 ->map(fn ($row) => trim((string) $row->method_name).' $'.number_format((float) ($row->amount ?? 0), 2))
                 ->implode(', ');
+            $payment->cash_amount = (float) $rows
+                ->filter(fn ($row) => $this->dashboardPaymentMethodBucket((string) ($row->method_name ?? '')) === 'cash')
+                ->sum('amount');
+            $payment->bank_amount = (float) $rows
+                ->reject(fn ($row) => $this->dashboardPaymentMethodBucket((string) ($row->method_name ?? '')) === 'cash')
+                ->sum('amount');
+            $payment->payment_channel = $rows->pluck('method_name')->filter()->unique()->implode(', ');
+            $payment->transaction_no = $rows->pluck('transaction_no')->filter()->unique()->implode(', ');
         }
 
         return $payments;

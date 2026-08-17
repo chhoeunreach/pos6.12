@@ -108,6 +108,38 @@
         ? $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom)
         : $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom).' ដល់ថ្ងៃទី'.$khmerReportDate($recentActivityDateTo);
     $dashboardDateRange = \Carbon\Carbon::parse($filters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($filters['date_to'])->format('d-M-Y');
+    $recentPaymentExportRows = collect($payload['recentPayments'] ?? [])->map(function ($payment) {
+        $amount = (float) ($payment->amount ?? 0);
+        $principal = (float) ($payment->principal_amount ?? 0);
+        $interest = (float) ($payment->interest_amount ?? 0);
+        $penalty = (float) ($payment->penalty_amount ?? 0);
+        $other = max(0, $amount - $principal - $interest - $penalty);
+        $paymentType = strtolower(trim((string) ($payment->payment_type ?? '')));
+        $loanStatus = strtolower(trim((string) ($payment->loan_status ?? '')));
+        $paidOff = in_array($paymentType, ['loan', 'payoff', 'paid_off', 'settlement'], true)
+            || in_array($loanStatus, ['closed', 'paid_off', 'completed', 'settled'], true);
+
+        return [
+            'កាលបរិច្ឆេទ' => ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-Y') : '',
+            'វិក័យប័ត្រ' => $payment->loan_number ?? '',
+            'ឈ្មោះអតិថិជន' => $payment->customer_name ?? '',
+            'លេខទូរស័ព្ទ' => $payment->customer_phone ?? '',
+            'ចំនួនខែត្រូវបង់' => $payment->month_count ?? '',
+            'បង់ផ្ដាច់' => $paidOff ? $amount : 0,
+            'បង់-លុយសុទ្ធ' => (float) ($payment->cash_amount ?? 0),
+            'បង់-តាមធនាគា' => (float) ($payment->bank_amount ?? 0),
+            'តាមរយៈ' => $payment->payment_channel ?? $payment->payment_method ?? '',
+            'សរុប' => $amount,
+            'ប្រាក់ដើម' => $principal,
+            'ការប្រាក់' => $interest,
+            'ពិន័យ' => $penalty,
+            'ផ្សេងៗ' => $other,
+            'Email' => $payment->customer_email ?? '',
+            'Name' => $payment->received_by_name ?? '',
+            'លេខប្រតិបត្តិ' => $payment->transaction_no ?? '',
+            'Number of Month' => $payment->number_of_month ?? '',
+        ];
+    })->values()->all();
     $formatPeriod = function ($value) use ($period) {
         if (empty($value)) {
             return '-';
@@ -1281,6 +1313,43 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
         };
+        var fullPaymentRows = @json($recentPaymentExportRows, JSON_UNESCAPED_UNICODE);
+        var fullPaymentTable = function (title) {
+            var headings = [
+                'កាលបរិច្ឆេទ',
+                'វិក័យប័ត្រ',
+                'ឈ្មោះអតិថិជន',
+                'លេខទូរស័ព្ទ',
+                'ចំនួនខែត្រូវបង់',
+                'បង់ផ្ដាច់',
+                'បង់-លុយសុទ្ធ',
+                'បង់-តាមធនាគា',
+                'តាមរយៈ',
+                'សរុប',
+                'ប្រាក់ដើម',
+                'ការប្រាក់',
+                'ពិន័យ',
+                'ផ្សេងៗ',
+                'Email',
+                'Name',
+                'លេខប្រតិបត្តិ',
+                'Number of Month'
+            ];
+            var html = '<h3>' + esc(title) + '</h3><table border="1"><thead><tr>';
+            headings.forEach(function (heading) {
+                html += '<th>' + esc(heading) + '</th>';
+            });
+            html += '</tr></thead><tbody>';
+            fullPaymentRows.forEach(function (row) {
+                html += '<tr>';
+                headings.forEach(function (heading) {
+                    html += '<td>' + esc(row[heading]) + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            return html + '</tbody></table><br>';
+        };
         var tableFromDataTable = function (selector, title) {
             var table = window.jQuery ? jQuery(selector)[0] : null;
             if (!table || !jQuery.fn.DataTable || !jQuery.fn.DataTable.isDataTable(table)) {
@@ -1322,7 +1391,7 @@
         var html = '<html><head><meta charset="UTF-8"></head><body>';
 
         html += '<h2>' + esc(@json($recentActivityReportTitle)) + '</h2>';
-        html += tableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ')));
+        html += fullPaymentTable(@json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ')));
         html += tableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ')));
         html += '</body></html>';
 
