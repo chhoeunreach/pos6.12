@@ -1132,8 +1132,13 @@ class DashboardController extends Controller
         $schedulePaymentBaseExpr = 'GREATEST(('.$amountExpr.' - '.$penaltyExpr.'), 0)';
         $scheduleFallbackPrincipalExpr = 'LEAST('.$schedulePrincipalExpr.', '.$schedulePaymentBaseExpr.')';
         $scheduleFallbackInterestExpr = 'LEAST('.$scheduleInterestExpr.', GREATEST(('.$schedulePaymentBaseExpr.' - '.$scheduleFallbackPrincipalExpr.'), 0))';
-        $principalExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackPrincipalExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentPrincipalExpr.' ELSE '.$scheduleFallbackPrincipalExpr.' END';
-        $interestExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackInterestExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentInterestExpr.' ELSE '.$scheduleFallbackInterestExpr.' END';
+        $loanPrincipalExpr = $this->coalesceSql('loans', 'l', ['principal_amount', 'financed_amount'], '0');
+        $loanInterestExpr = $this->coalesceSql('loans', 'l', ['interest_amount'], '0');
+        $loanMonthDivisorExpr = 'NULLIF('.$loanMonthCountExpr.', 0)';
+        $loanMonthlyPrincipalExpr = 'LEAST(ROUND(('.$loanPrincipalExpr.' / '.$loanMonthDivisorExpr.'), 2), '.$schedulePaymentBaseExpr.')';
+        $loanMonthlyInterestExpr = 'LEAST(ROUND(('.$loanInterestExpr.' / '.$loanMonthDivisorExpr.'), 2), GREATEST(('.$schedulePaymentBaseExpr.' - '.$loanMonthlyPrincipalExpr.'), 0))';
+        $principalExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackPrincipalExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentPrincipalExpr.' WHEN '.$loanMonthCountExpr.' > 0 THEN '.$loanMonthlyPrincipalExpr.' ELSE '.$scheduleFallbackPrincipalExpr.' END';
+        $interestExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackInterestExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentInterestExpr.' WHEN '.$loanMonthCountExpr.' > 0 THEN '.$loanMonthlyInterestExpr.' ELSE '.$scheduleFallbackInterestExpr.' END';
 
         $payments = $query
             ->selectRaw('p.id')

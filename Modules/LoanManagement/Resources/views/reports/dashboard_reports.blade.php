@@ -113,7 +113,7 @@
         $principal = (float) ($payment->principal_amount ?? 0);
         $interest = (float) ($payment->interest_amount ?? 0);
         $penalty = (float) ($payment->penalty_amount ?? 0);
-        $other = max(0, $amount - $principal - $interest - $penalty);
+        $other = round(max(0, $amount - $principal - $interest - $penalty), 2);
         $paymentType = strtolower(trim((string) ($payment->payment_type ?? '')));
         $loanStatus = strtolower(trim((string) ($payment->loan_status ?? '')));
         $paidOff = in_array($paymentType, ['loan', 'payoff', 'paid_off', 'settlement'], true)
