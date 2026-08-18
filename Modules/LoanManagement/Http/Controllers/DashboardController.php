@@ -1128,11 +1128,12 @@ class DashboardController extends Controller
         }
         $schedulePrincipalExpr = $hasScheduleJoin ? $this->coalesceSql('loan_payment_schedules', 's', ['principal_amount', 'principal_due', 'principal'], '0') : '0';
         $scheduleInterestExpr = $hasScheduleJoin ? $this->coalesceSql('loan_payment_schedules', 's', ['interest_amount', 'interest_due', 'interest'], '0') : '0';
+        $scheduleLinkedExpr = $hasScheduleJoin ? 'p.schedule_id IS NOT NULL' : '0';
         $schedulePaymentBaseExpr = 'GREATEST(('.$amountExpr.' - '.$penaltyExpr.'), 0)';
         $scheduleFallbackPrincipalExpr = 'LEAST('.$schedulePrincipalExpr.', '.$schedulePaymentBaseExpr.')';
         $scheduleFallbackInterestExpr = 'LEAST('.$scheduleInterestExpr.', GREATEST(('.$schedulePaymentBaseExpr.' - '.$scheduleFallbackPrincipalExpr.'), 0))';
-        $principalExpr = 'CASE WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentPrincipalExpr.' ELSE '.$scheduleFallbackPrincipalExpr.' END';
-        $interestExpr = 'CASE WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentInterestExpr.' ELSE '.$scheduleFallbackInterestExpr.' END';
+        $principalExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackPrincipalExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentPrincipalExpr.' ELSE '.$scheduleFallbackPrincipalExpr.' END';
+        $interestExpr = 'CASE WHEN '.$scheduleLinkedExpr.' THEN '.$scheduleFallbackInterestExpr.' WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentInterestExpr.' ELSE '.$scheduleFallbackInterestExpr.' END';
 
         $payments = $query
             ->selectRaw('p.id')
