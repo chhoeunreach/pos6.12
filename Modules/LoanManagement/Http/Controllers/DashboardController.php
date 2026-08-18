@@ -1100,8 +1100,8 @@ class DashboardController extends Controller
             ? 'p.received_by_name_snapshot'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payments', 'collected_by_name_snapshot') ? 'p.collected_by_name_snapshot' : '""');
         $paymentTypeExpr = $this->dashboardPaymentTypeExpression('p');
-        $principalExpr = $this->coalesceSql('loan_payments', 'p', ['principal_paid'], '0');
-        $interestExpr = $this->coalesceSql('loan_payments', 'p', ['interest_paid'], '0');
+        $paymentPrincipalExpr = $this->coalesceSql('loan_payments', 'p', ['principal_paid'], '0');
+        $paymentInterestExpr = $this->coalesceSql('loan_payments', 'p', ['interest_paid'], '0');
         $penaltyExpr = $this->coalesceSql('loan_payments', 'p', ['penalty_amount'], '0');
         $customerPhoneExpr = Schema::connection('mysql_loan')->hasColumn('loans', 'customer_phone_snapshot') ? 'l.customer_phone_snapshot' : '""';
         $loanMonthCountExpr = Schema::connection('mysql_loan')->hasColumn('loans', 'duration_months')
@@ -1119,12 +1119,20 @@ class DashboardController extends Controller
                 ? 'COALESCE(NULLIF(c.name, ""), '.$customerExpr.')'
                 : $customerExpr;
         }
-        if (Schema::connection('mysql_loan')->hasTable('loan_payment_schedules') && Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id')) {
+        $hasScheduleJoin = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules') && Schema::connection('mysql_loan')->hasColumn('loan_payments', 'schedule_id');
+        if ($hasScheduleJoin) {
             $query->leftJoin('loan_payment_schedules as s', 's.id', '=', 'p.schedule_id');
             $scheduleNumberExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_schedules', 'installment_no') ? 's.installment_no' : 'NULL';
         } else {
             $scheduleNumberExpr = 'NULL';
         }
+        $schedulePrincipalExpr = $hasScheduleJoin ? $this->coalesceSql('loan_payment_schedules', 's', ['principal_amount', 'principal_due', 'principal'], '0') : '0';
+        $scheduleInterestExpr = $hasScheduleJoin ? $this->coalesceSql('loan_payment_schedules', 's', ['interest_amount', 'interest_due', 'interest'], '0') : '0';
+        $schedulePaymentBaseExpr = 'GREATEST(('.$amountExpr.' - '.$penaltyExpr.'), 0)';
+        $scheduleFallbackPrincipalExpr = 'LEAST('.$schedulePrincipalExpr.', '.$schedulePaymentBaseExpr.')';
+        $scheduleFallbackInterestExpr = 'LEAST('.$scheduleInterestExpr.', GREATEST(('.$schedulePaymentBaseExpr.' - '.$scheduleFallbackPrincipalExpr.'), 0))';
+        $principalExpr = 'CASE WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentPrincipalExpr.' ELSE '.$scheduleFallbackPrincipalExpr.' END';
+        $interestExpr = 'CASE WHEN ('.$paymentPrincipalExpr.' + '.$paymentInterestExpr.') > 0 THEN '.$paymentInterestExpr.' ELSE '.$scheduleFallbackInterestExpr.' END';
 
         $payments = $query
             ->selectRaw('p.id')
