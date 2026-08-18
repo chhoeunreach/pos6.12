@@ -1043,9 +1043,10 @@
                         $discount = (float) ($row->discount_amount ?? 0);
                         $storedStatus = strtolower((string) ($row->status ?? ''));
                         $isPayOff = in_array($storedStatus, ['pay off', 'pay_off', 'payoff'], true);
+                        $isPaidWithinRounding = $paid > 0 && $rowTotal > 0 && round($rowTotal - $paid - $discount, 2) <= 0.02;
                         $rowStatus = $isCreditOnlyRow
                             ? 'Unpaid'
-                            : (($isPayOff || ($paid + $discount >= $rowTotal && $rowTotal > 0))
+                            : (($isPayOff || $isPaidWithinRounding || ($paid + $discount >= $rowTotal && $rowTotal > 0))
                             ? ($isPayOff ? 'Pay Off' : 'Paid')
                             : ($paid > 0 ? 'Partial' : ucfirst($row->status ?? '')));
                         $rowStatusClass = in_array(strtolower($rowStatus), ['paid', 'pay off'], true)

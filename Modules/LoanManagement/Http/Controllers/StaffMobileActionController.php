@@ -135,9 +135,12 @@ class StaffMobileActionController extends Controller
                         continue;
                     }
                     $applied = min($remaining, $due);
+                    if ($due > $applied && round($due - $applied, 2) <= 0.02) {
+                        $applied = $due;
+                    }
                     $existingPaid = (float) ($s->paid_amount ?? $s->amount_paid ?? 0);
-                    $newPaid = $existingPaid + $applied;
-                    $newBalance = max(0, $due - $applied);
+                    $newPaid = round($existingPaid + $applied, 2);
+                    $newBalance = max(0, round($due - $applied, 2));
                     $status = $newBalance <= 0 ? 'paid' : 'partial';
 
                     DB::connection($this->conn)->table('loan_payment_schedules')->where('id', $s->id)->update($this->safeColumns('loan_payment_schedules', [
@@ -617,6 +620,10 @@ class StaffMobileActionController extends Controller
         $oldPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
         $newPaid = max(0, $oldPaid + $diff);
         $newBalance = max(0, $due - $newPaid);
+        if ($newBalance > 0 && $newBalance <= 0.02) {
+            $newBalance = 0.0;
+            $newPaid = $due;
+        }
 
         DB::connection($this->conn)->table('loan_payment_schedules')->where('id', $scheduleId)->update($this->safeColumns('loan_payment_schedules', [
             'paid_amount' => $newPaid,

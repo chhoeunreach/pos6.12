@@ -2451,10 +2451,15 @@ class LoanInstallmentListController extends Controller
         $this->upsertSchedulePaymentDetail($paymentId, $method, $methodName, $amount, $reference, $note);
 
         $balance = max(0, round($amountDue - $amount, 2));
+        $storedPaidAmount = $amount;
+        if ($balance > 0 && $balance <= 0.02) {
+            $balance = 0.0;
+            $storedPaidAmount = $amountDue;
+        }
         DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->update($this->loanSafeColumns('loan_payment_schedules', [
-            'paid_amount' => $amount,
-            'amount_paid' => $amount,
-            'paid_value' => $amount,
+            'paid_amount' => $storedPaidAmount,
+            'amount_paid' => $storedPaidAmount,
+            'paid_value' => $storedPaidAmount,
             'balance_amount' => $balance,
             'amount_balance' => $balance,
             'status' => $status === 'pay off' ? 'pay off' : ($balance <= 0 ? 'paid' : 'partial'),
@@ -3292,8 +3297,9 @@ class LoanInstallmentListController extends Controller
             }
 
             $existingPaidAmount = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
-            $newPaid = round($existingPaidAmount + $remaining, 2);
-            $newBalance = max(0, round($due - $remaining, 2));
+            $appliedAmount = ($due > $remaining && round($due - $remaining, 2) <= 0.02) ? $due : $remaining;
+            $newPaid = round($existingPaidAmount + $appliedAmount, 2);
+            $newBalance = max(0, round($due - $appliedAmount, 2));
             $creditToNextInstallments = max(0, round($remaining - $due, 2));
 
             DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)->update($this->loanSafeColumns('loan_payment_schedules', [

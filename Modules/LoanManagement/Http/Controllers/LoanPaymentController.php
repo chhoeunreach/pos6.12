@@ -419,6 +419,10 @@ class LoanPaymentController extends Controller
         $oldPaid = (float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0);
         $newPaid = max(0, $oldPaid + $diff);
         $newBalance = max(0, $due - $newPaid);
+        if ($newBalance > 0 && $newBalance <= 0.02) {
+            $newBalance = 0.0;
+            $newPaid = $due;
+        }
 
         DB::connection($this->connection)->table('loan_payment_schedules')->where('id', $scheduleId)->update($this->safeColumns('loan_payment_schedules', [
             'paid_amount' => $newPaid,
