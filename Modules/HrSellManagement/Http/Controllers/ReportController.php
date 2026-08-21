@@ -437,7 +437,8 @@ class ReportController extends Controller
 
         try {
             $lineExpressions = $this->hrLineAmountExpressions();
-            $base = $this->baseStaffLineQuery($request, 'DATE(sor.created_at)', $lineExpressions);
+            $base = $this->baseStaffLineQuery($request, 'DATE(sor.created_at)', $lineExpressions)
+                ->whereIn('sor.service_type', $this->commissionServiceTypeValues($commissionColumns));
 
             $totalsQuery = (clone $base)
                 ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
@@ -447,9 +448,7 @@ class ReportController extends Controller
 
             foreach ($commissionColumns as $column) {
                 if ($column['has_commission']) {
-                    $baseExpr = $column['commission_basis'] === 'qty'
-                        ? 'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)'
-                        : 'COUNT(DISTINCT CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN sor.id END)';
+                    $baseExpr = $this->commissionBaseExpression($column, $lineExpressions);
 
                     $totalsQuery
                         ->selectRaw(
@@ -483,9 +482,7 @@ class ReportController extends Controller
 
             foreach ($commissionColumns as $column) {
                 if ($column['has_commission']) {
-                    $baseExpr = $column['commission_basis'] === 'qty'
-                        ? 'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)'
-                        : 'COUNT(DISTINCT CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN sor.id END)';
+                    $baseExpr = $this->commissionBaseExpression($column, $lineExpressions);
 
                     $rowsQuery
                         ->selectRaw(
@@ -511,6 +508,7 @@ class ReportController extends Controller
                     DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"),
                     DB::raw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown')")
                 )
+                ->havingRaw($this->commissionHavingExpression($commissionColumns, $lineExpressions), $this->commissionExpressionBindings($commissionColumns))
                 ->orderBy('staff_name')
                 ->orderBy('branch_name');
 
@@ -543,6 +541,7 @@ class ReportController extends Controller
                 'has_commission' => in_array($key, ['iron', 'material', 'repair', 'sell'], true),
                 'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
                 'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
+                'minimum_invoice_total' => $key === 'material' ? 10 : null,
             ])
             ->all();
     }
@@ -550,6 +549,57 @@ class ReportController extends Controller
     private function placeholders(array $values): string
     {
         return implode(', ', array_fill(0, count($values), '?'));
+    }
+
+    private function commissionServiceTypeValues(array $commissionColumns): array
+    {
+        return collect($commissionColumns)
+            ->filter(fn ($column) => $column['has_commission'])
+            ->flatMap(fn ($column) => $column['values'])
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function commissionBaseExpression(array $column, array $lineExpressions): string
+    {
+        $condition = 'sor.service_type IN (' . $this->placeholders($column['values']) . ')';
+
+        if (! empty($column['minimum_invoice_total'])) {
+            $condition .= ' AND ' . $this->invoiceLineTotalExpression() . ' >= ' . (float) $column['minimum_invoice_total'];
+        }
+
+        if ($column['commission_basis'] === 'qty') {
+            return 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
+        }
+
+        return 'COUNT(DISTINCT CASE WHEN ' . $condition . ' THEN sor.id END)';
+    }
+
+    private function invoiceLineTotalExpression(): string
+    {
+        $lineExpressions = $this->hrLineAmountExpressions('sol_invoice_total');
+
+        return '(SELECT COALESCE(SUM(' . $lineExpressions['total'] . '), 0) FROM sell_out_report_lines as sol_invoice_total WHERE sol_invoice_total.sell_out_report_id = sor.id)';
+    }
+
+    private function commissionHavingExpression(array $commissionColumns, array $lineExpressions): string
+    {
+        $parts = collect($commissionColumns)
+            ->filter(fn ($column) => $column['has_commission'])
+            ->map(fn ($column) => '(' . $this->commissionBaseExpression($column, $lineExpressions) . ' * ' . $column['commission_rate'] . ')')
+            ->all();
+
+        return '(' . implode(' + ', $parts) . ') > 0';
+    }
+
+    private function commissionExpressionBindings(array $commissionColumns): array
+    {
+        return collect($commissionColumns)
+            ->filter(fn ($column) => $column['has_commission'])
+            ->flatMap(fn ($column) => $column['values'])
+            ->values()
+            ->all();
     }
 
     private function sumCommissionTotals(object $row, array $commissionColumns): float
@@ -603,26 +653,26 @@ class ReportController extends Controller
             });
     }
 
-    private function hrLineAmountExpressions(): array
+    private function hrLineAmountExpressions(string $lineAlias = 'sol'): array
     {
         $qtyColumn = $this->firstHrLineColumn(['qty', 'quantity', 'sale_qty', 'product_qty']);
         $priceColumn = $this->firstHrLineColumn(['unit_price', 'price', 'sell_price', 'selling_price', 'product_price']);
         $totalColumn = $this->firstHrLineColumn(['line_total', 'total', 'total_amount', 'subtotal', 'amount']);
 
-        $qtyExpr = $qtyColumn ? 'COALESCE(sol.' . $qtyColumn . ', 0)' : '1';
+        $qtyExpr = $qtyColumn ? 'COALESCE(' . $lineAlias . '.' . $qtyColumn . ', 0)' : '1';
         $reportLineCountExpr = "(SELECT COUNT(*) FROM sell_out_report_lines as sol_count WHERE sol_count.sell_out_report_id = sor.id)";
         $totalExpr = $totalColumn
-            ? 'COALESCE(sol.' . $totalColumn . ', 0)'
-            : ($priceColumn ? '(' . $qtyExpr . ' * COALESCE(sol.' . $priceColumn . ', 0))' : '(COALESCE(sor.total_amount, 0) / NULLIF(' . $reportLineCountExpr . ', 0))');
+            ? 'COALESCE(' . $lineAlias . '.' . $totalColumn . ', 0)'
+            : ($priceColumn ? '(' . $qtyExpr . ' * COALESCE(' . $lineAlias . '.' . $priceColumn . ', 0))' : '(COALESCE(sor.total_amount, 0) / NULLIF(' . $reportLineCountExpr . ', 0))');
         $priceExpr = $priceColumn
-            ? 'COALESCE(sol.' . $priceColumn . ', 0)'
+            ? 'COALESCE(' . $lineAlias . '.' . $priceColumn . ', 0)'
             : ($totalColumn ? '(' . $totalExpr . ' / NULLIF(' . $qtyExpr . ', 0))' : '0');
 
         return [
             'qty' => $qtyExpr,
             'price' => $priceExpr,
             'total' => $totalExpr,
-            'serial' => "NULLIF(TRIM(CONCAT_WS(' / ', NULLIF(sol.serial_number, ''), NULLIF(sol.imei, ''), NULLIF(sol.imei2, ''), NULLIF(sol.primary_identifier, ''))), '')",
+            'serial' => "NULLIF(TRIM(CONCAT_WS(' / ', NULLIF(" . $lineAlias . ".serial_number, ''), NULLIF(" . $lineAlias . ".imei, ''), NULLIF(" . $lineAlias . ".imei2, ''), NULLIF(" . $lineAlias . ".primary_identifier, ''))), '')",
         ];
     }
 
