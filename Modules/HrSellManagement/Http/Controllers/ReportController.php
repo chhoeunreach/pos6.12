@@ -77,6 +77,7 @@ class ReportController extends Controller
                 'Branch' => $row->branch_name,
                 'Seller Username' => $row->staff_code,
                 'Seller' => $row->staff_name,
+                'Phone number' => $row->customer_phone ?? '',
                 'Sell Type' => $this->sellTypeLabel($row->service_type),
                 'Product' => $row->product_name,
                 'SKU' => $row->sku,
@@ -90,6 +91,7 @@ class ReportController extends Controller
                 'Period' => $row->period_label,
                 'Seller Username' => $row->staff_code,
                 'Seller' => $row->staff_name,
+                'Phone number' => $row->phone_numbers ?? '',
                 'Branch' => $row->branch_name,
                 'Invoice Qty' => $row->sale_count,
                 'Products Qty' => $row->total_qty,
@@ -125,7 +127,6 @@ class ReportController extends Controller
             $exportRow = [
                 'Username' => $row->staff_code,
                 'Staff' => $row->staff_name,
-                'Phone number' => $row->phone_numbers ?? '',
                 'Branch' => $row->branch_name,
             ];
 
@@ -393,6 +394,7 @@ class ReportController extends Controller
                     ->select(
                         'sor.id as report_id',
                         'sor.invoice_no',
+                        'sor.customer_phone',
                         'sor.branch_name',
                         'sor.created_at',
                         'sor.service_type',

@@ -371,6 +371,7 @@
                 <tr>
                     <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
                     <th>Staff</th>
+                    <th>Phone number</th>
                     <th>Branch</th>
                     <th class="text-right">Invoice Qty</th>
                     <th class="text-right">Products Qty</th>
@@ -387,6 +388,7 @@
                             {{ $row->staff_name }}
                             {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                         </td>
+                        <td>{{ $row->phone_numbers ?? '-' }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_count, 0) }}</td>
                         <td class="text-right">{{ number_format((float) $row->total_qty, 2) }}</td>
@@ -398,6 +400,7 @@
             </tbody>
             <tfoot>
                 <tr>
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th class="text-right">Total</th>
@@ -441,14 +444,15 @@
                                 <th data-line-column="1">Invoice</th>
                                 <th data-line-column="2">Sale Date</th>
                                 <th data-line-column="3">Staff</th>
-                                <th data-line-column="4">Branch</th>
-                                <th data-line-column="5">Type</th>
-                                <th data-line-column="6">Product</th>
-                                <th data-line-column="7">SKU</th>
-                                <th data-line-column="8">Serial / IMEI</th>
-                                <th class="text-right" data-line-column="9">Qty</th>
-                                <th class="text-right" data-line-column="10">Price</th>
-                                <th class="text-right" data-line-column="11">Total</th>
+                                <th data-line-column="4">Phone number</th>
+                                <th data-line-column="5">Branch</th>
+                                <th data-line-column="6">Type</th>
+                                <th data-line-column="7">Product</th>
+                                <th data-line-column="8">SKU</th>
+                                <th data-line-column="9">Serial / IMEI</th>
+                                <th class="text-right" data-line-column="10">Qty</th>
+                                <th class="text-right" data-line-column="11">Price</th>
+                                <th class="text-right" data-line-column="12">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -466,17 +470,18 @@
                                         {{ $row->staff_name }}
                                         {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                                     </td>
-                                    <td class="hr-staff-line-group-cell" data-line-column="4">{{ $row->branch_name }}</td>
-                                    <td class="hr-staff-line-group-cell" data-line-column="5">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                                    <td data-line-column="6">{{ $row->product_name ?: '-' }}</td>
-                                    <td data-line-column="7">{{ $row->sku ?: '-' }}</td>
-                                    <td data-line-column="8">{{ $row->serial_identifier ?: '-' }}</td>
-                                    <td class="text-right" data-line-column="9">{{ number_format((float) $row->qty, 2) }}</td>
-                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->unit_price, 2) }}</td>
-                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    <td data-line-column="4">{{ $row->customer_phone ?: '-' }}</td>
+                                    <td class="hr-staff-line-group-cell" data-line-column="5">{{ $row->branch_name }}</td>
+                                    <td class="hr-staff-line-group-cell" data-line-column="6">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td data-line-column="7">{{ $row->product_name ?: '-' }}</td>
+                                    <td data-line-column="8">{{ $row->sku ?: '-' }}</td>
+                                    <td data-line-column="9">{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right" data-line-column="12">{{ number_format((float) $row->line_total, 2) }}</td>
                                 </tr>
                             @endforeach
-                            {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="13" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
                         <tfoot>
                             <tr>
@@ -488,10 +493,11 @@
                                 <th data-line-column="5"></th>
                                 <th data-line-column="6"></th>
                                 <th data-line-column="7"></th>
-                                <th class="text-right" data-line-column="8">Total</th>
-                                <th class="text-right hr-staff-lines-qty-total" data-line-column="9">0.00</th>
-                                <th class="text-right hr-staff-lines-price-total" data-line-column="10">0.00</th>
-                                <th class="text-right hr-staff-lines-total-total" data-line-column="11">0.00</th>
+                                <th data-line-column="8"></th>
+                                <th class="text-right" data-line-column="9">Total</th>
+                                <th class="text-right hr-staff-lines-qty-total" data-line-column="10">0.00</th>
+                                <th class="text-right hr-staff-lines-price-total" data-line-column="11">0.00</th>
+                                <th class="text-right hr-staff-lines-total-total" data-line-column="12">0.00</th>
                             </tr>
                         </tfoot>
                     </table>
@@ -505,14 +511,15 @@
                                 <th data-line-column="1">Invoice</th>
                                 <th data-line-column="2">Sale Date</th>
                                 <th data-line-column="3">Staff</th>
-                                <th data-line-column="4">Branch</th>
-                                <th data-line-column="5">Type</th>
-                                <th data-line-column="6">Product</th>
-                                <th data-line-column="7">SKU</th>
-                                <th data-line-column="8">Serial / IMEI</th>
-                                <th class="text-right" data-line-column="9">Qty</th>
-                                <th class="text-right" data-line-column="10">Price</th>
-                                <th class="text-right" data-line-column="11">Total</th>
+                                <th data-line-column="4">Phone number</th>
+                                <th data-line-column="5">Branch</th>
+                                <th data-line-column="6">Type</th>
+                                <th data-line-column="7">Product</th>
+                                <th data-line-column="8">SKU</th>
+                                <th data-line-column="9">Serial / IMEI</th>
+                                <th class="text-right" data-line-column="10">Qty</th>
+                                <th class="text-right" data-line-column="11">Price</th>
+                                <th class="text-right" data-line-column="12">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -530,17 +537,18 @@
                                         {{ $row->staff_name }}
                                         {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                                     </td>
-                                    <td data-line-column="4">{{ $row->branch_name }}</td>
-                                    <td data-line-column="5">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                                    <td data-line-column="6">{{ $row->product_name ?: '-' }}</td>
-                                    <td data-line-column="7">{{ $row->sku ?: '-' }}</td>
-                                    <td data-line-column="8">{{ $row->serial_identifier ?: '-' }}</td>
-                                    <td class="text-right" data-line-column="9">{{ number_format((float) $row->qty, 2) }}</td>
-                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->unit_price, 2) }}</td>
-                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    <td data-line-column="4">{{ $row->customer_phone ?: '-' }}</td>
+                                    <td data-line-column="5">{{ $row->branch_name }}</td>
+                                    <td data-line-column="6">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td data-line-column="7">{{ $row->product_name ?: '-' }}</td>
+                                    <td data-line-column="8">{{ $row->sku ?: '-' }}</td>
+                                    <td data-line-column="9">{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right" data-line-column="12">{{ number_format((float) $row->line_total, 2) }}</td>
                                 </tr>
                             @endforeach
-                            {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="13" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
                         <tfoot>
                             <tr>
@@ -552,10 +560,11 @@
                                 <th data-line-column="5"></th>
                                 <th data-line-column="6"></th>
                                 <th data-line-column="7"></th>
-                                <th class="text-right" data-line-column="8">Total</th>
-                                <th class="text-right hr-staff-lines-v1-qty-total" data-line-column="9">0.00</th>
-                                <th class="text-right hr-staff-lines-v1-price-total" data-line-column="10">0.00</th>
-                                <th class="text-right hr-staff-lines-v1-total-total" data-line-column="11">0.00</th>
+                                <th data-line-column="8"></th>
+                                <th class="text-right" data-line-column="9">Total</th>
+                                <th class="text-right hr-staff-lines-v1-qty-total" data-line-column="10">0.00</th>
+                                <th class="text-right hr-staff-lines-v1-price-total" data-line-column="11">0.00</th>
+                                <th class="text-right hr-staff-lines-v1-total-total" data-line-column="12">0.00</th>
                             </tr>
                         </tfoot>
                     </table>
@@ -700,8 +709,8 @@ $(function() {
                         }, 0);
                 };
 
-                $(api.column(3).footer()).html(formatNumber(totalColumn(3), 0));
-                $(api.column(4).footer()).html(formatNumber(totalColumn(4), 2));
+                $(api.column(4).footer()).html(formatNumber(totalColumn(4), 0));
+                $(api.column(5).footer()).html(formatNumber(totalColumn(5), 2));
             }
         });
     }
@@ -740,7 +749,7 @@ $(function() {
                 return;
             }
 
-            var rowQty = parseNumber($row.children('[data-line-column="9"]').clone().children().remove().end().text());
+            var rowQty = parseNumber($row.children('[data-line-column="10"]').clone().children().remove().end().text());
             var groupKey = $.trim($cells.eq(0).text()) + '|' + $.trim($cells.eq(1).text()) + '|' + $.trim($cells.eq(2).text());
 
             if (groupKey === previousKey && $groupCells) {
@@ -785,9 +794,9 @@ $(function() {
                 return;
             }
 
-            totals.qty += parseNumber($row.children('[data-line-column="9"]').clone().children().remove().end().text());
-            totals.price += parseNumber($row.children('[data-line-column="10"]').clone().children().remove().end().text());
-            totals.total += parseNumber($row.children('[data-line-column="11"]').clone().children().remove().end().text());
+            totals.qty += parseNumber($row.children('[data-line-column="10"]').clone().children().remove().end().text());
+            totals.price += parseNumber($row.children('[data-line-column="11"]').clone().children().remove().end().text());
+            totals.total += parseNumber($row.children('[data-line-column="12"]').clone().children().remove().end().text());
         });
 
         $(containerSelector + ' .' + totalClassPrefix + '-qty-total').text(formatNumber(totals.qty));
