@@ -8,7 +8,8 @@
     $printDate = request('start_date') && request('end_date')
         ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
         : now()->toDateString();
-    $saleLinesPrintTitle = 'របាយការណ៍ប្រចាំថ្ងៃ ' . $printDate . ' សាខា ' . (request('branch_name') ?: 'ទាំងអស់');
+    $selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all();
+    $saleLinesPrintTitle = 'របាយការណ៍ប្រចាំថ្ងៃ ' . $printDate . ' សាខា ' . (count($selectedBranchNames) ? implode(', ', $selectedBranchNames) : 'ទាំងអស់');
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
     $currentUser = auth()->user();
     $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
@@ -175,22 +176,29 @@
                 <div class="col-md-2">
                     <div class="form-group">
                         <label>Location / Branch:</label>
-                        <select name="branch_name" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="branch_name[]" class="form-control select2 js-hr-multi-select js-branch-filter" multiple data-placeholder="All">
                             @foreach($hrBranches as $branch => $name)
-                                <option value="{{ $branch }}" {{ (string) request('branch_name') === (string) $branch ? 'selected' : '' }}>{{ $name }}</option>
+                                <option value="{{ $branch }}" {{ in_array((string) $branch, $selectedBranchNames, true) ? 'selected' : '' }}>{{ $name }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-2">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
+                        <select name="department_id[]" class="form-control select2 js-hr-multi-select" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
                                 <option value="{{ $departmentId }}" {{ in_array((string) $departmentId, $selectedDepartmentIds, true) ? 'selected' : '' }}>{{ $departmentName }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -566,6 +574,23 @@
 <script>
 $(function() {
     $('.select2').select2();
+
+    $(document).on('click', '.js-select-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.find('option').prop('selected', true);
+        select.trigger('change');
+    });
+
+    $(document).on('click', '.js-clear-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.val(null).trigger('change');
+    });
+
+    $('.js-branch-filter').on('change', function() {
+        var form = $(this).closest('form');
+        form.find('select[name="department_id[]"]').val(null);
+        form.submit();
+    });
 
     var dateRange = $('#hr_staff_sell_date_range');
     var startDate = $('#hr_staff_sell_start_date');

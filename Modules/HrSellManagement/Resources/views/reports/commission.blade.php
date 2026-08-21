@@ -3,11 +3,12 @@
 @section('module_content')
 @php
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key');
+    $selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all();
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
     $printDate = request('start_date') && request('end_date')
         ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
         : now()->toDateString();
-    $printBranch = request('branch_name') ?: 'ទាំងអស់';
+    $printBranch = count($selectedBranchNames) ? implode(', ', $selectedBranchNames) : 'ទាំងអស់';
     $printTitle = 'របាយការណ៍ ប្រាក់លើកទឹកចិត្ត​សម្រាប់ ' . $printDate . ' សាខា ' . $printBranch;
 @endphp
 <style>
@@ -103,22 +104,29 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Location / Branch:</label>
-                        <select name="branch_name" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="branch_name[]" class="form-control select2 js-hr-multi-select js-branch-filter" multiple data-placeholder="All">
                             @foreach($hrBranches as $branch => $name)
-                                <option value="{{ $branch }}" @selected((string) request('branch_name') === (string) $branch)>{{ $name }}</option>
+                                <option value="{{ $branch }}" @selected(in_array((string) $branch, $selectedBranchNames, true))>{{ $name }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
+                        <select name="department_id[]" class="form-control select2 js-hr-multi-select" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
                                 <option value="{{ $departmentId }}" @selected(in_array((string) $departmentId, $selectedDepartmentIds, true))>{{ $departmentName }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -348,6 +356,23 @@ $(function() {
     $('.select2').select2();
     $('[data-toggle="tooltip"]').tooltip();
     var commissionPrintTitle = @json($printTitle);
+
+    $(document).on('click', '.js-select-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.find('option').prop('selected', true);
+        select.trigger('change');
+    });
+
+    $(document).on('click', '.js-clear-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.val(null).trigger('change');
+    });
+
+    $('.js-branch-filter').on('change', function() {
+        var form = $(this).closest('form');
+        form.find('select[name="department_id[]"]').val(null);
+        form.submit();
+    });
 
     var dateRange = $('#hr_commission_date_range');
     var startDate = $('#hr_commission_start_date');

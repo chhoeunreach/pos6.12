@@ -17,7 +17,7 @@ class ReportController extends Controller
         abort_unless($this->canReport(), 403);
 
         [$rows, $summary] = $this->reportData($request, true);
-        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions($request);
 
         return view('hrsellmanagement::reports.index', compact('rows', 'summary', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
     }
@@ -53,7 +53,7 @@ class ReportController extends Controller
 
         $request = $this->withDefaultStaffReportDates($request);
         [$summaryRows, $lineRows, $totals, $period, $topSellers, $trafficRows] = $this->staffReportData($request, true);
-        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions($request);
 
         return view('hrsellmanagement::reports.staff', compact('summaryRows', 'lineRows', 'totals', 'period', 'topSellers', 'trafficRows', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
     }
@@ -107,7 +107,7 @@ class ReportController extends Controller
 
         $request = $this->withDefaultStaffReportDates($request);
         [$commissionRows, $commissionTotals, $commissionColumns] = $this->commissionReportData($request, true);
-        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions($request);
 
         return view('hrsellmanagement::reports.commission', compact('commissionRows', 'commissionTotals', 'commissionColumns', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
     }
@@ -670,7 +670,7 @@ class ReportController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
             ->when($request->filled('start_date'), fn ($q) => $q->where('sor.created_at', '>=', $request->input('start_date') . ' 00:00:00'))
             ->when($request->filled('end_date'), fn ($q) => $q->where('sor.created_at', '<=', $request->input('end_date') . ' 23:59:59'))
-            ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
+            ->when($this->selectedBranchNames($request), fn ($q) => $q->whereIn(DB::raw('TRIM(sor.branch_name)'), $this->selectedBranchNames($request)))
             ->when($request->filled('sell_type'), function ($q) use ($request) {
                 $q->whereIn('sor.service_type', $this->sellTypeValues($request->input('sell_type')));
             })
@@ -785,7 +785,7 @@ class ReportController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
             ->when($request->filled('start_date'), fn ($q) => $q->where('sor.created_at', '>=', $request->input('start_date') . ' 00:00:00'))
             ->when($request->filled('end_date'), fn ($q) => $q->where('sor.created_at', '<=', $request->input('end_date') . ' 23:59:59'))
-            ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
+            ->when($this->selectedBranchNames($request), fn ($q) => $q->whereIn(DB::raw('TRIM(sor.branch_name)'), $this->selectedBranchNames($request)))
             ->when($request->filled('sell_type'), function ($q) use ($request) {
                 $sellType = $request->input('sell_type');
                 $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
@@ -831,7 +831,7 @@ class ReportController extends Controller
             });
     }
 
-    private function filterOptions(): array
+    private function filterOptions(?Request $request = null): array
     {
         try {
             $branches = DB::connection('hr')
@@ -874,7 +874,7 @@ class ReportController extends Controller
                     return [$seller->seller_key => $label ?: 'Unknown'];
                 });
 
-            $departments = $this->hrDepartments();
+            $departments = $this->hrDepartments($request ? $this->selectedBranchNames($request) : []);
 
             return [$branches, $sellTypes, $sellers, $departments];
         } catch (\Throwable $e) {
@@ -884,7 +884,7 @@ class ReportController extends Controller
         }
     }
 
-    private function hrDepartments()
+    private function hrDepartments(array $branchNames = [])
     {
         $labelColumn = $this->departmentLabelColumn();
 
@@ -892,13 +892,23 @@ class ReportController extends Controller
             return collect();
         }
 
-        return DB::connection('hr')
+        $query = DB::connection('hr')
             ->table('departments')
+            ->when(! empty($branchNames), function ($q) use ($branchNames) {
+                $q->whereExists(function ($exists) use ($branchNames) {
+                    $exists->select(DB::raw(1))
+                        ->from('users as department_users')
+                        ->join('sell_out_reports as department_reports', 'department_reports.user_id', '=', 'department_users.id')
+                        ->whereColumn('department_users.department_id', 'departments.id')
+                        ->whereIn(DB::raw('TRIM(department_reports.branch_name)'), $branchNames);
+                });
+            })
             ->select('id', $labelColumn)
             ->whereNotNull($labelColumn)
             ->where($labelColumn, '!=', '')
-            ->orderBy($labelColumn)
-            ->pluck($labelColumn, 'id');
+            ->orderBy($labelColumn);
+
+        return $query->pluck($labelColumn, 'id');
     }
 
     private function canFilterByDepartment(): bool
@@ -928,6 +938,15 @@ class ReportController extends Controller
         return collect((array) $request->input('department_id', []))
             ->filter(fn ($departmentId) => $departmentId !== null && $departmentId !== '')
             ->map(fn ($departmentId) => (string) $departmentId)
+            ->values()
+            ->all();
+    }
+
+    private function selectedBranchNames(Request $request): array
+    {
+        return collect((array) $request->input('branch_name', []))
+            ->filter(fn ($branchName) => $branchName !== null && trim((string) $branchName) !== '')
+            ->map(fn ($branchName) => trim((string) $branchName))
             ->values()
             ->all();
     }

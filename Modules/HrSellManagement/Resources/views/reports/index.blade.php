@@ -122,6 +122,7 @@
 </style>
 
 @php($hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key'))
+@php($selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all())
 @php($selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all())
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_report_filter_box">
     <div class="box-header with-border hr-sell-report-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_report_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
@@ -136,12 +137,15 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Location / Branch:</label>
-                        <select name="branch_name" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="branch_name[]" class="form-control select2 js-hr-multi-select js-branch-filter" multiple data-placeholder="All">
                             @foreach($hrBranches as $branch => $name)
-                                <option value="{{ $branch }}" @selected((string) request('branch_name') === (string) $branch)>{{ $name }}</option>
+                                <option value="{{ $branch }}" @selected(in_array((string) $branch, $selectedBranchNames, true))>{{ $name }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -158,11 +162,15 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
+                        <select name="department_id[]" class="form-control select2 js-hr-multi-select" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
                                 <option value="{{ $departmentId }}" @selected(in_array((string) $departmentId, $selectedDepartmentIds, true))>{{ $departmentName }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -329,6 +337,23 @@
 <script>
 $(function() {
     $('.select2').select2();
+
+    $(document).on('click', '.js-select-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.find('option').prop('selected', true);
+        select.trigger('change');
+    });
+
+    $(document).on('click', '.js-clear-all-options', function() {
+        var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
+        select.val(null).trigger('change');
+    });
+
+    $('.js-branch-filter').on('change', function() {
+        var form = $(this).closest('form');
+        form.find('select[name="department_id[]"]').val(null);
+        form.submit();
+    });
 
     var dateRange = $('#hr_sell_report_date_range');
     var startDate = $('#hr_sell_report_start_date');
