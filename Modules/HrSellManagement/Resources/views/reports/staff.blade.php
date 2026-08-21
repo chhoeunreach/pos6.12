@@ -103,6 +103,14 @@
         vertical-align: middle !important;
     }
 
+    .hr-staff-line-group-qty {
+        display: block;
+        margin-top: 4px;
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_staff_sell_filter_box">
@@ -370,47 +378,100 @@
 
     <div class="box box-info" id="hr_staff_sell_lines" style="{{ $showLines ? '' : 'display:none;' }}">
         <div class="box-header"><h4>Sale Lines</h4></div>
-        <div class="box-body table-responsive">
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
-                        <th>Invoice</th>
-                        <th>Sale Date</th>
-                        <th>Staff</th>
-                        <th>Branch</th>
-                        <th>Type</th>
-                        <th>Product</th>
-                        <th>SKU</th>
-                        <th>Serial / IMEI</th>
-                        <th class="text-right">Qty</th>
-                        <th class="text-right">Price</th>
-                        <th class="text-right">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($lineRows as $row)
-                        <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
-                            <td>{{ $row->period_label ?? '-' }}</td>
-                            <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
-                            <td>{{ $row->created_at }}</td>
-                            <td class="hr-staff-line-group-cell">
-                                {{ $row->staff_name }}
-                                {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
-                            </td>
-                            <td class="hr-staff-line-group-cell">{{ $row->branch_name }}</td>
-                            <td class="hr-staff-line-group-cell">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                            <td>{{ $row->product_name ?: '-' }}</td>
-                            <td>{{ $row->sku ?: '-' }}</td>
-                            <td>{{ $row->serial_identifier ?: '-' }}</td>
-                            <td class="text-right">{{ number_format((float) $row->qty, 2) }}</td>
-                            <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
-                            <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
-                        </tr>
-                    @endforeach
-                    {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
-                </tbody>
-            </table>
+        <div class="box-body">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="active"><a href="#hr_staff_sell_lines_current" role="tab" data-toggle="tab">Sale Lines</a></li>
+                <li><a href="#hr_staff_sell_lines_v1" role="tab" data-toggle="tab">Sale Lines v1</a></li>
+            </ul>
+
+            <div class="tab-content" style="padding-top: 15px;">
+                <div class="tab-pane active table-responsive" id="hr_staff_sell_lines_current">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
+                                <th>Invoice</th>
+                                <th>Sale Date</th>
+                                <th>Staff</th>
+                                <th>Branch</th>
+                                <th>Type</th>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Serial / IMEI</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Price</th>
+                                <th class="text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($lineRows as $row)
+                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
+                                    <td>{{ $row->period_label ?? '-' }}</td>
+                                    <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td>{{ $row->created_at }}</td>
+                                    <td class="hr-staff-line-group-cell">
+                                        {{ $row->staff_name }}
+                                        {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                                    </td>
+                                    <td class="hr-staff-line-group-cell">{{ $row->branch_name }}</td>
+                                    <td class="hr-staff-line-group-cell">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td>{{ $row->product_name ?: '-' }}</td>
+                                    <td>{{ $row->sku ?: '-' }}</td>
+                                    <td>{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
+                                </tr>
+                            @endforeach
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="tab-pane table-responsive" id="hr_staff_sell_lines_v1">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
+                                <th>Invoice</th>
+                                <th>Sale Date</th>
+                                <th>Staff</th>
+                                <th>Branch</th>
+                                <th>Type</th>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Serial / IMEI</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Price</th>
+                                <th class="text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($lineRows as $row)
+                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
+                                    <td>{{ $row->period_label ?? '-' }}</td>
+                                    <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td>{{ $row->created_at }}</td>
+                                    <td>
+                                        {{ $row->staff_name }}
+                                        {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                                    </td>
+                                    <td>{{ $row->branch_name }}</td>
+                                    <td>{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td>{{ $row->product_name ?: '-' }}</td>
+                                    <td>{{ $row->sku ?: '-' }}</td>
+                                    <td>{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
+                                </tr>
+                            @endforeach
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="clearfix">
                 <div class="pull-left text-muted">Showing {{ $lineRows->firstItem() ?? 0 }} to {{ $lineRows->lastItem() ?? 0 }} of {{ $lineRows->total() }} sale lines</div>
                 <div class="pull-right">{{ $lineRows->appends(request()->query())->links() }}</div>
@@ -541,30 +602,55 @@ $(function() {
     var mergeSaleLineGroupCells = function() {
         var previousKey = null;
         var $groupCells = null;
+        var $groupQty = null;
+        var groupQtyTotal = 0;
         var rowspan = 1;
+        var parseNumber = function(value) {
+            return parseFloat(String(value || '').replace(/,/g, '')) || 0;
+        };
+        var formatNumber = function(value) {
+            return value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+        var updateGroupQty = function() {
+            if ($groupQty) {
+                $groupQty.text('Qty: ' + formatNumber(groupQtyTotal));
+            }
+        };
 
-        $('#hr_staff_sell_lines tbody tr').each(function() {
+        $('#hr_staff_sell_lines_current tbody tr').each(function() {
             var $row = $(this);
             var $cells = $row.find('td.hr-staff-line-group-cell');
 
             if ($cells.length !== 3) {
                 previousKey = null;
                 $groupCells = null;
+                $groupQty = null;
+                groupQtyTotal = 0;
                 rowspan = 1;
                 return;
             }
 
+            var rowQty = parseNumber($row.children('td').eq(9).text());
             var groupKey = $.trim($cells.eq(0).text()) + '|' + $.trim($cells.eq(1).text()) + '|' + $.trim($cells.eq(2).text());
 
             if (groupKey === previousKey && $groupCells) {
                 rowspan++;
+                groupQtyTotal += rowQty;
                 $groupCells.attr('rowspan', rowspan);
+                updateGroupQty();
                 $cells.remove();
                 return;
             }
 
             previousKey = groupKey;
             $groupCells = $cells;
+            groupQtyTotal = rowQty;
+            $groupQty = $('<span class="hr-staff-line-group-qty"></span>');
+            $cells.eq(0).append($groupQty);
+            updateGroupQty();
             rowspan = 1;
         });
     };
