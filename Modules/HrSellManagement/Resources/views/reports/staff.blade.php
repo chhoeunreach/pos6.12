@@ -5,6 +5,10 @@
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('period');
     $showLines = request()->boolean('show_lines');
     $filterBodyStyle = $hasActiveFilters ? '' : 'display:none;';
+    $printDate = request('start_date') && request('end_date')
+        ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
+        : now()->toDateString();
+    $saleLinesPrintTitle = 'របាយការណ៍ប្រចាំថ្ងៃ ' . $printDate . ' សាខា ' . (request('branch_name') ?: 'ទាំងអស់');
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -797,6 +801,7 @@ $(function() {
             $(this).removeAttr('style');
         });
 
+        var printTitle = @json($saleLinesPrintTitle);
         var printWindow = window.open('', '_blank');
         if (! printWindow) {
             window.print();
@@ -805,9 +810,26 @@ $(function() {
 
         printWindow.document.open();
         printWindow.document.write(
-            '<!doctype html><html><head><title>Sale Lines</title>' +
-            '<style>body{font-family:Arial,sans-serif;font-size:12px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #333;padding:5px;vertical-align:top;} th{background:#f2f2f2;} .text-right{text-align:right;} .btn{border:0;background:none;padding:0;} a{color:#000;text-decoration:none;} small{color:#666;}</style>' +
-            '</head><body><h3>Sale Lines</h3>' + $printTable.prop('outerHTML') + '</body></html>'
+            '<!doctype html><html><head><meta charset="utf-8"><title>' + printTitle + '</title>' +
+            '<style>' +
+                '@page{margin:14mm 10mm;}' +
+                'body{background:#fff;color:#1f2937;font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;font-size:12px;line-height:1.35;margin:0;}' +
+                '.report-header{border-bottom:3px solid #2563eb;margin-bottom:14px;padding-bottom:10px;}' +
+                '.report-title{color:#111827;font-size:20px;font-weight:700;margin:0;text-align:center;}' +
+                '.report-subtitle{color:#64748b;font-size:11px;margin-top:4px;text-align:center;}' +
+                'table{border-collapse:collapse;width:100%;}' +
+                'th,td{border:1px solid #cbd5e1;padding:6px 7px;vertical-align:top;}' +
+                'thead th{background:#e8f0fe;color:#1e3a8a;font-weight:700;text-align:left;}' +
+                'tbody tr:nth-child(even) td{background:#f8fafc;}' +
+                'tfoot th,tfoot td{background:#dbeafe;color:#0f172a;font-weight:700;}' +
+                '.text-right{text-align:right;}' +
+                '.btn{background:none;border:0;color:#1f2937;padding:0;}' +
+                'a{color:#1f2937;text-decoration:none;}' +
+                'small{color:#64748b;}' +
+                '.hr-staff-line-group-qty{color:#2563eb;display:block;font-size:11px;font-weight:700;margin-top:4px;}' +
+                '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.report-header{break-after:avoid;}tr{break-inside:avoid;}}' +
+            '</style>' +
+            '</head><body><div class="report-header"><h3 class="report-title">' + printTitle + '</h3><div class="report-subtitle">HR Sell Report</div></div>' + $printTable.prop('outerHTML') + '</body></html>'
         );
         printWindow.document.close();
         printWindow.focus();
