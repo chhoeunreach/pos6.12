@@ -111,6 +111,28 @@
         font-weight: 600;
     }
 
+    .hr-staff-lines-tools {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-bottom: 12px;
+    }
+
+    .hr-staff-lines-colvis-menu {
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 8px 12px;
+    }
+
+    .hr-staff-lines-colvis-menu label {
+        display: block;
+        font-weight: 400;
+        margin: 5px 0;
+        white-space: nowrap;
+    }
+
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_staff_sell_filter_box">
@@ -379,6 +401,18 @@
     <div class="box box-info" id="hr_staff_sell_lines" style="{{ $showLines ? '' : 'display:none;' }}">
         <div class="box-header"><h4>Sale Lines</h4></div>
         <div class="box-body">
+            <div class="hr-staff-lines-tools">
+                <button type="button" class="btn btn-default btn-sm" id="hr_staff_lines_print">
+                    <i class="fa fa-print"></i> Print
+                </button>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fa fa-columns"></i> Column visibility <span class="caret"></span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right hr-staff-lines-colvis-menu" id="hr_staff_lines_colvis_menu"></div>
+                </div>
+            </div>
+
             <ul class="nav nav-tabs" role="tablist">
                 <li class="active"><a href="#hr_staff_sell_lines_current" role="tab" data-toggle="tab">Sale Lines</a></li>
                 <li><a href="#hr_staff_sell_lines_v1" role="tab" data-toggle="tab">Sale Lines v1</a></li>
@@ -386,41 +420,41 @@
 
             <div class="tab-content" style="padding-top: 15px;">
                 <div class="tab-pane active table-responsive" id="hr_staff_sell_lines_current">
-                    <table class="table table-bordered table-striped">
+                    <table class="table table-bordered table-striped" id="hr_staff_sell_lines_current_table">
                         <thead>
                             <tr>
-                                <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
-                                <th>Invoice</th>
-                                <th>Sale Date</th>
-                                <th>Staff</th>
-                                <th>Branch</th>
-                                <th>Type</th>
-                                <th>Product</th>
-                                <th>SKU</th>
-                                <th>Serial / IMEI</th>
-                                <th class="text-right">Qty</th>
-                                <th class="text-right">Price</th>
-                                <th class="text-right">Total</th>
+                                <th data-line-column="0">{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
+                                <th data-line-column="1">Invoice</th>
+                                <th data-line-column="2">Sale Date</th>
+                                <th data-line-column="3">Staff</th>
+                                <th data-line-column="4">Branch</th>
+                                <th data-line-column="5">Type</th>
+                                <th data-line-column="6">Product</th>
+                                <th data-line-column="7">SKU</th>
+                                <th data-line-column="8">Serial / IMEI</th>
+                                <th class="text-right" data-line-column="9">Qty</th>
+                                <th class="text-right" data-line-column="10">Price</th>
+                                <th class="text-right" data-line-column="11">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($lineRows as $row)
                                 <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
-                                    <td>{{ $row->period_label ?? '-' }}</td>
-                                    <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
-                                    <td>{{ $row->created_at }}</td>
-                                    <td class="hr-staff-line-group-cell">
+                                    <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
+                                    <td data-line-column="1"><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td data-line-column="2">{{ $row->created_at }}</td>
+                                    <td class="hr-staff-line-group-cell" data-line-column="3">
                                         {{ $row->staff_name }}
                                         {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                                     </td>
-                                    <td class="hr-staff-line-group-cell">{{ $row->branch_name }}</td>
-                                    <td class="hr-staff-line-group-cell">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                                    <td>{{ $row->product_name ?: '-' }}</td>
-                                    <td>{{ $row->sku ?: '-' }}</td>
-                                    <td>{{ $row->serial_identifier ?: '-' }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->qty, 2) }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    <td class="hr-staff-line-group-cell" data-line-column="4">{{ $row->branch_name }}</td>
+                                    <td class="hr-staff-line-group-cell" data-line-column="5">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td data-line-column="6">{{ $row->product_name ?: '-' }}</td>
+                                    <td data-line-column="7">{{ $row->sku ?: '-' }}</td>
+                                    <td data-line-column="8">{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right" data-line-column="9">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->line_total, 2) }}</td>
                                 </tr>
                             @endforeach
                             {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
@@ -429,45 +463,61 @@
                 </div>
 
                 <div class="tab-pane table-responsive" id="hr_staff_sell_lines_v1">
-                    <table class="table table-bordered table-striped">
+                    <table class="table table-bordered table-striped" id="hr_staff_sell_lines_v1_table">
                         <thead>
                             <tr>
-                                <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
-                                <th>Invoice</th>
-                                <th>Sale Date</th>
-                                <th>Staff</th>
-                                <th>Branch</th>
-                                <th>Type</th>
-                                <th>Product</th>
-                                <th>SKU</th>
-                                <th>Serial / IMEI</th>
-                                <th class="text-right">Qty</th>
-                                <th class="text-right">Price</th>
-                                <th class="text-right">Total</th>
+                                <th data-line-column="0">{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
+                                <th data-line-column="1">Invoice</th>
+                                <th data-line-column="2">Sale Date</th>
+                                <th data-line-column="3">Staff</th>
+                                <th data-line-column="4">Branch</th>
+                                <th data-line-column="5">Type</th>
+                                <th data-line-column="6">Product</th>
+                                <th data-line-column="7">SKU</th>
+                                <th data-line-column="8">Serial / IMEI</th>
+                                <th class="text-right" data-line-column="9">Qty</th>
+                                <th class="text-right" data-line-column="10">Price</th>
+                                <th class="text-right" data-line-column="11">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($lineRows as $row)
                                 <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
-                                    <td>{{ $row->period_label ?? '-' }}</td>
-                                    <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
-                                    <td>{{ $row->created_at }}</td>
-                                    <td>
+                                    <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
+                                    <td data-line-column="1"><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td data-line-column="2">{{ $row->created_at }}</td>
+                                    <td data-line-column="3">
                                         {{ $row->staff_name }}
                                         {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                                     </td>
-                                    <td>{{ $row->branch_name }}</td>
-                                    <td>{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                                    <td>{{ $row->product_name ?: '-' }}</td>
-                                    <td>{{ $row->sku ?: '-' }}</td>
-                                    <td>{{ $row->serial_identifier ?: '-' }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->qty, 2) }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->unit_price, 2) }}</td>
-                                    <td class="text-right">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    <td data-line-column="4">{{ $row->branch_name }}</td>
+                                    <td data-line-column="5">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                                    <td data-line-column="6">{{ $row->product_name ?: '-' }}</td>
+                                    <td data-line-column="7">{{ $row->sku ?: '-' }}</td>
+                                    <td data-line-column="8">{{ $row->serial_identifier ?: '-' }}</td>
+                                    <td class="text-right" data-line-column="9">{{ number_format((float) $row->qty, 2) }}</td>
+                                    <td class="text-right" data-line-column="10">{{ number_format((float) $row->unit_price, 2) }}</td>
+                                    <td class="text-right" data-line-column="11">{{ number_format((float) $row->line_total, 2) }}</td>
                                 </tr>
                             @endforeach
                             {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <th data-line-column="0"></th>
+                                <th data-line-column="1"></th>
+                                <th data-line-column="2"></th>
+                                <th data-line-column="3"></th>
+                                <th data-line-column="4"></th>
+                                <th data-line-column="5"></th>
+                                <th data-line-column="6"></th>
+                                <th data-line-column="7"></th>
+                                <th class="text-right" data-line-column="8">Total</th>
+                                <th class="text-right hr-staff-lines-v1-qty-total" data-line-column="9">0.00</th>
+                                <th class="text-right hr-staff-lines-v1-price-total" data-line-column="10">0.00</th>
+                                <th class="text-right hr-staff-lines-v1-total-total" data-line-column="11">0.00</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -633,7 +683,7 @@ $(function() {
                 return;
             }
 
-            var rowQty = parseNumber($row.children('td').eq(9).text());
+            var rowQty = parseNumber($row.children('[data-line-column="9"]').clone().children().remove().end().text());
             var groupKey = $.trim($cells.eq(0).text()) + '|' + $.trim($cells.eq(1).text()) + '|' + $.trim($cells.eq(2).text());
 
             if (groupKey === previousKey && $groupCells) {
@@ -656,6 +706,114 @@ $(function() {
     };
 
     mergeSaleLineGroupCells();
+
+    var updateSaleLinesV1Footer = function() {
+        var totals = {
+            qty: 0,
+            price: 0,
+            total: 0
+        };
+        var parseNumber = function(value) {
+            return parseFloat(String(value || '').replace(/,/g, '')) || 0;
+        };
+        var formatNumber = function(value) {
+            return value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+
+        $('#hr_staff_sell_lines_v1_table tbody tr').each(function() {
+            var $row = $(this);
+
+            if (! $row.children('[data-line-column]').length) {
+                return;
+            }
+
+            totals.qty += parseNumber($row.children('[data-line-column="9"]').clone().children().remove().end().text());
+            totals.price += parseNumber($row.children('[data-line-column="10"]').clone().children().remove().end().text());
+            totals.total += parseNumber($row.children('[data-line-column="11"]').clone().children().remove().end().text());
+        });
+
+        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-qty-total').text(formatNumber(totals.qty));
+        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-price-total').text(formatNumber(totals.price));
+        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-total-total').text(formatNumber(totals.total));
+    };
+
+    updateSaleLinesV1Footer();
+
+    if (window.location.hash === '#hr_staff_sell_lines_v1') {
+        $('#hr_staff_sell_lines a[href="#hr_staff_sell_lines_v1"]').tab('show');
+    } else if (window.location.hash === '#hr_staff_sell_lines_current') {
+        $('#hr_staff_sell_lines a[href="#hr_staff_sell_lines_current"]').tab('show');
+    }
+
+    var saleLineColumnVisibility = [];
+    var saleLineHeaders = [];
+
+    $('#hr_staff_sell_lines_v1_table thead th').each(function(index) {
+        saleLineHeaders[index] = $.trim($(this).text());
+        saleLineColumnVisibility[index] = true;
+        $('#hr_staff_lines_colvis_menu').append(
+            $('<label></label>').append(
+                $('<input type="checkbox" checked>').attr('data-column-index', index),
+                ' ' + saleLineHeaders[index]
+            )
+        );
+    });
+
+    var setSaleLineColumnVisibility = function(index, visible) {
+        saleLineColumnVisibility[index] = visible;
+
+        $('#hr_staff_sell_lines_current_table, #hr_staff_sell_lines_v1_table')
+            .find('[data-line-column="' + index + '"]')
+            .toggle(visible);
+
+        updateSaleLinesV1Footer();
+    };
+
+    $('#hr_staff_lines_colvis_menu').on('click', function(e) {
+        e.stopPropagation();
+    });
+
+    $('#hr_staff_lines_colvis_menu').on('change', 'input[type="checkbox"]', function() {
+        setSaleLineColumnVisibility(parseInt($(this).data('column-index'), 10), $(this).is(':checked'));
+    });
+
+    $('#hr_staff_lines_print').on('click', function() {
+        var activeSelector = $('#hr_staff_sell_lines .tab-pane.active').is('#hr_staff_sell_lines_v1')
+            ? '#hr_staff_sell_lines_v1_table'
+            : '#hr_staff_sell_lines_current_table';
+        var $sourceTable = $(activeSelector);
+        var $printTable = $sourceTable.clone();
+        $printTable.find('[data-line-column]').each(function() {
+            var columnIndex = parseInt($(this).attr('data-line-column'), 10);
+
+            if (! saleLineColumnVisibility[columnIndex]) {
+                $(this).remove();
+                return;
+            }
+
+            $(this).removeAttr('style');
+        });
+
+        var printWindow = window.open('', '_blank');
+        if (! printWindow) {
+            window.print();
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(
+            '<!doctype html><html><head><title>Sale Lines</title>' +
+            '<style>body{font-family:Arial,sans-serif;font-size:12px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #333;padding:5px;vertical-align:top;} th{background:#f2f2f2;} .text-right{text-align:right;} .btn{border:0;background:none;padding:0;} a{color:#000;text-decoration:none;} small{color:#666;}</style>' +
+            '</head><body><h3>Sale Lines</h3>' + $printTable.prop('outerHTML') + '</body></html>'
+        );
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    });
 
     $(document).on('click', '.hr-staff-clickable-row', function(e) {
         if ($(e.target).closest('a, button, input, select, textarea, label').length) {
