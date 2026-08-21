@@ -324,9 +324,8 @@
                     <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
                     <th>Staff</th>
                     <th>Branch</th>
-                    <th class="text-right">Sales</th>
-                    <th class="text-right">Lines</th>
-                    <th class="text-right">Qty</th>
+                    <th class="text-right">Invoice Qty</th>
+                    <th class="text-right">Products Qty</th>
                     <th class="text-right">Avg Price</th>
                     <th class="text-right">Total</th>
                     <th>Detail</th>
@@ -342,15 +341,24 @@
                         </td>
                         <td>{{ $row->branch_name }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_count, 0) }}</td>
-                        <td class="text-right">{{ number_format((float) $row->line_count, 0) }}</td>
                         <td class="text-right">{{ number_format((float) $row->total_qty, 2) }}</td>
                         <td class="text-right">{{ number_format((float) $row->average_price, 2) }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_total, 2) }}</td>
                         <td><a class="btn btn-xs btn-primary" href="{{ $row->detail_url }}"><i class="fa fa-eye"></i> View</a></td>
                     </tr>
                 @endforeach
-                {!! count($summaryRows) === 0 ? '<tr><td colspan="9" class="text-center text-muted">No staff sell data found for selected filters.</td></tr>' : '' !!}
+                {!! count($summaryRows) === 0 ? '<tr><td colspan="8" class="text-center text-muted">No staff sell data found for selected filters.</td></tr>' : '' !!}
             </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3" class="text-right">Total</th>
+                    <th class="text-right">{{ number_format((float) ($totals['sale_count'] ?? 0), 0) }}</th>
+                    <th class="text-right">{{ number_format((float) ($totals['total_qty'] ?? 0), 2) }}</th>
+                    <th class="text-right">{{ number_format((float) ($totals['average_price'] ?? 0), 2) }}</th>
+                    <th class="text-right">{{ number_format((float) ($totals['sale_total'] ?? 0), 2) }}</th>
+                    <th></th>
+                </tr>
+            </tfoot>
         </table>
         <div class="clearfix">
             <div class="pull-left text-muted">Showing {{ $summaryRows->firstItem() ?? 0 }} to {{ $summaryRows->lastItem() ?? 0 }} of {{ $summaryRows->total() }} staff rows</div>

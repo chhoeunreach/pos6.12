@@ -91,9 +91,8 @@ class ReportController extends Controller
                 'Seller Username' => $row->staff_code,
                 'Seller' => $row->staff_name,
                 'Branch' => $row->branch_name,
-                'Sales' => $row->sale_count,
-                'Lines' => $row->line_count,
-                'Qty' => $row->total_qty,
+                'Invoice Qty' => $row->sale_count,
+                'Products Qty' => $row->total_qty,
                 'Average Price' => $row->average_price,
                 'Total' => $row->sale_total,
             ])->all();
