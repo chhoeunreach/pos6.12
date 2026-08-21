@@ -4,6 +4,11 @@
 @php
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key');
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
+    $printDate = request('start_date') && request('end_date')
+        ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
+        : now()->toDateString();
+    $printBranch = request('branch_name') ?: 'ទាំងអស់';
+    $printTitle = 'របាយការណ៍ ប្រាក់លើកទឹកចិត្ត​សម្រាប់ ' . $printDate . ' សាខា ' . $printBranch;
 @endphp
 <style>
     #hr_commission_filter_box {
@@ -342,6 +347,7 @@
 $(function() {
     $('.select2').select2();
     $('[data-toggle="tooltip"]').tooltip();
+    var commissionPrintTitle = @json($printTitle);
 
     var dateRange = $('#hr_commission_date_range');
     var startDate = $('#hr_commission_start_date');
@@ -413,17 +419,42 @@ $(function() {
             autoWidth: false,
             dom: '<"row"<"col-sm-3"l><"col-sm-6 text-center"B><"col-sm-3"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
             buttons: [
-                { extend: 'copy', text: 'Copy' },
-                { extend: 'csv', text: 'Export CSV' },
-                { extend: 'excel', text: 'Export Excel' },
-                { extend: 'print', text: 'Print' },
+                { extend: 'copy', text: 'Copy', footer: true, exportOptions: { columns: ':visible' } },
+                { extend: 'csv', text: 'Export CSV', footer: true, exportOptions: { columns: ':visible' } },
+                { extend: 'excel', text: 'Export Excel', footer: true, exportOptions: { columns: ':visible' } },
+                {
+                    extend: 'print',
+                    text: 'Print',
+                    title: commissionPrintTitle,
+                    footer: true,
+                    exportOptions: { columns: ':visible' },
+                    customize: function(win) {
+                        var css =
+                            '@page{size:landscape;margin:10mm;}' +
+                            'body{font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;color:#111827;font-size:11px;}' +
+                            'h1{font-size:18px;text-align:center;margin:0 0 14px;font-weight:700;color:#0f5132;}' +
+                            'table{width:100%!important;border-collapse:collapse!important;}' +
+                            'table th,table td{border:1px solid #9ca3af!important;padding:6px 7px!important;vertical-align:middle!important;}' +
+                            'table thead th{background:#d9ead3!important;color:#111827!important;font-weight:700!important;text-align:center!important;}' +
+                            'table tbody tr:nth-child(even) td{background:#f8fafc!important;}' +
+                            'table tfoot th{background:#fce5cd!important;color:#111827!important;font-weight:700!important;}' +
+                            '.text-right{text-align:right!important;}' +
+                            'a{color:#111827!important;text-decoration:none!important;}' +
+                            '.label{border:1px solid #b45309!important;background:#fef3c7!important;color:#92400e!important;padding:2px 4px!important;border-radius:2px!important;}' +
+                            '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}tr{break-inside:avoid;}}';
+
+                        $(win.document.head).append('<style>' + css + '</style>');
+                    }
+                },
                 { extend: 'colvis', text: 'Column visibility' },
                 {
                     extend: 'pdf',
                     text: 'Export PDF',
                     orientation: 'landscape',
                     pageSize: 'A4',
-                    title: 'HR Commission Report'
+                    title: commissionPrintTitle,
+                    footer: true,
+                    exportOptions: { columns: ':visible' }
                 }
             ],
             order: []
