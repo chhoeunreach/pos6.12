@@ -125,7 +125,7 @@ class ReportController extends Controller
             $exportRow = [
                 'Username' => $row->staff_code,
                 'Staff' => $row->staff_name,
-                'Phone' => $row->phone_numbers,
+                'Phone number' => $row->phone_numbers,
                 'Branch' => $row->branch_name,
             ];
 

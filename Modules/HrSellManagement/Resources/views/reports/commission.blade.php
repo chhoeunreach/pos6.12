@@ -244,7 +244,7 @@
                 <tr>
                     <th>User</th>
                     <th>Staff</th>
-                    <th>Phone</th>
+                    <th>Phone number</th>
                     <th>Branch</th>
                     <th>Alert</th>
                     @foreach($commissionColumns as $column)
