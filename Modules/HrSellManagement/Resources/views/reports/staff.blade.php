@@ -10,6 +10,8 @@
         : now()->toDateString();
     $saleLinesPrintTitle = 'របាយការណ៍ប្រចាំថ្ងៃ ' . $printDate . ' សាខា ' . (request('branch_name') ?: 'ទាំងអស់');
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
+    $currentUser = auth()->user();
+    $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -445,7 +447,12 @@
                             @foreach($lineRows as $row)
                                 <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
                                     <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
-                                    <td data-line-column="1"><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td data-line-column="1">
+                                        <button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button>
+                                        @if($canEditReport)
+                                            <button type="button" class="btn btn-xs btn-info btn-modal" data-href="{{ route('hr-sell.reports.edit', [$row->report_id]) }}" data-container=".view_modal"><i class="fa fa-edit"></i></button>
+                                        @endif
+                                    </td>
                                     <td data-line-column="2">{{ $row->created_at }}</td>
                                     <td class="hr-staff-line-group-cell" data-line-column="3">
                                         {{ $row->staff_name }}
@@ -504,7 +511,12 @@
                             @foreach($lineRows as $row)
                                 <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
                                     <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
-                                    <td data-line-column="1"><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
+                                    <td data-line-column="1">
+                                        <button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button>
+                                        @if($canEditReport)
+                                            <button type="button" class="btn btn-xs btn-info btn-modal" data-href="{{ route('hr-sell.reports.edit', [$row->report_id]) }}" data-container=".view_modal"><i class="fa fa-edit"></i></button>
+                                        @endif
+                                    </td>
                                     <td data-line-column="2">{{ $row->created_at }}</td>
                                     <td data-line-column="3">
                                         {{ $row->staff_name }}
