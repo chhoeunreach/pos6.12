@@ -463,6 +463,22 @@
                             @endforeach
                             {!! count($lineRows) === 0 ? '<tr><td colspan="12" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <th data-line-column="0"></th>
+                                <th data-line-column="1"></th>
+                                <th data-line-column="2"></th>
+                                <th data-line-column="3"></th>
+                                <th data-line-column="4"></th>
+                                <th data-line-column="5"></th>
+                                <th data-line-column="6"></th>
+                                <th data-line-column="7"></th>
+                                <th class="text-right" data-line-column="8">Total</th>
+                                <th class="text-right hr-staff-lines-qty-total" data-line-column="9">0.00</th>
+                                <th class="text-right hr-staff-lines-price-total" data-line-column="10">0.00</th>
+                                <th class="text-right hr-staff-lines-total-total" data-line-column="11">0.00</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
 
@@ -709,9 +725,7 @@ $(function() {
         });
     };
 
-    mergeSaleLineGroupCells();
-
-    var updateSaleLinesV1Footer = function() {
+    var updateSaleLinesFooter = function(tableSelector, containerSelector, totalClassPrefix) {
         var totals = {
             qty: 0,
             price: 0,
@@ -727,7 +741,7 @@ $(function() {
             });
         };
 
-        $('#hr_staff_sell_lines_v1_table tbody tr').each(function() {
+        $(tableSelector + ' tbody tr').each(function() {
             var $row = $(this);
 
             if (! $row.children('[data-line-column]').length) {
@@ -739,12 +753,18 @@ $(function() {
             totals.total += parseNumber($row.children('[data-line-column="11"]').clone().children().remove().end().text());
         });
 
-        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-qty-total').text(formatNumber(totals.qty));
-        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-price-total').text(formatNumber(totals.price));
-        $('#hr_staff_sell_lines_v1 .hr-staff-lines-v1-total-total').text(formatNumber(totals.total));
+        $(containerSelector + ' .' + totalClassPrefix + '-qty-total').text(formatNumber(totals.qty));
+        $(containerSelector + ' .' + totalClassPrefix + '-price-total').text(formatNumber(totals.price));
+        $(containerSelector + ' .' + totalClassPrefix + '-total-total').text(formatNumber(totals.total));
     };
 
-    updateSaleLinesV1Footer();
+    var updateSaleLinesFooters = function() {
+        updateSaleLinesFooter('#hr_staff_sell_lines_current_table', '#hr_staff_sell_lines_current', 'hr-staff-lines');
+        updateSaleLinesFooter('#hr_staff_sell_lines_v1_table', '#hr_staff_sell_lines_v1', 'hr-staff-lines-v1');
+    };
+
+    updateSaleLinesFooters();
+    mergeSaleLineGroupCells();
 
     if (window.location.hash === '#hr_staff_sell_lines_v1') {
         $('#hr_staff_sell_lines a[href="#hr_staff_sell_lines_v1"]').tab('show');
@@ -773,7 +793,7 @@ $(function() {
             .find('[data-line-column="' + index + '"]')
             .toggle(visible);
 
-        updateSaleLinesV1Footer();
+        updateSaleLinesFooters();
     };
 
     $('#hr_staff_lines_colvis_menu').on('click', function(e) {
