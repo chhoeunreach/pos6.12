@@ -389,43 +389,17 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @php
-                        $lineDisplayRows = collect(method_exists($lineRows, 'items') ? $lineRows->items() : $lineRows);
-                        $lineGroupRowspans = [];
-                        $lineGroupStart = null;
-                        $lineGroupKey = null;
-
-                        foreach ($lineDisplayRows as $lineIndex => $lineDisplayRow) {
-                            $currentLineGroupKey = implode('|', [
-                                $lineDisplayRow->staff_code ?: $lineDisplayRow->staff_name,
-                                $lineDisplayRow->staff_name,
-                                $lineDisplayRow->branch_name,
-                                $lineDisplayRow->service_type_label ?? ($lineDisplayRow->service_type ?: '-'),
-                            ]);
-
-                            if ($currentLineGroupKey !== $lineGroupKey) {
-                                $lineGroupKey = $currentLineGroupKey;
-                                $lineGroupStart = $lineIndex;
-                                $lineGroupRowspans[$lineIndex] = 1;
-                                continue;
-                            }
-
-                            $lineGroupRowspans[$lineGroupStart]++;
-                        }
-                    @endphp
-                    @foreach($lineDisplayRows as $lineIndex => $row)
+                    @foreach($lineRows as $row)
                         <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
                             <td>{{ $row->period_label ?? '-' }}</td>
                             <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
                             <td>{{ $row->created_at }}</td>
-                            @if(isset($lineGroupRowspans[$lineIndex]))
-                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">
-                                    {{ $row->staff_name }}
-                                    {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
-                                </td>
-                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">{{ $row->branch_name }}</td>
-                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
-                            @endif
+                            <td class="hr-staff-line-group-cell">
+                                {{ $row->staff_name }}
+                                {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                            </td>
+                            <td class="hr-staff-line-group-cell">{{ $row->branch_name }}</td>
+                            <td class="hr-staff-line-group-cell">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
                             <td>{{ $row->product_name ?: '-' }}</td>
                             <td>{{ $row->sku ?: '-' }}</td>
                             <td>{{ $row->serial_identifier ?: '-' }}</td>
@@ -563,6 +537,39 @@ $(function() {
             }
         });
     }
+
+    var mergeSaleLineGroupCells = function() {
+        var previousKey = null;
+        var $groupCells = null;
+        var rowspan = 1;
+
+        $('#hr_staff_sell_lines tbody tr').each(function() {
+            var $row = $(this);
+            var $cells = $row.find('td.hr-staff-line-group-cell');
+
+            if ($cells.length !== 3) {
+                previousKey = null;
+                $groupCells = null;
+                rowspan = 1;
+                return;
+            }
+
+            var groupKey = $.trim($cells.eq(0).text()) + '|' + $.trim($cells.eq(1).text()) + '|' + $.trim($cells.eq(2).text());
+
+            if (groupKey === previousKey && $groupCells) {
+                rowspan++;
+                $groupCells.attr('rowspan', rowspan);
+                $cells.remove();
+                return;
+            }
+
+            previousKey = groupKey;
+            $groupCells = $cells;
+            rowspan = 1;
+        });
+    };
+
+    mergeSaleLineGroupCells();
 
     $(document).on('click', '.hr-staff-clickable-row', function(e) {
         if ($(e.target).closest('a, button, input, select, textarea, label').length) {
