@@ -125,6 +125,7 @@ class ReportController extends Controller
             $exportRow = [
                 'Username' => $row->staff_code,
                 'Staff' => $row->staff_name,
+                'Phone' => $row->phone_numbers,
                 'Branch' => $row->branch_name,
             ];
 
@@ -338,6 +339,7 @@ class ReportController extends Controller
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
                 ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
+                ->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(TRIM(sor.customer_phone), '') ORDER BY TRIM(sor.customer_phone) SEPARATOR ', ') as phone_numbers")
                 ->selectRaw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown') as branch_name")
                 ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
                 ->selectRaw('COUNT(sol.id) as line_count')
