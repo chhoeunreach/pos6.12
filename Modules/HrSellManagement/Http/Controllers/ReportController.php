@@ -438,7 +438,9 @@ class ReportController extends Controller
         try {
             $lineExpressions = $this->hrLineAmountExpressions();
             $base = $this->baseStaffLineQuery($request, 'DATE(sor.created_at)', $lineExpressions)
-                ->whereIn('sor.service_type', $this->commissionServiceTypeValues($commissionColumns));
+                ->whereIn('sor.service_type', $this->commissionServiceTypeValues($commissionColumns))
+                ->whereNotNull('sor.customer_phone')
+                ->whereRaw('TRIM(sor.customer_phone) != ""');
 
             $totalsQuery = (clone $base)
                 ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
@@ -449,8 +451,13 @@ class ReportController extends Controller
             foreach ($commissionColumns as $column) {
                 if ($column['has_commission']) {
                     $baseExpr = $this->commissionBaseExpression($column, $lineExpressions);
+                    $rawExpr = $this->commissionRawExpression($column, $lineExpressions);
 
                     $totalsQuery
+                        ->selectRaw(
+                            $rawExpr . ' as ' . $column['key'] . '_raw_total',
+                            $column['values']
+                        )
                         ->selectRaw(
                             $baseExpr . ' as ' . $column['key'] . '_total',
                             $column['values']
@@ -483,8 +490,13 @@ class ReportController extends Controller
             foreach ($commissionColumns as $column) {
                 if ($column['has_commission']) {
                     $baseExpr = $this->commissionBaseExpression($column, $lineExpressions);
+                    $rawExpr = $this->commissionRawExpression($column, $lineExpressions);
 
                     $rowsQuery
+                        ->selectRaw(
+                            $rawExpr . ' as ' . $column['key'] . '_raw_total',
+                            $column['values']
+                        )
                         ->selectRaw(
                             $baseExpr . ' as ' . $column['key'] . '_total',
                             $column['values']
@@ -517,8 +529,9 @@ class ReportController extends Controller
                 : $rowsQuery->get();
 
             $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
-            $rowCollection->transform(function ($row) use ($commissionColumns) {
+            $rowCollection->transform(function ($row) use ($request, $commissionColumns) {
                 $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
+                $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
 
                 return $row;
             });
@@ -537,6 +550,12 @@ class ReportController extends Controller
             ->map(fn ($key) => [
                 'key' => $key,
                 'label' => $this->sellTypeLabel($key),
+                'short_label' => [
+                    'iron' => 'Iron',
+                    'material' => 'Mat.',
+                    'repair' => 'Repair',
+                    'sell' => 'Sell',
+                ][$key] ?? $this->sellTypeLabel($key),
                 'values' => $this->sellTypeValues($key),
                 'has_commission' => in_array($key, ['iron', 'material', 'repair', 'sell'], true),
                 'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
@@ -568,6 +587,17 @@ class ReportController extends Controller
         if (! empty($column['minimum_invoice_total'])) {
             $condition .= ' AND ' . $this->invoiceLineTotalExpression() . ' >= ' . (float) $column['minimum_invoice_total'];
         }
+
+        if ($column['commission_basis'] === 'qty') {
+            return 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
+        }
+
+        return 'COUNT(DISTINCT CASE WHEN ' . $condition . ' THEN sor.id END)';
+    }
+
+    private function commissionRawExpression(array $column, array $lineExpressions): string
+    {
+        $condition = 'sor.service_type IN (' . $this->placeholders($column['values']) . ')';
 
         if ($column['commission_basis'] === 'qty') {
             return 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
@@ -609,6 +639,29 @@ class ReportController extends Controller
             ->sum(fn ($column) => (float) ($row->{$column['key'] . '_commission_total'} ?? 0));
     }
 
+    private function commissionDetailUrls(object $row, Request $request, array $commissionColumns): array
+    {
+        $baseQuery = $request->except(['commission_page', 'staff_summary_page', 'staff_lines_page']);
+
+        return collect($commissionColumns)
+            ->mapWithKeys(function ($column) use ($baseQuery, $row) {
+                $detailQuery = array_merge($baseQuery, [
+                    'seller_key' => $row->seller_key,
+                    'sell_type' => $column['key'],
+                    'show_lines' => 1,
+                ]);
+
+                if (! empty($row->branch_name) && $row->branch_name !== 'Unknown') {
+                    $detailQuery['branch_name'] = $row->branch_name;
+                } else {
+                    unset($detailQuery['branch_name']);
+                }
+
+                return [$column['key'] => route('hr-sell.reports.staff', $detailQuery) . '#hr_staff_sell_lines'];
+            })
+            ->all();
+    }
+
     private function baseStaffLineQuery(Request $request, string $periodExpr, array $lineExpressions)
     {
         return DB::connection('hr')
@@ -621,8 +674,8 @@ class ReportController extends Controller
             ->when($request->filled('sell_type'), function ($q) use ($request) {
                 $q->whereIn('sor.service_type', $this->sellTypeValues($request->input('sell_type')));
             })
-            ->when($request->filled('department_id') && $this->canFilterByDepartment(), function ($q) use ($request) {
-                $q->where('u.department_id', $request->input('department_id'));
+            ->when($this->selectedDepartmentIds($request) && $this->canFilterByDepartment(), function ($q) use ($request) {
+                $q->whereIn('u.department_id', $this->selectedDepartmentIds($request));
             })
             ->when($request->filled('seller_key'), function ($q) use ($request) {
                 $sellerKey = $request->input('seller_key');
@@ -737,8 +790,8 @@ class ReportController extends Controller
                 $sellType = $request->input('sell_type');
                 $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
             })
-            ->when($request->filled('department_id') && $this->canFilterByDepartment(), function ($q) use ($request) {
-                $q->where('u.department_id', $request->input('department_id'));
+            ->when($this->selectedDepartmentIds($request) && $this->canFilterByDepartment(), function ($q) use ($request) {
+                $q->whereIn('u.department_id', $this->selectedDepartmentIds($request));
             })
             ->when($request->filled('seller_key'), function ($q) use ($request) {
                 $sellerKey = $request->input('seller_key');
@@ -870,6 +923,15 @@ class ReportController extends Controller
         return $canFilter;
     }
 
+    private function selectedDepartmentIds(Request $request): array
+    {
+        return collect((array) $request->input('department_id', []))
+            ->filter(fn ($departmentId) => $departmentId !== null && $departmentId !== '')
+            ->map(fn ($departmentId) => (string) $departmentId)
+            ->values()
+            ->all();
+    }
+
     private function departmentLabelColumn(): ?string
     {
         static $labelColumn;
@@ -972,6 +1034,7 @@ class ReportController extends Controller
         ];
 
         foreach ($commissionColumns as $column) {
+            $summary[$column['key'] . '_raw_total'] = 0;
             $summary[$column['key'] . '_total'] = 0;
 
             if ($column['has_commission']) {

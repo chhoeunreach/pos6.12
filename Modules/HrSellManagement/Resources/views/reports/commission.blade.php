@@ -3,6 +3,7 @@
 @section('module_content')
 @php
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key');
+    $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
 @endphp
 <style>
     #hr_commission_filter_box {
@@ -102,10 +103,9 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
-                                <option value="{{ $departmentId }}" @selected((string) request('department_id') === (string) $departmentId)>{{ $departmentName }}</option>
+                                <option value="{{ $departmentId }}" @selected(in_array((string) $departmentId, $selectedDepartmentIds, true))>{{ $departmentName }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -175,22 +175,64 @@
     </div>
 </div>
 
+<div class="box box-info">
+    <div class="box-header"><h4>Commission Conditions</h4></div>
+    <div class="box-body table-responsive">
+        <table class="table table-bordered table-condensed" style="margin-bottom:0;">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Condition</th>
+                    <th class="text-right">Rate</th>
+                    <th>Expression</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Iron</td>
+                    <td>Phone number required</td>
+                    <td class="text-right">0.20</td>
+                    <td>Invoice count * 0.20</td>
+                </tr>
+                <tr>
+                    <td>Mat.</td>
+                    <td>Phone number required, invoice total >= 10</td>
+                    <td class="text-right">0.25</td>
+                    <td>Invoice count * 0.25</td>
+                </tr>
+                <tr>
+                    <td>Repair</td>
+                    <td>Phone number required</td>
+                    <td class="text-right">0.20</td>
+                    <td>Invoice count * 0.20</td>
+                </tr>
+                <tr>
+                    <td>Sell</td>
+                    <td>Phone number required</td>
+                    <td class="text-right">0.25</td>
+                    <td>Product qty * 0.25</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <div class="box box-success">
     <div class="box-header"><h4>Commission Report</h4></div>
     <div class="box-body table-responsive">
         <table class="table table-bordered table-striped hr-commission-table" id="hr_commission_table">
             <thead>
                 <tr>
-                    <th>Username</th>
+                    <th>User</th>
                     <th>Staff</th>
                     <th>Branch</th>
                     @foreach($commissionColumns as $column)
-                        <th class="text-right">{{ $column['label'] }}</th>
+                        <th class="text-right">{{ $column['short_label'] ?? $column['label'] }}</th>
                         @if($column['has_commission'])
-                            <th class="text-right">Commission</th>
+                            <th class="text-right">Com.</th>
                         @endif
                     @endforeach
-                    <th class="text-right">Total Amount</th>
+                    <th class="text-right">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -200,7 +242,23 @@
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
                         @foreach($commissionColumns as $column)
-                            <td class="text-right">{{ number_format((float) ($row->{$column['key'] . '_total'} ?? 0), ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2) }}</td>
+                            @php
+                                $columnValue = (float) ($row->{$column['key'] . '_total'} ?? 0);
+                                $rawColumnValue = (float) ($row->{$column['key'] . '_raw_total'} ?? $columnValue);
+                                $excludedColumnValue = max(0, $rawColumnValue - $columnValue);
+                                $columnDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
+                                $columnUrl = $row->detail_urls[$column['key']] ?? null;
+                            @endphp
+                            <td class="text-right">
+                                @if($columnValue > 0 && $columnUrl)
+                                    <a href="{{ $columnUrl }}">{{ number_format($columnValue, $columnDecimals) }}</a>
+                                @else
+                                    {{ number_format($columnValue, $columnDecimals) }}
+                                @endif
+                                @if($excludedColumnValue > 0)
+                                    <small class="text-muted">(+{{ number_format($excludedColumnValue, $columnDecimals) }} no commission)</small>
+                                @endif
+                            </td>
                             @if($column['has_commission'])
                                 <td class="text-right">{{ number_format((float) ($row->{$column['key'] . '_commission_total'} ?? 0), 2) }}</td>
                             @endif
@@ -216,7 +274,18 @@
                     <th></th>
                     <th class="text-right">Total</th>
                     @foreach($commissionColumns as $column)
-                        <th class="text-right">{{ number_format((float) ($commissionTotals[$column['key'] . '_total'] ?? 0), ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2) }}</th>
+                        @php
+                            $footerValue = (float) ($commissionTotals[$column['key'] . '_total'] ?? 0);
+                            $footerRawValue = (float) ($commissionTotals[$column['key'] . '_raw_total'] ?? $footerValue);
+                            $footerExcludedValue = max(0, $footerRawValue - $footerValue);
+                            $footerDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
+                        @endphp
+                        <th class="text-right">
+                            {{ number_format($footerValue, $footerDecimals) }}
+                            @if($footerExcludedValue > 0)
+                                <small class="text-muted">(+{{ number_format($footerExcludedValue, $footerDecimals) }} no commission)</small>
+                            @endif
+                        </th>
                         @if($column['has_commission'])
                             <th class="text-right">{{ number_format((float) ($commissionTotals[$column['key'] . '_commission_total'] ?? 0), 2) }}</th>
                         @endif

@@ -122,6 +122,7 @@
 </style>
 
 @php($hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key'))
+@php($selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all())
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_report_filter_box">
     <div class="box-header with-border hr-sell-report-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_report_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
         <h4 class="box-title"><i class="fa fa-filter"></i> Filters</h4>
@@ -157,10 +158,9 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
-                                <option value="{{ $departmentId }}" @selected((string) request('department_id') === (string) $departmentId)>{{ $departmentName }}</option>
+                                <option value="{{ $departmentId }}" @selected(in_array((string) $departmentId, $selectedDepartmentIds, true))>{{ $departmentName }}</option>
                             @endforeach
                         </select>
                     </div>

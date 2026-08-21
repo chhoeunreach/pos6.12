@@ -9,6 +9,7 @@
         ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
         : now()->toDateString();
     $saleLinesPrintTitle = 'របាយការណ៍ប្រចាំថ្ងៃ ' . $printDate . ' សាខា ' . (request('branch_name') ?: 'ទាំងអស់');
+    $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -183,10 +184,9 @@
                 <div class="col-md-2">
                     <div class="form-group">
                         <label>Department:</label>
-                        <select name="department_id" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="department_id[]" class="form-control select2" multiple data-placeholder="All">
                             @foreach($hrDepartments as $departmentId => $departmentName)
-                                <option value="{{ $departmentId }}" {{ (string) request('department_id') === (string) $departmentId ? 'selected' : '' }}>{{ $departmentName }}</option>
+                                <option value="{{ $departmentId }}" {{ in_array((string) $departmentId, $selectedDepartmentIds, true) ? 'selected' : '' }}>{{ $departmentName }}</option>
                             @endforeach
                         </select>
                     </div>
