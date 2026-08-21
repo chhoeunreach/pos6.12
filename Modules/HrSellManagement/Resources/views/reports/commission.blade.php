@@ -261,7 +261,7 @@
                     <tr>
                         <td>{{ $row->staff_code ?: '-' }}</td>
                         <td>{{ $row->staff_name }}</td>
-                        <td>{{ $row->phone_numbers ?: '-' }}</td>
+                        <td>{{ $row->phone_numbers ?? '-' }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td>
                             @php
