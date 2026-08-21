@@ -153,7 +153,7 @@
                 }
             },
             columns: [
-                { data: 'transaction_date', name: 't.transaction_date', type: 'date' },
+                { data: 'transaction_date', name: 't.transaction_date', type: 'text' },
                 { data: 'invoice_no', name: 't.invoice_no', type: 'text' },
                 { data: 'i_t', name: 't.additional_notes', orderable: false },
                 { data: 'customer', name: 'c.name' },

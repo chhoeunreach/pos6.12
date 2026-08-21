@@ -45,6 +45,13 @@ class ReportController extends Controller
 
     protected $businessUtil;
 
+    private function copySafeDateCell($date)
+    {
+        $formatted_date = $this->transactionUtil->format_date($date);
+
+        return '<span data-export-value="'.e($formatted_date).'">'.e($formatted_date).'</span>';
+    }
+
     /**
      * Create a new controller instance.
      *
@@ -4090,7 +4097,9 @@ class ReportController extends Controller
                 ->first();
 
             return Datatables::of($sells)
-                ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('transaction_date', function ($row) {
+                    return $this->copySafeDateCell($row->transaction_date);
+                })
                 ->addColumn('i_t', function ($row) {
                     $sell_note = trim((string) $row->additional_notes);
                     $staff_note_last4 = substr(trim((string) $row->staff_note), -4);
@@ -4151,7 +4160,7 @@ class ReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }
