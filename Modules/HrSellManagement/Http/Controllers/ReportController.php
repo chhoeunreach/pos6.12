@@ -310,9 +310,7 @@ class ReportController extends Controller
                 ->orderByDesc('period_label')
                 ->orderByDesc('sale_total');
 
-            $summaryRows = $paginate
-                ? $summaryQuery->paginate(50, ['*'], 'staff_summary_page')->appends($request->query())
-                : $summaryQuery->get();
+            $summaryRows = $summaryQuery->get();
 
             $summaryCollection = method_exists($summaryRows, 'getCollection') ? $summaryRows->getCollection() : $summaryRows;
             $summaryCollection->transform(function ($row) use ($request, $period) {

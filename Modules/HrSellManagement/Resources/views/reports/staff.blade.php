@@ -318,7 +318,7 @@
 <div class="box box-success">
     <div class="box-header"><h4>Staff Summary - {{ ucfirst($period) }}</h4></div>
     <div class="box-body table-responsive">
-        <table class="table table-bordered table-striped">
+        <table class="table table-bordered table-striped" id="hr_staff_summary_table">
             <thead>
                 <tr>
                     <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
@@ -347,23 +347,20 @@
                         <td><a class="btn btn-xs btn-primary" href="{{ $row->detail_url }}"><i class="fa fa-eye"></i> View</a></td>
                     </tr>
                 @endforeach
-                {!! count($summaryRows) === 0 ? '<tr><td colspan="8" class="text-center text-muted">No staff sell data found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
-                    <th colspan="3" class="text-right">Total</th>
+                    <th></th>
+                    <th></th>
+                    <th class="text-right">Total</th>
                     <th class="text-right">{{ number_format((float) ($totals['sale_count'] ?? 0), 0) }}</th>
                     <th class="text-right">{{ number_format((float) ($totals['total_qty'] ?? 0), 2) }}</th>
-                    <th class="text-right">{{ number_format((float) ($totals['average_price'] ?? 0), 2) }}</th>
-                    <th class="text-right">{{ number_format((float) ($totals['sale_total'] ?? 0), 2) }}</th>
+                    <th></th>
+                    <th></th>
                     <th></th>
                 </tr>
             </tfoot>
         </table>
-        <div class="clearfix">
-            <div class="pull-left text-muted">Showing {{ $summaryRows->firstItem() ?? 0 }} to {{ $summaryRows->lastItem() ?? 0 }} of {{ $summaryRows->total() }} staff rows</div>
-            <div class="pull-right">{{ $summaryRows->appends(request()->query())->links() }}</div>
-        </div>
     </div>
 </div>
 
@@ -481,6 +478,61 @@ $(function() {
         e.preventDefault();
         setFilterExpanded(filterBox.hasClass('collapsed-box'));
     });
+
+    if ($.fn.DataTable && ! $.fn.DataTable.isDataTable('#hr_staff_summary_table')) {
+        $('#hr_staff_summary_table').DataTable({
+            paging: true,
+            pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+            searching: true,
+            ordering: true,
+            responsive: false,
+            autoWidth: false,
+            dom: '<"row"<"col-sm-3"l><"col-sm-6 text-center"B><"col-sm-3"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
+            buttons: [
+                { extend: 'copy', text: 'Copy' },
+                { extend: 'csv', text: 'Export CSV' },
+                { extend: 'excel', text: 'Export Excel' },
+                { extend: 'print', text: 'Print' },
+                { extend: 'colvis', text: 'Column visibility' },
+                {
+                    extend: 'pdf',
+                    text: 'Export PDF',
+                    orientation: 'landscape',
+                    pageSize: 'A4',
+                    title: 'HR Staff Sell Summary'
+                }
+            ],
+            order: [],
+            footerCallback: function() {
+                var api = this.api();
+                var parseNumber = function(value) {
+                    if (typeof value === 'number') {
+                        return value;
+                    }
+
+                    return parseFloat(String(value || '').replace(/,/g, '')) || 0;
+                };
+                var formatNumber = function(value, decimals) {
+                    return value.toLocaleString(undefined, {
+                        minimumFractionDigits: decimals,
+                        maximumFractionDigits: decimals
+                    });
+                };
+                var totalColumn = function(index) {
+                    return api
+                        .column(index, { search: 'applied' })
+                        .data()
+                        .reduce(function(total, value) {
+                            return total + parseNumber(value);
+                        }, 0);
+                };
+
+                $(api.column(3).footer()).html(formatNumber(totalColumn(3), 0));
+                $(api.column(4).footer()).html(formatNumber(totalColumn(4), 2));
+            }
+        });
+    }
 
     $(document).on('click', '.hr-staff-clickable-row', function(e) {
         if ($(e.target).closest('a, button, input, select, textarea, label').length) {
