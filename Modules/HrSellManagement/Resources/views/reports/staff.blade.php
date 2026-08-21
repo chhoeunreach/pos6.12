@@ -371,7 +371,6 @@
                 <tr>
                     <th>{{ $period === 'monthly' ? 'Month' : 'Date' }}</th>
                     <th>Staff</th>
-                    <th>Phone number</th>
                     <th>Branch</th>
                     <th class="text-right">Invoice Qty</th>
                     <th class="text-right">Products Qty</th>
@@ -388,7 +387,6 @@
                             {{ $row->staff_name }}
                             {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
                         </td>
-                        <td>{{ $row->phone_numbers ?? '-' }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td class="text-right">{{ number_format((float) $row->sale_count, 0) }}</td>
                         <td class="text-right">{{ number_format((float) $row->total_qty, 2) }}</td>
@@ -400,7 +398,6 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <th></th>
                     <th></th>
                     <th></th>
                     <th class="text-right">Total</th>
@@ -709,8 +706,8 @@ $(function() {
                         }, 0);
                 };
 
-                $(api.column(4).footer()).html(formatNumber(totalColumn(4), 0));
-                $(api.column(5).footer()).html(formatNumber(totalColumn(5), 2));
+                $(api.column(3).footer()).html(formatNumber(totalColumn(3), 0));
+                $(api.column(4).footer()).html(formatNumber(totalColumn(4), 2));
             }
         });
     }
