@@ -13,6 +13,7 @@ class HrSellManagementModuleTest extends TestCase
         $this->assertTrue(Route::has('hr-sell.sales.index'));
         $this->assertTrue(Route::has('hr-sell.sales.link'));
         $this->assertTrue(Route::has('hr-sell.reports.index'));
+        $this->assertTrue(Route::has('hr-sell.reports.commission'));
         $this->assertTrue(Route::has('hr-sell.settings.index'));
     }
 

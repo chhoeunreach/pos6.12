@@ -24,6 +24,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::get('/reports/export', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'export'])->name('reports.export');
         Route::get('/reports/staff', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'staff'])->name('reports.staff');
         Route::get('/reports/staff/export', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'staffExport'])->name('reports.staff.export');
+        Route::get('/reports/commission/export', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'commissionExport'])->name('reports.commission.export');
+        Route::get('/reports/commission', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'commission'])->name('reports.commission');
         Route::get('/reports/{report_id}/edit', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'edit'])->name('reports.edit');
         Route::put('/reports/{report_id}', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'update'])->name('reports.update');
         Route::delete('/reports/{report_id}', ['\Modules\HrSellManagement\Http\Controllers\ReportController', 'destroy'])->name('reports.destroy');

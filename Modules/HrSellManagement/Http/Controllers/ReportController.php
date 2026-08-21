@@ -101,6 +101,49 @@ class ReportController extends Controller
         return Excel::download(new ArrayExport($exportRows), 'hr_staff_sell_' . $period . '_' . $type . '_' . now()->format('Ymd_His') . '.xlsx');
     }
 
+    public function commission(Request $request)
+    {
+        abort_unless($this->canReport(), 403);
+
+        $request = $this->withDefaultStaffReportDates($request);
+        [$commissionRows, $commissionTotals, $commissionColumns] = $this->commissionReportData($request, true);
+        [$hrBranches, $hrSellTypes, $hrSellers, $hrDepartments] = $this->filterOptions();
+
+        return view('hrsellmanagement::reports.commission', compact('commissionRows', 'commissionTotals', 'commissionColumns', 'hrBranches', 'hrSellTypes', 'hrSellers', 'hrDepartments'));
+    }
+
+    public function commissionExport(Request $request)
+    {
+        abort_unless($this->canReport(), 403);
+
+        $request = $this->withDefaultStaffReportDates($request);
+        $commissionReport = $this->commissionReportData($request, false);
+        $commissionRows = $commissionReport[0];
+        $commissionColumns = $commissionReport[2];
+
+        $exportRows = $commissionRows->map(function ($row) use ($commissionColumns) {
+            $exportRow = [
+                'Username' => $row->staff_code,
+                'Staff' => $row->staff_name,
+                'Branch' => $row->branch_name,
+            ];
+
+            foreach ($commissionColumns as $column) {
+                $exportRow[$column['label']] = $row->{$column['key'] . '_total'} ?? 0;
+
+                if ($column['has_commission']) {
+                    $exportRow[$column['label'] . ' Commission'] = $row->{$column['key'] . '_commission_total'} ?? 0;
+                }
+            }
+
+            $exportRow['Total Amount'] = $row->commission_total ?? 0;
+
+            return $exportRow;
+        })->all();
+
+        return Excel::download(new ArrayExport($exportRows), 'hr_commission_report_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
     public function edit($report_id)
     {
         abort_unless($this->canEditReport(), 403);
@@ -386,6 +429,134 @@ class ReportController extends Controller
 
             return [$this->emptyRows($request, 50, 'staff_summary_page'), $this->emptyRows($request, 100, 'staff_lines_page'), $this->emptySummary(), $request->input('period') === 'monthly' ? 'monthly' : 'daily', collect(), collect()];
         }
+    }
+
+    private function commissionReportData(Request $request, bool $paginate): array
+    {
+        $commissionColumns = $this->commissionColumns();
+
+        try {
+            $lineExpressions = $this->hrLineAmountExpressions();
+            $base = $this->baseStaffLineQuery($request, 'DATE(sor.created_at)', $lineExpressions);
+
+            $totalsQuery = (clone $base)
+                ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
+                ->selectRaw('COUNT(sol.id) as line_count')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as total_amount');
+
+            foreach ($commissionColumns as $column) {
+                if ($column['has_commission']) {
+                    $baseExpr = $column['commission_basis'] === 'qty'
+                        ? 'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)'
+                        : 'COUNT(DISTINCT CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN sor.id END)';
+
+                    $totalsQuery
+                        ->selectRaw(
+                            $baseExpr . ' as ' . $column['key'] . '_total',
+                            $column['values']
+                        )
+                        ->selectRaw(
+                            '(' . $baseExpr . ' * ' . $column['commission_rate'] . ') as ' . $column['key'] . '_commission_total',
+                            $column['values']
+                        );
+                } else {
+                    $totalsQuery->selectRaw(
+                        'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['total'] . ' ELSE 0 END), 0) as ' . $column['key'] . '_total',
+                        $column['values']
+                    );
+                }
+            }
+
+            $totals = (array) $totalsQuery->first();
+            $totals['commission_total'] = $this->sumCommissionTotals((object) $totals, $commissionColumns);
+
+            $rowsQuery = (clone $base)
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
+                ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
+                ->selectRaw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown') as branch_name")
+                ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
+                ->selectRaw('COUNT(sol.id) as line_count')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
+                ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as total_amount');
+
+            foreach ($commissionColumns as $column) {
+                if ($column['has_commission']) {
+                    $baseExpr = $column['commission_basis'] === 'qty'
+                        ? 'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)'
+                        : 'COUNT(DISTINCT CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN sor.id END)';
+
+                    $rowsQuery
+                        ->selectRaw(
+                            $baseExpr . ' as ' . $column['key'] . '_total',
+                            $column['values']
+                        )
+                        ->selectRaw(
+                            '(' . $baseExpr . ' * ' . $column['commission_rate'] . ') as ' . $column['key'] . '_commission_total',
+                            $column['values']
+                        );
+                } else {
+                    $rowsQuery->selectRaw(
+                        'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['total'] . ' ELSE 0 END), 0) as ' . $column['key'] . '_total',
+                        $column['values']
+                    );
+                }
+            }
+
+            $rowsQuery
+                ->groupBy(
+                    DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown')"),
+                    DB::raw("NULLIF(TRIM(u.username), '')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"),
+                    DB::raw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown')")
+                )
+                ->orderBy('staff_name')
+                ->orderBy('branch_name');
+
+            $rows = $paginate
+                ? $rowsQuery->paginate(50, ['*'], 'commission_page')->appends($request->query())
+                : $rowsQuery->get();
+
+            $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
+            $rowCollection->transform(function ($row) use ($commissionColumns) {
+                $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
+
+                return $row;
+            });
+
+            return [$rows, $totals, $commissionColumns];
+        } catch (\Throwable $e) {
+            \Log::warning('Unable to load HR commission report data: ' . $e->getMessage());
+
+            return [$this->emptyRows($request, 50, 'commission_page'), $this->emptyCommissionSummary($commissionColumns), $commissionColumns];
+        }
+    }
+
+    private function commissionColumns(): array
+    {
+        return collect(['iron', 'material', 'repair', 'sell'])
+            ->map(fn ($key) => [
+                'key' => $key,
+                'label' => $this->sellTypeLabel($key),
+                'values' => $this->sellTypeValues($key),
+                'has_commission' => in_array($key, ['iron', 'material', 'repair', 'sell'], true),
+                'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
+                'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
+            ])
+            ->all();
+    }
+
+    private function placeholders(array $values): string
+    {
+        return implode(', ', array_fill(0, count($values), '?'));
+    }
+
+    private function sumCommissionTotals(object $row, array $commissionColumns): float
+    {
+        return collect($commissionColumns)
+            ->filter(fn ($column) => $column['has_commission'])
+            ->sum(fn ($column) => (float) ($row->{$column['key'] . '_commission_total'} ?? 0));
     }
 
     private function baseStaffLineQuery(Request $request, string $periodExpr, array $lineExpressions)
@@ -738,6 +909,27 @@ class ReportController extends Controller
             'line_count' => 0,
             'average_price' => 0,
         ];
+    }
+
+    private function emptyCommissionSummary(array $commissionColumns): array
+    {
+        $summary = [
+            'sale_count' => 0,
+            'line_count' => 0,
+            'total_qty' => 0,
+            'total_amount' => 0,
+            'commission_total' => 0,
+        ];
+
+        foreach ($commissionColumns as $column) {
+            $summary[$column['key'] . '_total'] = 0;
+
+            if ($column['has_commission']) {
+                $summary[$column['key'] . '_commission_total'] = 0;
+            }
+        }
+
+        return $summary;
     }
 
     private function findReport($report_id)

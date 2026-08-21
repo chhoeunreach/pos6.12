@@ -68,6 +68,11 @@ class DataController extends Controller
                         'icon' => 'fa fa-user',
                         'active' => request()->is('hr-sell/reports/staff*'),
                     ]);
+
+                    $sub->url(route('hr-sell.reports.commission'), 'Commission Report', [
+                        'icon' => 'fa fa-money',
+                        'active' => request()->is('hr-sell/reports/commission*'),
+                    ]);
                 }
 
                 if ($user->can('hr_sell.settings') || $user->can('superadmin') || $user->can('business_settings.access')) {
