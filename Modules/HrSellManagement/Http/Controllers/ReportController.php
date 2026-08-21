@@ -360,6 +360,9 @@ class ReportController extends Controller
                     ->selectRaw($lineExpressions['qty'] . ' as qty')
                     ->selectRaw($lineExpressions['price'] . ' as unit_price')
                     ->selectRaw($lineExpressions['total'] . ' as line_total')
+                    ->orderBy('staff_name')
+                    ->orderBy('sor.branch_name')
+                    ->orderBy('sor.service_type')
                     ->orderByDesc('sor.created_at')
                     ->orderByDesc('sor.id')
                     ->orderBy('sol.id');

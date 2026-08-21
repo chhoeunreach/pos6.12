@@ -99,6 +99,10 @@
         background: #eef7fb !important;
     }
 
+    #hr_staff_sell_lines td[rowspan] {
+        vertical-align: middle !important;
+    }
+
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_staff_sell_filter_box">
@@ -385,17 +389,43 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($lineRows as $row)
+                    @php
+                        $lineDisplayRows = collect(method_exists($lineRows, 'items') ? $lineRows->items() : $lineRows);
+                        $lineGroupRowspans = [];
+                        $lineGroupStart = null;
+                        $lineGroupKey = null;
+
+                        foreach ($lineDisplayRows as $lineIndex => $lineDisplayRow) {
+                            $currentLineGroupKey = implode('|', [
+                                $lineDisplayRow->staff_code ?: $lineDisplayRow->staff_name,
+                                $lineDisplayRow->staff_name,
+                                $lineDisplayRow->branch_name,
+                                $lineDisplayRow->service_type_label ?? ($lineDisplayRow->service_type ?: '-'),
+                            ]);
+
+                            if ($currentLineGroupKey !== $lineGroupKey) {
+                                $lineGroupKey = $currentLineGroupKey;
+                                $lineGroupStart = $lineIndex;
+                                $lineGroupRowspans[$lineIndex] = 1;
+                                continue;
+                            }
+
+                            $lineGroupRowspans[$lineGroupStart]++;
+                        }
+                    @endphp
+                    @foreach($lineDisplayRows as $lineIndex => $row)
                         <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
                             <td>{{ $row->period_label ?? '-' }}</td>
                             <td><button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button></td>
                             <td>{{ $row->created_at }}</td>
-                            <td>
-                                {{ $row->staff_name }}
-                                {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
-                            </td>
-                            <td>{{ $row->branch_name }}</td>
-                            <td>{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                            @if(isset($lineGroupRowspans[$lineIndex]))
+                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">
+                                    {{ $row->staff_name }}
+                                    {!! ! empty($row->staff_code) ? '<small class="text-muted">(' . e($row->staff_code) . ')</small>' : '' !!}
+                                </td>
+                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">{{ $row->branch_name }}</td>
+                                <td rowspan="{{ $lineGroupRowspans[$lineIndex] }}">{{ $row->service_type_label ?? ($row->service_type ?: '-') }}</td>
+                            @endif
                             <td>{{ $row->product_name ?: '-' }}</td>
                             <td>{{ $row->sku ?: '-' }}</td>
                             <td>{{ $row->serial_identifier ?: '-' }}</td>
