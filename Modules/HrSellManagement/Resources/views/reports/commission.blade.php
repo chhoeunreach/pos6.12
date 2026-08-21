@@ -66,6 +66,12 @@
     .hr-commission-table td {
         vertical-align: middle !important;
     }
+
+    .hr-commission-alert-badge {
+        cursor: help;
+        display: inline-block;
+        margin: 1px 2px;
+    }
 </style>
 
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_commission_filter_box">
@@ -226,6 +232,7 @@
                     <th>User</th>
                     <th>Staff</th>
                     <th>Branch</th>
+                    <th>Alert</th>
                     @foreach($commissionColumns as $column)
                         <th class="text-right">{{ $column['short_label'] ?? $column['label'] }}</th>
                         @if($column['has_commission'])
@@ -241,11 +248,32 @@
                         <td>{{ $row->staff_code ?: '-' }}</td>
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
+                        <td>
+                            @php($hasAlert = false)
+                            @foreach($commissionColumns as $column)
+                                @php
+                                    $qualifiedValue = (float) ($row->{$column['key'] . '_total'} ?? 0);
+                                    $rawValue = (float) ($row->{$column['key'] . '_raw_total'} ?? $qualifiedValue);
+                                    $excludedValue = max(0, $rawValue - $qualifiedValue);
+                                    $alertDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
+                                @endphp
+                                @if($excludedValue > 0)
+                                    @php($hasAlert = true)
+                                    <span class="label label-warning hr-commission-alert-badge"
+                                        data-toggle="tooltip"
+                                        data-placement="top"
+                                        title="{{ ($column['short_label'] ?? $column['label']) . ': ' . number_format($excludedValue, $alertDecimals) . ' did not receive commission. Failed condition: ' . (($column['key'] === 'material') ? 'invoice total is lower than 10.' : 'commission condition not completed.') }}">
+                                        {{ $column['short_label'] ?? $column['label'] }} {{ number_format($excludedValue, $alertDecimals) }}
+                                    </span>
+                                @endif
+                            @endforeach
+                            @unless($hasAlert)
+                                <span class="text-muted">-</span>
+                            @endunless
+                        </td>
                         @foreach($commissionColumns as $column)
                             @php
                                 $columnValue = (float) ($row->{$column['key'] . '_total'} ?? 0);
-                                $rawColumnValue = (float) ($row->{$column['key'] . '_raw_total'} ?? $columnValue);
-                                $excludedColumnValue = max(0, $rawColumnValue - $columnValue);
                                 $columnDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
                                 $columnUrl = $row->detail_urls[$column['key']] ?? null;
                             @endphp
@@ -255,9 +283,6 @@
                                 @else
                                     {{ number_format($columnValue, $columnDecimals) }}
                                 @endif
-                                @if($excludedColumnValue > 0)
-                                    <small class="text-muted">(+{{ number_format($excludedColumnValue, $columnDecimals) }} no commission)</small>
-                                @endif
                             </td>
                             @if($column['has_commission'])
                                 <td class="text-right">{{ number_format((float) ($row->{$column['key'] . '_commission_total'} ?? 0), 2) }}</td>
@@ -266,25 +291,21 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 4) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 5) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
                     <th></th>
                     <th></th>
                     <th class="text-right">Total</th>
+                    <th></th>
                     @foreach($commissionColumns as $column)
                         @php
                             $footerValue = (float) ($commissionTotals[$column['key'] . '_total'] ?? 0);
-                            $footerRawValue = (float) ($commissionTotals[$column['key'] . '_raw_total'] ?? $footerValue);
-                            $footerExcludedValue = max(0, $footerRawValue - $footerValue);
                             $footerDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
                         @endphp
                         <th class="text-right">
                             {{ number_format($footerValue, $footerDecimals) }}
-                            @if($footerExcludedValue > 0)
-                                <small class="text-muted">(+{{ number_format($footerExcludedValue, $footerDecimals) }} no commission)</small>
-                            @endif
                         </th>
                         @if($column['has_commission'])
                             <th class="text-right">{{ number_format((float) ($commissionTotals[$column['key'] . '_commission_total'] ?? 0), 2) }}</th>
@@ -307,6 +328,7 @@
 <script>
 $(function() {
     $('.select2').select2();
+    $('[data-toggle="tooltip"]').tooltip();
 
     var dateRange = $('#hr_commission_date_range');
     var startDate = $('#hr_commission_start_date');
