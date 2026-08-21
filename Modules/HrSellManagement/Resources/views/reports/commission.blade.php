@@ -249,27 +249,40 @@
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td>
-                            @php($hasAlert = false)
-                            @foreach($commissionColumns as $column)
-                                @php
-                                    $qualifiedValue = (float) ($row->{$column['key'] . '_total'} ?? 0);
-                                    $rawValue = (float) ($row->{$column['key'] . '_raw_total'} ?? $qualifiedValue);
+                            @php
+                                $alerts = [];
+                                foreach ($commissionColumns as $alertColumn) {
+                                    $qualifiedValue = (float) ($row->{$alertColumn['key'] . '_total'} ?? 0);
+                                    $rawValue = (float) ($row->{$alertColumn['key'] . '_raw_total'} ?? $qualifiedValue);
                                     $excludedValue = max(0, $rawValue - $qualifiedValue);
-                                    $alertDecimals = ($column['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
-                                @endphp
-                                @if($excludedValue > 0)
-                                    @php($hasAlert = true)
-                                    <span class="label label-warning hr-commission-alert-badge"
-                                        data-toggle="tooltip"
-                                        data-placement="top"
-                                        title="{{ ($column['short_label'] ?? $column['label']) . ': ' . number_format($excludedValue, $alertDecimals) . ' did not receive commission. Failed condition: ' . (($column['key'] === 'material') ? 'invoice total is lower than 10.' : 'commission condition not completed.') }}">
-                                        {{ $column['short_label'] ?? $column['label'] }} {{ number_format($excludedValue, $alertDecimals) }}
-                                    </span>
-                                @endif
-                            @endforeach
-                            @unless($hasAlert)
+
+                                    if ($excludedValue <= 0) {
+                                        continue;
+                                    }
+
+                                    $alertDecimals = ($alertColumn['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
+                                    $alertLabel = $alertColumn['short_label'] ?? $alertColumn['label'];
+                                    $failedCondition = $alertColumn['key'] === 'material'
+                                        ? 'invoice total is lower than 10.'
+                                        : 'commission condition not completed.';
+
+                                    $alerts[] = [
+                                        'label' => $alertLabel,
+                                        'value' => number_format($excludedValue, $alertDecimals),
+                                        'title' => $alertLabel . ': ' . number_format($excludedValue, $alertDecimals) . ' did not receive commission. Failed condition: ' . $failedCondition,
+                                    ];
+                                }
+                            @endphp
+                            @forelse($alerts as $alert)
+                                <span class="label label-warning hr-commission-alert-badge"
+                                    data-toggle="tooltip"
+                                    data-placement="top"
+                                    title="{{ $alert['title'] }}">
+                                    {{ $alert['label'] }} {{ $alert['value'] }}
+                                </span>
+                            @empty
                                 <span class="text-muted">-</span>
-                            @endunless
+                            @endforelse
                         </td>
                         @foreach($commissionColumns as $column)
                             @php
