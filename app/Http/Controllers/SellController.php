@@ -343,7 +343,7 @@ class SellController extends Controller
                                     $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'show'], [$row->id]).'" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> '.__('purchase.view_payments').'</a></li>';
                                 }
 
-                                if (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) {
+                                if ($is_admin || auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) {
                                     // $html .= '<li><a href="' . action([\App\Http\Controllers\SellController::class, 'duplicateSell'], [$row->id]) . '"><i class="fas fa-copy"></i> ' . __("lang_v1.duplicate_sell") . '</a></li>';
 
                                     $html .= '<li><a href="'.action([\App\Http\Controllers\SellReturnController::class, 'add'], [$row->id]).'"><i class="fas fa-undo"></i> '.__('lang_v1.sell_return').'</a></li>

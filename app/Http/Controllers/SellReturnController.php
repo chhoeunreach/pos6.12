@@ -48,6 +48,27 @@ class SellReturnController extends Controller
         $this->moduleUtil = $moduleUtil;
     }
 
+    private function canAccessSellReturn(): bool
+    {
+        return $this->businessUtil->is_admin(auth()->user())
+            || auth()->user()->can('access_sell_return')
+            || auth()->user()->can('access_own_sell_return');
+    }
+
+    private function canAccessAllSellReturn(): bool
+    {
+        return $this->businessUtil->is_admin(auth()->user())
+            || auth()->user()->can('access_sell_return');
+    }
+
+    private function canCreateSellReturn(): bool
+    {
+        return $this->businessUtil->is_admin(auth()->user())
+            || auth()->user()->can('sell.create')
+            || auth()->user()->can('direct_sell.access')
+            || auth()->user()->can('view_own_sell_only');
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -55,7 +76,9 @@ class SellReturnController extends Controller
      */
     public function index()
     {
-        if (!auth()->user()->can('access_sell_return') && !auth()->user()->can('access_own_sell_return')) {
+        $is_admin = $this->businessUtil->is_admin(auth()->user());
+
+        if (!$this->canAccessSellReturn()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -104,7 +127,7 @@ class SellReturnController extends Controller
                 $sells->whereIn('transactions.location_id', $permitted_locations);
             }
 
-            if (!auth()->user()->can('access_sell_return') && auth()->user()->can('access_own_sell_return')) {
+            if (!$this->canAccessAllSellReturn() && auth()->user()->can('access_own_sell_return')) {
                 $sells->where('transactions.created_by', request()->session()->get('user.id'));
             }
 
@@ -286,7 +309,7 @@ class SellReturnController extends Controller
                 })
                 ->setRowAttr([
                     'data-href' => function ($row) {
-                        if (auth()->user()->can('sell.view')) {
+                        if ($this->businessUtil->is_admin(auth()->user()) || auth()->user()->can('sell.view')) {
                             return action([\App\Http\Controllers\SellReturnController::class, 'show'], [$row->id]);
                         } else {
                             return '';
@@ -308,7 +331,7 @@ class SellReturnController extends Controller
 
         $sales_representative = User::forDropdown($business_id, false, false, true);
 
-        return view('sell_return.index')->with(compact('business_locations', 'customers', 'sales_representative'));
+        return view('sell_return.index')->with(compact('business_locations', 'customers', 'sales_representative', 'is_admin'));
     }
 
     /**
@@ -343,7 +366,7 @@ class SellReturnController extends Controller
      */
     public function add($id)
     {
-        if (!auth()->user()->can('access_sell_return') && !auth()->user()->can('access_own_sell_return')) {
+        if (!$this->canAccessSellReturn()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -382,7 +405,7 @@ class SellReturnController extends Controller
      */
     public function store(Request $request)
     {
-        if (!auth()->user()->can('access_sell_return') && !auth()->user()->can('access_own_sell_return')) {
+        if (!$this->canAccessSellReturn()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -442,7 +465,7 @@ class SellReturnController extends Controller
      */
     public function show($id)
     {
-        if (!auth()->user()->can('access_sell_return') && !auth()->user()->can('access_own_sell_return')) {
+        if (!$this->canAccessSellReturn()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -466,7 +489,7 @@ class SellReturnController extends Controller
                 'location'
             );
 
-        if (!auth()->user()->can('access_sell_return') && auth()->user()->can('access_own_sell_return')) {
+        if (!$this->canAccessAllSellReturn() && auth()->user()->can('access_own_sell_return')) {
             $query->where('created_by', request()->session()->get('user.id'));
         }
         $sell = $query->firstOrFail();
@@ -518,7 +541,7 @@ class SellReturnController extends Controller
      */
     public function destroy($id)
     {
-        if (!auth()->user()->can('access_sell_return') && !auth()->user()->can('access_own_sell_return')) {
+        if (!$this->canAccessSellReturn()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -533,7 +556,7 @@ class SellReturnController extends Controller
                     ->where('type', 'sell_return')
                     ->with(['sell_lines', 'payment_lines']);
 
-                if (!auth()->user()->can('access_sell_return') && auth()->user()->can('access_own_sell_return')) {
+                if (!$this->canAccessAllSellReturn() && auth()->user()->can('access_own_sell_return')) {
                     $query->where('created_by', request()->session()->get('user.id'));
                 }
                 $sell_return = $query->firstOrFail();
@@ -687,7 +710,7 @@ class SellReturnController extends Controller
      */
     public function validateInvoiceToReturn($invoice_no)
     {
-        if (!auth()->user()->can('sell.create') && !auth()->user()->can('direct_sell.access') && !auth()->user()->can('view_own_sell_only')) {
+        if (!$this->canCreateSellReturn()) {
             return ['success' => 0,
                 'msg' => trans('lang_v1.permission_denied'),
             ];
@@ -702,7 +725,7 @@ class SellReturnController extends Controller
             $query->whereIn('transactions.location_id', $permitted_locations);
         }
 
-        if (!auth()->user()->can('direct_sell.access') && auth()->user()->can('view_own_sell_only')) {
+        if (!$this->businessUtil->is_admin(auth()->user()) && !auth()->user()->can('direct_sell.access') && auth()->user()->can('view_own_sell_only')) {
             $query->where('created_by', auth()->user()->id);
         }
 
