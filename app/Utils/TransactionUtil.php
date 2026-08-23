@@ -6626,6 +6626,15 @@ class TransactionUtil extends Util
 
         $sell_lines = $sell->sell_lines->keyBy('id');
         $old_return_lines = $sell_return->sell_lines->keyBy('parent_sell_line_id');
+        if ($sell_return->sell_lines->where('quantity', '>', 0)->count() == 0) {
+            $old_return_lines = $this->getSellReturnDisplayLines($sell_return, $business_id)
+                ->mapWithKeys(function ($line) {
+                    $parent_line_id = ! empty($line->parent_sell_line_id) ? $line->parent_sell_line_id : $line->id;
+                    $line->return_quantity_for_update = ! empty($line->parent_sell_line_id) ? $line->quantity : $line->quantity_returned;
+
+                    return [$parent_line_id => $line];
+                });
+        }
         $product_lines = [];
 
         foreach ($input['products'] as $product_line) {
@@ -6642,7 +6651,9 @@ class TransactionUtil extends Util
             }
 
             $base_return_quantity = $return_quantity * $multiplier;
-            $old_return_quantity = !empty($old_return_lines[$sell_line->id]) ? $old_return_lines[$sell_line->id]->quantity : 0;
+            $old_return_quantity = !empty($old_return_lines[$sell_line->id])
+                ? ($old_return_lines[$sell_line->id]->return_quantity_for_update ?? $old_return_lines[$sell_line->id]->quantity)
+                : 0;
             $available_quantity = $sell_line->quantity - $sell_line->quantity_returned + $old_return_quantity;
 
             if ($base_return_quantity > $available_quantity) {
@@ -6693,13 +6704,15 @@ class TransactionUtil extends Util
         $sell_return->update($sell_return_data);
 
         foreach ($old_return_lines as $return_line) {
-            $sell_line = $sell_lines->get($return_line->parent_sell_line_id);
-            if (empty($sell_line) || $return_line->quantity <= 0) {
+            $parent_line_id = ! empty($return_line->parent_sell_line_id) ? $return_line->parent_sell_line_id : $return_line->id;
+            $return_quantity = $return_line->return_quantity_for_update ?? $return_line->quantity;
+            $sell_line = $sell_lines->get($parent_line_id);
+            if (empty($sell_line) || $return_quantity <= 0) {
                 continue;
             }
 
             $quantity_before = $sell_line->quantity_returned;
-            $new_returned_quantity = max(0, $quantity_before - $return_line->quantity);
+            $new_returned_quantity = max(0, $quantity_before - $return_quantity);
 
             $sell_line->quantity_returned = $new_returned_quantity;
             $sell_line->save();
