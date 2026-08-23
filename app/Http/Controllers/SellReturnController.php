@@ -380,6 +380,8 @@ class SellReturnController extends Controller
             ->with(['sell_lines', 'location', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
             ->find($id);
 
+        $this->repairStaleSellReturnQuantities($sell);
+
         foreach ($sell->sell_lines as $key => $value) {
             if (!empty($value->sub_unit_id)) {
                 $formated_sell_line = $this->transactionUtil->recalculateSellLineTotals($business_id, $value);
@@ -395,6 +397,36 @@ class SellReturnController extends Controller
 
         return view('sell_return.add')
             ->with(compact('sell'));
+    }
+
+    private function repairStaleSellReturnQuantities($sell)
+    {
+        if (empty($sell)) {
+            return;
+        }
+
+        $has_sell_return = Transaction::where('return_parent_id', $sell->id)
+            ->where('type', 'sell_return')
+            ->exists();
+
+        if ($has_sell_return) {
+            return;
+        }
+
+        DB::transaction(function () use ($sell) {
+            foreach ($sell->sell_lines as $sell_line) {
+                if ($sell_line->quantity_returned <= 0) {
+                    continue;
+                }
+
+                $quantity_before = $sell_line->quantity_returned;
+                $sell_line->quantity_returned = 0;
+                $sell_line->save();
+
+                $this->transactionUtil->updateQuantitySoldFromSellLine($sell_line, 0, $quantity_before, false);
+                $this->productUtil->updateProductQuantity($sell->location_id, $sell_line->product_id, $sell_line->variation_id, 0, $quantity_before, null, false);
+            }
+        });
     }
 
     /**
@@ -702,12 +734,19 @@ class SellReturnController extends Controller
                 if (!empty($sell_return)) {
                     $transaction_payments = $sell_return->payment_lines;
 
-                    foreach ($sell_return->sell_lines as $return_line) {
-                        $sell_line = $parent_sell_lines->get($return_line->parent_sell_line_id);
+                    $return_lines = $sell_return->sell_lines;
+                    if ($return_lines->where('quantity', '>', 0)->count() == 0) {
+                        $return_lines = $this->transactionUtil->getSellReturnDisplayLines($sell_return, $business_id);
+                    }
 
-                        if (!empty($sell_line) && $return_line->quantity > 0) {
+                    foreach ($return_lines as $return_line) {
+                        $parent_line_id = !empty($return_line->parent_sell_line_id) ? $return_line->parent_sell_line_id : $return_line->id;
+                        $return_quantity = !empty($return_line->parent_sell_line_id) ? $return_line->quantity : $return_line->quantity_returned;
+                        $sell_line = $parent_sell_lines->get($parent_line_id);
+
+                        if (!empty($sell_line) && $return_quantity > 0) {
                             $quantity_before = $sell_line->quantity_returned;
-                            $quantity = max(0, $quantity_before - $return_line->quantity);
+                            $quantity = max(0, $quantity_before - $return_quantity);
 
                             $sell_line->quantity_returned = $quantity;
                             $sell_line->save();
