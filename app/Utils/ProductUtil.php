@@ -2161,6 +2161,15 @@ class ProductUtil extends Util
                                 ->leftjoin('stock_adjustment_lines as al',
                                     'al.transaction_id', '=', 'transactions.id')
                                 ->leftjoin('transactions as return', 'transactions.return_parent_id', '=', 'return.id')
+                                ->leftjoin('transaction_sell_lines as rsl', function ($join) use ($variation_id) {
+                                    $join->on('rsl.transaction_id', '=', 'return.id')
+                                        ->where(function ($q) {
+                                            $q->whereNull('sl.id')
+                                                ->orWhere('sl.quantity', '<=', 0);
+                                        })
+                                        ->where('rsl.variation_id', '=', $variation_id)
+                                        ->whereRaw('(ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.total_before_tax) < 0.01 OR ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.final_total) < 0.01)');
+                                })
                                 ->leftjoin('purchase_lines as rpl',
                                     'rpl.transaction_id', '=', 'return.id')
                                 ->leftjoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
@@ -2169,7 +2178,8 @@ class ProductUtil extends Util
                                     $q->where('sl.variation_id', $variation_id)
                                         ->orWhere('pl.variation_id', $variation_id)
                                         ->orWhere('al.variation_id', $variation_id)
-                                        ->orWhere('rpl.variation_id', $variation_id);
+                                        ->orWhere('rpl.variation_id', $variation_id)
+                                        ->orWhere('rsl.variation_id', $variation_id);
                                 })
                                 ->whereIn('transactions.type', ['sell', 'purchase', 'stock_adjustment', 'opening_stock', 'sell_transfer', 'purchase_transfer', 'production_purchase', 'purchase_return', 'sell_return', 'production_sell'])
                                 ->select(
@@ -2178,6 +2188,7 @@ class ProductUtil extends Util
                                     'sl.quantity as sell_line_quantity',
                                     'pl.quantity as purchase_line_quantity',
                                     'sl.quantity as sell_return',
+                                    'rsl.quantity_returned as legacy_sell_return',
                                     'rpl.quantity_returned as purchase_return',
                                     'al.quantity as stock_adjusted',
                                     'pl.quantity_returned as combined_purchase_return',
@@ -2335,7 +2346,14 @@ class ProductUtil extends Util
                     'stock_in_second_unit' => $this->roundQuantity($stock_in_second_unit),
                 ]);
             } elseif ($stock_line->transaction_type == 'sell_return') {
-                $quantity_change = $stock_line->sell_return;
+                $quantity_change = ! empty($stock_line->sell_return) && $stock_line->sell_return > 0
+                    ? $stock_line->sell_return
+                    : $stock_line->legacy_sell_return;
+
+                if (empty($quantity_change)) {
+                    continue;
+                }
+
                 $stock += $quantity_change;
                 $stock_history_array[] = array_merge($temp_array, [
                     'quantity_change' => $quantity_change,
