@@ -31,6 +31,7 @@
             <tr class="bg-green">
                 <th>#</th>
                 <th>@lang('product.product_name')</th>
+                <th>@lang('product.sku')</th>
                 @if(session('business.enable_lot_number'))
                     <th>@lang('lang_v1.lot_number')</th>
                 @endif
@@ -70,6 +71,7 @@
                     - {{ $sell_line->variations->name}}
                   @endif
                 </td>
+                <td>{{ $sell_line->variations->sub_sku ?? '' }}</td>
                 @if(session('business.enable_lot_number'))
                     <td>{{ $sell_line->lot_details->lot_number ?? '--' }}</td>
                 @endif
