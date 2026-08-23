@@ -232,6 +232,57 @@ class ReportController extends Controller
         return back()->with('status', ['success' => 1, 'msg' => 'HR sell report deleted']);
     }
 
+    public function destroyLine(Request $request, $line_id)
+    {
+        abort_unless($this->canDeleteReport(), 403);
+        abort_unless(Schema::connection('hr')->hasTable('sell_out_report_lines'), 404);
+
+        $line = DB::connection('hr')
+            ->table('sell_out_report_lines as sol')
+            ->join('sell_out_reports as sor', 'sor.id', '=', 'sol.sell_out_report_id')
+            ->where('sol.id', $line_id)
+            ->select('sol.*', 'sor.id as report_id')
+            ->first();
+
+        abort_if(empty($line), 404);
+
+        DB::connection('hr')->transaction(function () use ($line) {
+            DB::connection('hr')->table('sell_out_report_lines')->where('id', $line->id)->delete();
+
+            $totalColumn = $this->firstHrLineColumn(['line_total', 'total', 'total_amount', 'subtotal', 'amount']);
+            $priceColumn = $this->firstHrLineColumn(['unit_price', 'price', 'sell_price', 'selling_price', 'product_price']);
+            $qtyColumn = $this->firstHrLineColumn(['qty', 'quantity', 'sale_qty', 'product_qty']);
+
+            $remainingTotalQuery = DB::connection('hr')
+                ->table('sell_out_report_lines')
+                ->where('sell_out_report_id', $line->report_id);
+
+            if ($totalColumn) {
+                $remainingTotal = $remainingTotalQuery->sum($totalColumn);
+            } elseif ($priceColumn && $qtyColumn) {
+                $remainingTotal = (clone $remainingTotalQuery)
+                    ->selectRaw('COALESCE(SUM(COALESCE(' . $qtyColumn . ', 0) * COALESCE(' . $priceColumn . ', 0)), 0) as total')
+                    ->value('total');
+            } else {
+                $remainingTotal = 0;
+            }
+
+            $reportUpdates = ['total_amount' => $remainingTotal];
+            if (Schema::connection('hr')->hasColumn('sell_out_reports', 'updated_at')) {
+                $reportUpdates['updated_at'] = now();
+            }
+
+            DB::connection('hr')
+                ->table('sell_out_reports')
+                ->where('id', $line->report_id)
+                ->update($reportUpdates);
+        });
+
+        $this->logReportAction('report_line_deleted', (int) $line->report_id, $line, null, $request);
+
+        return response()->json(['success' => 1, 'msg' => 'Sale line deleted']);
+    }
+
     private function reportData(Request $request, bool $paginate): array
     {
         try {
@@ -390,6 +441,7 @@ class ReportController extends Controller
                 $linesQuery = (clone $base)
                     ->selectRaw($periodExpr . ' as period_label')
                     ->select(
+                        'sol.id as line_id',
                         'sor.id as report_id',
                         'sor.invoice_no',
                         'sor.customer_phone',

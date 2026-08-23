@@ -13,6 +13,7 @@
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
     $currentUser = auth()->user();
     $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
+    $canDeleteReport = $currentUser->can('hr_sell.report.delete') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -450,11 +451,14 @@
                                 <th class="text-right" data-line-column="10">Qty</th>
                                 <th class="text-right" data-line-column="11">Price</th>
                                 <th class="text-right" data-line-column="12">Total</th>
+                                @if($canDeleteReport)
+                                    <th class="no-print" data-line-column="13">Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($lineRows as $row)
-                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
+                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-line-id="{{ $row->line_id }}" data-href="{{ $row->detail_url ?? '' }}">
                                     <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
                                     <td data-line-column="1">
                                         <button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button>
@@ -476,9 +480,16 @@
                                     <td class="text-right" data-line-column="10">{{ number_format((float) $row->qty, 2) }}</td>
                                     <td class="text-right" data-line-column="11">{{ number_format((float) $row->unit_price, 2) }}</td>
                                     <td class="text-right" data-line-column="12">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    @if($canDeleteReport)
+                                        <td class="no-print" data-line-column="13">
+                                            <button type="button" class="btn btn-xs btn-danger hr-staff-line-delete" data-url="{{ route('hr-sell.reports.lines.destroy', [$row->line_id]) }}">
+                                                <i class="fa fa-trash"></i> Delete
+                                            </button>
+                                        </td>
+                                    @endif
                                 </tr>
                             @endforeach
-                            {!! count($lineRows) === 0 ? '<tr><td colspan="13" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="' . ($canDeleteReport ? 14 : 13) . '" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
                         <tfoot>
                             <tr>
@@ -495,6 +506,9 @@
                                 <th class="text-right hr-staff-lines-qty-total" data-line-column="10">0.00</th>
                                 <th class="text-right hr-staff-lines-price-total" data-line-column="11">0.00</th>
                                 <th class="text-right hr-staff-lines-total-total" data-line-column="12">0.00</th>
+                                @if($canDeleteReport)
+                                    <th class="no-print" data-line-column="13"></th>
+                                @endif
                             </tr>
                         </tfoot>
                     </table>
@@ -517,11 +531,14 @@
                                 <th class="text-right" data-line-column="10">Qty</th>
                                 <th class="text-right" data-line-column="11">Price</th>
                                 <th class="text-right" data-line-column="12">Total</th>
+                                @if($canDeleteReport)
+                                    <th class="no-print" data-line-column="13">Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($lineRows as $row)
-                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-href="{{ $row->detail_url ?? '' }}">
+                                <tr class="hr-staff-clickable-row hr-staff-line-detail-row" data-line-id="{{ $row->line_id }}" data-href="{{ $row->detail_url ?? '' }}">
                                     <td data-line-column="0">{{ $row->period_label ?? '-' }}</td>
                                     <td data-line-column="1">
                                         <button type="button" class="btn btn-link btn-xs btn-modal" data-href="{{ $row->detail_url ?? '' }}" data-container=".view_modal">{{ $row->invoice_no ?? '-' }}</button>
@@ -543,9 +560,16 @@
                                     <td class="text-right" data-line-column="10">{{ number_format((float) $row->qty, 2) }}</td>
                                     <td class="text-right" data-line-column="11">{{ number_format((float) $row->unit_price, 2) }}</td>
                                     <td class="text-right" data-line-column="12">{{ number_format((float) $row->line_total, 2) }}</td>
+                                    @if($canDeleteReport)
+                                        <td class="no-print" data-line-column="13">
+                                            <button type="button" class="btn btn-xs btn-danger hr-staff-line-delete" data-url="{{ route('hr-sell.reports.lines.destroy', [$row->line_id]) }}">
+                                                <i class="fa fa-trash"></i> Delete
+                                            </button>
+                                        </td>
+                                    @endif
                                 </tr>
                             @endforeach
-                            {!! count($lineRows) === 0 ? '<tr><td colspan="13" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
+                            {!! count($lineRows) === 0 ? '<tr><td colspan="' . ($canDeleteReport ? 14 : 13) . '" class="text-center text-muted">No sale lines found for selected filters.</td></tr>' : '' !!}
                         </tbody>
                         <tfoot>
                             <tr>
@@ -562,6 +586,9 @@
                                 <th class="text-right hr-staff-lines-v1-qty-total" data-line-column="10">0.00</th>
                                 <th class="text-right hr-staff-lines-v1-price-total" data-line-column="11">0.00</th>
                                 <th class="text-right hr-staff-lines-v1-total-total" data-line-column="12">0.00</th>
+                                @if($canDeleteReport)
+                                    <th class="no-print" data-line-column="13"></th>
+                                @endif
                             </tr>
                         </tfoot>
                     </table>
@@ -580,6 +607,7 @@
 <script>
 $(function() {
     $('.select2').select2();
+    var genericErrorMessage = @json(__('messages.something_went_wrong'));
 
     $(document).on('click', '.js-select-all-options', function() {
         var select = $(this).closest('.form-group').find('select.js-hr-multi-select');
@@ -853,6 +881,7 @@ $(function() {
             : '#hr_staff_sell_lines_current_table';
         var $sourceTable = $(activeSelector);
         var $printTable = $sourceTable.clone();
+        $printTable.find('.no-print').remove();
         $printTable.find('[data-line-column]').each(function() {
             var columnIndex = parseInt($(this).attr('data-line-column'), 10);
 
@@ -898,6 +927,50 @@ $(function() {
         printWindow.focus();
         printWindow.print();
         printWindow.close();
+    });
+
+    $(document).on('click', '.hr-staff-line-delete', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var $button = $(this);
+        var url = $button.data('url');
+
+        if (!url || !confirm('Delete this sale line?')) {
+            return;
+        }
+
+        $button.prop('disabled', true);
+
+        $.ajax({
+            method: 'POST',
+            url: url,
+            dataType: 'json',
+            data: {
+                _token: '{{ csrf_token() }}',
+                _method: 'DELETE'
+            },
+            success: function(result) {
+                if (result.success) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(result.msg);
+                    }
+                    window.location.reload();
+                    return;
+                }
+
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(result.msg || genericErrorMessage);
+                }
+                $button.prop('disabled', false);
+            },
+            error: function() {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(genericErrorMessage);
+                }
+                $button.prop('disabled', false);
+            }
+        });
     });
 
     $(document).on('click', '.hr-staff-clickable-row', function(e) {
