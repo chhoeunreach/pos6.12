@@ -13,7 +13,7 @@
 
 	{!! Form::hidden('location_id', $sell->location->id, ['id' => 'location_id', 'data-receipt_printer_type' => $sell->location->receipt_printer_type ]); !!}
 
-	{!! Form::open(['url' => action([\App\Http\Controllers\SellReturnController::class, 'store']), 'method' => 'post', 'id' => 'sell_return_form' ]) !!}
+	{!! Form::open(['url' => empty($sell_return) ? action([\App\Http\Controllers\SellReturnController::class, 'store']) : action([\App\Http\Controllers\SellReturnController::class, 'update'], [$sell_return->id]), 'method' => empty($sell_return) ? 'post' : 'put', 'id' => 'sell_return_form' ]) !!}
 	{!! Form::hidden('transaction_id', $sell->id); !!}
 	<div class="box box-solid">
 		<div class="box-header">
@@ -38,7 +38,7 @@
 				<div class="col-sm-4">
 					<div class="form-group">
 						{!! Form::label('invoice_no', __('sale.invoice_no').':') !!}
-						{!! Form::text('invoice_no', null, ['class' => 'form-control']); !!}
+						{!! Form::text('invoice_no', $sell_return->invoice_no ?? null, ['class' => 'form-control']); !!}
 					</div>
 				</div>
 				<div class="col-sm-3">
@@ -49,7 +49,7 @@
 								<i class="fa fa-calendar"></i>
 							</span>
 							@php
-							$transaction_date = 'now';
+							$transaction_date = !empty($sell_return) ? $sell_return->transaction_date : 'now';
 							@endphp
 							{!! Form::text('transaction_date', @format_datetime($transaction_date), ['class' => 'form-control', 'readonly', 'required']); !!}
 						</div>
@@ -111,7 +111,7 @@
 								<td>{{ $sell_line->formatted_returned_qty }} {{$unit_name}}</td>
 
 								<td>
-									<input type="text" name="products[{{$loop->index}}][quantity]" value="{{@format_quantity(0)}}" class="form-control input-sm input_number return_qty input_quantity" data-rule-abs_digit="{{$check_decimal}}" data-msg-abs_digit="@lang('lang_v1.decimal_value_not_allowed')" data-rule-max-value="{{$sell_line->remaining_qty}}" data-msg-max-value="@lang('validation.custom-messages.quantity_not_available', ['qty' => $sell_line->formatted_remaining_qty, 'unit' => $unit_name ])" @if($sell_line->remaining_qty <= 0) readonly @endif>
+									<input type="text" name="products[{{$loop->index}}][quantity]" value="{{@format_quantity($sell_line->current_return_qty ?? 0)}}" class="form-control input-sm input_number return_qty input_quantity" data-rule-abs_digit="{{$check_decimal}}" data-msg-abs_digit="@lang('lang_v1.decimal_value_not_allowed')" data-rule-max-value="{{$sell_line->remaining_qty}}" data-msg-max-value="@lang('validation.custom-messages.quantity_not_available', ['qty' => $sell_line->formatted_remaining_qty, 'unit' => $unit_name ])" @if($sell_line->remaining_qty <= 0) readonly @endif>
 									<input name="products[{{$loop->index}}][unit_price_inc_tax]" type="hidden" class="unit_price" value="{{@num_format($sell_line->unit_price_inc_tax)}}">
 									<input name="products[{{$loop->index}}][sell_line_id]" type="hidden" value="{{$sell_line->id}}">
 								</td>
@@ -126,8 +126,8 @@
 			</div>
 			<div class="row">
 				@php
-				$discount_type = $sell->discount_type;
-				$discount_amount = 0;
+				$discount_type = $sell_return->discount_type ?? $sell->discount_type;
+				$discount_amount = $sell_return->discount_amount ?? 0;
 				@endphp
 				<div class="col-sm-4">
 					<div class="form-group">

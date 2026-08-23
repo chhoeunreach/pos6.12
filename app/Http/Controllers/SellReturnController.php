@@ -228,8 +228,8 @@ class SellReturnController extends Controller
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="' . action('App\Http\Controllers\SellReturnController@add', [$row->parent_sale_id]) . '">
-                                            <i class="fa fa-plus" aria-hidden="true"></i> ' . __('messages.add') . ' ' . __('lang_v1.sell_return') . '
+                                        <a href="' . action('App\Http\Controllers\SellReturnController@edit', [$row->id]) . '">
+                                            <i class="fas fa-edit" aria-hidden="true"></i> ' . __('messages.edit') . ' ' . __('lang_v1.sell_return') . '
                                         </a>
                                     </li>
                                     <li>
@@ -398,6 +398,66 @@ class SellReturnController extends Controller
     }
 
     /**
+     * Show the form for editing a sell return.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        if (!$this->canAccessSellReturn()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        if (!$this->moduleUtil->isSubscribed($business_id)) {
+            return $this->moduleUtil->expiredResponse();
+        }
+
+        $query = Transaction::where('business_id', $business_id)
+            ->where('type', 'sell_return')
+            ->with(['sell_lines']);
+
+        if (!$this->canAccessAllSellReturn() && auth()->user()->can('access_own_sell_return')) {
+            $query->where('created_by', request()->session()->get('user.id'));
+        }
+
+        $sell_return = $query->findOrFail($id);
+
+        $sell = Transaction::where('business_id', $business_id)
+            ->with(['sell_lines', 'location', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.lot_details'])
+            ->findOrFail($sell_return->return_parent_id);
+
+        $returned_lines = $sell_return->sell_lines->keyBy('parent_sell_line_id');
+
+        foreach ($sell->sell_lines as $key => $value) {
+            $return_line = $returned_lines->get($value->id);
+            $current_return_qty = !empty($return_line) ? $return_line->quantity : 0;
+
+            if (!empty($value->sub_unit_id)) {
+                $formated_sell_line = $this->transactionUtil->recalculateSellLineTotals($business_id, $value);
+                $sell->sell_lines[$key] = $formated_sell_line;
+                $value = $formated_sell_line;
+
+                if (!empty($value->sub_unit) && !empty($value->sub_unit->base_unit_multiplier)) {
+                    $current_return_qty = $current_return_qty / $value->sub_unit->base_unit_multiplier;
+                }
+            }
+
+            $available_qty = max(0, $value->quantity - $value->quantity_returned + $current_return_qty);
+            $sell->sell_lines[$key]->current_return_qty = $current_return_qty;
+            $sell->sell_lines[$key]->formatted_current_return_qty = $this->transactionUtil->num_f($current_return_qty, false, null, true);
+            $sell->sell_lines[$key]->formatted_qty = $this->transactionUtil->num_f($value->quantity, false, null, true);
+            $sell->sell_lines[$key]->formatted_returned_qty = $this->transactionUtil->num_f($value->quantity_returned, false, null, true);
+            $sell->sell_lines[$key]->remaining_qty = $available_qty;
+            $sell->sell_lines[$key]->formatted_remaining_qty = $this->transactionUtil->num_f($available_qty, false, null, true);
+        }
+
+        return view('sell_return.add')
+            ->with(compact('sell', 'sell_return'));
+    }
+
+    /**
      * Store a newly created resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -429,6 +489,70 @@ class SellReturnController extends Controller
                 $receipt = $this->receiptContent($business_id, $sell_return->location_id, $sell_return->id);
 
                 // for zatca invoice response
+                $this->moduleUtil->getModuleData('after_sales_return', ['transaction' => $sell_return]);
+
+                DB::commit();
+
+                $output = ['success' => 1,
+                    'msg' => __('lang_v1.success'),
+                    'receipt' => $receipt,
+                    'redirect_url' => action([\App\Http\Controllers\SellReturnController::class, 'index']),
+                ];
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if (get_class($e) == \App\Exceptions\PurchaseSellMismatch::class) {
+                $msg = $e->getMessage();
+            } else {
+                \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
+                $msg = __('messages.something_went_wrong');
+            }
+
+            $output = ['success' => 0,
+                'msg' => $msg,
+            ];
+        }
+
+        return $output;
+    }
+
+    /**
+     * Update the specified sell return.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        if (!$this->canAccessSellReturn()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        try {
+            $input = $request->except('_token', '_method');
+
+            if (!empty($input['products'])) {
+                $business_id = $request->session()->get('user.business_id');
+
+                if (!$this->moduleUtil->isSubscribed($business_id)) {
+                    return $this->moduleUtil->expiredResponse(action([\App\Http\Controllers\SellReturnController::class, 'index']));
+                }
+
+                if (!$this->canAccessAllSellReturn() && auth()->user()->can('access_own_sell_return')) {
+                    Transaction::where('business_id', $business_id)
+                        ->where('type', 'sell_return')
+                        ->where('created_by', $request->session()->get('user.id'))
+                        ->findOrFail($id);
+                }
+
+                DB::beginTransaction();
+
+                $sell_return = $this->transactionUtil->updateSellReturn($id, $input, $business_id);
+
+                $receipt = $this->receiptContent($business_id, $sell_return->location_id, $sell_return->id);
+
                 $this->moduleUtil->getModuleData('after_sales_return', ['transaction' => $sell_return]);
 
                 DB::commit();
