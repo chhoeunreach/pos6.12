@@ -1381,7 +1381,7 @@ class TransactionUtil extends Util
             $output['subtotal_exc_tax'] = $this->num_f($subtotal_exc_tax, true, $business_details);
             $output['total_line_discount'] = ! empty($total_line_discount) ? $this->num_f($total_line_discount, true, $business_details) : 0;
         } elseif ($transaction_type == 'sell_return') {
-            $lines = $transaction->sell_lines()->with(['line_tax', 'product', 'product.unit', 'product.brand', 'product.category', 'variations', 'sub_unit'])->get();
+            $lines = $this->getSellReturnDisplayLines($transaction, $business_details->id);
             $total_line_taxes = 0;
             foreach ($lines as $key => $value) {
                 if (! empty($value->sub_unit_id)) {
@@ -2374,6 +2374,51 @@ class TransactionUtil extends Util
         }
 
         return ['lines' => $output_lines, 'taxes' => $output_taxes];
+    }
+
+    public function getSellReturnDisplayLines($sell_return, $business_id)
+    {
+        $relations = ['line_tax', 'product', 'product.unit', 'product.brand', 'product.category', 'variations', 'sub_unit', 'lot_details'];
+
+        if (! empty($sell_return->sell_lines)) {
+            $lines = $sell_return->sell_lines->loadMissing($relations);
+        } else {
+            $lines = $sell_return->sell_lines()->with($relations)->get();
+        }
+
+        if ($lines->where('quantity', '>', 0)->count() > 0) {
+            return $lines;
+        }
+
+        $parent_sell = Transaction::where('business_id', $business_id)
+            ->where('id', $sell_return->return_parent_id)
+            ->first();
+
+        if (empty($parent_sell)) {
+            return $lines;
+        }
+
+        $fallback_lines = $parent_sell->sell_lines()
+            ->where('quantity_returned', '>', 0)
+            ->with($relations)
+            ->get();
+
+        if ($fallback_lines->count() <= 1) {
+            return $fallback_lines;
+        }
+
+        $target_total = (float) $sell_return->total_before_tax;
+        if ($target_total <= 0) {
+            $target_total = (float) $sell_return->final_total;
+        }
+
+        $matching_lines = $fallback_lines->filter(function ($line) use ($target_total) {
+            $line_total = (float) $line->unit_price_inc_tax * (float) $line->quantity_returned;
+
+            return abs($line_total - $target_total) < 0.01;
+        });
+
+        return $matching_lines->isNotEmpty() ? $matching_lines->values() : $fallback_lines;
     }
 
     /**

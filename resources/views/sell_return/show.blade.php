@@ -43,9 +43,13 @@
             @php
               $total_before_tax = 0;
             @endphp
-            @foreach($sell->sell_lines as $sell_line)
+            @foreach($sell_return_lines as $sell_line)
 
-            @if($sell_line->quantity == 0)
+            @php
+              $return_quantity = !empty($sell_line->parent_sell_line_id) ? $sell_line->quantity : $sell_line->quantity_returned;
+            @endphp
+
+            @if($return_quantity == 0)
                 @continue
             @endif
 
@@ -70,10 +74,10 @@
                     <td>{{ $sell_line->lot_details->lot_number ?? '--' }}</td>
                 @endif
                 <td><span class="display_currency" data-currency_symbol="true">{{ $sell_line->unit_price_inc_tax }}</span></td>
-                <td>{{@format_quantity($sell_line->quantity)}} {{$unit_name}}</td>
+                <td>{{@format_quantity($return_quantity)}} {{$unit_name}}</td>
                 <td>
                   @php
-                    $line_total = $sell_line->unit_price_inc_tax * $sell_line->quantity;
+                    $line_total = $sell_line->unit_price_inc_tax * $return_quantity;
                     $total_before_tax += $line_total ;
                   @endphp
                   <span class="display_currency" data-currency_symbol="true">{{$line_total}}</span>

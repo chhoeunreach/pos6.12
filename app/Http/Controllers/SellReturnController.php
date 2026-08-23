@@ -429,6 +429,15 @@ class SellReturnController extends Controller
             ->findOrFail($sell_return->return_parent_id);
 
         $returned_lines = $sell_return->sell_lines->keyBy('parent_sell_line_id');
+        if ($sell_return->sell_lines->where('quantity', '>', 0)->count() == 0) {
+            $returned_lines = $this->transactionUtil->getSellReturnDisplayLines($sell_return, $business_id)
+                ->mapWithKeys(function ($line) {
+                    $parent_line_id = !empty($line->parent_sell_line_id) ? $line->parent_sell_line_id : $line->id;
+                    $line->quantity = !empty($line->parent_sell_line_id) ? $line->quantity : $line->quantity_returned;
+
+                    return [$parent_line_id => $line];
+                });
+        }
 
         foreach ($sell->sell_lines as $key => $value) {
             $return_line = $returned_lines->get($value->id);
@@ -618,10 +627,11 @@ class SellReturnController extends Controller
         }
         $sell = $query->firstOrFail();
 
-        foreach ($sell->sell_lines as $key => $value) {
+        $sell_return_lines = $this->transactionUtil->getSellReturnDisplayLines($sell, $business_id);
+        foreach ($sell_return_lines as $key => $value) {
             if (!empty($value->sub_unit_id)) {
                 $formated_sell_line = $this->transactionUtil->recalculateSellLineTotals($business_id, $value);
-                $sell->sell_lines[$key] = $formated_sell_line;
+                $sell_return_lines[$key] = $formated_sell_line;
             }
         }
 
@@ -654,7 +664,7 @@ class SellReturnController extends Controller
             ->get();
 
         return view('sell_return.show')
-            ->with(compact('sell', 'sell_taxes', 'total_discount', 'activities'));
+            ->with(compact('sell', 'sell_return_lines', 'sell_taxes', 'total_discount', 'activities'));
     }
 
     /**
