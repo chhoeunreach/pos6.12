@@ -1250,6 +1250,7 @@ class LoanInstallmentListController extends Controller
                         'amount_due' => $amountDue,
                         'paid_value' => $paidAmount,
                         'balance_amount' => $balance,
+                        'discount_amount' => $row->discount_amount ?? 0,
                         'paid_at' => $row->paid_at ?? null,
                         'status' => $row->status ?? '-',
                     ];
@@ -1571,7 +1572,7 @@ class LoanInstallmentListController extends Controller
                         'payment_ref_no' => $paymentRef,
                         'receipt_number' => $receipt,
                         'loan_id' => $loan,
-                        'payment_type' => ($isPayOff || $isDepositPayment) ? 'loan' : 'monthly',
+                        'payment_type' => $isPayOff ? 'payoff' : ($isDepositPayment ? 'loan' : 'monthly'),
                         'loan_number_snapshot' => $loanRow->loan_number ?? null,
                         'customer_id' => $loanRow->customer_id ?? 0,
                         'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
@@ -1584,6 +1585,7 @@ class LoanInstallmentListController extends Controller
                         'amount' => $line['amount'],
                         'total_paid' => $line['amount'],
                         'total_paid_base' => $line['amount'],
+                        'discount_amount' => $isPayOff && (int) $index === 0 ? $payOffDiscountAmount : 0,
                         'currency' => $loanRow->currency ?? 'USD',
                         'base_currency' => $loanRow->currency ?? 'USD',
                         'exchange_rate' => 1,
@@ -1625,7 +1627,15 @@ class LoanInstallmentListController extends Controller
                         'updated_at' => now(),
                     ]));
                 } elseif ($isPayOff) {
-                    $this->applyLoanPayOffToSchedules($loan, $totalAmount, $payOffDiscountAmount, $paidAt);
+                    $payOffScheduleId = $this->applyLoanPayOffToSchedules($loan, $totalAmount, $payOffDiscountAmount, $paidAt);
+                    if ($payOffScheduleId && $this->loanTableHasCol('loan_payments', 'schedule_id')) {
+                        DB::connection('mysql_loan')->table('loan_payments')
+                            ->whereIn('id', $createdPaymentIds)
+                            ->update($this->loanSafeColumns('loan_payments', [
+                                'schedule_id' => $payOffScheduleId,
+                                'updated_at' => now(),
+                            ]));
+                    }
                 } else {
                     $this->applyLoanPaymentToSchedules($loan, $totalAmount, $paidAt, $selectedScheduleId);
                 }
@@ -3190,10 +3200,10 @@ class LoanInstallmentListController extends Controller
         return max(0.01, $payOffAmount > 0 ? $payOffAmount : (float) ($loanRow->balance_amount ?? 0));
     }
 
-    protected function applyLoanPayOffToSchedules(int $loan, float $amount, float $discountAmount, string $paidAt): void
+    protected function applyLoanPayOffToSchedules(int $loan, float $amount, float $discountAmount, string $paidAt): ?int
     {
         if (! $this->loanTableExists('loan_payment_schedules')) {
-            return;
+            return null;
         }
 
         $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
@@ -3206,7 +3216,7 @@ class LoanInstallmentListController extends Controller
 
         $payOffSchedule = $schedules->first();
         if (! $payOffSchedule) {
-            return;
+            return null;
         }
 
         $remainingPrincipal = round((float) $schedules->sum(function ($schedule) {
@@ -3251,7 +3261,7 @@ class LoanInstallmentListController extends Controller
             ->values();
 
         if ($futureScheduleIds->isEmpty()) {
-            return;
+            return (int) $payOffSchedule->id;
         }
 
         if ($this->loanTableHasCol('loan_payment_schedules', 'deleted_at')) {
@@ -3259,10 +3269,12 @@ class LoanInstallmentListController extends Controller
                 'deleted_at' => now(),
                 'updated_at' => now(),
             ]));
-            return;
+            return (int) $payOffSchedule->id;
         }
 
         DB::connection('mysql_loan')->table('loan_payment_schedules')->whereIn('id', $futureScheduleIds->all())->delete();
+
+        return (int) $payOffSchedule->id;
     }
 
     protected function applyLoanPaymentToSchedules(int $loan, float $amount, string $paidAt, ?int $selectedScheduleId = null): void

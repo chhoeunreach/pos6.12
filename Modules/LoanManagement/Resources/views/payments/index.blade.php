@@ -91,6 +91,7 @@
                                 <option value="">All</option>
                                 <option value="loan" {{ ($filters['payment_type'] ?? '') === 'loan' ? 'selected' : '' }}>Loan</option>
                                 <option value="monthly" {{ ($filters['payment_type'] ?? '') === 'monthly' ? 'selected' : '' }}>Monthly</option>
+                                <option value="payoff" {{ ($filters['payment_type'] ?? '') === 'payoff' ? 'selected' : '' }}>Pay Off</option>
                             </select>
                         </div>
                     </div>
@@ -181,8 +182,8 @@
                                 <small class="text-muted">{{ $payment->customer_phone ?? '' }}</small>
                             </td>
                             <td>
-                                <span class="label label-{{ ($payment->payment_type ?? 'monthly') === 'loan' ? 'info' : 'primary' }}">
-                                    {{ ucfirst($payment->payment_type ?? 'monthly') }}
+                                <span class="label label-{{ \Modules\LoanManagement\Http\Controllers\LoanPaymentController::paymentTypeLabelClass($payment->payment_type ?? 'monthly') }}">
+                                    {{ \Modules\LoanManagement\Http\Controllers\LoanPaymentController::paymentTypeLabel($payment->payment_type ?? 'monthly') }}
                                 </span>
                             </td>
                             <td>{{ $payment->payment_method ?? '-' }}</td>

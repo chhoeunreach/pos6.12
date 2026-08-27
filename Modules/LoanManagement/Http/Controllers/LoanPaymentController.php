@@ -39,8 +39,10 @@ class LoanPaymentController extends Controller
             'amount' => (float) (clone $summaryQuery)->sum(DB::raw($amountExpr)),
             'loan_amount' => $this->hasColumn('loan_payments', 'payment_type') ? (float) (clone $summaryQuery)->where('p.payment_type', 'loan')->sum(DB::raw($amountExpr)) : 0,
             'monthly_amount' => $this->hasColumn('loan_payments', 'payment_type') ? (float) (clone $summaryQuery)->where('p.payment_type', 'monthly')->sum(DB::raw($amountExpr)) : (float) (clone $summaryQuery)->sum(DB::raw($amountExpr)),
+            'payoff_amount' => $this->hasColumn('loan_payments', 'payment_type') ? (float) (clone $summaryQuery)->where('p.payment_type', 'payoff')->sum(DB::raw($amountExpr)) : 0,
             'loan_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'loan')->count() : 0,
             'monthly_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'monthly')->count() : (int) (clone $summaryQuery)->count(),
+            'payoff_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'payoff')->count() : 0,
         ];
 
         $payments = $query
@@ -59,6 +61,33 @@ class LoanPaymentController extends Controller
             'dateColumn' => $this->paymentDateColumn(),
             'amountColumn' => $this->paymentAmountColumn(),
         ]);
+    }
+
+    public static function paymentTypeLabel(?string $type): string
+    {
+        $type = strtolower(trim((string) $type));
+
+        return [
+            'loan' => 'Loan',
+            'monthly' => 'Monthly',
+            'payoff' => 'Pay Off',
+            'pay_off' => 'Pay Off',
+            'down_payment' => 'Down Payment',
+            'downpayment' => 'Down Payment',
+            'deposit' => 'Deposit',
+        ][$type] ?? ucfirst(str_replace('_', ' ', $type ?: 'monthly'));
+    }
+
+    public static function paymentTypeLabelClass(?string $type): string
+    {
+        $type = strtolower(trim((string) $type));
+
+        return [
+            'loan' => 'info',
+            'payoff' => 'success',
+            'pay_off' => 'success',
+            'monthly' => 'primary',
+        ][$type] ?? 'default';
     }
 
     public function edit(int $payment)

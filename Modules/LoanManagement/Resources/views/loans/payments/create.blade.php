@@ -217,7 +217,7 @@
                             <span class="input-group-addon">
                                 <i class="fa fa-tag"></i>
                             </span>
-                            <input type="number" step="0.01" min="0" name="pay_off_discount_amount" id="pay_off_discount_amount" class="form-control input_number loan-pay-off-discount" value="0.00">
+                            <input type="text" inputmode="decimal" name="pay_off_discount_amount" id="pay_off_discount_amount" class="form-control loan-pay-off-discount" value="0.00" autocomplete="off">
                         </div>
                     </div>
                 </div>
@@ -357,10 +357,31 @@ $(function () {
             total += parseFloat($(this).val()) || 0;
         });
         var discount = $form.find('.loan-pay-off-option').is(':checked')
-            ? (parseFloat($form.find('.loan-pay-off-discount').val()) || 0)
+            ? parseDecimalInput($form.find('.loan-pay-off-discount').val())
             : 0;
         $form.find('.loan-payment-total').text(total.toFixed(2));
         $form.find('.loan-payment-remaining').text(Math.max(suggestedTotal - total - discount, 0).toFixed(2));
+    }
+
+    function parseDecimalInput(value) {
+        value = String(value || '').replace(/,/g, '.').replace(/[^0-9.]/g, '');
+        var firstDot = value.indexOf('.');
+        if (firstDot !== -1) {
+            value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+        }
+
+        return parseFloat(value) || 0;
+    }
+
+    function sanitizeDecimalInput($input) {
+        var value = String($input.val() || '').replace(/,/g, '.').replace(/[^0-9.]/g, '');
+        var firstDot = value.indexOf('.');
+        if (firstDot !== -1) {
+            value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+        }
+        $input.val(value);
+
+        return parseFloat(value) || 0;
     }
 
     function remainingBeforeNewRow() {
@@ -572,7 +593,9 @@ $(function () {
             });
     });
 
-    function applyPayTarget() {
+    function applyPayTarget(formatDiscount) {
+        formatDiscount = formatDiscount !== false;
+
         if (isDepositPayment) {
             updateLoanPaymentTotal();
             updateScheduleDisplay();
@@ -584,8 +607,13 @@ $(function () {
             suggestedTotal = payOffBalance;
             $form.find('[name="schedule_id"]').val('').trigger('change');
             $form.find('.loan-pay-off-discount-wrap').show();
-            var discount = Math.min(parseFloat($form.find('.loan-pay-off-discount').val()) || 0, payOffBalance);
-            $form.find('.loan-pay-off-discount').val(discount.toFixed(2));
+            var $discountInput = $form.find('.loan-pay-off-discount');
+            var discount = Math.min(sanitizeDecimalInput($discountInput), payOffBalance);
+            if (formatDiscount) {
+                $discountInput.val(discount.toFixed(2));
+            } else if (discount >= payOffBalance) {
+                $discountInput.val(payOffBalance.toFixed(2));
+            }
             setSinglePaymentAmount(Math.max(payOffBalance - discount, 0.01));
             return;
         }
@@ -765,9 +793,14 @@ $(function () {
 
     $form.on('input change', '.payment-line-amount', updateLoanPaymentTotal);
     $form.on('change', '.loan-pay-off-option', applyPayTarget);
-    $form.on('input change', '.loan-pay-off-discount', function () {
+    $form.on('input', '.loan-pay-off-discount', function () {
         if ($form.find('.loan-pay-off-option').is(':checked')) {
-            applyPayTarget();
+            applyPayTarget(false);
+        }
+    });
+    $form.on('change blur', '.loan-pay-off-discount', function () {
+        if ($form.find('.loan-pay-off-option').is(':checked')) {
+            applyPayTarget(true);
         }
     });
     $form.on('change', '[name="schedule_id"]', function () {
