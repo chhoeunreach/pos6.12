@@ -3,7 +3,8 @@
     $interest = (float) ($scheduleRow->interest_amount ?? $scheduleRow->interest_due ?? $scheduleRow->interest ?? $scheduleRow->benefit_value ?? 0);
     $amountDue = (float) ($scheduleRow->schedule_amount ?? $scheduleRow->amount_due ?? $scheduleRow->total ?? ($principal + $interest));
     $paid = (float) ($scheduleRow->paid_amount ?? $scheduleRow->amount_paid ?? $scheduleRow->paid_value ?? 0);
-    $balance = (float) ($scheduleRow->balance_amount ?? $scheduleRow->amount_balance ?? max(0, $amountDue - $paid));
+    $discount = (float) ($scheduleRow->discount_amount ?? 0);
+    $balance = (float) ($scheduleRow->balance_amount ?? $scheduleRow->amount_balance ?? max(0, $amountDue - $paid - $discount));
     $dueDate = ! empty($scheduleRow->due_date) ? \Carbon\Carbon::parse($scheduleRow->due_date)->format('Y-m-d') : '';
     $status = strtolower((string) ($scheduleRow->status ?? 'unpaid'));
     $isEmbeddedModal = request()->boolean('_lm_modal');
@@ -123,6 +124,13 @@
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
+                        {!! Form::label('discount_amount', 'Discount') !!}
+                        <input type="text" inputmode="decimal" name="discount_amount" id="discount_amount" class="form-control schedule-number schedule-discount-field" value="{{ number_format($discount, 2, '.', '') }}" autocomplete="off">
+                        <small class="text-muted">Use with Pay Off when customer pays less by discount.</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
                         {!! Form::label('balance_amount', 'Balance') !!}
                         <input type="number" step="0.01" min="0" name="balance_amount" id="balance_amount" class="form-control schedule-number" value="{{ number_format($balance, 2, '.', '') }}">
                     </div>
@@ -233,19 +241,61 @@ $(function () {
     var $form = $('#loan_schedule_update_form');
 
     function numberValue(selector) {
-        return parseFloat($form.find(selector).val()) || 0;
+        return parseDecimal($form.find(selector).val());
+    }
+
+    function parseDecimal(value) {
+        value = String(value || '').replace(/,/g, '.').replace(/[^0-9.]/g, '');
+        var firstDot = value.indexOf('.');
+        if (firstDot !== -1) {
+            value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+        }
+
+        return parseFloat(value) || 0;
+    }
+
+    function sanitizeDecimalField($input, format) {
+        var value = String($input.val() || '').replace(/,/g, '.').replace(/[^0-9.]/g, '');
+        var firstDot = value.indexOf('.');
+        if (firstDot !== -1) {
+            value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+        }
+        var number = parseFloat(value) || 0;
+        $input.val(format ? number.toFixed(2) : value);
+
+        return number;
     }
 
     function recalculateBalance() {
         var amountDue = numberValue('[name="schedule_amount"]');
         var paid = numberValue('[name="paid_amount"]');
-        $form.find('[name="balance_amount"]').val(Math.max(amountDue - paid, 0).toFixed(2));
+        var discount = numberValue('[name="discount_amount"]');
+        var status = String($form.find('[name="status"]').val() || '').toLowerCase();
+        if (status === 'pay_off' || status === 'payoff') {
+            status = 'pay off';
+        }
+        if (status === 'pay off' && !$form.find('[name="paid_amount"]').data('touched')) {
+            paid = Math.max(amountDue - discount, 0);
+            $form.find('[name="paid_amount"]').val(paid.toFixed(2));
+        }
+        $form.find('[name="balance_amount"]').val(Math.max(amountDue - paid - discount, 0).toFixed(2));
         if (!$form.find('[name="payment_amount"]').data('touched')) {
             $form.find('[name="payment_amount"]').val(Math.max(paid, 0).toFixed(2));
         }
     }
 
     $form.on('click', '.loan-schedule-recalculate', recalculateBalance);
+    $form.on('input change', '[name="paid_amount"]', function () {
+        $(this).data('touched', true);
+    });
+    $form.on('input', '.schedule-discount-field', function () {
+        sanitizeDecimalField($(this), false);
+        recalculateBalance();
+    });
+    $form.on('change blur', '.schedule-discount-field', function () {
+        sanitizeDecimalField($(this), true);
+        recalculateBalance();
+    });
     $form.on('input change', '[name="payment_amount"]', function () {
         $(this).data('touched', true);
     });
@@ -254,8 +304,12 @@ $(function () {
         if (['paid', 'completed', 'pay off'].indexOf(status) !== -1) {
             $form.find('[name="payment_action"]').val('sync_status');
             var amountDue = numberValue('[name="schedule_amount"]');
+            var discount = status === 'pay off' ? numberValue('[name="discount_amount"]') : 0;
+            if (status === 'pay off' && !$form.find('[name="paid_amount"]').data('touched')) {
+                $form.find('[name="paid_amount"]').val(Math.max(amountDue - discount, 0).toFixed(2));
+            }
             if (!$form.find('[name="payment_amount"]').data('touched')) {
-                $form.find('[name="payment_amount"]').val(amountDue.toFixed(2));
+                $form.find('[name="payment_amount"]').val(Math.max(amountDue - discount, 0).toFixed(2));
             }
         } else if (['pending', 'unpaid'].indexOf(status) !== -1 && numberValue('[name="paid_amount"]') <= 0) {
             $form.find('[name="payment_action"]').val('sync_status');

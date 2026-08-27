@@ -2230,6 +2230,7 @@ class LoanInstallmentListController extends Controller
                 'interest_amount' => 'nullable|numeric|min:0',
                 'schedule_amount' => 'nullable|numeric|min:0',
                 'paid_amount' => 'nullable|numeric|min:0',
+                'discount_amount' => 'nullable|numeric|min:0',
                 'balance_amount' => 'nullable|numeric|min:0',
                 'status' => 'nullable|string|in:auto,pending,unpaid,partial,paid,late,completed,pay off,pay_off,payoff',
                 'payment_action' => 'nullable|string|in:keep,sync_status,add_update,remove',
@@ -2244,9 +2245,10 @@ class LoanInstallmentListController extends Controller
             $interest = round((float) ($payload['interest_amount'] ?? $scheduleRow->interest_amount ?? $scheduleRow->interest_due ?? $scheduleRow->interest ?? 0), 2);
             $amountDue = round((float) ($payload['schedule_amount'] ?? $scheduleRow->schedule_amount ?? $scheduleRow->amount_due ?? $scheduleRow->total ?? ($principal + $interest)), 2);
             $paid = round((float) ($payload['paid_amount'] ?? $scheduleRow->paid_amount ?? $scheduleRow->amount_paid ?? 0), 2);
+            $discount = round((float) ($payload['discount_amount'] ?? $scheduleRow->discount_amount ?? 0), 2);
             $balance = array_key_exists('balance_amount', $payload) && $payload['balance_amount'] !== null
                 ? round((float) $payload['balance_amount'], 2)
-                : round(max(0, $amountDue - $paid), 2);
+                : round(max(0, $amountDue - $paid - $discount), 2);
 
             $status = strtolower(trim((string) ($payload['status'] ?? 'auto')));
             if (in_array($status, ['pay_off', 'payoff'], true)) {
@@ -2262,7 +2264,7 @@ class LoanInstallmentListController extends Controller
                 }
             }
 
-            DB::connection('mysql_loan')->transaction(function () use ($loan, $scheduleRow, $payload, $principal, $interest, $amountDue, $paid, $balance, $status) {
+            DB::connection('mysql_loan')->transaction(function () use ($loan, $scheduleRow, $payload, $principal, $interest, $amountDue, $paid, $discount, $balance, $status) {
                 DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->update($this->loanSafeColumns('loan_payment_schedules', [
                     'installment_no' => $payload['installment_no'] ?? $scheduleRow->installment_no ?? null,
                     'due_date' => $payload['due_date'] ?? $scheduleRow->due_date ?? null,
@@ -2280,6 +2282,7 @@ class LoanInstallmentListController extends Controller
                     'paid_amount' => $paid,
                     'amount_paid' => $paid,
                     'paid_value' => $paid,
+                    'discount_amount' => $discount,
                     'balance_amount' => $balance,
                     'amount_balance' => $balance,
                     'status' => $status,
@@ -2292,7 +2295,7 @@ class LoanInstallmentListController extends Controller
                     'updated_at' => now(),
                 ]));
 
-                $this->syncSchedulePaymentAction($loan, $scheduleRow, $payload, $paid, $amountDue, $status);
+                $this->syncSchedulePaymentAction($loan, $scheduleRow, $payload, $paid, $amountDue, $discount, $status);
                 $this->refreshLoanBalanceFromSchedules($loan);
                 $this->refreshLoanPaymentTotals($loan, 0);
             });
@@ -2338,7 +2341,7 @@ class LoanInstallmentListController extends Controller
         }
     }
 
-    protected function syncSchedulePaymentAction(int $loan, object $scheduleRow, array $payload, float $paid, float $amountDue, string $status): void
+    protected function syncSchedulePaymentAction(int $loan, object $scheduleRow, array $payload, float $paid, float $amountDue, float $discount, string $status): void
     {
         if (! $this->loanTableExists('loan_payments') || ! $this->loanTableHasCol('loan_payments', 'schedule_id')) {
             return;
@@ -2365,6 +2368,7 @@ class LoanInstallmentListController extends Controller
                 'paid_amount' => 0,
                 'amount_paid' => 0,
                 'paid_value' => 0,
+                'discount_amount' => 0,
                 'balance_amount' => $amountDue,
                 'amount_balance' => $amountDue,
                 'status' => 'unpaid',
@@ -2386,9 +2390,12 @@ class LoanInstallmentListController extends Controller
 
         $amount = array_key_exists('payment_amount', $payload) && $payload['payment_amount'] !== null
             ? round((float) $payload['payment_amount'], 2)
-            : ($paid > 0 ? $paid : (in_array($status, ['paid', 'completed', 'pay off'], true) ? $amountDue : 0));
+            : ($paid > 0 ? $paid : (in_array($status, ['paid', 'completed', 'pay off'], true) ? max(0, $amountDue - $discount) : 0));
         if ($amount <= 0) {
             return;
+        }
+        if ($status !== 'pay off') {
+            $discount = 0;
         }
 
         $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
@@ -2419,7 +2426,7 @@ class LoanInstallmentListController extends Controller
             'payment_ref_no' => $payment->payment_ref_no ?? 'PMT-'.strtoupper(Str::random(10)),
             'receipt_number' => $payment->receipt_number ?? 'RCP-'.now()->format('YmdHis').'-'.$loan.'-'.random_int(10, 99),
             'loan_id' => $loan,
-            'payment_type' => 'monthly',
+            'payment_type' => $status === 'pay off' ? 'payoff' : 'monthly',
             'loan_number_snapshot' => $loanRow->loan_number ?? null,
             'customer_id' => $loanRow->customer_id ?? 0,
             'customer_name_snapshot' => $loanRow->customer_name_snapshot ?? null,
@@ -2432,6 +2439,7 @@ class LoanInstallmentListController extends Controller
             'amount' => $amount,
             'total_paid' => $amount,
             'total_paid_base' => $amount,
+            'discount_amount' => $discount,
             'currency' => $loanRow->currency ?? 'USD',
             'base_currency' => $loanRow->currency ?? 'USD',
             'exchange_rate' => 1,
@@ -2460,16 +2468,17 @@ class LoanInstallmentListController extends Controller
 
         $this->upsertSchedulePaymentDetail($paymentId, $method, $methodName, $amount, $reference, $note);
 
-        $balance = max(0, round($amountDue - $amount, 2));
+        $balance = max(0, round($amountDue - $amount - $discount, 2));
         $storedPaidAmount = $amount;
         if ($balance > 0 && $balance <= 0.02) {
             $balance = 0.0;
-            $storedPaidAmount = $amountDue;
+            $storedPaidAmount = max(0, $amountDue - $discount);
         }
         DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $scheduleRow->id)->update($this->loanSafeColumns('loan_payment_schedules', [
             'paid_amount' => $storedPaidAmount,
             'amount_paid' => $storedPaidAmount,
             'paid_value' => $storedPaidAmount,
+            'discount_amount' => $discount,
             'balance_amount' => $balance,
             'amount_balance' => $balance,
             'status' => $status === 'pay off' ? 'pay off' : ($balance <= 0 ? 'paid' : 'partial'),

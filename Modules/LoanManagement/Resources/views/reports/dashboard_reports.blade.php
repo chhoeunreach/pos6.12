@@ -125,7 +125,7 @@
             'ឈ្មោះអតិថិជន' => $payment->customer_name ?? '',
             'លេខទូរស័ព្ទ' => $payment->customer_phone ?? '',
             'ចំនួនខែត្រូវបង់' => $payment->month_count ?? '',
-            'បង់ផ្ដាច់' => $paidOff ? $amount : 0,
+            'បង់ផ្ដាច់' => $paidOff ? 'បង់ផ្ដាច់' : '',
             'បង់-លុយសុទ្ធ' => (float) ($payment->cash_amount ?? 0),
             'បង់-តាមធនាគា' => (float) ($payment->bank_amount ?? 0),
             'តាមរយៈ' => $payment->payment_channel ?? $payment->payment_method ?? '',
