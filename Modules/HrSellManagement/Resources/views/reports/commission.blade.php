@@ -243,9 +243,9 @@
                 </tr>
                 <tr>
                     <td>Sell</td>
-                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
+                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required, part-time qty >= 50, full-time qty >= 100' : 'No condition' }}</td>
                     <td class="text-right">0.25</td>
-                    <td>Product qty * 0.25</td>
+                    <td>Qualified product qty * 0.25</td>
                 </tr>
             </tbody>
         </table>
@@ -281,6 +281,8 @@
                     <th>User</th>
                     <th>Staff</th>
                     <th>Branch</th>
+                    <th>Office Time</th>
+                    <th>Time Work</th>
                     <th>Alert</th>
                     @foreach($commissionColumns as $column)
                         <th class="text-right">{{ $column['short_label'] ?? $column['label'] }}</th>
@@ -297,6 +299,8 @@
                         <td>{{ $row->staff_code ?: '-' }}</td>
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
+                        <td>{{ $row->office_time ?? '-' }}</td>
+                        <td>{{ $row->time_work ?? '-' }}</td>
                         <td>
                             @php
                                 $alerts = [];
@@ -311,9 +315,13 @@
 
                                     $alertDecimals = ($alertColumn['commission_basis'] ?? '') === 'invoice' ? 0 : 2;
                                     $alertLabel = $alertColumn['short_label'] ?? $alertColumn['label'];
-                                    $failedCondition = $alertColumn['key'] === 'material'
-                                        ? 'invoice total is lower than 10.'
-                                        : 'commission condition not completed.';
+                                    if ($alertColumn['key'] === 'material') {
+                                        $failedCondition = 'invoice total is lower than 10.';
+                                    } elseif ($alertColumn['key'] === 'sell') {
+                                        $failedCondition = 'part-time qty is lower than 50 or full-time qty is lower than 100.';
+                                    } else {
+                                        $failedCondition = 'commission condition not completed.';
+                                    }
 
                                     $alerts[] = [
                                         'label' => $alertLabel,
@@ -353,10 +361,12 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 5) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 7) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
+                    <th></th>
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>

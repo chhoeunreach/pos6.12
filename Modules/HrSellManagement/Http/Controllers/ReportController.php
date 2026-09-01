@@ -127,6 +127,8 @@ class ReportController extends Controller
                 'Username' => $row->staff_code,
                 'Staff' => $row->staff_name,
                 'Branch' => $row->branch_name,
+                'Office Time' => $row->office_time ?? '-',
+                'Time Work' => $row->time_work ?? '-',
             ];
 
             foreach ($commissionColumns as $column) {
@@ -533,40 +535,14 @@ class ReportController extends Controller
                 ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
                 ->selectRaw('COALESCE(SUM(' . $lineExpressions['total'] . '), 0) as total_amount');
 
-            foreach ($commissionColumns as $column) {
-                if ($column['has_commission']) {
-                    $baseExpr = $this->commissionBaseExpression($column, $lineExpressions);
-                    $rawExpr = $this->commissionRawExpression($column, $lineExpressions);
-
-                    $totalsQuery
-                        ->selectRaw(
-                            $rawExpr . ' as ' . $column['key'] . '_raw_total',
-                            $column['values']
-                        )
-                        ->selectRaw(
-                            $baseExpr . ' as ' . $column['key'] . '_total',
-                            $column['values']
-                        )
-                        ->selectRaw(
-                            '(' . $baseExpr . ' * ' . $column['commission_rate'] . ') as ' . $column['key'] . '_commission_total',
-                            $column['values']
-                        );
-                } else {
-                    $totalsQuery->selectRaw(
-                        'COALESCE(SUM(CASE WHEN sor.service_type IN (' . $this->placeholders($column['values']) . ') THEN ' . $lineExpressions['total'] . ' ELSE 0 END), 0) as ' . $column['key'] . '_total',
-                        $column['values']
-                    );
-                }
-            }
-
             $totals = (array) $totalsQuery->first();
-            $totals['commission_total'] = $this->sumCommissionTotals((object) $totals, $commissionColumns);
 
             $rowsQuery = (clone $base)
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
                 ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
                 ->selectRaw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown') as branch_name")
+                ->selectRaw($this->officeMinutesExpression() . ' as office_minutes')
                 ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
                 ->selectRaw('COUNT(sol.id) as line_count')
                 ->selectRaw('COALESCE(SUM(' . $lineExpressions['qty'] . '), 0) as total_qty')
@@ -584,11 +560,11 @@ class ReportController extends Controller
                         )
                         ->selectRaw(
                             $baseExpr . ' as ' . $column['key'] . '_total',
-                            $column['values']
+                            $this->commissionBaseExpressionBindings($column)
                         )
                         ->selectRaw(
                             '(' . $baseExpr . ' * ' . $column['commission_rate'] . ') as ' . $column['key'] . '_commission_total',
-                            $column['values']
+                            $this->commissionBaseExpressionBindings($column)
                         );
                 } else {
                     $rowsQuery->selectRaw(
@@ -609,6 +585,17 @@ class ReportController extends Controller
                 ->orderBy('staff_name')
                 ->orderBy('branch_name');
 
+            $commissionTotalRows = (clone $rowsQuery)->get();
+            foreach ($commissionColumns as $column) {
+                $totals[$column['key'] . '_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_total'} ?? 0));
+
+                if ($column['has_commission']) {
+                    $totals[$column['key'] . '_raw_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_raw_total'} ?? 0));
+                    $totals[$column['key'] . '_commission_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_commission_total'} ?? 0));
+                }
+            }
+            $totals['commission_total'] = $this->sumCommissionTotals((object) $totals, $commissionColumns);
+
             $commissionPerPage = $this->commissionPerPage($request);
             if ($paginate && $commissionPerPage === 'all') {
                 $allRows = $rowsQuery->get();
@@ -627,6 +614,9 @@ class ReportController extends Controller
             $rowCollection->transform(function ($row) use ($request, $commissionColumns) {
                 $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
                 $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
+                $officeMinutes = max(0, (int) ($row->office_minutes ?? 0));
+                $row->office_time = $this->formatOfficeTime($officeMinutes);
+                $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
 
                 return $row;
             });
@@ -645,6 +635,11 @@ class ReportController extends Controller
         $allowed = ['25', '50', '100', '200', '500', 'all'];
 
         return in_array($perPage, $allowed, true) ? ($perPage === 'all' ? 'all' : (int) $perPage) : 50;
+    }
+
+    private function formatOfficeTime(int $minutes): string
+    {
+        return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
     }
 
     private function applyCommissionConditions(Request $request): bool
@@ -670,6 +665,7 @@ class ReportController extends Controller
                     'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
                     'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
                     'minimum_invoice_total' => $applyConditions && $key === 'material' ? 10 : null,
+                    'sell_qty_thresholds' => $applyConditions && $key === 'sell' ? ['part_time' => 50, 'full_time' => 100] : null,
                 ];
             })
             ->all();
@@ -699,10 +695,30 @@ class ReportController extends Controller
         }
 
         if ($column['commission_basis'] === 'qty') {
+            if (! empty($column['sell_qty_thresholds'])) {
+                $qtyExpression = 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
+                $fullTimeMinimum = (float) $column['sell_qty_thresholds']['full_time'];
+                $partTimeMinimum = (float) $column['sell_qty_thresholds']['part_time'];
+
+                return 'CASE WHEN ' . $this->officeMinutesExpression() . ' >= 480 '
+                    . 'THEN CASE WHEN ' . $qtyExpression . ' >= ' . $fullTimeMinimum . ' THEN ' . $qtyExpression . ' ELSE 0 END '
+                    . 'ELSE CASE WHEN ' . $qtyExpression . ' >= ' . $partTimeMinimum . ' THEN ' . $qtyExpression . ' ELSE 0 END END';
+            }
+
             return 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
         }
 
         return 'COUNT(DISTINCT CASE WHEN ' . $condition . ' THEN sor.id END)';
+    }
+
+    private function commissionBaseExpressionBindings(array $column): array
+    {
+        $repeat = ! empty($column['sell_qty_thresholds']) ? 4 : 1;
+
+        return collect(range(1, $repeat))
+            ->flatMap(fn () => $column['values'])
+            ->values()
+            ->all();
     }
 
     private function commissionRawExpression(array $column, array $lineExpressions): string
@@ -723,6 +739,11 @@ class ReportController extends Controller
         return '(SELECT COALESCE(SUM(' . $lineExpressions['total'] . '), 0) FROM sell_out_report_lines as sol_invoice_total WHERE sol_invoice_total.sell_out_report_id = sor.id)';
     }
 
+    private function officeMinutesExpression(): string
+    {
+        return 'TIMESTAMPDIFF(MINUTE, MIN(sor.created_at), MAX(sor.created_at))';
+    }
+
     private function commissionHavingExpression(array $commissionColumns, array $lineExpressions): string
     {
         $parts = collect($commissionColumns)
@@ -737,7 +758,7 @@ class ReportController extends Controller
     {
         return collect($commissionColumns)
             ->filter(fn ($column) => $column['has_commission'])
-            ->flatMap(fn ($column) => $column['values'])
+            ->flatMap(fn ($column) => $this->commissionBaseExpressionBindings($column))
             ->values()
             ->all();
     }
