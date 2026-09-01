@@ -669,8 +669,8 @@ class ReportController extends Controller
 
         $shiftIdColumn = $this->firstHrColumn('essentials_user_shifts', ['essentials_shift_id', 'shift_id']);
         $shiftNameColumn = $this->firstHrColumn('essentials_shifts', ['name', 'shift', 'title']);
-        $shiftStartColumn = $this->firstHrColumn('essentials_shifts', ['start_time', 'time_start']);
-        $shiftEndColumn = $this->firstHrColumn('essentials_shifts', ['end_time', 'time_end']);
+        $shiftStartColumn = $this->firstHrColumn('essentials_shifts', ['opening_time', 'start_time', 'time_start']);
+        $shiftEndColumn = $this->firstHrColumn('essentials_shifts', ['closing_time', 'end_time', 'time_end']);
 
         if (empty($shiftIdColumn) || empty($shiftNameColumn)) {
             return [];
@@ -703,12 +703,15 @@ class ReportController extends Controller
         $durationExpression = $shiftStartColumn && $shiftEndColumn
             ? "CASE WHEN es.{$shiftStartColumn} IS NOT NULL AND es.{$shiftEndColumn} IS NOT NULL THEN CASE WHEN TIME_TO_SEC(es.{$shiftEndColumn}) >= TIME_TO_SEC(es.{$shiftStartColumn}) THEN FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) ELSE FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) + 86400 - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) END ELSE NULL END"
             : 'NULL';
+        $officeTimeExpression = $shiftStartColumn && $shiftEndColumn
+            ? "CASE WHEN es.{$shiftStartColumn} IS NOT NULL AND es.{$shiftEndColumn} IS NOT NULL THEN CONCAT(DATE_FORMAT(es.{$shiftStartColumn}, '%l:%i%p'), '-', DATE_FORMAT(es.{$shiftEndColumn}, '%l:%i%p')) ELSE NULLIF(TRIM(es.{$shiftNameColumn}), '') END"
+            : "NULLIF(TRIM(es.{$shiftNameColumn}), '')";
 
         $assignmentsByUser = DB::connection('hr')
             ->table('essentials_user_shifts as eus')
             ->join('essentials_shifts as es', 'es.id', '=', "eus.{$shiftIdColumn}")
             ->select('eus.user_id', 'eus.start_date', 'eus.end_date')
-            ->selectRaw("NULLIF(TRIM(es.{$shiftNameColumn}), '') as office_time_name")
+            ->selectRaw($officeTimeExpression . ' as office_time_name')
             ->selectRaw("COALESCE({$durationExpression}, 0) as office_minutes")
             ->whereIn('eus.user_id', $userIds)
             ->where('eus.start_date', '<=', $endDate)
