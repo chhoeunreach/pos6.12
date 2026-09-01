@@ -13,7 +13,9 @@
     $printTitle = 'របាយការណ៍ ប្រាក់លើកទឹកចិត្ត​សម្រាប់ ' . $printDate . ' សាខា ' . $printBranch;
     $commissionPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
     $commissionPerPage = array_key_exists((string) request('commission_per_page', '50'), $commissionPerPageOptions) ? (string) request('commission_per_page', '50') : '50';
-    $commissionConditionMode = request('commission_condition_mode', 'with_condition') === 'no_condition' ? 'no_condition' : 'with_condition';
+    $commissionConditionModes = ['with_condition', 'without_sell_qty_condition', 'no_condition'];
+    $commissionConditionMode = in_array(request('commission_condition_mode', 'with_condition'), $commissionConditionModes, true) ? request('commission_condition_mode', 'with_condition') : 'with_condition';
+    $applyCommissionConditions = $commissionConditionMode !== 'no_condition';
     $commissionPeriod = request('commission_period') === 'monthly' ? 'monthly' : 'daily';
 @endphp
 <style>
@@ -180,7 +182,8 @@
                     <div class="form-group">
                         <label>Commission:</label>
                         <select name="commission_condition_mode" class="form-control">
-                            <option value="with_condition" {{ $commissionConditionMode === 'with_condition' ? 'selected' : '' }}>With condition</option>
+                            <option value="with_condition" {{ $commissionConditionMode === 'with_condition' ? 'selected' : '' }}>With Sell qty condition</option>
+                            <option value="without_sell_qty_condition" {{ $commissionConditionMode === 'without_sell_qty_condition' ? 'selected' : '' }}>No Sell qty condition</option>
                             <option value="no_condition" {{ $commissionConditionMode === 'no_condition' ? 'selected' : '' }}>No condition</option>
                         </select>
                     </div>
@@ -235,25 +238,33 @@
             <tbody>
                 <tr>
                     <td>Iron</td>
-                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
+                    <td>{{ $applyCommissionConditions ? 'Phone number required' : 'No condition' }}</td>
                     <td class="text-right">0.20</td>
                     <td>Invoice count * 0.20</td>
                 </tr>
                 <tr>
                     <td>Mat.</td>
-                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required, invoice total >= 10' : 'No condition' }}</td>
+                    <td>{{ $applyCommissionConditions ? 'Phone number required, invoice total >= 10' : 'No condition' }}</td>
                     <td class="text-right">0.25</td>
                     <td>Invoice count * 0.25</td>
                 </tr>
                 <tr>
                     <td>Repair</td>
-                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
+                    <td>{{ $applyCommissionConditions ? 'Phone number required' : 'No condition' }}</td>
                     <td class="text-right">0.20</td>
                     <td>Invoice count * 0.20</td>
                 </tr>
                 <tr>
                     <td>Sell</td>
-                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required, part-time qty >= 50, full-time qty >= 100' : 'No condition' }}</td>
+                    <td>
+                        @if($commissionConditionMode === 'with_condition')
+                            Phone number required, part-time qty >= 50, full-time qty >= 100
+                        @elseif($commissionConditionMode === 'without_sell_qty_condition')
+                            Phone number required
+                        @else
+                            No condition
+                        @endif
+                    </td>
                     <td class="text-right">0.25</td>
                     <td>Qualified product qty * 0.25</td>
                 </tr>

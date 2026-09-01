@@ -520,7 +520,8 @@ class ReportController extends Controller
     private function commissionReportData(Request $request, bool $paginate): array
     {
         $applyCommissionConditions = $this->applyCommissionConditions($request);
-        $commissionColumns = $this->commissionColumns($applyCommissionConditions);
+        $applySellQtyCondition = $this->applySellQtyCondition($request);
+        $commissionColumns = $this->commissionColumns($applyCommissionConditions, $applySellQtyCondition);
         $period = $this->commissionPeriod($request);
         $periodExpr = $period === 'monthly' ? "DATE_FORMAT(sor.created_at, '%Y-%m')" : 'DATE(sor.created_at)';
 
@@ -669,10 +670,16 @@ class ReportController extends Controller
 
         $shiftIdColumn = $this->firstHrColumn('essentials_user_shifts', ['essentials_shift_id', 'shift_id']);
         $shiftNameColumn = $this->firstHrColumn('essentials_shifts', ['name', 'shift', 'title']);
-        $shiftStartColumn = $this->firstHrColumn('essentials_shifts', ['opening_time', 'start_time', 'time_start']);
-        $shiftEndColumn = $this->firstHrColumn('essentials_shifts', ['closing_time', 'end_time', 'time_end']);
+        [$shiftStartColumn, $shiftStartAlias] = $this->firstHrAliasedColumn([
+            ['essentials_shifts', 'es', ['opening_time', 'start_time', 'time_start', 'open_time', 'from_time', 'clock_in_time']],
+            ['essentials_user_shifts', 'eus', ['opening_time', 'start_time', 'time_start', 'open_time', 'from_time', 'clock_in_time']],
+        ]);
+        [$shiftEndColumn, $shiftEndAlias] = $this->firstHrAliasedColumn([
+            ['essentials_shifts', 'es', ['closing_time', 'end_time', 'time_end', 'close_time', 'to_time', 'clock_out_time']],
+            ['essentials_user_shifts', 'eus', ['closing_time', 'end_time', 'time_end', 'close_time', 'to_time', 'clock_out_time']],
+        ]);
 
-        if (empty($shiftIdColumn) || empty($shiftNameColumn)) {
+        if (empty($shiftIdColumn) || (empty($shiftNameColumn) && (empty($shiftStartColumn) || empty($shiftEndColumn)))) {
             return [];
         }
 
@@ -700,12 +707,15 @@ class ReportController extends Controller
         $endDate = $period === 'monthly'
             ? \Carbon\Carbon::createFromFormat('Y-m-d', $saleDates->max() . '-01')->endOfMonth()->toDateString()
             : $saleDates->max();
-        $durationExpression = $shiftStartColumn && $shiftEndColumn
-            ? "CASE WHEN es.{$shiftStartColumn} IS NOT NULL AND es.{$shiftEndColumn} IS NOT NULL THEN CASE WHEN TIME_TO_SEC(es.{$shiftEndColumn}) >= TIME_TO_SEC(es.{$shiftStartColumn}) THEN FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) ELSE FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) + 86400 - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) END ELSE NULL END"
+        $startExpression = $shiftStartColumn ? "{$shiftStartAlias}.{$shiftStartColumn}" : null;
+        $endExpression = $shiftEndColumn ? "{$shiftEndAlias}.{$shiftEndColumn}" : null;
+        $shiftNameExpression = $shiftNameColumn ? "NULLIF(TRIM(es.{$shiftNameColumn}), '')" : 'NULL';
+        $durationExpression = $startExpression && $endExpression
+            ? "CASE WHEN {$startExpression} IS NOT NULL AND {$endExpression} IS NOT NULL THEN CASE WHEN TIME_TO_SEC({$endExpression}) >= TIME_TO_SEC({$startExpression}) THEN FLOOR((TIME_TO_SEC({$endExpression}) - TIME_TO_SEC({$startExpression})) / 60) ELSE FLOOR((TIME_TO_SEC({$endExpression}) + 86400 - TIME_TO_SEC({$startExpression})) / 60) END ELSE NULL END"
             : 'NULL';
-        $officeTimeExpression = $shiftStartColumn && $shiftEndColumn
-            ? "CASE WHEN es.{$shiftStartColumn} IS NOT NULL AND es.{$shiftEndColumn} IS NOT NULL THEN CONCAT(DATE_FORMAT(es.{$shiftStartColumn}, '%l:%i%p'), '-', DATE_FORMAT(es.{$shiftEndColumn}, '%l:%i%p')) ELSE NULLIF(TRIM(es.{$shiftNameColumn}), '') END"
-            : "NULLIF(TRIM(es.{$shiftNameColumn}), '')";
+        $officeTimeExpression = $startExpression && $endExpression
+            ? "CASE WHEN {$startExpression} IS NOT NULL AND {$endExpression} IS NOT NULL THEN CONCAT(TIME_FORMAT({$startExpression}, '%l:%i%p'), '-', TIME_FORMAT({$endExpression}, '%l:%i%p')) ELSE {$shiftNameExpression} END"
+            : $shiftNameExpression;
 
         $assignmentsByUser = DB::connection('hr')
             ->table('essentials_user_shifts as eus')
@@ -786,15 +796,33 @@ class ReportController extends Controller
         return null;
     }
 
+    private function firstHrAliasedColumn(array $sources): array
+    {
+        foreach ($sources as [$table, $alias, $columns]) {
+            $column = $this->firstHrColumn($table, $columns);
+
+            if ($column) {
+                return [$column, $alias];
+            }
+        }
+
+        return [null, null];
+    }
+
     private function applyCommissionConditions(Request $request): bool
     {
         return $request->input('commission_condition_mode', 'with_condition') !== 'no_condition';
     }
 
-    private function commissionColumns(bool $applyConditions = true): array
+    private function applySellQtyCondition(Request $request): bool
+    {
+        return $request->input('commission_condition_mode', 'with_condition') === 'with_condition';
+    }
+
+    private function commissionColumns(bool $applyConditions = true, bool $applySellQtyCondition = true): array
     {
         return collect(['iron', 'material', 'repair', 'sell'])
-            ->map(function ($key) use ($applyConditions) {
+            ->map(function ($key) use ($applyConditions, $applySellQtyCondition) {
                 return [
                     'key' => $key,
                     'label' => $this->sellTypeLabel($key),
@@ -809,7 +837,7 @@ class ReportController extends Controller
                     'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
                     'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
                     'minimum_invoice_total' => $applyConditions && $key === 'material' ? 10 : null,
-                    'sell_qty_thresholds' => $applyConditions && $key === 'sell' ? ['part_time' => 50, 'full_time' => 100] : null,
+                    'sell_qty_thresholds' => $applySellQtyCondition && $key === 'sell' ? ['part_time' => 50, 'full_time' => 100] : null,
                 ];
             })
             ->all();
