@@ -14,6 +14,9 @@
     $currentUser = auth()->user();
     $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
     $canDeleteReport = $currentUser->can('hr_sell.report.delete') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
+    $staffLinesPerPageOptions = [25, 50, 100, 200, 500];
+    $staffLinesPerPage = in_array((int) request('staff_lines_per_page', 100), $staffLinesPerPageOptions, true) ? (int) request('staff_lines_per_page', 100) : 100;
+    $staffLinesPaginationQuery = request()->query();
 @endphp
 <style>
     #hr_staff_sell_filter_box {
@@ -417,6 +420,24 @@
         <div class="box-header"><h4>Sale Lines</h4></div>
         <div class="box-body">
             <div class="hr-staff-lines-tools">
+                <form method="get" action="{{ route('hr-sell.reports.staff') }}#hr_staff_sell_lines" class="form-inline">
+                    @foreach(request()->except(['show_lines', 'staff_lines_per_page', 'staff_lines_page']) as $key => $value)
+                        @if(is_array($value))
+                            @foreach($value as $item)
+                                <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                            @endforeach
+                        @else
+                            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                        @endif
+                    @endforeach
+                    <input type="hidden" name="show_lines" value="1">
+                    <label class="text-muted" for="staff_lines_per_page" style="margin-right: 5px;">Lines per page</label>
+                    <select name="staff_lines_per_page" id="staff_lines_per_page" class="form-control input-sm" onchange="this.form.submit()">
+                        @foreach($staffLinesPerPageOptions as $option)
+                            <option value="{{ $option }}" {{ $staffLinesPerPage === $option ? 'selected' : '' }}>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </form>
                 <button type="button" class="btn btn-default btn-sm" id="hr_staff_lines_print">
                     <i class="fa fa-print"></i> Print
                 </button>
@@ -597,7 +618,7 @@
 
             <div class="clearfix">
                 <div class="pull-left text-muted">Showing {{ $lineRows->firstItem() ?? 0 }} to {{ $lineRows->lastItem() ?? 0 }} of {{ $lineRows->total() }} sale lines</div>
-                <div class="pull-right">{{ $lineRows->appends(request()->query())->links() }}</div>
+                <div class="pull-right">{{ $lineRows->appends($staffLinesPaginationQuery)->fragment('hr_staff_sell_lines')->links() }}</div>
             </div>
         </div>
     </div>
@@ -904,12 +925,13 @@ $(function() {
         printWindow.document.write(
             '<!doctype html><html><head><meta charset="utf-8"><title>' + printTitle + '</title>' +
             '<style>' +
-                '@page{margin:14mm 10mm;}' +
-                'body{background:#fff;color:#1f2937;font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;font-size:12px;line-height:1.35;margin:0;}' +
-                '.report-header{border-bottom:3px solid #2563eb;margin-bottom:14px;padding-bottom:10px;}' +
-                '.report-title{color:#111827;font-size:20px;font-weight:700;margin:0;text-align:center;}' +
-                '.report-subtitle{color:#64748b;font-size:11px;margin-top:4px;text-align:center;}' +
-                'table{border-collapse:collapse;width:100%;}' +
+                '@page{margin:5mm 8mm 10mm;}' +
+                'html,body{margin:0;padding:0;}' +
+                'body{background:#fff;color:#1f2937;font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;font-size:12px;line-height:1.3;}' +
+                '.report-header{border-bottom:2px solid #2563eb;margin:0 0 6px;padding:0 0 4px;}' +
+                '.report-title{color:#111827;font-size:18px;font-weight:700;margin:0;text-align:center;}' +
+                '.report-subtitle{color:#64748b;font-size:10px;margin-top:2px;text-align:center;}' +
+                'table{border-collapse:collapse;margin-top:0;width:100%;}' +
                 'th,td{border:1px solid #cbd5e1;padding:6px 7px;vertical-align:top;}' +
                 'thead th{background:#e8f0fe;color:#1e3a8a;font-weight:700;text-align:left;}' +
                 'tbody tr:nth-child(even) td{background:#f8fafc;}' +

@@ -436,7 +436,8 @@ class ReportController extends Controller
                 return $row;
             });
 
-            $lineRows = $this->emptyRows($request, 100, 'staff_lines_page');
+            $linePerPage = $this->staffLinePerPage($request);
+            $lineRows = $this->emptyRows($request, $linePerPage, 'staff_lines_page');
             if ($request->boolean('show_lines') || ! $paginate) {
                 $linesQuery = (clone $base)
                     ->selectRaw($periodExpr . ' as period_label')
@@ -465,7 +466,7 @@ class ReportController extends Controller
                     ->orderBy('sol.id');
 
                 $lineRows = $paginate
-                    ? $linesQuery->paginate(100, ['*'], 'staff_lines_page')->appends($request->query())
+                    ? $linesQuery->paginate($linePerPage, ['*'], 'staff_lines_page')->appends($request->query())
                     : $linesQuery->get();
 
                 $lineCollection = method_exists($lineRows, 'getCollection') ? $lineRows->getCollection() : $lineRows;
@@ -481,8 +482,16 @@ class ReportController extends Controller
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR staff sell report data: ' . $e->getMessage());
 
-            return [$this->emptyRows($request, 50, 'staff_summary_page'), $this->emptyRows($request, 100, 'staff_lines_page'), $this->emptySummary(), $request->input('period') === 'monthly' ? 'monthly' : 'daily', collect(), collect()];
+            return [$this->emptyRows($request, 50, 'staff_summary_page'), $this->emptyRows($request, $this->staffLinePerPage($request), 'staff_lines_page'), $this->emptySummary(), $request->input('period') === 'monthly' ? 'monthly' : 'daily', collect(), collect()];
         }
+    }
+
+    private function staffLinePerPage(Request $request): int
+    {
+        $perPage = (int) $request->input('staff_lines_per_page', 100);
+        $allowed = [25, 50, 100, 200, 500];
+
+        return in_array($perPage, $allowed, true) ? $perPage : 100;
     }
 
     private function commissionReportData(Request $request, bool $paginate): array
