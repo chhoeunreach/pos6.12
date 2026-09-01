@@ -620,7 +620,7 @@ class ReportController extends Controller
                 $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
                 $officeMinutes = max(0, (int) ($row->office_minutes ?? 0));
                 $row->office_time = $officeTimeNames[(int) $row->user_id] ?? '-';
-                $row->total_hour_day = $this->formatOfficeTime($officeMinutes);
+                $row->total_hour_day = $this->formatTotalHourDay($officeMinutes);
                 $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
 
                 return $row;
@@ -647,6 +647,11 @@ class ReportController extends Controller
         return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
     }
 
+    private function formatTotalHourDay(int $minutes): string
+    {
+        return intdiv($minutes, 60) . ' hour';
+    }
+
     private function officeTimeNamesByUser($rows, Request $request): array
     {
         if (! Schema::connection('hr')->hasTable('essentials_user_shifts') || ! Schema::connection('hr')->hasTable('essentials_shifts')) {
@@ -670,7 +675,7 @@ class ReportController extends Controller
         return DB::connection('hr')
             ->table('essentials_user_shifts as eus')
             ->join('essentials_shifts as es', 'es.id', '=', 'eus.essentials_shift_id')
-            ->selectRaw("eus.user_id, GROUP_CONCAT(DISTINCT NULLIF(TRIM(es.name), '') ORDER BY es.name SEPARATOR ', ') as office_time_name")
+            ->selectRaw("eus.user_id, GROUP_CONCAT(DISTINCT CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CONCAT(DATE_FORMAT(es.start_time, '%l:%i%p'), '-', DATE_FORMAT(es.end_time, '%l:%i%p')) ELSE NULLIF(TRIM(es.name), '') END ORDER BY es.start_time, es.end_time, es.name SEPARATOR ', ') as office_time_name")
             ->whereIn('eus.user_id', $userIds)
             ->where('eus.start_date', '<=', $endDate)
             ->where(function ($query) use ($startDate) {
