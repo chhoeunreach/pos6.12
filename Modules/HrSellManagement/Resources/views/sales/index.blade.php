@@ -1,5 +1,10 @@
 @extends('hrsellmanagement::layouts.master')
 @section('page_title', 'HR Sell List')
+@php
+    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key');
+    $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
+    $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
+@endphp
 @section('module_content')
 <style>
     #hr_sell_filter_box {
@@ -113,11 +118,6 @@
         z-index: 99998 !important;
     }
 </style>
-@php($hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key'))
-@php
-    $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
-    $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
-@endphp
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_filter_box">
 <div class="box-header with-border hr-sell-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
 <h4 class="box-title"><i class="fa fa-filter"></i> Filters</h4>

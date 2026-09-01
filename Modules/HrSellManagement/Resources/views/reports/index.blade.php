@@ -1,5 +1,8 @@
 @extends('hrsellmanagement::layouts.master')
 @section('page_title', 'HR Sell Reports')
+@php
+    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key');
+@endphp
 @section('module_content')
 @php
     $currentUser = auth()->user();
@@ -123,7 +126,6 @@
     }
 </style>
 
-@php($hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key'))
 @php($selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all())
 @php($selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all())
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_report_filter_box">
