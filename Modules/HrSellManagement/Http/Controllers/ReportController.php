@@ -128,6 +128,7 @@ class ReportController extends Controller
                 'Staff' => $row->staff_name,
                 'Branch' => $row->branch_name,
                 'Office Time' => $row->office_time ?? '-',
+                'Total Hour / Day' => $row->total_hour_day ?? '-',
                 'Time Work' => $row->time_work ?? '-',
             ];
 
@@ -538,6 +539,7 @@ class ReportController extends Controller
             $totals = (array) $totalsQuery->first();
 
             $rowsQuery = (clone $base)
+                ->selectRaw('sor.user_id as user_id')
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
                 ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as staff_name")
@@ -577,6 +579,7 @@ class ReportController extends Controller
             $rowsQuery
                 ->groupBy(
                     DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown')"),
+                    'sor.user_id',
                     DB::raw("NULLIF(TRIM(u.username), '')"),
                     DB::raw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown')"),
                     DB::raw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown')")
@@ -611,11 +614,13 @@ class ReportController extends Controller
             }
 
             $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
-            $rowCollection->transform(function ($row) use ($request, $commissionColumns) {
+            $officeTimeNames = $this->officeTimeNamesByUser($rowCollection, $request);
+            $rowCollection->transform(function ($row) use ($request, $commissionColumns, $officeTimeNames) {
                 $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
                 $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
                 $officeMinutes = max(0, (int) ($row->office_minutes ?? 0));
-                $row->office_time = $this->formatOfficeTime($officeMinutes);
+                $row->office_time = $officeTimeNames[(int) $row->user_id] ?? '-';
+                $row->total_hour_day = $this->formatOfficeTime($officeMinutes);
                 $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
 
                 return $row;
@@ -640,6 +645,43 @@ class ReportController extends Controller
     private function formatOfficeTime(int $minutes): string
     {
         return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
+    }
+
+    private function officeTimeNamesByUser($rows, Request $request): array
+    {
+        if (! Schema::connection('hr')->hasTable('essentials_user_shifts') || ! Schema::connection('hr')->hasTable('essentials_shifts')) {
+            return [];
+        }
+
+        $userIds = collect($rows)
+            ->pluck('user_id')
+            ->filter()
+            ->map(fn ($userId) => (int) $userId)
+            ->unique()
+            ->values();
+
+        if ($userIds->isEmpty()) {
+            return [];
+        }
+
+        $startDate = $request->input('start_date') ?: now()->toDateString();
+        $endDate = $request->input('end_date') ?: $startDate;
+
+        return DB::connection('hr')
+            ->table('essentials_user_shifts as eus')
+            ->join('essentials_shifts as es', 'es.id', '=', 'eus.essentials_shift_id')
+            ->selectRaw("eus.user_id, GROUP_CONCAT(DISTINCT NULLIF(TRIM(es.name), '') ORDER BY es.name SEPARATOR ', ') as office_time_name")
+            ->whereIn('eus.user_id', $userIds)
+            ->where('eus.start_date', '<=', $endDate)
+            ->where(function ($query) use ($startDate) {
+                $query->whereNull('eus.end_date')
+                    ->orWhere('eus.end_date', '>=', $startDate);
+            })
+            ->groupBy('eus.user_id')
+            ->get()
+            ->filter(fn ($row) => ! empty($row->office_time_name))
+            ->mapWithKeys(fn ($row) => [(int) $row->user_id => $row->office_time_name])
+            ->all();
     }
 
     private function applyCommissionConditions(Request $request): bool

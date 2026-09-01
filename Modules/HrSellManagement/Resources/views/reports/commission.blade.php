@@ -282,6 +282,7 @@
                     <th>Staff</th>
                     <th>Branch</th>
                     <th>Office Time</th>
+                    <th>Total Hour / Day</th>
                     <th>Time Work</th>
                     <th>Alert</th>
                     @foreach($commissionColumns as $column)
@@ -300,6 +301,7 @@
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td>{{ $row->office_time ?? '-' }}</td>
+                        <td>{{ $row->total_hour_day ?? '-' }}</td>
                         <td>{{ $row->time_work ?? '-' }}</td>
                         <td>
                             @php
@@ -361,10 +363,11 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 7) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 8) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>
