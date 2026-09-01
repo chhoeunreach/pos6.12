@@ -124,6 +124,7 @@ class ReportController extends Controller
 
         $exportRows = $commissionRows->map(function ($row) use ($commissionColumns) {
             $exportRow = [
+                'Date' => $row->sale_date ?? '',
                 'Username' => $row->staff_code,
                 'Staff' => $row->staff_name,
                 'Branch' => $row->branch_name,
@@ -539,6 +540,7 @@ class ReportController extends Controller
             $totals = (array) $totalsQuery->first();
 
             $rowsQuery = (clone $base)
+                ->selectRaw('DATE(sor.created_at) as sale_date')
                 ->selectRaw('sor.user_id as user_id')
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown') as seller_key")
                 ->selectRaw("NULLIF(TRIM(u.username), '') as staff_code")
@@ -578,6 +580,7 @@ class ReportController extends Controller
 
             $rowsQuery
                 ->groupBy(
+                    DB::raw('DATE(sor.created_at)'),
                     DB::raw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name)), 'unknown')"),
                     'sor.user_id',
                     DB::raw("NULLIF(TRIM(u.username), '')"),
@@ -585,6 +588,7 @@ class ReportController extends Controller
                     DB::raw("COALESCE(NULLIF(TRIM(sor.branch_name), ''), 'Unknown')")
                 )
                 ->havingRaw($this->commissionHavingExpression($commissionColumns, $lineExpressions), $this->commissionExpressionBindings($commissionColumns))
+                ->orderBy('sale_date')
                 ->orderBy('staff_name')
                 ->orderBy('branch_name');
 
@@ -614,13 +618,15 @@ class ReportController extends Controller
             }
 
             $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
-            $officeTimeNames = $this->officeTimeNamesByUser($rowCollection, $request);
-            $rowCollection->transform(function ($row) use ($request, $commissionColumns, $officeTimeNames) {
+            $officeTimes = $this->officeTimesByUser($rowCollection, $request);
+            $rowCollection->transform(function ($row) use ($request, $commissionColumns, $officeTimes) {
                 $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
                 $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
-                $officeMinutes = max(0, (int) ($row->office_minutes ?? 0));
-                $row->office_time = $officeTimeNames[(int) $row->user_id] ?? '-';
-                $row->total_hour_day = $this->formatTotalHourDay($officeMinutes);
+                $fallbackMinutes = max(0, (int) ($row->office_minutes ?? 0));
+                $officeTime = $officeTimes[$this->officeTimeKey($row)] ?? null;
+                $officeMinutes = (int) ($officeTime['minutes'] ?? $fallbackMinutes);
+                $row->office_time = ! empty($officeTime['time']) ? $officeTime['time'] : '-';
+                $row->total_hour_day = ! empty($officeTime['hours']) ? $officeTime['hours'] : $this->formatTotalHourDay($fallbackMinutes);
                 $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
 
                 return $row;
@@ -642,17 +648,12 @@ class ReportController extends Controller
         return in_array($perPage, $allowed, true) ? ($perPage === 'all' ? 'all' : (int) $perPage) : 50;
     }
 
-    private function formatOfficeTime(int $minutes): string
-    {
-        return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
-    }
-
     private function formatTotalHourDay(int $minutes): string
     {
         return intdiv($minutes, 60) . ' hour';
     }
 
-    private function officeTimeNamesByUser($rows, Request $request): array
+    private function officeTimesByUser($rows, Request $request): array
     {
         if (! Schema::connection('hr')->hasTable('essentials_user_shifts') || ! Schema::connection('hr')->hasTable('essentials_shifts')) {
             return [];
@@ -669,24 +670,70 @@ class ReportController extends Controller
             return [];
         }
 
-        $startDate = $request->input('start_date') ?: now()->toDateString();
-        $endDate = $request->input('end_date') ?: $startDate;
+        $saleDates = collect($rows)
+            ->pluck('sale_date')
+            ->filter()
+            ->values();
 
-        return DB::connection('hr')
+        if ($saleDates->isEmpty()) {
+            return [];
+        }
+
+        $startDate = $saleDates->min();
+        $endDate = $saleDates->max();
+        $durationExpression = "CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CASE WHEN TIME_TO_SEC(es.end_time) >= TIME_TO_SEC(es.start_time) THEN FLOOR((TIME_TO_SEC(es.end_time) - TIME_TO_SEC(es.start_time)) / 60) ELSE FLOOR((TIME_TO_SEC(es.end_time) + 86400 - TIME_TO_SEC(es.start_time)) / 60) END ELSE NULL END";
+
+        $assignmentsByUser = DB::connection('hr')
             ->table('essentials_user_shifts as eus')
             ->join('essentials_shifts as es', 'es.id', '=', 'eus.essentials_shift_id')
-            ->selectRaw("eus.user_id, GROUP_CONCAT(DISTINCT CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CONCAT(DATE_FORMAT(es.start_time, '%l:%i%p'), '-', DATE_FORMAT(es.end_time, '%l:%i%p')) ELSE NULLIF(TRIM(es.name), '') END ORDER BY es.start_time, es.end_time, es.name SEPARATOR ', ') as office_time_name")
+            ->select('eus.user_id', 'eus.start_date', 'eus.end_date')
+            ->selectRaw("CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CONCAT(DATE_FORMAT(es.start_time, '%l:%i%p'), '-', DATE_FORMAT(es.end_time, '%l:%i%p')) ELSE NULLIF(TRIM(es.name), '') END as office_time_name")
+            ->selectRaw("COALESCE({$durationExpression}, 0) as office_minutes")
             ->whereIn('eus.user_id', $userIds)
             ->where('eus.start_date', '<=', $endDate)
             ->where(function ($query) use ($startDate) {
                 $query->whereNull('eus.end_date')
                     ->orWhere('eus.end_date', '>=', $startDate);
             })
-            ->groupBy('eus.user_id')
             ->get()
-            ->filter(fn ($row) => ! empty($row->office_time_name))
-            ->mapWithKeys(fn ($row) => [(int) $row->user_id => $row->office_time_name])
+            ->groupBy(fn ($assignment) => (int) $assignment->user_id);
+
+        return collect($rows)
+            ->mapWithKeys(function ($row) use ($assignmentsByUser) {
+                $userId = (int) ($row->user_id ?? 0);
+                $saleDate = $row->sale_date ?? null;
+
+                if ($userId <= 0 || empty($saleDate)) {
+                    return [];
+                }
+
+                $matches = ($assignmentsByUser[$userId] ?? collect())
+                    ->filter(fn ($assignment) => $assignment->start_date <= $saleDate && (empty($assignment->end_date) || $assignment->end_date >= $saleDate));
+
+                if ($matches->isEmpty()) {
+                    return [];
+                }
+
+                $time = $matches->pluck('office_time_name')->filter()->unique()->implode(', ');
+                $hours = $matches
+                    ->pluck('office_minutes')
+                    ->filter(fn ($minutes) => (int) $minutes > 0)
+                    ->map(fn ($minutes) => $this->formatTotalHourDay((int) $minutes))
+                    ->unique()
+                    ->implode(', ');
+
+                return [$this->officeTimeKey($row) => [
+                    'time' => $time,
+                    'hours' => $hours,
+                    'minutes' => (int) $matches->max('office_minutes'),
+                ]];
+            })
             ->all();
+    }
+
+    private function officeTimeKey(object $row): string
+    {
+        return (int) ($row->user_id ?? 0) . '|' . ($row->sale_date ?? '');
     }
 
     private function applyCommissionConditions(Request $request): bool
@@ -833,6 +880,11 @@ class ReportController extends Controller
                     $detailQuery['branch_name'] = $row->branch_name;
                 } else {
                     unset($detailQuery['branch_name']);
+                }
+
+                if (! empty($row->sale_date)) {
+                    $detailQuery['start_date'] = $row->sale_date;
+                    $detailQuery['end_date'] = $row->sale_date;
                 }
 
                 return [$column['key'] => route('hr-sell.reports.staff', $detailQuery) . '#hr_staff_sell_lines'];

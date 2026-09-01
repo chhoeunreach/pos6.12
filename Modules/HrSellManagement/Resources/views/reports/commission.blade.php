@@ -278,6 +278,7 @@
         <table class="table table-bordered table-striped hr-commission-table" id="hr_commission_table">
             <thead>
                 <tr>
+                    <th>Date</th>
                     <th>User</th>
                     <th>Staff</th>
                     <th>Branch</th>
@@ -297,6 +298,7 @@
             <tbody>
                 @foreach($commissionRows as $row)
                     <tr>
+                        <td>{{ $row->sale_date ?? '-' }}</td>
                         <td>{{ $row->staff_code ?: '-' }}</td>
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
@@ -363,10 +365,11 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 8) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 9) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>
