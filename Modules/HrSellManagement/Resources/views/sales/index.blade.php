@@ -114,6 +114,10 @@
     }
 </style>
 @php($hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key'))
+@php
+    $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
+    $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
+@endphp
 <div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_filter_box">
 <div class="box-header with-border hr-sell-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
 <h4 class="box-title"><i class="fa fa-filter"></i> Filters</h4>
@@ -138,6 +142,26 @@
 </div>
 
 <div class="box box-success"><div class="box-header"><h4>POS HR Sell List</h4></div><div class="box-body table-responsive">
+<div class="clearfix" style="margin-bottom: 10px;">
+<form method="get" action="{{ route('hr-sell.sales.index') }}" class="form-inline pull-left">
+@foreach(request()->except(['pos_hr_per_page', 'pos_hr_page']) as $key => $value)
+@if(is_array($value))
+@foreach($value as $item)
+<input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+@endforeach
+@else
+<input type="hidden" name="{{ $key }}" value="{{ $value }}">
+@endif
+@endforeach
+<label class="text-muted" for="pos_hr_per_page" style="margin-right: 5px;">Show</label>
+<select name="pos_hr_per_page" id="pos_hr_per_page" class="form-control input-sm" onchange="this.form.submit()">
+@foreach($posHrPerPageOptions as $value => $label)
+<option value="{{ $value }}" {{ $posHrPerPage === $value ? 'selected' : '' }}>{{ $label }}</option>
+@endforeach
+</select>
+<span class="text-muted" style="margin-left: 5px;">records</span>
+</form>
+</div>
 <table class="table table-bordered table-striped" id="pos_hr_sell_table"><thead><tr><th>Invoice</th><th>Date</th><th>Branch</th><th>Customer</th><th>Phone</th><th>Seller</th><th>Type</th><th>Total</th><th>Action</th></tr></thead><tbody>
 @forelse($posHrSales as $sale)
 <tr>
@@ -300,14 +324,13 @@ $(function(){
         ];
 
         $(selector).DataTable({
-            paging: true,
-            pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-            searching: true,
+            paging: false,
+            searching: false,
+            info: false,
             ordering: true,
             responsive: false,
             autoWidth: false,
-            dom: '<"row"<"col-sm-3"l><"col-sm-6 text-center"B><"col-sm-3"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
+            dom: '<"row"<"col-sm-12 text-center"B>>rt',
             buttons: buttons,
             order: []
         });

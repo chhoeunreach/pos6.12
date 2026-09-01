@@ -5,6 +5,8 @@
     $currentUser = auth()->user();
     $canEditReport = $currentUser->can('hr_sell.report.edit') || $currentUser->can('hr_sell.update') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
     $canDeleteReport = $currentUser->can('hr_sell.report.delete') || $currentUser->can('superadmin') || $currentUser->can('business_settings.access');
+    $hrReportPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
+    $hrReportPerPage = array_key_exists((string) request('hr_report_per_page', '50'), $hrReportPerPageOptions) ? (string) request('hr_report_per_page', '50') : '50';
 @endphp
 <style>
     #hr_sell_report_filter_box {
@@ -237,6 +239,26 @@
 <div class="box box-success">
     <div class="box-header"><h4>HR Sell Report</h4></div>
     <div class="box-body table-responsive">
+        <div class="clearfix" style="margin-bottom: 10px;">
+            <form method="get" action="{{ route('hr-sell.reports.index') }}" class="form-inline pull-left">
+                @foreach(request()->except(['hr_report_per_page', 'hr_report_page']) as $key => $value)
+                    @if(is_array($value))
+                        @foreach($value as $item)
+                            <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
+                <label class="text-muted" for="hr_report_per_page" style="margin-right: 5px;">Show</label>
+                <select name="hr_report_per_page" id="hr_report_per_page" class="form-control input-sm" onchange="this.form.submit()">
+                    @foreach($hrReportPerPageOptions as $value => $label)
+                        <option value="{{ $value }}" {{ $hrReportPerPage === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <span class="text-muted" style="margin-left: 5px;">records</span>
+            </form>
+        </div>
         <table class="table table-bordered table-striped" id="hr_sell_report_table">
             <thead>
                 <tr>
@@ -451,14 +473,13 @@ $(function() {
 
     if ($.fn.DataTable && ! $.fn.DataTable.isDataTable('#hr_sell_report_table')) {
         $('#hr_sell_report_table').DataTable({
-            paging: true,
-            pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-            searching: true,
+            paging: false,
+            searching: false,
+            info: false,
             ordering: true,
             responsive: false,
             autoWidth: false,
-            dom: '<"row"<"col-sm-3"l><"col-sm-6 text-center"B><"col-sm-3"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
+            dom: '<"row"<"col-sm-12 text-center"B>>rt',
             buttons: [
                 { extend: 'copy', text: 'Copy' },
                 { extend: 'csv', text: 'Export CSV' },

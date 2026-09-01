@@ -2,7 +2,7 @@
 @section('page_title', 'Commission Report')
 @section('module_content')
 @php
-    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key');
+    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('commission_condition_mode');
     $selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all();
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
     $printDate = request('start_date') && request('end_date')
@@ -10,6 +10,9 @@
         : now()->toDateString();
     $printBranch = count($selectedBranchNames) ? implode(', ', $selectedBranchNames) : 'ទាំងអស់';
     $printTitle = 'របាយការណ៍ ប្រាក់លើកទឹកចិត្ត​សម្រាប់ ' . $printDate . ' សាខា ' . $printBranch;
+    $commissionPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
+    $commissionPerPage = array_key_exists((string) request('commission_per_page', '50'), $commissionPerPageOptions) ? (string) request('commission_per_page', '50') : '50';
+    $commissionConditionMode = request('commission_condition_mode', 'with_condition') === 'no_condition' ? 'no_condition' : 'with_condition';
 @endphp
 <style>
     #hr_commission_filter_box {
@@ -159,7 +162,16 @@
                         <input name="search" class="form-control" value="{{ request('search') }}" placeholder="Invoice, staff, product, IMEI">
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Commission:</label>
+                        <select name="commission_condition_mode" class="form-control">
+                            <option value="with_condition" {{ $commissionConditionMode === 'with_condition' ? 'selected' : '' }}>With condition</option>
+                            <option value="no_condition" {{ $commissionConditionMode === 'no_condition' ? 'selected' : '' }}>No condition</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="hr-commission-actions">
                         <button class="btn btn-primary"><i class="fa fa-filter"></i> Filter</button>
                         <a class="btn btn-default" href="{{ route('hr-sell.reports.commission') }}">Reset</a>
@@ -209,25 +221,25 @@
             <tbody>
                 <tr>
                     <td>Iron</td>
-                    <td>Phone number required</td>
+                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
                     <td class="text-right">0.20</td>
                     <td>Invoice count * 0.20</td>
                 </tr>
                 <tr>
                     <td>Mat.</td>
-                    <td>Phone number required, invoice total >= 10</td>
+                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required, invoice total >= 10' : 'No condition' }}</td>
                     <td class="text-right">0.25</td>
                     <td>Invoice count * 0.25</td>
                 </tr>
                 <tr>
                     <td>Repair</td>
-                    <td>Phone number required</td>
+                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
                     <td class="text-right">0.20</td>
                     <td>Invoice count * 0.20</td>
                 </tr>
                 <tr>
                     <td>Sell</td>
-                    <td>Phone number required</td>
+                    <td>{{ $commissionConditionMode === 'with_condition' ? 'Phone number required' : 'No condition' }}</td>
                     <td class="text-right">0.25</td>
                     <td>Product qty * 0.25</td>
                 </tr>
@@ -239,6 +251,26 @@
 <div class="box box-success">
     <div class="box-header"><h4>Commission Report</h4></div>
     <div class="box-body table-responsive">
+        <div class="clearfix" style="margin-bottom: 10px;">
+            <form method="get" action="{{ route('hr-sell.reports.commission') }}" class="form-inline pull-left">
+                @foreach(request()->except(['commission_per_page', 'commission_page']) as $key => $value)
+                    @if(is_array($value))
+                        @foreach($value as $item)
+                            <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
+                <label class="text-muted" for="commission_per_page" style="margin-right: 5px;">Show</label>
+                <select name="commission_per_page" id="commission_per_page" class="form-control input-sm" onchange="this.form.submit()">
+                    @foreach($commissionPerPageOptions as $value => $label)
+                        <option value="{{ $value }}" {{ $commissionPerPage === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <span class="text-muted" style="margin-left: 5px;">rows</span>
+            </form>
+        </div>
         <table class="table table-bordered table-striped hr-commission-table" id="hr_commission_table">
             <thead>
                 <tr>
@@ -435,14 +467,13 @@ $(function() {
 
     if ($.fn.DataTable && ! $.fn.DataTable.isDataTable('#hr_commission_table')) {
         $('#hr_commission_table').DataTable({
-            paging: true,
-            pageLength: parseInt(window.__default_datatable_page_entries || 25, 10),
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-            searching: true,
+            paging: false,
+            searching: false,
+            info: false,
             ordering: true,
             responsive: false,
             autoWidth: false,
-            dom: '<"row"<"col-sm-3"l><"col-sm-6 text-center"B><"col-sm-3"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
+            dom: '<"row"<"col-sm-12 text-center"B>>rt',
             buttons: [
                 { extend: 'copy', text: 'Copy', footer: true, exportOptions: { columns: ':visible' } },
                 { extend: 'csv', text: 'Export CSV', footer: true, exportOptions: { columns: ':visible' } },

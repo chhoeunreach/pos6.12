@@ -287,9 +287,20 @@ class HrSellController extends Controller
                     });
                 });
 
-            $rows = $query->orderByDesc('sor.created_at')
-                ->paginate(50, ['*'], 'pos_hr_page')
-                ->appends($request->query());
+            $perPage = $this->posHrPerPage($request);
+            $query->orderByDesc('sor.created_at');
+
+            if ($perPage === 'all') {
+                $allRows = $query->get();
+                $rows = new LengthAwarePaginator($allRows, $allRows->count(), max($allRows->count(), 1), 1, [
+                    'path' => $request->url(),
+                    'pageName' => 'pos_hr_page',
+                    'query' => $request->query(),
+                ]);
+            } else {
+                $rows = $query->paginate($perPage, ['*'], 'pos_hr_page')
+                    ->appends($request->query());
+            }
 
             $rows->getCollection()->transform(function ($row) {
                 $row->service_type_label = $this->sellTypeLabel($row->service_type);
@@ -301,10 +312,11 @@ class HrSellController extends Controller
         } catch (\Throwable $e) {
             \Log::warning('Unable to load POS HR sell list in HrSellManagement: ' . $e->getMessage());
 
+            $emptyPerPage = $this->posHrPerPage($request);
             $emptyRows = new LengthAwarePaginator(
                 [],
                 0,
-                50,
+                $emptyPerPage === 'all' ? 1 : $emptyPerPage,
                 (int) $request->input('pos_hr_page', 1),
                 [
                     'path' => $request->url(),
@@ -315,6 +327,14 @@ class HrSellController extends Controller
 
             return [$emptyRows, collect(), collect(), collect()];
         }
+    }
+
+    private function posHrPerPage(Request $request)
+    {
+        $perPage = (string) $request->input('pos_hr_per_page', '50');
+        $allowed = ['25', '50', '100', '200', '500', 'all'];
+
+        return in_array($perPage, $allowed, true) ? ($perPage === 'all' ? 'all' : (int) $perPage) : 50;
     }
 
     private function sellTypeMap(): array

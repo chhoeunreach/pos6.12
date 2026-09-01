@@ -306,9 +306,19 @@ class ReportController extends Controller
                 ->orderByDesc('sor.created_at')
                 ->orderByDesc('sor.id');
 
-            $rows = $paginate
-                ? $rowsQuery->paginate(50, ['*'], 'hr_report_page')->appends($request->query())
-                : $rowsQuery->get();
+            $reportPerPage = $this->reportPerPage($request);
+            if ($paginate && $reportPerPage === 'all') {
+                $allRows = $rowsQuery->get();
+                $rows = new LengthAwarePaginator($allRows, $allRows->count(), max($allRows->count(), 1), 1, [
+                    'path' => $request->url(),
+                    'pageName' => 'hr_report_page',
+                    'query' => $request->query(),
+                ]);
+            } else {
+                $rows = $paginate
+                    ? $rowsQuery->paginate($reportPerPage, ['*'], 'hr_report_page')->appends($request->query())
+                    : $rowsQuery->get();
+            }
 
             $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
             $rowCollection->transform(function ($row) {
@@ -323,6 +333,14 @@ class ReportController extends Controller
 
             return [$this->emptyRows($request), $this->emptySummary()];
         }
+    }
+
+    private function reportPerPage(Request $request)
+    {
+        $perPage = (string) $request->input('hr_report_per_page', '50');
+        $allowed = ['25', '50', '100', '200', '500', 'all'];
+
+        return in_array($perPage, $allowed, true) ? ($perPage === 'all' ? 'all' : (int) $perPage) : 50;
     }
 
     private function staffReportData(Request $request, bool $paginate): array
@@ -496,14 +514,18 @@ class ReportController extends Controller
 
     private function commissionReportData(Request $request, bool $paginate): array
     {
-        $commissionColumns = $this->commissionColumns();
+        $applyCommissionConditions = $this->applyCommissionConditions($request);
+        $commissionColumns = $this->commissionColumns($applyCommissionConditions);
 
         try {
             $lineExpressions = $this->hrLineAmountExpressions();
             $base = $this->baseStaffLineQuery($request, 'DATE(sor.created_at)', $lineExpressions)
-                ->whereIn('sor.service_type', $this->commissionServiceTypeValues($commissionColumns))
-                ->whereNotNull('sor.customer_phone')
-                ->whereRaw('TRIM(sor.customer_phone) != ""');
+                ->whereIn('sor.service_type', $this->commissionServiceTypeValues($commissionColumns));
+
+            if ($applyCommissionConditions) {
+                $base->whereNotNull('sor.customer_phone')
+                    ->whereRaw('TRIM(sor.customer_phone) != ""');
+            }
 
             $totalsQuery = (clone $base)
                 ->selectRaw('COUNT(DISTINCT sor.id) as sale_count')
@@ -587,9 +609,19 @@ class ReportController extends Controller
                 ->orderBy('staff_name')
                 ->orderBy('branch_name');
 
-            $rows = $paginate
-                ? $rowsQuery->paginate(50, ['*'], 'commission_page')->appends($request->query())
-                : $rowsQuery->get();
+            $commissionPerPage = $this->commissionPerPage($request);
+            if ($paginate && $commissionPerPage === 'all') {
+                $allRows = $rowsQuery->get();
+                $rows = new LengthAwarePaginator($allRows, $allRows->count(), max($allRows->count(), 1), 1, [
+                    'path' => $request->url(),
+                    'pageName' => 'commission_page',
+                    'query' => $request->query(),
+                ]);
+            } else {
+                $rows = $paginate
+                    ? $rowsQuery->paginate($commissionPerPage, ['*'], 'commission_page')->appends($request->query())
+                    : $rowsQuery->get();
+            }
 
             $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
             $rowCollection->transform(function ($row) use ($request, $commissionColumns) {
@@ -603,28 +635,43 @@ class ReportController extends Controller
         } catch (\Throwable $e) {
             \Log::warning('Unable to load HR commission report data: ' . $e->getMessage());
 
-            return [$this->emptyRows($request, 50, 'commission_page'), $this->emptyCommissionSummary($commissionColumns), $commissionColumns];
+            return [$this->emptyRows($request, $this->commissionPerPage($request) === 'all' ? 1 : $this->commissionPerPage($request), 'commission_page'), $this->emptyCommissionSummary($commissionColumns), $commissionColumns];
         }
     }
 
-    private function commissionColumns(): array
+    private function commissionPerPage(Request $request)
+    {
+        $perPage = (string) $request->input('commission_per_page', '50');
+        $allowed = ['25', '50', '100', '200', '500', 'all'];
+
+        return in_array($perPage, $allowed, true) ? ($perPage === 'all' ? 'all' : (int) $perPage) : 50;
+    }
+
+    private function applyCommissionConditions(Request $request): bool
+    {
+        return $request->input('commission_condition_mode', 'with_condition') !== 'no_condition';
+    }
+
+    private function commissionColumns(bool $applyConditions = true): array
     {
         return collect(['iron', 'material', 'repair', 'sell'])
-            ->map(fn ($key) => [
-                'key' => $key,
-                'label' => $this->sellTypeLabel($key),
-                'short_label' => [
-                    'iron' => 'Iron',
-                    'material' => 'Mat.',
-                    'repair' => 'Repair',
-                    'sell' => 'Sell',
-                ][$key] ?? $this->sellTypeLabel($key),
-                'values' => $this->sellTypeValues($key),
-                'has_commission' => in_array($key, ['iron', 'material', 'repair', 'sell'], true),
-                'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
-                'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
-                'minimum_invoice_total' => $key === 'material' ? 10 : null,
-            ])
+            ->map(function ($key) use ($applyConditions) {
+                return [
+                    'key' => $key,
+                    'label' => $this->sellTypeLabel($key),
+                    'short_label' => [
+                        'iron' => 'Iron',
+                        'material' => 'Mat.',
+                        'repair' => 'Repair',
+                        'sell' => 'Sell',
+                    ][$key] ?? $this->sellTypeLabel($key),
+                    'values' => $this->sellTypeValues($key),
+                    'has_commission' => in_array($key, ['iron', 'material', 'repair', 'sell'], true),
+                    'commission_basis' => $key === 'sell' ? 'qty' : 'invoice',
+                    'commission_rate' => in_array($key, ['material', 'sell'], true) ? 0.25 : 0.20,
+                    'minimum_invoice_total' => $applyConditions && $key === 'material' ? 10 : null,
+                ];
+            })
             ->all();
     }
 
