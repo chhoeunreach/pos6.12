@@ -130,7 +130,6 @@ class ReportController extends Controller
                 'Staff' => $row->staff_name,
                 'Branch' => $row->branch_name,
                 'Office Time' => $row->office_time ?? '-',
-                'Start - End Time' => $row->office_time_range ?? '-',
                 'Total Hour / Day' => $row->total_hour_day ?? '-',
                 'Time Work' => $row->time_work ?? '-',
             ];
@@ -630,7 +629,6 @@ class ReportController extends Controller
                 $officeTime = $officeTimes[$this->officeTimeKey($row, $period)] ?? null;
                 $officeMinutes = (int) ($officeTime['minutes'] ?? $fallbackMinutes);
                 $row->office_time = ! empty($officeTime['time']) ? $officeTime['time'] : '-';
-                $row->office_time_range = ! empty($officeTime['range']) ? $officeTime['range'] : '-';
                 $row->total_hour_day = ! empty($officeTime['hours']) ? $officeTime['hours'] : $this->formatTotalHourDay($fallbackMinutes);
                 $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
 
@@ -669,6 +667,15 @@ class ReportController extends Controller
             return [];
         }
 
+        $shiftIdColumn = $this->firstHrColumn('essentials_user_shifts', ['essentials_shift_id', 'shift_id']);
+        $shiftNameColumn = $this->firstHrColumn('essentials_shifts', ['name', 'shift', 'title']);
+        $shiftStartColumn = $this->firstHrColumn('essentials_shifts', ['start_time', 'time_start']);
+        $shiftEndColumn = $this->firstHrColumn('essentials_shifts', ['end_time', 'time_end']);
+
+        if (empty($shiftIdColumn) || empty($shiftNameColumn)) {
+            return [];
+        }
+
         $userIds = collect($rows)
             ->pluck('user_id')
             ->filter()
@@ -693,14 +700,15 @@ class ReportController extends Controller
         $endDate = $period === 'monthly'
             ? \Carbon\Carbon::createFromFormat('Y-m-d', $saleDates->max() . '-01')->endOfMonth()->toDateString()
             : $saleDates->max();
-        $durationExpression = "CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CASE WHEN TIME_TO_SEC(es.end_time) >= TIME_TO_SEC(es.start_time) THEN FLOOR((TIME_TO_SEC(es.end_time) - TIME_TO_SEC(es.start_time)) / 60) ELSE FLOOR((TIME_TO_SEC(es.end_time) + 86400 - TIME_TO_SEC(es.start_time)) / 60) END ELSE NULL END";
+        $durationExpression = $shiftStartColumn && $shiftEndColumn
+            ? "CASE WHEN es.{$shiftStartColumn} IS NOT NULL AND es.{$shiftEndColumn} IS NOT NULL THEN CASE WHEN TIME_TO_SEC(es.{$shiftEndColumn}) >= TIME_TO_SEC(es.{$shiftStartColumn}) THEN FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) ELSE FLOOR((TIME_TO_SEC(es.{$shiftEndColumn}) + 86400 - TIME_TO_SEC(es.{$shiftStartColumn})) / 60) END ELSE NULL END"
+            : 'NULL';
 
         $assignmentsByUser = DB::connection('hr')
             ->table('essentials_user_shifts as eus')
-            ->join('essentials_shifts as es', 'es.id', '=', 'eus.essentials_shift_id')
+            ->join('essentials_shifts as es', 'es.id', '=', "eus.{$shiftIdColumn}")
             ->select('eus.user_id', 'eus.start_date', 'eus.end_date')
-            ->selectRaw("NULLIF(TRIM(es.name), '') as office_time_name")
-            ->selectRaw("CASE WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL THEN CONCAT(DATE_FORMAT(es.start_time, '%l:%i%p'), '-', DATE_FORMAT(es.end_time, '%l:%i%p')) ELSE NULL END as office_time_range")
+            ->selectRaw("NULLIF(TRIM(es.{$shiftNameColumn}), '') as office_time_name")
             ->selectRaw("COALESCE({$durationExpression}, 0) as office_minutes")
             ->whereIn('eus.user_id', $userIds)
             ->where('eus.start_date', '<=', $endDate)
@@ -728,7 +736,6 @@ class ReportController extends Controller
                 }
 
                 $time = $matches->pluck('office_time_name')->filter()->unique()->implode(', ');
-                $range = $matches->pluck('office_time_range')->filter()->unique()->implode(', ');
                 $hours = $matches
                     ->pluck('office_minutes')
                     ->filter(fn ($minutes) => (int) $minutes > 0)
@@ -738,7 +745,6 @@ class ReportController extends Controller
 
                 return [$this->officeTimeKey($row, $period) => [
                     'time' => $time,
-                    'range' => $range,
                     'hours' => $hours,
                     'minutes' => (int) $matches->max('office_minutes'),
                 ]];
@@ -764,6 +770,17 @@ class ReportController extends Controller
         }
 
         return [$salePeriod, $salePeriod];
+    }
+
+    private function firstHrColumn(string $table, array $columns): ?string
+    {
+        foreach ($columns as $column) {
+            if (Schema::connection('hr')->hasColumn($table, $column)) {
+                return $column;
+            }
+        }
+
+        return null;
     }
 
     private function applyCommissionConditions(Request $request): bool

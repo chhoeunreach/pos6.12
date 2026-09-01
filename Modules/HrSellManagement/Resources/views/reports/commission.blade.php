@@ -293,7 +293,6 @@
                     <th>Staff</th>
                     <th>Branch</th>
                     <th>Office Time</th>
-                    <th>Start - End Time</th>
                     <th>Total Hour / Day</th>
                     <th>Time Work</th>
                     <th>Alert</th>
@@ -314,7 +313,6 @@
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td>{{ $row->office_time ?? '-' }}</td>
-                        <td>{{ $row->office_time_range ?? '-' }}</td>
                         <td>{{ $row->total_hour_day ?? '-' }}</td>
                         <td>{{ $row->time_work ?? '-' }}</td>
                         <td>
@@ -377,11 +375,10 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 10) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 9) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
-                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>
