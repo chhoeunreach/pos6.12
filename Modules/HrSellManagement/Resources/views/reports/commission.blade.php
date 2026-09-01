@@ -490,11 +490,11 @@ $(function() {
                     exportOptions: { columns: ':visible' },
                     customize: function(win) {
                         var css =
-                            '@page{size:landscape;margin:10mm;}' +
-                            'body{font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;color:#111827;font-size:11px;}' +
-                            'h1{font-size:18px;text-align:center;margin:0 0 14px;font-weight:700;color:#0f5132;}' +
-                            'table{width:100%!important;border-collapse:collapse!important;}' +
-                            'table th,table td{border:1px solid #9ca3af!important;padding:6px 7px!important;vertical-align:middle!important;}' +
+                            '@page{size:portrait;margin:6mm;}' +
+                            'body{font-family:Arial,"Khmer OS Battambang","Khmer OS",sans-serif;color:#111827;font-size:9px;line-height:1.2;margin:0;padding:0;}' +
+                            'h1{font-size:14px;text-align:center;margin:0 0 6px;font-weight:700;color:#0f5132;}' +
+                            'table{width:100%!important;border-collapse:collapse!important;table-layout:auto!important;}' +
+                            'table th,table td{border:1px solid #9ca3af!important;padding:3px 4px!important;vertical-align:middle!important;word-break:break-word!important;}' +
                             'table thead th{background:#d9ead3!important;color:#111827!important;font-weight:700!important;text-align:center!important;}' +
                             'table tbody tr:nth-child(even) td{background:#f8fafc!important;}' +
                             'table tfoot th{background:#fce5cd!important;color:#111827!important;font-weight:700!important;}' +
