@@ -2,7 +2,7 @@
 @section('page_title', 'Commission Report')
 @section('module_content')
 @php
-    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('commission_condition_mode');
+    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('commission_condition_mode') || request()->filled('commission_period');
     $selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all();
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
     $selectedSellTypes = collect((array) request('sell_type', []))->map(fn ($sellType) => (string) $sellType)->all();
@@ -14,6 +14,7 @@
     $commissionPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
     $commissionPerPage = array_key_exists((string) request('commission_per_page', '50'), $commissionPerPageOptions) ? (string) request('commission_per_page', '50') : '50';
     $commissionConditionMode = request('commission_condition_mode', 'with_condition') === 'no_condition' ? 'no_condition' : 'with_condition';
+    $commissionPeriod = request('commission_period') === 'monthly' ? 'monthly' : 'daily';
 @endphp
 <style>
     #hr_commission_filter_box {
@@ -103,6 +104,15 @@
                         </div>
                         <input type="hidden" name="start_date" id="hr_commission_start_date" value="{{ request('start_date') }}">
                         <input type="hidden" name="end_date" id="hr_commission_end_date" value="{{ request('end_date') }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Report By:</label>
+                        <select name="commission_period" class="form-control">
+                            <option value="daily" {{ $commissionPeriod === 'daily' ? 'selected' : '' }}>Daily</option>
+                            <option value="monthly" {{ $commissionPeriod === 'monthly' ? 'selected' : '' }}>Monthly</option>
+                        </select>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -278,11 +288,12 @@
         <table class="table table-bordered table-striped hr-commission-table" id="hr_commission_table">
             <thead>
                 <tr>
-                    <th>Date</th>
+                    <th>{{ $commissionPeriod === 'monthly' ? 'Month' : 'Date' }}</th>
                     <th>User</th>
                     <th>Staff</th>
                     <th>Branch</th>
                     <th>Office Time</th>
+                    <th>Start - End Time</th>
                     <th>Total Hour / Day</th>
                     <th>Time Work</th>
                     <th>Alert</th>
@@ -298,11 +309,12 @@
             <tbody>
                 @foreach($commissionRows as $row)
                     <tr>
-                        <td>{{ $row->sale_date ?? '-' }}</td>
+                        <td>{{ $row->sale_period ?? '-' }}</td>
                         <td>{{ $row->staff_code ?: '-' }}</td>
                         <td>{{ $row->staff_name }}</td>
                         <td>{{ $row->branch_name }}</td>
                         <td>{{ $row->office_time ?? '-' }}</td>
+                        <td>{{ $row->office_time_range ?? '-' }}</td>
                         <td>{{ $row->total_hour_day ?? '-' }}</td>
                         <td>{{ $row->time_work ?? '-' }}</td>
                         <td>
@@ -365,10 +377,11 @@
                         <td class="text-right">{{ number_format((float) ($row->commission_total ?? 0), 2) }}</td>
                     </tr>
                 @endforeach
-                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 9) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
+                {!! count($commissionRows) === 0 ? '<tr><td colspan="' . (count($commissionColumns) + collect($commissionColumns)->where('has_commission', true)->count() + 10) . '" class="text-center text-muted">No commission rows found for selected filters.</td></tr>' : '' !!}
             </tbody>
             <tfoot>
                 <tr>
+                    <th></th>
                     <th></th>
                     <th></th>
                     <th></th>
