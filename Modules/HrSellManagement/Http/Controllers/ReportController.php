@@ -1117,8 +1117,17 @@ class ReportController extends Controller
         return $map[$key]['label'] ?? ($type ?: '-');
     }
 
-    private function sellTypeValues(?string $type): array
+    private function sellTypeValues($type): array
     {
+        if (is_array($type)) {
+            return collect($type)
+                ->filter(fn ($value) => $value !== null && trim((string) $value) !== '')
+                ->flatMap(fn ($value) => $this->sellTypeValues((string) $value))
+                ->unique()
+                ->values()
+                ->all();
+        }
+
         $key = $this->normalizeSellTypeKey($type);
         $map = $this->sellTypeMap();
 

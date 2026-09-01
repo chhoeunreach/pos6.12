@@ -5,6 +5,7 @@
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('department_id') || request()->filled('sell_type') || request()->filled('seller_key') || request()->filled('commission_condition_mode');
     $selectedBranchNames = collect((array) request('branch_name', []))->map(fn ($branchName) => (string) $branchName)->all();
     $selectedDepartmentIds = collect((array) request('department_id', []))->map(fn ($departmentId) => (string) $departmentId)->all();
+    $selectedSellTypes = collect((array) request('sell_type', []))->map(fn ($sellType) => (string) $sellType)->all();
     $printDate = request('start_date') && request('end_date')
         ? (request('start_date') === request('end_date') ? request('start_date') : request('start_date') . ' - ' . request('end_date'))
         : now()->toDateString();
@@ -148,12 +149,15 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Sell Type:</label>
-                        <select name="sell_type" class="form-control select2">
-                            <option value="">All</option>
+                        <select name="sell_type[]" class="form-control select2 js-hr-multi-select" multiple data-placeholder="All">
                             @foreach($hrSellTypes as $type => $name)
-                                <option value="{{ $type }}" @selected((string) request('sell_type') === (string) $type)>{{ $name }}</option>
+                                <option value="{{ $type }}" @selected(in_array((string) $type, $selectedSellTypes, true))>{{ $name }}</option>
                             @endforeach
                         </select>
+                        <div class="btn-group btn-group-xs" style="margin-top:5px;">
+                            <button type="button" class="btn btn-default js-select-all-options">Select all</button>
+                            <button type="button" class="btn btn-default js-clear-all-options">Clear all</button>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
