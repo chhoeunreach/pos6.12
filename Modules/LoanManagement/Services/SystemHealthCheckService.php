@@ -456,23 +456,10 @@ class SystemHealthCheckService
 
             try {
                 if ($key === 'users') {
-                    $tableExists = Schema::hasTable($table);
-                    if ($tableExists) {
-                        $query = DB::table($table);
-
-                        if (Schema::hasColumn($table, 'business_id')) {
-                            $businessId = self::currentBusinessId();
-                            if ($businessId !== null) {
-                                $query->where('business_id', $businessId);
-                            }
-                        }
-
-                        if (Schema::hasColumn($table, 'deleted_at')) {
-                            $query->whereNull('deleted_at');
-                        }
-
-                        $count = (int) $query->count();
-                    }
+                    $userStatus = self::loanManagementUserSeedStatus();
+                    $table = $userStatus['table'];
+                    $tableExists = $userStatus['exists'];
+                    $count = $userStatus['count'];
                 } elseif ($conn) {
                     $tableExists = Schema::connection($conn)->hasTable($table);
                     if ($tableExists) {
@@ -503,7 +490,7 @@ class SystemHealthCheckService
                 'title_en' => "Empty Reference Data: {$info['name']}",
                 'title_km' => "ទិន្នន័យគោលទទេ (Empty Data): {$info['name']}",
                 'message_en' => $key === 'users'
-                    ? "LoanManagement > Manage Users has no account for this business. {$info['desc']} is missing."
+                    ? "LoanManagement > Manage Users has no account in the loan database. {$info['desc']} is missing."
                     : "Table '{$table}' has 0 records. Essential reference data ({$info['desc']}) is missing.",
                 'message_km' => "តារាង '{$table}' មិនទាន់មានទិន្នន័យ (0 កំណត់ត្រា)។ សូមដំណើរការ seed ទិន្នន័យគោល។",
                 'remedy' => $key === 'users' ? $info['remedy'] : "Run terminal command: {$info['remedy']}",
@@ -523,6 +510,55 @@ class SystemHealthCheckService
         $businessId = session('user.business_id') ?? auth()->user()->business_id ?? null;
 
         return $businessId ? (int) $businessId : null;
+    }
+
+    private static function loanManagementUserSeedStatus(): array
+    {
+        $loanConnection = (string) config('loanmanagement.db_connection', 'mysql_loan');
+        $sources = [
+            ['connection' => $loanConnection, 'table' => 'loan_users'],
+            ['connection' => $loanConnection, 'table' => 'users'],
+            ['connection' => null, 'table' => 'users'],
+        ];
+
+        foreach ($sources as $source) {
+            $connection = $source['connection'];
+            $table = $source['table'];
+
+            try {
+                $schema = $connection ? Schema::connection($connection) : Schema::getFacadeRoot();
+                if (! $schema->hasTable($table)) {
+                    continue;
+                }
+
+                $query = $connection ? DB::connection($connection)->table($table) : DB::table($table);
+
+                if ($schema->hasColumn($table, 'business_id')) {
+                    $businessId = self::currentBusinessId();
+                    if ($businessId !== null) {
+                        $query->where('business_id', $businessId);
+                    }
+                }
+
+                if ($schema->hasColumn($table, 'deleted_at')) {
+                    $query->whereNull('deleted_at');
+                }
+
+                return [
+                    'table' => $connection ? "{$connection}.{$table}" : $table,
+                    'exists' => true,
+                    'count' => (int) $query->count(),
+                ];
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        return [
+            'table' => "{$loanConnection}.loan_users",
+            'exists' => false,
+            'count' => 0,
+        ];
     }
 
     /**
