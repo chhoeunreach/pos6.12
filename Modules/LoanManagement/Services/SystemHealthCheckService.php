@@ -443,7 +443,7 @@ class SystemHealthCheckService
                 'name' => 'Admin User Accounts',
                 'table' => 'users',
                 'conn' => null,
-                'desc' => 'At least 1 active administrator account',
+                'desc' => 'At least 1 account in LoanManagement > Manage Users',
                 'remedy' => 'Create or activate a login-enabled user from LoanManagement > Manage Users.',
             ],
         ];
@@ -465,14 +465,6 @@ class SystemHealthCheckService
                             if ($businessId !== null) {
                                 $query->where('business_id', $businessId);
                             }
-                        }
-
-                        if (Schema::hasColumn($table, 'status')) {
-                            $query->where('status', 'active');
-                        }
-
-                        if (Schema::hasColumn($table, 'allow_login')) {
-                            $query->where('allow_login', 1);
                         }
 
                         if (Schema::hasColumn($table, 'deleted_at')) {
@@ -511,10 +503,11 @@ class SystemHealthCheckService
                 'title_en' => "Empty Reference Data: {$info['name']}",
                 'title_km' => "ទិន្នន័យគោលទទេ (Empty Data): {$info['name']}",
                 'message_en' => $key === 'users'
-                    ? "Manage Users has no active login-enabled account for this business. {$info['desc']} is missing."
+                    ? "LoanManagement > Manage Users has no account for this business. {$info['desc']} is missing."
                     : "Table '{$table}' has 0 records. Essential reference data ({$info['desc']}) is missing.",
                 'message_km' => "តារាង '{$table}' មិនទាន់មានទិន្នន័យ (0 កំណត់ត្រា)។ សូមដំណើរការ seed ទិន្នន័យគោល។",
                 'remedy' => $key === 'users' ? $info['remedy'] : "Run terminal command: {$info['remedy']}",
+                'action_route' => $key === 'users' ? 'loan-management.users.index' : null,
             ];
         }
 

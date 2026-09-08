@@ -92,7 +92,11 @@
                             @foreach(array_slice($systemHealth['alerts'], 0, 3) as $alert)
                                 <div style="font-size: 13px; line-height: 1.4;">
                                     <strong>• {{ $lmIsKhmer ? $alert['title_km'] : $alert['title_en'] }}:</strong> {{ $lmIsKhmer ? $alert['message_km'] : $alert['message_en'] }}
-                                    @if(!empty($alert['remedy']))
+                                    @if(!empty($alert['action_route']) && \Illuminate\Support\Facades\Route::has($alert['action_route']))
+                                        <a href="{{ route($alert['action_route']) }}" class="btn btn-xs btn-default" style="margin-left: 6px; font-weight: 700;">
+                                            <i class="fa fa-users"></i> {{ $lmText('Manage Users', 'គ្រប់គ្រងអ្នកប្រើ') }}
+                                        </a>
+                                    @elseif(!empty($alert['remedy']))
                                         <code style="background: #0f172a; color: #38bdf8; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 6px;">{{ $alert['remedy'] }}</code>
                                     @endif
                                 </div>
