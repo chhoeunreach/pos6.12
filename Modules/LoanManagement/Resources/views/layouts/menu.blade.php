@@ -7,16 +7,27 @@
     };
     $lmIsKhmer = session('user.language', config('app.locale')) === 'km';
     $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
+    $businessSettings = \Modules\LoanManagement\Services\BusinessSettingsService::get();
 @endphp
 
 <li class="treeview {{ request()->segment(1) === 'loan-management' ? 'active menu-open' : '' }}">
     <a href="#">
-        <i class="fa fa-handshake-o"></i> <span>Installment / Loan</span>
+        <i class="fa fa-handshake-o"></i> <span>{{ $businessSettings['system_name'] }}</span>
         <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
     </a>
     <ul class="treeview-menu">
         <li><a href="{{ $lmUrl('loan-management.dashboard.index', [], '/loan-management/dashboard/main') }}"><i class="fa fa-dashboard"></i> Dashboard</a></li>
-        <li><a href="{{ $lmUrl('loan-management.admin-loan', [], '/loan-management/admin-loan') }}"><i class="fa fa-line-chart"></i> {{ $lmText('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</a></li>
+
+        <li class="treeview">
+            <a href="#"><i class="fa fa-money"></i> <span>{{ $lmText('Installments', 'កម្ចីរំលស់') }}</span> <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
+            <ul class="treeview-menu">
+                <li><a href="{{ $lmUrl('loan-management.loans', [], '/loan-management/loans') }}"><i class="fa fa-file-text-o"></i> {{ $lmText('All Installments', 'បញ្ជីកម្ចីទាំងអស់') }}</a></li>
+                <li><a href="{{ $lmUrl('loan-management.loans.create', [], '/loan-management/loans/create') }}"><i class="fa fa-plus-circle"></i> {{ $lmText('New Installment', 'កម្ចីថ្មី') }}</a></li>
+                <li><a href="{{ $lmUrl('loan-management.schedules.index', [], '/loan-management/schedules') }}"><i class="fa fa-calendar"></i> {{ $lmText('Installment Schedule', 'កាលវិភាគកម្ចី') }}</a></li>
+                <li><a href="{{ $lmUrl('loan-management.schedules.calendar', [], '/loan-management/schedules/calendar') }}"><i class="fa fa-calendar-check-o"></i> {{ $lmText('Installment Calendar', 'ប្រតិទិនបង់ប្រាក់រំលស់') }}</a></li>
+                <li><a href="{{ $lmUrl('loan-management.loans.calculator', [], '/loan-management/loans/calculator') }}"><i class="fa fa-calculator"></i> {{ $lmText('Calculator', 'ម៉ាស៊ីនគណនាកម្ចី') }}</a></li>
+            </ul>
+        </li>
 
         <li class="treeview">
             <a href="#"><i class="fa fa-phone"></i> Collection Cases <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
@@ -40,6 +51,14 @@
                 <li><a href="{{ $lmUrl('loan-management.risk.page', ['page' => 'legal-cases'], '/loan-management/risk/legal-cases') }}"><i class="fa fa-gavel"></i> Legal Cases</a></li>
                 <li><a href="{{ $lmUrl('loan-management.risk.page', ['page' => 'blacklisted-customers'], '/loan-management/risk/blacklisted-customers') }}"><i class="fa fa-black-tie"></i> Blacklisted Customers</a></li>
                 <li><a href="{{ $lmUrl('loan-management.risk.page', ['page' => 'repossessions'], '/loan-management/risk/repossessions') }}"><i class="fa fa-truck"></i> Repossessions</a></li>
+            </ul>
+        </li>
+
+        <li class="treeview">
+            <a href="#"><i class="fa fa-cubes"></i> <span>Installment Products</span> <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
+            <ul class="treeview-menu">
+                <li><a href="{{ $lmUrl('loan-management.products.index', [], '/loan-management/products') }}"><i class="fa fa-list"></i> All Products</a></li>
+                <li><a href="{{ $lmUrl('loan-management.products.create', [], '/loan-management/products/create') }}"><i class="fa fa-plus-circle"></i> Add Product</a></li>
             </ul>
         </li>
 
@@ -76,7 +95,7 @@
             <a href="#"><i class="fa fa-bar-chart"></i> Reports <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 <li><a href="{{ $lmUrl('loan-management.reports.index', [], '/loan-management/reports/index') }}"><i class="fa fa-list-alt"></i> Installment Reports</a></li>
-                <li><a href="{{ $lmUrl('loan-management.reports.yearly-loan-summary', [], '/loan-management/reports/yearly-loan-summary') }}"><i class="fa fa-calendar"></i> {{ $lmText('Yearly Loan Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ') }}</a></li>
+                <li><a href="{{ $lmUrl('loan-management.reports.yearly-loan-summary', [], '/loan-management/reports/yearly-loan-summary') }}"><i class="fa fa-calendar"></i> {{ $lmText('Yearly Installment Summary', 'សង្ខេបកម្ចីប្រចាំឆ្នាំ') }}</a></li>
                 <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'monthly'], '/loan-management/payments/index?payment_type=monthly') }}"><i class="fa fa-money"></i> Collection Payment Reports</a></li>
                 <li><a href="{{ $lmUrl('loan-management.payments.index', ['payment_type' => 'loan'], '/loan-management/payments/index?payment_type=loan') }}"><i class="fa fa-bank"></i> Deposit Payment Reports</a></li>
             </ul>
@@ -85,7 +104,7 @@
         <li class="treeview">
             <a href="#"><i class="fa fa-cogs"></i> Tools <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
-                <li><a href="{{ $lmUrl('loan-management.tools.loan-import-export', [], '/loan-management/tools/loan-import-export') }}"><i class="fa fa-file-excel-o"></i> Loan Import/Export</a></li>
+                <li><a href="{{ $lmUrl('loan-management.tools.loan-import-export', [], '/loan-management/tools/loan-import-export') }}"><i class="fa fa-file-excel-o"></i> Installment Import/Export</a></li>
                 <li><a href="{{ $lmUrl('loan-management.tools.monthly-import-export', [], '/loan-management/tools/monthly-import-export') }}"><i class="fa fa-exchange"></i> Monthly Payments Import/Export</a></li>
                 <li><a href="{{ $lmUrl('loan-management.gps.index', [], '/loan-management/gps') }}"><i class="fa fa-map"></i> GPS Tracking</a></li>
                 <li><a href="{{ $lmUrl('loan-management.activity-logs.index', [], '/loan-management/tools/activity-logs') }}"><i class="fa fa-history"></i> Activity Logs</a></li>
@@ -96,11 +115,13 @@
             <a href="#"><i class="fa fa-cog"></i> Settings <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
             <ul class="treeview-menu">
                 @if(auth()->user()->can('user.view') || auth()->user()->can('user.create'))
-                    <li><a href="{{ $lmUrl('users.index', [], '/users') }}"><i class="fa fa-user-plus"></i> Manage Users</a></li>
+                    <li><a href="{{ $lmUrl('loan-management.users.index', [], '/loan-management/users') }}"><i class="fa fa-user-plus"></i> Manage Users</a></li>
+                @endif
+                @if(auth()->user()->can('roles.view') || auth()->user()->can('roles.create'))
+                    <li><a href="{{ $lmUrl('loan-management.roles.index', [], '/loan-management/roles') }}"><i class="fa fa-shield"></i> Roles</a></li>
                 @endif
                 <li><a href="{{ $lmUrl('loan-management.locations.index', [], '/loan-management/locations') }}"><i class="fa fa-map-marker"></i> Locations</a></li>
-                <li><a href="{{ $lmUrl('loan-management.settings.payment-methods', [], '/loan-management/settings/payment-methods') }}"><i class="fa fa-credit-card"></i> Payment Methods</a></li>
-                <li><a href="{{ $lmUrl('loan-management.settings.currencies', [], '/loan-management/settings/currencies') }}"><i class="fa fa-money"></i> Currencies</a></li>
+                <li><a href="{{ $lmUrl('loan-management.settings.business', [], '/loan-management/settings/business') }}"><i class="fa fa-paint-brush"></i> {{ $lmText('Business Settings', 'ការកំណត់អាជីវកម្ម') }}</a></li>
             </ul>
         </li>
     </ul>

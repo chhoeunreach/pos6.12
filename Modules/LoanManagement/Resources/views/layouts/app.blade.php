@@ -2,15 +2,18 @@
 
 @php
     use Modules\LoanManagement\Helpers\LoanMenuHelper;
+    use Modules\LoanManagement\Services\BusinessSettingsService;
 
     $whitelist = ['127.0.0.1', '::1'];
-    $moduleCssPath = base_path('Modules/LoanManagement/Resources/assets/css/loan-management.css');
-    $moduleJsPath = base_path('Modules/LoanManagement/Resources/assets/js/loan-management.js');
+    $moduleCssPath = module_path('LoanManagement', 'Resources/assets/css/loan-management.css');
+    $moduleJsPath = module_path('LoanManagement', 'Resources/assets/js/loan-management.js');
     $loanBadgeCounts = LoanMenuHelper::badgeCounts();
-    $pageTitle = trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title').' - LoanManagement' : 'LoanManagement';
-    $businessName = Session::get('business.name');
+    $businessSettings = BusinessSettingsService::get();
+    $pageTitle = trim($__env->yieldContent('title')) !== '' ? $__env->yieldContent('title').' - '.$businessSettings['system_name'] : $businessSettings['system_name'];
+    $businessName = $businessSettings['business_name'] ?: Session::get('business.name');
     $isLoanEmbeddedModal = request()->boolean('_lm_modal');
     $loanLanguage = session('user.language', config('app.locale'));
+    $asset_v = $asset_v ?? config('loanmanagement.version', '1.0.0');
 @endphp
 
 <!DOCTYPE html>
@@ -25,11 +28,16 @@
 
     @include('layouts.partials.css')
     @include('layouts.partials.extracss')
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap" as="style">
 
     @if (file_exists($moduleCssPath))
-        <style>{!! file_get_contents($moduleCssPath) !!}</style>
+        <style data-lm-css-version="{{ $asset_v }}">{!! file_get_contents($moduleCssPath) !!}</style>
     @endif
+    <style id="loanBusinessTheme">
+        :root {
+            {!! BusinessSettingsService::cssVariables() !!}
+        }
+    </style>
     @yield('loan_css')
 </head>
 <body class="hold-transition skin-blue-light sidebar-mini loan-management-page lm-language-{{ $loanLanguage }} {{ $isLoanEmbeddedModal ? 'loan-management-embedded-modal' : '' }} tw-font-sans tw-antialiased tw-text-gray-900 tw-bg-gray-100">
@@ -37,13 +45,13 @@
         <input type="hidden" id="__is_localhost" value="true">
     @endif
 
-    <input type="hidden" id="__code" value="{{ session('currency.code') }}">
-    <input type="hidden" id="__symbol" value="{{ session('currency.symbol') }}">
+    <input type="hidden" id="__code" value="{{ session('currency.code', $businessSettings['currency_code'] ?? 'USD') }}">
+    <input type="hidden" id="__symbol" value="{{ session('currency.symbol', $businessSettings['currency_symbol'] ?? '$') }}">
     <input type="hidden" id="__thousand" value="{{ session('currency.thousand_separator') }}">
     <input type="hidden" id="__decimal" value="{{ session('currency.decimal_separator') }}">
-    <input type="hidden" id="__symbol_placement" value="{{ session('business.currency_symbol_placement') }}">
-    <input type="hidden" id="__precision" value="{{ session('business.currency_precision', 2) }}">
-    <input type="hidden" id="__quantity_precision" value="{{ session('business.quantity_precision', 2) }}">
+    <input type="hidden" id="__symbol_placement" value="{{ session('business.currency_symbol_placement', $businessSettings['currency_symbol_placement'] ?? 'before') }}">
+    <input type="hidden" id="__precision" value="{{ session('business.currency_precision', $businessSettings['currency_precision'] ?? 2) }}">
+    <input type="hidden" id="__quantity_precision" value="{{ session('business.quantity_precision', $businessSettings['quantity_precision'] ?? 2) }}">
 
     @can('view_export_buttons')
         <input type="hidden" id="view_export_buttons">
@@ -65,10 +73,10 @@
     @endif
 
     <div class="tw-flex thetop">
-        <main class="tw-flex tw-flex-col tw-flex-1 tw-h-full tw-min-w-0 tw-bg-gray-100">
+        <main class="tw-flex tw-flex-col tw-flex-1 tw-min-w-0 tw-bg-gray-100">
             <div id="main_app_header"></div>
             <div id="app"></div>
-            <div class="tw-flex-1 tw-overflow-y-auto tw-h-screen" id="scrollable-container">
+            <div class="tw-flex-1 tw-overflow-y-auto" id="scrollable-container">
                 <div class="lm-app" id="loanManagementApp">
                     @unless($isLoanEmbeddedModal)
                         @include('loanmanagement::layouts.sidebar', ['loanBadgeCounts' => $loanBadgeCounts])
@@ -92,14 +100,8 @@
                             @include('loanmanagement::layouts.partials.auto_installment_modal')
                         @endif
 
-                        @if(!$isLoanEmbeddedModal && (auth()->user()?->can('superadmin') || auth()->user()?->can('sell.create')))
-                            @include('loanmanagement::layouts.partials.sell_pos_modal')
-                        @endif
-
                         @unless($isLoanEmbeddedModal)
                             @include('loanmanagement::layouts.footer')
-
-                            @include('loanmanagement::layouts.partials.mobile_nav')
                         @endunless
                     </div>
                 </div>
@@ -107,15 +109,19 @@
         </div>
     </div>
 
+    @unless($isLoanEmbeddedModal)
+        @include('loanmanagement::layouts.partials.mobile_nav')
+    @endunless
+
     <section class="invoice print_section" id="receipt_section"></section>
     <div class="modal fade view_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel"></div>
     <div class="modal fade no-print" id="standaloneLoanModal" tabindex="-1" role="dialog" aria-labelledby="standaloneLoanModalLabel">
-        <div class="modal-dialog modal-xl" role="document" style="width: 96%; max-width: 1200px; margin: 10px auto;">
-            <div class="modal-content">
+        <div class="modal-dialog modal-xl" role="document" style="width: 96%; max-width: 1380px; margin: 12px auto;">
+            <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 25px 60px -15px rgba(0,0,0,0.3); background: #f8fafc;">
                 <div class="modal-body" id="standaloneLoanModalBody" style="padding: 0;">
-                    <div class="text-center" style="padding: 40px 16px;">
-                        <i class="fa fa-spinner fa-spin fa-2x" style="color: #3b82f6;"></i>
-                        <p style="margin-top: 12px; color: #64748b;">Loading form...</p>
+                    <div class="text-center" style="padding: 60px 20px;">
+                        <i class="fa fa-spinner fa-spin fa-3x" style="color: #2563eb;"></i>
+                        <p style="margin-top: 14px; font-size: 15px; font-weight: 600; color: #64748b;">Loading Installment Form...</p>
                     </div>
                 </div>
             </div>
@@ -135,18 +141,24 @@
     </div>
     <div class="overlay tw-hidden"></div>
 
-    <audio id="success-audio">
-        <source src="{{ asset('/audio/success.ogg?v=' . $asset_v) }}" type="audio/ogg">
-        <source src="{{ asset('/audio/success.mp3?v=' . $asset_v) }}" type="audio/mpeg">
-    </audio>
-    <audio id="error-audio">
-        <source src="{{ asset('/audio/error.ogg?v=' . $asset_v) }}" type="audio/ogg">
-        <source src="{{ asset('/audio/error.mp3?v=' . $asset_v) }}" type="audio/mpeg">
-    </audio>
-    <audio id="warning-audio">
-        <source src="{{ asset('/audio/warning.ogg?v=' . $asset_v) }}" type="audio/ogg">
-        <source src="{{ asset('/audio/warning.mp3?v=' . $asset_v) }}" type="audio/mpeg">
-    </audio>
+    @foreach(['success', 'error', 'warning'] as $loanAudioName)
+        @php
+            $loanOggPath = public_path('audio/'.$loanAudioName.'.ogg');
+            $loanMp3Path = public_path('audio/'.$loanAudioName.'.mp3');
+            $loanHasOgg = is_file($loanOggPath);
+            $loanHasMp3 = is_file($loanMp3Path);
+        @endphp
+        @if($loanHasOgg || $loanHasMp3)
+            <audio id="{{ $loanAudioName }}-audio">
+                @if($loanHasOgg)
+                    <source src="{{ asset('/audio/'.$loanAudioName.'.ogg?v=' . $asset_v) }}" type="audio/ogg">
+                @endif
+                @if($loanHasMp3)
+                    <source src="{{ asset('/audio/'.$loanAudioName.'.mp3?v=' . $asset_v) }}" type="audio/mpeg">
+                @endif
+            </audio>
+        @endif
+    @endforeach
 
     @if (!empty($__additional_html))
         {!! $__additional_html !!}
@@ -196,10 +208,10 @@
                                     '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
                                         '<span aria-hidden="true">&times;</span>' +
                                     '</button>' +
-                                    '<h4 class="modal-title">' + escLoanModal(title || 'Loan Detail') + '</h4>' +
+                                    '<h4 class="modal-title">' + escLoanModal(title || 'Installment Detail') + '</h4>' +
                                 '</div>' +
                                 '<div class="modal-body" style="padding:0;height:85vh;">' +
-                                    '<iframe src="' + escLoanModal(modalUrl) + '" style="width:100%;height:100%;border:0;" title="' + escLoanModal(title || 'Loan Detail') + '"></iframe>' +
+                                    '<iframe src="' + escLoanModal(modalUrl) + '" style="width:100%;height:100%;border:0;" title="' + escLoanModal(title || 'Installment Detail') + '"></iframe>' +
                                 '</div>' +
                             '</div>' +
                         '</div>';
@@ -211,7 +223,7 @@
                     var actions = '<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>';
                     if (loanUrl) {
                         actions = '<button type="button" class="btn btn-primary js-open-existing-loan-detail" data-loan-url="' + escLoanModal(loanUrl) + '">' +
-                            '<i class="fa fa-eye"></i> View Loan' +
+                            '<i class="fa fa-eye"></i> View Installment' +
                         '</button> ' + actions;
                     }
 
@@ -437,135 +449,19 @@
                     }, 250);
                 }
 
-                function installPosPrintBridge(frameId) {
-                    var frame = document.getElementById(frameId);
-                    if (!frame) {
-                        return;
-                    }
-
-                    var attempts = 0;
-                    var timer = window.setInterval(function(){
-                        attempts++;
-                        try {
-                            var child = frame.contentWindow;
-                            if (!child || typeof child.pos_print !== 'function' || typeof child.notify_loan_module_pos_saved !== 'function') {
-                                if (attempts > 40) {
-                                    window.clearInterval(timer);
-                                }
-                                return;
-                            }
-
-                            if (child.__loanSellPosPrintBridgeInstalled) {
-                                window.clearInterval(timer);
-                                return;
-                            }
-
-                            var originalPrint = child.pos_print;
-                            var originalNotify = child.notify_loan_module_pos_saved;
-                            child.__loanSellPosPrintBridgeInstalled = true;
-                            child.__loanSellPosPendingPayload = null;
-                            child.__loanSellPosFinalizePendingPayload = function() {
-                                var payload = child.__loanSellPosPendingPayload;
-                                child.__loanSellPosPendingPayload = null;
-
-                                if (!payload) {
-                                    return;
-                                }
-
-                                finalizeLoanPosSaleSaved(payload.receipt || null, payload.transaction_id || null);
-                            };
-                            child.notify_loan_module_pos_saved = function(result) {
-                                var payload = {
-                                    type: 'loan-pos-sale-saved',
-                                    transaction_id: result.transaction_id || (result.receipt && result.receipt.transaction_id) || null,
-                                    invoice_no: result.invoice_no || (result.receipt && result.receipt.invoice_no) || null,
-                                    receipt: result.receipt || null
-                                };
-                                var receipt = payload.receipt || null;
-
-                                if (receipt && receipt.is_enabled && receipt.print_type !== 'printer' && receipt.html_content) {
-                                    child.__loanSellPosPendingPayload = payload;
-                                    return;
-                                }
-
-                                child.__loanSellPosPendingPayload = null;
-                                originalNotify.call(child, result);
-                            };
-                            child.pos_print = function(receipt) {
-                                if (receipt && receipt.print_type !== 'printer' && receipt.html_content) {
-                                    waitForLoanPrintToFinish(child, function(){
-                                        child.__loanSellPosFinalizePendingPayload();
-                                    });
-                                }
-
-                                var response = originalPrint.call(child, receipt);
-
-                                if (!receipt || receipt.print_type === 'printer' || !receipt.html_content) {
-                                    child.__loanSellPosFinalizePendingPayload();
-                                }
-
-                                return response;
-                            };
-                            window.clearInterval(timer);
-                        } catch (e) {
-                            window.clearInterval(timer);
-                        }
-                    }, 250);
-                }
-
-                function buildLoanPosModalUrl(baseUrl) {
-                    if (!baseUrl) {
-                        return '';
-                    }
-
-                    var separator = baseUrl.indexOf('?') === -1 ? '?' : '&';
-                    return baseUrl + separator + '_lm_pos_modal=1&_lm_reload=' + Date.now();
-                }
-
-                function openLoanSellPosModal(posUrl) {
-                    var frame = $('#loanSellPosFrame');
-                    if (!frame.length || !$('#loanSellPosModal').length) {
-                        return false;
-                    }
-
-                    var targetUrl = posUrl || frame.data('pos-url');
-                    if (!targetUrl) {
-                        return false;
-                    }
-
-                    frame.attr('src', buildLoanPosModalUrl(targetUrl));
-                    $('#loanSellPosModal').modal('show');
-                    return true;
-                }
-
-                $(document).on('click', '#loanHeaderOpenSellPos', function(event){
-                    if (openLoanSellPosModal($(this).data('pos-url'))) {
-                        event.preventDefault();
-                    }
-                });
-
-                $('#loanSellPosFrame').on('load', function(){
-                    installPosPrintBridge('loanSellPosFrame');
-                });
-
-                $('#loanSellPosModal').on('shown.bs.modal', function(){
-                    installPosPrintBridge('loanSellPosFrame');
-                });
-
                 $(document).on('click', '.js-open-existing-loan-detail', function(event){
                     event.preventDefault();
-                    openLoanDetailFrameModal($(this).data('loan-url'), 'Loan Detail');
+                    openLoanDetailFrameModal($(this).data('loan-url'), 'Installment Detail');
                 });
 
                 window.loanManagementOpenAutoInstallment = openAutoInstallment;
                 window.loanManagementDirectPrintUrl = directLoanManagementPrintUrl;
-                window.loanManagementOpenSellPos = openLoanSellPosModal;
                 window.loanManagementOpenPrintModal = openLoanPrintModal;
             })(jQuery);
         </script>
     <script>
         (function ($) {
-            $(document).on('click', '.lm-btn-modal', function (e) {
+            $(document).on('click', '.lm-btn-modal, .btn-modal', function (e) {
                 e.preventDefault();
 
                 var $trigger = $(this);
@@ -620,7 +516,7 @@
 
                 var $trigger = $(this);
                 var url = $trigger.data('href') || $trigger.attr('href');
-                var title = $trigger.data('title') || 'Loan Calculator';
+                var title = $trigger.data('title') || 'Installment Calculator';
 
                 if (!url || !$('.view_modal').length) {
                     window.location.href = url;
@@ -673,8 +569,16 @@
                 var $modal = $('#standaloneLoanModal');
                 var $body = $modal.find('#standaloneLoanModalBody');
 
+                if ($.fn.modal && $.fn.modal.Constructor) {
+                    $.fn.modal.Constructor.prototype._enforceFocus = function() {};
+                    $.fn.modal.Constructor.prototype.enforceFocus = function() {};
+                }
+
                 if (modalFormLoaded) {
                     $modal.modal('show');
+                    if (typeof window.mobInitCustomerSearch === 'function') {
+                        window.mobInitCustomerSearch();
+                    }
                     return;
                 }
 
@@ -700,6 +604,9 @@
                         $body.html(result);
                         modalFormLoaded = true;
                         initStandaloneLoanModalEvents($body);
+                        if (typeof window.mobInitCustomerSearch === 'function') {
+                            window.mobInitCustomerSearch();
+                        }
                     },
                     error: function(xhr) {
                         $body.html(
@@ -759,42 +666,74 @@
                 if ($.fn.select2) {
                     $body.find('#modalCustomerSelect').select2({
                         ajax: {
-                            url: '/contacts/customers',
+                            url: modalUrls.searchCustomers,
                             dataType: 'json',
-                            delay: 250,
+                            delay: 200,
                             data: function(params) {
-                                return { q: params.term, page: params.page };
+                                return { q: params.term || '', term: params.term || '', page: params.page || 1 };
                             },
                             processResults: function(data) {
-                                return { results: data };
-                            }
+                                var items = (data && (data.results || data.data)) || [];
+                                return { results: items };
+                            },
+                            cache: true
                         },
                         templateResult: function(data) {
-                            if (!data.id) return data.text;
-                            var html = '';
-                            if (data.supplier_business_name) {
-                                html += '<strong>' + data.supplier_business_name + '</strong><br>';
+                            if (!data.id && !data.text) return data.text;
+                            var khmer = data.khmer_name || '';
+                            var name = data.name || '';
+                            var phone = data.phone || data.mobile || '';
+                            var idcard = data.id_card_number || '';
+                            var code = data.customer_code || '';
+                            var photo = data.photo_url || '';
+
+                            var html = '<div style="display:flex; align-items:center; gap:10px; padding:4px 0;">';
+                            if (photo) {
+                                html += '<img src="' + photo + '" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:1px solid #cbd5e1; flex-shrink:0;">';
+                            } else {
+                                html += '<div style="width:34px; height:34px; border-radius:50%; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;"><i class="fa fa-user"></i></div>';
                             }
-                            html += data.text;
-                            if (data.mobile) {
-                                html += '<br><small style="color:#6b7280;">' + data.mobile + '</small>';
+                            html += '<div style="flex:1; min-width:0; line-height:1.3;">';
+                            html += '<div style="font-weight:700; color:#0f172a; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + (khmer || name || data.text) + (khmer && name && khmer !== name ? ' <span style="font-weight:400; color:#64748b; font-size:12px;">(' + name + ')</span>' : '') + '</div>';
+                            var details = [];
+                            if (phone) details.push('<i class="fa fa-phone" style="color:#64748b;"></i> ' + phone);
+                            if (idcard) details.push('<i class="fa fa-id-card-o" style="color:#64748b;"></i> ' + idcard);
+                            if (code) details.push('<span class="label label-default" style="font-size:10px; font-weight:600;">' + code + '</span>');
+                            if (details.length) {
+                                html += '<div style="font-size:11px; color:#475569; margin-top:2px;">' + details.join(' &bull; ') + '</div>';
                             }
-                            return html;
+                            html += '</div></div>';
+                            return $(html);
                         },
                         templateSelection: function(data) {
-                            return data.text || data.id;
-                        },
-                        minimumInputLength: 1,
-                        language: {
-                            inputTooShort: function(args) {
-                                return 'Please enter ' + args.minimum + ' or more characters';
-                            },
-                            noResults: function() {
-                                return 'No customer found';
+                            if (!data) return '';
+                            if (data.khmer_name) {
+                                return data.khmer_name + (data.name && data.name !== data.khmer_name ? ' (' + data.name + ')' : '') + (data.phone ? ' - ' + data.phone : '');
                             }
+                            return data.text || data.name || data.id || '';
                         },
                         escapeMarkup: function(markup) { return markup; },
-                        dropdownParent: $body.closest('.modal-content')
+                        minimumInputLength: 0,
+                        language: {
+                            noResults: function() { return 'No existing customer found. Click Quick Add to fill KYC!'; }
+                        },
+                        dropdownParent: $body.closest('.modal-content').length ? $body.closest('.modal-content') : $('#standaloneLoanModal')
+                    });
+
+                    $body.find('#modalCustomerSelect').off('select2:open').on('select2:open', function() {
+                        var $sel = $(this);
+                        var s2Data = $sel.data('select2');
+                        setTimeout(function() {
+                            var searchField = document.querySelector('.select2-container--open .select2-search__field') ||
+                                              document.querySelector('.select2-search--dropdown .select2-search__field');
+                            if (searchField) {
+                                searchField.focus();
+                                searchField.setAttribute('placeholder', 'Type Name, Phone, or ID to search...');
+                                if (s2Data && s2Data.results && !searchField.value) {
+                                    s2Data.trigger('query', { term: '' });
+                                }
+                            }
+                        }, 30);
                     });
                 }
 
@@ -843,17 +782,94 @@
 
                 $body.on('select2:select', '#modalCustomerSelect', function(e) {
                     var data = e.params.data;
+                    var khmer = data.khmer_name || data.name || '';
+                    var english = data.name || '';
                     $body.find('#modalCustomerId').val(data.id || '');
-                    $body.find('#modalCustomerName').val(data.text || data.name || '');
-                    $body.find('#modalCustomerPhone').val(data.mobile || data.phone || '');
+                    $body.find('#modalCustomerKhmerName').val(khmer);
+                    $body.find('#modalCustomerEnglishName').val(english);
+                    $body.find('#modalCustomerName').val(khmer || english || data.text || '');
+                    $body.find('#modalCustomerPhone').val(data.phone || data.mobile || '');
                     $body.find('#modalAlternatePhone').val(data.alternate_phone || data.alternate_number || '');
                     $body.find('#modalAlternatePhoneGroup').toggle(!!String(data.alternate_phone || data.alternate_number || '').trim());
-                    $body.find('#modalCustomerAddress').val(data.shipping_address || data.address || '');
+                    $body.find('#modalCustomerAddress').val(data.address || data.shipping_address || '');
                     $body.find('#modalCustomerIdCard').val(data.id_card_number || '');
+
+                    if (data.photo_url) {
+                        $body.find('#mobCustomerPhotoPreview').html('<img src="' + data.photo_url + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"><button type="button" class="lm-kyc-remove" onclick="mobRemoveCustomerProfile()" title="Remove photo"><i class="fa fa-times"></i></button>');
+                    }
+
                     modalSelectAddressFromCustomer($body, data);
-                    var name = data.text || data.name || '';
-                    var initials = name.split(' ').map(function(w){ return w.charAt(0); }).join('').substring(0,2).toUpperCase();
-                    $body.find('#modalCustomerAvatar').html(initials || '<i class="fa fa-user"></i>');
+
+                    var card = document.getElementById('mobCustomerInfoCard');
+                    if (card) {
+                        card.style.transition = 'all 0.3s ease';
+                        card.style.borderColor = '#10b981';
+                        card.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.25)';
+                        setTimeout(function() {
+                            card.style.borderColor = '';
+                            card.style.boxShadow = '';
+                        }, 2200);
+                    }
+                });
+
+                // Quick Add Customer Button Handler (Focus directly on Customer KYC & Identity Form)
+                $body.on('click', '#modalBtnQuickAddCustomer', function(e) {
+                    e.preventDefault();
+                    $body.find('#modalCustomerId').val('');
+                    if (typeof window.mobQuickAddNewCustomer === 'function') {
+                        window.mobQuickAddNewCustomer();
+                        return;
+                    }
+
+                    var searchedText = ($body.find('#modalCustomerSearchInput').val() || '').trim();
+                    if (!searchedText) {
+                        var $searchField = $('.select2-container--open .select2-search__field, #modalCustomerSelect + .select2 .select2-search__field');
+                        if ($searchField.length && $searchField.val()) {
+                            searchedText = $searchField.val().trim();
+                        }
+                    }
+
+                    if ($body.find('#modalCustomerSelect').data('select2')) {
+                        $body.find('#modalCustomerSelect').val(null).trigger('change.select2');
+                    }
+
+                    if (searchedText) {
+                        if (/^[0-9\s+-]+$/.test(searchedText)) {
+                            if (!$body.find('#modalCustomerPhone').val()) {
+                                $body.find('#modalCustomerPhone').val(searchedText);
+                            }
+                        } else {
+                            if (!$body.find('#modalCustomerKhmerName').val()) {
+                                $body.find('#modalCustomerKhmerName').val(searchedText);
+                                $body.find('#modalCustomerEnglishName').val(searchedText);
+                                $body.find('#modalCustomerName').val(searchedText);
+                            }
+                        }
+                    }
+
+                    var card = document.getElementById('mobCustomerInfoCard');
+                    if (card) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        card.style.transition = 'all 0.3s ease';
+                        card.style.borderColor = '#2563eb';
+                        card.style.boxShadow = '0 0 20px rgba(37, 99, 235, 0.35)';
+                        setTimeout(function() {
+                            card.style.borderColor = '';
+                            card.style.boxShadow = '';
+                        }, 2500);
+                    }
+
+                    setTimeout(function() {
+                        var input = document.getElementById('modalCustomerKhmerName');
+                        if (input) {
+                            input.focus();
+                            if (input.select) input.select();
+                        }
+                    }, 250);
+
+                    if (window.toastr) {
+                        toastr.info('Please fill in Customer KYC details below.', 'New Customer KYC');
+                    }
                 });
 
                 $(document).on('contact.created', function(e, contact) {
@@ -861,6 +877,8 @@
                         var $opt = new Option(contact.name, contact.id, true, true);
                         $body.find('#modalCustomerSelect').append($opt).trigger('change');
                         $body.find('#modalCustomerId').val(contact.id);
+                        $body.find('#modalCustomerKhmerName').val(contact.name || '');
+                        $body.find('#modalCustomerEnglishName').val(contact.name || '');
                         $body.find('#modalCustomerName').val(contact.name || '');
                         $body.find('#modalCustomerPhone').val(contact.mobile || '');
                         $body.find('#modalAlternatePhone').val(contact.alternate_phone || contact.alternate_number || '');
@@ -868,15 +886,14 @@
                         $body.find('#modalCustomerAddress').val(contact.shipping_address || '');
                         $body.find('#modalCustomerIdCard').val(contact.id_card_number || '');
                         modalClearAddressSelects($body);
-                        var name = contact.name || '';
-                        var initials = name.split(' ').map(function(w){ return w.charAt(0); }).join('').substring(0,2).toUpperCase();
-                        $body.find('#modalCustomerAvatar').html(initials || '<i class="fa fa-user"></i>');
                     }
                 });
 
                 $body.on('click', '#modalClearCustomer', function() {
                     $body.find('#modalCustomerSelect').val(null).trigger('change');
                     $body.find('#modalCustomerId').val('');
+                    $body.find('#modalCustomerKhmerName').val('');
+                    $body.find('#modalCustomerEnglishName').val('');
                     $body.find('#modalCustomerName').val('');
                     $body.find('#modalCustomerPhone').val('');
                     $body.find('#modalAlternatePhone').val('');
@@ -884,7 +901,13 @@
                     $body.find('#modalCustomerAddress').val('');
                     $body.find('#modalCustomerIdCard').val('');
                     modalClearAddressSelects($body);
-                    $body.find('#modalCustomerAvatar').html('<i class="fa fa-user"></i>');
+                    $body.find('#mobCustomerPhotoPreview').html('<i class="fa fa-user"></i>');
+                    if (typeof mobCustomerProfileData !== 'undefined') {
+                        mobCustomerProfileData = '';
+                    }
+                    if (typeof mobRemoveIdCard === 'function') {
+                        mobRemoveIdCard();
+                    }
                 });
 
                 // Quick add contact form handler (pos.js not loaded in LM)
@@ -1115,13 +1138,16 @@
                         return;
                     }
 
-                    $select.select2({
-                        width: '100%',
-                        allowClear: true,
-                        placeholder: '-- Select --',
-                        dropdownParent: $body.closest('.modal-content')
-                    });
+                    if ($.fn.select2) {
+                        $select.select2({
+                            width: '100%',
+                            allowClear: true,
+                            placeholder: '-- Select --',
+                            dropdownParent: $body.closest('.modal-content')
+                        });
+                    }
                 });
+
             }
 
             function modalRefreshAddressSelect($select) {
@@ -1276,6 +1302,12 @@
                 $body.find('#modalSummaryDownPayment').text(modalMoney(downPayment));
                 $body.find('#modalSummaryDue').text(modalMoney(due));
                 $body.find('#modalDownPaymentHidden').val(downPayment.toFixed(2));
+                $body.find('#modalFooterPrincipal').text('$' + due.toFixed(2));
+                var dur = parseInt($body.find('input[name="duration_months"]').val()) || 12;
+                var rate = parseFloat($body.find('input[name="interest_rate"]').val()) || 0;
+                var estMonthly = dur > 0 ? (due + (due * rate / 100 * dur)) / dur : 0;
+                $body.find('#modalFooterMonthly').text('$' + estMonthly.toFixed(2));
+                $body.find('#modalSummaryMonthly').text('$' + estMonthly.toFixed(2));
             }
 
             function modalProductTotal($body) {
@@ -1396,9 +1428,36 @@
                 });
             });
 
-            $('#quickPayModal').on('hidden.bs.modal', function() {
-                quickPayLoaded = {};
+            // Prevent Bootstrap from stealing focus away from Select2 search input fields in modals
+            if ($.fn.modal && $.fn.modal.Constructor) {
+                $.fn.modal.Constructor.prototype.enforceFocus = function () {};
+            }
+
+            // Ensure all modals always appear in front of the backdrop overlay and never get trapped in nested stacking contexts
+            $(document).on('show.bs.modal', '.modal', function () {
+                var $modal = $(this);
+                if (!$modal.parent().is('body')) {
+                    $modal.appendTo('body');
+                }
+                var modalCount = $('.modal:visible').length;
+                var zIndex = 1050 + (10 * modalCount);
+                $modal.css('z-index', zIndex);
+                setTimeout(function() {
+                    $('.modal-backdrop').not('.modal-stack').first().css('z-index', zIndex - 1).addClass('modal-stack');
+                }, 0);
             });
+
+            $(document).on('hidden.bs.modal', '.modal', function () {
+                if ($('.modal:visible').length > 0) {
+                    $('body').addClass('modal-open');
+                }
+            });
+
+            // Expose helpers globally for standalone modal
+            window.modalSelectAddressFromCustomer = modalSelectAddressFromCustomer;
+            window.modalClearAddressSelects = modalClearAddressSelects;
+            window.modalLoadAddressOptions = modalLoadAddressOptions;
+            window.modalInitAddressSelects = modalInitAddressSelects;
 
         })(jQuery);
     </script>

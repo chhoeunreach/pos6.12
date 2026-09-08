@@ -36,7 +36,13 @@ class Kernel extends ConsoleKernel
             //Pre-compute stock values for today's reports (warms cache + DB snapshot)
             $schedule->command('pos:recalculate-stock-values')->dailyAt('03:00');
 
+            //Keep LoanManagement collection workflow statuses (collection_status, risk_level, DPD) fresh for reports
+            $schedule->command('loan-management:collection-automation')->dailyAt('02:30');
+
         }
+
+        //Keep LoanManagement collection workflow statuses fresh regardless of environment
+        $schedule->command('loan-management:collection-automation')->dailyAt('02:30');
 
         if ($env === 'demo') {
             //IMPORTANT NOTE: This command will delete all business details and create dummy business, run only in demo server.

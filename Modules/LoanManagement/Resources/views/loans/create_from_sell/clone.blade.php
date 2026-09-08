@@ -77,7 +77,7 @@
                 method: 'POST',
                 data: form.serialize(),
                 success: function(res){
-                    alert(res.message || 'Loan created successfully');
+                    alert(res.message || 'Installment created successfully');
                     if(res?.data?.loan_id){
                         window.location = "{{ url('/loan-management/loans') }}/" + res.data.loan_id + "/view?_lm_modal=1";
                         return;

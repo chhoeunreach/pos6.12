@@ -1,5 +1,5 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Loan Management')
+@section('title', 'Installment Management')
 @section('content_body')
 <section class="content-header">
     <h1>{{ $page }}</h1>
@@ -8,7 +8,7 @@
     @if($page === 'Monthly Payments')
         <div class="lm-mobile-section-tabs">
             <a href="{{ route('loan-management.loans') }}">
-                <i class="fa fa-credit-card"></i> Loans
+                <i class="fa fa-credit-card"></i> Installments
             </a>
             <a href="{{ route('loan-management.monthly-payments.index') }}" class="active">
                 <i class="fa fa-money"></i> Collection
@@ -57,7 +57,7 @@
                                 <strong>{{ $row['amount'] ?? '0.00' }}</strong>
                             </div>
                             <div class="lm-mobile-collection-grid">
-                                <div><small>Loan ID</small><span>{{ $row['loan_id'] ?? '-' }}</span></div>
+                                <div><small>Installment ID</small><span>{{ $row['loan_id'] ?? '-' }}</span></div>
                                 <div><small>Customer ID</small><span>{{ $row['customer_id'] ?? '-' }}</span></div>
                                 <div><small>Channel</small><span>{{ $row['channel'] ?? '-' }}</span></div>
                                 <div><small>Payment ID</small><span>{{ $row['id'] ?? '-' }}</span></div>

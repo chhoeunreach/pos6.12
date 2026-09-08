@@ -15,7 +15,18 @@ class LoanPaymentController extends Controller
     public function index(Request $request)
     {
         abort_if(! Schema::connection($this->connection)->hasTable('loan_payments'), 404);
-        $this->ensurePaymentTypeColumn();
+
+        $dateRange = trim((string) $request->input('date_range', ''));
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        if ($dateRange !== '' && str_contains($dateRange, ' - ')) {
+            [$fromPart, $toPart] = explode(' - ', $dateRange, 2);
+            try {
+                $dateFrom = \Carbon\Carbon::parse(trim($fromPart))->format('Y-m-d');
+                $dateTo = \Carbon\Carbon::parse(trim($toPart))->format('Y-m-d');
+            } catch (\Throwable $e) {}
+        }
 
         $filters = $request->only([
             'search',
@@ -24,10 +35,12 @@ class LoanPaymentController extends Controller
             'payment_type',
             'method',
             'status',
-            'date_from',
-            'date_to',
             'location_id',
+            'user_id',
         ]);
+        $filters['date_from'] = $dateFrom;
+        $filters['date_to'] = $dateTo;
+        $filters['date_range'] = $dateRange;
 
         $query = $this->basePaymentQuery();
         $this->applyFilters($query, $filters);
@@ -45,11 +58,38 @@ class LoanPaymentController extends Controller
             'payoff_count' => $this->hasColumn('loan_payments', 'payment_type') ? (int) (clone $summaryQuery)->where('p.payment_type', 'payoff')->count() : 0,
         ];
 
+        $perPage = (int) $request->input('per_page', 250);
+        if ($perPage <= 0 || $perPage > 1000) {
+            $perPage = 250;
+        }
+
         $payments = $query
             ->orderByDesc('p.'.$this->paymentDateColumn())
             ->orderByDesc('p.id')
-            ->paginate(25)
+            ->paginate($perPage)
             ->appends($request->query());
+
+        $users = [];
+        try {
+            $users = DB::table('users')
+                ->selectRaw("id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name")
+                ->orderBy('first_name')
+                ->pluck('name', 'id')
+                ->all();
+        } catch (\Throwable $e) {}
+
+        $customers = [];
+        try {
+            if (Schema::connection($this->connection)->hasTable('loans')) {
+                $customers = DB::connection($this->connection)->table('loans')
+                    ->whereNotNull('customer_name_snapshot')
+                    ->where('customer_name_snapshot', '!=', '')
+                    ->distinct()
+                    ->orderBy('customer_name_snapshot')
+                    ->pluck('customer_name_snapshot', 'customer_name_snapshot')
+                    ->all();
+            }
+        } catch (\Throwable $e) {}
 
         return view('loanmanagement::payments.index', [
             'payments' => $payments,
@@ -58,6 +98,8 @@ class LoanPaymentController extends Controller
             'methods' => $this->paymentMethodOptions(),
             'statuses' => $this->distinctOptions('loan_payments', 'status'),
             'locations' => $this->locationOptions(),
+            'users' => $users,
+            'customers' => $customers,
             'dateColumn' => $this->paymentDateColumn(),
             'amountColumn' => $this->paymentAmountColumn(),
         ]);
@@ -83,11 +125,19 @@ class LoanPaymentController extends Controller
         $type = strtolower(trim((string) $type));
 
         return [
-            'loan' => 'info',
-            'payoff' => 'success',
-            'pay_off' => 'success',
-            'monthly' => 'primary',
-        ][$type] ?? 'default';
+            'loan' => 'lm-type-deposit',
+            'down_payment' => 'lm-type-deposit',
+            'downpayment' => 'lm-type-deposit',
+            'deposit' => 'lm-type-deposit',
+            'initial' => 'lm-type-deposit',
+            'payoff' => 'lm-type-payoff',
+            'pay_off' => 'lm-type-payoff',
+            'advance' => 'lm-type-advance',
+            'prepayment' => 'lm-type-advance',
+            'penalty' => 'lm-type-penalty',
+            'late_fee' => 'lm-type-penalty',
+            'monthly' => 'lm-type-monthly',
+        ][$type] ?? 'lm-type-monthly';
     }
 
     public function edit(int $payment)
@@ -172,6 +222,7 @@ class LoanPaymentController extends Controller
             'paid_date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
             'method' => 'nullable|string|max:100',
+            'payment_type' => 'nullable|string|max:50',
             'schedule_id' => 'nullable|integer|min:1',
             'status' => 'nullable|string|max:50',
             'reference_number' => 'nullable|string|max:191',
@@ -188,10 +239,12 @@ class LoanPaymentController extends Controller
         $oldScheduleId = ! empty($row->schedule_id) ? (int) $row->schedule_id : null;
         $paidDate = $payload['paid_date'];
         $paidAt = $paidDate.' '.now()->format('H:i:s');
+        $paymentTypeVal = trim((string) ($payload['payment_type'] ?? ($row->payment_type ?? 'monthly'))) ?: 'monthly';
 
-        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $method, $methodName, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt) {
+        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $method, $methodName, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt, $paymentTypeVal) {
             DB::connection($this->connection)->table('loan_payments')->where('id', $payment)->update($this->safeColumns('loan_payments', [
                 'schedule_id' => $newScheduleId,
+                'payment_type' => $paymentTypeVal,
                 'payment_method_snapshot' => $methodName,
                 'channel' => $methodName,
                 'amount' => $newAmount,
@@ -386,6 +439,23 @@ class LoanPaymentController extends Controller
         if (! empty($filters['status']) && $this->hasColumn('loan_payments', 'status')) {
             $query->where('p.status', $filters['status']);
         }
+        if (! empty($filters['user_id'])) {
+            $userId = (int) $filters['user_id'];
+            $query->where(function ($q) use ($userId) {
+                $hasCondition = false;
+                if ($this->hasColumn('loan_payments', 'received_by_id')) {
+                    $q->where('p.received_by_id', $userId);
+                    $hasCondition = true;
+                }
+                if ($this->hasColumn('loan_payments', 'created_by')) {
+                    $hasCondition ? $q->orWhere('p.created_by', $userId) : $q->where('p.created_by', $userId);
+                    $hasCondition = true;
+                }
+                if ($this->hasColumn('loans', 'assigned_collector_id')) {
+                    $hasCondition ? $q->orWhere('l.assigned_collector_id', $userId) : $q->where('l.assigned_collector_id', $userId);
+                }
+            });
+        }
         if (! empty($filters['location_id'])) {
             $locationId = (int) $filters['location_id'];
             $query->where(function ($q) use ($locationId) {
@@ -499,7 +569,7 @@ class LoanPaymentController extends Controller
             'balance_amount' => $balance,
             'last_payment_amount' => $paid > 0 ? $this->lastPaymentAmount($loanId) : null,
             'last_payment_date' => $paid > 0 ? $this->lastPaymentDate($loanId) : null,
-            'status' => $balance <= 0 ? 'closed' : ($loan->status === 'closed' ? 'active' : ($loan->status ?? 'active')),
+            'status' => $balance <= 0 ? 'completed' : (in_array($loan->status, ['completed', 'closed'], true) ? 'active' : ($loan->status ?? 'active')),
             'updated_at' => now(),
         ]));
     }
@@ -519,10 +589,43 @@ class LoanPaymentController extends Controller
     protected function paymentMethodOptions($loan = null): array
     {
         try {
-            return app(TransactionUtil::class)->payment_types($loan->main_location_id ?? null, true, (int) (session('user.business_id') ?? 0));
+            $types = app(TransactionUtil::class)->payment_types($loan->main_location_id ?? null, true, (int) (session('user.business_id') ?? 0));
         } catch (\Throwable $e) {
-            return ['cash' => 'Cash', 'aba' => 'ធនាគារអេប៊ីអេ (ABA)', 'wing' => 'វីងវេលុយ (Wing)'];
+            $types = ['cash' => 'Cash', 'aba' => 'ធនាគារអេប៊ីអេ (ABA)', 'wing' => 'វីងវេលុយ (Wing)'];
         }
+
+        $isKhmer = session('user.language', config('app.locale')) === 'km';
+        $known = [
+            'advance' => $isKhmer ? 'ប្រាក់បង់មុន / បុរេប្រទាន (Advance)' : 'Advance Payment',
+            'cash' => $isKhmer ? 'សាច់ប្រាក់សុទ្ធ (Cash)' : 'Cash',
+            'card' => $isKhmer ? 'កាតឥណទាន / ឥណពន្ធ (Card)' : 'Card',
+            'cheque' => $isKhmer ? 'មូលប្បទានប័ត្រ (Cheque)' : 'Cheque',
+            'bank_transfer' => $isKhmer ? 'ផ្ទេរប្រាក់តាមធនាគារ (Bank Transfer)' : 'Bank Transfer',
+            'aba' => 'ធនាគារអេប៊ីអេ (ABA Bank)',
+            'wing' => 'វីងវេលុយ (Wing Money)',
+            'acleda' => 'ធនាគារអេស៊ីលីដា (ACLEDA)',
+            'custom_pay_1' => $isKhmer ? 'វិធីទូទាត់ពិសេស ១' : 'Custom Payment 1',
+            'custom_pay_2' => $isKhmer ? 'វិធីទូទាត់ពិសេស ២' : 'Custom Payment 2',
+            'custom_pay_3' => $isKhmer ? 'វិធីទូទាត់ពិសេស ៣' : 'Custom Payment 3',
+            'other' => $isKhmer ? 'ផ្សេងៗ (Other)' : 'Other',
+        ];
+
+        $cleaned = [];
+        foreach ($types as $key => $label) {
+            $keyStr = (string) $key;
+            $labelStr = trim((string) $label);
+
+            if (isset($known[$keyStr])) {
+                $cleaned[$keyStr] = $known[$keyStr];
+            } elseif (str_starts_with($labelStr, 'lang_v1.') || str_starts_with($labelStr, 'messages.')) {
+                $subKey = str_replace(['lang_v1.', 'messages.'], '', $labelStr);
+                $cleaned[$keyStr] = $known[$subKey] ?? ucfirst(str_replace('_', ' ', $subKey));
+            } else {
+                $cleaned[$keyStr] = $labelStr;
+            }
+        }
+
+        return $cleaned;
     }
 
     protected function ensurePaymentTypeColumn(): void

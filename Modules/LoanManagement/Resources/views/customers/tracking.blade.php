@@ -16,7 +16,7 @@
                         <tr>
                             <th>Customer</th>
                             <th>Phone</th>
-                            <th>Loan</th>
+                            <th>Installment</th>
                             <th>Balance</th>
                             <th>Speed</th>
                             <th>Battery</th>

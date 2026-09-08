@@ -1,21 +1,37 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Add Loan User')
+
+@section('title', 'Create User')
+
+@section('loan_css')
+    @include('loanmanagement::standalone.partials.admin_ui_css')
+@endsection
 
 @section('content_body')
-<section class="content-header">
-    <h1>Add Loan User</h1>
-</section>
-
-<section class="content">
-    <div class="box box-primary">
-        <div class="box-body">
-            <form method="POST" action="{{ route('loan-management.users.store') }}">
-                @csrf
-                @include('loanmanagement::users.partials.form')
-                <button type="submit" class="btn btn-primary">Create User</button>
-                <a href="{{ route('loan-management.users.index') }}" class="btn btn-default">Cancel</a>
-            </form>
+<div class="pos-admin-page">
+    <div class="pos-page-head">
+        <div class="pos-page-title">
+            <h1>Create User</h1>
+            <p>Add a staff account and assign the correct access role.</p>
+        </div>
+        <div class="pos-action-row">
+            <a href="{{ route('loan-management.users.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
         </div>
     </div>
-</section>
+
+    <div class="pos-panel">
+        <div class="pos-panel-head">
+            <h3>User Information</h3>
+        </div>
+    <form method="POST" action="{{ route('loan-management.users.store') }}">
+        @csrf
+        <div class="pos-panel-body">
+            @include('loanmanagement::users.partials.form')
+        </div>
+        <div class="pos-page-foot">
+            <a href="{{ route('loan-management.users.index') }}" class="btn btn-default">Cancel</a>
+            <button class="btn btn-primary" type="submit"><i class="fa fa-save"></i> Save User</button>
+        </div>
+    </form>
+    </div>
+</div>
 @endsection

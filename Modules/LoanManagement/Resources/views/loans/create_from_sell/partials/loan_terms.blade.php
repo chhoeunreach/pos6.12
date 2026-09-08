@@ -1,12 +1,12 @@
 <div class="box box-warning">
-    <div class="box-header"><h3 class="box-title">Loan Terms</h3></div>
+    <div class="box-header"><h3 class="box-title">Installment Terms</h3></div>
     <div class="box-body row">
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Sell Invoice #</label><input type="text" class="form-control" value="{{ $sell['transaction']->invoice_no ?? '' }}" readonly></div></div>
-        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Loan Invoice #</label><input type="text" name="loan_number" class="form-control" value="{{ old('loan_number', $sell['defaults']['loan_number'] ?? '') }}" placeholder="Auto generate if blank"></div></div>
+        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Installment Invoice #</label><input type="text" name="loan_number" class="form-control" value="{{ old('loan_number', $sell['defaults']['loan_number'] ?? '') }}" placeholder="Auto generate if blank"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Total Amount</label><input type="text" id="loan_total_amount_display" class="form-control" value="{{ number_format((float)($sell['transaction']->final_total ?? 0), 2) }}" readonly><input type="hidden" id="loan_total_amount_value" value="{{ (float)($sell['transaction']->final_total ?? 0) }}"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Total Paid</label><input type="text" id="loan_total_paid_display" class="form-control" value="{{ number_format((float)($sell['defaults']['down_payment'] ?? 0), 2) }}" readonly></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Total Due</label><input type="text" id="loan_total_due_display" class="form-control" value="{{ number_format(max(0, (float)($sell['transaction']->final_total ?? 0) - (float)($sell['defaults']['down_payment'] ?? 0)), 2) }}" readonly></div></div>
-        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Loan Date</label><input type="date" name="loan_date" class="form-control" value="{{ date('Y-m-d') }}"></div></div>
+        <div class="col-sm-6 col-md-3"><div class="form-group"><label>Installment Date</label><input type="date" name="loan_date" class="form-control" value="{{ date('Y-m-d') }}"></div></div>
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Principal Amount</label><input type="number" step="0.01" id="principal_amount_input" name="principal_amount" class="form-control" value="{{ $sell['defaults']['principal_amount'] }}"></div></div>
         <input type="hidden" id="down_payment_hidden" name="down_payment" value="{{ $sell['defaults']['down_payment'] }}">
         <div class="col-sm-6 col-md-3">

@@ -1,5 +1,5 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Create Loan')
+@section('title', 'Create Installment')
 
 @section('content_body')
 <style>
@@ -67,11 +67,11 @@
     }
 </style>
 <section class="content-header no-print">
-    <h1>Create Loan</h1>
+    <h1>Create Installment</h1>
     <div class="pull-right">
         @if(Route::has('loan-management.import.template'))
             <a href="{{ route('loan-management.import.template', ['type' => 'loans']) }}" class="btn btn-sm btn-default">
-                <i class="fa fa-download"></i> Loan Template
+                <i class="fa fa-download"></i> Installment Template
             </a>
             <a href="{{ route('loan-management.import.template', ['type' => 'payments']) }}" class="btn btn-sm btn-default">
                 <i class="fa fa-download"></i> Monthly Payment Template
@@ -79,7 +79,7 @@
         @endif
         @if(Route::has('loan-management.tools.loan-import-export'))
             <a href="{{ route('loan-management.tools.loan-import-export') }}" class="btn btn-sm btn-primary">
-                <i class="fa fa-file-excel-o"></i> Loan Import / Export
+                <i class="fa fa-file-excel-o"></i> Installment Import / Export
             </a>
         @endif
         @if(Route::has('loan-management.tools.monthly-import-export'))
@@ -99,13 +99,13 @@
         <div class="alert alert-warning">
             <strong>{{ session('duplicate_installment_warning') }}</strong>
             @if(session('duplicate_loan_url'))
-                <a href="{{ session('duplicate_loan_url') }}" class="btn btn-xs btn-primary m-l-10">View Loan</a>
+                <a href="{{ session('duplicate_loan_url') }}" class="btn btn-xs btn-primary m-l-10">View Installment</a>
             @endif
             <button type="button" class="btn btn-xs btn-default m-l-5" data-dismiss="alert">Cancel</button>
         </div>
     @endif
 
-    @component('components.filters', ['title' => __('report.filters')])
+    @component('components.filters', ['title' => lm_label('report.filters', 'Filters', 'តម្រង')])
         <form id="sellSearchForm" class="row">
             <input type="hidden" name="start_date" id="sell_filter_start_date">
             <input type="hidden" name="end_date" id="sell_filter_end_date">
@@ -229,7 +229,7 @@
 
     <div id="duplicateLoanWarning" class="alert alert-warning" style="display:none;">
         <strong>This sale already has installment loan.</strong>
-        <a href="#" class="btn btn-xs btn-primary m-l-10" id="duplicateLoanViewLink">View Loan</a>
+        <a href="#" class="btn btn-xs btn-primary m-l-10" id="duplicateLoanViewLink">View Installment</a>
         <button type="button" class="btn btn-xs btn-default m-l-5" id="duplicateLoanCancel">Cancel</button>
     </div>
 
@@ -357,7 +357,7 @@
             ? urls.loanViewBase + '/' + encodeURIComponent(row.loan_id) + '/view'
             : sellDetailUrl;
         var viewAction = row.is_converted && row.loan_id
-            ? '<li><a href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Loan</a></li>'
+            ? '<li><a href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Installment</a></li>'
             : '<li><a href="#" class="btn-modal" data-container=".view_modal" data-href="'+esc(viewUrl)+'"><i class="fa fa-eye"></i> View Sale</a></li>';
         var addAction = row.is_converted
             ? '<li class="disabled"><a href="#" tabindex="-1"><i class="fa fa-check"></i> Already Added</a></li>'
@@ -654,16 +654,6 @@
     }
 
     function openAddSellModal(){
-        if (typeof window.loanManagementOpenSellPos === 'function' && window.loanManagementOpenSellPos()) {
-            return;
-        }
-
-        var sharedPosTrigger = $('#loanHeaderOpenSellPos');
-        if (sharedPosTrigger.length && $('#loanSellPosModal').length) {
-            sharedPosTrigger.trigger('click');
-            return;
-        }
-
         var frame = $('#ultimatePosSellFrame');
         frame.attr('src', buildLoanModalPosUrl(urls.posCreate));
         $('#addSellModal').modal('show');

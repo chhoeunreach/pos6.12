@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use Modules\LoanManagement\Console\InstallLoanManagementCommand;
 use Modules\LoanManagement\Console\RunCollectionAutomationCommand;
+use Modules\LoanManagement\Console\SystemCheckCommand;
 use Modules\LoanManagement\Console\TestChatSchemaCommand;
 use Modules\LoanManagement\Console\UninstallLoanManagementCommand;
 use Modules\LoanManagement\Helpers\LoanMenuHelper;
@@ -30,6 +31,7 @@ class LoanManagementServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallLoanManagementCommand::class,
+                SystemCheckCommand::class,
                 RunCollectionAutomationCommand::class,
                 TestChatSchemaCommand::class,
                 UninstallLoanManagementCommand::class,
@@ -45,11 +47,11 @@ class LoanManagementServiceProvider extends ServiceProvider
     private function registerConfig(): void
     {
         $this->publishes([
-            __DIR__ . '/../Config/config.php' => config_path('loanmanagement.php'),
+            __DIR__ . '/../config/config.php' => config_path('loanmanagement.php'),
         ], 'config');
 
-        $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loanmanagement');
-        $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loan_management');
+        $this->mergeConfigFrom(__DIR__ . '/../config/config.php', 'loanmanagement');
+        $this->mergeConfigFrom(__DIR__ . '/../config/config.php', 'loan_management');
     }
 
     private function registerViews(): void
@@ -67,7 +69,8 @@ class LoanManagementServiceProvider extends ServiceProvider
 
     private function registerCustomerLoanAuth(): void
     {
-        $guard = (string) config('loanmanagement.customer_api_guard', 'customer_loan_api');
+        $webGuard = (string) config('loanmanagement.customer_web_guard', 'customer_loan');
+        $apiGuard = (string) config('loanmanagement.customer_api_guard', 'customer_loan_api');
         $provider = (string) config('loanmanagement.customer_api_provider', 'loan_customers');
         $configuredDriver = (string) config('loanmanagement.customer_api_driver', 'auto');
 
@@ -81,7 +84,12 @@ class LoanManagementServiceProvider extends ServiceProvider
             'model' => \Modules\LoanManagement\Entities\LoanCustomer::class,
         ]);
 
-        Config::set("auth.guards.{$guard}", [
+        Config::set("auth.guards.{$webGuard}", [
+            'driver' => 'session',
+            'provider' => $provider,
+        ]);
+
+        Config::set("auth.guards.{$apiGuard}", [
             'driver' => $driver,
             'provider' => $provider,
         ]);

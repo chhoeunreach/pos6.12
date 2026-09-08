@@ -47,7 +47,7 @@
                 <div class="box-body" style="border-bottom:1px solid #f4f4f4;">
                     <div class="btn-group">
                         <a class="btn btn-sm {{ $type === 'loans' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.tools.loan-import-export') }}">
-                            Full Loan Information
+                            Full Installment Information
                         </a>
                         <a class="btn btn-sm {{ $type === 'full_loan_update' ? 'btn-primary' : 'btn-default' }}" href="{{ route('loan-management.import.index', ['type' => 'full_loan_update']) }}">
                             Full Update
@@ -64,7 +64,7 @@
                     </div>
                     @if($type !== 'loans')
                         <a class="btn btn-sm btn-info pull-right" href="{{ route('loan-management.import.template', ['type' => 'loans']) }}">
-                            <i class="fa fa-download"></i> Download Loan Template
+                            <i class="fa fa-download"></i> Download Installment Template
                         </a>
                     @endif
                 </div>

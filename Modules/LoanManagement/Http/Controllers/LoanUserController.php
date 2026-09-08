@@ -2,254 +2,427 @@
 
 namespace Modules\LoanManagement\Http\Controllers;
 
+use App\User;
 use Illuminate\Http\Request;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Role;
 
 class LoanUserController extends Controller
 {
-    protected string $connection = 'mysql_loan';
-    protected string $table = 'loan_users';
-
     public function index(Request $request)
     {
-        if (! auth()->user()->can('loan_management.view') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
+        $this->authorizeUserAccess('user.view');
+
+        $hasRoleTables = Schema::hasTable('roles') && Schema::hasTable('model_has_roles');
+        $baseQuery = User::query()
+            ->when($hasRoleTables, fn ($q) => $q->with('roles'))
+            ->when(Schema::hasColumn('users', 'business_id'), fn ($q) => $q->where('business_id', $this->businessId()));
+
+        $stats = [
+            'total' => (clone $baseQuery)->count(),
+            'active' => Schema::hasColumn('users', 'status') ? (clone $baseQuery)->where('status', 'active')->count() : 0,
+            'inactive' => Schema::hasColumn('users', 'status') ? (clone $baseQuery)->where('status', 'inactive')->count() : 0,
+            'login_enabled' => Schema::hasColumn('users', 'allow_login') ? (clone $baseQuery)->where('allow_login', 1)->count() : 0,
+        ];
+
+        $query = (clone $baseQuery)->orderByDesc('id');
+
+        foreach (['name', 'username', 'email', 'status'] as $field) {
+            if ($request->filled($field)) {
+                $value = $request->input($field);
+                $field === 'status'
+                    ? $query->where($field, $value)
+                    : $query->where($field, 'like', '%'.$value.'%');
+            }
         }
 
-        $this->ensureLoanUsersTable();
-        $tableExists = Schema::connection($this->connection)->hasTable($this->table);
-        $users = collect();
-
-        if ($tableExists) {
-            $q = DB::connection($this->connection)->table($this->table)->orderByDesc('id');
-
-            if ($request->filled('name')) {
-                $q->where('name', 'like', '%'.$request->input('name').'%');
-            }
-            if ($request->filled('username')) {
-                $q->where('username', 'like', '%'.$request->input('username').'%');
-            }
-            if ($request->filled('email')) {
-                $q->where('email', 'like', '%'.$request->input('email').'%');
-            }
-            if ($request->filled('phone')) {
-                $q->where('phone', 'like', '%'.$request->input('phone').'%');
-            }
-            if ($request->filled('status')) {
-                $q->where('status', $request->input('status'));
-            }
-
-            $users = $q->paginate(20)->appends($request->query());
+        if ($hasRoleTables && $request->filled('role')) {
+            $query->whereHas('roles', fn ($roleQuery) => $roleQuery->whereKey((int) $request->input('role')));
         }
 
-        return view('loanmanagement::users.index', compact('users', 'tableExists'));
+        $perPage = (int) $request->input('per_page', 250);
+        if ($perPage <= 0 || $perPage > 1000) {
+            $perPage = 250;
+        }
+
+        $users = $query->paginate($perPage)->appends($request->query());
+        $roles = $this->rolesForSelect();
+
+        return view('loanmanagement::users.index', compact('users', 'stats', 'roles'));
     }
 
     public function create()
     {
-        if (! auth()->user()->can('loan_management.create') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeUserAccess('user.create');
 
-        $this->ensureLoanUsersTable();
-
-        return view('loanmanagement::users.create');
+        return view('loanmanagement::users.create', [
+            'roles' => $this->rolesForSelect(),
+        ]);
     }
 
     public function store(Request $request)
     {
-        if (! auth()->user()->can('loan_management.create') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $this->ensureLoanUsersTable();
+        $this->authorizeUserAccess('user.create');
 
         $data = $request->validate([
-            'name' => 'required|string|max:191',
-            'username' => 'required|string|max:191|unique:mysql_loan.loan_users,username',
-            'email' => 'nullable|email|max:191|unique:mysql_loan.loan_users,email',
-            'phone' => 'nullable|string|max:50',
+            'first_name' => 'required|string|max:100',
+            'last_name' => 'nullable|string|max:100',
+            'username' => 'required|string|max:191|unique:users,username',
+            'email' => 'required|email|max:191|unique:users,email',
             'password' => 'required|string|min:6|confirmed',
-            'status' => 'nullable|string|in:active,inactive',
+            'business_id' => 'nullable|integer|min:1',
+            'allow_login' => 'nullable|boolean',
+            'status' => 'required|in:active,inactive',
+            'role' => 'nullable|integer|exists:roles,id',
         ]);
 
-        $payload = [
-            'name' => trim($data['name']),
+        $user = User::create([
+            'name' => trim($data['first_name'].' '.($data['last_name'] ?? '')),
+            'first_name' => trim($data['first_name']),
+            'last_name' => trim($data['last_name'] ?? ''),
             'username' => trim($data['username']),
-            'email' => trim($data['email'] ?? ''),
-            'phone' => trim($data['phone'] ?? ''),
+            'email' => trim($data['email']),
             'password' => Hash::make($data['password']),
-            'status' => $data['status'] ?? 'active',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
+            'business_id' => $data['business_id'] ?? (auth()->user()->business_id ?? 1),
+            'allow_login' => $request->boolean('allow_login'),
+            'status' => $data['status'],
+        ]);
 
-        $id = DB::connection($this->connection)->table($this->table)->insertGetId($payload);
+        $this->syncRole($user, $data['role'] ?? null);
 
         return redirect()->route('loan-management.users.index')
-            ->with('status', ['success' => 1, 'msg' => 'Loan user created successfully.']);
+            ->with('status', ['success' => 1, 'msg' => 'User created successfully.']);
     }
 
-    public function show(int $user)
+    public function show(User $user)
     {
-        if (! auth()->user()->can('loan_management.view') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeUserAccess('user.view');
+        $this->abortIfOutsideBusiness($user);
 
-        $this->ensureLoanUsersTable();
-
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
-
-        $recentLoans = collect();
-        if (Schema::connection($this->connection)->hasTable('loans')) {
-            $recentLoans = DB::connection($this->connection)->table('loans')
-                ->where('created_by', $user)
-                ->orderByDesc('id')
-                ->limit(10)
-                ->get();
-        }
-
-        return view('loanmanagement::users.show', compact('userRow', 'recentLoans'));
+        return view('loanmanagement::users.show', [
+            'userRow' => Schema::hasTable('model_has_roles') ? $user->load('roles') : $user,
+        ]);
     }
 
-    public function edit(int $user)
+    public function edit(User $user)
     {
-        if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeUserAccess('user.update');
+        $this->abortIfOutsideBusiness($user);
 
-        $this->ensureLoanUsersTable();
-
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
-
-        return view('loanmanagement::users.edit', compact('userRow'));
+        return view('loanmanagement::users.edit', [
+            'userRow' => Schema::hasTable('model_has_roles') ? $user->load('roles') : $user,
+            'roles' => $this->rolesForSelect(),
+        ]);
     }
 
-    public function update(Request $request, int $user)
+    public function update(Request $request, User $user)
     {
-        if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $this->ensureLoanUsersTable();
-
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
+        $this->authorizeUserAccess('user.update');
+        $this->abortIfOutsideBusiness($user);
 
         $data = $request->validate([
-            'name' => 'required|string|max:191',
-            'username' => 'required|string|max:191|unique:mysql_loan.loan_users,username,'.$user.',id',
-            'email' => 'nullable|email|max:191|unique:mysql_loan.loan_users,email,'.$user.',id',
-            'phone' => 'nullable|string|max:50',
+            'first_name' => 'required|string|max:100',
+            'last_name' => 'nullable|string|max:100',
+            'username' => 'required|string|max:191|unique:users,username,'.$user->id,
+            'email' => 'required|email|max:191|unique:users,email,'.$user->id,
             'password' => 'nullable|string|min:6|confirmed',
-            'status' => 'nullable|string|in:active,inactive',
+            'business_id' => 'nullable|integer|min:1',
+            'allow_login' => 'nullable|boolean',
+            'status' => 'required|in:active,inactive',
+            'role' => 'nullable|integer|exists:roles,id',
         ]);
 
         $payload = [
-            'name' => trim($data['name']),
+            'name' => trim($data['first_name'].' '.($data['last_name'] ?? '')),
+            'first_name' => trim($data['first_name']),
+            'last_name' => trim($data['last_name'] ?? ''),
             'username' => trim($data['username']),
-            'email' => trim($data['email'] ?? ''),
-            'phone' => trim($data['phone'] ?? ''),
-            'status' => $data['status'] ?? 'active',
-            'updated_at' => now(),
+            'email' => trim($data['email']),
+            'business_id' => $data['business_id'] ?? ($user->business_id ?: 1),
+            'allow_login' => $request->boolean('allow_login'),
+            'status' => $data['status'],
         ];
 
         if (! empty($data['password'])) {
             $payload['password'] = Hash::make($data['password']);
         }
 
-        DB::connection($this->connection)->table($this->table)->where('id', $user)->update($payload);
-
-        return redirect()->route('loan-management.users.show', $user)
-            ->with('status', ['success' => 1, 'msg' => 'Loan user updated successfully.']);
-    }
-
-    public function destroy(int $user)
-    {
-        if (! auth()->user()->can('loan_management.delete') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $this->ensureLoanUsersTable();
-
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
-
-        DB::connection($this->connection)->table($this->table)->where('id', $user)->delete();
+        $user->update($payload);
+        $this->syncRole($user, $data['role'] ?? null);
 
         return redirect()->route('loan-management.users.index')
-            ->with('status', ['success' => 1, 'msg' => 'Loan user deleted successfully.']);
+            ->with('status', ['success' => 1, 'msg' => 'User updated successfully.']);
     }
 
-    public function toggleStatus(int $user)
+    public function destroy(User $user)
     {
-        if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeUserAccess('user.delete');
+        $this->abortIfOutsideBusiness($user);
 
-        $this->ensureLoanUsersTable();
+        abort_if(auth()->id() === $user->id, 422, 'You cannot delete your own account.');
 
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
+        $user->delete();
 
-        $newStatus = ($userRow->status ?? 'active') === 'active' ? 'inactive' : 'active';
-
-        DB::connection($this->connection)->table($this->table)
-            ->where('id', $user)
-            ->update(['status' => $newStatus, 'updated_at' => now()]);
-
-        return redirect()->back()
-            ->with('status', ['success' => 1, 'msg' => 'User status changed to '.$newStatus.'.']);
+        return redirect()->route('loan-management.users.index')
+            ->with('status', ['success' => 1, 'msg' => 'User deleted successfully.']);
     }
 
-    public function resetPassword(Request $request, int $user)
+    public function toggleStatus(User $user)
     {
-        if (! auth()->user()->can('loan_management.edit') && ! auth()->user()->can('loan_management.setting')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeUserAccess('user.update');
+        $this->abortIfOutsideBusiness($user);
 
-        $this->ensureLoanUsersTable();
+        abort_if(auth()->id() === $user->id, 422, 'You cannot disable your own account.');
 
-        $userRow = DB::connection($this->connection)->table($this->table)->where('id', $user)->first();
-        abort_if(! $userRow, 404);
+        $user->update([
+            'status' => ($user->status ?? 'active') === 'active' ? 'inactive' : 'active',
+        ]);
+
+        return back()->with('status', ['success' => 1, 'msg' => 'User status updated.']);
+    }
+
+    public function resetPassword(Request $request, User $user)
+    {
+        $this->authorizeUserAccess('user.update');
+        $this->abortIfOutsideBusiness($user);
 
         $data = $request->validate([
             'new_password' => 'required|string|min:6|confirmed',
         ]);
 
-        DB::connection($this->connection)->table($this->table)
-            ->where('id', $user)
-            ->update(['password' => Hash::make($data['new_password']), 'updated_at' => now()]);
+        $user->update(['password' => Hash::make($data['new_password'])]);
 
-        return redirect()->back()
-            ->with('status', ['success' => 1, 'msg' => 'Password reset successfully.']);
+        return back()->with('status', ['success' => 1, 'msg' => 'Password reset successfully.']);
     }
 
-    protected function ensureLoanUsersTable(): void
+    public function export()
     {
-        if (Schema::connection($this->connection)->hasTable($this->table)) {
+        $this->authorizeUserAccess('user.view');
+
+        $hasRoleTables = Schema::hasTable('roles') && Schema::hasTable('model_has_roles');
+        $users = User::query()
+            ->when($hasRoleTables, fn ($q) => $q->with('roles'))
+            ->when(Schema::hasColumn('users', 'business_id'), fn ($q) => $q->where('business_id', $this->businessId()))
+            ->orderBy('id')
+            ->get();
+
+        return response()->streamDownload(function () use ($users) {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['first_name', 'last_name', 'username', 'email', 'status', 'allow_login', 'business_id', 'role']);
+
+            foreach ($users as $user) {
+                fputcsv($output, [
+                    $user->first_name,
+                    $user->last_name,
+                    $user->username,
+                    $user->email,
+                    $user->status ?? 'active',
+                    ! empty($user->allow_login) ? 1 : 0,
+                    $user->business_id ?? $this->businessId(),
+                    $user->relationLoaded('roles') ? $user->roles->pluck('name')->implode('|') : '',
+                ]);
+            }
+
+            fclose($output);
+        }, 'loan-management-users-export-'.date('Ymd-His').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    public function downloadTemplate()
+    {
+        $this->authorizeUserAccess('user.create');
+
+        return response()->streamDownload(function () {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['first_name', 'last_name', 'username', 'email', 'password', 'status', 'allow_login', 'business_id', 'role']);
+            fputcsv($output, ['Sok', 'Dara', 'sokdara', 'sokdara@example.com', '12345678', 'active', 1, $this->businessId(), 'Admin']);
+            fclose($output);
+        }, 'loan-management-users-import-template.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    public function import(Request $request)
+    {
+        $this->authorizeUserAccess('user.create');
+
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+            'mode' => 'required|in:insert,update,upsert',
+            'default_password' => 'nullable|string|min:6|max:100',
+        ]);
+
+        $rows = $this->csvRows($request->file('file')->getRealPath());
+        if (empty($rows)) {
+            return back()->withErrors(['file' => 'The import file is empty or missing headers.']);
+        }
+
+        $mode = $request->input('mode', 'insert');
+        $defaultPassword = $request->input('default_password') ?: '12345678';
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($rows, $mode, $defaultPassword, &$imported, &$updated, &$skipped, &$errors) {
+            foreach ($rows as $index => $row) {
+                $line = $index + 2;
+                $username = trim((string) ($row['username'] ?? ''));
+                $email = trim((string) ($row['email'] ?? ''));
+                $firstName = trim((string) ($row['first_name'] ?? ''));
+
+                if ($username === '' || $email === '' || $firstName === '') {
+                    $skipped++;
+                    $errors[] = 'Row '.$line.': first_name, username, and email are required.';
+                    continue;
+                }
+
+                $existing = User::query()
+                    ->when(Schema::hasColumn('users', 'business_id'), fn ($q) => $q->where('business_id', $this->businessId()))
+                    ->where(function ($query) use ($username, $email) {
+                        $query->where('username', $username)->orWhere('email', $email);
+                    })
+                    ->first();
+
+                if ($existing && $mode === 'insert') {
+                    $skipped++;
+                    continue;
+                }
+
+                if (! $existing && $mode === 'update') {
+                    $skipped++;
+                    continue;
+                }
+
+                $payload = [
+                    'name' => trim($firstName.' '.trim((string) ($row['last_name'] ?? ''))),
+                    'first_name' => $firstName,
+                    'last_name' => trim((string) ($row['last_name'] ?? '')),
+                    'username' => $username,
+                    'email' => $email,
+                    'business_id' => (int) ($row['business_id'] ?? $this->businessId()) ?: $this->businessId(),
+                    'allow_login' => $this->truthy($row['allow_login'] ?? true),
+                    'status' => in_array(strtolower(trim((string) ($row['status'] ?? 'active'))), ['active', 'inactive'], true)
+                        ? strtolower(trim((string) ($row['status'] ?? 'active')))
+                        : 'active',
+                ];
+
+                if (! $existing || trim((string) ($row['password'] ?? '')) !== '') {
+                    $payload['password'] = Hash::make(trim((string) ($row['password'] ?? '')) ?: $defaultPassword);
+                }
+
+                $user = $existing ?: new User();
+                $user->fill($payload);
+                $user->save();
+                $this->syncRoleByName($user, trim((string) ($row['role'] ?? '')));
+
+                $existing ? $updated++ : $imported++;
+            }
+        });
+
+        $message = 'Import completed. Imported: '.$imported.', Updated: '.$updated.', Skipped: '.$skipped.'.';
+        if (! empty($errors)) {
+            $message .= ' '.count($errors).' row issue(s): '.implode(' ', array_slice($errors, 0, 3));
+        }
+
+        return redirect()->route('loan-management.users.index')->with('status', ['success' => empty($errors) ? 1 : 0, 'msg' => $message]);
+    }
+
+    protected function authorizeUserAccess(string $permission): void
+    {
+        abort_unless(auth()->check() && auth()->user()->can($permission), 403, 'Unauthorized action.');
+    }
+
+    protected function rolesForSelect()
+    {
+        return Schema::hasTable('roles')
+            ? Role::query()
+                ->when(Schema::hasColumn('roles', 'business_id'), fn ($query) => $query->where('business_id', $this->businessId()))
+                ->orderBy('name')
+                ->pluck('name', 'id')
+            : collect();
+    }
+
+    protected function syncRole(User $user, $roleId): void
+    {
+        if (! Schema::hasTable('model_has_roles')) {
             return;
         }
 
-        Schema::connection($this->connection)->create($this->table, function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('name');
-            $table->string('username')->unique();
-            $table->string('email')->nullable()->unique();
-            $table->string('phone', 50)->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->string('status', 30)->default('active')->index();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->timestamp('last_login_at')->nullable();
-            $table->timestamps();
-            $table->softDeletes();
-        });
+        if (! $roleId || ! Schema::hasTable('roles')) {
+            $user->syncRoles([]);
+            return;
+        }
+
+        $role = Role::query()
+            ->whereKey($roleId)
+            ->when(Schema::hasColumn('roles', 'business_id'), fn ($query) => $query->where('business_id', $this->businessId()))
+            ->first();
+
+        if ($role) {
+            $user->syncRoles([$role]);
+        }
+    }
+
+    protected function syncRoleByName(User $user, string $roleName): void
+    {
+        if ($roleName === '' || ! Schema::hasTable('roles') || ! Schema::hasTable('model_has_roles')) {
+            return;
+        }
+
+        $roleName = trim(explode('|', $roleName)[0]);
+        $role = Role::query()
+            ->where('name', $roleName)
+            ->when(Schema::hasColumn('roles', 'business_id'), fn ($query) => $query->where('business_id', $this->businessId()))
+            ->first();
+
+        if ($role) {
+            $user->syncRoles([$role]);
+        }
+    }
+
+    protected function csvRows(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if (! $handle) {
+            return [];
+        }
+
+        $headers = fgetcsv($handle);
+        if (! is_array($headers)) {
+            fclose($handle);
+            return [];
+        }
+
+        $headers = array_map(fn ($header) => strtolower(trim((string) $header)), $headers);
+        $rows = [];
+        while (($data = fgetcsv($handle)) !== false) {
+            if (count(array_filter($data, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $rows[] = array_combine($headers, array_slice(array_pad($data, count($headers), ''), 0, count($headers)));
+        }
+
+        fclose($handle);
+
+        return $rows;
+    }
+
+    protected function truthy($value): bool
+    {
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'active', 'allowed', 'on'], true);
+    }
+
+    protected function businessId(): int
+    {
+        return (int) (session('user.business_id') ?? auth()->user()->business_id ?? 1);
+    }
+
+    protected function abortIfOutsideBusiness(User $user): void
+    {
+        if (Schema::hasColumn('users', 'business_id')) {
+            abort_unless((int) $user->business_id === $this->businessId(), 404);
+        }
     }
 }

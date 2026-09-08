@@ -392,7 +392,7 @@ class LoanImportExportService
 
         $logId = $this->createExportLog($type, $filters, $userId, $rows->count(), $format);
         $filename = 'loan-management-'.$type.'-'.now()->format('Ymd-His').'.'.$format;
-        $relativePath = 'Modules/LoanManagement/storage/exports/'.$filename;
+        $relativePath = 'storage/exports/'.$filename;
         $absolutePath = $this->moduleStoragePath('exports', $filename);
 
         if (! is_dir(dirname($absolutePath))) {
@@ -3674,13 +3674,14 @@ class LoanImportExportService
     protected function readStoredImportFile(string $path, string $type): array
     {
         $path = str_replace('\\', '/', trim($path));
-        $prefix = 'Modules/LoanManagement/storage/';
+        $legacyPrefix = 'Modules/LoanManagement/storage/';
+        $prefix = Str::startsWith($path, $legacyPrefix) ? $legacyPrefix : 'storage/';
         if (! Str::startsWith($path, $prefix) || Str::contains($path, ['..'])) {
             throw new \RuntimeException('Invalid import file path.');
         }
 
         $relative = substr($path, strlen($prefix));
-        $absolute = base_path($prefix.$relative);
+        $absolute = $this->moduleStoragePath(dirname($relative), basename($relative));
         if (! is_file($absolute)) {
             throw new \RuntimeException('Uploaded import file was not found.');
         }
@@ -3787,12 +3788,12 @@ class LoanImportExportService
 
         $file->move(dirname($absolutePath), basename($absolutePath));
 
-        return 'Modules/LoanManagement/storage/'.$directory.'/'.$filename;
+        return 'storage/'.$directory.'/'.$filename;
     }
 
     protected function moduleStoragePath(string $directory, string $filename): string
     {
-        return base_path('Modules/LoanManagement/storage/'.$directory.'/'.$filename);
+        return module_path('LoanManagement', 'storage/'.$directory.'/'.$filename);
     }
 
     protected function ensurePaymentTypeColumn(): void

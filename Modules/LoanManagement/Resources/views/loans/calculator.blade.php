@@ -1,5 +1,5 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Loan Calculator')
+@section('title', 'Installment Calculator')
 
 @section('content_body')
 <style>
@@ -235,13 +235,13 @@
 </style>
 
 <section class="content-header no-print">
-    <h1>Loan Calculator <small>Generate installment result before creating loan</small></h1>
+    <h1>Installment Calculator <small>Generate installment result before creating loan</small></h1>
 </section>
 
 <section class="content lm-calculator no-print">
     <div class="box box-primary">
         <div class="box-header">
-            <h3 class="box-title">Loan Input</h3>
+            <h3 class="box-title">Installment Input</h3>
         </div>
         <div class="box-body">
             <form id="loanCalculatorForm" class="row" autocomplete="off">
@@ -287,7 +287,7 @@
                 <div class="col-sm-12">
                     <div class="lm-calculator-actions">
                         <button type="button" class="btn btn-primary" id="btnPrintLoanCalculator">
-                            <i class="fa fa-print"></i> Print Calculate Loan
+                            <i class="fa fa-print"></i> Print Calculate Installment
                         </button>
                     </div>
                 </div>
@@ -347,13 +347,13 @@
 
 <section id="loanCalculatorPrint">
     <div class="lm-print-page">
-        <div class="lm-print-brand">{{ Session::get('business.name', 'Loan Management') }}</div>
-        <div class="lm-print-tagline">Loan calculation preview | Generated from Loan Calculator</div>
+        <div class="lm-print-brand">{{ Session::get('business.name', 'Installment Management') }}</div>
+        <div class="lm-print-tagline">Installment calculation preview | Generated from Installment Calculator</div>
 
         <div class="lm-print-info-grid">
             <table class="lm-print-info-table">
                 <tr><td class="label">Document</td><td class="value lm-print-red" id="print_calc_doc_no">CALC</td></tr>
-                <tr><td class="label">Loan Date</td><td class="value" id="print_calc_loan_date">-</td></tr>
+                <tr><td class="label">Installment Date</td><td class="value" id="print_calc_loan_date">-</td></tr>
                 <tr><td class="label">First Due</td><td class="value" id="print_calc_first_due">-</td></tr>
             </table>
             <table class="lm-print-info-table">
@@ -369,7 +369,7 @@
         </div>
 
         <div class="lm-print-product-title">
-            Loan Calculator Form
+            Installment Calculator Form
             <span class="lm-print-date-bar" id="print_calc_title_date">-</span>
         </div>
         <table class="lm-print-table">
@@ -387,7 +387,7 @@
                 <tr>
                     <td>1</td>
                     <td>CALC</td>
-                    <td class="text-left">Calculate Loan</td>
+                    <td class="text-left">Calculate Installment</td>
                     <td>1</td>
                     <td class="money-cell">$<span id="print_calc_total_price_a">0.00</span></td>
                     <td class="money-cell">$<span id="print_calc_total_price_b">0.00</span></td>

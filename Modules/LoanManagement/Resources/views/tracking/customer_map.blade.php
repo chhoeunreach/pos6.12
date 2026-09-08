@@ -14,7 +14,7 @@
                 <table class="table table-bordered" id="tracking-table">
                     <thead>
                     <tr>
-                        <th>Customer</th><th>Phone</th><th>Loan</th><th>Balance</th><th>Speed</th><th>Battery</th><th>Last GPS</th><th>Map</th>
+                        <th>Customer</th><th>Phone</th><th>Installment</th><th>Balance</th><th>Speed</th><th>Battery</th><th>Last GPS</th><th>Map</th>
                     </tr>
                     </thead>
                     <tbody></tbody>

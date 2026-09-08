@@ -2,7 +2,7 @@
     $isKhmer = $isKhmer ?? session('user.language', config('app.locale')) === 'km';
     $text = fn ($en, $km) => $isKhmer ? $km : $en;
     $groupLabels = [
-        'all' => $text('All Loans', 'កម្ចីទាំងអស់'),
+        'all' => $text('All Installments', 'កម្ចីទាំងអស់'),
         'registered' => $text('Registered Installments', 'អតិថិជនចុះឈ្មោះរំលស់'),
         'generalPaid' => $text('General Installments Paid', 'អតិថិជនរំលស់បានបង់ទូរទៅ'),
         'paidOff' => $text('Settled / Fully Paid-Off', 'អតិថិជនរំលស់បានបង់ផ្ដាច់'),
@@ -344,7 +344,7 @@
             <div>
                 <h1 class="title">{{ $groupTitle }} - {{ $year }}</h1>
                 <div class="meta">
-                    {{ $text('Showing full loan data from Admin Loan table', 'បង្ហាញទិន្នន័យកម្ចីពេញពីតារាងរដ្ឋបាលកម្ចី') }}
+                    {{ $text('Showing full loan data from Admin Installment table', 'បង្ហាញទិន្នន័យកម្ចីពេញពីតារាងរដ្ឋបាលកម្ចី') }}
                     · {{ number_format($loans->count()) }} {{ $text('records', 'ជួរ') }}
                 </div>
             </div>
@@ -356,8 +356,8 @@
                     <a class="btn" href="{{ route('loan-management.export.download', ['type' => 'active_loan_schedule_template', 'date_from' => $year.'-01-01', 'date_to' => $year.'-12-31']) }}">{{ $text('Export Schedule Fill Rows', 'នាំចេញជួរកាលវិភាគបង់') }}</a>
                     <a class="btn btn-primary" href="{{ route('loan-management.import.index', ['type' => 'active_loans']) }}" target="_blank">{{ $text('Import Active/Ongoing', 'នាំចូលកំពុងដំណើរការ') }}</a>
                 @endif
-                <a class="btn" href="{{ route('loan-management.admin-loan', request()->only(['start_year', 'end_year', 'location_id', 'search'])) }}">{{ $text('Back to Admin Loan', 'ត្រឡប់ទៅរដ្ឋបាលកម្ចី') }}</a>
-                <a class="btn" href="{{ route('loan-management.loans') }}" target="_blank">{{ $text('Open Loan List', 'បើកបញ្ជីកម្ចី') }}</a>
+                <a class="btn" href="{{ route('loan-management.admin-loan', request()->only(['start_year', 'end_year', 'location_id', 'search'])) }}">{{ $text('Back to Admin Installment', 'ត្រឡប់ទៅរដ្ឋបាលកម្ចី') }}</a>
+                <a class="btn" href="{{ route('loan-management.loans') }}" target="_blank">{{ $text('Open Installment List', 'បើកបញ្ជីកម្ចី') }}</a>
             </div>
         </section>
 
@@ -369,7 +369,7 @@
                     <thead>
                         <tr>
                             <th class="center">#</th>
-                            <th>{{ $text('Loan #', 'លេខកម្ចី') }}</th>
+                            <th>{{ $text('Installment #', 'លេខកម្ចី') }}</th>
                             <th>{{ $text('Date', 'កាលបរិច្ឆេទ') }}</th>
                             <th>{{ $text('Customer', 'អតិថិជន') }}</th>
                             <th>{{ $text('Phone', 'ទូរស័ព្ទ') }}</th>
@@ -386,7 +386,7 @@
                             @php $status = strtolower((string) ($loan->status ?? 'pending')); @endphp
                             <tr class="loan-row" data-loan-row="{{ $loan->id }}">
                                 <td class="center">{{ $loop->iteration }}</td>
-                                <td><a class="loan-link" href="{{ route('loan-management.loans.view', $loan->id) }}" target="_blank">{{ $loan->loan_number ?: ('Loan #'.$loan->id) }}</a></td>
+                                <td><a class="loan-link" href="{{ route('loan-management.loans.view', $loan->id) }}" target="_blank">{{ $loan->loan_number ?: ('Installment #'.$loan->id) }}</a></td>
                                 <td data-cell="loan_date">{{ $loan->loan_date ? \Illuminate\Support\Carbon::parse($loan->loan_date)->format('Y-m-d') : '-' }}</td>
                                 <td data-cell="customer_name_snapshot">{{ $loan->customer_name ?: '-' }}</td>
                                 <td data-cell="customer_phone_snapshot">{{ $loan->customer_phone ?: '-' }}</td>
@@ -398,7 +398,7 @@
                                 <td>
                                     <div class="row-actions">
                                         @if($canEditLoan)
-                                            <button type="button" class="edit-toggle" data-edit-modal-url="{{ route('loan-management.loans.edit', ['loan' => $loan->id, '_lm_modal' => 1]) }}" data-edit-modal-title="{{ ($loan->loan_number ?: ('Loan #'.$loan->id)) }}">{{ $text('Edit', 'កែ') }}</button>
+                                            <button type="button" class="edit-toggle" data-edit-modal-url="{{ route('loan-management.loans.edit', ['loan' => $loan->id, '_lm_modal' => 1]) }}" data-edit-modal-title="{{ ($loan->loan_number ?: ('Installment #'.$loan->id)) }}">{{ $text('Edit', 'កែ') }}</button>
                                             @if(! empty($loan->customer_id))
                                                 @if(! empty($loan->telegram_chat_id))
                                                     <button type="button" class="telegram-toggle" disabled style="color:#64748b;cursor:not-allowed;">{{ $text('Telegram Connected', 'បានភ្ជាប់ Telegram') }}</button>
@@ -421,10 +421,10 @@
     <div class="full-edit-modal" id="fullEditModal" aria-hidden="true">
         <div class="full-edit-dialog">
             <div class="full-edit-head">
-                <div class="full-edit-title" id="fullEditTitle">{{ $text('Edit Loan', 'កែកម្ចី') }}</div>
+                <div class="full-edit-title" id="fullEditTitle">{{ $text('Edit Installment', 'កែកម្ចី') }}</div>
                 <button type="button" class="full-edit-close" id="fullEditClose">{{ $text('Close', 'បិទ') }}</button>
             </div>
-            <iframe class="full-edit-frame" id="fullEditFrame" title="{{ $text('Edit Loan', 'កែកម្ចី') }}"></iframe>
+            <iframe class="full-edit-frame" id="fullEditFrame" title="{{ $text('Edit Installment', 'កែកម្ចី') }}"></iframe>
         </div>
     </div>
 
@@ -452,7 +452,7 @@
                 var button = event.target.closest('[data-edit-modal-url]');
                 if (!button) return;
                 event.preventDefault();
-                title.textContent = '{{ $text('Edit Loan', 'កែកម្ចី') }} - ' + (button.getAttribute('data-edit-modal-title') || '');
+                title.textContent = '{{ $text('Edit Installment', 'កែកម្ចី') }} - ' + (button.getAttribute('data-edit-modal-title') || '');
                 frame.src = button.getAttribute('data-edit-modal-url');
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');

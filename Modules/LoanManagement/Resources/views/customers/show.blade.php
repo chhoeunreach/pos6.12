@@ -44,10 +44,14 @@
                                 <button type="button" class="btn btn-info btn-xs" id="lmGenerateTelegramLink" style="margin-left:6px">Connect Telegram</button>
                             @endif
                         </span>
-                        <div id="lmTelegramLinkBox" style="display:none;margin-top:8px;padding:10px;border:1px dashed #d1d5db;border-radius:6px;background:#f8fafc">
-                            <div style="font-size:12px;color:#64748b;margin-bottom:6px">Send this link to the customer. Valid for a limited time and can only be used once.</div>
+                        <div id="lmTelegramLinkBox" style="display:none;margin-top:8px;padding:12px;border:1px dashed #d1d5db;border-radius:6px;background:#f8fafc">
+                            <div style="font-size:12px;color:#64748b;margin-bottom:8px">Send this QR code or link to the customer. Valid for a limited time and can only be used once.</div>
+                            <div style="margin-bottom:8px">
+                                <img id="lmTelegramQr" src="" alt="Telegram QR code" style="width:180px;height:180px;max-width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:#fff;display:none;">
+                            </div>
                             <input type="text" id="lmTelegramLinkValue" readonly class="form-control input-sm" style="display:inline-block;width:70%">
                             <button type="button" class="btn btn-default btn-sm" id="lmCopyTelegramLink">Copy</button>
+                            <div id="lmTelegramLinkExpiry" style="font-size:11px;color:#94a3b8;margin-top:6px"></div>
                         </div>
                         <div style="font-size:11px;color:#94a3b8;margin-top:6px"><i class="fa fa-arrow-down"></i> Use the Telegram button in the bottom-right corner to open the chat.</div>
                     </div>
@@ -56,8 +60,8 @@
         </div>
     </div></div>
 
-    <div class="box box-default"><div class="box-header"><h3 class="box-title">Loans</h3></div><div class="box-body">
-        <table class="table table-bordered"><thead><tr><th>ID</th><th>Loan Number</th><th>Status</th><th>Balance</th></tr></thead><tbody>
+    <div class="box box-default"><div class="box-header"><h3 class="box-title">Installments</h3></div><div class="box-body">
+        <table class="table table-bordered"><thead><tr><th>ID</th><th>Installment Number</th><th>Status</th><th>Balance</th></tr></thead><tbody>
             @forelse($loans as $l)<tr><td>{{ $l->id }}</td><td>{{ $l->loan_number ?? '-' }}</td><td>{{ $l->status ?? '-' }}</td><td>{{ $l->balance_amount ?? 0 }}</td></tr>@empty<tr><td colspan="4" class="text-center">No loans</td></tr>@endforelse
         </tbody></table>
     </div></div>
@@ -85,9 +89,19 @@
             btn.prop('disabled', false);
             if (resp && resp.link) {
                 $('#lmTelegramLinkValue').val(resp.link);
+                var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(resp.link);
+                $('#lmTelegramQr').attr('src', qrUrl).show();
+                if (resp.expires_at) {
+                    $('#lmTelegramLinkExpiry').text('Expires: ' + new Date(resp.expires_at).toLocaleString());
+                }
                 $('#lmTelegramLinkBox').show();
+            } else if (resp && resp.message && window.toastr) {
+                toastr.error(resp.message);
             }
-        }).catch(function(){ btn.prop('disabled', false); });
+        }).catch(function(){
+            btn.prop('disabled', false);
+            if (window.toastr) { toastr.error('Unable to create a Telegram connection link.'); }
+        });
     });
 
     $('#lmCopyTelegramLink').on('click', function(){

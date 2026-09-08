@@ -27,8 +27,8 @@ class InstallLoanManagementCommand extends Command
             $this->info('Running migrations on mysql_loan...');
             Artisan::call('migrate', [
                 '--database' => 'mysql_loan',
-                '--path' => 'Modules/LoanManagement/Database/Migrations',
-                '--realpath' => false,
+                '--path' => realpath(__DIR__.'/../database/migrations'),
+                '--realpath' => true,
                 '--force' => true,
             ]);
             $this->line(Artisan::output());
@@ -36,7 +36,7 @@ class InstallLoanManagementCommand extends Command
             $this->info('Running seeders...');
             Artisan::call('db:seed', [
                 '--database' => 'mysql_loan',
-                '--class' => 'Modules\\LoanManagement\\Database\\Seeders\\LoanManagementDatabaseSeeder',
+                '--class' => 'Database\\Seeders\\LoanManagementDatabaseSeeder',
                 '--force' => true,
             ]);
             $this->line(Artisan::output());

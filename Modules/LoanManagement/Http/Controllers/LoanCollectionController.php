@@ -18,10 +18,11 @@ class LoanCollectionController extends Controller
         $filters = $this->service->filters($request);
         $definition = $this->service->pageDefinition($page);
         $loans = $this->service->loansForPage($page, $filters);
+        $metrics = $this->service->pageMetrics($page, $filters);
         $options = $this->service->options();
         $badges = LoanCollectionConstants::class;
 
-        return view('loanmanagement::collections.index', compact('page', 'definition', 'filters', 'loans', 'options', 'badges'));
+        return view('loanmanagement::collections.index', compact('page', 'definition', 'filters', 'loans', 'options', 'badges', 'metrics'));
     }
 
     public function reports(Request $request)
@@ -38,9 +39,12 @@ class LoanCollectionController extends Controller
         $filters = $this->service->filters($request);
         $options = $this->service->options();
         $title = LoanCollectionConstants::REPORTS[$report] ?? 'Collection Report';
+        $page = $this->service->reportToPage($report);
+        $definition = $this->service->pageDefinition($page);
         $loans = $this->service->reportRows($report, $filters);
+        $metrics = $this->service->pageMetrics($page, $filters);
         $badges = LoanCollectionConstants::class;
 
-        return view('loanmanagement::collections.report', compact('report', 'title', 'filters', 'options', 'loans', 'badges'));
+        return view('loanmanagement::collections.report', compact('report', 'title', 'page', 'definition', 'filters', 'options', 'loans', 'badges', 'metrics'));
     }
 }

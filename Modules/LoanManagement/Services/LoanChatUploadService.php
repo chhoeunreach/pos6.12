@@ -17,8 +17,6 @@ class LoanChatUploadService
             ? 'loan/chat/audio/'.date('Y/m')
             : 'loan-management/chat/'.date('Y/m');
         $path = $file->store($directory, $disk);
-        $url = Storage::disk($disk)->url($path);
-
         $payload = [
             'fileable_type' => 'loan_chat_message',
             'fileable_id' => 0,
@@ -27,7 +25,7 @@ class LoanChatUploadService
             'disk' => $disk,
             'storage_provider' => 'local',
             'path' => $path,
-            'url' => $url,
+            'url' => null,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
@@ -46,11 +44,21 @@ class LoanChatUploadService
             array_intersect_key($payload, array_flip($columns))
         );
 
+        if (in_array('url', $columns, true)) {
+            DB::connection('mysql_loan')->table('loan_files')
+                ->where('id', $id)
+                ->update(['url' => url('loan-management/chat-files/'.$id)]);
+        }
+
         return LoanFile::query()->findOrFail($id);
     }
 
     public function url(LoanFile $file): ?string
     {
+        if (! empty($file->id)) {
+            return url('loan-management/chat-files/'.$file->id);
+        }
+
         if (! empty($file->url)) {
             return (string) $file->url;
         }

@@ -8,7 +8,12 @@ class ChatThreadResource extends JsonResource
 {
     public function toArray($request): array
     {
-        $messageCount = (int) $this->messages()->count();
+        $messageCount = $this->relationLoaded('messages')
+            ? $this->messages->count()
+            : (int) ($this->messages_count ?? 0);
+        if ($messageCount === 0 && ! $this->relationLoaded('messages') && ! isset($this->messages_count)) {
+            $messageCount = (int) $this->messages()->count();
+        }
         $viewerType = $request->attributes->get('loan_chat_viewer_type');
         if ($viewerType) {
             $service = app(\Modules\LoanManagement\Services\LoanChatService::class);

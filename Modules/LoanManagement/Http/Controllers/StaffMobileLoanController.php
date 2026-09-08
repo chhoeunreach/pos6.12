@@ -638,13 +638,13 @@ class StaffMobileLoanController extends Controller
         $fullPath = null;
 
         if (preg_match('#^(?:uploads/)?loan_location_assets/(\d+)/([^/]+)$#', $path, $matches)) {
-            $fullPath = base_path('Modules/LoanManagement/loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
+            $fullPath = module_path('LoanManagement', 'loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
         } elseif (preg_match('#^loan-management/location-assets/(\d+)/([^/]+)$#', $path, $matches)) {
-            $fullPath = base_path('Modules/LoanManagement/loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
+            $fullPath = module_path('LoanManagement', 'loan_location_assets/'.((int) $matches[1]).'/'.$matches[2]);
         } elseif (File::isFile(public_path($path))) {
             $fullPath = public_path($path);
-        } elseif (File::isFile(base_path('Modules/LoanManagement/'.$path))) {
-            $fullPath = base_path('Modules/LoanManagement/'.$path);
+        } elseif (File::isFile(module_path('LoanManagement', $path))) {
+            $fullPath = module_path('LoanManagement', $path);
         }
 
         if (! $fullPath || ! File::isFile($fullPath)) {

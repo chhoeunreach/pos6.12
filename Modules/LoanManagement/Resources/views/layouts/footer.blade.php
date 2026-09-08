@@ -1,8 +1,8 @@
 @php
-    $moduleVersion = '1.0.0';
+    $businessSettings = \Modules\LoanManagement\Services\BusinessSettingsService::get();
 @endphp
 
 <footer class="lm-footer">
-    <div>LoanManagement Module Workspace</div>
-    <div>Version {{ $moduleVersion }}</div>
+    <div>{{ $businessSettings['system_name'] }} Workspace</div>
+    <div>Copyright &copy; 2026 All rights reserved. from rvstechsolution.com</div>
 </footer>

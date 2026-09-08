@@ -120,7 +120,7 @@
     });
 
     $('#btnGenerateSecret').on('click', function(){
-        apiPost('{{ route("loan-management.settings.telegram.generate-secret") }}', {}).then(function(r){
+        apiPost('{{ route("loan-management.settings.telegram.secret") }}', {}).then(function(r){
             if (r.body && r.body.secret) {
                 $('#webhookSecretInput').val(r.body.secret);
             }
@@ -130,7 +130,7 @@
     $('#btnTestConnection').on('click', function(){
         var $btn = $(this).prop('disabled', true);
         var $result = $('#testConnectionResult').html('<span class="text-muted">Testing...</span>');
-        apiPost('{{ route("loan-management.settings.telegram.test-connection") }}', {bot_token: $('#botTokenInput').val()}).then(function(r){
+        apiPost('{{ route("loan-management.settings.telegram.test") }}', {bot_token: $('#botTokenInput').val()}).then(function(r){
             if (r.body && r.body.success) {
                 $result.html('<span class="text-green"><i class="fa fa-check-circle"></i> Connected as <strong>' + (r.body.bot_name || '') + '</strong> (@' + (r.body.bot_username || '') + ')</span>');
             } else {
@@ -142,7 +142,7 @@
     $('#btnRegisterWebhook').on('click', function(){
         var $btn = $(this).prop('disabled', true);
         var $result = $('#registerWebhookResult').html('<span class="text-muted">Registering...</span>');
-        apiPost('{{ route("loan-management.settings.telegram.register-webhook") }}', {}).then(function(r){
+        apiPost('{{ route("loan-management.settings.telegram.webhook") }}', {}).then(function(r){
             if (r.body && r.body.success) {
                 $result.html('<span class="text-green"><i class="fa fa-check-circle"></i> ' + r.body.message + '</span>');
             } else {

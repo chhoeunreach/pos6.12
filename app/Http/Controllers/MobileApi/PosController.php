@@ -242,16 +242,29 @@ class PosController extends BaseController
                 'discount_type' => $input['discount_type'] ?? null,
                 'discount_amount' => $input['discount_amount'] ?? 0,
             ];
-            $invoice_total = $this->productUtil->calculateInvoiceTotal(
+$invoice_total = $this->productUtil->calculateInvoiceTotal(
                 $input['products'],
                 $input['tax_rate_id'] ?? null,
                 $discount
             );
 
+            $input['final_total'] = $invoice_total['final_total'];
+            $input['discount_type'] = $discount['discount_type'] ?? null;
+            $input['discount_amount'] = $discount['discount_amount'] ?? 0;
+
             $cg = $this->contactUtil->getCustomerGroup($business_id, $input['contact_id']);
             $input['customer_group_id'] = $cg->id ?? null;
 
-            $transaction = $this->transactionUtil->createSellTransaction($business_id, $input, $invoice_total, $user_id);
+$transaction = $this->transactionUtil->createSellTransaction($business_id, $input, $invoice_total, $user_id);
+
+            foreach ($input['products'] as $idx => $product) {
+                if (empty($product['tax_id'])) {
+                    $variation = \App\Variation::with('product')->find($product['variation_id']);
+                    $product['tax_id'] = ! empty($variation) && ! empty($variation->product) ? $variation->product->tax : null;
+                }
+                $product['item_tax'] = $product['item_tax'] ?? 0;
+                $input['products'][$idx] = $product;
+            }
 
             $this->transactionUtil->createOrUpdateSellLines($transaction, $input['products'], $input['location_id']);
 

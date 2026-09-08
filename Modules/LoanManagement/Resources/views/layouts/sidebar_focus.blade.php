@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var links = {
         dashboard: "{{ route('loan-management.dashboard') }}",
-        adminLoan: "{{ route('loan-management.admin-loan') }}",
         customers: "{{ route('loan-management.customers.index') }}",
         guarantors: "{{ route('loan-management.guarantors.index') }}",
         blacklist: "{{ route('loan-management.blacklist.index') }}",
@@ -24,9 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
         toolsLoanImport: "{{ route('loan-management.tools.loan-import-export') }}",
         toolsNotify: "{{ route('loan-management.tools.send-notification') }}",
         activityLogs: "{{ route('loan-management.activity-logs.index') }}",
-        settingsLocations: "{{ route('loan-management.locations.index') }}",
-        settingsPaymentMethods: "{{ route('loan-management.settings.payment-methods') }}",
-        settingsCurrencies: "{{ route('loan-management.settings.currencies') }}"
+        settingsLocations: "{{ route('loan-management.locations.index') }}"
     };
 
     function activeClass(url) {
@@ -52,7 +49,6 @@ document.addEventListener('DOMContentLoaded', function () {
             <a href="javascript:void(0)" id="btn-expand-all" style="display:inline-block;padding:2px 6px;"><i class="fa fa-expand"></i> Expand</a>
         </li>
         <li class="${activeClass(links.dashboard)}"><a href="${links.dashboard}"><i class="fa fa-dashboard"></i> <span>Dashboard</span></a></li>
-        <li class="${activeClass(links.adminLoan)}"><a href="${links.adminLoan}" target="_blank" rel="noopener"><i class="fa fa-line-chart"></i> <span>Admin Loan</span></a></li>
         <li class="treeview installment-section section-customers ${treeOpenClass([links.customers, links.guarantors, links.blacklist])}" data-section="customers">
             <a href="#"><i class="fa fa-users"></i> <span>Customers</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.customers, links.guarantors, links.blacklist])}>
@@ -63,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </ul>
         </li>
         <li class="treeview installment-section section-loans ${treeOpenClass([links.installment, links.overdue])}" data-section="loans">
-            <a href="#"><i class="fa fa-credit-card"></i> <span>Loans</span><i class="fa fa-angle-left pull-right"></i></a>
+            <a href="#"><i class="fa fa-credit-card"></i> <span>Installments</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.installment, links.overdue])}>
                 <li class="${activeClass(links.installment)}"><a href="${links.installment}"><i class="fa fa-money"></i> Installment</a></li>
                 <li class="${activeClass(links.overdue)}"><a href="${links.overdue}"><i class="fa fa-exclamation-triangle"></i> Overdue / Late Payments</a></li>
@@ -81,8 +77,8 @@ document.addEventListener('DOMContentLoaded', function () {
         <li class="treeview installment-section section-reports ${treeOpenClass([links.reportsPayments, links.reportsSummary, links.reportsAba])}" data-section="reports">
             <a href="#"><i class="fa fa-bar-chart"></i> <span>Reports</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.reportsPayments, links.reportsSummary, links.reportsAba])}>
-                <li class="${activeClass(links.reportsPayments)}"><a href="${links.reportsPayments}"><i class="fa fa-line-chart"></i> Payments Report</a></li>
-                <li class="${activeClass(links.reportsSummary)}"><a href="${links.reportsSummary}"><i class="fa fa-list"></i> Loan Summary Report</a></li>
+                <li class="${activeClass(links.reportsPayments)}"><a href="${links.reportsPayments}"><i class="fa fa-credit-card"></i> Payment Channels & Methods</a></li>
+                <li class="${activeClass(links.reportsSummary)}"><a href="${links.reportsSummary}"><i class="fa fa-list"></i> Installment Summary Report</a></li>
                 <li class="${activeClass(links.reportsAba)}"><a href="${links.reportsAba}"><i class="fa fa-qrcode"></i> ABA Transactions Report</a></li>
             </ul>
         </li>
@@ -90,17 +86,15 @@ document.addEventListener('DOMContentLoaded', function () {
             <a href="#"><i class="fa fa-cogs"></i> <span>Tools</span><i class="fa fa-angle-left pull-right"></i></a>
             <ul class="treeview-menu" ${treeMenuStyle([links.toolsMonthlyImport, links.toolsLoanImport, links.toolsNotify, links.activityLogs])}>
                 <li class="${activeClass(links.toolsMonthlyImport)}"><a href="${links.toolsMonthlyImport}"><i class="fa fa-exchange"></i> Monthly Payments Import/Export</a></li>
-                <li class="${activeClass(links.toolsLoanImport)}"><a href="${links.toolsLoanImport}"><i class="fa fa-upload"></i> Loan Import/Export</a></li>
+                <li class="${activeClass(links.toolsLoanImport)}"><a href="${links.toolsLoanImport}"><i class="fa fa-upload"></i> Installment Import/Export</a></li>
                 <li class="${activeClass(links.toolsNotify)}"><a href="${links.toolsNotify}"><i class="fa fa-bell"></i> Send Notification</a></li>
                 <li class="${activeClass(links.activityLogs)}"><a href="${links.activityLogs}"><i class="fa fa-history"></i> Activity Logs</a></li>
             </ul>
         </li>
-        <li class="treeview installment-section section-settings ${treeOpenClass([links.settingsGeneral, links.settingsLocations, links.settingsPaymentMethods, links.settingsCurrencies])}" data-section="settings">
+        <li class="treeview installment-section section-settings ${treeOpenClass([links.settingsLocations])}" data-section="settings">
             <a href="#"><i class="fa fa-wrench"></i> <span>Settings</span><i class="fa fa-angle-left pull-right"></i></a>
-            <ul class="treeview-menu" ${treeMenuStyle([links.settingsGeneral, links.settingsLocations, links.settingsPaymentMethods, links.settingsCurrencies])}>
+            <ul class="treeview-menu" ${treeMenuStyle([links.settingsLocations])}>
                 <li class="${activeClass(links.settingsLocations)}"><a href="${links.settingsLocations}"><i class="fa fa-map-marker"></i> Locations</a></li>
-                <li class="${activeClass(links.settingsPaymentMethods)}"><a href="${links.settingsPaymentMethods}"><i class="fa fa-credit-card"></i> Payment Methods</a></li>
-                <li class="${activeClass(links.settingsCurrencies)}"><a href="${links.settingsCurrencies}"><i class="fa fa-money"></i> Currencies</a></li>
             </ul>
         </li>
     `;

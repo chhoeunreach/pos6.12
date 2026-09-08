@@ -65,6 +65,11 @@ return [
             'driver' => 'passport',
             'provider' => 'loan_customers',
         ],
+
+        'customer_loan' => [
+            'driver' => 'session',
+            'provider' => 'loan_customers',
+        ],
     ],
 
     /*

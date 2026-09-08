@@ -1,42 +1,65 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Edit Loan User')
+
+@section('title', 'Edit User')
+
+@section('loan_css')
+    @include('loanmanagement::standalone.partials.admin_ui_css')
+@endsection
 
 @section('content_body')
-<section class="content-header">
-    <h1>Edit Loan User</h1>
-</section>
+<div class="pos-admin-page">
+    <div class="pos-page-head">
+        <div class="pos-page-title">
+            <h1>Edit User</h1>
+            <p>Update account details, role assignment, and login status.</p>
+        </div>
+        <div class="pos-action-row">
+            <a href="{{ route('loan-management.users.index') }}" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
+        </div>
+    </div>
 
-<section class="content">
-    <div class="box box-primary">
-        <div class="box-body">
+<div class="row">
+    <div class="col-md-8">
+        <div class="pos-panel">
+            <div class="pos-panel-head">
+                <h3 class="box-title">Edit User</h3>
+            </div>
             <form method="POST" action="{{ route('loan-management.users.update', $userRow->id) }}">
                 @csrf
                 @method('PUT')
-                @include('loanmanagement::users.partials.form', ['userRow' => $userRow])
-                <button type="submit" class="btn btn-primary">Update User</button>
-                <a href="{{ route('loan-management.users.show', $userRow->id) }}" class="btn btn-default">Cancel</a>
+                <div class="pos-panel-body">
+                    @include('loanmanagement::users.partials.form', ['userRow' => $userRow])
+                </div>
+                <div class="pos-page-foot">
+                    <a href="{{ route('loan-management.users.index') }}" class="btn btn-default">Cancel</a>
+                    <button class="btn btn-primary" type="submit"><i class="fa fa-save"></i> Update User</button>
+                </div>
             </form>
         </div>
     </div>
-
-    <div class="box box-warning">
-        <div class="box-header with-border">
-            <h3 class="box-title">Reset Password</h3>
-        </div>
-        <div class="box-body">
-            <form method="POST" action="{{ route('loan-management.users.reset-password', $userRow->id) }}" class="form-inline">
+    <div class="col-md-4">
+        <div class="pos-panel">
+            <div class="pos-panel-head">
+                <h3 class="box-title">Reset Password</h3>
+            </div>
+            <form method="POST" action="{{ route('loan-management.users.reset-password', $userRow->id) }}">
                 @csrf
-                <div class="form-group">
-                    <label style="margin-right:8px;">New Password</label>
-                    <input type="password" class="form-control" name="new_password" placeholder="New password (min 6)" required>
+                <div class="pos-panel-body">
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" name="new_password" class="form-control" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" name="new_password_confirmation" class="form-control" required minlength="6">
+                    </div>
                 </div>
-                <div class="form-group" style="margin-left:8px;">
-                    <label style="margin-right:8px;">Confirm</label>
-                    <input type="password" class="form-control" name="new_password_confirmation" placeholder="Confirm password" required>
+                <div class="pos-page-foot">
+                    <button class="btn btn-warning" type="submit"><i class="fa fa-key"></i> Reset</button>
                 </div>
-                <button type="submit" class="btn btn-warning">Reset Password</button>
             </form>
         </div>
     </div>
-</section>
+</div>
+</div>
 @endsection

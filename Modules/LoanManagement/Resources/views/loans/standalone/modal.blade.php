@@ -1,931 +1,1406 @@
-<div class="modal-dialog modal-xl" role="document" style="max-width: 1200px; margin: 10px auto;">
-    <div class="modal-content lm-mob-loan" style="border-radius: 0; border: none; overflow: hidden; display: flex; flex-direction: column; height: 100%;">
-        <style>
-            *, *::before, *::after { box-sizing: border-box; }
+@php
+    $loanLanguage = session('user.language', config('app.locale'));
+    $lmIsKhmer = $loanLanguage === 'km';
+    $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
+@endphp
 
-            .lm-mob-loan { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
-            .lm-mob-loan .modal-body { padding: 0 !important; flex: 1; display: flex; flex-direction: column; overflow: hidden; max-height: calc(100vh - 10px) !important; }
+<div class="lm-pro-loan-modal" style="font-family: 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; color: #1e293b; display: flex; flex-direction: column; max-height: calc(100vh - 24px); overflow: hidden;">
+    <style>
+        .lm-pro-loan-modal *, .lm-pro-loan-modal *::before, .lm-pro-loan-modal *::after { box-sizing: border-box; }
 
-            /* ===== TOP BAR ===== */
-            .mob-topbar {
-                display: flex; align-items: center; padding: 10px 16px; background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                color: #fff; position: relative; z-index: 5; min-height: 52px;
-            }
-            .mob-topbar .mob-close {
-                width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.15);
-                border: none; color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center;
-                cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent;
-            }
-            .mob-topbar .mob-title { flex: 1; text-align: center; font-size: 16px; font-weight: 700; }
-            .mob-topbar .mob-action { width: 36px; flex-shrink: 0; }
+        /* Modal Compact Header */
+        .lm-pro-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #fff;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 10;
+        }
+        .lm-pro-header-left { display: flex; align-items: center; gap: 10px; }
+        .lm-pro-header-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(37, 99, 235, 0.2);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            color: #60a5fa;
+        }
+        .lm-pro-header-title { font-size: 15px; font-weight: 700; margin: 0; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
+        .lm-pro-header-sub { font-size: 11px; color: #94a3b8; margin: 1px 0 0; }
+        .lm-pro-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .lm-dup-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 8px;
+            margin-bottom: 4px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1.2;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .lm-dup-status-badge--success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+        .lm-dup-status-badge--warning { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .lm-dup-status-badge--danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .lm-dup-status-badge--neutral { background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; }
+        .lm-pro-header-right { display: flex; align-items: center; gap: 8px; }
+        .lm-pro-btn-calc {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .lm-pro-btn-calc:hover { background: rgba(255, 255, 255, 0.2); color: #fff; text-decoration: none; }
+        .lm-pro-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #cbd5e1;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .lm-pro-close:hover { background: #ef4444; color: #fff; transform: scale(1.05); }
 
-            /* ===== STEP PROGRESS ===== */
-            .mob-progress {
-                display: flex; padding: 12px 20px; background: #fff; border-bottom: 1px solid #f0f0f0;
-            }
-            .mob-progress .mob-step {
-                flex: 1; height: 4px; border-radius: 2px; background: #e5e7eb; margin: 0 2px;
-                position: relative; transition: background .3s;
-            }
-            .mob-progress .mob-step.active { background: #2563eb; }
-            .mob-progress .mob-step.done { background: #22c55e; }
-            .mob-step-dot {
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #d1d5db;
-                display: none; font-size: 8px; color: #94a3b8; align-items: center; justify-content: center;
-            }
-            .mob-step.active .mob-step-dot { display: flex; border-color: #2563eb; color: #2563eb; }
-            .mob-step.done .mob-step-dot { display: flex; border-color: #22c55e; background: #22c55e; color: #fff; }
+        /* Scrollable Workspace */
+        .lm-pro-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 14px;
+            background: #f1f5f9;
+        }
 
-            .mob-step-labels {
-                display: flex; padding: 0 20px 10px; background: #fff;
-            }
-            .mob-step-labels span {
-                flex: 1; text-align: center; font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .2px;
-            }
-            .mob-step-labels span.active { color: #2563eb; }
-            .mob-step-labels span.done { color: #22c55e; }
+        /* Top Settings Bar (Compact Single Row) */
+        .lm-top-strip {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+            display: grid;
+            grid-template-columns: 150px 150px 1fr 1fr 1.4fr;
+            gap: 8px;
+            align-items: center;
+        }
 
-            /* ===== STEP CONTENT ===== */
-            .mob-steps-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; }
-            .mob-step-panel {
-                display: none; padding: 16px; animation: mobSlideIn .25s ease-out;
-                min-height: 100%;
-            }
-            .mob-step-panel.active { display: block; }
-            @keyframes mobSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        /* Responsive 2-Column Dense Grid */
+        .lm-grid-workspace {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 10px;
+            align-items: start;
+        }
+        .lm-col { display: flex; flex-direction: column; gap: 10px; }
 
-            .mob-section-title {
-                font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
-                letter-spacing: .5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
-            }
-            .mob-section-title i { font-size: 12px; }
-            .mob-collapse-title {
-                width: 100%; border: 0; background: transparent; padding: 0 0 10px;
-                justify-content: space-between; cursor: pointer; text-align: left;
-            }
-            .mob-collapse-title span {
-                display: inline-flex; align-items: center; gap: 6px;
-            }
-            .mob-collapse-title .mob-collapse-icon {
-                color: #94a3b8; transition: transform .15s;
-            }
-            .mob-card.is-collapsed .mob-collapse-icon {
-                transform: rotate(-90deg);
-            }
-            .mob-card.is-collapsed .mob-collapsible-body {
-                display: none;
-            }
+        /* Compact Cards */
+        .lm-card {
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+            overflow: hidden;
+        }
+        .lm-card-head {
+            padding: 6px 12px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .lm-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .lm-card-title i { color: #2563eb; font-size: 13px; }
+        .lm-card-body { padding: 10px 12px; }
 
-            .mob-card {
-                background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px;
-                box-shadow: 0 1px 3px rgba(0,0,0,.04);
-            }
-            .mob-customer-step {
-                display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .72fr);
-                gap: 14px; align-items: start;
-            }
-            .mob-customer-main,
-            .mob-customer-side {
-                min-width: 0;
-            }
-            .mob-customer-main {
-                display: flex;
-                flex-direction: column;
-            }
-            .mob-customer-step .mob-card {
-                margin-bottom: 14px;
-            }
-            .mob-search-card .mob-field {
-                margin-bottom: 0;
-            }
-            .mob-search-card .select2-container .select2-selection--single {
-                min-height: 46px;
-                border-color: #dfe5ec;
-                border-radius: 10px;
-                background: #fbfcfe;
-            }
-            .mob-search-card .select2-container--default .select2-selection--single .select2-selection__rendered {
-                line-height: 44px;
-                padding-left: 14px;
-                color: #1f2937;
-                font-size: 15px;
-            }
-            .mob-id-card-panel,
-            .mob-doc-card {
-                border: 1px solid #eef2f7;
-                box-shadow: 0 8px 22px rgba(15,23,42,.05);
-            }
+        /* Form Controls */
+        .lm-field { margin-bottom: 7px; }
+        .lm-field:last-child { margin-bottom: 0; }
+        .lm-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+            line-height: 1.2;
+        }
+        .lm-req { color: #ef4444; margin-left: 2px; }
+        .lm-control {
+            width: 100%;
+            height: 31px;
+            padding: 0 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #1e293b;
+            background: #fff;
+            transition: all 0.15s;
+        }
+        .lm-control:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+        }
+        select.lm-control {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 24px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .lm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .lm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .lm-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 
-            .mob-field { margin-bottom: 14px; }
-            .mob-field:last-child { margin-bottom: 0; }
-            .mob-field label {
-                display: block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;
-                text-transform: uppercase; letter-spacing: .2px;
-            }
-            .mob-field .mob-required { color: #ef4444; }
-            .mob-input {
-                width: 100%; height: 40px; padding: 0 12px; border: 1px solid #e1e7ef; border-radius: 9px;
-                font-size: 14px; background: #fbfcfe; color: #1f2937; transition: all .15s;
-                -webkit-appearance: none; appearance: none;
-            }
-            .mob-input:focus { outline: none; border-color: #2563eb; background: #fff; box-shadow: 0 0 0 3px rgba(37,99,235,.08); }
-            .mob-input::placeholder { color: #c4c4c4; }
-            select.mob-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
-            .mob-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        /* Flow Stepper Strip & Quick Suggestions in Modal */
+        .lm-modal-stepper-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .lm-modal-step-item {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 5px 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .lm-modal-step-item:hover, .lm-modal-step-item.active {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+        .lm-modal-step-num {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .lm-modal-step-title { font-size: 11px; font-weight: 700; color: #1e293b; line-height: 1.1; }
+        .lm-modal-step-desc { font-size: 9px; color: #64748b; line-height: 1; }
 
-            /* ===== CUSTOMER CARD ===== */
-            .mob-customer-header {
-                display: flex; align-items: center; gap: 14px; padding: 16px;
-                background: linear-gradient(135deg, #eff6ff, #dbeafe); border-bottom: 1px solid #bfdbfe;
-                border-radius: 12px; margin-bottom: 12px;
-            }
-            .mob-avatar {
-                width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #93c5fd, #60a5fa);
-                display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-                font-size: 20px; font-weight: 700; color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,.2);
-            }
-            .mob-avatar img { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; }
-            .mob-avatar-empty { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #94a3b8; }
+        .lm-modal-preset-strip {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 5px 10px;
+            margin-bottom: 8px;
+        }
+        .lm-modal-preset-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-right: 2px; }
+        .lm-modal-preset-chip {
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            font-size: 10px;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.12s;
+        }
+        .lm-modal-preset-chip:hover {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+        .lm-modal-preset-chip i { color: #f59e0b; font-size: 9px; }
+        .lm-modal-preset-chip:hover i { color: #fff; }
 
-            /* ===== PRODUCT CARDS ===== */
-            .mob-product-item {
-                background: #fff; border-radius: 16px; padding: 14px; margin-bottom: 12px;
-                box-shadow: 0 8px 24px rgba(15,23,42,.06); position: relative; border: 1px solid #e9edf3;
-            }
-            .mob-product-item .mob-prod-img {
-                width: 58px; height: 58px; border-radius: 14px; background: #f1f5f9;
-                display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 18px; flex-shrink: 0;
-                overflow: hidden; border: 1px solid #e5e7eb;
-            }
-            .mob-product-item .mob-prod-img img { width: 100%; height: 100%; object-fit: cover; }
-            .mob-product-item .mob-prod-num {
-                min-width: 34px; height: 26px; padding: 0 9px; border-radius: 999px; background: #eef2ff;
-                display: inline-flex; align-items: center; justify-content: center;
-                font-size: 12px; font-weight: 800; color: #2563eb;
-            }
-            .mob-product-item .mob-prod-del {
-                width: 36px; height: 36px; border-radius: 50%;
-                background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; font-size: 13px;
-                display: flex; align-items: center; justify-content: center; cursor: pointer;
-            }
-            .mob-product-ocr-row {
-                display: grid; grid-template-columns: 58px 1fr auto auto; gap: 10px; align-items: center; margin-bottom: 12px;
-            }
-            .mob-product-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-            .mob-product-photo-btn {
-                height: 36px; min-width: 154px; padding: 0 12px; border-radius: 999px; border: 1px solid #d9e2ef;
-                display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-                background: #f8fafc; color: #52647b; cursor: pointer; transition: all .15s;
-                font-size: 12px; font-weight: 700; -webkit-tap-highlight-color: transparent;
-            }
-            .mob-product-photo-btn:active { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
-            .mob-product-photo-btn i { font-size: 14px; }
-            .mob-product-ocr-status {
-                grid-column: 1 / 5; min-height: 0; margin: -2px 0 0; font-size: 12px; color: #64748b;
-            }
-            .mob-product-ocr-status:not(:empty) {
-                display: inline-flex; width: fit-content; max-width: 100%; padding: 6px 10px; border-radius: 999px;
-                background: #f1f5f9; color: #52647b; font-weight: 700;
-            }
-            .mob-product-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-            .mob-product-fields .mob-field { margin-bottom: 0; }
-            .mob-product-fields .wide { grid-column: 1 / -1; }
-            .mob-product-fields .mob-field label {
-                font-size: 11px; color: #7b8798; margin-bottom: 5px; letter-spacing: .25px;
-            }
-            .mob-product-fields .mob-input {
-                height: 42px; border-radius: 12px; font-size: 15px; background: #fbfcfe; border-color: #dfe5ec;
-            }
-            .mob-product-fields .wide .mob-input { height: 48px; font-size: 16px; font-weight: 600; }
-            .mob-product-bottom {
-                display: grid; grid-template-columns: 1fr minmax(96px, auto); gap: 10px; align-items: end;
-            }
-            .mob-product-total {
-                min-height: 42px; padding: 7px 10px; border-radius: 12px; text-align: right; background: #eff6ff;
-            }
-            .mob-product-total label { display: block; font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 3px; }
-            .mob-product-total .modal-item-total { font-size: 18px; font-weight: 900; color: #2563eb; line-height: 1.1; }
-            .mob-products-principal {
-                margin-top: 12px; border-radius: 16px; border: 1px solid #dfe5ec; background: #fff;
-                padding: 14px; text-align: center; box-shadow: 0 4px 14px rgba(15,23,42,.04);
-            }
-            .mob-products-principal .mob-s-label { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: .3px; }
-            .mob-products-principal .mob-s-value { margin-top: 4px; font-size: 20px; font-weight: 900; color: #2563eb; }
-            @media (max-width: 520px) {
-                .mob-product-ocr-row { grid-template-columns: 52px 1fr auto; }
-                .mob-product-actions { grid-column: 2; gap: 6px; }
-                .mob-product-photo-btn { min-width: 0; flex: 1; }
-                .mob-prod-del { grid-column: 3; grid-row: 1; }
-                .mob-product-ocr-status { grid-column: 1 / 4; margin-top: 0; }
-                .mob-product-fields { gap: 9px; }
-                .mob-product-bottom { grid-template-columns: 1fr minmax(92px, auto); }
-            }
-            .mob-product-crop-overlay {
-                position: fixed; inset: 0; z-index: 1065; display: none; align-items: center; justify-content: center;
-                padding: 14px; background: rgba(15,23,42,.62);
-            }
-            .mob-product-crop-box {
-                width: min(760px, 100%); max-height: calc(100vh - 28px); overflow: auto;
-                background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 24px 70px rgba(15,23,42,.28);
-            }
-            .mob-product-crop-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-            .mob-product-crop-title { font-size: 14px; font-weight: 800; color: #1f2937; }
-            .mob-product-crop-canvas {
-                width: 100%; max-height: 62vh; border-radius: 10px; border: 1px solid #e5e7eb;
-                background: #f8fafc; touch-action: none; cursor: move;
-            }
-            .mob-product-crop-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; justify-content: flex-end; }
-            .mob-product-crop-actions button {
-                height: 38px; border-radius: 10px; border: 1px solid #e5e7eb; padding: 0 12px;
-                font-size: 12px; font-weight: 700; background: #fff; color: #475569;
-            }
-            .mob-product-crop-actions .primary { border-color: #2563eb; background: #2563eb; color: #fff; }
-            .mob-product-crop-status { min-height: 16px; margin-top: 8px; font-size: 11px; color: #64748b; }
-            .mob-add-product {
-                display: flex; align-items: center; justify-content: center; gap: 8px;
-                padding: 14px; border: 2px dashed #d1d5db; border-radius: 12px;
-                background: #fafafa; color: #2563eb; font-weight: 700; font-size: 14px;
-                cursor: pointer; transition: all .15s;
-            }
-            .mob-add-product:active { background: #eff6ff; border-color: #2563eb; }
+        /* Customer Search Box & Live Results Dropdown */
+        .lm-customer-search-box {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            background: #f8fafc;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .lm-customer-search-wrap {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+        }
+        .lm-search-input-inner {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .lm-search-input-field {
+            height: 40px !important;
+            border-radius: 8px !important;
+            padding-left: 36px !important;
+            padding-right: 32px !important;
+            font-size: 13px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            background: #fff !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+            width: 100% !important;
+            color: #0f172a !important;
+        }
+        .lm-search-input-field:focus {
+            border-color: #2563eb !important;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.18) !important;
+            outline: none !important;
+        }
+        .lm-customer-search-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            max-height: 320px;
+            overflow-y: auto;
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 14px 30px -4px rgba(15,23,42,0.22);
+            z-index: 99999;
+        }
+        .lm-customer-search-dropdown::-webkit-scrollbar {
+            width: 6px;
+        }
+        .lm-customer-search-dropdown::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .lm-cs-row {
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .lm-cs-row:last-child {
+            border-bottom: none;
+        }
+        .lm-cs-row:hover, .lm-cs-row.selected {
+            background: #eff6ff;
+        }
+        .lm-cs-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid #cbd5e1;
+            flex-shrink: 0;
+        }
+        .lm-cs-avatar-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #e0f2fe;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .lm-cs-info {
+            flex: 1;
+            min-width: 0;
+            line-height: 1.35;
+        }
+        .lm-cs-name {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lm-cs-sub {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
 
-            /* ===== SUMMARY STRIP ===== */
-            .mob-summary {
-                display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-                padding: 12px 16px; background: #fff; border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;
-            }
-            .mob-summary-item { text-align: center; }
-            .mob-summary-item .mob-s-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .3px; }
-            .mob-summary-item .mob-s-value { font-size: 15px; font-weight: 800; color: #1f2937; margin-top: 2px; }
-            .mob-summary-item .mob-s-value.green { color: #16a34a; }
-            .mob-summary-item .mob-s-value.blue { color: #2563eb; }
+        /* Smart KYC Strip (Profile + ID Card) */
+        .lm-kyc-strip {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .lm-kyc-box {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px dashed #cbd5e1;
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+        .lm-kyc-thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 18px;
+            overflow: hidden;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .lm-kyc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .lm-kyc-details { flex: 1; min-width: 0; }
+        .lm-kyc-title { font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 2px; }
+        .lm-kyc-btn {
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #2563eb;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+        .lm-kyc-btn:hover { background: #eff6ff; border-color: #2563eb; }
+        .lm-kyc-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fee2e2;
+            color: #ef4444;
+            border: 1px solid #fca5a5;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
 
-            /* ===== BOTTOM BAR ===== */
-            .mob-bottombar {
-                display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #e5e7eb;
-                position: relative; z-index: 5;
-            }
-            .mob-bottombar button {
-                flex: 1; height: 48px; border-radius: 12px; font-size: 14px; font-weight: 700;
-                border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
-                transition: opacity .15s; -webkit-tap-highlight-color: transparent;
-            }
-            .mob-bottombar button:active { opacity: .85; }
-            .mob-btn-primary { background: #2563eb; color: #fff; }
-            .mob-btn-success { background: #22c55e; color: #fff; }
-            .mob-btn-ghost { background: #f1f5f9; color: #475569; }
-            .mob-btn-back { background: #f1f5f9; color: #475569; flex: 0 0 auto; width: 48px; }
-            .mob-btn-next { flex: 2; }
-            .mob-btn-submit { background: #22c55e; color: #fff; flex: 2; }
+        /* Product Collateral Item (Compact) */
+        .mob-product-item {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .mob-product-ocr-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .mob-prod-num {
+            font-size: 11px;
+            font-weight: 800;
+            color: #2563eb;
+            background: #eff6ff;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid #bfdbfe;
+        }
+        .mob-product-actions { display: flex; align-items: center; gap: 6px; }
+        .mob-product-photo-btn {
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            font-size: 10px;
+            font-weight: 700;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+        .mob-product-photo-btn:hover { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
+        .mob-prod-del {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #ef4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .mob-product-fields {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+        .mob-product-fields .wide { grid-column: span 2; }
+        .mob-product-fields .mob-field { margin-bottom: 0; }
+        .mob-product-fields .mob-input {
+            width: 100%;
+            height: 28px;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            padding: 0 8px;
+            font-size: 12px;
+        }
+        .mob-product-fields .mob-field label {
+            display: block;
+            font-size: 9px;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+        .mob-product-total {
+            grid-column: span 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 4px 8px;
+            height: 28px;
+            margin-top: 14px;
+        }
+        .modal-item-total { font-weight: 800; color: #059669; font-size: 12px; }
+        .mob-add-product {
+            width: 100%;
+            padding: 7px;
+            border: 2px dashed #93c5fd;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .mob-add-product:hover { background: #dbeafe; border-color: #3b82f6; }
 
-            /* ===== DOWN PAYMENT TOGGLE ===== */
-            .mob-toggle-row {
-                display: flex; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer;
-                -webkit-tap-highlight-color: transparent;
-            }
-            .mob-switch {
-                width: 48px; height: 28px; border-radius: 14px; background: #e5e7eb; position: relative; transition: background .2s; flex-shrink: 0;
-            }
-            .mob-switch::after {
-                content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
-                border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15); transition: transform .2s;
-            }
-            .mob-toggle-row.on .mob-switch { background: #2563eb; }
-            .mob-toggle-row.on .mob-switch::after { transform: translateX(20px); }
-            .mob-toggle-label { font-size: 14px; font-weight: 600; color: #374151; }
-            .mob-toggle-sub { font-size: 12px; color: #94a3b8; }
-            .mob-deposit-card {
-                margin-top: 12px; border-radius: 16px; border: 1px solid #dfe5ec; background: #fff;
-                padding: 14px; box-shadow: 0 6px 20px rgba(15,23,42,.05);
-            }
-            .mob-deposit-card .mob-toggle-row {
-                padding: 0; margin-bottom: 12px; align-items: center;
-            }
-            .mob-deposit-card .mob-switch {
-                width: 52px; height: 30px; border-radius: 999px; background: #e2e8f0;
-            }
-            .mob-deposit-card .mob-switch::after {
-                width: 24px; height: 24px; top: 3px; left: 3px;
-            }
-            .mob-deposit-card .mob-toggle-row.on .mob-switch::after { transform: translateX(22px); }
-            .mob-deposit-card .mob-toggle-label { font-size: 15px; font-weight: 800; color: #1f2937; line-height: 1.15; }
-            .mob-deposit-card .mob-toggle-sub { margin-top: 2px; font-size: 12px; font-weight: 600; color: #8a98ad; }
-            .mob-deposit-fields { display: grid; grid-template-columns: 1.15fr .85fr; gap: 10px; }
-            .mob-deposit-fields .mob-field { margin-bottom: 0; }
-            .mob-deposit-fields .wide { grid-column: 1 / -1; }
-            .mob-deposit-fields .mob-field label {
-                font-size: 11px; color: #7b8798; margin-bottom: 5px; letter-spacing: .25px;
-            }
-            .mob-deposit-fields .mob-input {
-                height: 42px; border-radius: 12px; font-size: 15px; background: #fbfcfe; border-color: #dfe5ec;
-            }
-            .mob-deposit-fields .amount .mob-input {
-                height: 48px; font-size: 18px; font-weight: 800; color: #2563eb; background: #eff6ff; border-color: #bfdbfe;
-            }
-            .mob-payment-row {
-                position: relative; padding: 12px; border: 1px solid #e5ebf3; border-radius: 14px; background: #fbfcfe;
-                margin-bottom: 10px;
-            }
-            .mob-payment-row:last-of-type { margin-bottom: 0; }
-            .mob-payment-head {
-                display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;
-            }
-            .mob-payment-title { font-size: 12px; font-weight: 800; color: #52647b; }
-            .mob-payment-remove {
-                width: 30px; height: 30px; border-radius: 50%; border: 1px solid #fecaca; background: #fff5f5;
-                color: #ef4444; display: inline-flex; align-items: center; justify-content: center;
-            }
-            .mob-add-payment {
-                height: 40px; width: 100%; border-radius: 12px; border: 1.5px dashed #cbd5e1;
-                background: #f8fafc; color: #2563eb; font-size: 13px; font-weight: 800;
-                display: flex; align-items: center; justify-content: center; gap: 7px;
-            }
-            @media (max-width: 520px) {
-                .mob-deposit-fields { grid-template-columns: 1fr 1fr; gap: 9px; }
-                .mob-deposit-fields .amount { grid-column: 1 / -1; }
-            }
+        /* Deposit / Down Payment Switch (Compact) */
+        .lm-deposit-box {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-top: 8px;
+        }
+        .lm-switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .lm-switch-pill {
+            width: 36px;
+            height: 20px;
+            border-radius: 10px;
+            background: #cbd5e1;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .lm-switch-pill::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s;
+        }
+        .lm-switch-row.on .lm-switch-pill { background: #10b981; }
+        .lm-switch-row.on .lm-switch-pill::after { transform: translateX(16px); }
+        .mob-deposit-fields {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 1fr 1fr;
+            gap: 6px;
+            margin-top: 6px;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
 
-            /* ===== REVIEW STEP ===== */
-            .mob-review-row {
-                display: flex; justify-content: space-between; align-items: center; padding: 10px 0;
-                border-bottom: 1px solid #f5f5f5;
-            }
-            .mob-review-row:last-child { border-bottom: 0; }
-            .mob-review-label { font-size: 13px; color: #6b7280; }
-            .mob-review-value { font-size: 14px; font-weight: 600; color: #1f2937; text-align: right; max-width: 60%; }
+        /* Financial Metrics Grid (Compact) */
+        .lm-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .lm-metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .lm-metric-card.highlight { background: #eff6ff; border-color: #bfdbfe; }
+        .lm-metric-card.success { background: #ecfdf5; border-color: #a7f3d0; }
+        .lm-metric-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
+        .lm-metric-val { font-size: 13px; font-weight: 800; color: #0f172a; }
+        .lm-metric-card.highlight .lm-metric-val { color: #2563eb; }
+        .lm-metric-card.success .lm-metric-val { color: #059669; }
 
-            /* ===== SCHEDULE ===== */
-            .mob-schedule-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; border: 1px solid #e5e7eb; }
-            .mob-schedule-tbl { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 380px; }
-            .mob-schedule-tbl th { background: #f9fafb; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; }
-            .mob-schedule-tbl td { padding: 8px 10px; border-bottom: 1px solid #f5f5f5; }
-            .mob-schedule-tbl tfoot th { background: #eff6ff; border-top: 2px solid #2563eb; font-size: 12px; }
+        /* Documents Grid (Compact) */
+        .mob-doc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .mob-doc-thumb {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mob-doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .mob-doc-thumb .mob-doc-icon { text-align: center; color: #64748b; font-size: 9px; padding: 2px; }
+        .mob-doc-thumb .mob-doc-icon i { font-size: 18px; display: block; margin-bottom: 2px; }
+        .mob-doc-thumb .mob-doc-remove {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+            border: none;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .mob-doc-add {
+            aspect-ratio: 1;
+            border: 2px dashed #cbd5e1;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #64748b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .mob-doc-add:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
 
-            /* ===== ID CARD / DOCUMENT UPLOAD ===== */
-            .mob-upload-area {
-                display: flex; gap: 8px; margin-top: 6px;
-            }
-            .mob-customer-photo-strip {
-                display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; margin-bottom: 10px;
-            }
-            .mob-mini-photo-panel {
-                display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center;
-                border: 1px solid #e8edf5; border-radius: 10px; padding: 8px; background: #fbfcfe;
-            }
-            .mob-mini-photo-panel .mob-section-title {
-                margin-bottom: 6px; font-size: 10px; line-height: 1.15;
-            }
-            .mob-mini-upload-area {
-                display: block;
-            }
-            .mob-mini-upload-btn {
-                width: 100%; min-height: 30px; padding: 5px 8px; border-radius: 9px;
-                border: 1px dashed #cbd5e1; background: #fff; color: #52647b;
-                display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-                font-size: 10px; font-weight: 800; cursor: pointer;
-            }
-            .mob-mini-upload-btn:active { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
-            .mob-profile-preview {
-                position: relative; width: 54px; height: 54px; margin: 0; border-radius: 50%;
-                overflow: hidden; display: flex; align-items: center; justify-content: center;
-                background: #eef2f7; color: #94a3b8; border: 1px solid #dbe3ef; font-size: 20px;
-            }
-            .mob-profile-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
-            .mob-profile-preview .mob-id-remove {
-                position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; border-radius: 50%;
-                background: rgba(239,68,68,.92); border: none; color: #fff; font-size: 10px;
-                display: none; align-items: center; justify-content: center; cursor: pointer;
-            }
-            .mob-profile-preview.has-image .mob-id-remove { display: flex; }
-            .mob-customer-detail-fields {
-                display: none;
-                animation: mobFadeUp .18s ease-out;
-            }
-            .mob-customer-detail-fields.is-visible {
-                display: block;
-            }
-            @keyframes mobFadeUp {
-                from { opacity: 0; transform: translateY(6px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            .mob-photo-sheet {
-                position: fixed; inset: 0; z-index: 1070; display: none;
-                align-items: flex-end; background: rgba(15,23,42,.45);
-            }
-            .mob-photo-sheet.is-open { display: flex; }
-            .mob-photo-sheet-panel {
-                width: 100%; background: #fff; border-radius: 18px 18px 0 0; padding: 14px;
-                box-shadow: 0 -18px 50px rgba(15,23,42,.18);
-            }
-            .mob-photo-sheet-title {
-                font-size: 13px; font-weight: 800; color: #1f2937; margin-bottom: 10px;
-            }
-            .mob-photo-sheet-option {
-                width: 100%; min-height: 44px; border: 1px solid #e8edf5; border-radius: 12px;
-                background: #fbfcfe; color: #334155; display: flex; align-items: center; gap: 10px;
-                padding: 0 12px; margin-bottom: 8px; font-size: 13px; font-weight: 800;
-            }
-            .mob-photo-sheet-option i { width: 20px; text-align: center; color: #2563eb; }
-            .mob-photo-sheet-cancel {
-                width: 100%; min-height: 42px; border: 0; border-radius: 12px;
-                background: #f1f5f9; color: #64748b; font-size: 13px; font-weight: 800;
-            }
-            .mob-upload-btn {
-                flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-                min-height: 42px; padding: 10px 12px; border: 1.5px dashed #cbd5e1; border-radius: 12px;
-                background: #fbfcfe; color: #475569; font-size: 12px; font-weight: 800;
-                cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent;
-            }
-            .mob-upload-btn:active { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
-            .mob-upload-btn i { font-size: 16px; }
-            .mob-id-preview {
-                position: relative; width: 112px; min-height: 64px; border-radius: 10px; overflow: hidden;
-                margin-top: 0; display: none; background: #f1f5f9; border: 1px solid #e5e7eb;
-            }
-            .mob-id-preview img { width: 112px; height: 64px; object-fit: cover; display: block; }
-            .mob-id-preview .mob-id-remove {
-                position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
-                background: rgba(239,68,68,.9); border: none; color: #fff; font-size: 9px;
-                display: flex; align-items: center; justify-content: center; cursor: pointer;
-            }
-            .mob-doc-grid {
-                display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 124px));
-                gap: 10px; margin-top: 8px; align-items: start;
-            }
-            .mob-doc-thumb {
-                position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
-                background: #f1f5f9; border: 1px solid #e5e7eb;
-            }
-            .mob-doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
-            .mob-doc-thumb .mob-doc-icon { text-align: center; color: #64748b; padding: 8px; }
-            .mob-doc-thumb .mob-doc-icon i { font-size: 28px; display: block; margin-bottom: 4px; }
-            .mob-doc-thumb .mob-doc-icon span { font-size: 9px; word-break: break-all; display: block; }
-            .mob-doc-thumb .mob-doc-remove {
-                position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
-                background: rgba(239,68,68,.9); border: none; color: #fff; font-size: 10px;
-                display: flex; align-items: center; justify-content: center; cursor: pointer;
-            }
-            .mob-doc-thumb .mob-doc-badge {
-                position: absolute; bottom: 4px; left: 4px; padding: 2px 6px; border-radius: 4px;
-                background: rgba(0,0,0,.6); color: #fff; font-size: 8px; font-weight: 600;
-            }
-            .mob-doc-add {
-                width: 100%; height: 112px; border-radius: 12px; border: 2px dashed #cbd5e1;
-                display: flex; flex-direction: column; align-items: center; justify-content: center;
-                gap: 6px; background: #fbfcfe; color: #8a98ad; cursor: pointer; transition: all .15s;
-                font-size: 11px; font-weight: 800; -webkit-tap-highlight-color: transparent;
-            }
-            .mob-doc-add:active { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
-            .mob-doc-add i { font-size: 20px; }
-            .mob-compressing-overlay {
-                position: absolute; inset: 0; background: rgba(255,255,255,.8);
-                display: flex; align-items: center; justify-content: center;
-                font-size: 10px; font-weight: 700; color: #2563eb;
-            }
+        /* Schedule Table (Compact) */
+        .mob-schedule-wrap {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+        .mob-schedule-tbl {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: #fff;
+        }
+        .mob-schedule-tbl th {
+            background: #f8fafc;
+            padding: 5px 8px;
+            font-weight: 700;
+            color: #475569;
+            border-bottom: 1px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .mob-schedule-tbl td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
+        .mob-schedule-tbl tfoot th { background: #f8fafc; font-weight: 800; border-top: 1px solid #cbd5e1; }
 
-            /* ===== MOBILE ONLY ===== */
-            @media (max-width: 767px) {
-                .mob-customer-step { display: block; }
-                .mob-customer-photo-strip { grid-template-columns: 1fr 1fr; }
-                .mob-customer-main .mob-card { margin-bottom: 10px; }
-                .mob-doc-grid { grid-template-columns: repeat(3, 1fr); }
-                .mob-doc-add { height: auto; aspect-ratio: 1; }
-                .lm-mob-loan .modal-dialog { margin: 0 !important; max-width: 100% !important; width: 100% !important; height: 100vh; display: flex; }
-                .lm-mob-loan { height: 100vh; }
-                .lm-mob-loan .modal-body { max-height: none !important; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-                .mob-bottombar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-            }
-            @media (max-width: 380px) {
-                .mob-customer-photo-strip { grid-template-columns: 1fr; }
-            }
-        </style>
+        /* Slim Sticky Action Footer */
+        .lm-pro-footer {
+            background: #fff;
+            border-top: 1px solid #e2e8f0;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.03);
+            position: relative;
+            z-index: 10;
+        }
+        .lm-pro-footer-info { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #475569; }
+        .lm-pro-footer-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .lm-pro-footer-pill strong { color: #0f172a; }
+        .lm-pro-footer-actions { display: flex; align-items: center; gap: 8px; }
 
-        <div class="mob-topbar">
-            <button type="button" class="mob-close" data-dismiss="modal" aria-label="Close">&times;</button>
-            <div class="mob-title">Create Loan</div>
-            <div class="mob-action"></div>
+        .lm-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .lm-btn-outline { background: #fff; border-color: #cbd5e1; color: #475569; }
+        .lm-btn-outline:hover { background: #f8fafc; border-color: #94a3b8; color: #0f172a; }
+        .lm-btn-secondary { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+        .lm-btn-secondary:hover { background: #dbeafe; }
+        .lm-btn-warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+        .lm-btn-warning:hover { background: #fef3c7; }
+        .lm-btn-primary {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: #fff;
+            box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+        }
+        .lm-btn-primary:hover { background: linear-gradient(135deg, #15803d, #166534); transform: translateY(-1px); }
+
+        /* Photo Sheet & Crop Overlays (Full-screen high-elevation overlays) */
+        .mob-photo-sheet {
+            position: fixed; inset: 0; z-index: 99998; background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(4px);
+            display: none; align-items: flex-end; justify-content: center;
+        }
+        .mob-photo-sheet.is-open { display: flex; }
+        .mob-photo-sheet-panel {
+            background: #fff; border-radius: 20px 20px 0 0; width: 100%; max-width: 440px; padding: 22px;
+            box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.2);
+            animation: mobSheetUp 0.2s ease-out;
+        }
+        .mob-photo-sheet-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 14px; text-align: center; }
+        .mob-photo-sheet-option {
+            width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc;
+            font-size: 13px; font-weight: 600; color: #334155; display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+        }
+        .mob-photo-sheet-option:hover { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+        .mob-photo-sheet-cancel {
+            width: 100%; padding: 11px; border-radius: 10px; border: none; background: #f1f5f9; color: #ef4444;
+            font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 4px;
+        }
+        .mob-photo-sheet-cancel:hover { background: #fee2e2; }
+
+        .mob-product-crop-overlay {
+            position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(6px);
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        .mob-product-crop-box {
+            background: #fff; border-radius: 16px; width: 100%; max-width: 760px; max-height: 92vh; overflow: auto; padding: 20px 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+            animation: wizPopIn 0.2s ease-out;
+        }
+        .mob-product-crop-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+        .mob-product-crop-title { font-size: 16px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+        .mob-product-crop-canvas { display: block; width: 100%; max-height: 55vh; border-radius: 10px; background: #0f172a; touch-action: none; border: 1px solid #334155; }
+        .mob-product-crop-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+        .mob-product-crop-actions button {
+            padding: 9px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; transition: all 0.15s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .mob-product-crop-actions button:hover { background: #e2e8f0; color: #0f172a; }
+        .mob-product-crop-actions button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .mob-product-crop-actions button.primary:hover { background: #1d4ed8; }
+
+        @keyframes mobSheetUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes wizPopIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @media (max-width: 991px) {
+            .lm-top-strip { grid-template-columns: 1fr 1fr; }
+            .lm-grid-workspace { grid-template-columns: 1fr; }
+            .lm-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .lm-pro-footer { flex-direction: column; gap: 12px; align-items: stretch; }
+            .lm-pro-footer-actions { justify-content: flex-end; flex-wrap: wrap; }
+        }
+    </style>
+
+    <!-- Modal Header -->
+    <div class="lm-pro-header">
+        <div class="lm-pro-header-left">
+            <div class="lm-pro-header-icon">
+                <i class="fa fa-file-text-o"></i>
+            </div>
+            <div>
+                <h2 class="lm-pro-header-title">
+                    {{ $lmText('Create New Installment Agreement', 'បង្កើតកិច្ចសន្យាកម្ចីរំលស់ថ្មី') }}
+                    <span class="lm-pro-badge">{{ $lmText('Auto Ref', 'លេខស្វ័យប្រវត្តិ') }}</span>
+                </h2>
+                <p class="lm-pro-header-sub">{{ $lmText('Quick installment agreement with OCR ID Card, Customer KYC & Collateral Recognition', 'បង្កើតកម្ចីរហ័ស ជាមួយការស្កេនអត្តសញ្ញាណប័ណ្ណ រូបថតអតិថិជន និងទំនិញស្វ័យប្រវត្តិ') }}</p>
+            </div>
         </div>
-
-        <div class="mob-progress" id="mobProgress">
-            <div class="mob-step active" data-step="0"><div class="mob-step-dot">1</div></div>
-            <div class="mob-step" data-step="1"><div class="mob-step-dot">2</div></div>
-            <div class="mob-step" data-step="2"><div class="mob-step-dot">3</div></div>
-            <div class="mob-step" data-step="3"><div class="mob-step-dot">4</div></div>
+        <div class="lm-pro-header-right">
+            @if(Route::has('loan-management.loans.calculator'))
+                <a href="{{ route('loan-management.loans.calculator') }}" target="_blank" class="lm-pro-btn-calc" title="Open Installment Calculator">
+                    <i class="fa fa-calculator"></i> {{ $lmText('Calculator', 'ម៉ាស៊ីនគណនា') }}
+                </a>
+            @endif
+            <button type="button" class="lm-pro-close" data-dismiss="modal" aria-label="Close" title="Close modal">&times;</button>
         </div>
-        <div class="mob-step-labels" id="mobStepLabels">
-            <span class="active">Invoice</span>
-            <span>Customer</span>
-            <span>Products</span>
-            <span>Review</span>
-        </div>
+    </div>
 
-        <form id="standaloneLoanModalForm" method="POST" action="{{ route('loan-management.loans.store-standalone') }}" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-            @csrf
-            <input type="hidden" name="action_type" value="create_approve">
+    <!-- Main Scrollable Form Body -->
+    <form id="standaloneLoanModalForm" method="POST" action="{{ route('loan-management.loans.store-standalone') }}" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; margin: 0;">
+        @csrf
+        <input type="hidden" name="action_type" value="create_approve">
 
-            <div class="mob-steps-wrap" id="mobStepsWrap">
-
-                {{-- ========== STEP 0: INVOICE ========== --}}
-                <div class="mob-step-panel active" data-panel="0">
-                    <div class="mob-card">
-                        <div class="mob-section-title"><i class="fa fa-file-invoice"></i> Invoice Details</div>
-                        <div class="mob-grid-2">
-                            <div class="mob-field">
-                                <label>Loan #</label>
-                                <input type="text" name="loan_number" class="mob-input" placeholder="Auto">
-                            </div>
-                            <div class="mob-field">
-                                <label>Date <span class="mob-required">*</span></label>
-                                <input type="date" name="loan_date" class="mob-input" value="{{ date('Y-m-d') }}">
-                            </div>
-                        </div>
-                        <div class="mob-field">
-                            <label>Location</label>
-                            <select name="business_location_id" class="mob-input">
-                                <option value="">-- Select --</option>
-                                @foreach($locations as $id => $name)
-                                    <option value="{{ $id }}" {{ (string) $id === (string) ($defaultLocationId ?? '') ? 'selected' : '' }}>{{ $name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="mob-field">
-                            <label>Collector</label>
-                            <select name="assigned_collector_id" class="mob-input">
-                                <option value="">-- None --</option>
-                                @foreach($collectors as $c)
-                                    <option value="{{ $c->id }}" {{ (string) $c->id === (string) ($defaultCollectorId ?? '') ? 'selected' : '' }}>{{ $c->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <input type="hidden" name="currency" value="USD">
-                        <input type="hidden" name="exchange_rate" value="1">
-                        <div class="mob-field">
-                            <label>Note</label>
-                            <input name="note" class="mob-input" placeholder="Optional">
-                        </div>
+        <div class="lm-pro-body">
+            <!-- 4-Step Quick Visual Stepper -->
+            <div class="lm-modal-stepper-strip">
+                <div class="lm-modal-step-item active" onclick="document.getElementById('mobCustomerInfoCard').scrollIntoView({behavior:'smooth'})">
+                    <span class="lm-modal-step-num">1</span>
+                    <div>
+                        <div class="lm-modal-step-title">{{ $lmText('Customer KYC', 'អតិថិជន & KYC') }}</div>
+                        <div class="lm-modal-step-desc">{{ $lmText('ID OCR & Profile', 'អត្តសញ្ញាណប័ណ្ណ') }}</div>
                     </div>
                 </div>
+                <div class="lm-modal-step-item" onclick="document.getElementById('mobProductsCard').scrollIntoView({behavior:'smooth'})">
+                    <span class="lm-modal-step-num">2</span>
+                    <div>
+                        <div class="lm-modal-step-title">{{ $lmText('Products & Items', 'ទំនិញ & IMEI') }}</div>
+                        <div class="lm-modal-step-desc">{{ $lmText('Pricing & Specs', 'តម្លៃ & មុខទំនិញ') }}</div>
+                    </div>
+                </div>
+                <div class="lm-modal-step-item" onclick="document.getElementById('mobLoanTermsCard').scrollIntoView({behavior:'smooth'})">
+                    <span class="lm-modal-step-num">3</span>
+                    <div>
+                        <div class="lm-modal-step-title">{{ $lmText('Terms & Rates', 'លក្ខខណ្ឌ & ការប្រាក់') }}</div>
+                        <div class="lm-modal-step-desc">{{ $lmText('Rate, Mode & Months', 'អត្រា & រយៈពេល') }}</div>
+                    </div>
+                </div>
+                <div class="lm-modal-step-item" onclick="document.getElementById('mobRepaymentCard').scrollIntoView({behavior:'smooth'})">
+                    <span class="lm-modal-step-num">4</span>
+                    <div>
+                        <div class="lm-modal-step-title">{{ $lmText('Down Payment & Plan', 'ប្រាក់កក់ & កាលវិភាគ') }}</div>
+                        <div class="lm-modal-step-desc">{{ $lmText('Upfront & Amortization', 'ទូទាត់មុន & តារាង') }}</div>
+                    </div>
+                </div>
+            </div>
 
-                {{-- ========== STEP 1: CUSTOMER ========== --}}
-                <div class="mob-step-panel" data-panel="1">
-                    <div class="mob-customer-step">
-                        <div class="mob-customer-main">
-                            <div class="mob-card" id="mobCustomerInfoCard">
-                                <input type="hidden" name="customer_id" id="modalCustomerId" value="">
-                                <button type="button" class="mob-section-title mob-collapse-title" onclick="mobToggleCustomerInfo()" aria-expanded="true" aria-controls="mobCustomerInfoBody">
-                                    <span><i class="fa fa-user-edit"></i> Customer</span>
-                                    <i class="fa fa-chevron-down mob-collapse-icon"></i>
+            <!-- Quick Suggestions Strip -->
+            <div class="lm-modal-preset-strip">
+                <span class="lm-modal-preset-label"><i class="fa fa-bolt text-warning"></i> {{ $lmText('Quick Plans:', 'គម្រោងរហ័ស៖') }}</span>
+                <button type="button" class="lm-modal-preset-chip js-mob-quick-plan" data-rate="4" data-mode="flat" data-months="12" data-down-pct="0">
+                    <i class="fa fa-star"></i> 12 Mo @ 4% Flat (0% Down)
+                </button>
+                <button type="button" class="lm-modal-preset-chip js-mob-quick-plan" data-rate="3" data-mode="flat" data-months="6" data-down-pct="20">
+                    <i class="fa fa-tag"></i> 6 Mo @ 3% (20% Down)
+                </button>
+                <button type="button" class="lm-modal-preset-chip js-mob-quick-plan" data-rate="3.5" data-mode="reducing_balance" data-months="24" data-down-pct="10">
+                    <i class="fa fa-line-chart"></i> 24 Mo @ 3.5% Reducing
+                </button>
+                <button type="button" class="lm-modal-preset-chip js-mob-quick-plan" data-rate="0" data-mode="flat" data-months="3" data-down-pct="30">
+                    <i class="fa fa-gift"></i> 3 Mo @ 0% Promo (30% Down)
+                </button>
+            </div>
+
+            <!-- Top Agreement Configuration Strip -->
+            <div class="lm-top-strip">
+                <div class="lm-field">
+                    <label class="lm-label">{{ $lmText('Agreement #', 'លេខកិច្ចសន្យា') }}</label>
+                    <input type="text" name="loan_number" class="lm-control" placeholder="{{ $lmText('Auto-generated', 'ស្វ័យប្រវត្តិ') }}" style="font-weight: 700; color: #2563eb;">
+                </div>
+                <div class="lm-field">
+                    <label class="lm-label">{{ $lmText('Agreement Date', 'កាលបរិច្ឆេទ') }} <span class="lm-req">*</span></label>
+                    <input type="date" name="loan_date" class="lm-control" value="{{ date('Y-m-d') }}" required>
+                </div>
+                <div class="lm-field">
+                    <label class="lm-label">{{ $lmText('Business Location', 'ទីតាំងសាខា') }}</label>
+                    <select name="business_location_id" class="lm-control">
+                        <option value="">-- {{ $lmText('Select Location', 'ជ្រើសរើសសាខា') }} --</option>
+                        @foreach($locations as $id => $name)
+                            <option value="{{ $id }}" {{ (string) $id === (string) ($defaultLocationId ?? '') ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="lm-field">
+                    <label class="lm-label">{{ $lmText('Assigned Collector', 'បុគ្គលិកប្រមូលប្រាក់') }}</label>
+                    <select name="assigned_collector_id" class="lm-control">
+                        <option value="">-- {{ $lmText('Select Staff', 'ជ្រើសរើសបុគ្គលិក') }} --</option>
+                        @foreach($collectors as $c)
+                            <option value="{{ $c->id }}" {{ (string) $c->id === (string) ($defaultCollectorId ?? '') ? 'selected' : '' }}>{{ $c->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="lm-field">
+                    <label class="lm-label">{{ $lmText('Agreement Note / Memo', 'ចំណាំកិច្ចសន្យា') }}</label>
+                    <input type="text" name="note" class="lm-control" placeholder="{{ $lmText('Optional note or agreement remark', 'កំណត់ចំណាំផ្សេងៗ...') }}">
+                </div>
+                <input type="hidden" name="currency" value="USD">
+                <input type="hidden" name="exchange_rate" value="1">
+            </div>
+
+            <!-- Two-Column Responsive Workspace -->
+            <div class="lm-grid-workspace">
+                <!-- LEFT COLUMN: Customer KYC, ID OCR & Documents -->
+                <div class="lm-col">
+                    <!-- Customer Information Card -->
+                    <div class="lm-card" id="mobCustomerInfoCard">
+                        <div class="lm-card-head">
+                            <h3 class="lm-card-title"><i class="fa fa-user-circle"></i> {{ $lmText('Customer KYC & Identity', 'ព័ត៌មានអតិថិជន & អត្តសញ្ញាណ') }}</h3>
+                            <button type="button" class="btn btn-xs btn-default" id="modalClearCustomer" onclick="mobClearCustomerKYC()" title="{{ $lmText('Clear Customer', 'ជម្រះអតិថិជន') }}">
+                                <i class="fa fa-refresh"></i> {{ $lmText('Clear', 'ជម្រះ') }}
+                            </button>
+                        </div>
+                        <div class="lm-card-body">
+                            <input type="hidden" name="customer_id" id="modalCustomerId" value="">
+
+                            <!-- Direct Search Existing Customer & Quick Add -->
+                            <div class="lm-customer-search-box">
+                                <div class="lm-customer-search-wrap">
+                                    <div class="lm-search-input-inner">
+                                        <i class="fa fa-search" style="position: absolute; left: 12px; color: #94a3b8; font-size: 14px; pointer-events: none; z-index: 2;"></i>
+                                        <input type="text" id="modalCustomerSearchInput" class="form-control lm-search-input-field" placeholder="{{ $lmText('Search existing customer by Name, Phone, or ID...', 'ស្វែងរកអតិថិជនចាស់ តាមឈ្មោះ លេខទូរស័ព្ទ ឬអត្តសញ្ញាណប័ណ្ណ...') }}" autocomplete="off" spellcheck="false">
+                                        <button type="button" id="modalBtnClearSearchText" onclick="mobClearSearchInputOnly()" style="display: none; position: absolute; right: 8px; border: none; background: transparent; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 4px; z-index: 2;" title="Clear search"><i class="fa fa-times-circle"></i></button>
+                                    </div>
+                                    <!-- Live Dropdown Results -->
+                                    <div id="modalCustomerSearchResults" class="lm-customer-search-dropdown"></div>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm" id="modalBtnQuickAddCustomer" onclick="mobQuickAddNewCustomer()" title="{{ $lmText('Click to create new customer & fill KYC', 'ចុចដើម្បីបង្កើតអតិថិជនថ្មី & បំពេញព័ត៌មាន') }}" style="height: 40px; border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(37,99,235,0.2); white-space: nowrap;">
+                                    <i class="fa fa-plus-circle"></i> <span>{{ $lmText('Quick Add', 'បង្កើតថ្មី') }}</span>
                                 </button>
-                                <div class="mob-collapsible-body" id="mobCustomerInfoBody">
-                                    <div class="mob-customer-photo-strip">
-                                        <div class="mob-mini-photo-panel">
-                                            <div>
-                                                <div class="mob-section-title"><i class="fa fa-user-circle"></i> Profile Photo</div>
-                                                <div class="mob-mini-upload-area">
-                                                    <button type="button" class="mob-mini-upload-btn" onclick="mobOpenPhotoSheet('profile')">
-                                                        <i class="fa fa-plus-circle"></i> Add Photo
-                                                    </button>
-                                                    <input type="file" id="mobCustomerPhotoCamera" accept="image/*" capture="user" style="display:none;" onchange="mobHandleCustomerProfile(this)">
-                                                    <input type="file" id="mobCustomerPhotoGallery" accept="image/*" style="display:none;" onchange="mobHandleCustomerProfile(this)">
-                                                </div>
-                                            </div>
-                                            <div class="mob-profile-preview" id="mobCustomerPhotoPreview">
-                                                <i class="fa fa-user"></i>
-                                                <button type="button" class="mob-id-remove" onclick="mobRemoveCustomerProfile()"><i class="fa fa-times"></i></button>
-                                            </div>
-                                        </div>
-                                        <div class="mob-mini-photo-panel">
-                                            <div>
-                                                <div class="mob-section-title"><i class="fa fa-id-card"></i> ID Card Photo</div>
-                                                <div class="mob-mini-upload-area">
-                                                    <button type="button" class="mob-mini-upload-btn" onclick="mobOpenPhotoSheet('id_card')">
-                                                        <i class="fa fa-plus-circle"></i> Add Photo
-                                                    </button>
-                                                    <input type="file" id="mobIdCardCamera" accept="image/*" capture="environment" style="display:none;" onchange="mobHandleIdCard(this)">
-                                                    <input type="file" id="mobIdCardGallery" accept="image/*" style="display:none;" onchange="mobHandleIdCard(this)">
-                                                </div>
-                                            </div>
-                                            <div class="mob-id-preview" id="mobIdCardPreview">
-                                                <img id="mobIdCardImg" src="">
-                                                <button type="button" class="mob-id-remove" onclick="mobRemoveIdCard()"><i class="fa fa-times"></i></button>
-                                            </div>
-                                            <input type="hidden" name="id_card_ocr_raw_text" id="mobIdCardOcrRawText">
-                                            <input type="hidden" name="id_card_ocr_fields[id_card_number]" id="mobIdCardOcrNumber">
-                                            <input type="hidden" name="id_card_ocr_fields[khmer_name]" id="mobIdCardOcrKhmerName">
-                                            <input type="hidden" name="id_card_ocr_fields[english_name]" id="mobIdCardOcrEnglishName">
-                                            <input type="hidden" name="id_card_ocr_fields[address]" id="mobIdCardOcrAddress">
-                                            <div id="mobIdCardOcrStatus" style="margin-top:6px; font-size:11px; color:#64748b;"></div>
-                                        </div>
+                            </div>
+
+                            <!-- Smart KYC Strip (Portrait Photo & National ID Scanner) -->
+                            <div class="lm-kyc-strip">
+                                <!-- Profile Photo Box -->
+                                <div class="lm-kyc-box">
+                                    <div class="lm-kyc-thumb" id="mobCustomerPhotoPreview">
+                                        <i class="fa fa-user"></i>
                                     </div>
-                                    <div class="mob-customer-detail-fields" id="mobCustomerDetailFields">
-                                        <div class="mob-grid-2">
-                                            <div class="mob-field">
-                                                <label>Name in Khmer <span class="mob-required">*</span></label>
-                                                <input type="text" name="customer_khmer_name" id="modalCustomerKhmerName" class="mob-input" required placeholder="Khmer name">
-                                            </div>
-                                            <div class="mob-field">
-                                                <label>Name in English <span class="mob-required">*</span></label>
-                                                <input type="text" name="customer_english_name" id="modalCustomerEnglishName" class="mob-input" required placeholder="English name">
-                                                <input type="hidden" name="customer_name" id="modalCustomerName">
-                                            </div>
-                                        </div>
-                                        <div class="mob-grid-2">
-                                            <div class="mob-field">
-                                                <label>Phone</label>
-                                                <div style="display:flex; gap:6px;">
-                                                    <input type="text" name="customer_phone" id="modalCustomerPhone" class="mob-input" placeholder="Phone" style="flex:1;">
-                                                    <button type="button" class="mob-product-photo-btn" id="modalBtnShowAlternatePhone" style="min-width:42px; padding:0;" title="Add alternate phone">
-                                                        <i class="fa fa-plus"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div class="mob-field">
-                                                <label>ID Card #</label>
-                                                <input type="text" name="id_card_number" id="modalCustomerIdCard" class="mob-input" placeholder="ID Card">
-                                            </div>
-                                        </div>
-                                        <div class="mob-field" id="modalAlternatePhoneGroup" style="display:none;">
-                                            <label>Alternate Phone</label>
-                                            <input type="text" name="alternate_phone" id="modalAlternatePhone" class="mob-input" placeholder="Alternate phone">
-                                        </div>
-                                        <div class="mob-field" style="display:none;">
-                                            <label>ID Card Address</label>
-                                            <input type="hidden" name="customer_address" id="modalCustomerAddress" class="mob-input" placeholder="ID card address">
-                                        </div>
-                                        <div class="mob-grid-2">
-                                            <div class="mob-field">
-                                                <label>Province</label>
-                                                <select name="province_code" id="modalProvinceSelect" class="mob-input">
-                                                    <option value="">-- Select --</option>
-                                                </select>
-                                                <input type="hidden" name="province_name" id="modalProvinceName">
-                                            </div>
-                                            <div class="mob-field">
-                                                <label>District</label>
-                                                <select name="district_code" id="modalDistrictSelect" class="mob-input" disabled>
-                                                    <option value="">-- Select --</option>
-                                                </select>
-                                                <input type="hidden" name="district_name" id="modalDistrictName">
-                                            </div>
-                                            <div class="mob-field">
-                                                <label>Commune</label>
-                                                <select name="commune_code" id="modalCommuneSelect" class="mob-input" disabled>
-                                                    <option value="">-- Select --</option>
-                                                </select>
-                                                <input type="hidden" name="commune_name" id="modalCommuneName">
-                                            </div>
-                                            <div class="mob-field">
-                                                <label>Village</label>
-                                                <select name="village_code" id="modalVillageSelect" class="mob-input" disabled>
-                                                    <option value="">-- Select --</option>
-                                                </select>
-                                                <input type="hidden" name="village_name" id="modalVillageName">
-                                            </div>
-                                        </div>
-                                        <div id="modalAddressLoadStatus" style="margin-top:6px; font-size:11px; color:#64748b;"></div>
-                                        <div class="mob-field">
-                                            <label>Group</label>
-                                            <input name="customer_group_name" class="mob-input" value="រំលស់">
-                                        </div>
+                                    <div class="lm-kyc-details">
+                                        <div class="lm-kyc-title">{{ $lmText('Customer Photo', 'រូបថតអតិថិជន') }}</div>
+                                        <button type="button" class="lm-kyc-btn" onclick="mobOpenPhotoSheet('profile')">
+                                            <i class="fa fa-camera"></i> {{ $lmText('Capture/Upload', 'ថត / ផ្ទុកឡើង') }}
+                                        </button>
+                                        <input type="file" id="mobCustomerPhotoCamera" accept="image/*" capture="user" style="display:none;" onchange="mobHandleCustomerProfile(this)">
+                                        <input type="file" id="mobCustomerPhotoGallery" accept="image/*" style="display:none;" onchange="mobHandleCustomerProfile(this)">
                                     </div>
+                                </div>
+
+                                <!-- ID Card OCR Box -->
+                                <div class="lm-kyc-box">
+                                    <div class="lm-kyc-thumb" id="mobIdCardPreview" style="border-radius: 6px;">
+                                        <img id="mobIdCardImg" src="" style="display:none;">
+                                        <i class="fa fa-id-card" id="mobIdCardPlaceholderIcon"></i>
+                                    </div>
+                                    <div class="lm-kyc-details">
+                                        <div class="lm-kyc-title">{{ $lmText('National ID OCR', 'ស្កេនអត្តសញ្ញាណប័ណ្ណ') }}</div>
+                                        <button type="button" class="lm-kyc-btn" onclick="mobOpenPhotoSheet('id_card')">
+                                            <i class="fa fa-camera"></i> {{ $lmText('Scan ID Card', 'ស្កេនកាត') }}
+                                        </button>
+                                        <input type="file" id="mobIdCardCamera" accept="image/*" capture="environment" style="display:none;" onchange="mobHandleIdCard(this)">
+                                        <input type="file" id="mobIdCardGallery" accept="image/*" style="display:none;" onchange="mobHandleIdCard(this)">
+                                        <div id="mobIdCardOcrStatus" style="font-size: 10px; color: #2563eb; font-weight: 600; margin-top: 4px;"></div>
+                                    </div>
+                                    <input type="hidden" name="id_card_ocr_raw_text" id="mobIdCardOcrRawText">
+                                    <input type="hidden" name="id_card_ocr_fields[id_card_number]" id="mobIdCardOcrNumber">
+                                    <input type="hidden" name="id_card_ocr_fields[khmer_name]" id="mobIdCardOcrKhmerName">
+                                    <input type="hidden" name="id_card_ocr_fields[english_name]" id="mobIdCardOcrEnglishName">
+                                    <input type="hidden" name="id_card_ocr_fields[address]" id="mobIdCardOcrAddress">
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="mob-customer-side">
-                            <div class="mob-card mob-doc-card">
-                                <div class="mob-section-title"><i class="fa fa-paperclip"></i> Documents</div>
-                                <div class="mob-doc-grid" id="mobDocGrid">
-                                    <label class="mob-doc-add" for="mobDocInput">
-                                        <i class="fa fa-plus-circle"></i> Add File
-                                    </label>
+                            <!-- Customer Fields Grid -->
+                            <div class="lm-grid-2">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Name in Khmer', 'ឈ្មោះជាភាសាខ្មែរ') }} <span class="lm-req">*</span></label>
+                                    <input type="text" name="customer_khmer_name" id="modalCustomerKhmerName" class="lm-control" required placeholder="{{ $lmText('Khmer Full Name', 'ឈ្មោះពេញជាភាសាខ្មែរ') }}">
                                 </div>
-                                <input type="file" id="mobDocInput" accept="image/*,.pdf,.txt,.csv,.doc,.docx" multiple style="display:none;" onchange="mobHandleDocs(this)">
-                                <textarea name="document_text" class="mob-input" rows="3" placeholder="Write document note or extra information to send with Telegram" style="margin-top:8px;"></textarea>
-                                <div id="mobDocumentLinks" style="margin-top:8px;">
-                                    <div class="mob-doc-link-row" style="display:flex; gap:6px; margin-bottom:6px;">
-                                        <input type="url" name="document_links[]" class="mob-input" placeholder="Paste document link">
-                                        <button type="button" class="btn btn-default btn-sm" id="mobAddDocumentLink" title="Add another link">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Name in English', 'ឈ្មោះជាអក្សរឡាតាំង') }} <span class="lm-req">*</span></label>
+                                    <input type="text" name="customer_english_name" id="modalCustomerEnglishName" class="lm-control" required placeholder="{{ $lmText('English Full Name', 'ឈ្មោះជាអក្សរឡាតាំង') }}">
+                                    <input type="hidden" name="customer_name" id="modalCustomerName">
+                                </div>
+                            </div>
+
+                            <div class="lm-grid-2">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Primary Phone', 'លេខទូរស័ព្ទចម្បង') }} <span class="lm-req">*</span></label>
+                                    <div style="display: flex; gap: 6px;">
+                                        <input type="text" name="customer_phone" id="modalCustomerPhone" class="lm-control" placeholder="012 345 678" required style="flex: 1;">
+                                        <button type="button" class="btn btn-default btn-sm" id="modalBtnShowAlternatePhone" title="{{ $lmText('Add Alternate Phone', 'បន្ថែមលេខទូរស័ព្ទបន្ទាប់បន្សំ') }}" style="border-radius: 8px;">
                                             <i class="fa fa-plus"></i>
                                         </button>
                                     </div>
                                 </div>
-                                <div style="margin-top:8px; font-size:10px; color:#94a3b8;">
-                                    <i class="fa fa-clipboard"></i> Paste images with Ctrl+V &middot; Photos compressed, files kept as-is
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('National ID Card #', 'លេខអត្តសញ្ញាណប័ណ្ណ') }}</label>
+                                    <input type="text" name="id_card_number" id="modalCustomerIdCard" class="lm-control" placeholder="010123456">
+                                </div>
+                            </div>
+
+                            <div class="lm-field" id="modalAlternatePhoneGroup" style="display: none;">
+                                <label class="lm-label">{{ $lmText('Alternate Phone', 'លេខទូរស័ព្ទបន្ទាប់បន្សំ') }}</label>
+                                <input type="text" name="alternate_phone" id="modalAlternatePhone" class="lm-control" placeholder="{{ $lmText('Secondary Phone', 'លេខទូរស័ព្ទទីពីរ') }}">
+                            </div>
+
+                            <!-- Live Duplicate Customer Warning Banner -->
+                            <div id="modalCustomerDuplicateAlert" style="display: none; margin-top: 10px; margin-bottom: 6px; padding: 10px 12px; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 8px; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.12);">
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 200px;">
+                                        <i class="fa fa-exclamation-triangle" style="color: #d97706; font-size: 16px; margin-top: 2px;"></i>
+                                        <div>
+                                            <div style="font-size: 12px; font-weight: 700; color: #92400e;" id="modalCustomerDuplicateTitle">
+                                                {{ $lmText('Existing Customer Found!', 'បានរកឃើញអតិថិជនមានស្រាប់!') }}
+                                            </div>
+                                            <div style="font-size: 11px; color: #b45309; margin-top: 2px;" id="modalCustomerDuplicateDesc"></div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-left: auto;">
+                                        <button type="button" class="btn btn-warning btn-xs" id="modalBtnLinkDuplicateCustomer" onclick="mobLinkDuplicateCustomer()" style="font-weight: 600; border-radius: 6px; padding: 4px 10px; background: #f59e0b; border-color: #d97706; color: #fff; display: inline-flex; align-items: center; gap: 4px;">
+                                            <i class="fa fa-link"></i> <span>{{ $lmText('Link This Customer', 'ភ្ជាប់អតិថិជននេះ') }}</span>
+                                        </button>
+                                        <button type="button" class="btn btn-default btn-xs" id="modalBtnDismissDuplicateAlert" onclick="mobDismissDuplicateAlert()" style="border-radius: 6px; padding: 4px 8px;" title="Dismiss">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cambodia Administrative Hierarchy Address -->
+                            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9;">
+                                <label class="lm-label" style="color: #2563eb; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa fa-map-marker"></i> {{ $lmText('Cambodia Administrative Address', 'អាសយដ្ឋានរដ្ឋបាលកម្ពុជា') }}
+                                </label>
+                                <input type="hidden" name="customer_address" id="modalCustomerAddress">
+                                <div class="lm-grid-2" style="margin-top: 8px;">
+                                    <div class="lm-field">
+                                        <label class="lm-label">{{ $lmText('Province / City', 'រាជធានី / ខេត្ត') }}</label>
+                                        <select name="province_code" id="modalProvinceSelect" class="lm-control">
+                                            <option value="">-- {{ $lmText('Select Province', 'ជ្រើសរើសខេត្ត') }} --</option>
+                                        </select>
+                                        <input type="hidden" name="province_name" id="modalProvinceName">
+                                    </div>
+                                    <div class="lm-field">
+                                        <label class="lm-label">{{ $lmText('District / Khan', 'ក្រុង / ស្រុក / ខណ្ឌ') }}</label>
+                                        <select name="district_code" id="modalDistrictSelect" class="lm-control" disabled>
+                                            <option value="">-- {{ $lmText('Select District', 'ជ្រើសរើសស្រុក') }} --</option>
+                                        </select>
+                                        <input type="hidden" name="district_name" id="modalDistrictName">
+                                    </div>
+                                    <div class="lm-field">
+                                        <label class="lm-label">{{ $lmText('Commune / Sangkat', 'ឃុំ / សង្កាត់') }}</label>
+                                        <select name="commune_code" id="modalCommuneSelect" class="lm-control" disabled>
+                                            <option value="">-- {{ $lmText('Select Commune', 'ជ្រើសរើសឃុំ') }} --</option>
+                                        </select>
+                                        <input type="hidden" name="commune_name" id="modalCommuneName">
+                                    </div>
+                                    <div class="lm-field">
+                                        <label class="lm-label">{{ $lmText('Village', 'ភូមិ') }}</label>
+                                        <select name="village_code" id="modalVillageSelect" class="lm-control" disabled>
+                                            <option value="">-- {{ $lmText('Select Village', 'ជ្រើសរើសភូមិ') }} --</option>
+                                        </select>
+                                        <input type="hidden" name="village_name" id="modalVillageName">
+                                    </div>
+                                </div>
+                                <div id="modalAddressLoadStatus" style="font-size: 11px; color: #64748b; margin-top: 4px;"></div>
+                            </div>
+
+                            <div class="lm-field" style="margin-top: 10px;">
+                                <label class="lm-label">{{ $lmText('Customer Group', 'ក្រុមអតិថិជន') }}</label>
+                                <input name="customer_group_name" class="lm-control" value="រំលស់">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Supporting Documents Card -->
+                    <div class="lm-card">
+                        <div class="lm-card-head">
+                            <h3 class="lm-card-title"><i class="fa fa-paperclip"></i> {{ $lmText('Supporting Documents & Notes', 'ឯកសារភ្ជាប់ & កំណត់ចំណាំ') }}</h3>
+                        </div>
+                        <div class="lm-card-body">
+                            <div class="mob-doc-grid" id="mobDocGrid">
+                                <label class="mob-doc-add" for="mobDocInput" title="{{ $lmText('Click or drag files here', 'ចុចដើម្បីជ្រើសរើសឯកសារ') }}">
+                                    <i class="fa fa-cloud-upload" style="font-size: 24px; margin-bottom: 4px;"></i>
+                                    <span>{{ $lmText('Add Files', 'បញ្ចូលឯកសារ') }}</span>
+                                </label>
+                            </div>
+                            <input type="file" id="mobDocInput" accept="image/*,.pdf,.txt,.csv,.doc,.docx" multiple style="display:none;" onchange="mobHandleDocs(this)">
+
+                            <div style="margin-top: 12px;">
+                                <label class="lm-label">{{ $lmText('Telegram Summary Note', 'កំណត់ចំណាំផ្ញើទៅ Telegram') }}</label>
+                                <textarea name="document_text" class="lm-control" rows="2" placeholder="{{ $lmText('Write document note or extra details for telegram notification...', 'កំណត់ចំណាំឯកសារ ឬព័ត៌មានបន្ថែមសម្រាប់ជូនដំណឹង Telegram...') }}" style="height: auto; padding: 8px 12px;"></textarea>
+                            </div>
+
+                            <div id="mobDocumentLinks" style="margin-top: 10px;">
+                                <label class="lm-label">{{ $lmText('External Document Links', 'តំណភ្ជាប់ឯកសារក្រៅ (Google Drive / Cloud)') }}</label>
+                                <div class="mob-doc-link-row" style="display: flex; gap: 6px; margin-bottom: 6px;">
+                                    <input type="url" name="document_links[]" class="lm-control" placeholder="https://drive.google.com/...">
+                                    <button type="button" class="btn btn-default btn-sm" id="mobAddDocumentLink" title="Add another link" style="border-radius: 8px;">
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+                                <i class="fa fa-info-circle"></i> {{ $lmText('Tip: You can paste screenshots with Ctrl+V directly anywhere.', 'ជំនួយ: លោកអ្នកអាចចុច Ctrl+V ដើម្បី Paste រូបភាពបានភ្លាមៗ។') }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Collateral Items, Down Payment, Terms & Financial Summary -->
+                <div class="lm-col">
+                    <!-- Collateral Items Card -->
+                    <div class="lm-card">
+                        <div class="lm-card-head">
+                            <h3 class="lm-card-title"><i class="fa fa-cubes"></i> {{ $lmText('Collateral / Products for Installment', 'ទំនិញ / ទ្រព្យបញ្ចាំបង់រំលស់') }}</h3>
+                            <button type="button" class="btn btn-primary btn-xs" id="modalBtnAddItem" style="border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                                <i class="fa fa-plus-circle"></i> {{ $lmText('Add Product', 'បន្ថែមទំនិញ') }}
+                            </button>
+                        </div>
+                        <div class="lm-card-body">
+                            <div id="mobProductList">
+                                <!-- Dynamic Items will be rendered here -->
+                            </div>
+                            <button type="button" class="mob-add-product" id="modalBtnAddItemSecondary" onclick="document.getElementById('modalBtnAddItem').click()">
+                                <i class="fa fa-plus-circle"></i> {{ $lmText('Add Another Item / Product', 'បន្ថែមទំនិញមួយទៀត') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Customer Deposit / Down Payment Card -->
+                    <div class="lm-card">
+                        <div class="lm-card-head">
+                            <h3 class="lm-card-title"><i class="fa fa-money"></i> {{ $lmText('Customer Deposit / Down Payment', 'ប្រាក់កក់ / បង់មុន (Down Payment)') }}</h3>
+                            <div class="lm-switch-row" id="mobDpToggle" onclick="this.classList.toggle('on'); document.getElementById('mobDpFields').style.display = this.classList.contains('on') ? 'block' : 'none';">
+                                <div class="lm-switch-pill"></div>
+                            </div>
+                        </div>
+                        <div class="lm-card-body">
+                            <div id="mobDpFields" style="display: none;">
+                                <input type="hidden" id="modalDownPaymentHidden" name="down_payment" value="0">
+                                <div id="mobDepositPayments">
+                                    <div class="mob-payment-row" data-payment-index="0" style="margin-bottom: 10px;">
+                                        <div class="mob-deposit-fields">
+                                            <div class="lm-field amount" style="margin: 0;">
+                                                <label class="lm-label">{{ $lmText('Deposit Amount ($)', 'ចំនួនប្រាក់កក់ ($)') }}</label>
+                                                <input type="number" step="0.01" name="payments[0][amount]" class="lm-control modal-payment-amount" value="0" min="0" style="font-weight: 700; color: #059669;">
+                                            </div>
+                                            <div class="lm-field" style="margin: 0;">
+                                                <label class="lm-label">{{ $lmText('Paid Date', 'ថ្ងៃបង់ប្រាក់') }}</label>
+                                                <input type="date" name="payments[0][paid_date]" class="lm-control" value="{{ date('Y-m-d') }}">
+                                            </div>
+                                            <div class="lm-field" style="margin: 0;">
+                                                <label class="lm-label">{{ $lmText('Payment Method', 'វិធីសាស្ត្របង់') }}</label>
+                                                {!! Form::select('payments[0][method]', $paymentTypes ?? [], $defaultPaymentMethod ?? 'cash', ['class' => 'lm-control modal-payment-method']) !!}
+                                            </div>
+                                            <div class="lm-field" style="margin: 0;">
+                                                <label class="lm-label">{{ $lmText('Ref / Transaction #', 'លេខយោង') }}</label>
+                                                <input name="payments[0][reference_number]" class="lm-control" placeholder="TXN / Ref">
+                                            </div>
+                                            <input type="hidden" name="payments[0][currency]" value="USD">
+                                            <input type="hidden" name="payments[0][exchange_rate]" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-default btn-xs" id="modalBtnAddPayment" style="margin-top: 8px; border-radius: 6px; font-weight: 600;">
+                                    <i class="fa fa-plus-circle"></i> {{ $lmText('Add Split Payment', 'បន្ថែមការបង់ប្រាក់បំបែក') }}
+                                </button>
+                            </div>
+                            <div id="mobDpEmptyHint" style="font-size: 12px; color: #94a3b8; font-style: italic;">
+                                {{ $lmText('No deposit enabled. Full amount will be financed.', 'មិនមានប្រាក់កក់ទេ - ទំហំទឹកប្រាក់សរុបនឹងត្រូវគណនាជាកម្ចីរំលស់។') }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Installment Financing Terms Card -->
+                    <div class="lm-card">
+                        <div class="lm-card-head">
+                            <h3 class="lm-card-title"><i class="fa fa-calculator"></i> {{ $lmText('Installment Loan Terms', 'លក្ខខណ្ឌគណនាកម្ចី') }}</h3>
+                        </div>
+                        <div class="lm-card-body">
+                            <div class="lm-field">
+                                <label class="lm-label">{{ $lmText('Principal Financed (Net Loan Amount)', 'ប្រាក់ដើមកម្ចីសុទ្ធ (បន្ទាប់ពីកាត់ប្រាក់កក់)') }} <span class="lm-req">*</span></label>
+                                <input type="number" step="0.01" id="modalPrincipalAmount" name="principal_amount" class="lm-control" min="0.01" required placeholder="0.00" readonly style="font-size: 16px; font-weight: 800; color: #2563eb; background: #f8fafc;">
+                            </div>
+
+                            <div class="lm-grid-2">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Interest Rate (%)', 'អត្រាការប្រាក់ (%)') }}</label>
+                                    <input type="number" step="0.01" name="interest_rate" class="lm-control" value="{{ old('interest_rate', 4) }}" min="0" style="font-weight: 700;">
+                                </div>
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Interest Type', 'ប្រភេទការប្រាក់') }} <span class="lm-req">*</span></label>
+                                    <select name="interest_type" class="lm-control">
+                                        <option value="flat">{{ $lmText('Flat Rate (ថេរ)', 'Flat Rate (ថេរ)') }}</option>
+                                        <option value="reducing_balance">{{ $lmText('Reducing Balance (ថយចុះ)', 'Reducing Balance (ថយចុះ)') }}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="lm-grid-2">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Duration (Months)', 'រយៈពេល (ខែ)') }} <span class="lm-req">*</span></label>
+                                    <input type="number" name="duration_months" class="lm-control" min="1" max="360" value="12" required style="font-weight: 700;">
+                                </div>
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Payment Frequency', 'ភាពញឹកញាប់នៃការបង់') }} <span class="lm-req">*</span></label>
+                                    <select name="payment_frequency" class="lm-control">
+                                        <option value="monthly">{{ $lmText('Monthly (ប្រចាំខែ)', 'Monthly (ប្រចាំខែ)') }}</option>
+                                        <option value="weekly">{{ $lmText('Weekly (ប្រចាំសប្ដាហ៍)', 'Weekly (ប្រចាំសប្ដាហ៍)') }}</option>
+                                        <option value="daily">{{ $lmText('Daily (ប្រចាំថ្ងៃ)', 'Daily (ប្រចាំថ្ងៃ)') }}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="lm-grid-2">
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('First Due Date', 'ថ្ងៃបង់ប្រាក់លើកទី១') }} <span class="lm-req">*</span></label>
+                                    <input type="date" name="first_due_date" class="lm-control" value="{{ \Carbon\Carbon::today()->addMonth()->format('Y-m-d') }}">
+                                </div>
+                                <div class="lm-field">
+                                    <label class="lm-label">{{ $lmText('Late Penalty Type', 'ប្រភេទពិន័យយឺតយ៉ាវ') }}</label>
+                                    <select name="penalty_type" class="lm-control">
+                                        <option value="fixed">{{ $lmText('Fixed Amount ($)', 'ទឹកប្រាក់ថេរ ($)') }}</option>
+                                        <option value="percentage">{{ $lmText('Percentage (%)', 'ភាគរយ (%)') }}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="lm-field">
+                                <label class="lm-label">{{ $lmText('Penalty Amount / Rate', 'ទំហំពិន័យ') }}</label>
+                                <input type="number" step="0.01" name="penalty_amount" class="lm-control" value="0" min="0">
+                            </div>
+
+                            <!-- Financial Metrics Overview -->
+                            <div class="lm-metrics-grid">
+                                <div class="lm-metric-card">
+                                    <div class="lm-metric-label">{{ $lmText('Total Items', 'តម្លៃទំនិញសរុប') }}</div>
+                                    <div class="lm-metric-val" id="modalSummaryTotal">$0.00</div>
+                                </div>
+                                <div class="lm-metric-card">
+                                    <div class="lm-metric-label">{{ $lmText('Deposit Paid', 'ប្រាក់កក់') }}</div>
+                                    <div class="lm-metric-val" id="modalSummaryDownPayment">$0.00</div>
+                                </div>
+                                <div class="lm-metric-card highlight">
+                                    <div class="lm-metric-label">{{ $lmText('Net Loan Due', 'ប្រាក់ដើមសុទ្ធ') }}</div>
+                                    <div class="lm-metric-val" id="modalSummaryDue">$0.00</div>
+                                </div>
+                                <div class="lm-metric-card success">
+                                    <div class="lm-metric-label">{{ $lmText('Est. Monthly Due', 'បង់ប្រចាំខែ') }}</div>
+                                    <div class="lm-metric-val" id="modalSummaryMonthly">$0.00</div>
+                                </div>
+                            </div>
+
+                            <!-- Schedule Preview Section -->
+                            <div id="modalScheduleSection" style="display: none; margin-top: 14px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <label class="lm-label" style="color: #2563eb; margin: 0;"><i class="fa fa-calendar"></i> {{ $lmText('Amortization Schedule Preview', 'កាលវិភាគបង់ប្រាក់សាកល្បង') }}</label>
+                                    <span style="font-size: 11px; color: #64748b;">{{ $lmText('Live calculated breakdown', 'តារាងគណនាលម្អិត') }}</span>
+                                </div>
+                                <div class="mob-schedule-wrap">
+                                    <table class="mob-schedule-tbl" id="modalScheduleTable">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>{{ $lmText('Due Date', 'ថ្ងៃផុតកំណត់') }}</th>
+                                                <th class="text-right">{{ $lmText('Principal', 'ប្រាក់ដើម') }}</th>
+                                                <th class="text-right">{{ $lmText('Interest', 'ការប្រាក់') }}</th>
+                                                <th class="text-right">{{ $lmText('Total', 'សរុប') }}</th>
+                                                <th class="text-right">{{ $lmText('Balance', 'សមតុល្យ') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <th colspan="2" class="text-right">{{ $lmText('Total', 'សរុប') }}</th>
+                                                <th class="text-right">$0.00</th>
+                                                <th class="text-right">$0.00</th>
+                                                <th class="text-right">$0.00</th>
+                                                <th class="text-right">$0.00</th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                {{-- ========== STEP 2: PRODUCTS ========== --}}
-                <div class="mob-step-panel" data-panel="2">
-                    <div id="mobProductList"></div>
-                    <button type="button" class="mob-add-product" id="modalBtnAddItem">
-                        <i class="fa fa-plus-circle"></i> Add Product
-                    </button>
-
-                    <div class="mob-products-principal">
-                        <div class="mob-s-label">Principal After Deposit</div>
-                        <div class="mob-s-value" id="modalComputedPrincipal">$0.00</div>
-                    </div>
-
-                    <div class="mob-deposit-card">
-                        <div class="mob-toggle-row" id="mobDpToggle" onclick="this.classList.toggle('on'); document.getElementById('mobDpFields').style.display = this.classList.contains('on') ? 'block' : 'none';">
-                            <div class="mob-switch"></div>
-                            <div>
-                                <div class="mob-toggle-label">ចូលរួមកក់ខ្លះ</div>
-                                <div class="mob-toggle-sub">Customer deposit payment</div>
-                            </div>
-                        </div>
-                        <div id="mobDpFields" style="display: none;">
-                            <input type="hidden" id="modalDownPaymentHidden" name="down_payment" value="0">
-                            <div id="mobDepositPayments">
-                                <div class="mob-payment-row" data-payment-index="0">
-                                    <div class="mob-payment-head">
-                                        <div class="mob-payment-title">Payment #1</div>
-                                        <button type="button" class="mob-payment-remove modal-btn-remove-payment" style="display:none;"><i class="fa fa-trash"></i></button>
-                                    </div>
-                                    <div class="mob-deposit-fields">
-                                        <div class="mob-field amount">
-                                            <label>Amount</label>
-                                            <input type="number" step="0.01" name="payments[0][amount]" class="mob-input modal-payment-amount" value="0" min="0">
-                                        </div>
-                                        <div class="mob-field">
-                                            <label>Date</label>
-                                            <input type="date" name="payments[0][paid_date]" class="mob-input" value="{{ date('Y-m-d') }}">
-                                        </div>
-                                        <div class="mob-field">
-                                            <label>Method</label>
-                                            {!! Form::select('payments[0][method]', $paymentTypes ?? [], $defaultPaymentMethod ?? 'cash', ['class' => 'mob-input modal-payment-method']) !!}
-                                        </div>
-                                        <div class="mob-field">
-                                            <label>Ref #</label>
-                                            <input name="payments[0][reference_number]" class="mob-input" placeholder="Ref #">
-                                        </div>
-                                        <input type="hidden" name="payments[0][currency]" value="USD">
-                                        <input type="hidden" name="payments[0][exchange_rate]" value="1">
-                                    </div>
-                                </div>
-                            </div>
-                            <button type="button" class="mob-add-payment" id="modalBtnAddPayment"><i class="fa fa-plus-circle"></i> Add Payment</button>
-                        </div>
-                    </div>
-
-                    <div class="mob-card" style="margin-top: 12px;">
-                        <div class="mob-section-title"><i class="fa fa-sliders-h"></i> Loan Conditions</div>
-                        <div class="mob-field">
-                            <label>Principal After Deposit <span class="mob-required">*</span></label>
-                            <input type="number" step="0.01" id="modalPrincipalAmount" name="principal_amount" class="mob-input" min="0.01" required placeholder="Auto" readonly>
-                        </div>
-                        <div class="mob-grid-2">
-                            <div class="mob-field">
-                                <label>Interest %</label>
-                                <input type="number" step="0.01" name="interest_rate" class="mob-input" value="{{ old('interest_rate', 4) }}" min="0">
-                            </div>
-                            <div class="mob-field">
-                                <label>Interest Type <span class="mob-required">*</span></label>
-                                <select name="interest_type" class="mob-input">
-                                    <option value="flat">Flat</option>
-                                    <option value="reducing_balance">Reducing</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mob-grid-2">
-                            <div class="mob-field">
-                                <label>Duration (M) <span class="mob-required">*</span></label>
-                                <input type="number" name="duration_months" class="mob-input" min="1" max="360" value="12" required>
-                            </div>
-                            <div class="mob-field">
-                                <label>Frequency <span class="mob-required">*</span></label>
-                                <select name="payment_frequency" class="mob-input">
-                                    <option value="monthly">Monthly</option>
-                                    <option value="weekly">Weekly</option>
-                                    <option value="daily">Daily</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mob-grid-2">
-                            <div class="mob-field">
-                                <label>First Due <span class="mob-required">*</span></label>
-                                <input type="date" name="first_due_date" class="mob-input" value="{{ \Carbon\Carbon::today()->addMonth()->format('Y-m-d') }}">
-                            </div>
-                            <div class="mob-field">
-                                <label>Penalty</label>
-                                <select name="penalty_type" class="mob-input">
-                                    <option value="fixed">Fixed</option>
-                                    <option value="percentage">Percent</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mob-field">
-                            <label>Penalty Amount</label>
-                            <input type="number" step="0.01" name="penalty_amount" class="mob-input" value="0" min="0">
-                        </div>
-                    </div>
-
-                </div>
-
-                {{-- ========== STEP 3: REVIEW ========== --}}
-                <div class="mob-step-panel" data-panel="3">
-                    <div class="mob-card">
-                        <div class="mob-section-title"><i class="fa fa-receipt"></i> Summary</div>
-                        <div class="mob-review-row"><span class="mob-review-label">Loan Date</span><span class="mob-review-value" id="mobRevDate">{{ date('Y-m-d') }}</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Location</span><span class="mob-review-value" id="mobRevLocation">-</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Collector</span><span class="mob-review-value" id="mobRevCollector">-</span></div>
-                    </div>
-                    <div class="mob-card">
-                        <div class="mob-section-title"><i class="fa fa-user"></i> Customer</div>
-                        <div class="mob-review-row"><span class="mob-review-label">Name</span><span class="mob-review-value" id="mobRevCustName">-</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Phone</span><span class="mob-review-value" id="mobRevCustPhone">-</span></div>
-                    </div>
-                    <div class="mob-card">
-                        <div class="mob-section-title"><i class="fa fa-shopping-bag"></i> Products</div>
-                        <div id="mobRevProducts" style="font-size:13px; color:#6b7280;">No products added</div>
-                    </div>
-                    <div class="mob-card">
-                        <div class="mob-section-title"><i class="fa fa-calculator"></i> Loan Terms</div>
-                        <div class="mob-review-row"><span class="mob-review-label">Principal</span><span class="mob-review-value" id="mobRevPrincipal">-</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Interest</span><span class="mob-review-value" id="mobRevInterest">-</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Duration</span><span class="mob-review-value" id="mobRevDuration">-</span></div>
-                        <div class="mob-review-row"><span class="mob-review-label">Customer Deposit</span><span class="mob-review-value" id="mobRevDownPayment">-</span></div>
-                    </div>
-
-                    <div class="mob-summary" style="margin-top: 12px; border-radius: 12px; border: 1px solid #e5e7eb;">
-                        <div class="mob-summary-item">
-                            <div class="mob-s-label">Total</div>
-                            <div class="mob-s-value" id="modalSummaryTotal">$0.00</div>
-                        </div>
-                        <div class="mob-summary-item">
-                            <div class="mob-s-label">Deposit</div>
-                            <div class="mob-s-value" id="modalSummaryDownPayment">$0.00</div>
-                        </div>
-                        <div class="mob-summary-item">
-                            <div class="mob-s-label">Due</div>
-                            <div class="mob-s-value green" id="modalSummaryDue">$0.00</div>
-                        </div>
-                        <div class="mob-summary-item">
-                            <div class="mob-s-label">Monthly</div>
-                            <div class="mob-s-value blue" id="modalSummaryMonthly">$0.00</div>
-                        </div>
-                    </div>
-
-                    <div class="mob-card" id="modalScheduleSection" style="display: none;">
-                        <div class="mob-section-title"><i class="fa fa-calendar"></i> Payment Schedule</div>
-                        <div class="mob-schedule-wrap">
-                            <table class="mob-schedule-tbl" id="modalScheduleTable">
-                                <thead><tr><th>#</th><th>Date</th><th class="text-right">Principal</th><th class="text-right">Interest</th><th class="text-right">Total</th><th class="text-right">Balance</th></tr></thead>
-                                <tbody></tbody>
-                                <tfoot><tr><th colspan="2" class="text-right">Total</th><th class="text-right">0.00</th><th class="text-right">0.00</th><th class="text-right">0.00</th><th class="text-right">0.00</th></tr></tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
             </div>
+        </div>
 
-            <div class="mob-bottombar" id="mobBottombar">
-                <button type="button" class="mob-btn-back" id="mobBtnBack" style="display:none;" onclick="mobGoStep(mobCurrentStep - 1)">
-                    <i class="fa fa-arrow-left"></i>
+        <!-- Sticky Professional Action Footer -->
+        <div class="lm-pro-footer">
+            <div class="lm-pro-footer-info">
+                <span class="lm-pro-footer-pill">
+                    <i class="fa fa-cube" style="color: #2563eb;"></i>
+                    <span>{{ $lmText('Principal:', 'ប្រាក់ដើម:') }} <strong id="modalFooterPrincipal">$0.00</strong></span>
+                </span>
+                <span class="lm-pro-footer-pill">
+                    <i class="fa fa-clock-o" style="color: #10b981;"></i>
+                    <span>{{ $lmText('Monthly Due:', 'បង់ប្រចាំខែ:') }} <strong id="modalFooterMonthly">$0.00</strong></span>
+                </span>
+            </div>
+            <div class="lm-pro-footer-actions">
+                <button type="button" class="lm-btn lm-btn-secondary" id="mobBtnPreviewSchedule" onclick="mobPreviewSchedule()">
+                    <i class="fa fa-table"></i> {{ $lmText('Preview Schedule', 'គណនាកាលវិភាគ') }}
                 </button>
-                <button type="button" class="mob-btn-ghost" id="mobBtnPreviewSchedule" style="display:none;" onclick="mobPreviewSchedule()">
-                    <i class="fa fa-table"></i> Schedule
+                <button type="button" class="lm-btn lm-btn-warning" onclick="mobSubmit('draft')">
+                    <i class="fa fa-save"></i> {{ $lmText('Save Draft', 'រក្សាទុកព្រាង') }}
                 </button>
-                <button type="button" class="mob-btn-primary mob-btn-next" id="mobBtnNext" onclick="mobGoStep(mobCurrentStep + 1)">
-                    Next <i class="fa fa-arrow-right"></i>
+                <button type="button" class="lm-btn lm-btn-primary" onclick="mobSubmit('create_approve')">
+                    <i class="fa fa-check-circle"></i> {{ $lmText('Create & Approve Agreement', 'បង្កើត & អនុម័តកម្ចី') }}
                 </button>
-                <button type="button" class="mob-btn-submit" id="mobBtnSubmit" style="display:none;" onclick="mobSubmit('create_approve')">
-                    <i class="fa fa-check"></i> Create Loan
+                <button type="button" class="lm-btn lm-btn-outline" data-dismiss="modal">
+                    {{ $lmText('Cancel', 'បោះបង់') }}
                 </button>
             </div>
-        </form>
-    </div>
+        </div>
+    </form>
 </div>
+
+<!-- Modal Quick Add Customer include -->
 <div class="modal fade contact_modal" tabindex="-1" role="dialog" aria-labelledby="contactModalLabel">
     @include('contact.create', ['quick_add' => true, 'selected_type' => 'customer'])
 </div>
+
+<!-- Photo Sheet Popup -->
 <div class="mob-photo-sheet" id="mobPhotoSheet" aria-hidden="true" onclick="mobClosePhotoSheet()">
     <div class="mob-photo-sheet-panel" onclick="event.stopPropagation()">
-        <div class="mob-photo-sheet-title" id="mobPhotoSheetTitle">Add Photo</div>
+        <div class="mob-photo-sheet-title" id="mobPhotoSheetTitle">{{ $lmText('Add Photo', 'បន្ថែមរូបថត') }}</div>
         <button type="button" class="mob-photo-sheet-option" onclick="mobChoosePhotoSource('camera')">
-            <i class="fa fa-camera"></i> Take Photo
+            <i class="fa fa-camera" style="color: #2563eb;"></i> {{ $lmText('Take Photo with Camera', 'ថតរូបដោយកាមេរ៉ា') }}
         </button>
         <button type="button" class="mob-photo-sheet-option" onclick="mobChoosePhotoSource('library')">
-            <i class="fa fa-image"></i> Choose from Library
+            <i class="fa fa-image" style="color: #10b981;"></i> {{ $lmText('Choose from Photo Library', 'ជ្រើសរើសពីវិចិត្រសាល') }}
         </button>
-        <button type="button" class="mob-photo-sheet-cancel" onclick="mobClosePhotoSheet()">Cancel</button>
+        <button type="button" class="mob-photo-sheet-cancel" onclick="mobClosePhotoSheet()">{{ $lmText('Cancel', 'បោះបង់') }}</button>
     </div>
 </div>
+
+<!-- Cropper Overlays -->
 <div class="mob-product-crop-overlay" id="mobProductCropOverlay" aria-hidden="true">
     <div class="mob-product-crop-box">
         <div class="mob-product-crop-head">
-            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> Crop Product Photo</div>
+            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> {{ $lmText('Crop Product Photo', 'កាត់រូបថតទំនិញ') }}</div>
             <button type="button" class="mob-prod-del" onclick="mobCancelProductCrop()" style="position:static;">
                 <i class="fa fa-times"></i>
             </button>
         </div>
         <canvas class="mob-product-crop-canvas" id="mobProductCropCanvas"></canvas>
-        <div class="mob-product-crop-status" id="mobProductCropStatus">Drag the box or corners to keep only the product label.</div>
+        <div class="mob-product-crop-status" id="mobProductCropStatus" style="font-size: 11px; color: #64748b; margin-top: 8px;">Drag the box or corners to keep only the product label.</div>
         <div class="mob-product-crop-actions">
             <button type="button" onclick="mobResetProductCrop()"><i class="fa fa-refresh"></i> Reset</button>
             <button type="button" onclick="mobUseOriginalProductPhoto()"><i class="fa fa-image"></i> Original</button>
@@ -933,16 +1408,17 @@
         </div>
     </div>
 </div>
+
 <div class="mob-product-crop-overlay" id="mobIdCardCropOverlay" aria-hidden="true">
     <div class="mob-product-crop-box">
         <div class="mob-product-crop-head">
-            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> Crop ID Card Photo</div>
+            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> {{ $lmText('Crop ID Card Photo', 'កាត់រូបថតអត្តសញ្ញាណប័ណ្ណ') }}</div>
             <button type="button" class="mob-prod-del" onclick="mobCancelIdCardCrop()" style="position:static;">
                 <i class="fa fa-times"></i>
             </button>
         </div>
         <canvas class="mob-product-crop-canvas" id="mobIdCardCropCanvas"></canvas>
-        <div class="mob-product-crop-status" id="mobIdCardCropStatus">Drag the box or corners to keep only the ID card.</div>
+        <div class="mob-product-crop-status" id="mobIdCardCropStatus" style="font-size: 11px; color: #64748b; margin-top: 8px;">Drag the box or corners to keep only the ID card.</div>
         <div class="mob-product-crop-actions">
             <button type="button" onclick="mobResetIdCardCrop()"><i class="fa fa-refresh"></i> Reset</button>
             <button type="button" onclick="mobUseOriginalIdCardPhoto()"><i class="fa fa-image"></i> Original</button>
@@ -950,16 +1426,17 @@
         </div>
     </div>
 </div>
+
 <div class="mob-product-crop-overlay" id="mobProfileCropOverlay" aria-hidden="true">
     <div class="mob-product-crop-box">
         <div class="mob-product-crop-head">
-            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> Crop Profile Photo</div>
+            <div class="mob-product-crop-title"><i class="fa fa-crop"></i> {{ $lmText('Crop Profile Photo', 'កាត់រូបថតផ្ទាល់ខ្លួន') }}</div>
             <button type="button" class="mob-prod-del" onclick="mobCancelProfileCrop()" style="position:static;">
                 <i class="fa fa-times"></i>
             </button>
         </div>
         <canvas class="mob-product-crop-canvas" id="mobProfileCropCanvas"></canvas>
-        <div class="mob-product-crop-status" id="mobProfileCropStatus">Drag the box or corners to keep the customer's face centered.</div>
+        <div class="mob-product-crop-status" id="mobProfileCropStatus" style="font-size: 11px; color: #64748b; margin-top: 8px;">Drag the box or corners to keep the customer's face centered.</div>
         <div class="mob-product-crop-actions">
             <button type="button" onclick="mobResetProfileCrop()"><i class="fa fa-refresh"></i> Reset</button>
             <button type="button" onclick="mobUseOriginalProfilePhoto()"><i class="fa fa-image"></i> Original</button>
@@ -969,74 +1446,49 @@
 </div>
 
 <script>
-var mobCurrentStep = 0;
-var mobTotalSteps = 4;
+// ==================== JAVASCRIPT CONTROLLERS ====================
+var mobIdCardData = '';
+var mobCustomerProfileData = '';
+var mobPhotoTarget = '';
+var mobPhotoTargetCard = null;
+var mobProfileCropper = null;
+var mobProfileCropFile = null;
+var mobIdCardCropper = null;
+var mobIdCardCropFile = null;
+var mobDocFiles = [];
 
-function mobGoStep(step) {
-    if (step < 0 || step >= mobTotalSteps) return;
-    mobCurrentStep = step;
+// Initialize first item if empty
+jQuery(function($) {
+    var $list = $('#mobProductList');
+    if ($list.length && !$list.find('.mob-product-item').length) {
+        $('#modalBtnAddItem').trigger('click');
+    }
 
-    document.querySelectorAll('.mob-step-panel').forEach(function(p) { p.classList.remove('active'); });
-    document.querySelector('.mob-step-panel[data-panel="'+step+'"]').classList.add('active');
-
-    document.querySelectorAll('.mob-progress .mob-step').forEach(function(s, i) {
-        s.classList.remove('active', 'done');
-        if (i < step) s.classList.add('done');
-        if (i === step) s.classList.add('active');
-    });
-    document.querySelectorAll('.mob-step-labels span').forEach(function(s, i) {
-        s.classList.remove('active', 'done');
-        if (i < step) s.classList.add('done');
-        if (i === step) s.classList.add('active');
-    });
-
-    document.getElementById('mobBtnBack').style.display = step > 0 ? '' : 'none';
-    document.getElementById('mobBtnNext').style.display = step < mobTotalSteps - 1 ? '' : 'none';
-    var isLast = step === mobTotalSteps - 1;
-    document.getElementById('mobBtnSubmit').style.display = isLast ? '' : 'none';
-    document.getElementById('mobBtnPreviewSchedule').style.display = isLast ? '' : 'none';
-
-    document.getElementById('mobStepsWrap').scrollTop = 0;
-
-    if (isLast) mobPopulateReview();
-}
-
-function mobPopulateReview() {
-    var $w = document.getElementById('standaloneLoanModalForm');
-    var getVal = function(sel) { var el = $w.querySelector(sel); return el ? el.value : ''; };
-    var getText = function(sel) { var el = $w.querySelector(sel); return el ? (el.options && el.selectedIndex >= 0 ? el.options[el.selectedIndex].text : el.value) : ''; };
-
-    document.getElementById('mobRevDate').textContent = getVal('input[name="loan_date"]') || '-';
-    document.getElementById('mobRevLocation').textContent = getText('select[name="business_location_id"]') || '-';
-    document.getElementById('mobRevCollector').textContent = getText('select[name="assigned_collector_id"]') || '-';
-    document.getElementById('mobRevCustName').textContent = getVal('#modalCustomerKhmerName') || getVal('#modalCustomerEnglishName') || '-';
-    document.getElementById('mobRevCustPhone').textContent = getVal('#modalCustomerPhone') || '-';
-
-    var principal = parseFloat(getVal('#modalPrincipalAmount')) || 0;
-    var rate = parseFloat(getVal('[name="interest_rate"]')) || 0;
-    var dur = parseInt(getVal('input[name="duration_months"]')) || 0;
-    var freq = getText('select[name="payment_frequency"]');
-    var dp = 0;
-    $w.querySelectorAll('.modal-payment-amount').forEach(function(input) {
-        dp += parseFloat(input.value || 0) || 0;
+    // Sync deposit hint
+    $('#mobDpToggle').on('click', function() {
+        var on = $(this).hasClass('on');
+        $('#mobDpEmptyHint').toggle(!on);
     });
 
-    document.getElementById('mobRevPrincipal').textContent = '$' + principal.toFixed(2);
-    document.getElementById('mobRevInterest').textContent = rate + '%';
-    document.getElementById('mobRevDuration').textContent = dur + ' months / ' + freq;
-    document.getElementById('mobRevDownPayment').textContent = '$' + dp.toFixed(2);
-
-    var cards = document.querySelectorAll('#mobProductList .mob-product-item');
-    var html = '';
-    cards.forEach(function(card, i) {
-        var name = card.querySelector('.mob-field input[name*="product_name"]');
-        var price = card.querySelector('.mob-field input[name*="unit_price"]');
-        var qty = card.querySelector('.mob-field input[name*="qty"]');
-        html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
-            '<span>#' + (i+1) + ' ' + (name ? name.value || 'Unnamed' : 'Unnamed') + '</span>' +
-            '<span style="font-weight:600;">$' + ((parseFloat(qty?qty.value:1)||1) * (parseFloat(price?price.value:0)||0)).toFixed(2) + '</span></div>';
+    // Auto-update summary pill on terms change
+    $('input[name="interest_rate"], select[name="interest_type"], input[name="duration_months"]').on('input change', function() {
+        updateFooterPills();
     });
-    document.getElementById('mobRevProducts').innerHTML = html || '<div style="color:#94a3b8; font-style:italic;">No products added</div>';
+
+    // Initialize Direct Customer Search & Address cascading
+    mobInitCustomerSearch();
+});
+
+function updateFooterPills() {
+    var p = parseFloat(document.getElementById('modalPrincipalAmount')?.value || 0) || 0;
+    var dur = parseInt(document.querySelector('input[name="duration_months"]')?.value || 12) || 12;
+    var rate = parseFloat(document.querySelector('input[name="interest_rate"]')?.value || 0) || 0;
+    var monthly = dur > 0 ? (p + (p * rate / 100 * dur)) / dur : 0;
+
+    var elP = document.getElementById('modalFooterPrincipal');
+    if (elP) elP.textContent = '$' + p.toFixed(2);
+    var elM = document.getElementById('modalFooterMonthly');
+    if (elM) elM.textContent = '$' + monthly.toFixed(2);
 }
 
 function mobCompressImage(file, maxW, maxH, quality) {
@@ -1059,26 +1511,6 @@ function mobCompressImage(file, maxW, maxH, quality) {
     });
 }
 
-var mobIdCardData = '';
-var mobCustomerProfileData = '';
-var mobPhotoTarget = '';
-var mobPhotoTargetCard = null;
-var mobProfileCropper = null;
-var mobProfileCropFile = null;
-var mobIdCardCropper = null;
-var mobIdCardCropFile = null;
-function mobRevealCustomerDetails() {
-    var fields = document.getElementById('mobCustomerDetailFields');
-    if (fields) {
-        fields.classList.add('is-visible');
-    }
-}
-function mobHideCustomerDetails() {
-    var fields = document.getElementById('mobCustomerDetailFields');
-    if (fields) {
-        fields.classList.remove('is-visible');
-    }
-}
 function mobOpenPhotoSheet(target) {
     mobPhotoTarget = target;
     mobPhotoTargetCard = null;
@@ -1092,19 +1524,21 @@ function mobOpenPhotoSheet(target) {
         sheet.setAttribute('aria-hidden', 'false');
     }
 }
+
 function mobOpenProductPhotoSheet(button) {
     mobPhotoTarget = 'product';
     mobPhotoTargetCard = button ? button.closest('.mob-product-item') : null;
     var sheet = document.getElementById('mobPhotoSheet');
     var title = document.getElementById('mobPhotoSheetTitle');
     if (title) {
-        title.textContent = 'Take or Upload Product';
+        title.textContent = 'Take or Upload Product Photo';
     }
     if (sheet) {
         sheet.classList.add('is-open');
         sheet.setAttribute('aria-hidden', 'false');
     }
 }
+
 function mobClosePhotoSheet() {
     var sheet = document.getElementById('mobPhotoSheet');
     if (sheet) {
@@ -1112,6 +1546,7 @@ function mobClosePhotoSheet() {
         sheet.setAttribute('aria-hidden', 'true');
     }
 }
+
 function mobChoosePhotoSource(source) {
     var target = mobPhotoTarget;
     mobClosePhotoSheet();
@@ -1129,69 +1564,48 @@ function mobChoosePhotoSource(source) {
     var input = inputId ? document.getElementById(inputId) : null;
     if (input) input.click();
 }
-function mobSetCustomerInfoCollapsed(collapsed) {
-    var card = document.getElementById('mobCustomerInfoCard');
-    if (!card) return;
-    card.classList.toggle('is-collapsed', !!collapsed);
-    var toggle = card.querySelector('.mob-collapse-title');
-    if (toggle) {
-        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    }
-}
-function mobToggleCustomerInfo() {
-    var card = document.getElementById('mobCustomerInfoCard');
-    if (!card) return;
-    mobSetCustomerInfoCollapsed(!card.classList.contains('is-collapsed'));
-}
+
 function mobHandleCustomerProfile(input) {
     var file = input.files && input.files[0];
     if (!file) return;
     mobStartProfileCrop(file);
     input.value = '';
 }
+
 function mobApplyCustomerProfileData(dataUri) {
     mobCustomerProfileData = dataUri;
     var preview = document.getElementById('mobCustomerPhotoPreview');
     if (preview) {
-        preview.classList.add('has-image');
-        preview.innerHTML = '<img src="' + dataUri + '" alt="Customer profile photo preview">' +
-            '<button type="button" class="mob-id-remove" onclick="mobRemoveCustomerProfile()"><i class="fa fa-times"></i></button>';
+        preview.innerHTML = '<img src="' + dataUri + '" alt="Customer profile preview">' +
+            '<button type="button" class="lm-kyc-remove" onclick="mobRemoveCustomerProfile()" title="Remove photo"><i class="fa fa-times"></i></button>';
     }
 }
+
 function mobShowProfileCropOverlay() {
     var overlay = document.getElementById('mobProfileCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-    }
+    if (overlay) overlay.style.display = 'flex';
 }
+
 function mobHideProfileCropOverlay() {
     var overlay = document.getElementById('mobProfileCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden', 'true');
-    }
+    if (overlay) overlay.style.display = 'none';
 }
+
 function mobSetProfileCropStatus(message, isError) {
     var el = document.getElementById('mobProfileCropStatus');
     if (!el) return;
     el.style.color = isError ? '#dc2626' : '#64748b';
     el.textContent = message || '';
 }
+
 function mobStartProfileCrop(file) {
     mobProfileCropper = null;
     mobProfileCropFile = file;
     mobShowProfileCropOverlay();
-    mobSetProfileCropStatus('Preparing profile photo...');
-
-    if (!window.FileReader) {
-        mobUseOriginalProfilePhoto();
-        return;
-    }
+    mobSetProfileCropStatus('Preparing photo...');
 
     var reader = new FileReader();
     var image = new Image();
-
     reader.onload = function(event) {
         image.onload = function() {
             mobProfileCropper = mobCreateProductCropper(
@@ -1199,54 +1613,24 @@ function mobStartProfileCrop(file) {
                 image,
                 {x: 0.18, y: 0.08, width: 0.64, height: 0.84}
             );
-            mobSetProfileCropStatus('Drag the box or corners to keep the face centered.');
+            mobSetProfileCropStatus('Drag the box or corners to center face.');
         };
-
-        image.onerror = function() {
-            mobSetProfileCropStatus('This browser cannot preview this image. Using original photo.', true);
-            mobUseOriginalProfilePhoto();
-        };
-
+        image.onerror = function() { mobUseOriginalProfilePhoto(); };
         image.src = event.target.result;
     };
-
-    reader.onerror = function() {
-        mobSetProfileCropStatus('This browser cannot preview this image. Using original photo.', true);
-        mobUseOriginalProfilePhoto();
-    };
-
     reader.readAsDataURL(file);
 }
-function mobResetProfileCrop() {
-    if (mobProfileCropper) {
-        mobProfileCropper.reset();
-        mobSetProfileCropStatus('Crop reset. Drag the box or corners to adjust.');
-    }
-}
-function mobCancelProfileCrop() {
-    mobProfileCropper = null;
-    mobProfileCropFile = null;
-    mobHideProfileCropOverlay();
-}
-function mobUseOriginalProfilePhoto() {
-    if (!mobProfileCropFile) {
-        mobCancelProfileCrop();
-        return;
-    }
 
+function mobResetProfileCrop() { if (mobProfileCropper) mobProfileCropper.reset(); }
+function mobCancelProfileCrop() { mobProfileCropper = null; mobProfileCropFile = null; mobHideProfileCropOverlay(); }
+function mobUseOriginalProfilePhoto() {
+    if (!mobProfileCropFile) { mobCancelProfileCrop(); return; }
     var file = mobProfileCropFile;
     mobCancelProfileCrop();
-    mobCompressImage(file, 900, 900, 0.82).then(function(dataUri) {
-        mobApplyCustomerProfileData(dataUri);
-    });
+    mobCompressImage(file, 900, 900, 0.82).then(function(dataUri) { mobApplyCustomerProfileData(dataUri); });
 }
 function mobUseCroppedProfilePhoto() {
-    if (!mobProfileCropper) {
-        mobUseOriginalProfilePhoto();
-        return;
-    }
-
-    mobSetProfileCropStatus('Cropping profile photo...');
+    if (!mobProfileCropper) { mobUseOriginalProfilePhoto(); return; }
     mobProfileCropper.getDataUrl(function(dataUri) {
         mobCancelProfileCrop();
         mobApplyCustomerProfileData(dataUri);
@@ -1255,144 +1639,71 @@ function mobUseCroppedProfilePhoto() {
 function mobRemoveCustomerProfile() {
     mobCustomerProfileData = '';
     var preview = document.getElementById('mobCustomerPhotoPreview');
-    if (preview) {
-        preview.classList.remove('has-image');
-        preview.innerHTML = '<i class="fa fa-user"></i>' +
-            '<button type="button" class="mob-id-remove" onclick="mobRemoveCustomerProfile()"><i class="fa fa-times"></i></button>';
-    }
-    var camera = document.getElementById('mobCustomerPhotoCamera');
-    var gallery = document.getElementById('mobCustomerPhotoGallery');
-    if (camera) camera.value = '';
-    if (gallery) gallery.value = '';
+    if (preview) preview.innerHTML = '<i class="fa fa-user"></i>';
 }
+
+// ==================== ID CARD SCANNER & OCR ====================
 function mobHandleIdCard(input) {
     var file = input.files && input.files[0];
     if (!file) return;
-    mobSetOcrStatus('Choose crop area before OCR...');
+    mobSetOcrStatus('Preparing photo for crop...');
     mobStartIdCardCrop(file);
     input.value = '';
 }
 
 function mobApplyIdCardImageData(dataUri) {
     mobIdCardData = dataUri;
-    document.getElementById('mobIdCardImg').src = dataUri;
-    document.getElementById('mobIdCardPreview').style.display = 'block';
-    document.getElementById('mobCustomerInfoCard').style.display = 'block';
-    mobSetCustomerInfoCollapsed(false);
-    mobRevealCustomerDetails();
+    var preview = document.getElementById('mobIdCardPreview');
+    if (preview) {
+        preview.innerHTML = '<img id="mobIdCardImg" src="' + dataUri + '" style="width:100%;height:100%;object-fit:cover;">' +
+            '<button type="button" class="lm-kyc-remove" onclick="mobRemoveIdCard()" title="Remove ID card"><i class="fa fa-times"></i></button>';
+    }
     mobScanIdCard(dataUri);
 }
 
-function mobShowIdCardCropOverlay() {
-    var overlay = document.getElementById('mobIdCardCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-    }
-}
-
-function mobHideIdCardCropOverlay() {
-    var overlay = document.getElementById('mobIdCardCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden', 'true');
-    }
-}
-
-function mobSetIdCardCropStatus(message, isError) {
-    var el = document.getElementById('mobIdCardCropStatus');
-    if (!el) return;
-    el.style.color = isError ? '#dc2626' : '#64748b';
-    el.textContent = message || '';
-}
+function mobShowIdCardCropOverlay() { var o = document.getElementById('mobIdCardCropOverlay'); if (o) o.style.display = 'flex'; }
+function mobHideIdCardCropOverlay() { var o = document.getElementById('mobIdCardCropOverlay'); if (o) o.style.display = 'none'; }
+function mobSetIdCardCropStatus(m, e) { var el = document.getElementById('mobIdCardCropStatus'); if (el) { el.style.color = e ? '#dc2626' : '#64748b'; el.textContent = m || ''; } }
 
 function mobStartIdCardCrop(file) {
     mobIdCardCropper = null;
     mobIdCardCropFile = file;
     mobShowIdCardCropOverlay();
-    mobSetIdCardCropStatus('Preparing photo for crop...');
-
-    if (!window.FileReader) {
-        mobUseOriginalIdCardPhoto();
-        return;
-    }
-
+    mobSetIdCardCropStatus('Preparing ID card...');
     var reader = new FileReader();
     var image = new Image();
-
     reader.onload = function(event) {
         image.onload = function() {
-            mobIdCardCropper = mobCreateProductCropper(
-                document.getElementById('mobIdCardCropCanvas'),
-                image
-            );
-            mobSetIdCardCropStatus('Drag the box or corners to keep only the ID card.');
+            mobIdCardCropper = mobCreateProductCropper(document.getElementById('mobIdCardCropCanvas'), image);
+            mobSetIdCardCropStatus('Drag to fit ID card borders.');
         };
-
-        image.onerror = function() {
-            mobSetIdCardCropStatus('This browser cannot preview this image. Using original photo.', true);
-            mobUseOriginalIdCardPhoto();
-        };
-
+        image.onerror = function() { mobUseOriginalIdCardPhoto(); };
         image.src = event.target.result;
     };
-
-    reader.onerror = function() {
-        mobSetIdCardCropStatus('This browser cannot preview this image. Using original photo.', true);
-        mobUseOriginalIdCardPhoto();
-    };
-
     reader.readAsDataURL(file);
 }
 
-function mobResetIdCardCrop() {
-    if (mobIdCardCropper) {
-        mobIdCardCropper.reset();
-        mobSetIdCardCropStatus('Crop reset. Drag the box or corners to adjust.');
-    }
-}
-
-function mobCancelIdCardCrop() {
-    mobIdCardCropper = null;
-    mobIdCardCropFile = null;
-    mobHideIdCardCropOverlay();
-}
-
+function mobResetIdCardCrop() { if (mobIdCardCropper) mobIdCardCropper.reset(); }
+function mobCancelIdCardCrop() { mobIdCardCropper = null; mobIdCardCropFile = null; mobHideIdCardCropOverlay(); }
 function mobUseOriginalIdCardPhoto() {
-    if (!mobIdCardCropFile) {
-        mobCancelIdCardCrop();
-        return;
-    }
-
+    if (!mobIdCardCropFile) { mobCancelIdCardCrop(); return; }
     var file = mobIdCardCropFile;
     mobCancelIdCardCrop();
-    mobSetOcrStatus('Preparing ID card photo...');
-    mobCompressImage(file, 1600, 1000, 0.76).then(function(dataUri) {
-        mobApplyIdCardImageData(dataUri);
-    });
+    mobSetOcrStatus('Preparing photo...');
+    mobCompressImage(file, 1600, 1000, 0.76).then(function(dataUri) { mobApplyIdCardImageData(dataUri); });
 }
-
 function mobUseCroppedIdCardPhoto() {
-    if (!mobIdCardCropper) {
-        mobUseOriginalIdCardPhoto();
-        return;
-    }
-
-    mobSetIdCardCropStatus('Cropping photo...');
+    if (!mobIdCardCropper) { mobUseOriginalIdCardPhoto(); return; }
     mobIdCardCropper.getDataUrl(function(dataUri) {
         mobCancelIdCardCrop();
-        mobSetOcrStatus('Preparing cropped ID card photo...');
         mobApplyIdCardImageData(dataUri);
     });
 }
 function mobRemoveIdCard() {
     mobIdCardData = '';
-    document.getElementById('mobIdCardImg').src = '';
-    document.getElementById('mobIdCardPreview').style.display = 'none';
-    document.getElementById('mobIdCardCamera').value = '';
-    document.getElementById('mobIdCardGallery').value = '';
+    var preview = document.getElementById('mobIdCardPreview');
+    if (preview) preview.innerHTML = '<i class="fa fa-id-card"></i>';
     mobSetOcrStatus('');
-    mobHideCustomerDetails();
     ['mobIdCardOcrRawText', 'mobIdCardOcrNumber', 'mobIdCardOcrKhmerName', 'mobIdCardOcrEnglishName', 'mobIdCardOcrAddress'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.value = '';
@@ -1402,8 +1713,12 @@ function mobRemoveIdCard() {
 function mobSetOcrStatus(message, isError) {
     var el = document.getElementById('mobIdCardOcrStatus');
     if (!el) return;
-    el.style.color = isError ? '#dc2626' : '#64748b';
-    el.textContent = message || '';
+    el.style.color = isError ? '#dc2626' : '#2563eb';
+    el.innerHTML = message ? '<i class="fa ' + (isError ? 'fa-exclamation-triangle' : 'fa-spinner fa-spin') + '"></i> ' + message : '';
+    if (!isError && message.indexOf('filled') !== -1) {
+        el.innerHTML = '<i class="fa fa-check-circle" style="color:#10b981;"></i> ' + message;
+        el.style.color = '#10b981';
+    }
 }
 
 function mobFillIfEmpty(id, value) {
@@ -1430,7 +1745,7 @@ function mobApplyIdCardFields(fields, rawText) {
 }
 
 function mobScanIdCard(dataUri) {
-    mobSetOcrStatus('Reading ID card...');
+    mobSetOcrStatus('Reading Cambodian National ID Card with AI Vision...');
     jQuery.ajax({
         url: "{{ route('loan-management.loans.ajax.scan-id-card') }}",
         method: 'POST',
@@ -1442,61 +1757,469 @@ function mobScanIdCard(dataUri) {
             if (res && res.success) {
                 var data = res.data || {};
                 mobApplyIdCardFields(data.fields || {}, data.raw_text || '');
-                mobSetOcrStatus(Object.keys(data.fields || {}).length ? 'ID card text filled automatically.' : 'OCR finished, but no matching fields were found.');
+                mobSetOcrStatus(Object.keys(data.fields || {}).length ? 'ID Card scanned & details filled.' : 'OCR finished.');
             } else {
                 mobSetOcrStatus((res && res.message) || 'OCR unavailable.', true);
             }
         },
         error: function(xhr) {
-            mobSetOcrStatus(xhr.responseJSON?.message || 'OCR failed.', true);
+            mobSetOcrStatus(xhr.responseJSON?.message || 'OCR scan failed.', true);
         }
     });
 }
 
+// Alternate phone toggle
 document.getElementById('modalBtnShowAlternatePhone')?.addEventListener('click', function() {
     var group = document.getElementById('modalAlternatePhoneGroup');
     var input = document.getElementById('modalAlternatePhone');
-    if (group) group.style.display = 'block';
-    if (input) input.focus();
+    if (group) group.style.display = group.style.display === 'none' ? 'block' : 'none';
+    if (input && group.style.display === 'block') input.focus();
 });
 
-var mobDocFiles = [];
+// ==================== CUSTOMER KYC & DIRECT SEARCH CONTROLLERS ====================
+var mobCustomerSearchTimer = null;
+var mobCustomerSearchSelectedIndex = -1;
+var mobCustomerSearchResultsCache = [];
+
+function mobInitCustomerSearch() {
+    var $input = jQuery('#modalCustomerSearchInput');
+    var $dropdown = jQuery('#modalCustomerSearchResults');
+    var $clearBtn = jQuery('#modalBtnClearSearchText');
+    if (!$input.length) return;
+
+    // Trigger lookup on focus or click
+    $input.off('focus click').on('focus click', function() {
+        var val = $input.val().trim();
+        mobPerformCustomerSearch(val);
+    });
+
+    // Realtime typing search (debounced 100ms)
+    $input.off('input').on('input', function() {
+        var val = $input.val();
+        $clearBtn.toggle(!!val.length);
+        clearTimeout(mobCustomerSearchTimer);
+        mobCustomerSearchTimer = setTimeout(function() {
+            mobPerformCustomerSearch(val.trim());
+        }, 100);
+    });
+    // Keyboard navigation (ArrowDown, ArrowUp, Enter, Escape)
+    $input.off('keydown').on('keydown', function(e) {
+        var $rows = $dropdown.find('.lm-cs-row');
+        if (!$rows.length || $dropdown.is(':hidden')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            mobCustomerSearchSelectedIndex = (mobCustomerSearchSelectedIndex + 1) % $rows.length;
+            $rows.removeClass('selected').eq(mobCustomerSearchSelectedIndex).addClass('selected');
+            $rows.eq(mobCustomerSearchSelectedIndex)[0]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            mobCustomerSearchSelectedIndex = (mobCustomerSearchSelectedIndex - 1 + $rows.length) % $rows.length;
+            $rows.removeClass('selected').eq(mobCustomerSearchSelectedIndex).addClass('selected');
+            $rows.eq(mobCustomerSearchSelectedIndex)[0]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            if (mobCustomerSearchSelectedIndex >= 0 && mobCustomerSearchSelectedIndex < $rows.length) {
+                e.preventDefault();
+                $rows.eq(mobCustomerSearchSelectedIndex).trigger('click');
+            }
+        } else if (e.key === 'Escape') {
+            $dropdown.hide();
+        }
+    });
+
+    // Close dropdown on outside click
+    jQuery(document).off('click.lmCsOut').on('click.lmCsOut', function(e) {
+        if (!jQuery(e.target).closest('.lm-customer-search-wrap').length) {
+            $dropdown.hide();
+        }
+    });
+
+    // Row selection click
+    $dropdown.off('click', '.lm-cs-row').on('click', '.lm-cs-row', function() {
+        var idx = jQuery(this).data('index');
+        var customer = mobCustomerSearchResultsCache[idx];
+        if (customer) {
+            mobApplySelectedCustomer(customer);
+            $dropdown.hide();
+        }
+    });
+}
+
+function mobPerformCustomerSearch(query) {
+    var $dropdown = jQuery('#modalCustomerSearchResults');
+    if (!$dropdown.length) return;
+    $dropdown.html('<div style="padding:14px; text-align:center; color:#64748b; font-size:12px;"><i class="fa fa-spinner fa-spin" style="color:#2563eb; margin-right:6px;"></i> {{ $lmText("Searching existing customers...", "កំពុងស្វែងរកអតិថិជន...") }}</div>').show();
+
+    jQuery.ajax({
+        url: "{{ route('loan-management.loans.ajax.search-customers') }}",
+        method: 'GET',
+        data: { q: query, term: query },
+        dataType: 'json',
+        success: function(res) {
+            var items = (res && (res.results || res.data)) || [];
+            mobCustomerSearchResultsCache = items;
+            mobCustomerSearchSelectedIndex = -1;
+
+            if (!items.length) {
+                var safeQ = jQuery('<div>').text(query).html();
+                $dropdown.html(
+                    '<div style="padding: 16px; text-align: center; color: #64748b;">' +
+                        '<div style="font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 4px;">{{ $lmText("No existing customer found", "រកមិនឃើញអតិថិជនចាស់ទេ") }}' + (safeQ ? ' for "' + safeQ + '"' : '') + '</div>' +
+                        '<div style="font-size: 11px; color: #94a3b8; margin-bottom: 10px;">{{ $lmText("Click Quick Add to create a new customer directly", "ចុច បង្កើតថ្មី ដើម្បីបំពេញព័ត៌មានអតិថិជនថ្មី") }}</div>' +
+                        '<button type="button" class="btn btn-primary btn-xs" onclick="mobQuickAddNewCustomer()" style="border-radius: 6px; font-weight: 600; padding: 5px 14px; display: inline-flex; align-items: center; gap: 4px;">' +
+                            '<i class="fa fa-plus-circle"></i> {{ $lmText("Quick Add New Customer", "បង្កើតអតិថិជនថ្មី") }}' +
+                        '</button>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            var html = '';
+            items.forEach(function(c, i) {
+                var khmer = c.khmer_name || '';
+                var name = c.name || '';
+                var phone = c.phone || '';
+                var idcard = c.id_card_number || '';
+                var code = c.customer_code || '';
+                var photo = c.photo_url || '';
+
+                var avatarHtml = photo
+                    ? '<img src="' + photo + '" class="lm-cs-avatar">'
+                    : '<div class="lm-cs-avatar-icon"><i class="fa fa-user"></i></div>';
+
+                var primaryName = khmer || name || 'Customer #' + (c.id || '');
+                var secondaryName = (khmer && name && khmer !== name) ? ' <span style="font-weight:400; color:#64748b; font-size:12px;">(' + name + ')</span>' : '';
+
+                var metaBadges = [];
+                if (phone) metaBadges.push('<span><i class="fa fa-phone" style="color:#64748b;"></i> ' + phone + '</span>');
+                if (idcard) metaBadges.push('<span><i class="fa fa-id-card-o" style="color:#64748b;"></i> ' + idcard + '</span>');
+                if (code) metaBadges.push('<span class="label label-default" style="font-size:10px; font-weight:600; padding: 2px 6px;">' + code + '</span>');
+
+                html += '<div class="lm-cs-row" data-index="' + i + '">' +
+                    avatarHtml +
+                    '<div class="lm-cs-info">' +
+                        '<div class="lm-cs-name">' + primaryName + secondaryName + '</div>' +
+                        (metaBadges.length ? '<div class="lm-cs-sub">' + metaBadges.join(' &bull; ') + '</div>' : '') +
+                    '</div>' +
+                    '<i class="fa fa-chevron-right" style="color:#cbd5e1; font-size:11px;"></i>' +
+                '</div>';
+            });
+
+            $dropdown.html(html);
+        },
+        error: function() {
+            $dropdown.html('<div style="padding:12px; text-align:center; color:#ef4444; font-size:12px;">Failed to load customers.</div>');
+        }
+    });
+}
+
+function mobClearSearchInputOnly() {
+    jQuery('#modalCustomerSearchInput').val('').focus();
+    jQuery('#modalBtnClearSearchText').hide();
+    mobPerformCustomerSearch('');
+}
+
+function mobApplySelectedCustomer(data) {
+    if (!data) return;
+    jQuery('#modalCustomerId').val(data.id || '');
+    var khmerName = data.khmer_name || data.name || '';
+    var englishName = data.name || '';
+    jQuery('#modalCustomerKhmerName').val(khmerName);
+    jQuery('#modalCustomerEnglishName').val(englishName);
+    jQuery('#modalCustomerName').val(khmerName || englishName);
+    jQuery('#modalCustomerPhone').val(data.phone || data.mobile || '');
+    jQuery('#modalCustomerIdCard').val(data.id_card_number || '');
+
+    var altPhone = data.alternate_phone || data.alternate_number || '';
+    jQuery('#modalAlternatePhone').val(altPhone);
+    if (altPhone) {
+        jQuery('#modalAlternatePhoneGroup').show();
+    }
+
+    jQuery('#modalCustomerAddress').val(data.address || data.shipping_address || '');
+
+    // Update the search bar text
+    var displayText = (khmerName || englishName) + (data.phone ? ' (' + data.phone + ')' : '');
+    jQuery('#modalCustomerSearchInput').val(displayText);
+    jQuery('#modalBtnClearSearchText').show();
+    jQuery('#modalCustomerSearchResults').hide();
+
+    if (typeof modalSelectAddressFromCustomer === 'function') {
+        modalSelectAddressFromCustomer(jQuery('#standaloneLoanModalBody').length ? jQuery('#standaloneLoanModalBody') : jQuery(document), data);
+    }
+
+    if (data.photo_url) {
+        var prev = document.getElementById('mobCustomerPhotoPreview');
+        if (prev) {
+            prev.innerHTML = '<img src="' + data.photo_url + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">' +
+                '<button type="button" class="lm-kyc-remove" onclick="mobRemoveCustomerProfile()" title="Remove photo"><i class="fa fa-times"></i></button>';
+        }
+    }
+
+    var card = document.getElementById('mobCustomerInfoCard');
+    if (card) {
+        card.style.transition = 'all 0.3s ease';
+        card.style.borderColor = '#10b981';
+        card.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.25)';
+        setTimeout(function() {
+            card.style.borderColor = '';
+            card.style.boxShadow = '';
+        }, 2200);
+    }
+}
+
+function mobClearCustomerKYC() {
+    jQuery('#modalCustomerId').val('');
+    jQuery('#modalCustomerSearchInput').val('');
+    jQuery('#modalBtnClearSearchText').hide();
+    jQuery('#modalCustomerSearchResults').hide();
+    jQuery('#modalCustomerKhmerName').val('');
+    jQuery('#modalCustomerEnglishName').val('');
+    jQuery('#modalCustomerName').val('');
+    jQuery('#modalCustomerPhone').val('');
+    jQuery('#modalCustomerIdCard').val('');
+    jQuery('#modalAlternatePhone').val('');
+    jQuery('#modalAlternatePhoneGroup').hide();
+    jQuery('#modalCustomerAddress').val('');
+
+    if (typeof modalClearAddressSelects === 'function') {
+        modalClearAddressSelects(jQuery('#standaloneLoanModalBody').length ? jQuery('#standaloneLoanModalBody') : jQuery(document));
+    }
+
+    var prev = document.getElementById('mobCustomerPhotoPreview');
+    if (prev) prev.innerHTML = '<i class="fa fa-user"></i>';
+    mobCustomerProfileData = '';
+
+    mobRemoveIdCard();
+}
+
+function mobQuickAddNewCustomer() {
+    // 1. Unlink existing customer
+    jQuery('#modalCustomerId').val('');
+    jQuery('#modalCustomerSearchResults').hide();
+
+    // 2. Grab what user typed in search bar
+    var searchedText = jQuery('#modalCustomerSearchInput').val().trim();
+
+    // 3. Pre-populate search query if applicable
+    if (searchedText) {
+        if (/^[0-9\s+-]+$/.test(searchedText)) {
+            if (!jQuery('#modalCustomerPhone').val()) {
+                jQuery('#modalCustomerPhone').val(searchedText);
+            }
+        } else {
+            if (!jQuery('#modalCustomerKhmerName').val()) {
+                jQuery('#modalCustomerKhmerName').val(searchedText);
+                jQuery('#modalCustomerEnglishName').val(searchedText);
+                jQuery('#modalCustomerName').val(searchedText);
+            }
+        }
+    }
+
+    // 4. Highlight KYC Card & Scroll
+    var card = document.getElementById('mobCustomerInfoCard');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        card.style.transition = 'all 0.3s ease';
+        card.style.borderColor = '#2563eb';
+        card.style.boxShadow = '0 0 20px rgba(37, 99, 235, 0.35)';
+        setTimeout(function() {
+            card.style.borderColor = '';
+            card.style.boxShadow = '';
+        }, 2500);
+    }
+
+    // 5. Focus the first field
+    setTimeout(function() {
+        var input = document.getElementById('modalCustomerKhmerName');
+        if (input) {
+            input.focus();
+            if (input.select) input.select();
+        }
+    }, 250);
+
+    if (window.toastr) {
+        toastr.info('{{ $lmText("Please fill in Customer KYC details below", "សូមបំពេញព័ត៌មានអតិថិជន & អត្តសញ្ញាណប័ណ្ណខាងក្រោម") }}', '{{ $lmText("New Customer KYC", "អតិថិជនថ្មី") }}');
+    }
+}
+
+window.mobInitCustomerSearch = mobInitCustomerSearch;
+window.mobPerformCustomerSearch = mobPerformCustomerSearch;
+window.mobClearSearchInputOnly = mobClearSearchInputOnly;
+window.mobApplySelectedCustomer = mobApplySelectedCustomer;
+window.mobClearCustomerKYC = mobClearCustomerKYC;
+window.mobQuickAddNewCustomer = mobQuickAddNewCustomer;
+
+// ==================== LIVE DUPLICATE CUSTOMER VALIDATION ====================
+var mobDuplicateCheckTimer = null;
+var mobPendingDuplicateCustomer = null;
+
+function mobCheckCustomerDuplicate() {
+    clearTimeout(mobDuplicateCheckTimer);
+    mobDuplicateCheckTimer = setTimeout(function() {
+        var phone = (jQuery('#modalCustomerPhone').val() || '').trim();
+        var idCard = (jQuery('#modalCustomerIdCard').val() || '').trim();
+        var currentCustomerId = (jQuery('#modalCustomerId').val() || '').trim();
+
+        var cleanPhone = phone.replace(/[^0-9+]/g, '');
+        var cleanIdCard = idCard.replace(/[^a-zA-Z0-9]/g, '');
+
+        if (cleanPhone.length < 6 && cleanIdCard.length < 3) {
+            mobClearDuplicateAlert();
+            return;
+        }
+
+        jQuery.ajax({
+            url: "{{ route('loan-management.loans.ajax.check-customer-duplicate') }}",
+            type: 'GET',
+            data: {
+                phone: phone,
+                id_card_number: idCard,
+                customer_id: currentCustomerId
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res && res.exists && res.duplicate && res.duplicate.customer) {
+                    var dup = res.duplicate.customer;
+                    if (!currentCustomerId || String(currentCustomerId) !== String(dup.id)) {
+                        mobShowDuplicateAlert(res.duplicate);
+                    } else {
+                        mobClearDuplicateAlert();
+                    }
+                } else {
+                    mobClearDuplicateAlert();
+                }
+            },
+            error: function() {
+                // Silently ignore network failures
+            }
+        });
+    }, 250);
+}
+
+function mobEscapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, function(ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[ch];
+    });
+}
+
+function mobCustomerStatusBadge(customer) {
+    var status = String(customer.status || 'active').toLowerCase();
+    var isBlacklisted = customer.blacklist_status === true || customer.blacklist_status === 1 || customer.blacklist_status === '1';
+    var label = '';
+    var badgeClass = '';
+    var icon = '';
+
+    if (isBlacklisted) {
+        label = '{{ $lmText("Blacklisted", "ក្នុងបញ្ជីខ្មៅ") }}';
+        badgeClass = 'lm-dup-status-badge--danger';
+        icon = 'fa fa-ban';
+    } else if (['active', 'normal', 'approved'].indexOf(status) !== -1) {
+        label = '{{ $lmText("Normal / Recommended", "ធម្មតា / អាចណែនាំបាន") }}';
+        badgeClass = 'lm-dup-status-badge--success';
+        icon = 'fa fa-check-circle';
+    } else if (['pending', 'inactive', 'suspended'].indexOf(status) !== -1) {
+        label = status.charAt(0).toUpperCase() + status.slice(1);
+        badgeClass = 'lm-dup-status-badge--warning';
+        icon = 'fa fa-info-circle';
+    } else {
+        label = status ? status.charAt(0).toUpperCase() + status.slice(1) : '{{ $lmText("Normal", "ធម្មតា") }}';
+        badgeClass = 'lm-dup-status-badge--neutral';
+        icon = 'fa fa-user';
+    }
+
+    var reason = isBlacklisted && customer.blacklist_reason
+        ? ' title="' + mobEscapeHtml(customer.blacklist_reason) + '"'
+        : '';
+
+    return '<span class="lm-dup-status-badge ' + badgeClass + '"' + reason + '><i class="' + icon + '"></i> ' + mobEscapeHtml(label) + '</span>';
+}
+
+function mobShowDuplicateAlert(dupData) {
+    var c = dupData.customer;
+    mobPendingDuplicateCustomer = c;
+
+    var matchedBy = dupData.matched_by || 'phone';
+    var matchText = '';
+    if (matchedBy === 'both') {
+        matchText = '{{ $lmText("Both Primary Phone & National ID Card match existing customer:", "លេខទូរស័ព្ទ & អត្តសញ្ញាណប័ណ្ណត្រូវគ្នាជាមួយអតិថិជនមានស្រាប់:") }}';
+    } else if (matchedBy === 'id_card_number') {
+        matchText = '{{ $lmText("National ID Card number matches existing customer:", "លេខអត្តសញ្ញាណប័ណ្ណនេះត្រូវគ្នាជាមួយអតិថិជនមានស្រាប់:") }}';
+    } else {
+        matchText = '{{ $lmText("Primary Phone matches existing customer:", "លេខទូរស័ព្ទនេះត្រូវគ្នាជាមួយអតិថិជនមានស្រាប់:") }}';
+    }
+
+    var primaryName = c.khmer_name || c.name || ('Customer #' + (c.id || ''));
+    var secondaryName = (c.khmer_name && c.name && c.khmer_name !== c.name) ? ' (' + c.name + ')' : '';
+    var metaInfo = [];
+    if (c.phone) metaInfo.push('<i class="fa fa-phone"></i> ' + mobEscapeHtml(c.phone));
+    if (c.id_card_number) metaInfo.push('<i class="fa fa-id-card-o"></i> ' + mobEscapeHtml(c.id_card_number));
+    if (c.customer_code) metaInfo.push('[' + mobEscapeHtml(c.customer_code) + ']');
+
+    jQuery('#modalCustomerDuplicateTitle').html('<i class="fa fa-exclamation-triangle text-warning"></i> ' + matchText);
+    jQuery('#modalCustomerDuplicateDesc').html(
+        mobCustomerStatusBadge(c) +
+        '<strong style="color:#0f172a; font-size:12px;">' + mobEscapeHtml(primaryName) + mobEscapeHtml(secondaryName) + '</strong>' +
+        (metaInfo.length ? ' &bull; <span style="color:#64748b;">' + metaInfo.join(' &bull; ') + '</span>' : '')
+    );
+
+    if (matchedBy === 'phone' || matchedBy === 'both') {
+        jQuery('#modalCustomerPhone').css({ 'border-color': '#f59e0b', 'background': '#fffdf5' });
+    }
+    if (matchedBy === 'id_card_number' || matchedBy === 'both') {
+        jQuery('#modalCustomerIdCard').css({ 'border-color': '#f59e0b', 'background': '#fffdf5' });
+    }
+
+    jQuery('#modalCustomerDuplicateAlert').slideDown(200);
+}
+
+function mobClearDuplicateAlert() {
+    mobPendingDuplicateCustomer = null;
+    jQuery('#modalCustomerDuplicateAlert').slideUp(150);
+    jQuery('#modalCustomerPhone').css({ 'border-color': '', 'background': '' });
+    jQuery('#modalCustomerIdCard').css({ 'border-color': '', 'background': '' });
+}
+
+function mobDismissDuplicateAlert() {
+    jQuery('#modalCustomerDuplicateAlert').slideUp(150);
+}
+
+function mobLinkDuplicateCustomer() {
+    if (mobPendingDuplicateCustomer) {
+        mobApplySelectedCustomer(mobPendingDuplicateCustomer);
+        mobClearDuplicateAlert();
+        if (window.toastr) {
+            toastr.success('{{ $lmText("Existing customer linked and autofilled!", "បានភ្ជាប់ និងបំពេញទិន្នន័យអតិថិជនជោគជ័យ!") }}');
+        }
+    }
+}
+
+window.mobCheckCustomerDuplicate = mobCheckCustomerDuplicate;
+window.mobLinkDuplicateCustomer = mobLinkDuplicateCustomer;
+window.mobDismissDuplicateAlert = mobDismissDuplicateAlert;
+window.mobClearDuplicateAlert = mobClearDuplicateAlert;
+
+jQuery(document).off('input.lmDup change.lmDup blur.lmDup', '#modalCustomerPhone, #modalCustomerIdCard')
+    .on('input.lmDup change.lmDup blur.lmDup', '#modalCustomerPhone, #modalCustomerIdCard', function() {
+        mobCheckCustomerDuplicate();
+    });
+
+// External Document Links
 jQuery(document).on('click', '#mobAddDocumentLink', function() {
     jQuery('#mobDocumentLinks').append(
         '<div class="mob-doc-link-row" style="display:flex; gap:6px; margin-bottom:6px;">' +
-            '<input type="url" name="document_links[]" class="mob-input" placeholder="Paste document link">' +
-            '<button type="button" class="btn btn-default btn-sm mob-remove-document-link" title="Remove link"><i class="fa fa-times"></i></button>' +
+            '<input type="url" name="document_links[]" class="lm-control" placeholder="https://...">' +
+            '<button type="button" class="btn btn-default btn-sm mob-remove-document-link" title="Remove link" style="border-radius:8px;"><i class="fa fa-times"></i></button>' +
         '</div>'
     );
 });
+jQuery(document).on('click', '.mob-remove-document-link', function() { jQuery(this).closest('.mob-doc-link-row').remove(); });
 
-jQuery(document).on('click', '.mob-remove-document-link', function() {
-    jQuery(this).closest('.mob-doc-link-row').remove();
-});
-
-function mobGetFileIcon(name) {
-    var ext = (name || '').split('.').pop().toLowerCase();
-    var icons = { pdf: 'fa-file-pdf-o', txt: 'fa-file-text-o', csv: 'fa-file-text-o', doc: 'fa-file-word-o', docx: 'fa-file-word-o' };
-    return icons[ext] || 'fa-file-o';
-}
-function mobIsImageFile(file) {
-    return file && file.type && file.type.indexOf('image/') === 0;
-}
-function mobReadTextFile(file) {
-    return new Promise(function(resolve) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            var text = e.target.result || '';
-            var dataUri = 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(text)));
-            resolve(dataUri);
-        };
-        reader.readAsText(file);
-    });
-}
+// ==================== PRODUCT OCR & SCANNER ====================
 function mobSetProductOcrStatus(card, message, isError) {
     var el = card ? card.querySelector('.mob-product-ocr-status') : null;
     if (!el) return;
-    el.style.color = isError ? '#dc2626' : '#64748b';
+    el.style.color = isError ? '#dc2626' : '#2563eb';
     el.textContent = message || '';
 }
 
@@ -1516,13 +2239,12 @@ function mobApplyProductPhotoFields(card, fields, rawText) {
     mobSetProductField(card, 'storage', fields.storage);
     mobSetProductField(card, 'serial_number', fields.serial_number);
     mobSetProductField(card, 'imei', fields.imei);
-
     var rawInput = card.querySelector('.modal-item-ocr-raw');
     if (rawInput) rawInput.value = rawText || '';
 }
 
 function mobScanProductPhoto(card, dataUri) {
-    mobSetProductOcrStatus(card, 'Reading product photo...');
+    mobSetProductOcrStatus(card, 'Analyzing product photo with AI Vision...');
     jQuery.ajax({
         url: "{{ route('loan-management.loans.ajax.scan-product-photo') }}",
         method: 'POST',
@@ -1534,9 +2256,7 @@ function mobScanProductPhoto(card, dataUri) {
             if (res && res.success) {
                 var data = res.data || {};
                 mobApplyProductPhotoFields(card, data.fields || {}, data.raw_text || '');
-                mobSetProductOcrStatus(card, Object.keys(data.fields || {}).filter(function(key) {
-                    return data.fields[key];
-                }).length ? 'Product fields filled automatically.' : 'OCR finished, but no matching fields were found.');
+                mobSetProductOcrStatus(card, 'Product details detected and filled.');
             } else {
                 mobSetProductOcrStatus(card, (res && res.message) || 'Product OCR unavailable.', true);
             }
@@ -1555,124 +2275,66 @@ function mobApplyProductPhotoData(card, dataUri) {
     var hidden = card.querySelector('.modal-item-image');
     var preview = card.querySelector('.mob-product-photo-preview');
     var icon = card.querySelector('.mob-prod-img > i');
-
     if (hidden) hidden.value = dataUri;
-    if (preview) {
-        preview.src = dataUri;
-        preview.style.display = 'block';
-    }
+    if (preview) { preview.src = dataUri; preview.style.display = 'block'; }
     if (icon) icon.style.display = 'none';
-
     mobScanProductPhoto(card, dataUri);
 }
 
-function mobShowProductCropOverlay() {
-    var overlay = document.getElementById('mobProductCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-    }
-}
-
-function mobHideProductCropOverlay() {
-    var overlay = document.getElementById('mobProductCropOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden', 'true');
-    }
-}
-
-function mobSetProductCropStatus(message, isError) {
-    var el = document.getElementById('mobProductCropStatus');
-    if (!el) return;
-    el.style.color = isError ? '#dc2626' : '#64748b';
-    el.textContent = message || '';
-}
+function mobShowProductCropOverlay() { var o = document.getElementById('mobProductCropOverlay'); if (o) o.style.display = 'flex'; }
+function mobHideProductCropOverlay() { var o = document.getElementById('mobProductCropOverlay'); if (o) o.style.display = 'none'; }
+function mobSetProductCropStatus(m, e) { var el = document.getElementById('mobProductCropStatus'); if (el) { el.style.color = e ? '#dc2626' : '#64748b'; el.textContent = m || ''; } }
 
 function mobStartProductCrop(card, file) {
     mobProductCropper = null;
     mobProductCropCard = card;
     mobProductCropFile = file;
     mobShowProductCropOverlay();
-    mobSetProductCropStatus('Preparing photo for crop...');
-
-    if (!window.FileReader) {
-        mobUseOriginalProductPhoto();
-        return;
-    }
-
+    mobSetProductCropStatus('Preparing product photo...');
     var reader = new FileReader();
     var image = new Image();
-
     reader.onload = function(event) {
         image.onload = function() {
-            mobProductCropper = mobCreateProductCropper(
-                document.getElementById('mobProductCropCanvas'),
-                image
-            );
-            mobSetProductCropStatus('Drag the box or corners to keep only the product label.');
+            mobProductCropper = mobCreateProductCropper(document.getElementById('mobProductCropCanvas'), image);
+            mobSetProductCropStatus('Drag to focus on label/specs.');
         };
-
-        image.onerror = function() {
-            mobSetProductCropStatus('This browser cannot preview this image. Using original photo.', true);
-            mobUseOriginalProductPhoto();
-        };
-
+        image.onerror = function() { mobUseOriginalProductPhoto(); };
         image.src = event.target.result;
     };
-
-    reader.onerror = function() {
-        mobSetProductCropStatus('This browser cannot preview this image. Using original photo.', true);
-        mobUseOriginalProductPhoto();
-    };
-
     reader.readAsDataURL(file);
 }
 
-function mobResetProductCrop() {
-    if (mobProductCropper) {
-        mobProductCropper.reset();
-        mobSetProductCropStatus('Crop reset. Drag the box or corners to adjust.');
-    }
-}
-
-function mobCancelProductCrop() {
-    mobProductCropper = null;
-    mobProductCropCard = null;
-    mobProductCropFile = null;
-    mobHideProductCropOverlay();
-}
-
+function mobResetProductCrop() { if (mobProductCropper) mobProductCropper.reset(); }
+function mobCancelProductCrop() { mobProductCropper = null; mobProductCropCard = null; mobProductCropFile = null; mobHideProductCropOverlay(); }
 function mobUseOriginalProductPhoto() {
-    if (!mobProductCropCard || !mobProductCropFile) {
-        mobCancelProductCrop();
-        return;
-    }
-
+    if (!mobProductCropCard || !mobProductCropFile) { mobCancelProductCrop(); return; }
     var card = mobProductCropCard;
     var file = mobProductCropFile;
     mobCancelProductCrop();
-    mobSetProductOcrStatus(card, 'Preparing product photo...');
-    mobCompressImage(file, 1400, 1400, 0.72).then(function(dataUri) {
-        mobApplyProductPhotoData(card, dataUri);
-    });
+    mobSetProductOcrStatus(card, 'Preparing photo...');
+    mobCompressImage(file, 1400, 1400, 0.72).then(function(dataUri) { mobApplyProductPhotoData(card, dataUri); });
 }
-
 function mobUseCroppedProductPhoto() {
-    if (!mobProductCropper || !mobProductCropCard) {
-        mobUseOriginalProductPhoto();
-        return;
-    }
-
+    if (!mobProductCropper || !mobProductCropCard) { mobUseOriginalProductPhoto(); return; }
     var card = mobProductCropCard;
-    mobSetProductCropStatus('Cropping photo...');
+    mobSetProductCropStatus('Cropping...');
     mobProductCropper.getDataUrl(function(dataUri) {
         mobCancelProductCrop();
-        mobSetProductOcrStatus(card, 'Preparing cropped product photo...');
         mobApplyProductPhotoData(card, dataUri);
     });
 }
 
+function mobHandleProductPhoto(input) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    var card = input.closest('.mob-product-item');
+    if (!card) return;
+    mobSetProductOcrStatus(card, 'Preparing photo...');
+    mobStartProductCrop(card, file);
+    input.value = '';
+}
+
+// Canvas Cropper Helper
 function mobCreateProductCropper(canvas, image, initialCrop) {
     var context = canvas.getContext('2d');
     var maxWidth = Math.min(760, image.width);
@@ -1683,7 +2345,6 @@ function mobCreateProductCropper(canvas, image, initialCrop) {
     var lastPoint = null;
     var handleSize = 16;
     var crop = {};
-
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
@@ -1698,28 +2359,16 @@ function mobCreateProductCropper(canvas, image, initialCrop) {
         constrainCrop();
         draw();
     }
-
     function drawHandle(x, y) {
         context.fillStyle = '#2563eb';
         context.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
     }
-
     function draw() {
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         context.drawImage(image, 0, 0, canvasWidth, canvasHeight);
         context.fillStyle = 'rgba(15, 23, 42, 0.45)';
         context.fillRect(0, 0, canvasWidth, canvasHeight);
-        context.drawImage(
-            image,
-            crop.x / scale,
-            crop.y / scale,
-            crop.width / scale,
-            crop.height / scale,
-            crop.x,
-            crop.y,
-            crop.width,
-            crop.height
-        );
+        context.drawImage(image, crop.x / scale, crop.y / scale, crop.width / scale, crop.height / scale, crop.x, crop.y, crop.width, crop.height);
         context.strokeStyle = '#2563eb';
         context.lineWidth = 3;
         context.strokeRect(crop.x, crop.y, crop.width, crop.height);
@@ -1728,164 +2377,70 @@ function mobCreateProductCropper(canvas, image, initialCrop) {
         drawHandle(crop.x, crop.y + crop.height);
         drawHandle(crop.x + crop.width, crop.y + crop.height);
     }
-
     function getPoint(event) {
         var source = event.touches && event.touches.length ? event.touches[0] : event;
         var rect = canvas.getBoundingClientRect();
-
         return {
             x: (source.clientX - rect.left) * (canvas.width / rect.width),
             y: (source.clientY - rect.top) * (canvas.height / rect.height)
         };
     }
-
     function getDragMode(point) {
         var handles = {
-            nw: {x: crop.x, y: crop.y},
-            ne: {x: crop.x + crop.width, y: crop.y},
-            sw: {x: crop.x, y: crop.y + crop.height},
-            se: {x: crop.x + crop.width, y: crop.y + crop.height}
+            nw: {x: crop.x, y: crop.y}, ne: {x: crop.x + crop.width, y: crop.y},
+            sw: {x: crop.x, y: crop.y + crop.height}, se: {x: crop.x + crop.width, y: crop.y + crop.height}
         };
-
         for (var mode in handles) {
-            if (
-                Math.abs(point.x - handles[mode].x) <= handleSize
-                && Math.abs(point.y - handles[mode].y) <= handleSize
-            ) {
-                return mode;
-            }
+            if (Math.abs(point.x - handles[mode].x) <= handleSize && Math.abs(point.y - handles[mode].y) <= handleSize) return mode;
         }
-
-        if (
-            point.x >= crop.x
-            && point.x <= crop.x + crop.width
-            && point.y >= crop.y
-            && point.y <= crop.y + crop.height
-        ) {
-            return 'move';
-        }
-
+        if (point.x >= crop.x && point.x <= crop.x + crop.width && point.y >= crop.y && point.y <= crop.y + crop.height) return 'move';
         return null;
     }
-
     function constrainCrop() {
         var minSize = 40;
-
         crop.width = Math.max(minSize, crop.width);
         crop.height = Math.max(minSize, crop.height);
         crop.x = Math.max(0, Math.min(crop.x, canvasWidth - crop.width));
         crop.y = Math.max(0, Math.min(crop.y, canvasHeight - crop.height));
-
-        if (crop.x + crop.width > canvasWidth) {
-            crop.width = canvasWidth - crop.x;
-        }
-
-        if (crop.y + crop.height > canvasHeight) {
-            crop.height = canvasHeight - crop.y;
-        }
+        if (crop.x + crop.width > canvasWidth) crop.width = canvasWidth - crop.x;
+        if (crop.y + crop.height > canvasHeight) crop.height = canvasHeight - crop.y;
     }
-
     function resizeCrop(mode, deltaX, deltaY) {
-        if (mode.indexOf('n') !== -1) {
-            crop.y += deltaY;
-            crop.height -= deltaY;
-        }
-        if (mode.indexOf('s') !== -1) {
-            crop.height += deltaY;
-        }
-        if (mode.indexOf('w') !== -1) {
-            crop.x += deltaX;
-            crop.width -= deltaX;
-        }
-        if (mode.indexOf('e') !== -1) {
-            crop.width += deltaX;
-        }
+        if (mode.indexOf('n') !== -1) { crop.y += deltaY; crop.height -= deltaY; }
+        if (mode.indexOf('s') !== -1) { crop.height += deltaY; }
+        if (mode.indexOf('w') !== -1) { crop.x += deltaX; crop.width -= deltaX; }
+        if (mode.indexOf('e') !== -1) { crop.width += deltaX; }
     }
-
-    function startDrag(event) {
-        var point = getPoint(event);
-        dragMode = getDragMode(point);
-        lastPoint = point;
-
-        if (dragMode) {
-            event.preventDefault();
-        }
-    }
-
-    function moveDrag(event) {
+    function startDrag(e) { var p = getPoint(e); dragMode = getDragMode(p); lastPoint = p; if (dragMode) e.preventDefault(); }
+    function moveDrag(e) {
         if (!dragMode) return;
-
-        var point = getPoint(event);
-        var deltaX = point.x - lastPoint.x;
-        var deltaY = point.y - lastPoint.y;
-
-        if (dragMode === 'move') {
-            crop.x += deltaX;
-            crop.y += deltaY;
-        } else {
-            resizeCrop(dragMode, deltaX, deltaY);
-        }
-
-        constrainCrop();
-        lastPoint = point;
-        draw();
-        event.preventDefault();
+        var p = getPoint(e);
+        var dx = p.x - lastPoint.x, dy = p.y - lastPoint.y;
+        if (dragMode === 'move') { crop.x += dx; crop.y += dy; } else { resizeCrop(dragMode, dx, dy); }
+        constrainCrop(); lastPoint = p; draw(); e.preventDefault();
     }
+    function endDrag() { dragMode = null; lastPoint = null; }
 
-    function endDrag() {
-        dragMode = null;
-        lastPoint = null;
-    }
-
-    canvas.onmousedown = startDrag;
-    canvas.onmousemove = moveDrag;
-    canvas.onmouseup = endDrag;
-    canvas.onmouseleave = endDrag;
-    canvas.ontouchstart = startDrag;
-    canvas.ontouchmove = moveDrag;
-    canvas.ontouchend = endDrag;
-
+    canvas.onmousedown = startDrag; canvas.onmousemove = moveDrag; canvas.onmouseup = endDrag; canvas.onmouseleave = endDrag;
+    canvas.ontouchstart = startDrag; canvas.ontouchmove = moveDrag; canvas.ontouchend = endDrag;
     reset();
 
     return {
         reset: reset,
         getDataUrl: function(callback) {
-            var cropWidth = Math.round(crop.width / scale);
-            var cropHeight = Math.round(crop.height / scale);
-            var maxOutput = 1600;
-            var outputScale = Math.min(1, maxOutput / Math.max(cropWidth, cropHeight));
-            var output = document.createElement('canvas');
-            var outputContext = output.getContext('2d');
-
-            output.width = Math.max(1, Math.round(cropWidth * outputScale));
-            output.height = Math.max(1, Math.round(cropHeight * outputScale));
-            outputContext.drawImage(
-                image,
-                crop.x / scale,
-                crop.y / scale,
-                crop.width / scale,
-                crop.height / scale,
-                0,
-                0,
-                output.width,
-                output.height
-            );
-            callback(output.toDataURL('image/jpeg', 0.88));
+            var cw = Math.round(crop.width / scale), ch = Math.round(crop.height / scale);
+            var maxOut = 1600;
+            var outScale = Math.min(1, maxOut / Math.max(cw, ch));
+            var out = document.createElement('canvas');
+            out.width = Math.max(1, Math.round(cw * outScale));
+            out.height = Math.max(1, Math.round(ch * outScale));
+            out.getContext('2d').drawImage(image, crop.x / scale, crop.y / scale, crop.width / scale, crop.height / scale, 0, 0, out.width, out.height);
+            callback(out.toDataURL('image/jpeg', 0.88));
         }
     };
 }
 
-function mobHandleProductPhoto(input) {
-    var file = input.files && input.files[0];
-    if (!file) return;
-    var card = input.closest('.mob-product-item');
-    if (!card) return;
-
-    mobSetProductOcrStatus(card, 'Choose crop area before OCR...');
-    mobStartProductCrop(card, file);
-    input.value = '';
-}
-
+// ==================== DOCUMENTS & CLIPBOARD ====================
 function mobHandleDocs(input) {
     var files = Array.from(input.files || []);
     if (!files.length) return;
@@ -1894,66 +2449,48 @@ function mobHandleDocs(input) {
     files.forEach(function(file) {
         var thumb = document.createElement('div');
         thumb.className = 'mob-doc-thumb';
-        thumb.innerHTML = '<div class="mob-compressing-overlay"><i class="fa fa-spinner fa-spin"></i></div>';
+        thumb.innerHTML = '<div style="color:#2563eb;"><i class="fa fa-spinner fa-spin"></i></div>';
         grid.insertBefore(thumb, addBtn);
 
-        if (mobIsImageFile(file)) {
+        if (file.type && file.type.indexOf('image/') === 0) {
             mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
                 var idx = mobDocFiles.length;
                 mobDocFiles.push({ dataUri: dataUri, name: file.name, type: 'image' });
-                var sizeKb = Math.round((dataUri.length * 3/4) / 1024);
                 thumb.innerHTML = '<img src="' + dataUri + '">' +
-                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
-                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
-            });
-        } else if (file.type === 'text/plain' || file.name.match(/\.(txt|csv|log)$/i)) {
-            mobReadTextFile(file).then(function(dataUri) {
-                var idx = mobDocFiles.length;
-                mobDocFiles.push({ dataUri: dataUri, name: file.name, type: 'text' });
-                var sizeKb = Math.round(file.size / 1024);
-                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa fa-file-text-o"></i><span>' + file.name + '</span></div>' +
-                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
-                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
             });
         } else {
             var reader = new FileReader();
             reader.onload = function(e) {
                 var idx = mobDocFiles.length;
                 mobDocFiles.push({ dataUri: e.target.result, name: file.name, type: 'file' });
-                var sizeKb = Math.round(file.size / 1024);
-                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa ' + mobGetFileIcon(file.name) + '"></i><span>' + file.name + '</span></div>' +
-                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
-                    '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa fa-file-text-o"></i><span>' + file.name.substring(0, 10) + '</span></div>' +
+                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
             };
             reader.readAsDataURL(file);
         }
     });
     input.value = '';
 }
-function mobRemoveDoc(btn, idx) {
-    mobDocFiles[idx] = null;
-    btn.closest('.mob-doc-thumb').remove();
-}
+function mobRemoveDoc(btn, idx) { mobDocFiles[idx] = null; btn.closest('.mob-doc-thumb').remove(); }
 
 document.addEventListener('paste', function(e) {
     var items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
     var handled = false;
     for (var i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image/') === 0) {
+        if (items[i].type && items[i].type.indexOf('image/') === 0) {
             var file = items[i].getAsFile();
             if (file) {
                 mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
                     var grid = document.getElementById('mobDocGrid');
+                    if (!grid) return;
                     var addBtn = grid.querySelector('.mob-doc-add');
                     var thumb = document.createElement('div');
                     thumb.className = 'mob-doc-thumb';
                     var idx = mobDocFiles.length;
-                    mobDocFiles.push({ dataUri: dataUri, name: 'pasted-image-' + Date.now() + '.png', type: 'image' });
-                    var sizeKb = Math.round((dataUri.length * 3/4) / 1024);
-                    thumb.innerHTML = '<img src="' + dataUri + '">' +
-                        '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>' +
-                        '<span class="mob-doc-badge">' + sizeKb + 'KB</span>';
+                    mobDocFiles.push({ dataUri: dataUri, name: 'paste-' + Date.now() + '.png', type: 'image' });
+                    thumb.innerHTML = '<img src="' + dataUri + '"><button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
                     grid.insertBefore(thumb, addBtn);
                 });
                 handled = true;
@@ -1963,10 +2500,36 @@ document.addEventListener('paste', function(e) {
     if (handled) e.preventDefault();
 });
 
+jQuery(document).on('click', '.js-mob-quick-plan', function() {
+    var rate = jQuery(this).data('rate');
+    var mode = jQuery(this).data('mode');
+    var months = jQuery(this).data('months');
+    var downPct = jQuery(this).data('down-pct');
+
+    var rateInput = document.querySelector('input[name="interest_rate"]');
+    var modeSelect = document.querySelector('select[name="interest_type"]');
+    var monthsInput = document.querySelector('input[name="duration_months"]');
+
+    if (rateInput) { rateInput.value = rate; }
+    if (modeSelect) { modeSelect.value = mode; }
+    if (monthsInput) { monthsInput.value = months; }
+
+    var totalProd = parseFloat((document.getElementById('modalComputedPrincipal')?.textContent || '0').replace(/[^0-9.]/g, '')) || 0;
+    if (totalProd > 0) {
+        var downAmt = Math.round(totalProd * (downPct / 100) * 100) / 100;
+        var downInput = document.querySelector('input[name="payment[amount]"]');
+        if (downInput) downInput.value = downAmt;
+    }
+
+    if (typeof mobRecalc === 'function') mobRecalc();
+});
+
+// ==================== PREVIEW & SUBMISSION ====================
 function mobPreviewSchedule() {
     var $form = jQuery('#standaloneLoanModalForm');
     document.getElementById('modalCustomerName').value = document.getElementById('modalCustomerKhmerName').value || document.getElementById('modalCustomerEnglishName').value || '';
     var urls = { previewSchedule: "{{ route('loan-management.loans.preview-standalone-schedule') }}" };
+
     jQuery.post(urls.previewSchedule, $form.serialize(), function(res) {
         var rows = res.data || [];
         var $tb = jQuery('#modalScheduleTable tbody');
@@ -1985,10 +2548,13 @@ function mobPreviewSchedule() {
         $table.find('tfoot th').eq(3).text('$' + totalA.toFixed(2));
         $table.find('tfoot th').eq(4).text('$' + totalB.toFixed(2));
         document.getElementById('modalScheduleSection').style.display = 'block';
+
         var months = parseInt(document.querySelector('input[name="duration_months"]').value) || 1;
-        document.getElementById('modalSummaryMonthly').textContent = '$' + (totalA / months).toFixed(2);
+        var monthly = (totalA / months).toFixed(2);
+        document.getElementById('modalSummaryMonthly').textContent = '$' + monthly;
+        document.getElementById('modalFooterMonthly').textContent = '$' + monthly;
     }).fail(function(xhr) {
-        if (window.toastr) toastr.error(xhr.responseJSON?.message || 'Failed');
+        if (window.toastr) toastr.error(xhr.responseJSON?.message || 'Failed to calculate schedule');
     });
 }
 
@@ -1996,21 +2562,28 @@ function mobSubmit(action) {
     document.querySelector('#standaloneLoanModalForm input[name="action_type"]').value = action;
     document.getElementById('modalCustomerName').value = document.getElementById('modalCustomerKhmerName').value || document.getElementById('modalCustomerEnglishName').value || '';
     var form = document.getElementById('standaloneLoanModalForm');
-    if (form.checkValidity && ! form.checkValidity()) {
+    if (form.checkValidity && !form.checkValidity()) {
         form.reportValidity();
         return;
     }
+
     var fd = new FormData(form);
     if (mobIdCardData) fd.append('id_card_image', mobIdCardData);
     if (mobCustomerProfileData) fd.append('customer_profile_image', mobCustomerProfileData);
-    mobDocFiles.forEach(function(d, i) { if (d) fd.append('documents[]', d.dataUri); });
+    mobDocFiles.forEach(function(d) { if (d) fd.append('documents[]', d.dataUri); });
     fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
+
     var urls = { storeLoan: "{{ route('loan-management.loans.store-standalone') }}", loanViewBase: "{{ url('/loan-management/loans') }}" };
-    var $btns = jQuery('#mobBottombar button').prop('disabled', true);
+    var $btns = jQuery('.lm-pro-footer button').prop('disabled', true);
+
     jQuery.ajax({
-        url: urls.storeLoan, method: 'POST', data: fd, processData: false, contentType: false,
+        url: urls.storeLoan,
+        method: 'POST',
+        data: fd,
+        processData: false,
+        contentType: false,
         success: function(res) {
-            if (window.toastr) toastr.success(res.message || 'Loan created');
+            if (window.toastr) toastr.success(res.message || 'Installment Agreement Created Successfully');
             jQuery('#standaloneLoanModal').modal('hide');
             if (res?.data?.loan_id) {
                 var loanUrl = urls.loanViewBase + '/' + res.data.loan_id + '/view?_lm_modal=1';
@@ -2029,7 +2602,7 @@ function mobSubmit(action) {
             }
         },
         error: function(xhr) {
-            var msg = 'Failed to create loan';
+            var msg = 'Failed to create installment';
             if (xhr.status === 422 && xhr.responseJSON?.errors) {
                 var errors = xhr.responseJSON.errors;
                 msg = errors[Object.keys(errors)[0]][0] || msg;

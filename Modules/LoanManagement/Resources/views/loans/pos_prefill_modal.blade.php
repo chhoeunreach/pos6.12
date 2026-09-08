@@ -1,11 +1,11 @@
 <div class="modal-dialog modal-xl loan-pos-prefill-modal" role="document" style="width:96%; max-width:1280px;">
     <div class="modal-content">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ lm_label('messages.close', 'Close', 'បិទ') }}">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
-                <i class="fa fa-exchange"></i> Add Loan to POS
+                <i class="fa fa-exchange"></i> Add Installment to POS
             </h4>
         </div>
         <div class="modal-body{{ empty($error) ? ' loan-pos-prefill-modal__body' : '' }}">
@@ -27,7 +27,7 @@
                     <i class="fa fa-external-link"></i> Open Full POS
                 </a>
             @endif
-            <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">{{ lm_label('messages.close', 'Close', 'បិទ') }}</button>
         </div>
     </div>
 </div>

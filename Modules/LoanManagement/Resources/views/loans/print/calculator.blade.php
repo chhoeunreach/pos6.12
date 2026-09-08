@@ -2,11 +2,11 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Print Calculate Loan</title>
+    <title>Print Calculate Installment</title>
     <style>
         @font-face { font-family: 'Roboto'; src: url('{{ asset("fonts/english/Roboto-Regular.ttf") }}') format('truetype'); }
         @font-face { font-family: 'RobotoBold'; src: url('{{ asset("fonts/english/Roboto-Bold.ttf") }}') format('truetype'); }
-        @font-face { font-family: 'Khmer OS Battambang'; src: url('{{ asset("fonts/khmer/Battambang-Regular.ttf") }}') format('truetype'); }
+        @font-face { font-family: 'Khmer OS Battambang'; src: url('{{ asset("fonts/khmer/KhmerOSbattambang.ttf") }}') format('truetype'); }
 
         :root {
             --orange: #ff8a00;
@@ -220,7 +220,7 @@
 </head>
 <body>
 <div class="no-print">
-    <button type="button" onclick="window.print()">Print Calculate Loan</button>
+    <button type="button" onclick="window.print()">Print Calculate Installment</button>
     <button type="button" onclick="window.close()">Close</button>
 </div>
 
@@ -232,7 +232,7 @@
             <div></div>
         </div>
         <div class="tagline">
-            Loan calculation form preview | Generated from Loan Calculator
+            Installment calculation form preview | Generated from Installment Calculator
         </div>
     </div>
 
@@ -240,7 +240,7 @@
         <table class="info-table">
             <tr><td class="label">Contract No</td><td class="value red">CALC-{{ now()->format('Ymd') }}</td></tr>
             <tr><td class="label">Invoice No</td><td class="value">-</td></tr>
-            <tr><td class="label">Loan Date</td><td class="value">{{ $loanDate }}</td></tr>
+            <tr><td class="label">Installment Date</td><td class="value">{{ $loanDate }}</td></tr>
             <tr><td class="label">End Date</td><td class="value">{{ $lastDueDate ? \Carbon\Carbon::parse($lastDueDate)->format('m-d-Y') : '-' }}</td></tr>
         </table>
         <table class="info-table">
@@ -260,7 +260,7 @@
     </div>
 
     <div class="product-title">
-        Loan Calculator Form
+        Installment Calculator Form
         <span class="date-bar">{{ $loanDateTitle }}</span>
     </div>
     <table class="print-table product-table">
@@ -278,7 +278,7 @@
             <tr>
                 <td class="bold">1</td>
                 <td class="bold">CALC</td>
-                <td class="text-left bold">Calculate Loan</td>
+                <td class="text-left bold">Calculate Installment</td>
                 <td class="bold">1</td>
                 <td colspan="2" class="money-cell bold">${{ number_format($totalPrice, 2) }}</td>
                 <td colspan="2" class="money-cell bold">${{ number_format($totalPrice, 2) }}</td>

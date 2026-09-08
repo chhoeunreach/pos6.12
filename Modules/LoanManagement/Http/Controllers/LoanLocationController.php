@@ -446,7 +446,7 @@ class LoanLocationController extends Controller
 
     protected function locationAssetDirectory(int $location): string
     {
-        return base_path('Modules/LoanManagement/'.$this->locationAssetRoot.'/'.$location);
+        return module_path('LoanManagement', $this->locationAssetRoot.'/'.$location);
     }
 
     protected function moduleLocationAssetPath(int $location, string $filename): ?string
@@ -670,7 +670,7 @@ class LoanLocationController extends Controller
         return [
             [
                 'type' => 'module',
-                'directory' => base_path('Modules/LoanManagement/'.$this->locationAssetRoot),
+                'directory' => module_path('LoanManagement', $this->locationAssetRoot),
                 'prefix' => $this->locationAssetRoot,
             ],
             [

@@ -450,7 +450,7 @@
             ['Customer', info.customer_name],
             ['Phone', info.phone],
             ['Location', info.location_name],
-            ['Loan #', info.loan_number],
+            ['Installment #', info.loan_number],
             ['Overdue Days', info.overdue_days],
             ['Balance', money(info.balance)],
             ['Next Due', info.next_due_date],

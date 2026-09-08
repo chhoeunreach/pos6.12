@@ -9,9 +9,13 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Modules\LoanManagement\Entities\LoanFile;
+use Modules\LoanManagement\Entities\LoanChatMessage;
 use Modules\LoanManagement\Entities\LoanTelegramChatMessage;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
+use Modules\LoanManagement\Services\BusinessSettingsService;
 use Modules\LoanManagement\Services\TelegramChatService;
 
 /**
@@ -227,6 +231,59 @@ class LoanTelegramChatController extends Controller
         return $this->ok('Message sent', $this->chatService->formatMessage($message));
     }
 
+    public function file(int $file)
+    {
+        abort_unless($this->canUseTelegramChat(), 403);
+
+        $loanFile = LoanFile::query()->find($file);
+        abort_if(! $loanFile || empty($loanFile->path), 404);
+
+        $message = LoanTelegramChatMessage::query()
+            ->with('thread')
+            ->where('file_id', $loanFile->id)
+            ->first();
+        if ($message) {
+            abort_if(! $message->thread || ! $this->canAccessThread($message->thread), 404);
+        } elseif (Schema::connection('mysql_loan')->hasTable('loan_chat_messages')
+            && Schema::connection('mysql_loan')->hasColumn('loan_chat_messages', 'file_id')
+            && LoanChatMessage::query()->where('file_id', $loanFile->id)->exists()) {
+            abort_unless($this->canUseTelegramChat(), 403);
+        } elseif ($this->canAccessCustomerScopedFile($loanFile)) {
+            // Older customer photos may not be the customer's current photo_file_id anymore.
+        } else {
+            abort_if(! Schema::connection('mysql_loan')->hasTable('loan_customers')
+                || ! Schema::connection('mysql_loan')->hasColumn('loan_customers', 'customer_photo_file_id'), 404);
+
+            $customerId = (int) DB::connection('mysql_loan')->table('loan_customers')
+                ->where('customer_photo_file_id', $loanFile->id)
+                ->value('id');
+            abort_if($customerId <= 0 || ! $this->canAccessCustomerLocation($customerId), 404);
+        }
+
+        $disk = $loanFile->disk ?: 'public';
+        abort_if(! Storage::disk($disk)->exists($loanFile->path), 404);
+
+        return response()->file(Storage::disk($disk)->path($loanFile->path), [
+            'Content-Type' => $loanFile->mime_type ?: 'application/octet-stream',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    protected function canAccessCustomerScopedFile(LoanFile $loanFile): bool
+    {
+        $category = (string) ($loanFile->category ?? $loanFile->file_type ?? '');
+        if (! in_array($category, ['customer_photo'], true)) {
+            return false;
+        }
+
+        $path = trim((string) $loanFile->path, '/');
+        if (! preg_match('#^loan-customers/([0-9]+)/#', $path, $matches)) {
+            return false;
+        }
+
+        return $this->canAccessCustomerLocation((int) $matches[1]);
+    }
+
     public function sendInvoiceImage(Request $request, int $thread, WkhtmltopdfPdfService $renderService)
     {
         abort_unless(auth()->user()->can('loan_management.chat.reply') || auth()->user()->can('loan_management.chat.view'), 403);
@@ -249,6 +306,13 @@ class LoanTelegramChatController extends Controller
             return $this->fail('This loan does not belong to the selected customer.', 422, (object) []);
         }
 
+        $rendererBinary = env('WKHTMLTOIMAGE_BINARY');
+        if (! $rendererBinary || ! is_file($rendererBinary)) {
+            return $this->fail('Invoice image renderer is not configured. Using browser invoice image fallback.', 422, (object) [
+                'fallback' => 'browser_invoice_image',
+            ]);
+        }
+
         $html = app(LoanInstallmentListController::class)->print((int) $data['loan_id'])->render();
         $html = preg_replace('/<div class="no-print".*?<\/div>/is', '', $html, 1) ?: $html;
         $imageCss = '<style>body{background:#fff!important}.page{margin:0 auto!important}.no-print{display:none!important}</style>';
@@ -269,7 +333,17 @@ class LoanTelegramChatController extends Controller
             $senderType = $this->isAdmin() ? 'admin' : 'staff';
             $caption = trim((string) ($data['message'] ?? ''));
             if ($caption === '') {
-                $caption = 'Invoice: '.($loan->loan_number ?? $loan->id);
+                $customerName = 'Customer';
+                if (! empty($row->customer_id) && Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+                    $customer = DB::connection('mysql_loan')->table('loan_customers')->where('id', (int) $row->customer_id)->first();
+                    if ($customer) {
+                        $customerName = trim((string) ($customer->khmer_name ?? ''))
+                            ?: trim((string) ($customer->name ?? ''))
+                            ?: $customerName;
+                    }
+                }
+
+                $caption = BusinessSettingsService::invoiceMessage($customerName);
             }
 
             $message = $this->chatService->sendImageMessage($row, $senderType, (int) auth()->id(), $uploaded, $caption);

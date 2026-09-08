@@ -13,12 +13,11 @@
         </div>
         <div class="box-body">
             <p class="text-muted">
-                Required location fields are always safe: <strong>id, name, location_id</strong>.
-                Optional fields are shown only when your POS database contains them.
+                Configure loan invoice prefixes for each branch. These prefixes are used when creating standalone loan invoices.
             </p>
             @if(!$hasInvoicePrefix)
                 <div class="alert alert-warning">
-                    Your current Ultimate POS structure does not include <code>invoice_prefix</code>. Prefix editing is disabled for compatibility.
+                    The loan location table does not include <code>loan_invoice_prefix</code>. Prefix editing is disabled.
                 </div>
             @endif
 
@@ -33,7 +32,7 @@
                                 @if($hasInvoicePrefix)
                                     <th style="width: 260px;">Invoice Prefix</th>
                                 @endif
-                                <th>Optional Metadata</th>
+                                <th>Branch Info</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -42,15 +41,15 @@
                                     <td>{{ $location->id }}</td>
                                     <td>
                                         {{ $location->name }}
-                                        @if(!empty($location->location_id))
-                                            <small class="text-muted">({{ $location->location_id }})</small>
+                                        @if(!empty($location->location_code))
+                                            <small class="text-muted">({{ $location->location_code }})</small>
                                         @endif
                                     </td>
                                     @if($hasInvoicePrefix)
                                         <td>
                                             <input type="text"
                                                    name="invoice_prefixes[{{ $location->id }}]"
-                                                   value="{{ $location->invoice_prefix ?? '' }}"
+                                                   value="{{ $location->loan_invoice_prefix ?? '' }}"
                                                    maxlength="50"
                                                    class="form-control"
                                                    placeholder="e.g. BR1, SHOP-A, PP">
@@ -59,10 +58,9 @@
                                     <td>
                                         @php
                                             $optional = [];
-                                            if (isset($location->invoice_scheme_id)) $optional[] = 'invoice_scheme_id: '.$location->invoice_scheme_id;
-                                            if (isset($location->receipt_printer_type) && $location->receipt_printer_type !== null && $location->receipt_printer_type !== '') $optional[] = 'receipt_printer_type: '.$location->receipt_printer_type;
-                                            if (isset($location->mobile) && $location->mobile !== null && $location->mobile !== '') $optional[] = 'mobile: '.$location->mobile;
-                                            if (isset($location->alternate_number) && $location->alternate_number !== null && $location->alternate_number !== '') $optional[] = 'alternate_number: '.$location->alternate_number;
+                                            if (isset($location->phone) && $location->phone !== null && $location->phone !== '') $optional[] = 'phone: '.$location->phone;
+                                            if (isset($location->address) && $location->address !== null && $location->address !== '') $optional[] = 'address: '.$location->address;
+                                            if (isset($location->status) && $location->status !== null && $location->status !== '') $optional[] = 'status: '.$location->status;
                                         @endphp
                                         {{ !empty($optional) ? implode(' | ', $optional) : '-' }}
                                     </td>

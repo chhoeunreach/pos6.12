@@ -1,5 +1,5 @@
 @php
-    $loanNumber = $loan->loan_number ?? ('Loan #'.$loan->id);
+    $loanNumber = $loan->loan_number ?? ('Installment #'.$loan->id);
     $customerName = trim((string) ($loan->customer_name_snapshot ?? '')) ?: '-';
     $addPaymentUrl = route('loan-management.loans.payment.create', [
         'loan' => $loan->id,
@@ -10,7 +10,7 @@
 <div class="modal-dialog modal-lg lm-collection-modal" role="document">
     <div class="modal-content">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ lm_label('messages.close', 'Close', 'បិទ') }}">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title"><i class="fa fa-calendar-check-o"></i> Payment Collection</h4>
@@ -20,7 +20,7 @@
             <div class="row">
                 <div class="col-sm-4">
                     <div class="well well-sm">
-                        <strong>Loan #:</strong> {{ $loanNumber }}<br>
+                        <strong>Installment #:</strong> {{ $loanNumber }}<br>
                         <strong>Customer:</strong> {{ $customerName }}
                     </div>
                 </div>

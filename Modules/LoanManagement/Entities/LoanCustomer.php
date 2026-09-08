@@ -101,6 +101,15 @@ class LoanCustomer extends Authenticatable
         }
     }
 
+    public function getCustomerPhotoUrlAttribute(): ?string
+    {
+        if (empty($this->customer_photo_file_id)) {
+            return null;
+        }
+
+        return url('loan-management/chat-files/'.(int) $this->customer_photo_file_id);
+    }
+
     public function loans()
     {
         return $this->hasMany(Loan::class, 'customer_id');

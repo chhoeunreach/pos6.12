@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Print Loan {{ $loanRow->loan_number ?? $loanRow->id }}</title>
+    <title>Print Installment {{ $loanRow->loan_number ?? $loanRow->id }}</title>
     <style>
         @font-face { font-family: 'Noto Sans Khmer'; src: url('{{ asset('fonts/khmer/NotoSansKhmer-Regular.ttf') }}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
         @font-face { font-family: 'Khmer OS Battambang'; src: url('{{ asset('fonts/khmer/KhmerOSbattambang.ttf') }}') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
@@ -305,6 +305,8 @@
         }
         .schedule-table tbody tr {
             height: 5.2mm;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
         .schedule-table tbody tr:nth-child(even) td {
             background: #fbfcfd;
@@ -703,7 +705,7 @@
 <body>
 @php
     $productTotal = $products->sum(fn ($p) => (float) ($p->subtotal ?? ((float) ($p->quantity ?? 1) * (float) ($p->unit_price_inc_tax ?? 0))));
-    $fixedScheduleRowCount = 12;
+    $fixedScheduleRowCount = max(12, $installments->count());
     $scheduleRowsForPrint = $installments->take($fixedScheduleRowCount)->values();
     $schedulePrincipalTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->installment_value ?? 0));
     $scheduleInterestTotal = $scheduleRowsForPrint->sum(fn ($row) => (float) ($row->benefit_value ?? $row->interest_due ?? $row->interest_amount ?? 0));
@@ -838,7 +840,7 @@
 
 <div class="no-print">
     <button type="button" id="copy_loan_as_image_button">Copy as Image</button>
-    <button type="button" onclick="window.print()">Print Loan</button>
+    <button type="button" onclick="window.print()">Print Installment</button>
     <button type="button" onclick="window.close()">Close</button>
     <span class="copy-status" id="copy_loan_as_image_status"></span>
 </div>
@@ -1109,8 +1111,11 @@
 
     <div class="notice">
         <span class="title kh-moul">ចំណាំ:</span>
-         ខ្ញុំទទួលខុសត្រូវចំពោះការបង់ប្រាក់ឲ្យបានទៀងទាត់ ក្នុងករណីយឺតយាវ​ ខ្ញុំយល់ព្រមឲ្យហាង គ្នាយើង ផាកពិន័យ ២០០០រៀលក្នុងមួយថ្ងៃ។
-          ខ្ញុំយល់ព្រមទទួលខុសត្រូវចំពេាះមុខច្បាប់ក្នុងករណីគេចវេសមិនព្រមបង់ប្រាក់ឲ្យហាង គ្នាយើង។  <br>
+        @php
+            $contractStoreName = $businessName ?? (\Modules\LoanManagement\Services\BusinessSettingsService::businessName() ?: Session::get('business.name', 'គ្នាយើង'));
+        @endphp
+         ខ្ញុំទទួលខុសត្រូវចំពោះការបង់ប្រាក់ឲ្យបានទៀងទាត់ ក្នុងករណីយឺតយាវ​ ខ្ញុំយល់ព្រមឲ្យហាង {{ $contractStoreName }} ផាកពិន័យ ២០០០រៀលក្នុងមួយថ្ងៃ។
+          ខ្ញុំយល់ព្រមទទួលខុសត្រូវចំពេាះមុខច្បាប់ក្នុងករណីគេចវេសមិនព្រមបង់ប្រាក់ឲ្យហាង {{ $contractStoreName }}។  <br>
         <div class="warranty-line"><span class="red">សម្រាប់ការធាន១ឆ្នាំ</span>គឺធានា ១ខែដំបូងដូដើមថ្មី និង១១ខែបន្ទាប់ជួសជុល សរុប១២ខែ <span class="red">មិនធានាលើការធ្លាក់បាក់បែកចូលទឹកគៀបកិនឡើយ។</span></div>
     </div>
 
@@ -1145,7 +1150,7 @@
     </div>
 
     <div class="printed-date">Printed date&nbsp;&nbsp;&nbsp;&nbsp;{{ $printedAt }}</div>
-    
+
 </div>
 
 <script>
@@ -1212,11 +1217,18 @@
         };
     }
 
-    async function buildLoanPrintImageBlob() {
+    async function buildLoanPrintImageBlob(scale, mimeType, quality) {
         var target = document.querySelector('.page');
         if (!target) {
-            throw new Error('Loan print page was not found.');
+            throw new Error('Installment print page was not found.');
         }
+
+        scale = parseFloat(scale || 2);
+        if (!isFinite(scale) || scale <= 0) {
+            scale = 2;
+        }
+        mimeType = mimeType || 'image/png';
+        quality = typeof quality === 'number' ? quality : 0.72;
 
         await waitForLoanPrintAssets();
         var payload = buildLoanImageSvg(target);
@@ -1230,14 +1242,14 @@
         });
 
         var canvas = document.createElement('canvas');
-        canvas.width = payload.width * 2;
-        canvas.height = payload.height * 2;
+        canvas.width = Math.ceil(payload.width * scale);
+        canvas.height = Math.ceil(payload.height * scale);
         var context = canvas.getContext('2d');
-        context.scale(2, 2);
+        context.scale(scale, scale);
         context.drawImage(image, 0, 0, payload.width, payload.height);
 
         var blob = await new Promise(function(resolve) {
-            canvas.toBlob(resolve, 'image/png');
+            canvas.toBlob(resolve, mimeType, quality);
         });
 
         if (!blob) {

@@ -22,6 +22,10 @@ class LoanDashboardController extends Controller
 
     public function index(Request $request)
     {
+        if ($request->has('lang') && in_array($request->query('lang'), ['en', 'km'], true)) {
+            session(['user.language' => $request->query('lang')]);
+        }
+
         $filters = $this->service->getFilters($request);
 
         $locations = $this->locationOptions();
@@ -29,34 +33,62 @@ class LoanDashboardController extends Controller
         $collectors = $this->simpleOptions('loans', 'collector_id');
         $currencies = ['USD', 'KHR'];
         $paymentMethods = [];
-        if (Schema::hasTable('payment_methods')) {
-            $paymentMethods = DB::table('payment_methods')
-                ->select('id', 'name')
-                ->where('is_active', 1)
-                ->orderBy('name')
-                ->get()
-                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
-                ->all();
+        try {
+            if (Schema::hasTable('payment_methods')) {
+                $paymentMethods = DB::table('payment_methods')
+                    ->select('id', 'name')
+                    ->where('is_active', 1)
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            $paymentMethods = [];
         }
 
-        $dashboard = Cache::remember('loan_dashboard_index_'.auth()->id().'_'.md5(json_encode($filters)), 300, function () use ($filters) {
-            return [
-                'quickCards' => $this->service->getQuickCards($filters),
-                'recentPayments' => $this->service->getRecentPayments($filters),
-                'overdueCustomers' => $this->service->getOverdueCustomers($filters),
-                'visitSchedule' => $this->service->getFollowUpCustomers($filters),
-                'collectorPerformance' => $this->service->getCollectorPerformanceChart($filters),
-                'loanStatusChart' => $this->service->getLoanStatusChart($filters),
-            ];
-        });
+        try {
+            $dashboard = Cache::remember('loan_dashboard_index_'.auth()->id().'_'.md5(json_encode($filters)), 300, function () use ($filters) {
+                return [
+                    'quickCards' => $this->service->getQuickCards($filters),
+                    'recentPayments' => $this->service->getRecentPayments($filters),
+                    'overdueCustomers' => $this->service->getOverdueCustomers($filters),
+                    'visitSchedule' => $this->service->getFollowUpCustomers($filters),
+                    'collectorPerformance' => $this->service->getCollectorPerformanceChart($filters),
+                    'loanStatusChart' => $this->service->getLoanStatusChart($filters),
+                ];
+            });
+        } catch (\Throwable $e) {
+            Log::error('Loan dashboard index cache/query failed', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
 
-        $quickCards = $dashboard['quickCards'];
-        $recentPayments = $dashboard['recentPayments'];
-        $overdueCustomers = $dashboard['overdueCustomers'];
-        $visitSchedule = $dashboard['visitSchedule'];
-        $collectorPerformance = $dashboard['collectorPerformance'];
-        $loanStatusChart = $dashboard['loanStatusChart'];
+            $dashboard = [
+                'quickCards' => [],
+                'recentPayments' => [],
+                'overdueCustomers' => [],
+                'visitSchedule' => [],
+                'collectorPerformance' => [],
+                'loanStatusChart' => ['labels' => [], 'series' => []],
+            ];
+        }
+
+        $quickCards = $dashboard['quickCards'] ?? [];
+        $recentPayments = $dashboard['recentPayments'] ?? [];
+        $overdueCustomers = $dashboard['overdueCustomers'] ?? [];
+        $visitSchedule = $dashboard['visitSchedule'] ?? [];
+        $collectorPerformance = $dashboard['collectorPerformance'] ?? [];
+        $loanStatusChart = $dashboard['loanStatusChart'] ?? ['labels' => [], 'series' => []];
         $recentChats = $this->getRecentChats();
+
+        $systemHealth = null;
+        try {
+            $systemHealth = \Modules\LoanManagement\Services\SystemHealthCheckService::check();
+        } catch (\Throwable $e) {
+            // Safe fallback if health check throws
+        }
 
         return view('loanmanagement::dashboard.index', compact(
             'filters',
@@ -71,7 +103,8 @@ class LoanDashboardController extends Controller
             'visitSchedule',
             'collectorPerformance',
             'loanStatusChart',
-            'recentChats'
+            'recentChats',
+            'systemHealth'
         ));
     }
 
@@ -112,7 +145,7 @@ class LoanDashboardController extends Controller
         $term = trim((string) $request->input('q', ''));
         $locationId = $request->filled('location_id') ? (int) $request->input('location_id') : null;
         if ($scope === 'sell') {
-            $rows = $this->service->searchSellsForDashboard($term);
+            $rows = [];
         } elseif ($request->filled('loan_id')) {
             $loanId = (int) $request->input('loan_id');
             $rows = collect($this->service->searchLoansForDashboard((string) $loanId, 25, $locationId))
@@ -131,68 +164,76 @@ class LoanDashboardController extends Controller
 
     protected function simpleOptions(string $table, string $column, bool $stringLabel = false): array
     {
-        if (! $this->service->tableExists($table) || ! $this->service->columnExists($table, $column)) {
+        try {
+            if (! $this->service->tableExists($table) || ! $this->service->columnExists($table, $column)) {
+                return [];
+            }
+
+            $rows = DB::connection('mysql_loan')->table($table)
+                ->whereNotNull($column)
+                ->select($column)
+                ->distinct()
+                ->orderBy($column)
+                ->limit(200)
+                ->get();
+
+            return $rows->map(function ($row) use ($column, $stringLabel) {
+                $value = $row->{$column};
+
+                return [
+                    'id' => $value,
+                    'name' => $stringLabel ? (string) $value : 'ID #'.$value,
+                ];
+            })->values()->all();
+        } catch (\Throwable $e) {
             return [];
         }
-
-        $rows = DB::connection('mysql_loan')->table($table)
-            ->whereNotNull($column)
-            ->select($column)
-            ->distinct()
-            ->orderBy($column)
-            ->limit(200)
-            ->get();
-
-        return $rows->map(function ($row) use ($column, $stringLabel) {
-            $value = $row->{$column};
-
-            return [
-                'id' => $value,
-                'name' => $stringLabel ? (string) $value : 'ID #'.$value,
-            ];
-        })->values()->all();
     }
 
     protected function locationOptions(): array
     {
-        if (Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
-            $query = DB::connection('mysql_loan')->table('loan_business_locations')
-                ->selectRaw('id, COALESCE(NULLIF(name, ""), CONCAT("Location #", id)) as name')
-                ->orderBy('name');
+        try {
+            if ($this->service->tableExists('loan_business_locations')) {
+                $query = DB::connection('mysql_loan')->table('loan_business_locations')
+                    ->selectRaw('id, COALESCE(NULLIF(name, ""), CONCAT("Location #", id)) as name')
+                    ->orderBy('name');
 
-            if (Schema::connection('mysql_loan')->hasColumn('loan_business_locations', 'deleted_at')) {
-                $query->whereNull('deleted_at');
+                if ($this->service->columnExists('loan_business_locations', 'deleted_at')) {
+                    $query->whereNull('deleted_at');
+                }
+
+                return $query->get()
+                    ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                    ->all();
             }
 
-            return $query->get()
-                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
-                ->all();
-        }
+            if ($this->service->tableExists('loans') && $this->service->columnExists('loans', 'business_location_id')) {
+                $nameColumn = $this->service->columnExists('loans', 'business_location_name_snapshot')
+                    ? 'business_location_name_snapshot'
+                    : null;
 
-        if ($this->service->tableExists('loans') && $this->service->columnExists('loans', 'business_location_id')) {
-            $nameColumn = $this->service->columnExists('loans', 'business_location_name_snapshot')
-                ? 'business_location_name_snapshot'
-                : null;
+                $query = DB::connection('mysql_loan')->table('loans')
+                    ->whereNotNull('business_location_id')
+                    ->select('business_location_id as id');
 
-            $query = DB::connection('mysql_loan')->table('loans')
-                ->whereNotNull('business_location_id')
-                ->select('business_location_id as id');
+                if ($nameColumn) {
+                    $query->addSelect($nameColumn.' as name')
+                        ->whereNotNull($nameColumn)
+                        ->where($nameColumn, '!=', '')
+                        ->groupBy('business_location_id', $nameColumn)
+                        ->orderBy($nameColumn);
+                } else {
+                    $query->selectRaw('business_location_id as id, CONCAT("Location #", business_location_id) as name')
+                        ->groupBy('business_location_id')
+                        ->orderBy('business_location_id');
+                }
 
-            if ($nameColumn) {
-                $query->addSelect($nameColumn.' as name')
-                    ->whereNotNull($nameColumn)
-                    ->where($nameColumn, '!=', '')
-                    ->groupBy('business_location_id', $nameColumn)
-                    ->orderBy($nameColumn);
-            } else {
-                $query->selectRaw('business_location_id as id, CONCAT("Location #", business_location_id) as name')
-                    ->groupBy('business_location_id')
-                    ->orderBy('business_location_id');
+                return $query->limit(200)->get()
+                    ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                    ->all();
             }
-
-            return $query->limit(200)->get()
-                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
-                ->all();
+        } catch (\Throwable $e) {
+            return [];
         }
 
         return [];
@@ -200,11 +241,11 @@ class LoanDashboardController extends Controller
 
     protected function getRecentChats(): array
     {
-        if (! Schema::connection('mysql_loan')->hasTable('loan_chat_threads')) {
-            return [];
-        }
-
         try {
+            if (! $this->service->tableExists('loan_chat_threads')) {
+                return [];
+            }
+
             $query = DB::connection('mysql_loan')
                 ->table('loan_chat_threads')
                 ->select([

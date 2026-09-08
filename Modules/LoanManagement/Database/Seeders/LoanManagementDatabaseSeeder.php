@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\LoanManagement\Database\Seeders;
+namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 
@@ -10,5 +10,6 @@ class LoanManagementDatabaseSeeder extends Seeder
     {
         $this->call(LoanManagementPermissionSeeder::class);
         $this->call(LoanManagementReferenceSeeder::class);
+        $this->call(LoanManagementSystemDataSeeder::class);
     }
 }

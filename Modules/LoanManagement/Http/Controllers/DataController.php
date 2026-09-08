@@ -28,7 +28,6 @@ class DataController extends Controller
 
             ['value' => 'loan_management.loans.view', 'label' => 'Loans - View', 'default' => false],
             ['value' => 'loan_management.loans.create', 'label' => 'Loans - Create Loan', 'default' => false],
-            ['value' => 'loan_management.create_from_sell', 'label' => 'Loans - Create From Sell', 'default' => false],
             ['value' => 'loan_management.loans.edit', 'label' => 'Loans - Edit', 'default' => false],
             ['value' => 'loan_management.loans.approve', 'label' => 'Loans - Approve', 'default' => false],
             ['value' => 'loan_management.loans.reject', 'label' => 'Loans - Reject', 'default' => false],

@@ -8,7 +8,18 @@
     }
 
     ready(function () {
-        var toggles = Array.prototype.slice.call(document.querySelectorAll('#loanSidebarToggle, #loanSidebarCollapse'));
+        var toggles = Array.prototype.slice.call(document.querySelectorAll('#loanSidebarToggle, #loanSidebarCollapse, #loanMobileSidebarToggle'));
+        var sidebar = document.getElementById('loanManagementSidebar');
+        var sidebarBackdrop = document.getElementById('loanSidebarBackdrop');
+
+        if (!sidebarBackdrop && sidebar) {
+            sidebarBackdrop = document.createElement('button');
+            sidebarBackdrop.type = 'button';
+            sidebarBackdrop.id = 'loanSidebarBackdrop';
+            sidebarBackdrop.className = 'lm-sidebar-backdrop';
+            sidebarBackdrop.setAttribute('aria-label', 'Close sidebar');
+            sidebar.parentNode.insertBefore(sidebarBackdrop, sidebar);
+        }
 
         function isMobile() {
             return window.innerWidth <= 992;
@@ -28,7 +39,11 @@
         }
 
         toggles.forEach(function (toggle) {
-            toggle.addEventListener('click', toggleSidebar);
+            toggle.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleSidebar();
+            });
         });
 
         // Sidebar close button
@@ -37,12 +52,18 @@
             closeBtn.addEventListener('click', closeSidebar);
         }
 
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', function (event) {
+                event.preventDefault();
+                closeSidebar();
+            });
+        }
+
         // Close sidebar on mobile when clicking backdrop
         document.addEventListener('click', function (event) {
             if (!isMobile()) return;
             if (!document.body.classList.contains('lm-sidebar-open')) return;
 
-            var sidebar = document.getElementById('loanManagementSidebar');
             if (!sidebar) return;
 
             // If click is outside sidebar and not on toggle button
@@ -76,7 +97,9 @@
 
         var sidebarSearch = document.getElementById('lmSidebarSearch');
         if (sidebarSearch) {
-            sidebarSearch.addEventListener('input', function () {
+            var searchTimer = null;
+
+            function runMenuFilter() {
                 var term = sidebarSearch.value.trim().toLowerCase();
                 var sections = document.querySelectorAll('.lm-menu-section');
 
@@ -106,7 +129,15 @@
 
                     section.style.display = hasVisibleItem ? '' : 'none';
                 });
-            });
+            }
+
+            // Debounce filtering for smoother typing on older devices
+            sidebarSearch.addEventListener('input', function () {
+                if (searchTimer) {
+                    clearTimeout(searchTimer);
+                }
+                searchTimer = setTimeout(runMenuFilter, 'ontouchstart' in window ? 80 : 0);
+            }, { passive: true });
         }
 
         // Submenu toggle

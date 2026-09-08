@@ -4,8 +4,14 @@
     $isKhmer = $isKhmer ?? session('user.language', config('app.locale')) === 'km';
     $text = fn ($en, $km) => $isKhmer ? $km : $en;
     $years = range((int) now()->format('Y'), 2000);
-    $moduleCssPath = base_path('Modules/LoanManagement/Resources/assets/css/loan-management.css');
-    $moduleJsPath = base_path('Modules/LoanManagement/Resources/assets/js/loan-management.js');
+    $moduleCssPath = module_path('LoanManagement', 'Resources/assets/css/loan-management.css');
+    $moduleJsPath = module_path('LoanManagement', 'Resources/assets/js/loan-management.js');
+    $adminLoanCssAsset = 'modules/loanmanagement/admin-loan-app/assets/index-tfrm5V5v.css';
+    $adminLoanJsAsset = 'modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js';
+    $adminLoanCssPath = public_path($adminLoanCssAsset);
+    $adminLoanJsPath = public_path($adminLoanJsAsset);
+    $adminLoanCssExists = file_exists($adminLoanCssPath);
+    $adminLoanJsExists = file_exists($adminLoanJsPath);
     $loanBadgeCounts = LoanMenuHelper::badgeCounts();
     $loanLanguage = session('user.language', config('app.locale'));
     $adminRows = collect($payload['adminRows'] ?? [])->sortBy('year')->map(function ($row) {
@@ -88,8 +94,25 @@
     $adminLoanFilterPayload = [
         'start_year' => $filters['start_year'],
         'end_year' => $filters['end_year'],
+        'date_from' => $filters['date_from'] ?? null,
+        'date_to' => $filters['date_to'] ?? null,
         'location_id' => $filters['location_id'],
         'search' => $filters['search'],
+    ];
+    $money = fn ($value) => '$'.number_format((float) $value, 2);
+    $monthNames = [
+        1 => $text('January', 'មករា'),
+        2 => $text('February', 'កុម្ភៈ'),
+        3 => $text('March', 'មីនា'),
+        4 => $text('April', 'មេសា'),
+        5 => $text('May', 'ឧសភា'),
+        6 => $text('June', 'មិថុនា'),
+        7 => $text('July', 'កក្កដា'),
+        8 => $text('August', 'សីហា'),
+        9 => $text('September', 'កញ្ញា'),
+        10 => $text('October', 'តុលា'),
+        11 => $text('November', 'វិច្ឆិកា'),
+        12 => $text('December', 'ធ្នូ'),
     ];
 @endphp
 <!doctype html>
@@ -98,12 +121,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $text('Admin Loan', 'រដ្ឋបាលកម្ចី') }}</title>
+    <title>{{ $text('Admin Installment', 'រដ្ឋបាលកម្ចី') }}</title>
     @include('layouts.partials.css')
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-tfrm5V5v.css') }}">
+    @if ($adminLoanCssExists)
+        <link rel="stylesheet" href="{{ asset($adminLoanCssAsset) }}?v={{ filemtime($adminLoanCssPath) }}">
+    @endif
     @if (file_exists($moduleCssPath))
         <style>{!! file_get_contents($moduleCssPath) !!}</style>
     @endif
@@ -630,6 +655,129 @@
             border: 0;
             background: #fff;
         }
+        .admin-loan-fallback {
+            padding: 14px 16px 18px;
+        }
+        .admin-loan-fallback-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .admin-loan-fallback-title {
+            margin: 0;
+            color: #0f172a;
+            font-size: 19px;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+        .admin-loan-fallback-subtitle {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .admin-loan-fallback-actions {
+            display: inline-flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .admin-loan-fallback-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            padding: 0 12px;
+            background: #fff;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 800;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .admin-loan-fallback-action.primary {
+            border-color: #2563eb;
+            background: #2563eb;
+            color: #fff;
+        }
+        .admin-loan-fallback-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .admin-loan-fallback-metric {
+            border: 1px solid #dbe4ef;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, .05);
+        }
+        .admin-loan-fallback-metric span {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .admin-loan-fallback-metric strong {
+            display: block;
+            margin-top: 5px;
+            color: #0f172a;
+            font-size: 19px;
+            font-weight: 900;
+            line-height: 1.15;
+        }
+        .admin-loan-fallback-table {
+            max-height: calc(100vh - 252px);
+            overflow: auto;
+            border: 1px solid #d7e0eb;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+        }
+        .admin-loan-fallback-table .empty {
+            padding: 36px;
+            text-align: center;
+            color: #64748b;
+            font-weight: 800;
+        }
+        .admin-loan-fallback-tabs {
+            display: inline-flex;
+            gap: 4px;
+            margin-bottom: 10px;
+            border: 1px solid #d7e0eb;
+            border-radius: 8px;
+            padding: 3px;
+            background: #eef3f8;
+        }
+        .admin-loan-fallback-tab {
+            height: 30px;
+            border: 0;
+            border-radius: 6px;
+            padding: 0 12px;
+            background: transparent;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        .admin-loan-fallback-tab.is-active {
+            background: #fff;
+            color: #0f172a;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
+        }
+        .admin-loan-fallback-pane[hidden] {
+            display: none !important;
+        }
+        #admin-loan-react-root .admin-loan-fallback-table table th:last-child,
+        #admin-loan-react-root .admin-loan-fallback-table table td:last-child {
+            display: table-cell !important;
+        }
         @media (max-width: 1200px) {
             .admin-loan-filter-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -642,6 +790,18 @@
             }
             #admin-loan-react-root [class~="min-w-[2000px]"] {
                 min-width: max-content !important;
+            }
+            .admin-loan-fallback-head {
+                flex-direction: column;
+            }
+            .admin-loan-fallback-actions {
+                justify-content: flex-start;
+            }
+            .admin-loan-fallback-metrics {
+                grid-template-columns: 1fr;
+            }
+            .admin-loan-fallback {
+                padding: 10px;
             }
         }
         @media (max-width: 767px) {
@@ -682,20 +842,12 @@
                 <form method="GET" action="{{ route('loan-management.admin-loan') }}" id="adminLoanFilter">
                     <div class="admin-loan-filter-grid">
                         <div>
-                            <label>{{ $text('Start Year', 'ឆ្នាំចាប់ផ្តើម') }}</label>
-                            <select name="start_year">
-                                @foreach($years as $year)
-                                    <option value="{{ $year }}" {{ (int) $filters['start_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
-                                @endforeach
-                            </select>
+                            <label>{{ $text('Date From', 'ពីថ្ងៃ') }}</label>
+                            <input type="date" name="date_from" value="{{ $filters['date_from'] ?? ($filters['start_year'].'-01-01') }}">
                         </div>
                         <div>
-                            <label>{{ $text('End Year', 'ឆ្នាំបញ្ចប់') }}</label>
-                            <select name="end_year">
-                                @foreach($years as $year)
-                                    <option value="{{ $year }}" {{ (int) $filters['end_year'] === (int) $year ? 'selected' : '' }}>{{ $year }}</option>
-                                @endforeach
-                            </select>
+                            <label>{{ $text('Date To', 'ដល់ថ្ងៃ') }}</label>
+                            <input type="date" name="date_to" value="{{ $filters['date_to'] ?? ($filters['end_year'].'-12-31') }}">
                         </div>
                         <div>
                             <label>{{ $text('Location', 'សាខា') }}</label>
@@ -708,7 +860,7 @@
                         </div>
                         <div>
                             <label>{{ $text('Search', 'ស្វែងរក') }}</label>
-                            <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="{{ $text('Loan #, invoice, customer, phone', 'លេខកម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
+                            <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="{{ $text('Installment #, invoice, customer, phone', 'លេខកម្ចី វិក្កយបត្រ អតិថិជន ទូរស័ព្ទ') }}">
                         </div>
                         <button type="submit">{{ $text('Filter', 'ចម្រោះ') }}</button>
                         <a href="{{ route('loan-management.admin-loan') }}">{{ $text('Reset', 'កំណត់ឡើងវិញ') }}</a>
@@ -724,17 +876,210 @@
                 </form>
             </div>
             <div id="admin-loan-react-root">
-                <div id="root"></div>
+                @if ($adminLoanJsExists)
+                    <div id="root"></div>
+                @else
+                    <section class="admin-loan-fallback">
+                        <div class="admin-loan-fallback-head">
+                            <div>
+                                <h1 class="admin-loan-fallback-title">{{ $text('Installment Applications', 'ពាក្យស្នើសុំកម្ចី') }}</h1>
+                                <div class="admin-loan-fallback-subtitle">
+                                    {{ $text('Yearly installment summary by loan status and collection performance.', 'សង្ខេបកម្ចីរំលស់ប្រចាំឆ្នាំតាមស្ថានភាពកម្ចី និងការប្រមូលប្រាក់។') }}
+                                </div>
+                            </div>
+                            <div class="admin-loan-fallback-actions">
+                                <a class="admin-loan-fallback-action primary" href="{{ route('loan-management.loans.create') }}">
+                                    <i class="fa fa-plus-circle"></i>&nbsp;{{ $text('New Installment', 'កម្ចីថ្មី') }}
+                                </a>
+                                <a class="admin-loan-fallback-action" href="{{ route('loan-management.admin-loan.export', $adminLoanFilterPayload) }}">
+                                    <i class="fa fa-file-excel-o"></i>&nbsp;{{ $text('Export XLSX', 'នាំចេញ XLSX') }}
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="admin-loan-fallback-metrics">
+                            <div class="admin-loan-fallback-metric">
+                                <span>{{ $text('Registered Customers', 'អតិថិជនបានចុះឈ្មោះ') }}</span>
+                                <strong>{{ number_format((int) ($payload['adminTotals']['registered']['customers'] ?? 0)) }}</strong>
+                            </div>
+                            <div class="admin-loan-fallback-metric">
+                                <span>{{ $text('Registered Principal', 'ប្រាក់ដើមបានចុះឈ្មោះ') }}</span>
+                                <strong>{{ $money($payload['adminTotals']['registered']['loan_amount'] ?? 0) }}</strong>
+                            </div>
+                            <div class="admin-loan-fallback-metric">
+                                <span>{{ $text('Active Customers', 'អតិថិជនកំពុងដំណើរការ') }}</span>
+                                <strong>{{ number_format((int) ($payload['adminTotals']['active']['active_customers'] ?? 0)) }}</strong>
+                            </div>
+                            <div class="admin-loan-fallback-metric">
+                                <span>{{ $text('Bad Debt Ratio', 'អនុបាតកម្ចីខូច') }}</span>
+                                <strong>{{ number_format((float) ($payload['adminTotals']['bad_debt_ratio'] ?? 0), 2) }}%</strong>
+                            </div>
+                        </div>
+
+                        <div class="admin-loan-fallback-tabs" role="tablist" aria-label="{{ $text('Installment application reports', 'របាយការណ៍ពាក្យស្នើសុំកម្ចី') }}">
+                            <button type="button" class="admin-loan-fallback-tab is-active" data-admin-loan-fallback-tab="yearly">{{ $text('Yearly', 'ប្រចាំឆ្នាំ') }}</button>
+                            <button type="button" class="admin-loan-fallback-tab" data-admin-loan-fallback-tab="monthly">{{ $text('Monthly', 'ប្រចាំខែ') }}</button>
+                        </div>
+
+                        <div class="admin-loan-fallback-pane" data-admin-loan-fallback-pane="yearly">
+                            <div class="admin-loan-fallback-table" id="yearly-report-table-card">
+                                @if ($adminRows->isEmpty())
+                                    <div class="empty">{{ $text('No loan applications found for these filters.', 'រកមិនឃើញពាក្យស្នើសុំកម្ចីសម្រាប់លក្ខខណ្ឌនេះទេ។') }}</div>
+                                @else
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="2">{{ $text('#', 'ល.រ') }}</th>
+                                                <th rowspan="2">{{ $text('Year', 'ឆ្នាំ') }}</th>
+                                                <th colspan="4">{{ $text('Registered Installments', 'អតិថិជនចុះឈ្មោះរំលស់') }}</th>
+                                                <th colspan="4">{{ $text('General Installments Paid', 'អតិថិជនរំលស់បានបង់ទូទៅ') }}</th>
+                                                <th colspan="5">{{ $text('Settled / Fully Paid-Off', 'អតិថិជនរំលស់បានបង់ផ្ដាច់') }}</th>
+                                                <th colspan="4">{{ $text('Active / Ongoing Installments', 'អតិថិជនរំលស់កំពុងដំណើរការ') }}</th>
+                                                <th colspan="4">{{ $text('Defaulted / Bad Debt', 'អតិថិជនរំលស់ខូច') }}</th>
+                                            </tr>
+                                            <tr>
+                                                <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                                <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                                <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                                <th>{{ $text('Total', 'សរុប') }}</th>
+                                                <th>{{ $text('Principal Paid', 'ប្រាក់ដើមបានបង់') }}</th>
+                                                <th>{{ $text('Interest Paid', 'ការប្រាក់បានបង់') }}</th>
+                                                <th>{{ $text('Discount', 'បញ្ចុះតម្លៃ') }}</th>
+                                                <th>{{ $text('Penalty', 'ពិន័យ') }}</th>
+                                                <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                                <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                                <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                                <th>{{ $text('Penalty', 'ពិន័យ') }}</th>
+                                                <th>{{ $text('Discount', 'បញ្ចុះតម្លៃ') }}</th>
+                                                <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                                <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                                <th>{{ $text('Monthly Interest', 'ការប្រាក់ប្រចាំខែ') }}</th>
+                                                <th>{{ $text('Total Balance', 'សមតុល្យសរុប') }}</th>
+                                                <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                                <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                                <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                                <th>{{ $text('Total', 'សរុប') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($adminRows as $row)
+                                                <tr title="{{ $text('Click any amount to view detail', 'ចុចលើចំនួនណាមួយដើម្បីមើលលម្អិត') }}">
+                                                    <td>{{ $loop->iteration }}</td>
+                                                    <td>{{ $row['year'] }}</td>
+                                                    <td>{{ number_format($row['registered']['customers']) }}</td>
+                                                    <td>{{ $money($row['registered']['loanAmount']) }}</td>
+                                                    <td>{{ $money($row['registered']['interest']) }}</td>
+                                                    <td>{{ $money($row['registered']['totalInterest']) }}</td>
+                                                    <td>{{ $money($row['generalPaid']['principalPaid']) }}</td>
+                                                    <td>{{ $money($row['generalPaid']['interestPaid']) }}</td>
+                                                    <td>{{ $money($row['generalPaid']['interestDeducted']) }}</td>
+                                                    <td>{{ $money($row['generalPaid']['penaltiesReceived']) }}</td>
+                                                    <td>{{ number_format($row['paidOff']['settledCustomers']) }}</td>
+                                                    <td>{{ $money($row['paidOff']['settledPrincipal']) }}</td>
+                                                    <td>{{ $money($row['paidOff']['settledInterest']) }}</td>
+                                                    <td>{{ $money($row['paidOff']['settledPenalties']) }}</td>
+                                                    <td>{{ $money($row['paidOff']['prepaymentDiscount']) }}</td>
+                                                    <td>{{ number_format($row['activeOngoing']['activeCustomers']) }}</td>
+                                                    <td>{{ $money($row['activeOngoing']['activePrincipal']) }}</td>
+                                                    <td>{{ $money($row['activeOngoing']['activeMonthlyInterest']) }}</td>
+                                                    <td>{{ $money($row['activeOngoing']['activeTotalInterest']) }}</td>
+                                                    <td>{{ number_format($row['badDebt']['badCustomers']) }}</td>
+                                                    <td>{{ $money($row['badDebt']['badPrincipal']) }}</td>
+                                                    <td>{{ $money($row['badDebt']['badInterest']) }}</td>
+                                                    <td>{{ $money($row['badDebt']['badTotal']) }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="admin-loan-fallback-pane" data-admin-loan-fallback-pane="monthly" hidden>
+                            <div class="admin-loan-fallback-table" id="monthly-report-table-card">
+                                @if ($adminMonthlyRows->isEmpty())
+                                    <div class="empty">{{ $text('No monthly loan application data found for these filters.', 'រកមិនឃើញទិន្នន័យពាក្យស្នើសុំកម្ចីប្រចាំខែសម្រាប់លក្ខខណ្ឌនេះទេ។') }}</div>
+                                @else
+                                    <table>
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2">{{ $text('#', 'ល.រ') }}</th>
+                                            <th rowspan="2">{{ $text('Month', 'ខែ') }}</th>
+                                            <th colspan="4">{{ $text('Registered Installments', 'អតិថិជនចុះឈ្មោះរំលស់') }}</th>
+                                            <th colspan="4">{{ $text('General Installments Paid', 'អតិថិជនរំលស់បានបង់ទូទៅ') }}</th>
+                                            <th colspan="5">{{ $text('Settled / Fully Paid-Off', 'អតិថិជនរំលស់បានបង់ផ្ដាច់') }}</th>
+                                            <th colspan="4">{{ $text('Active / Ongoing Installments', 'អតិថិជនរំលស់កំពុងដំណើរការ') }}</th>
+                                            <th colspan="4">{{ $text('Defaulted / Bad Debt', 'អតិថិជនរំលស់ខូច') }}</th>
+                                        </tr>
+                                        <tr>
+                                            <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                            <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                            <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                            <th>{{ $text('Total', 'សរុប') }}</th>
+                                            <th>{{ $text('Principal Paid', 'ប្រាក់ដើមបានបង់') }}</th>
+                                            <th>{{ $text('Interest Paid', 'ការប្រាក់បានបង់') }}</th>
+                                            <th>{{ $text('Discount', 'បញ្ចុះតម្លៃ') }}</th>
+                                            <th>{{ $text('Penalty', 'ពិន័យ') }}</th>
+                                            <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                            <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                            <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                            <th>{{ $text('Penalty', 'ពិន័យ') }}</th>
+                                            <th>{{ $text('Discount', 'បញ្ចុះតម្លៃ') }}</th>
+                                            <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                            <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                            <th>{{ $text('Monthly Interest', 'ការប្រាក់ប្រចាំខែ') }}</th>
+                                            <th>{{ $text('Total Balance', 'សមតុល្យសរុប') }}</th>
+                                            <th>{{ $text('Customers', 'អតិថិជន') }}</th>
+                                            <th>{{ $text('Principal', 'ប្រាក់ដើម') }}</th>
+                                            <th>{{ $text('Interest', 'ការប្រាក់') }}</th>
+                                            <th>{{ $text('Total', 'សរុប') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($adminMonthlyRows as $row)
+                                            <tr title="{{ $text('Click any amount to view detail', 'ចុចលើចំនួនណាមួយដើម្បីមើលលម្អិត') }}">
+                                                <td>{{ $loop->iteration }}</td>
+                                                <td>{{ $monthNames[$row['month']] ?? $row['month'] }} {{ $row['year'] }}</td>
+                                                <td>{{ number_format($row['registered']['customers']) }}</td>
+                                                <td>{{ $money($row['registered']['loanAmount']) }}</td>
+                                                <td>{{ $money($row['registered']['interest']) }}</td>
+                                                <td>{{ $money($row['registered']['totalInterest']) }}</td>
+                                                <td>{{ $money($row['generalPaid']['principalPaid']) }}</td>
+                                                <td>{{ $money($row['generalPaid']['interestPaid']) }}</td>
+                                                <td>{{ $money($row['generalPaid']['interestDeducted']) }}</td>
+                                                <td>{{ $money($row['generalPaid']['penaltiesReceived']) }}</td>
+                                                <td>{{ number_format($row['paidOff']['settledCustomers']) }}</td>
+                                                <td>{{ $money($row['paidOff']['settledPrincipal']) }}</td>
+                                                <td>{{ $money($row['paidOff']['settledInterest']) }}</td>
+                                                <td>{{ $money($row['paidOff']['settledPenalties']) }}</td>
+                                                <td>{{ $money($row['paidOff']['prepaymentDiscount']) }}</td>
+                                                <td>{{ number_format($row['activeOngoing']['activeCustomers']) }}</td>
+                                                <td>{{ $money($row['activeOngoing']['activePrincipal']) }}</td>
+                                                <td>{{ $money($row['activeOngoing']['activeMonthlyInterest']) }}</td>
+                                                <td>{{ $money($row['activeOngoing']['activeTotalInterest']) }}</td>
+                                                <td>{{ number_format($row['badDebt']['badCustomers']) }}</td>
+                                                <td>{{ $money($row['badDebt']['badPrincipal']) }}</td>
+                                                <td>{{ $money($row['badDebt']['badInterest']) }}</td>
+                                                <td>{{ $money($row['badDebt']['badTotal']) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                                @endif
+                            </div>
+                        </div>
+                    </section>
+                @endif
             </div>
         </main>
     </div>
     <div class="admin-loan-detail-modal" id="adminLoanDetailModal" aria-hidden="true">
         <div class="admin-loan-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="adminLoanDetailTitle">
             <div class="admin-loan-detail-head">
-                <div class="admin-loan-detail-title" id="adminLoanDetailTitle">{{ $text('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}</div>
+                <div class="admin-loan-detail-title" id="adminLoanDetailTitle">{{ $text('Installment Details', 'ព័ត៌មានលម្អិតកម្ចី') }}</div>
                 <button type="button" class="admin-loan-detail-close" id="adminLoanDetailClose">{{ $text('Close', 'បិទ') }}</button>
             </div>
-            <iframe class="admin-loan-detail-frame" id="adminLoanDetailFrame" title="{{ $text('Loan Details', 'ព័ត៌មានលម្អិតកម្ចី') }}"></iframe>
+            <iframe class="admin-loan-detail-frame" id="adminLoanDetailFrame" title="{{ $text('Installment Details', 'ព័ត៌មានលម្អិតកម្ចី') }}"></iframe>
         </div>
     </div>
     <script>
@@ -745,13 +1090,15 @@
             localStorage.setItem('khnar_yeung_monthly_ledger', JSON.stringify(monthlyRecords));
         })();
     </script>
-    <script type="module" src="{{ asset('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js') }}?v={{ filemtime(public_path('modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js')) }}"></script>
+    @if ($adminLoanJsExists)
+        <script type="module" src="{{ asset($adminLoanJsAsset) }}?v={{ filemtime($adminLoanJsPath) }}"></script>
+    @endif
     <script>
         (function () {
             var form = document.getElementById('adminLoanFilter');
             if (form) {
                 form.addEventListener('change', function (event) {
-                    if (event.target && event.target.tagName === 'SELECT' && event.target.name !== 'language') {
+                    if (event.target && (event.target.tagName === 'SELECT' || event.target.type === 'date') && event.target.name !== 'language') {
                         form.submit();
                     }
                 });
@@ -801,7 +1148,7 @@
                 exportButton.setAttribute('data-export-xlsx-url', adminLoanExportUrl);
                 var label = exportButton.querySelector('span');
                 if (label) {
-                    label.textContent = 'Export XLSX';
+                    label.textContent = targetLanguage === 'km' ? 'នាំចេញ XLSX' : 'Export XLSX';
                 }
             }
 
@@ -842,6 +1189,20 @@
             document.addEventListener('input', fixAdminLoanSearchFields, true);
 
             document.addEventListener('click', function (event) {
+                var tab = event.target && event.target.closest ? event.target.closest('[data-admin-loan-fallback-tab]') : null;
+                if (!tab) {
+                    return;
+                }
+                var target = tab.getAttribute('data-admin-loan-fallback-tab');
+                document.querySelectorAll('[data-admin-loan-fallback-tab]').forEach(function (button) {
+                    button.classList.toggle('is-active', button === tab);
+                });
+                document.querySelectorAll('[data-admin-loan-fallback-pane]').forEach(function (pane) {
+                    pane.hidden = pane.getAttribute('data-admin-loan-fallback-pane') !== target;
+                });
+            });
+
+            document.addEventListener('click', function (event) {
                 var button = event.target && event.target.closest ? event.target.closest('#export-xlsx-btn, #export-csv-btn') : null;
                 if (!button) {
                     return;
@@ -862,7 +1223,7 @@
 
             function adminLoanGroupLabel(group) {
                 var labels = {
-                    all: targetLanguage === 'km' ? 'កម្ចីទាំងអស់' : 'All Loans',
+                    all: targetLanguage === 'km' ? 'កម្ចីទាំងអស់' : 'All Installments',
                     registered: targetLanguage === 'km' ? 'អតិថិជនចុះឈ្មោះរំលស់' : 'Registered Installments',
                     generalPaid: targetLanguage === 'km' ? 'អតិថិជនរំលស់បានបង់ទូរទៅ' : 'General Installments Paid',
                     paidOff: targetLanguage === 'km' ? 'អតិថិជនរំលស់បានបង់ផ្ដាច់' : 'Settled / Fully Paid Off',

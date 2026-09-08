@@ -1,9 +1,9 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Edit Loan Customer')
+@section('title', 'Edit Installment Customer')
 
 @section('content_body')
 <section class="content-header">
-    <h1>Edit Loan Customer</h1>
+    <h1>Edit Installment Customer</h1>
 </section>
 
 <section class="content">
@@ -12,7 +12,7 @@
             <div class="small-box bg-aqua">
                 <div class="inner">
                     <h3>{{ $loanSummary['count'] ?? 0 }}</h3>
-                    <p>Related Loans</p>
+                    <p>Related Installments</p>
                 </div>
                 <div class="icon"><i class="fa fa-file-text-o"></i></div>
                 <span class="small-box-footer">Balance {{ number_format((float) ($loanSummary['balance'] ?? 0), 2) }}</span>
@@ -109,7 +109,7 @@
 
     <div class="box box-default">
         <div class="box-header with-border">
-            <h3 class="box-title">Related Loans</h3>
+            <h3 class="box-title">Related Installments</h3>
         </div>
         <div class="box-body table-responsive">
             @php $customerEditReturnUrl = route('loan-management.customers.edit', $customerRow->id); @endphp
@@ -117,9 +117,9 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Loan #</th>
+                        <th>Installment #</th>
                         <th>Status</th>
-                        <th>Loan Date</th>
+                        <th>Installment Date</th>
                         <th>Principal</th>
                         <th>Balance</th>
                         <th>Action</th>
@@ -175,7 +175,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Receipt</th>
-                        <th>Loan #</th>
+                        <th>Installment #</th>
                         <th>Paid Date</th>
                         <th>Method</th>
                         <th>Amount</th>

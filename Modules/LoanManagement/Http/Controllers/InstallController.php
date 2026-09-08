@@ -125,13 +125,13 @@ class InstallController extends Controller
 
         Artisan::call('migrate', [
             '--database' => 'mysql_loan',
-            '--path' => 'Modules/LoanManagement/Database/Migrations',
+            '--path' => 'database/migrations',
             '--realpath' => false,
             '--force' => true,
         ]);
 
         Artisan::call('db:seed', [
-            '--class' => 'Modules\\LoanManagement\\Database\\Seeders\\LoanManagementDatabaseSeeder',
+            '--class' => 'Database\\Seeders\\LoanManagementDatabaseSeeder',
             '--force' => true,
         ]);
 

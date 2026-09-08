@@ -11,6 +11,14 @@ class LoanSidebarBadgeService
 
     public function overdueCount(): int
     {
+        try {
+            if ($this->hasTable('loans')) {
+                return (int) (app(LoanCollectionService::class)->pageMetrics('overdue-accounts')['total_accounts'] ?? 0);
+            }
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
         if (! $this->hasTable('loan_payment_schedules')) {
             return 0;
         }
@@ -24,6 +32,14 @@ class LoanSidebarBadgeService
 
     public function unreadChatCount(): int
     {
+        if ($this->hasTable('loan_telegram_chat_threads')
+            && $this->hasColumn('loan_telegram_chat_threads', 'unread_staff_count')) {
+            return (int) DB::connection($this->connection)
+                ->table('loan_telegram_chat_threads')
+                ->where('unread_staff_count', '>', 0)
+                ->count();
+        }
+
         if (! $this->hasTable('loan_chat_messages')) {
             return 0;
         }

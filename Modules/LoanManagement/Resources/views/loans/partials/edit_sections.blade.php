@@ -10,7 +10,7 @@
 
 <div class="box box-default lm-collapsible is-collapsed" data-collapse-key="loan-items" id="lm-section-loan-items">
     <div class="box-header with-border">
-        <h3 class="box-title">Loan Items (Read-only Reference)</h3>
+        <h3 class="box-title">Installment Items (Read-only Reference)</h3>
         <div class="box-tools pull-right">
             <button type="button" class="lm-collapse-toggle" title="Collapse or expand section">
                 <i class="fa fa-minus"></i>

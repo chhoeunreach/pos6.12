@@ -6,11 +6,11 @@
     <div class="modal-content{{ $isAutostart ? ' loan-print-preview-modal__content--autostart' : '' }}">
         @if(! $isAutostart)
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ lm_label('messages.close', 'Close', 'បិទ') }}">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
-                <i class="fa fa-print"></i> Print Loan #{{ $loanRow->loan_number ?? $loanRow->id }}
+                <i class="fa fa-print"></i> Print Installment #{{ $loanRow->loan_number ?? $loanRow->id }}
             </h4>
         </div>
         @endif
@@ -19,7 +19,7 @@
                 id="loan_print_preview_frame"
                 src="{{ $frameSrc }}"
                 style="width: 100%; height: 100%; border: 0; display: block;"
-                title="Loan print preview"></iframe>
+                title="Installment print preview"></iframe>
         </div>
         @if(! $isAutostart)
         <div class="modal-footer">
@@ -27,9 +27,9 @@
                 <i class="fa fa-external-link"></i> Open Full Page
             </a>
             <button type="button" class="btn btn-primary" id="loan_print_preview_button">
-                <i class="fa fa-print"></i> @lang('messages.print')
+                <i class="fa fa-print"></i> {{ lm_label('messages.print', 'Print', 'បោះពុម្ព') }}
             </button>
-            <button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">{{ lm_label('messages.close', 'Close', 'បិទ') }}</button>
         </div>
         @endif
     </div>

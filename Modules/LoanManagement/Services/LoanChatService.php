@@ -23,20 +23,67 @@ class LoanChatService
 {
     public const STAFF_SIDE_TYPES = ['staff', 'admin'];
     protected array $locationNameCache = [];
+    protected static array $userCache = [];
+    protected static array $fileCache = [];
+    protected static array $columnCache = [];
+
+    protected static function tableOn(string $table): bool
+    {
+        $key = $table.'.exists';
+        if (! array_key_exists($key, self::$columnCache)) {
+            self::$columnCache[$key] = Schema::connection('mysql_loan')->hasTable($table);
+        }
+
+        return self::$columnCache[$key];
+    }
+
+    protected static function columnOn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+        if (! array_key_exists($key, self::$columnCache)) {
+            self::$columnCache[$key] = Schema::connection('mysql_loan')->hasColumn($table, $column);
+        }
+
+        return self::$columnCache[$key];
+    }
+
+    protected function cachedUser(int $id)
+    {
+        if (! $id || ! class_exists(\App\User::class)) {
+            return null;
+        }
+        if (! array_key_exists($id, self::$userCache)) {
+            self::$userCache[$id] = \App\User::query()->find($id);
+        }
+
+        return self::$userCache[$id];
+    }
+
+    protected function cachedLoanFile(int $id): ?LoanFile
+    {
+        if (! $id) {
+            return null;
+        }
+        if (! array_key_exists($id, self::$fileCache)) {
+            self::$fileCache[$id] = LoanFile::query()->find($id) ?: null;
+        }
+
+        return self::$fileCache[$id];
+    }
 
     public static function hasThreadColumn($column): bool
     {
-        return Schema::connection('mysql_loan')->hasColumn('loan_chat_threads', $column);
+        return self::columnOn('loan_chat_threads', $column);
     }
 
     public static function hasMessageColumn($column): bool
     {
-        return Schema::connection('mysql_loan')->hasColumn('loan_chat_messages', $column);
+        return self::columnOn('loan_chat_messages', $column);
     }
 
     public static function hasParticipantColumn($column): bool
     {
-        return Schema::connection('mysql_loan')->hasColumn('loan_chat_participants', $column);
+        return self::columnOn('loan_chat_participants', $column);
     }
 
     public function listCustomerThreads(?int $customerId = null): Collection
@@ -56,7 +103,7 @@ class LoanChatService
         return $this->listCustomerThreads($customerId);
     }
 
-    public function listStaffThreads(?int $staffId = null, bool $admin = false, array $filters = []): Collection
+    public function listStaffThreads(?int $staffId = null, bool $admin = false, array $filters = [], ?int $limit = null): Collection
     {
         $staffId = $staffId ?? (int) (auth()->id() ?? 0);
 
@@ -71,15 +118,20 @@ class LoanChatService
         }
         $this->applyInboxFilters($q, $filters, $staffId, $admin);
 
-        $q->with(['customer', 'loan']);
+        $q->with(['customer', 'loan'])
+            ->withCount('messages');
         $this->applyThreadListOrdering($q);
+
+        if ($limit !== null && $limit > 0) {
+            $q->limit($limit);
+        }
 
         return $q->get();
     }
 
     public function getStaffInbox(?int $staffId = null, bool $admin = false, array $filters = []): Collection
     {
-        return $this->listStaffThreads($staffId, $admin, $filters);
+        return $this->listStaffThreads($staffId, $admin, $filters, 200);
     }
 
     public function createThread(array $data): LoanChatThread
@@ -619,7 +671,7 @@ class LoanChatService
         if ($viewerType !== 'customer') {
             $customer = $this->threadCustomer($thread);
             if ($customer && ! empty($customer->customer_photo_file_id)) {
-                $file = LoanFile::query()->find($customer->customer_photo_file_id);
+                $file = $this->cachedLoanFile((int) $customer->customer_photo_file_id);
                 return $file ? (string) ($this->safeFileUrl($file) ?? '') : '';
             }
         }
@@ -866,7 +918,7 @@ class LoanChatService
                 }
             });
         }
-        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+        if (self::columnOn('loan_customers', 'business_location_id')) {
             $locationIds = array_values(array_filter(array_map('intval', (array) ($filters['location_ids'] ?? []))));
             if (! empty($filters['location_id'])) {
                 $locationIds[] = (int) $filters['location_id'];
@@ -938,7 +990,7 @@ class LoanChatService
     protected function assignedStaffUser(LoanChatThread $thread)
     {
         $id = (int) ($thread->assigned_staff_id ?? $thread->staff_id ?? 0);
-        return $id && class_exists(\App\User::class) ? \App\User::query()->find($id) : null;
+        return $this->cachedUser($id);
     }
 
     protected function formatUserName($user): string
@@ -955,7 +1007,7 @@ class LoanChatService
         }
 
         if (class_exists(\App\User::class)) {
-            $user = \App\User::query()->find($senderId);
+            $user = $this->cachedUser((int) $senderId);
             if ($user) {
                 return $this->formatUserName($user);
             }
@@ -1140,7 +1192,7 @@ class LoanChatService
         if (array_key_exists($locationId, $this->locationNameCache)) {
             return $this->locationNameCache[$locationId];
         }
-        if (! Schema::connection('mysql_loan')->hasTable('loan_business_locations')) {
+        if (! self::tableOn('loan_business_locations')) {
             return $this->locationNameCache[$locationId] = '';
         }
 
@@ -1152,9 +1204,7 @@ class LoanChatService
 
     protected function staffUser(LoanChatThread $thread)
     {
-        return $thread->staff_id && class_exists(\App\User::class)
-            ? \App\User::query()->find($thread->staff_id)
-            : null;
+        return $this->cachedUser((int) $thread->staff_id);
     }
 
     protected function timestampWithin($value, int $seconds): bool

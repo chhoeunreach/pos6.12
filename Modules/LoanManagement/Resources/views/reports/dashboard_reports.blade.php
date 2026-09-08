@@ -49,7 +49,7 @@
     $duplicateReason = function ($row, $loanCounts, $customerCounts) use ($normalizeDuplicateKey, $t) {
         $reasons = [];
         if (($loanCounts[$normalizeDuplicateKey($row->loan_number ?? '')] ?? 0) > 1) {
-            $reasons[] = $t('Duplicate Loan #', 'លេខកម្ចីស្ទួន');
+            $reasons[] = $t('Duplicate Installment #', 'លេខកម្ចីស្ទួន');
         }
         if (($customerCounts[$normalizeDuplicateKey($row->customer_name ?? '')] ?? 0) > 1) {
             $reasons[] = $t('Duplicate Customer', 'អតិថិជនស្ទួន');
@@ -57,13 +57,11 @@
 
         return implode(' / ', $reasons);
     };
-    $cards = $payload['cards'] ?? [];
     $recentPaymentLoanCounts = $duplicateCounts($payload['recentPayments'] ?? [], 'loan_number');
     $recentPaymentCustomerCounts = $duplicateCounts($payload['recentPayments'] ?? [], 'customer_name');
     $recentLoanLoanCounts = $duplicateCounts($payload['recentLoans'] ?? [], 'loan_number');
     $recentLoanCustomerCounts = $duplicateCounts($payload['recentLoans'] ?? [], 'customer_name');
     $period = $filters['period'] ?? 'daily';
-    $periodLabel = $payload['collectionPeriodLabel'] ?? $t('Date', 'ថ្ងៃ');
     $periodTitle = ['daily' => $t('Daily', 'ប្រចាំថ្ងៃ'), 'monthly' => $t('Monthly', 'ប្រចាំខែ'), 'yearly' => $t('Yearly', 'ប្រចាំឆ្នាំ')][$period] ?? $t('Daily', 'ប្រចាំថ្ងៃ');
     $recentActivityFilters = $recentActivityFilters ?? [
         'date_from' => now()->toDateString(),
@@ -77,7 +75,7 @@
         'location_id' => $recentActivityFilters['location_id'],
         'search' => $recentActivityFilters['search'],
     ]);
-    $recentActivityDateRange = \Carbon\Carbon::parse($recentActivityFilters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($recentActivityFilters['date_to'])->format('d-M-Y');
+    $recentActivityDateRange = \Carbon\Carbon::parse($recentActivityFilters['date_from'])->format('m-d-Y').' - '.\Carbon\Carbon::parse($recentActivityFilters['date_to'])->format('m-d-Y');
     $recentActivityDateFrom = \Carbon\Carbon::parse($recentActivityFilters['date_from']);
     $recentActivityDateTo = \Carbon\Carbon::parse($recentActivityFilters['date_to']);
     $khmerMonths = [
@@ -101,13 +99,15 @@
 
         return $toKhmerNumber($date->format('j')).' ខែ'.($khmerMonths[(int) $date->format('n')] ?? $date->format('m')).' ឆ្នាំ'.$toKhmerNumber($date->format('Y'));
     };
-    $recentActivityLocationName = trim((string) ($locations[$recentActivityFilters['location_id'] ?? null] ?? Session::get('business.name', 'កម្ពុជាក្រោម')));
-    $recentActivityLocationName = $recentActivityLocationName !== '' ? $recentActivityLocationName : 'កម្ពុជាក្រោម';
-    $recentActivityReportPrefix = 'គ្នាយើង-'.$recentActivityLocationName.' ';
+    $reportBusinessName = trim((string) (\Modules\LoanManagement\Services\BusinessSettingsService::businessName() ?: Session::get('business.name', '')));
+    $reportBusinessBrand = $reportBusinessName !== '' ? $reportBusinessName : 'គ្នាយើង';
+    $selectedLocationName = ! empty($recentActivityFilters['location_id']) && ! empty($locations[$recentActivityFilters['location_id']])
+        ? trim((string) $locations[$recentActivityFilters['location_id']])
+        : '';
+    $recentActivityReportPrefix = $reportBusinessBrand.($selectedLocationName !== '' ? '-'.$selectedLocationName : '').' ';
     $recentActivityReportTitle = $recentActivityDateFrom->isSameDay($recentActivityDateTo)
         ? $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom)
         : $recentActivityReportPrefix.'របាយការណ៍រំលស់ថ្ងៃទី'.$khmerReportDate($recentActivityDateFrom).' ដល់ថ្ងៃទី'.$khmerReportDate($recentActivityDateTo);
-    $dashboardDateRange = \Carbon\Carbon::parse($filters['date_from'])->format('d-M-Y').' ~ '.\Carbon\Carbon::parse($filters['date_to'])->format('d-M-Y');
     $recentPaymentExportRows = collect($payload['recentPayments'] ?? [])->map(function ($payment) {
         $amount = (float) ($payment->amount ?? 0);
         $principal = (float) ($payment->principal_amount ?? 0);
@@ -158,74 +158,247 @@
 @parent
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Moul&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Moul&family=Inter:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
 <style>
-    .lm-report-tabs {
+    /* Modern Compact Dashboard Reports Styles */
+    .lm-reports-shell {
+        padding: 2px 0 16px;
+        font-family: inherit;
+    }
+    /* Period Switcher Pills */
+    .lm-period-pill-group {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px;
+        background: #f1f5f9;
         border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-        margin-bottom: 12px;
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px;
     }
-    .lm-report-tab {
+    .lm-period-pill {
         display: inline-flex;
         align-items: center;
-        min-height: 36px;
-        padding: 8px 15px;
-        border-radius: 8px;
-        color: #475569;
-        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11.5px;
         font-weight: 700;
+        color: #475569;
         text-decoration: none;
+        transition: all 0.15s ease;
     }
-    .lm-report-tab:hover,
-    .lm-report-tab:focus {
+    .lm-period-pill:hover {
         color: #0f172a;
         text-decoration: none;
     }
-    .lm-report-tab.is-active {
-        background: #0f172a;
-        color: #fff;
-        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+    .lm-period-pill.is-active {
+        background: #ffffff;
+        color: #2563eb;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+        text-decoration: none;
     }
-    .lm-dashboard-report-filter .box-body {
-        padding-bottom: 8px;
+
+    /* --- STANDARD FILTER PANEL (matching All Installments) --- */
+    .lm-loan-list-filter {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        margin-bottom: 14px;
+        transition: all 0.2s ease;
     }
-    .lm-dashboard-report-filter .form-group {
-        margin-bottom: 10px;
-    }
-    .lm-dashboard-report-filter .filter-actions {
+    .lm-loan-list-filter-toggle {
         display: flex;
-        gap: 6px;
-        padding-top: 24px;
-    }
-    .lm-recent-filter-card .filter-actions {
-        display: flex;
-        gap: 6px;
-        padding-top: 24px;
-    }
-    .lm-recent-filter-card .filter-actions.pull-right {
-        justify-content: flex-end;
-        width: 100%;
-    }
-    .lm-recent-filter-card .box-header .filter-actions {
         align-items: center;
-        padding-top: 0;
+        justify-content: space-between;
+        padding: 9px 14px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        cursor: default;
+        user-select: none;
     }
+    .lm-loan-list-filter-toggle-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 800;
+        color: #1e293b;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .lm-loan-list-filter-toggle-label::before {
+        content: "\f0b0";
+        font-family: FontAwesome;
+        color: #2563eb;
+        font-size: 13px;
+    }
+    .lm-loan-list-filter-toggle-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .lm-loan-list-reset {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #64748b;
+        text-decoration: none;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .lm-loan-list-reset:hover {
+        color: #ef4444;
+        background: #fef2f2;
+        border-color: #fca5a5;
+        text-decoration: none;
+    }
+    .lm-loan-list-filter-body {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 10px 14px;
+        align-items: flex-end;
+    }
+    .lm-loan-list-field.date-range-field {
+        width: 250px !important;
+        max-width: 250px !important;
+        flex: 0 0 250px !important;
+    }
+    .lm-loan-list-field.location-field {
+        width: 210px !important;
+        max-width: 210px !important;
+        flex: 0 0 210px !important;
+    }
+    .lm-loan-list-field.period-field {
+        width: 140px !important;
+        max-width: 140px !important;
+        flex: 0 0 140px !important;
+    }
+    .lm-loan-list-field.search-field {
+        width: 230px !important;
+        max-width: 230px !important;
+        flex: 1 1 230px !important;
+    }
+    .lm-loan-list-field.lm-loan-list-field-actions {
+        width: 95px !important;
+        max-width: 95px !important;
+        flex: 0 0 95px !important;
+    }
+    @media (max-width: 768px) {
+        .lm-loan-list-field.date-range-field,
+        .lm-loan-list-field.location-field,
+        .lm-loan-list-field.period-field,
+        .lm-loan-list-field.search-field,
+        .lm-loan-list-field.lm-loan-list-field-actions {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+    }
+    .lm-loan-list-field label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 4px;
+        display: block;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .lm-loan-list-field .form-control,
+    .lm-loan-list-field .select2-container--default .select2-selection--single {
+        height: 36px !important;
+        border-radius: 6px !important;
+        border: 1px solid #cbd5e1 !important;
+        font-size: 12px !important;
+        padding: 5px 10px !important;
+        box-shadow: none !important;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        line-height: 24px !important;
+        background: #fff;
+    }
+    .lm-loan-list-field .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 24px !important;
+        padding-left: 0 !important;
+        color: #0f172a !important;
+    }
+    .lm-loan-list-field .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 34px !important;
+    }
+    .lm-loan-list-field .form-control:focus,
+    .lm-loan-list-field .select2-container--default.select2-container--focus .select2-selection--single {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+        outline: none !important;
+    }
+    .lm-loan-list-field-actions .btn {
+        height: 36px !important;
+        border-radius: 6px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+    .daterangepicker {
+        z-index: 999999 !important;
+    }
+    .lm-filter-actions-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .lm-btn-filter {
+        height: 35px;
+        padding: 0 12px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 11.5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .lm-btn-filter-excel {
+        background: #059669;
+        color: #ffffff;
+    }
+    .lm-btn-filter-excel:hover {
+        background: #047857;
+        color: #ffffff;
+    }
+    .lm-btn-filter-print {
+        background: #f1f5f9;
+        color: #334155;
+        border-color: #cbd5e1;
+    }
+    .lm-btn-filter-print:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
     .lm-recent-panel-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
+        gap: 10px;
     }
     .lm-recent-table-wrap {
-        padding: 8px;
+        padding: 8px 10px;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         background: #fff;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
     }
     .lm-recent-table-wrap .dataTables_wrapper,
     .lm-recent-table-wrap .dataTables_scroll,
@@ -234,11 +407,13 @@
         width: 100% !important;
     }
     .lm-recent-panel-heading {
-        margin: 0 0 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e5e7eb;
+        margin: 0 0 12px;
+        padding: 8px 12px;
+        background: #f8fafc;
+        border-radius: 8px;
+        border-left: 4px solid #2563eb;
         color: #1f2937;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 800;
     }
     .lm-report-table {
@@ -251,12 +426,12 @@
     .lm-report-table > thead > tr > th,
     .lm-report-table > tbody > tr > td,
     .lm-report-table > tfoot > tr > th {
-        padding: 5px 6px !important;
-        line-height: 1.25;
+        padding: 7px 8px !important;
+        line-height: 1.3;
     }
     .lm-report-table > thead > tr > th {
-        background: #eef6fc;
-        color: #111827;
+        background: #f1f5f9;
+        color: #0f172a;
         border-color: #cbd5e1 !important;
         font-size: 11px;
         font-weight: 800;
@@ -273,15 +448,44 @@
     }
     .lm-report-table > tbody > tr.lm-duplicate-row > td,
     .lm-report-table > tbody > tr.lm-duplicate-row:nth-child(even) > td {
-        background: #fff7ed;
-        border-top-color: #fdba74 !important;
-        border-bottom-color: #fdba74 !important;
+        background: #fffbeb !important;
+        border-top-color: #fde68a !important;
+        border-bottom-color: #fde68a !important;
     }
     .lm-report-table > tbody > tr.lm-duplicate-row > td:first-child {
-        border-left: 4px solid #f97316 !important;
+        border-left: 4px solid #f59e0b !important;
+    }
+    .lm-duplicate-customer-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .lm-duplicate-customer-name {
+        font-weight: 700;
+        color: #92400e;
+    }
+    .lm-duplicate-customer-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #fef3c7;
+        color: #b45309;
+        border: 1px solid #fde68a;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(245, 158, 11, 0.15);
+    }
+    .lm-duplicate-customer-badge i {
+        color: #d97706;
+        font-size: 9px;
     }
     .lm-report-table > tfoot > tr > th {
-        background: #eaf4ff;
+        background: #f8fafc;
         font-weight: 800;
     }
     .lm-report-table .text-right {
@@ -369,7 +573,7 @@
         text-decoration: underline;
     }
     .lm-payment-method-summary th {
-        background: #dbeafe;
+        background: #f1f5f9;
         color: #0f172a;
         text-align: center;
         vertical-align: middle !important;
@@ -378,14 +582,14 @@
         vertical-align: middle !important;
     }
     .lm-payment-method-summary tfoot th {
-        background: #eff6ff;
+        background: #f8fafc;
     }
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin: 0 0 6px;
+        margin: 0 0 8px;
     }
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child:before,
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child:after {
@@ -393,26 +597,27 @@
     }
     .lm-recent-table-wrap .dataTables_length select,
     .lm-recent-table-wrap .dataTables_filter input {
-        height: 28px;
+        height: 30px;
         border: 1px solid #cbd5e1;
-        border-radius: 4px;
+        border-radius: 6px;
         box-shadow: none;
-        font-size: 11px;
+        font-size: 12px;
     }
     .lm-recent-table-wrap .dataTables_filter input {
-        min-width: 135px;
+        min-width: 140px;
     }
     .lm-recent-table-wrap .dt-buttons {
         display: inline-flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 3px;
+        gap: 4px;
     }
     .lm-recent-table-wrap .dt-buttons .dt-button,
     .lm-recent-table-wrap .dt-buttons a.dt-button,
     .lm-recent-table-wrap .dt-buttons button.dt-button {
-        padding: 3px 7px !important;
+        padding: 4px 8px !important;
         font-size: 11px !important;
+        border-radius: 6px !important;
         line-height: 1.3 !important;
     }
     .lm-recent-table-wrap .dataTables_wrapper .row:first-child > [class*="col-sm-"] {
@@ -425,242 +630,33 @@
         flex: 1;
         text-align: center;
     }
-    .lm-panel-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        justify-content: flex-end;
-    }
-    .lm-panel-action-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        min-height: 28px;
-        border-radius: 6px;
-        font-weight: 700;
-    }
     .lm-recent-report-title {
-        margin: 0 0 12px;
-        padding: 12px 16px;
-        border-top: 1px solid #94a3b8;
-        border-bottom: 2px solid #111827;
-        background: #dbeafe;
-        color: #0000ff;
+        margin: 0 0 16px;
+        padding: 14px 18px;
+        border-radius: 10px;
+        background: #eff6ff;
+        border-left: 5px solid #2563eb;
+        color: #1e40af;
         text-align: center;
         font-family: "Khmer OS Muol Light", "Khmer OS Muol", "Khmer OS Moul", "Moul", "Noto Sans Khmer", "Kantumruy Pro", serif;
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 400;
-        line-height: 1.35;
-    }
-    .lm-recent-filter-card {
-        margin-bottom: 15px;
-        border-top-color: #3c8dbc;
-        box-shadow: none;
-    }
-    .lm-recent-filter-card > .box-header {
-        border-bottom: 1px solid #f4f4f4;
-        cursor: pointer;
-    }
-    .lm-recent-filter-card > .box-header .box-title a {
-        color: #444;
-        text-decoration: none;
-    }
-    .lm-recent-filter-card > .box-header .box-title .fa {
-        margin-right: 5px;
-    }
-    .lm-recent-filter-card > .box-body {
-        padding: 15px;
-    }
-    .lm-report-filter-box .form-group,
-    .lm-recent-filter-card .form-group {
-        margin-bottom: 18px;
-    }
-    .lm-recent-filter-card label {
-        color: #111827;
-        font-size: 13px;
-        font-weight: 700;
-    }
-    .lm-recent-filter-card .form-control {
-        height: 36px;
-        border-color: #d1d9e6;
-        border-radius: 0;
-        box-shadow: none;
-    }
-    .lm-report-print-title {
-        display: none;
+        line-height: 1.4;
     }
     @media print {
         @page {
             size: A4 landscape;
-            margin: 10mm;
-        }
-        body {
-            background: #fff !important;
-            color: #111827 !important;
+            margin: 8mm;
         }
         .lm-sidebar,
         .lm-header,
         .lm-breadcrumb-wrap,
-        .lm-report-tabs,
-        .lm-report-filter-box,
-        .lm-recent-filter-card,
-        .box-tools,
         .main-footer,
         .no-print {
             display: none !important;
         }
         .collapsed-box .box-body {
             display: block !important;
-        }
-        body.lm-print-recent-only .content-header,
-        body.lm-print-recent-only .content > * {
-            display: none !important;
-        }
-        body.lm-print-recent-only .content > .lm-recent-activity-row {
-            display: block !important;
-        }
-        body.lm-print-recent-only .lm-recent-activity-row .col-md-12,
-        body.lm-print-recent-only .lm-recent-activity-panel {
-            display: block !important;
-            width: 100% !important;
-            border: 0 !important;
-            page-break-inside: auto !important;
-            break-inside: auto !important;
-        }
-        body.lm-print-recent-only .lm-recent-activity-panel,
-        body.lm-print-recent-only .lm-recent-activity-panel .box-body,
-        body.lm-print-recent-only .lm-recent-activity-panel .table-responsive {
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: visible !important;
-            page-break-inside: auto !important;
-            break-inside: auto !important;
-        }
-        body.lm-print-recent-only .lm-recent-report-title {
-            margin: 0 0 4mm !important;
-            padding: 5mm 4mm !important;
-            font-size: 20px !important;
-            page-break-after: avoid !important;
-            break-after: avoid !important;
-        }
-        body.lm-print-recent-only .lm-payment-method-summary {
-            margin-bottom: 5mm !important;
-            page-break-after: auto !important;
-            break-after: auto !important;
-        }
-        body.lm-print-recent-only .lm-recent-panel-grid {
-            display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 5mm !important;
-            align-items: start !important;
-            page-break-before: auto !important;
-            break-before: auto !important;
-        }
-        body.lm-print-recent-only .lm-recent-panel-grid > .table-responsive {
-            display: block !important;
-            width: 100% !important;
-            overflow: visible !important;
-            page-break-inside: auto !important;
-            break-inside: auto !important;
-        }
-        body.lm-print-recent-only .lm-recent-panel-grid .table {
-            width: 100% !important;
-            table-layout: fixed;
-        }
-        body.lm-print-recent-only .lm-recent-panel-grid th,
-        body.lm-print-recent-only .lm-recent-panel-grid td {
-            white-space: normal !important;
-            word-break: break-word;
-        }
-        body.lm-print-recent-only .dataTables_wrapper .row:first-child,
-        body.lm-print-recent-only .dataTables_info,
-        body.lm-print-recent-only .dataTables_paginate {
-            display: none !important;
-        }
-        body.lm-print-recent-only .lm-recent-table-wrap {
-            padding: 0 !important;
-            border: 0 !important;
-            border-radius: 0 !important;
-            background: #fff !important;
-        }
-        body.lm-print-recent-only .lm-recent-panel-heading {
-            margin: 0 0 2mm !important;
-            padding: 2mm 3mm !important;
-            border: 1px solid #9ca3af !important;
-            background: #e5f0fb !important;
-            color: #111827 !important;
-            text-align: center;
-            font-size: 12px !important;
-            font-weight: 800 !important;
-        }
-        body.lm-print-recent-only .lm-report-table {
-            border-collapse: collapse !important;
-            font-size: 9px !important;
-        }
-        body.lm-print-recent-only .lm-report-table > thead > tr > th {
-            background: #dbeafe !important;
-            color: #111827 !important;
-            font-size: 9px !important;
-            font-weight: 800 !important;
-            text-align: center;
-        }
-        body.lm-print-recent-only .lm-report-table > tbody > tr > td,
-        body.lm-print-recent-only .lm-report-table > tfoot > tr > th {
-            border: 1px solid #9ca3af !important;
-        }
-        body.lm-print-recent-only .lm-report-table > tbody > tr:nth-child(even) > td {
-            background: #f8fafc !important;
-        }
-        body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row > td,
-        body.lm-print-recent-only .lm-report-table > tbody > tr.lm-duplicate-row:nth-child(even) > td {
-            background: #fff2cc !important;
-        }
-        body.lm-print-recent-only .lm-loan-ref-line small {
-            display: none !important;
-        }
-        .lm-main,
-        .lm-content,
-        .lm-workspace,
-        .content,
-        .container-fluid {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
-        }
-        .content-header {
-            padding: 0 0 8px !important;
-        }
-        .lm-report-print-title {
-            display: block;
-            margin: 0 0 10px;
-            text-align: center;
-        }
-        .lm-report-print-title h2 {
-            margin: 0 0 4px;
-            font-size: 18px;
-            font-weight: 700;
-        }
-        .lm-report-print-title p {
-            margin: 0;
-            font-size: 11px;
-            color: #4b5563;
-        }
-        .info-box,
-        .box {
-            border: 1px solid #d1d5db !important;
-            box-shadow: none !important;
-            page-break-inside: avoid;
-        }
-        .box-header,
-        .box-body {
-            padding: 8px !important;
-        }
-        .table > thead > tr > th,
-        .table > tbody > tr > td {
-            padding: 4px 5px !important;
-            font-size: 10px !important;
-            border-color: #d1d5db !important;
         }
         a[href]:after {
             content: "" !important;
@@ -675,155 +671,67 @@
 @endsection
 
 @section('content_body')
-<section class="content">
-    <div class="box box-primary lm-dashboard-report-filter lm-recent-filter-card lm-report-no-print">
-        <div class="box-header with-border">
-            <h3 class="box-title">
-                <a data-toggle="collapse" href="#loanDashboardReportFilterCollapse" aria-expanded="false">
-                    <i class="fa fa-filter" aria-hidden="true"></i>{{ $t('Filters', 'តម្រង') }}
-                </a>
-            </h3>
-        </div>
-        <div class="box-body panel-collapse collapse" id="loanDashboardReportFilterCollapse">
-            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanDashboardReportFilterForm">
-                <input type="hidden" name="recent_location_id" value="{{ $recentActivityFilters['location_id'] ?? '' }}">
-                <input type="hidden" name="recent_search" value="{{ $recentActivityFilters['search'] ?? '' }}">
-                <input type="hidden" name="recent_date_from" value="{{ $recentActivityFilters['date_from'] ?? '' }}">
-                <input type="hidden" name="recent_date_to" value="{{ $recentActivityFilters['date_to'] ?? '' }}">
-                <input type="hidden" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
-                <input type="hidden" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
-                <input type="hidden" name="period" value="{{ $filters['period'] ?? 'daily' }}">
-                <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
-                <div class="row">
-                    <div class="col-md-3 col-sm-6">
-                        <div class="form-group">
-                            <label>{{ $t('Location', 'ទីតាំង') }}</label>
-                            <select name="location_id" class="form-control select2" style="width:100%">
-                                <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
-                                @foreach($locations as $id => $name)
-                                    <option value="{{ $id }}" {{ (string) ($filters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6">
-                        <div class="form-group">
-                            <label>{{ $t('Date Range', 'ចន្លោះថ្ងៃ') }}</label>
-                            <input type="text" name="date_range" id="loanDashboardReportDateRange" class="form-control" placeholder="{{ $t('Select a date range', 'ជ្រើសរើសចន្លោះថ្ងៃ') }}" value="{{ $dashboardDateRange }}" readonly>
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="lm-report-print-title">
-        <h2>{{ $periodTitle }} {{ $t('Loan and Collection Report', 'របាយការណ៍កម្ចី និងការប្រមូលប្រាក់') }}</h2>
-        <p>{{ \Carbon\Carbon::parse($filters['date_from'])->format('d-m-Y') }} - {{ \Carbon\Carbon::parse($filters['date_to'])->format('d-m-Y') }}</p>
-    </div>
-
-    <div class="row">
-        <div class="col-md-3 col-sm-6 col-xs-12">
-            <div class="info-box">
-                <span class="info-box-icon bg-aqua"><i class="fa fa-file-text-o"></i></span>
-                <div class="info-box-content">
-                    <span class="info-box-text">{{ $t('Loans', 'កម្ចី') }}</span>
-                    <span class="info-box-number">{{ $number($cards['loan_count'] ?? 0) }}</span>
-                    <small>{{ $money($cards['principal_total'] ?? 0) }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-sm-6 col-xs-12">
-            <div class="info-box">
-                <span class="info-box-icon bg-green"><i class="fa fa-money"></i></span>
-                <div class="info-box-content">
-                    <span class="info-box-text">{{ $t('Collected Payments', 'ប្រាក់ប្រមូលបាន') }}</span>
-                    <span class="info-box-number">{{ $money($cards['collection_total'] ?? 0) }}</span>
-                    <small>{{ $number($cards['collection_count'] ?? 0) }} {{ $t('payments', 'ការបង់ប្រាក់') }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-sm-6 col-xs-12">
-            <div class="info-box">
-                <span class="info-box-icon bg-blue"><i class="fa fa-bank"></i></span>
-                <div class="info-box-content">
-                    <span class="info-box-text">{{ $t('Loan/Deposit Payments', 'ប្រាក់កក់កម្ចី') }}</span>
-                    <span class="info-box-number">{{ $money($cards['deposit_total'] ?? 0) }}</span>
-                    <small>{{ $number($cards['deposit_count'] ?? 0) }} {{ $t('payments', 'ការបង់ប្រាក់') }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-sm-6 col-xs-12">
-            <div class="info-box">
-                <span class="info-box-icon bg-yellow"><i class="fa fa-balance-scale"></i></span>
-                <div class="info-box-content">
-                    <span class="info-box-text">{{ $t('Outstanding Balance', 'សមតុល្យនៅសល់') }}</span>
-                    <span class="info-box-number">{{ $money($cards['balance_total'] ?? 0) }}</span>
-                    <small>{{ $t('Loan total', 'សរុបកម្ចី') }} {{ $money($cards['loan_total'] ?? 0) }}</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
+<section class="content lm-reports-shell">
+    <!-- Recent Activity & Detailed Tables Section -->
     <div class="row lm-recent-activity-row">
-        <div class="col-md-12 lm-report-no-print">
-            <div class="box box-solid lm-recent-activity-panel">
-                <div class="box-body">
-                    <div class="box box-primary lm-recent-filter-card">
-                        <div class="box-header with-border">
-                            <h3 class="box-title">
-                                <a data-toggle="collapse" href="#loanRecentActivityFilterCollapse" aria-expanded="false">
-                                    <i class="fa fa-filter" aria-hidden="true"></i>{{ $t('Filters', 'តម្រង') }}
+        <div class="col-md-12">
+            <div class="box box-solid lm-recent-activity-panel" style="border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 4px 18px -2px rgba(15,23,42,0.05);overflow:hidden;">
+                <div class="box-body" style="padding:18px;">
+                    <!-- Standard Filter for Detailed Report -->
+                    <div class="lm-loan-list-filter" id="loanFilterPanel">
+                        <div class="lm-loan-list-filter-toggle">
+                            <span class="lm-loan-list-filter-toggle-label">{{ $t('Filters', 'តម្រង') }}</span>
+                            <span class="lm-loan-list-filter-toggle-actions">
+                                <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-loan-list-reset">
+                                    <i class="fa fa-refresh"></i> {{ $t('Reset', 'កំណត់ឡើងវិញ') }}
                                 </a>
-                            </h3>
-                            <div class="box-tools pull-right filter-actions">
-                                <button type="button" class="btn btn-primary btn-sm" onclick="window.loanExportRecentActivityExcel()">
+                                <button type="button" class="btn btn-success btn-xs" onclick="window.loanExportRecentActivityExcel()">
                                     <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
                                 </button>
-                                <button type="button" class="btn btn-success btn-sm" onclick="window.loanPrintRecentActivity()">
+                                <button type="button" class="btn btn-default btn-xs" onclick="window.loanPrintRecentActivity()">
                                     <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
                                 </button>
-                            </div>
+                            </span>
                         </div>
-                        <div class="box-body panel-collapse collapse" id="loanRecentActivityFilterCollapse">
-                            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanRecentActivityFilterForm">
+                        <div class="lm-loan-list-filter-body" id="loanFilterBody">
+                            <form method="GET" action="{{ route('loan-management.reports.dashboard') }}" id="loanRecentActivityFilterForm" style="display:contents;">
                                 <input type="hidden" name="period" value="{{ $period }}">
                                 <input type="hidden" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
                                 <input type="hidden" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
                                 <input type="hidden" name="location_id" value="{{ $filters['location_id'] ?? '' }}">
                                 <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label>{{ $t('Location', 'ទីតាំង') }}</label>
-                                            <select name="recent_location_id" class="form-control select2" style="width:100%">
-                                                <option value="">{{ $t('All', 'ទាំងអស់') }}</option>
-                                                @foreach($locations as $id => $name)
-                                                    <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label>{{ $t('Date Range', 'ចន្លោះថ្ងៃ') }}</label>
-                                            <input type="text" name="recent_date_range" id="loanRecentActivityDateRange" class="form-control" placeholder="{{ $t('Select a date range', 'ជ្រើសរើសចន្លោះថ្ងៃ') }}" value="{{ $recentActivityDateRange }}" readonly>
-                                        </div>
-                                    </div>
+                                <input type="hidden" id="recent_date_from" name="recent_date_from" value="{{ $recentActivityFilters['date_from'] ?? '' }}">
+                                <input type="hidden" id="recent_date_to" name="recent_date_to" value="{{ $recentActivityFilters['date_to'] ?? '' }}">
+
+                                <div class="lm-loan-list-field date-range-field">
+                                    <label for="loanRecentActivityDateRange">{{ $t('Date Range', 'ចន្លោះកាលបរិច្ឆេទ') }}</label>
+                                    <input type="text" name="recent_date_range" id="loanRecentActivityDateRange" placeholder="{{ $t('Select date range', 'ជ្រើសរើសចន្លោះកាលបរិច្ឆេទ') }}" class="form-control" autocomplete="off" value="{{ $recentActivityDateRange }}">
+                                </div>
+                                <div class="lm-loan-list-field location-field">
+                                    <label for="recent_location_id">{{ $t('Location', 'សាខា') }}</label>
+                                    <select name="recent_location_id" id="recent_location_id" class="form-control select2" style="width:100%">
+                                        <option value="">{{ $t('All Locations', 'សាខាទាំងអស់') }}</option>
+                                        @foreach($locations as $id => $name)
+                                            <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="lm-loan-list-field lm-loan-list-field-actions">
+                                    <button type="submit" class="btn btn-primary btn-block">
+                                        <i class="fa fa-filter"></i> {{ $t('Apply', 'អនុវត្ត') }}
+                                    </button>
                                 </div>
                             </form>
                         </div>
                     </div>
 
-                    <h2 class="lm-recent-report-title">{{ $recentActivityReportTitle }}</h2>
-
-                    <div class="table-responsive">
-                        <table class="table table-bordered lm-payment-method-summary lm-report-table">
+                    <div class="table-responsive lm-payment-method-summary" style="margin-bottom:20px;">
+                        <table class="table table-bordered table-striped lm-report-table">
                             <thead>
                                 <tr>
-                                    <th>{{ $t('Type', 'ប្រភេទ') }}</th>
-                                    <th class="text-right">{{ $t('Count', 'ចំនួន') }}</th>
-                                    <th>{{ $t('Cash', 'លុយសុទ្ធ') }}</th>
+                                    <th>{{ $t('Method', 'វិធីសាស្ត្រទូទាត់') }}</th>
+                                    <th>{{ $t('Count', 'ចំនួន') }}</th>
+                                    <th>CASH</th>
                                     <th>ABA</th>
                                     <th>ACLEDA</th>
                                     <th>WING</th>
@@ -878,7 +786,7 @@
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
-                                        <th class="lm-col-payment-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th class="lm-col-payment-loan">{{ $t('Installment #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
                                         <th class="text-right lm-col-payment-amount">{{ $t('Amount', 'ចំនួនប្រាក់') }}</th>
@@ -889,6 +797,9 @@
                                     @foreach($payload['recentPayments'] as $paymentIndex => $payment)
                                         @php($paymentDuplicateReason = $duplicateReason($payment, $recentPaymentLoanCounts, $recentPaymentCustomerCounts))
                                         @php($paymentDocUrl = $payment->payment_doc_url ?? null)
+                                        @php($custKey = $normalizeDuplicateKey($payment->customer_name ?? ''))
+                                        @php($isCustDuplicate = $custKey !== '' && ($recentPaymentCustomerCounts[$custKey] ?? 0) > 1)
+                                        @php($custDupCount = $recentPaymentCustomerCounts[$custKey] ?? 0)
                                         <tr class="{{ $paymentDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $paymentDuplicateReason }}">
                                             <td class="lm-col-no">{{ $paymentIndex + 1 }}</td>
                                             <td class="lm-col-date">{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('d-m-y') : '-' }}</td>
@@ -900,7 +811,18 @@
                                                        data-title="{{ $t('Payment Detail', 'ព័ត៌មានលម្អិតការបង់ប្រាក់') }}">{{ $payment->loan_number ?? '-' }}</a>
                                                 </span>
                                             </td>
-                                            <td>{{ $payment->customer_name ?: '-' }}</td>
+                                            <td>
+                                                @if($isCustDuplicate)
+                                                    <div class="lm-duplicate-customer-wrap">
+                                                        <span class="lm-duplicate-customer-name">{{ $payment->customer_name ?: '-' }}</span>
+                                                        <span class="lm-duplicate-customer-badge" title="{{ $t('Duplicate customer in collected payments: :count records', 'អតិថិជនស្ទួនក្នុងការបង់ប្រាក់៖ :count កំណត់ត្រា', ['count' => $custDupCount]) }}">
+                                                            <i class="fa fa-clone"></i> {{ $t('Duplicate', 'ស្ទួន') }} ({{ $custDupCount }}x)
+                                                        </span>
+                                                    </div>
+                                                @else
+                                                    {{ $payment->customer_name ?: '-' }}
+                                                @endif
+                                            </td>
                                             <td class="lm-col-method" title="{{ $payment->payment_method ?: '-' }}">
                                                 <a href="{{ $paymentDocUrl ?: route('loan-management.payments.show', $payment->id) }}"
                                                    class="lm-detail-link js-loan-recent-detail-modal"
@@ -916,13 +838,13 @@
                         </div>
 
                         <div class="table-responsive lm-recent-table-wrap">
-                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Loans', 'កម្ចីថ្មីៗ') }}</h4>
+                            <h4 class="lm-recent-panel-heading">{{ $t('Recent Installments', 'កម្ចីថ្មីៗ') }}</h4>
                             <table class="table table-bordered table-hover loan-recent-activity-datatable lm-report-table" id="loan_recent_loans_table">
                                 <thead>
                                     <tr>
                                         <th class="lm-col-no">{{ $t('No', 'ល.រ') }}</th>
                                         <th class="lm-col-date">{{ $t('Date', 'ថ្ងៃ') }}</th>
-                                        <th class="lm-col-loan">{{ $t('Loan #', 'លេខកម្ចី') }}</th>
+                                        <th class="lm-col-loan">{{ $t('Installment #', 'លេខកម្ចី') }}</th>
                                         <th>{{ $t('Customer', 'អតិថិជន') }}</th>
                                         <th>{{ $t('Product', 'ទំនិញ') }}</th>
                                         <th class="lm-col-method">{{ $t('Method', 'ប្រភេទវិធីបង់') }}</th>
@@ -933,6 +855,9 @@
                                 <tbody>
                                     @foreach($payload['recentLoans'] as $loanIndex => $loan)
                                         @php($loanDuplicateReason = $duplicateReason($loan, $recentLoanLoanCounts, $recentLoanCustomerCounts))
+                                        @php($loanCustKey = $normalizeDuplicateKey($loan->customer_name ?? ''))
+                                        @php($isLoanCustDuplicate = $loanCustKey !== '' && ($recentLoanCustomerCounts[$loanCustKey] ?? 0) > 1)
+                                        @php($loanCustDupCount = $recentLoanCustomerCounts[$loanCustKey] ?? 0)
                                         <tr class="{{ $loanDuplicateReason ? 'lm-duplicate-row' : '' }}" title="{{ $loanDuplicateReason }}">
                                             <td class="lm-col-no">{{ $loanIndex + 1 }}</td>
                                             <td class="lm-col-date">{{ ! empty($loan->loan_date) ? \Carbon\Carbon::parse($loan->loan_date)->format('d-m-y') : '-' }}</td>
@@ -940,10 +865,21 @@
                                                 <span class="lm-loan-ref-line">
                                                     <span class="lm-detail-link js-loan-recent-detail-modal"
                                                           data-url="{{ route('loan-management.loans.view', ['loan' => $loan->id, '_lm_modal' => 1]) }}"
-                                                          data-title="{{ $t('Loan Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</span>
+                                                          data-title="{{ $t('Installment Detail', 'ព័ត៌មានលម្អិតកម្ចី') }}">{{ $loan->loan_number ?? ('#'.$loan->id) }}</span>
                                                 </span>
                                             </td>
-                                            <td>{{ $loan->customer_name ?: '-' }}</td>
+                                            <td>
+                                                @if($isLoanCustDuplicate)
+                                                    <div class="lm-duplicate-customer-wrap">
+                                                        <span class="lm-duplicate-customer-name">{{ $loan->customer_name ?: '-' }}</span>
+                                                        <span class="lm-duplicate-customer-badge" title="{{ $t('Duplicate customer in installments: :count records', 'អតិថិជនស្ទួនក្នុងកម្ចី៖ :count កំណត់ត្រា', ['count' => $loanCustDupCount]) }}">
+                                                            <i class="fa fa-clone"></i> {{ $t('Duplicate', 'ស្ទួន') }} ({{ $loanCustDupCount }}x)
+                                                        </span>
+                                                    </div>
+                                                @else
+                                                    {{ $loan->customer_name ?: '-' }}
+                                                @endif
+                                            </td>
                                             <td>{{ $loan->product_name ?: '-' }}</td>
                                             <td class="lm-col-method" title="{{ $loan->payment_method ?: '-' }}">{{ $shortMethod($loan->payment_method ?? '-') }}</td>
                                             <td class="text-right">{{ $money($loan->payment_amount ?? 0) }}</td>
@@ -963,86 +899,132 @@
 <script>
     (function () {
     var initLoanDashboardReports = function () {
-        var displayDateFormat = window.moment_date_format || 'DD-MMM-YYYY';
-        var bindFilterForm = function (formId, rangeId, startDate, endDate, eventNamespace) {
-            var form = document.getElementById(formId);
-            if (!form) {
-                return;
-            }
-            var fromField = formId === 'loanRecentActivityFilterForm' ? 'recent_date_from' : 'date_from';
-            var toField = formId === 'loanRecentActivityFilterForm' ? 'recent_date_to' : 'date_to';
+        var loanDateFormat = window.moment_date_format || 'MM-DD-YYYY';
+        var loanDrs = window.dateRangeSettings ? jQuery.extend(true, {}, window.dateRangeSettings) : {};
+        var hasMoment = typeof moment !== 'undefined';
+        var loanDateRanges = {};
 
-            var submitTimer = null;
-            var scheduleSubmit = function (delay) {
-                window.clearTimeout(submitTimer);
-                submitTimer = window.setTimeout(function () {
-                    form.submit();
-                }, delay || 150);
+        if (hasMoment) {
+            var fyStart = (typeof financial_year !== 'undefined' && financial_year.start && moment(financial_year.start).isValid())
+                ? moment(financial_year.start)
+                : moment().startOf('year');
+            var fyEnd = (typeof financial_year !== 'undefined' && financial_year.end && moment(financial_year.end).isValid())
+                ? moment(financial_year.end)
+                : moment().endOf('year');
+            loanDateRanges = {
+                'Today': [moment(), moment()],
+                'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+                'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+                'This Month': [moment().startOf('month'), moment().endOf('month')],
+                'Last Month': [
+                    moment().subtract(1, 'month').startOf('month'),
+                    moment().subtract(1, 'month').endOf('month')
+                ],
+                'This month last year': [
+                    moment().subtract(1, 'year').startOf('month'),
+                    moment().subtract(1, 'year').endOf('month')
+                ],
+                'This Year': [moment().startOf('year'), moment().endOf('year')],
+                'Last Year': [
+                    moment().subtract(1, 'year').startOf('year'),
+                    moment().subtract(1, 'year').endOf('year')
+                ],
+                'Current financial year': [fyStart.clone(), fyEnd.clone()],
+                'Last financial year': [
+                    fyStart.clone().subtract(1, 'year'),
+                    fyEnd.clone().subtract(1, 'year')
+                ]
             };
 
-            form.querySelectorAll('select').forEach(function (field) {
-                field.addEventListener('change', function () {
-                    scheduleSubmit(100);
-                });
-            });
+            if (window.dateRangeSettings && window.dateRangeSettings.ranges) {
+                loanDateRanges = window.dateRangeSettings.ranges;
+            }
+        }
 
-            if (window.jQuery) {
-                jQuery('#' + formId + ' .select2').select2({
-                    width: '100%'
-                }).on('change', function () {
-                    scheduleSubmit(100);
-                });
+        var bindDateRangeFilter = function (options) {
+            var $range = jQuery(options.range);
+            if (!$range.length) {
+                return;
             }
 
-            if (window.jQuery && jQuery.fn.daterangepicker && window.moment) {
-                var dateRangeSettings = window.dateRangeSettings
-                    ? jQuery.extend(true, {}, window.dateRangeSettings)
-                    : {};
+            var $from = jQuery(options.from);
+            var $to = jQuery(options.to);
+            var $form = jQuery(options.form);
 
-                dateRangeSettings = jQuery.extend(true, dateRangeSettings, {
-                    autoUpdateInput: true,
-                    startDate: moment(startDate),
-                    endDate: moment(endDate),
+            var setRange = function (start, end) {
+                if (!start || !end) return;
+                var s = moment.isMoment(start) ? start : moment(start);
+                var e = moment.isMoment(end) ? end : moment(end);
+                if (!s.isValid() || !e.isValid()) return;
+                $from.val(s.format('YYYY-MM-DD'));
+                $to.val(e.format('YYYY-MM-DD'));
+                $range.val(s.format(loanDateFormat) + ' - ' + e.format(loanDateFormat));
+            };
+
+            if (hasMoment && jQuery.fn.daterangepicker) {
+                var currentStartDate = options.start ? moment(options.start) : moment().startOf('month');
+                var currentEndDate = options.end ? moment(options.end) : moment();
+
+                $range.daterangepicker(jQuery.extend(true, {}, loanDrs, {
+                    autoUpdateInput: false,
+                    showDropdowns: true,
+                    linkedCalendars: false,
+                    startDate: currentStartDate.isValid() ? currentStartDate : moment().startOf('month'),
+                    endDate: currentEndDate.isValid() ? currentEndDate : moment(),
                     parentEl: 'body',
                     opens: 'right',
                     drops: 'auto',
-                    locale: jQuery.extend(true, {}, dateRangeSettings.locale || {}, {
-                        format: displayDateFormat,
-                        cancelLabel: 'Clear'
+                    ranges: loanDateRanges,
+                    locale: jQuery.extend(true, {}, loanDrs.locale || {}, {
+                        format: loanDateFormat,
+                        separator: ' - ',
+                        applyLabel: @json($t('Apply', 'អនុវត្ត')),
+                        cancelLabel: @json($t('Clear', 'សម្អាត')),
+                        customRangeLabel: @json($t('Custom Range', 'ជ្រើសរើសផ្ទាល់')),
+                        toLabel: '~'
                     })
+                }), function (s, e) {
+                    setRange(s, e);
                 });
 
-                jQuery('#' + rangeId)
-                    .daterangepicker(dateRangeSettings, function (start, end) {
-                        jQuery('#' + rangeId).val(start.format(displayDateFormat) + ' ~ ' + end.format(displayDateFormat));
-                        jQuery(form).find('[name="' + fromField + '"]').val(start.format('YYYY-MM-DD'));
-                        jQuery(form).find('[name="' + toField + '"]').val(end.format('YYYY-MM-DD'));
-                        scheduleSubmit(100);
-                    })
-                    .on('apply.daterangepicker', function (event, picker) {
-                        jQuery(this).val(picker.startDate.format(displayDateFormat) + ' ~ ' + picker.endDate.format(displayDateFormat));
-                        jQuery(form).find('[name="' + fromField + '"]').val(picker.startDate.format('YYYY-MM-DD'));
-                        jQuery(form).find('[name="' + toField + '"]').val(picker.endDate.format('YYYY-MM-DD'));
-                        scheduleSubmit(100);
-                    })
-                    .on('cancel.daterangepicker', function () {
-                        jQuery(this).val('');
-                        jQuery(form).find('[name="' + fromField + '"]').val('');
-                        jQuery(form).find('[name="' + toField + '"]').val('');
-                        scheduleSubmit(100);
-                    });
+                $range.on('apply.daterangepicker', function (event, picker) {
+                    setRange(picker.startDate, picker.endDate);
+                });
 
-                jQuery('#' + rangeId).off('click.' + eventNamespace).on('click.' + eventNamespace, function () {
-                    var picker = jQuery(this).data('daterangepicker');
-                    if (picker) {
-                        picker.show();
+                $range.on('cancel.daterangepicker', function () {
+                    $range.val('');
+                    $from.val('');
+                    $to.val('');
+                });
+            } else {
+                $range.prop('readonly', false).on('change', function () {
+                    var raw = String(jQuery(this).val() || '').trim();
+                    var parts = raw.split(/\s+-\s+|\s+~\s+/);
+                    if (parts.length === 2) {
+                        $from.val(parts[0]);
+                        $to.val(parts[1]);
                     }
                 });
             }
         };
 
-        bindFilterForm('loanDashboardReportFilterForm', 'loanDashboardReportDateRange', '{{ $filters['date_from'] }}', '{{ $filters['date_to'] }}', 'loanDashboardDateRange');
-        bindFilterForm('loanRecentActivityFilterForm', 'loanRecentActivityDateRange', '{{ $recentActivityFilters['date_from'] }}', '{{ $recentActivityFilters['date_to'] }}', 'loanRecentDateRange');
+        bindDateRangeFilter({
+            range: '#loanRecentActivityDateRange',
+            from: '#recent_date_from',
+            to: '#recent_date_to',
+            form: '#loanRecentActivityFilterForm',
+            start: @json($recentActivityFilters['date_from'] ?? null),
+            end: @json($recentActivityFilters['date_to'] ?? null)
+        });
+
+        if (window.jQuery && jQuery.fn.select2) {
+            jQuery('#recent_location_id').select2({
+                width: '100%'
+            }).on('change', function () {
+                jQuery('#loanRecentActivityFilterForm').submit();
+            });
+        }
 
         if (window.jQuery && jQuery.fn.DataTable) {
             var recentActivityExportTitle = @json($recentActivityReportTitle);
@@ -1166,10 +1148,48 @@
 
     };
 
-    if (window.jQuery) {
-        jQuery(initLoanDashboardReports);
+    var loanDashboardLoadScript = function (src, isReady, done) {
+        if (isReady()) {
+            done();
+            return;
+        }
+
+        var existing = document.querySelector('script[src="' + src + '"]');
+        if (existing) {
+            existing.addEventListener('load', done, {once: true});
+            existing.addEventListener('error', done, {once: true});
+            return;
+        }
+
+        var script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        script.onload = done;
+        script.onerror = done;
+        document.head.appendChild(script);
+    };
+
+    var loanDashboardBoot = function () {
+        if (!window.jQuery) {
+            window.setTimeout(loanDashboardBoot, 50);
+            return;
+        }
+
+        loanDashboardLoadScript('https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js', function () {
+            return typeof window.moment !== 'undefined';
+        }, function () {
+            loanDashboardLoadScript('https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js', function () {
+                return !!(window.jQuery && jQuery.fn && jQuery.fn.daterangepicker);
+            }, function () {
+                jQuery(initLoanDashboardReports);
+            });
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loanDashboardBoot);
     } else {
-        document.addEventListener('DOMContentLoaded', initLoanDashboardReports);
+        loanDashboardBoot();
     }
     })();
 
@@ -1188,6 +1208,24 @@
         }
 
         var data = {header: [], body: []};
+        var readDomData = function () {
+            var domData = {header: [], body: []};
+            jQuery(table).find('thead th').each(function () {
+                domData.header.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
+            });
+            jQuery(table).find('tbody tr').each(function () {
+                var row = [];
+                jQuery(this).find('td').each(function () {
+                    row.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
+                });
+                if (row.length) {
+                    domData.body.push(row);
+                }
+            });
+
+            return domData;
+        };
+
         if (jQuery.fn.DataTable && jQuery.fn.DataTable.isDataTable(table)) {
             var api = jQuery(table).DataTable();
             data = api.buttons && api.buttons.exportData
@@ -1204,18 +1242,9 @@
                         }
                     }
                 })
-                : data;
+                : readDomData();
         } else {
-            jQuery(table).find('thead th').each(function () {
-                data.header.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
-            });
-            jQuery(table).find('tbody tr').each(function () {
-                var row = [];
-                jQuery(this).find('td').each(function () {
-                    row.push(jQuery(this).text().replace(/\s+/g, ' ').trim());
-                });
-                data.body.push(row);
-            });
+            data = readDomData();
         }
 
         var html = (title ? '<h3>' + loanRecentActivityEsc(title) + '</h3>' : '') + '<table><thead><tr>';
@@ -1272,26 +1301,39 @@
     window.loanPrintRecentActivity = function () {
         var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
         html += '<style>';
-        html += '@import url("https://fonts.googleapis.com/css2?family=Moul&display=swap");@page{size:A4 landscape;margin:10mm}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;font-size:11px}';
-        html += 'h2{margin:0 0 10px;padding:12px 14px;border-top:1px solid #94a3b8;border-bottom:2px solid #111827;background:#dbeafe;color:#0000ff;text-align:center;font-family:"Khmer OS Muol Light","Khmer OS Muol","Khmer OS Moul","Moul","Noto Sans Khmer","Kantumruy Pro",serif;font-size:22px;font-weight:400;line-height:1.3}';
-        html += 'h3{margin:12px 0 5px;padding:5px 8px;border:1px solid #9ca3af;background:#e5f0fb;text-align:center;font-size:13px}';
-        html += 'table{width:100%;border-collapse:collapse;margin:0 0 10px;table-layout:auto}th,td{border:1px solid #9ca3af;padding:4px 5px;vertical-align:top;word-break:break-word}';
-        html += 'th{background:#dbeafe;text-align:center;font-weight:700}td{text-align:left}td.amount,td.count{text-align:right}.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm;align-items:start}.recent-grid td,.recent-grid th{font-size:9px}';
+        html += '@import url("https://fonts.googleapis.com/css2?family=Moul&family=Inter:wght@400;600;700;800&display=swap");';
+        html += '@page{size:A4 landscape;margin:7mm;}';
+        html += '*{box-sizing:border-box;}';
+        html += 'body{font-family:"Inter","Noto Sans Khmer","Khmer OS Siemreap",Arial,sans-serif;color:#000;background:#fff;font-size:10px;margin:0;padding:0;}';
+        html += '.report-title{margin:0 0 12px;padding:9px 12px;border:1px solid #8fa1ba;border-bottom:4px solid #111827;background:#d9e8fa;color:#0000ff;text-align:center;font-family:"Khmer OS Muol Light","Khmer OS Muol","Khmer OS Moul","Moul","Noto Sans Khmer",serif;font-size:25px;font-weight:400;line-height:1.35;}';
+        html += '.summary{margin-bottom:12px;}';
+        html += '.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:12mm;align-items:start;}';
+        html += '.print-section{min-width:0;}';
+        html += 'h3{margin:0 0 5px;padding:7px 8px;border:1px solid #9aa8ba;background:#e6f0fb;color:#000;text-align:center;font-size:13px;font-weight:800;line-height:1.2;}';
+        html += 'table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 8px;}';
+        html += 'th,td{border:1px solid #9aa3b2;padding:4px 6px;vertical-align:top;font-size:9.5px;line-height:1.2;word-break:break-word;}';
+        html += 'th{background:#d9e8fa;color:#000;text-align:center;font-weight:800;}';
+        html += 'td{text-align:left;}';
+        html += 'tfoot th, tfoot td{background:#d9e8fa;font-weight:800;}';
+        html += '.summary table{table-layout:auto;}';
+        html += '.summary th,.summary td{font-size:11px;padding:4px 7px;}';
+        html += '.summary td:not(:first-child),.summary th:not(:first-child){text-align:center;white-space:nowrap;}';
+        html += '.recent-grid th,.recent-grid td{font-size:8.5px;padding:4px 5px;}';
+        html += '.recent-grid th:nth-child(1){width:5%;}.recent-grid th:nth-child(2){width:9%;}.recent-grid th:nth-child(3){width:15%;}.recent-grid th:nth-child(4){width:15%;}.recent-grid th:nth-child(5){width:17%;}.recent-grid th:nth-child(6){width:10%;}.recent-grid th:nth-child(7){width:29%;}';
+        html += '.recent-grid .print-section:nth-child(2) th:nth-child(1){width:5%;}.recent-grid .print-section:nth-child(2) th:nth-child(2){width:9%;}.recent-grid .print-section:nth-child(2) th:nth-child(3){width:15%;}.recent-grid .print-section:nth-child(2) th:nth-child(4){width:11%;}.recent-grid .print-section:nth-child(2) th:nth-child(5){width:22%;}.recent-grid .print-section:nth-child(2) th:nth-child(6){width:24%;}.recent-grid .print-section:nth-child(2) th:nth-child(7){width:9%;}.recent-grid .print-section:nth-child(2) th:nth-child(8){width:5%;}';
+        html += '.text-right{text-align:right;}';
+        html += 'a{color:#000;text-decoration:none;}';
         html += '</style></head><body>';
-        html += '<h2>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</h2>';
-        html += loanRecentActivityTableFromDom('.lm-payment-method-summary', '');
+        html += '<h1 class="report-title">' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</h1>';
+        html += '<div class="summary">' + loanRecentActivityTableFromDom('.lm-payment-method-summary', '') + '</div>';
         html += '<div class="recent-grid">';
-        html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ'))) + '</div>';
-        html += '<div>' + loanRecentActivityTableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ'))) + '</div>';
+        html += '<div class="print-section">' + loanRecentActivityTableFromDataTable('#loan_recent_payments_table', @json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ'))) + '</div>';
+        html += '<div class="print-section">' + loanRecentActivityTableFromDataTable('#loan_recent_loans_table', @json($t('Recent Installments', 'កម្ចីថ្មីៗ'))) + '</div>';
         html += '</div></body></html>';
 
         var printWindow = window.open('', '_blank');
         if (!printWindow) {
-            document.body.classList.add('lm-print-recent-only');
             window.print();
-            window.setTimeout(function () {
-                document.body.classList.remove('lm-print-recent-only');
-            }, 500);
             return;
         }
 
@@ -1299,10 +1341,27 @@
         printWindow.document.write(html);
         printWindow.document.close();
         printWindow.focus();
+
+        var returnToSystemPage = function () {
+            try {
+                if (window && !window.closed) {
+                    window.focus();
+                }
+                if (printWindow && !printWindow.closed) {
+                    printWindow.close();
+                }
+            } catch (e) {
+                if (window && !window.closed) {
+                    window.focus();
+                }
+            }
+        };
+
+        printWindow.onafterprint = returnToSystemPage;
         window.setTimeout(function () {
             printWindow.print();
-            printWindow.close();
-        }, 300);
+            window.setTimeout(returnToSystemPage, 1000);
+        }, 500);
     };
 
     window.loanExportRecentActivityExcel = function () {
@@ -1392,7 +1451,7 @@
 
         html += '<h2>' + esc(@json($recentActivityReportTitle)) + '</h2>';
         html += fullPaymentTable(@json($t('Recent Collected Payments', 'ការបង់ប្រាក់ថ្មីៗ')));
-        html += tableFromDataTable('#loan_recent_loans_table', @json($t('Recent Loans', 'កម្ចីថ្មីៗ')));
+        html += tableFromDataTable('#loan_recent_loans_table', @json($t('Recent Installments', 'កម្ចីថ្មីៗ')));
         html += '</body></html>';
 
         var blob = new Blob([html], {type: 'application/vnd.ms-excel;charset=utf-8;'});

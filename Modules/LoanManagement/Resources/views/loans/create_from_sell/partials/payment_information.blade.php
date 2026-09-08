@@ -5,7 +5,7 @@
             <div class="col-md-12">
                 <div class="alert alert-info" style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">
                     <div style="flex:1 1 220px;min-width:220px;">
-                        <strong>Loan Location:</strong> {{ $loanLocation->name ?? ($sell['transaction']->location_name_snapshot ?? '-') }}<br>
+                        <strong>Installment Location:</strong> {{ $loanLocation->name ?? ($sell['transaction']->location_name_snapshot ?? '-') }}<br>
                         @if(!empty($loanLocation->phone))
                             <strong>Phone:</strong> {{ $loanLocation->phone }}<br>
                         @endif
@@ -64,7 +64,7 @@
         <div class="col-sm-6 col-md-3"><div class="form-group"><label>Paid Date</label><input type="date" name="payment[paid_date]" class="form-control" value="{{ date('Y-m-d') }}"></div></div>
         <div class="col-sm-6 col-md-3">
             <div class="form-group">
-                {!! Form::label('loan_payment_method', __('lang_v1.payment_method') . ':') !!}
+                {!! Form::label('loan_payment_method', lm_label('lang_v1.payment_method', 'Payment Method', 'វិធីបង់ប្រាក់') . ':') !!}
                 <div class="input-group">
                     <span class="input-group-addon">
                         <i class="fas fa-money-bill-alt"></i>

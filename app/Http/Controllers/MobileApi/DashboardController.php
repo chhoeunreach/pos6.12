@@ -50,9 +50,16 @@ class DashboardController extends BaseController
         $actual_income = $total_sale - $total_sell_return_paid;
 
         $expense_report = $this->transactionUtil->getExpenseReport(
-            $business_id, $location_id, $start_date, $end_date, $user_id
+            $business_id,
+            [
+                'location_id' => $location_id,
+                'start_date' => $start_date,
+                'end_date' => $end_date,
+                'created_by' => $user_id,
+            ],
+            'total'
         );
-        $expenses = $expense_report['total_expense'] ?? 0;
+        $expenses = $expense_report->total_expense ?? 0;
 
         $total_purchase = $this->transactionUtil->getPurchaseTotals(
             $business_id, $start_date, $end_date, $location_id, $user_id

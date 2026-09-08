@@ -25,13 +25,38 @@ class LoanCustomerController extends Controller
     {
         $tableExists = Schema::connection($this->connection)->hasTable($this->table);
         $customers = collect();
+        $stats = [
+            'total' => 0,
+            'active' => 0,
+            'with_loans' => 0,
+            'can_login' => 0,
+            'blacklisted' => 0,
+        ];
+
         if ($tableExists) {
-            $q = DB::connection($this->connection)->table($this->table.' as c')->orderByDesc('c.id');
+            // Summary KPI stats
+            $stats['total'] = DB::connection($this->connection)->table($this->table)->whereNull('deleted_at')->count();
+            $stats['active'] = DB::connection($this->connection)->table($this->table)->whereNull('deleted_at')->where('status', 'active')->count();
+            if (Schema::connection($this->connection)->hasColumn($this->table, 'can_login')) {
+                $stats['can_login'] = DB::connection($this->connection)->table($this->table)->whereNull('deleted_at')->where('can_login', 1)->count();
+            }
+            if (Schema::connection($this->connection)->hasColumn($this->table, 'blacklist_status')) {
+                $stats['blacklisted'] = DB::connection($this->connection)->table($this->table)->whereNull('deleted_at')->where('blacklist_status', 1)->count();
+            }
+            if (Schema::connection($this->connection)->hasTable('loans')) {
+                $stats['with_loans'] = DB::connection($this->connection)->table('loans')->whereNull('deleted_at')->distinct('customer_id')->count('customer_id');
+            }
+
+            $q = DB::connection($this->connection)->table($this->table.' as c')
+                ->whereNull('c.deleted_at')
+                ->orderByDesc('c.id');
+
             foreach (['phone', 'customer_code', 'id_card_number', 'status'] as $f) {
                 if ($request->filled($f) && Schema::connection($this->connection)->hasColumn($this->table, $f)) {
                     $q->where('c.'.$f, 'like', '%'.$request->input($f).'%');
                 }
             }
+
             if ($request->filled('name')) {
                 $q->where(function ($query) use ($request) {
                     $like = '%'.$request->input('name').'%';
@@ -43,6 +68,11 @@ class LoanCustomerController extends Controller
                     }
                 });
             }
+
+            if ($request->filled('location_id') && Schema::connection($this->connection)->hasColumn($this->table, 'business_location_id')) {
+                $q->where('c.business_location_id', $request->input('location_id'));
+            }
+
             if ($request->filled('blacklist_status') && Schema::connection($this->connection)->hasColumn($this->table, 'blacklist_status')) {
                 $q->where('c.blacklist_status', (int) $request->input('blacklist_status'));
             }
@@ -52,14 +82,118 @@ class LoanCustomerController extends Controller
             if ($request->filled('allow_gps_tracking') && Schema::connection($this->connection)->hasColumn($this->table, 'allow_gps_tracking')) {
                 $q->where('c.allow_gps_tracking', (int) $request->input('allow_gps_tracking'));
             }
-            $customers = $q->paginate(20)->appends($request->query());
+
+            $perPage = (int) $request->input('per_page', 25);
+            if ($perPage <= 0 || $perPage > 1000) {
+                $perPage = 25;
+            }
+
+            $paginated = $q->paginate($perPage)->appends($request->query());
+
+            $paginated->getCollection()->transform(function ($c) {
+                if (!empty($c->customer_photo_file_id) && empty($c->photo_url)) {
+                    $c->photo_url = url('loan-management/chat-files/' . (int) $c->customer_photo_file_id);
+                } elseif (!empty($c->profile_photo) && empty($c->photo_url)) {
+                    $c->photo_url = Storage::disk('public')->url($c->profile_photo);
+                }
+                return $c;
+            });
+
+            $customers = $paginated;
         }
-        return view('loanmanagement::customers.index', compact('customers', 'tableExists'));
+
+        $locations = [];
+        try {
+            if (Schema::hasTable('business_locations')) {
+                $locations = DB::table('business_locations')->pluck('name', 'id')->all();
+            }
+        } catch (\Throwable $e) {}
+
+        return view('loanmanagement::customers.index', compact('customers', 'tableExists', 'locations', 'stats'));
     }
 
     public function create()
     {
         return view('loanmanagement::customers.create');
+    }
+
+    public function blacklistSearchCustomers(Request $request)
+    {
+        $term = trim((string) $request->input('q', $request->input('term', '')));
+        $results = collect();
+
+        if (Schema::connection($this->connection)->hasTable($this->table)) {
+            $query = DB::connection($this->connection)->table($this->table)
+                ->whereNull('deleted_at')
+                ->where(function ($where) {
+                    $where->whereNull('blacklist_status')
+                        ->orWhere('blacklist_status', 0);
+                });
+
+            if ($term !== '') {
+                $like = '%'.$term.'%';
+                $query->where(function ($where) use ($like, $term) {
+                    foreach (['name', 'khmer_name', 'phone', 'alternate_phone', 'customer_code', 'id_card_number'] as $column) {
+                        if (Schema::connection($this->connection)->hasColumn($this->table, $column)) {
+                            $where->orWhere($column, 'like', $like);
+                        }
+                    }
+
+                    if (ctype_digit($term)) {
+                        $where->orWhere('id', (int) $term);
+                    }
+                });
+            }
+
+            $select = ['id', 'customer_code', 'name', 'phone'];
+            foreach ([
+                'khmer_name',
+                'alternate_phone',
+                'id_card_number',
+                'customer_photo_file_id',
+                'photo_url',
+                'profile_photo',
+                'status',
+            ] as $column) {
+                if (Schema::connection($this->connection)->hasColumn($this->table, $column)) {
+                    $select[] = $column;
+                }
+            }
+
+            $results = $query->select($select)
+                ->orderByRaw('CASE WHEN phone = ? OR customer_code = ? THEN 0 ELSE 1 END', [$term, $term])
+                ->orderByDesc('id')
+                ->limit(30)
+                ->get()
+                ->map(function ($customer) {
+                    $photoUrl = null;
+                    if (! empty($customer->customer_photo_file_id) && empty($customer->photo_url)) {
+                        $photoUrl = url('loan-management/chat-files/' . (int) $customer->customer_photo_file_id);
+                    } elseif (! empty($customer->photo_url)) {
+                        $photoUrl = $customer->photo_url;
+                    } elseif (! empty($customer->profile_photo)) {
+                        $photoUrl = Storage::disk('public')->url($customer->profile_photo);
+                    }
+
+                    return [
+                        'id' => (int) $customer->id,
+                        'customer_code' => (string) ($customer->customer_code ?? ''),
+                        'name' => (string) ($customer->name ?? ''),
+                        'khmer_name' => (string) ($customer->khmer_name ?? ''),
+                        'phone' => (string) ($customer->phone ?? ''),
+                        'alternate_phone' => (string) ($customer->alternate_phone ?? ''),
+                        'id_card_number' => (string) ($customer->id_card_number ?? ''),
+                        'status' => (string) ($customer->status ?? 'active'),
+                        'photo_url' => $photoUrl,
+                    ];
+                });
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $results->values(),
+            'results' => $results->values(),
+        ]);
     }
 
     public function store(StoreLoanCustomerRequest $request)
@@ -161,7 +295,24 @@ class LoanCustomerController extends Controller
             'blacklist_by' => $request->boolean('blacklist_status') ? auth()->id() : null,
             'updated_at' => now(),
         ]));
-        return back()->with('status', ['success' => 1, 'msg' => 'Blacklist status updated.']);
+        $msg = $request->boolean('blacklist_status')
+            ? 'Customer has been added to blacklist.'
+            : 'Customer has been removed from blacklist.';
+        if ($request->boolean('return_to_blacklist')) {
+            return redirect()->route('loan-management.blacklist.index')->with('status', ['success' => 1, 'msg' => $msg]);
+        }
+
+        return back()->with('status', ['success' => 1, 'msg' => $msg]);
+    }
+
+    public function blacklistStore(Request $request)
+    {
+        $request->validate([
+            'customer_id' => 'required|integer',
+            'blacklist_status' => 'required|boolean',
+            'blacklist_reason' => 'nullable|string|max:1000',
+        ]);
+        return $this->blacklist($request, (int) $request->input('customer_id'));
     }
 
     public function enableLogin(int $customer)
@@ -379,7 +530,7 @@ class LoanCustomerController extends Controller
             return null;
         }
 
-        return Storage::disk($file->disk ?? 'public')->url($file->path);
+        return url('loan-management/chat-files/'.(int) $customer->customer_photo_file_id);
     }
 
     protected function attachFileToCustomer(int $fileId, int $customerId): void

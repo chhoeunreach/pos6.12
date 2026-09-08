@@ -19,11 +19,11 @@
         {!! Form::open(['url' => $formUrl, 'method' => 'post', 'id' => 'loan_item_update_form']) !!}
         <input type="hidden" name="return_to" value="{{ route('loan-management.loans.edit', $editRouteParams) }}">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ lm_label('messages.close', 'Close', 'បិទ') }}">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
-                <i class="fa fa-cube"></i> {{ $isCreate ? 'Add Loan Item' : 'Edit Loan Item' }}
+                <i class="fa fa-cube"></i> {{ $isCreate ? 'Add Installment Item' : 'Edit Installment Item' }}
             </h4>
         </div>
 
@@ -31,7 +31,7 @@
             <div class="row">
                 <div class="col-md-4">
                     <div class="well well-sm">
-                        <strong>Loan #:</strong> {{ $loanRow->loan_number ?? $loanRow->id }}<br>
+                        <strong>Installment #:</strong> {{ $loanRow->loan_number ?? $loanRow->id }}<br>
                         <strong>Customer:</strong> {{ $loanRow->customer_name_snapshot ?? '-' }}
                     </div>
                 </div>
@@ -112,10 +112,10 @@
                 <i class="fa fa-calculator"></i> Auto Total
             </button>
             <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
-                {{ $isCreate ? 'Add Item' : __('messages.update') }}
+                {{ $isCreate ? lm_label('loanmanagement::ui.add_item', 'Add Item', 'បន្ថែមទំនិញ') : lm_label('messages.update', 'Update', 'ធ្វើបច្ចុប្បន្នភាព') }}
             </button>
             <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">
-                @lang('messages.close')
+                {{ lm_label('messages.close', 'Close', 'បិទ') }}
             </button>
         </div>
         {!! Form::close() !!}
@@ -150,7 +150,7 @@ $(function () {
             dataType: 'json',
             success: function (res) {
                 if (window.toastr) {
-                    toastr.success(res.message || 'Loan item updated successfully');
+                    toastr.success(res.message || 'Installment item updated successfully');
                 }
 
                 $('.view_modal').modal('hide');

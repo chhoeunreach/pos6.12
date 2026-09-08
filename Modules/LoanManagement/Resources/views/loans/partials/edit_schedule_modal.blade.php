@@ -41,7 +41,7 @@
         <input type="hidden" name="return_to" value="{{ route('loan-management.loans.edit', $editRouteParams) }}">
         <input type="hidden" name="sections_context" value="{{ $sectionsContext }}">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="@lang('messages.close')">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ lm_label('messages.close', 'Close', 'បិទ') }}">
                 <span aria-hidden="true">&times;</span>
             </button>
             <h4 class="modal-title">
@@ -54,7 +54,7 @@
             <div class="row">
                 <div class="col-md-4">
                     <div class="well well-sm">
-                        <strong>Loan #:</strong> {{ $loanRow->loan_number ?? $loanRow->id }}<br>
+                        <strong>Installment #:</strong> {{ $loanRow->loan_number ?? $loanRow->id }}<br>
                         <strong>Customer:</strong> {{ $loanRow->customer_name_snapshot ?? '-' }}
                     </div>
                 </div>
@@ -226,10 +226,10 @@
                 <i class="fa fa-trash"></i> Delete
             </button>
             <button type="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white">
-                @lang('messages.update')
+                {{ lm_label('messages.update', 'Update', 'ធ្វើបច្ចុប្បន្នភាព') }}
             </button>
             <button type="button" class="tw-dw-btn tw-dw-btn-neutral tw-text-white" data-dismiss="modal">
-                @lang('messages.close')
+                {{ lm_label('messages.close', 'Close', 'បិទ') }}
             </button>
         </div>
         {!! Form::close() !!}

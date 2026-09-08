@@ -1,5 +1,5 @@
 {{-- Global Telegram-style chat widget: sticky floating button + a two-pane panel (contact
-     sidebar + conversation), available on every Loan Management module page. Backed entirely by
+     sidebar + conversation), available on every Installment Management module page. Backed entirely by
      its own tables/service/controller (TelegramChatService, LoanTelegramChatController,
      loan_telegram_chat_threads/messages) - fully independent from the staff's own internal Live
      Chat tool (chat/inbox.blade.php, LoanChatService, loan_chat_threads/messages), which this
@@ -11,6 +11,8 @@
     $tgBoundName = $tgBound ? (trim((string) ($customerRow->khmer_name ?? '')) ?: trim((string) ($customerRow->name ?? ''))) : '';
     $tgBoundLinked = $tgBound ? !empty($customerRow->telegram_chat_id) : false;
     $tgPollMs = (int) config('loanmanagement.chat_polling_seconds', 5) * 1000;
+    $tgInvoiceMessageTemplate = \Modules\LoanManagement\Services\BusinessSettingsService::invoiceMessageTemplate();
+    $tgInvoiceServerImageEnabled = ($tgRendererBinary = env('WKHTMLTOIMAGE_BINARY')) && is_file($tgRendererBinary);
     $tgUserLocationOptions = collect();
     $tgUserLocationText = 'All locations';
     $tgDefaultLocationId = null;
@@ -61,19 +63,26 @@
     }
 @endphp
 <style>
-    #lmTgFab{position:fixed;right:26px;bottom:26px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#6dc9f7,#2894e0);color:#fff;border:0;box-shadow:0 6px 20px rgba(41,148,224,.5);font-size:25px;cursor:pointer;z-index:4998;display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
-    #lmTgFab:hover{transform:scale(1.07)}
-    #lmTgFab:active{transform:scale(.96)}
-    #lmTgFab .lm-tg-fab-icon{width:31px;height:31px;display:block;fill:currentColor;color:#fff}
-    #lmTgFab .lm-tg-fab-dot{position:absolute;top:2px;right:2px;width:13px;height:13px;background:#94a3b8;border:2px solid #fff;border-radius:50%}
+    #lmTgFab{position:fixed;right:22px;bottom:22px;top:auto;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#6dc9f7,#2894e0);color:#fff;border:0;box-shadow:0 6px 20px rgba(41,148,224,.45);font-size:24px;cursor:pointer;z-index:1030;display:flex;align-items:center;justify-content:center;transform:scale(1);transition:transform .18s cubic-bezier(.34, 1.56, .64, 1), box-shadow .18s ease}
+    #lmTgFab:hover{transform:scale(1.08);box-shadow:0 8px 24px rgba(41,148,224,.6)}
+    #lmTgFab:active{transform:scale(.94)}
+    #lmTgFab .lm-tg-fab-icon{width:28px;height:28px;display:block;fill:currentColor;color:#fff}
+    #lmTgFab .lm-tg-fab-dot{position:absolute;top:2px;right:2px;width:12px;height:12px;background:#94a3b8;border:2px solid #fff;border-radius:50%}
     #lmTgFab.linked .lm-tg-fab-dot{background:#22c55e}
-    #lmTgFab.open{display:none}
+    #lmTgFab.open{display:none !important}
 
-    #lmTgDrawerOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:4999;opacity:0;pointer-events:none;transition:opacity .18s ease}
-    #lmTgDrawerOverlay.open{opacity:1;pointer-events:auto}
+    /* Hide sticky floating button when any modal is open */
+    body.modal-open #lmTgFab {
+        display: none !important;
+    }
 
-    #lmTgDrawer{position:fixed;top:50%;left:50%;width:min(940px,94vw);height:min(660px,86vh);background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.3);z-index:5000;border-radius:14px;overflow:hidden;display:flex;flex-direction:row;opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(.96);transition:opacity .18s ease,transform .18s ease;font-family:"Khmer OS Battambang","Noto Sans Khmer","Segoe UI",Arial,sans-serif}
-    #lmTgDrawer.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+    #lmTgDrawerOverlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1040;opacity:0;transition:opacity .18s ease}
+    #lmTgDrawerOverlay.open{display:block;opacity:1}
+
+    #lmTgDrawer{display:none;position:fixed;top:50%;left:50%;width:min(940px,94vw);height:min(660px,86vh);background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.3);z-index:1050;border-radius:14px;overflow:hidden;flex-direction:row;opacity:0;transform:translate(-50%,-50%) scale(.96);transition:opacity .18s ease,transform .18s ease;font-family:"Khmer OS Battambang","Noto Sans Khmer","Segoe UI",Arial,sans-serif}
+    #lmTgDrawer.open{display:flex;opacity:1;transform:translate(-50%,-50%) scale(1)}
+    .lm-send-invoice-confirm-modal{z-index:1090!important}
+    .lm-send-invoice-confirm-backdrop{z-index:1085!important}
 
     .lm-tg-sidebar{width:300px;flex:0 0 300px;border-right:1px solid #e5e7eb;background:#f7f9fb;display:flex;flex-direction:column;min-height:0}
     .lm-tg-sidebar-head{padding:14px 14px 10px;flex:0 0 auto}
@@ -112,6 +121,7 @@
     .lm-tg-row{display:flex;margin-bottom:6px}
     .lm-tg-row.own{justify-content:flex-end}
     .lm-tg-bubble{max-width:74%;padding:7px 10px;border-radius:15px;background:#fff;box-shadow:0 1px 1px rgba(0,0,0,.07);font-size:13.5px;line-height:1.42;overflow-wrap:anywhere;position:relative}
+    .lm-tg-text{white-space:pre-wrap}
     .lm-tg-row.own .lm-tg-bubble{background:linear-gradient(135deg,#e3fbd4,#d5f7c4);border-bottom-right-radius:4px}
     .lm-tg-row:not(.own) .lm-tg-bubble{border-bottom-left-radius:4px}
     .lm-tg-meta{display:flex;align-items:center;gap:4px;margin-top:3px;font-size:10px;color:#94a3b8;justify-content:flex-end}
@@ -136,9 +146,35 @@
     .lm-tg-tools button.recording{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
 
     @media (max-width:760px){
-        #lmTgDrawer{width:96vw;height:92vh}
-        .lm-tg-sidebar{width:120px;flex-basis:120px}
+        #lmTgFab{right:14px;left:auto;top:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));width:48px;height:48px;font-size:20px;box-shadow:0 6px 18px rgba(41,148,224,.4);z-index:1030}
+        #lmTgFab .lm-tg-fab-icon{width:24px;height:24px}
+        #lmTgFab .lm-tg-fab-dot{width:11px;height:11px;top:1px;right:1px}
+        #lmTgDrawer{top:auto;left:8px;right:8px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:auto;height:min(76vh,620px);border-radius:14px;transform:translateY(14px) scale(.98)}
+        #lmTgDrawer.open{transform:translateY(0) scale(1)}
+        .lm-tg-sidebar{width:104px;flex-basis:104px}
+        .lm-tg-sidebar-head{padding:10px 8px 8px}
+        .lm-tg-sidebar-head h4{font-size:13px;margin-bottom:8px}
+        .lm-tg-current-location,.lm-tg-filter-row{display:none}
+        .lm-tg-sidebar-head input{padding:7px 8px;font-size:11px;border-radius:12px}
+        .lm-tg-contact-list{padding:4px 5px 8px}
+        .lm-tg-contact{justify-content:center;padding:7px 4px}
+        .lm-tg-contact-avatar{width:34px;height:34px}
         .lm-tg-contact-info{display:none}
+        .lm-tg-header{padding:10px 12px}
+        .lm-tg-header .lm-tg-avatar{width:34px;height:34px}
+        .lm-tg-header-info .name{font-size:13px}
+        .lm-tg-header-info .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .lm-tg-body{padding:10px}
+        .lm-tg-bubble{max-width:86%;font-size:12.5px}
+        .lm-tg-composer{padding:8px;gap:6px}
+        .lm-tg-composer input[type=text]{min-width:0;padding:8px 11px;font-size:12px}
+        .lm-tg-composer button{width:34px;height:34px;font-size:12px}
+    }
+    @media (max-width:380px){
+        #lmTgFab{right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));width:44px;height:44px}
+        #lmTgFab .lm-tg-fab-icon{width:22px;height:22px}
+        #lmTgDrawer{left:6px;right:6px;bottom:calc(70px + env(safe-area-inset-bottom,0px));height:min(74vh,560px)}
+        .lm-tg-sidebar{width:82px;flex-basis:82px}
     }
 </style>
 
@@ -155,7 +191,7 @@
         <div class="lm-tg-sidebar-head">
             <h4><i class="fa fa-telegram"></i> Chats</h4>
             <div class="lm-tg-current-location"><i class="fa fa-map-marker"></i> {{ $tgUserLocationText }}</div>
-            <input type="text" id="lmTgSearchInput" placeholder="Search name, phone or code" autocomplete="off">
+            <input type="text" id="lmTgSearchInput" placeholder="Search name, phone, code or invoice" autocomplete="off">
             <div class="lm-tg-filter-row">
                 <select id="lmTgLocationFilter" aria-label="Filter by location">
                     <option value="">All branches</option>
@@ -195,6 +231,8 @@
             <button type="button" id="lmTgPickDocs"><i class="fa fa-paperclip"></i> Documents</button>
             <button type="button" id="lmTgSendLocation"><i class="fa fa-map-marker"></i> Location</button>
             <button type="button" id="lmTgVoiceBtn"><i class="fa fa-microphone"></i> Voice</button>
+            <button type="button" id="lmTgVoiceStopBtn" style="display:none"><i class="fa fa-stop"></i> Stop</button>
+            <button type="button" id="lmTgVoiceSendBtn" style="display:none"><i class="fa fa-paper-plane"></i> Send Voice</button>
             <input type="file" id="lmTgImageInput" accept="image/*" multiple style="display:none">
             <input type="file" id="lmTgDocInput" multiple style="display:none">
         </div>
@@ -213,6 +251,8 @@
     var boundTelegramLinked = @json($tgBoundLinked);
     var chatBaseUrl = '{{ url("loan-management/telegram-chat-api/chats") }}';
     var pollMs = parseInt('{{ $tgPollMs }}', 10);
+    var invoiceMessageTemplate = @json($tgInvoiceMessageTemplate);
+    var invoiceServerImageEnabled = @json((bool) $tgInvoiceServerImageEnabled);
     var activeThreadId = null;
     var activeCustomerId = null;
     var loanPrintBaseUrl = '{{ url("loan-management/loans") }}';
@@ -225,6 +265,10 @@
     var mediaRecorder = null;
     var voiceChunks = [];
     var voiceStartedAt = null;
+    var voiceElapsedBeforePause = 0;
+    var voicePausedAt = null;
+    var pendingVoiceFile = null;
+    var pendingVoiceDuration = 0;
 
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function pad2(v){ return String(v).padStart(2, '0'); }
@@ -272,7 +316,7 @@
                 'X-CSRF-TOKEN': csrf
             },
             body: formData
-        }).then(function(r){ return r.json(); });
+        }).then(parseJsonResponse);
     }
     function apiJson(url, method, payload){
         return fetch(url, {
@@ -285,7 +329,25 @@
                 'X-CSRF-TOKEN': csrf
             },
             body: JSON.stringify(payload || {})
-        }).then(function(r){ return r.json(); });
+        }).then(parseJsonResponse);
+    }
+    function parseJsonResponse(response){
+        return response.json()
+            .catch(function(){
+                return {
+                    success: false,
+                    message: response.ok ? 'Invalid server response.' : ('Request failed with status ' + response.status + '.')
+                };
+            })
+            .then(function(json){
+                if (!response.ok && json && json.success !== false) {
+                    json.success = false;
+                }
+                if (!response.ok && json && !json.message) {
+                    json.message = 'Request failed with status ' + response.status + '.';
+                }
+                return json;
+            });
     }
     function singleData(resp){ return resp && resp.data ? resp.data : null; }
     function listData(resp){ return resp && Array.isArray(resp.data) ? resp.data : []; }
@@ -317,6 +379,14 @@
         $('#lmTgNotLinkedBanner').toggle(!isLinked);
     }
 
+    function formatChatText(text){
+        var safe = esc(text || '');
+
+        safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        return '<div class="lm-tg-text">' + safe + '</div>';
+    }
+
     function renderMessages(messages){
         var box = $('#lmTgMessages').empty();
         if (!messages || !messages.length) {
@@ -331,7 +401,7 @@
                 lastDateKey = thisDateKey;
             }
 
-            var body = esc(m.message || '');
+            var body = formatChatText(m.message || '');
             if (m.message_type === 'image' && m.file && m.file.url) body += '<div><img src="'+esc(m.file.url)+'" style="max-width:200px;border-radius:8px;margin-top:6px"></div>';
             if (m.message_type === 'file' && m.file && m.file.url) body += '<div><a href="'+esc(m.file.url)+'" target="_blank">'+esc(m.file.name || 'Download file')+'</a></div>';
             if (m.message_type === 'audio' && m.file && m.file.url) body += '<div><audio controls src="'+esc(m.file.url)+'" style="max-width:200px;margin-top:6px"></audio></div>';
@@ -375,8 +445,10 @@
         contacts.forEach(function(r){
             if (!r.customer_id) return;
             var name = r.display_name || r.customer_name || 'Customer';
-            var fallbackSub = [r.customer_phone, r.location_name].filter(Boolean).join(' · ') || 'New chat';
-            var sub = r.last_message ? ((r.last_sender_name ? r.last_sender_name + ': ' : '') + r.last_message) : (r.display_subtitle || fallbackSub);
+            var inv = r.invoice_no ? 'Inv '+r.invoice_no : '';
+            var inst = r.installment_no ? 'Inst ' + r.installment_no + (r.installment_total ? '/' + r.installment_total : '') : '';
+            var fallbackSub = [inv, inst, r.customer_phone, r.location_name].filter(Boolean).join(' · ') || 'New chat';
+            var sub = fallbackSub;
             var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-tg-contact-badge">' + Number(r.unread_count) + '</span>' : '';
             var avatar = r.avatar_url
                 ? '<img src="' + esc(r.avatar_url) + '" alt="">'
@@ -431,6 +503,11 @@
     function openContact(customerId, name, linked, context){
         activeLoanContext = context || {};
         var initialProfile = activeLoanContext.profile || {display_name: name, telegram_linked: !!linked};
+        if (!activeLoanContext.loan_id && initialProfile.loan_id) {
+            activeLoanContext.loan_id = initialProfile.loan_id;
+            activeLoanContext.loan_number = initialProfile.loan_number || '';
+            activeLoanContext.balance_amount = initialProfile.balance_amount || '';
+        }
         activeCustomerName = profileName(initialProfile, name);
         activeCustomerId = customerId;
         $('.lm-tg-contact').removeClass('active');
@@ -445,6 +522,11 @@
                 activeThreadId = thread.id;
                 setHeader(thread.customer_profile || thread, !!thread.telegram_linked);
                 activeCustomerName = profileName(thread.customer_profile || thread, activeCustomerName);
+                if (!activeLoanContext.loan_id && thread.loan_id) {
+                    activeLoanContext.loan_id = thread.loan_id;
+                    activeLoanContext.loan_number = thread.loan_number || '';
+                    activeLoanContext.balance_amount = thread.balance_amount || '';
+                }
                 loadThread(true);
                 startPolling();
                 if (activeLoanContext.auto_action === 'invoice') {
@@ -484,6 +566,15 @@
     $('#lmTgFab').on('click', openDrawer);
     $('#lmTgDrawerCloseX, #lmTgDrawerOverlay').on('click', closeDrawer);
 
+    // Auto-close Telegram drawer whenever any Bootstrap modal opens
+    $(document).on('show.bs.modal', function(e){
+        if (!$(e.target).hasClass('lm-send-invoice-confirm-modal')) {
+            if ($('#lmTgDrawer').hasClass('open')) {
+                closeDrawer();
+            }
+        }
+    });
+
     $('#lmTgSearchInput').on('input', function(){
         var q = $(this).val();
         if (searchTimer) window.clearTimeout(searchTimer);
@@ -502,6 +593,14 @@
         var $err = $('#lmTgComposerError').text(message).show();
         window.clearTimeout(showComposerError._t);
         showComposerError._t = window.setTimeout(function(){ $err.fadeOut(200); }, 4000);
+    }
+    function showVisibleError(message){
+        showComposerError(message);
+        if (window.toastr) {
+            toastr.error(message);
+        } else {
+            alert(message);
+        }
     }
 
     $('#lmTgComposerForm').on('submit', function(e){
@@ -546,23 +645,97 @@
             .catch(function(){ showComposerError('Failed to send message.'); });
     }
 
+    function invoiceCaption(customerName){
+        var name = customerName || activeCustomerName || 'Customer';
+
+        return String(invoiceMessageTemplate || '')
+            .split('{Customer Name}').join(name)
+            .split('{Business Name}').join(@json(\Modules\LoanManagement\Services\BusinessSettingsService::businessName()));
+    }
+
+    function invoicePrintUrl(loanId){
+        return loanPrintBaseUrl + '/' + encodeURIComponent(loanId) + '/print?auto_print=0&_lm_invoice_preview=1';
+    }
+
+    function confirmInvoiceSend(loanId, caption){
+        var deferred = $.Deferred();
+        var $modal = $(
+            '<div class="modal fade lm-send-invoice-confirm-modal" tabindex="-1" role="dialog">' +
+                '<div class="modal-dialog modal-xl" role="document" style="width:96%;max-width:1180px;">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header">' +
+                            '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                '<span aria-hidden="true">&times;</span>' +
+                            '</button>' +
+                            '<h4 class="modal-title"><i class="fa fa-file-text-o"></i> Preview Invoice Before Sending</h4>' +
+                        '</div>' +
+                        '<div class="modal-body" style="padding:0;">' +
+                            '<div style="display:grid;grid-template-columns:320px minmax(0,1fr);height:78vh;">' +
+                                '<div style="border-right:1px solid #e5e7eb;padding:16px;overflow:auto;background:#f8fafc;">' +
+                                    '<div style="font-weight:700;margin-bottom:8px;color:#111827;">Message to customer</div>' +
+                                    '<div class="lm-tg-bubble" style="max-width:none;background:#e3fbd4;box-shadow:none;">' + formatChatText(caption) + '</div>' +
+                                '</div>' +
+                                '<iframe id="lmSendInvoiceConfirmFrame" src="' + esc(invoicePrintUrl(loanId)) + '" style="width:100%;height:100%;border:0;background:#fff;"></iframe>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="modal-footer">' +
+                            '<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>' +
+                            '<button type="button" class="btn btn-success lm-confirm-send-invoice-now">' +
+                                '<i class="fa fa-paper-plane"></i> Send Now' +
+                            '</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        ).appendTo('body');
+
+        var resolved = false;
+        $modal.on('click', '.lm-confirm-send-invoice-now', function(){
+            resolved = true;
+            $modal.modal('hide');
+            deferred.resolve('lmSendInvoiceConfirmFrame');
+        });
+        $modal.on('hidden.bs.modal', function(){
+            $modal.remove();
+            if (!resolved) {
+                deferred.reject({cancelled: true});
+            }
+        });
+        $modal.on('shown.bs.modal', function(){
+            $('.modal-backdrop').last().addClass('lm-send-invoice-confirm-backdrop');
+        });
+        $modal.modal({backdrop: 'static', keyboard: false});
+
+        return deferred.promise();
+    }
+
     function sendInvoiceImage(){
         if (!activeThreadId || !activeLoanContext.loan_id) {
             return false;
         }
 
-        var caption = 'Invoice: ' + (activeLoanContext.loan_number || activeLoanContext.loan_id);
+        var caption = invoiceCaption();
         var $button = $('#lmTgSendInvoice');
-        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
+        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Previewing');
         showComposerError('');
 
-        buildLoanPrintImageFromPreview(activeLoanContext.loan_id)
-            .then(function(blob){
-                var fileName = 'loan-invoice-' + String(activeLoanContext.loan_number || activeLoanContext.loan_id).replace(/[^a-zA-Z0-9_-]+/g, '-') + '.png';
-                var file = new File([blob], fileName, {type: 'image/png'});
-                return sendTelegramFile(file, 'image', caption);
+        confirmInvoiceSend(activeLoanContext.loan_id, caption)
+            .then(function(previewFrameId){
+                $button.html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
+                activeLoanContext.preview_frame_id = previewFrameId || activeLoanContext.preview_frame_id || '';
+                return sendInvoiceImageFast(activeLoanContext.loan_id, caption);
             })
             .then(function(resp){
+                if (resp && resp.success) {
+                    loadThread(false);
+                    loadContacts($('#lmTgSearchInput').val());
+                    return null;
+                }
+            })
+            .then(function(resp){
+                if (resp === null) {
+                    return;
+                }
                 if (!(resp && resp.success)) {
                     showComposerError((resp && resp.message) || 'Failed to send invoice image.');
                     return;
@@ -571,8 +744,11 @@
                 loadThread(false);
                 loadContacts($('#lmTgSearchInput').val());
             })
-            .catch(function(){
-                showComposerError('Failed to create invoice image from print preview.');
+            .catch(function(error){
+                if (error && error.cancelled) {
+                    return;
+                }
+                showComposerError('Failed to send invoice image.');
             })
             .finally(function(){
                 $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
@@ -581,7 +757,102 @@
         return true;
     }
 
-    function buildLoanPrintImageFromPreview(loanId){
+    function sendInvoiceImageFromServer(loanId, caption){
+        return apiPostJson(chatBaseUrl + '/' + activeThreadId + '/invoice-image', {
+            loan_id: loanId,
+            message: caption || ''
+        });
+    }
+
+    function sendInvoiceImageFast(loanId, caption){
+        return sendInvoiceImageFromPreview(caption)
+            .then(function(resp){
+                if (resp && resp.success) {
+                    return resp;
+                }
+
+                if (invoiceServerImageEnabled) {
+                    return sendInvoiceImageFromServer(loanId, caption);
+                }
+
+                return resp;
+            })
+            .catch(function(error){
+                if (invoiceServerImageEnabled) {
+                    return sendInvoiceImageFromServer(loanId, caption);
+                }
+
+                throw error;
+            });
+    }
+
+    function sendInvoiceImageFromPreview(caption){
+        caption = caption || invoiceCaption();
+        showComposerError('Compressing invoice image...');
+
+        return buildLoanPrintImageFromPreview(activeLoanContext.loan_id, activeLoanContext.preview_frame_id || '')
+            .then(function(blob){
+                return compressInvoiceImageBlob(blob, 820, 1300, 0.58);
+            })
+            .then(function(blob){
+                showComposerError('');
+                var fileName = 'loan-invoice-' + String(activeLoanContext.loan_number || activeLoanContext.loan_id).replace(/[^a-zA-Z0-9_-]+/g, '-') + '.jpg';
+                var file = new File([blob], fileName, {type: 'image/jpeg'});
+                return sendTelegramFile(file, 'image', caption);
+            });
+    }
+
+    function compressInvoiceImageBlob(blob, maxWidth, maxHeight, quality){
+        if (!blob) {
+            return Promise.reject(new Error('Invoice image was not created.'));
+        }
+
+        return new Promise(function(resolve){
+            var image = new Image();
+            var objectUrl = URL.createObjectURL(blob);
+
+            image.onload = function(){
+                URL.revokeObjectURL(objectUrl);
+
+                var width = image.naturalWidth || image.width;
+                var height = image.naturalHeight || image.height;
+                var ratio = Math.min(1, maxWidth / width, maxHeight / height);
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(width * ratio));
+                canvas.height = Math.max(1, Math.round(height * ratio));
+
+                var context = canvas.getContext('2d');
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                canvas.toBlob(function(compressed){
+                    resolve(compressed || blob);
+                }, 'image/jpeg', quality);
+            };
+
+            image.onerror = function(){
+                URL.revokeObjectURL(objectUrl);
+                resolve(blob);
+            };
+
+            image.src = objectUrl;
+        });
+    }
+
+    function buildLoanPrintImageFromPreview(loanId, previewFrameId){
+        var existingFrame = previewFrameId ? document.getElementById(previewFrameId) : null;
+        if (existingFrame && existingFrame.contentWindow && typeof existingFrame.contentWindow.loanManagementBuildLoanPrintImageBlob === 'function') {
+            return existingFrame.contentWindow.loanManagementBuildLoanPrintImageBlob(0.9, 'image/jpeg', 0.66)
+                .catch(function(){
+                    return buildLoanPrintImageFromHiddenFrame(loanId);
+                });
+        }
+
+        return buildLoanPrintImageFromHiddenFrame(loanId);
+    }
+
+    function buildLoanPrintImageFromHiddenFrame(loanId){
         return new Promise(function(resolve, reject){
             var iframe = document.createElement('iframe');
             var timeout = window.setTimeout(function(){
@@ -611,7 +882,7 @@
                         throw new Error('Print preview image builder is not available.');
                     }
 
-                    win.loanManagementBuildLoanPrintImageBlob()
+                    win.loanManagementBuildLoanPrintImageBlob(0.9, 'image/jpeg', 0.66)
                         .then(function(blob){
                             cleanup();
                             resolve(blob);
@@ -673,16 +944,47 @@
             return;
         }
 
-        var loanNo = activeLoanContext.loan_number ? ('Loan #: ' + activeLoanContext.loan_number + '\n') : '';
+        var loanNo = activeLoanContext.loan_number ? ('Installment #: ' + activeLoanContext.loan_number + '\n') : '';
         var balance = activeLoanContext.balance_amount ? ('Balance: ' + activeLoanContext.balance_amount + '\n') : '';
         var text = window.prompt('Invoice message:', 'Dear ' + activeCustomerName + ',\n' + loanNo + balance + 'Please review your invoice and contact us if you have questions.');
         if (text) sendTelegramText(text);
     });
 
     $('#lmTgSendPay').on('click', function(){
-        var amount = activeLoanContext.balance_amount || '......';
-        var text = window.prompt('Payment message:', 'សូមជំរាបសួរ ' + activeCustomerName + ' លោកអ្នកបានបង់ប្រាក់ ចំនួន ' + amount + ' រួចរាល់');
-        if (text) sendTelegramText(text);
+        var loanId = activeLoanContext.loan_id || '';
+        if (!loanId) {
+            showVisibleError('No current loan found for this customer.');
+            return;
+        }
+
+        if (!$('.view_modal').length) {
+            showVisibleError('Payment modal is not available on this page.');
+            return;
+        }
+
+        closeDrawer();
+        $.ajax({
+            url: loanPrintBaseUrl + '/' + encodeURIComponent(loanId) + '/payment/create?return_to=' + encodeURIComponent(window.location.href),
+            dataType: 'html',
+            beforeSend: function(){
+                $('.view_modal').html(
+                    '<div class="modal-dialog modal-lg" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-body text-center" style="padding:32px 16px;">' +
+                                '<i class="fa fa-spinner fa-spin fa-2x"></i>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>'
+                ).modal('show');
+            },
+            success: function(html){
+                $('.view_modal').html(html).modal('show');
+            },
+            error: function(){
+                $('.view_modal').modal('hide');
+                showVisibleError('Unable to open payment form.');
+            }
+        });
     });
 
     $('#lmTgPickImages').on('click', function(){ $('#lmTgImageInput').trigger('click'); });
@@ -710,20 +1012,66 @@
         }, function(){ showComposerError('Unable to get location permission.'); });
     });
 
+    function resetVoiceDraft(){
+        pendingVoiceFile = null;
+        pendingVoiceDuration = 0;
+        voiceChunks = [];
+        voiceStartedAt = null;
+        voiceElapsedBeforePause = 0;
+        voicePausedAt = null;
+        $('#lmTgVoiceStopBtn').hide().prop('disabled', false).html('<i class="fa fa-stop"></i> Stop');
+        $('#lmTgVoiceSendBtn').hide().prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+        $('#lmTgVoiceBtn').removeClass('recording').prop('disabled', false).html('<i class="fa fa-microphone"></i> Voice').show();
+    }
+
+    function currentVoiceDuration(){
+        var elapsed = voiceElapsedBeforePause;
+        if (voiceStartedAt && (!mediaRecorder || mediaRecorder.state === 'recording')) {
+            elapsed += Date.now() - voiceStartedAt;
+        }
+
+        return Math.max(1, Math.round(elapsed / 1000));
+    }
+
     $('#lmTgVoiceBtn').on('click', function(){
         var $btn = $(this);
         if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            $btn.removeClass('recording').html('<i class="fa fa-microphone"></i> Voice');
+            if (typeof mediaRecorder.pause === 'function') {
+                mediaRecorder.pause();
+                voiceElapsedBeforePause += Date.now() - voiceStartedAt;
+                voicePausedAt = Date.now();
+                voiceStartedAt = null;
+                $btn.html('<i class="fa fa-play"></i> Start');
+                showComposerError('Voice recording paused.');
+            } else {
+                showVisibleError('Pause is not available in this browser.');
+            }
             return;
         }
+
+        if (mediaRecorder && mediaRecorder.state === 'paused') {
+            if (typeof mediaRecorder.resume === 'function') {
+                mediaRecorder.resume();
+                voiceStartedAt = Date.now();
+                voicePausedAt = null;
+                $btn.addClass('recording').html('<i class="fa fa-pause"></i> Pause');
+                showComposerError('Voice recording resumed.');
+            }
+            return;
+        }
+
         if (!navigator.mediaDevices || !window.MediaRecorder) {
             showComposerError('Voice recording is not available in this browser.');
             return;
         }
+
+        resetVoiceDraft();
         navigator.mediaDevices.getUserMedia({audio: true}).then(function(stream){
             voiceChunks = [];
             voiceStartedAt = Date.now();
+            voiceElapsedBeforePause = 0;
+            pendingVoiceFile = null;
+            pendingVoiceDuration = 0;
             mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.ondataavailable = function(event){
                 if (event.data && event.data.size) voiceChunks.push(event.data);
@@ -731,16 +1079,62 @@
             mediaRecorder.onstop = function(){
                 stream.getTracks().forEach(function(track){ track.stop(); });
                 var blob = new Blob(voiceChunks, {type: mediaRecorder.mimeType || 'audio/webm'});
-                var file = new File([blob], 'voice-message.webm', {type: blob.type});
-                var duration = Math.max(1, Math.round((Date.now() - voiceStartedAt) / 1000));
-                sendTelegramFile(file, 'audio', '', duration).then(function(){
-                    loadThread(false);
-                    loadContacts($('#lmTgSearchInput').val());
-                });
+                pendingVoiceFile = new File([blob], 'voice-message.webm', {type: blob.type});
+                pendingVoiceDuration = currentVoiceDuration();
+                mediaRecorder = null;
+                voiceStartedAt = null;
+                voicePausedAt = null;
+                $('#lmTgVoiceBtn').removeClass('recording').hide();
+                $('#lmTgVoiceStopBtn').hide().prop('disabled', false);
+                $('#lmTgVoiceSendBtn').show().prop('disabled', false);
+                showComposerError('Voice ready. Click Send Voice.');
             };
             mediaRecorder.start();
-            $btn.addClass('recording').html('<i class="fa fa-stop"></i> Stop');
-        }).catch(function(){ showComposerError('Unable to access microphone.'); });
+            $btn.addClass('recording').html('<i class="fa fa-pause"></i> Pause');
+            $('#lmTgVoiceStopBtn').show().prop('disabled', false);
+            $('#lmTgVoiceSendBtn').hide();
+            showComposerError('Recording voice...');
+        }).catch(function(){
+            resetVoiceDraft();
+            showComposerError('Unable to access microphone.');
+        });
+    });
+
+    $('#lmTgVoiceStopBtn').on('click', function(){
+        if (!mediaRecorder || ['recording', 'paused'].indexOf(mediaRecorder.state) === -1) {
+            return;
+        }
+
+        $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Preparing');
+        if (mediaRecorder.state === 'recording' && voiceStartedAt) {
+            voiceElapsedBeforePause += Date.now() - voiceStartedAt;
+            voiceStartedAt = null;
+        }
+        mediaRecorder.stop();
+    });
+
+    $('#lmTgVoiceSendBtn').on('click', function(){
+        if (!pendingVoiceFile) {
+            showVisibleError('No voice recording is ready to send.');
+            return;
+        }
+
+        var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending');
+        sendTelegramFile(pendingVoiceFile, 'audio', '', pendingVoiceDuration)
+            .then(function(resp){
+                if (resp && resp.success) {
+                    resetVoiceDraft();
+                    loadThread(false);
+                    loadContacts($('#lmTgSearchInput').val());
+                } else {
+                    showVisibleError((resp && resp.message) || 'Failed to send voice message.');
+                    $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+                }
+            })
+            .catch(function(){
+                showVisibleError('Failed to send voice message.');
+                $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+            });
     });
 
     $('#lmTgMessages').on('click', '.lm-tg-action.edit', function(){
@@ -796,6 +1190,66 @@
         $('#lmTgFab').addClass('open');
         loadContacts('');
         openContact(customerId, name || 'Customer', !!linked, context || {});
+    };
+
+    window.loanManagementSendInvoiceToTelegramCustomer = function(customerId, name, linked, context){
+        context = context || {};
+        $('#lmTgDrawer').addClass('open');
+        $('#lmTgDrawerOverlay').addClass('open');
+        $('#lmTgFab').addClass('open');
+        loadContacts('');
+
+        activeLoanContext = context;
+        activeCustomerId = customerId;
+        activeCustomerName = name || 'Customer';
+        setHeader({display_name: activeCustomerName, telegram_linked: !!linked}, linked, 'Preparing invoice...');
+        $('#lmTgComposerForm').show();
+        $('#lmTgTools').css('display', 'flex');
+        $('#lmTgMessages').html('<div class="lm-tg-empty">Preparing invoice message...</div>');
+        showComposerError('');
+
+        return apiPostJson(chatBaseUrl, {customer_id: customerId})
+            .then(function(resp){
+                var thread = singleData(resp);
+                if (!thread || !thread.id) {
+                    throw new Error((resp && resp.message) || 'Unable to open this customer chat.');
+                }
+
+                activeThreadId = thread.id;
+                setHeader(thread.customer_profile || thread, !!thread.telegram_linked, 'Previewing invoice...');
+                activeCustomerName = profileName(thread.customer_profile || thread, activeCustomerName);
+                startPolling();
+
+                var loanId = context.loan_id || '';
+                if (!loanId) {
+                    throw new Error('No loan selected for this invoice.');
+                }
+
+                var caption = context.message || invoiceCaption(activeCustomerName);
+                return confirmInvoiceSend(loanId, caption)
+                    .then(function(previewFrameId){
+                        activeLoanContext.preview_frame_id = previewFrameId || activeLoanContext.preview_frame_id || '';
+                        setHeader(thread.customer_profile || thread, !!thread.telegram_linked, 'Sending invoice...');
+                        return sendInvoiceImageFast(loanId, caption);
+                    });
+            })
+            .then(function(resp){
+                if (!(resp && resp.success)) {
+                    throw new Error((resp && resp.message) || 'Failed to send invoice image.');
+                }
+
+                loadThread(false);
+                loadContacts($('#lmTgSearchInput').val());
+                return resp;
+            })
+            .catch(function(error){
+                if (error && error.cancelled) {
+                    throw error;
+                }
+                var message = error && error.message ? error.message : 'Failed to send invoice image.';
+                showComposerError(message);
+                throw error;
+            });
     };
 })(jQuery);
 </script>

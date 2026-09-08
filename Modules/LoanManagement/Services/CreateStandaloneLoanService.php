@@ -13,40 +13,111 @@ use Illuminate\Support\Facades\Storage;
 
 class CreateStandaloneLoanService
 {
-    public function searchCustomers(string $keyword): \Illuminate\Support\Collection
+    public function searchCustomers(string $keyword = ''): \Illuminate\Support\Collection
     {
-        $query = DB::connection('mysql_loan')->table('loan_customers')
-            ->where(function ($q) use ($keyword) {
-                $q->where('name', 'like', '%'.$keyword.'%')
-                    ->orWhere('phone', 'like', '%'.$keyword.'%')
-                    ->orWhere('customer_code', 'like', '%'.$keyword.'%');
-                if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
-                    $q->orWhere('khmer_name', 'like', '%'.$keyword.'%');
+        $customers = collect();
+        $keyword = trim($keyword);
+
+        if (Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            $query = DB::connection('mysql_loan')->table('loan_customers')
+                ->whereNull('deleted_at');
+
+            if ($keyword !== '') {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$keyword.'%')
+                        ->orWhere('customer_code', 'like', '%'.$keyword.'%');
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
+                        $q->orWhere('khmer_name', 'like', '%'.$keyword.'%');
+                    }
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id_card_number')) {
+                        $q->orWhere('id_card_number', 'like', '%'.$keyword.'%');
+                    }
+                    if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'alternate_phone')) {
+                        $q->orWhere('alternate_phone', 'like', '%'.$keyword.'%');
+                    }
+                });
+            }
+
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'status')) {
+                $query->where('status', 'active');
+            }
+
+            $select = [
+                'id', 'customer_code', 'name', 'phone', 'address',
+                'email', 'gender', 'date_of_birth', 'id_card_number',
+            ];
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
+                $select[] = 'khmer_name';
+            }
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'alternate_phone')) {
+                $select[] = 'alternate_phone';
+            }
+            foreach ([
+                'province', 'province_code', 'district', 'district_code', 'commune', 'commune_code',
+                'village', 'village_code', 'customer_photo_file_id', 'photo_url', 'profile_photo',
+                'status', 'blacklist_status', 'blacklist_reason',
+            ] as $column) {
+                if (Schema::connection('mysql_loan')->hasColumn('loan_customers', $column)) {
+                    $select[] = $column;
                 }
-            })
-            ->whereNull('deleted_at');
+            }
 
-        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'status')) {
-            $query->where('status', 'active');
+            $customers = $query->select($select)->orderByDesc('id')->limit(30)->get()->map(function ($item) {
+                if (!empty($item->customer_photo_file_id) && empty($item->photo_url)) {
+                    $item->photo_url = url('loan-management/chat-files/' . (int) $item->customer_photo_file_id);
+                } elseif (!empty($item->profile_photo) && empty($item->photo_url)) {
+                    $item->photo_url = Storage::disk('public')->url($item->profile_photo);
+                }
+                return $item;
+            });
         }
 
-        $select = [
-            'id', 'customer_code', 'name', 'phone', 'address',
-            'email', 'gender', 'date_of_birth', 'id_card_number',
-        ];
-        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
-            $select[] = 'khmer_name';
-        }
-        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'alternate_phone')) {
-            $select[] = 'alternate_phone';
-        }
-        foreach (['province', 'province_code', 'district', 'district_code', 'commune', 'commune_code', 'village', 'village_code'] as $column) {
-            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', $column)) {
-                $select[] = $column;
+        // If fewer results found and main contacts table exists, search contacts
+        if ($customers->count() < 30 && Schema::hasTable('contacts')) {
+            $existingPhones = $customers->pluck('phone')->filter()->all();
+            $contactsQuery = DB::table('contacts')
+                ->where('type', 'customer');
+
+            if ($keyword !== '') {
+                $contactsQuery->where(function ($q) use ($keyword) {
+                    $q->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('mobile', 'like', '%'.$keyword.'%')
+                        ->orWhere('contact_id', 'like', '%'.$keyword.'%')
+                        ->orWhere('alternate_number', 'like', '%'.$keyword.'%');
+                });
+            }
+
+            $contacts = $contactsQuery->orderByDesc('id')->limit(30 - $customers->count())->get();
+
+            foreach ($contacts as $contact) {
+                if (!empty($contact->mobile) && in_array($contact->mobile, $existingPhones, true)) {
+                    continue;
+                }
+                $customers->push((object) [
+                    'id' => null, // Pos contact, will create loan_customer on submit
+                    'main_contact_id' => $contact->id,
+                    'customer_code' => $contact->contact_id ?? '',
+                    'name' => $contact->name ?? '',
+                    'khmer_name' => '',
+                    'phone' => $contact->mobile ?? '',
+                    'alternate_phone' => $contact->alternate_number ?? '',
+                    'id_card_number' => '',
+                    'address' => trim(($contact->address_line_1 ?? '') . ' ' . ($contact->address_line_2 ?? '') . ' ' . ($contact->city ?? '')),
+                    'province_code' => '',
+                    'district_code' => '',
+                    'commune_code' => '',
+                    'village_code' => '',
+                    'province' => $contact->state ?? '',
+                    'district' => $contact->city ?? '',
+                    'commune' => '',
+                    'village' => '',
+                    'photo_url' => null,
+                ]);
             }
         }
 
-        return $query->select($select)->limit(20)->get();
+        return $customers;
     }
 
     public function getCustomerById(int $customerId): ?object
@@ -55,6 +126,177 @@ class CreateStandaloneLoanService
             ->where('id', $customerId)
             ->whereNull('deleted_at')
             ->first();
+    }
+
+    public function findCustomerDuplicate(?string $phone = null, ?string $idCard = null, ?int $excludeCustomerId = null): ?array
+    {
+        $phone = trim((string) $phone);
+        $idCard = trim((string) $idCard);
+        $cleanPhone = preg_replace('/[^0-9+]/', '', $phone);
+        $cleanIdCard = preg_replace('/[^a-zA-Z0-9]/', '', $idCard);
+
+        if (($phone === '' || $cleanPhone === '') && ($idCard === '' || $cleanIdCard === '')) {
+            return null;
+        }
+
+        if (Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            $query = DB::connection('mysql_loan')->table('loan_customers')
+                ->whereNull('deleted_at');
+
+            if ($excludeCustomerId) {
+                $query->where('id', '!=', $excludeCustomerId);
+            }
+
+            $query->where(function ($q) use ($phone, $cleanPhone, $idCard, $cleanIdCard) {
+                $hasCondition = false;
+                if ($cleanPhone !== '') {
+                    $q->where(function ($pq) use ($phone, $cleanPhone) {
+                        $pq->where('phone', $phone)
+                            ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '.', '') = ?", [$cleanPhone]);
+                        if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'alternate_phone')) {
+                            $pq->orWhere('alternate_phone', $phone)
+                                ->orWhereRaw("REPLACE(REPLACE(REPLACE(alternate_phone, ' ', ''), '-', ''), '.', '') = ?", [$cleanPhone]);
+                        }
+                    });
+                    $hasCondition = true;
+                }
+
+                if ($cleanIdCard !== '' && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id_card_number')) {
+                    if ($hasCondition) {
+                        $q->orWhere(function ($iq) use ($idCard, $cleanIdCard) {
+                            $iq->where('id_card_number', $idCard)
+                                ->orWhereRaw("REPLACE(REPLACE(id_card_number, ' ', ''), '-', '') = ?", [$cleanIdCard]);
+                        });
+                    } else {
+                        $q->where(function ($iq) use ($idCard, $cleanIdCard) {
+                            $iq->where('id_card_number', $idCard)
+                                ->orWhereRaw("REPLACE(REPLACE(id_card_number, ' ', ''), '-', '') = ?", [$cleanIdCard]);
+                        });
+                    }
+                }
+            });
+
+            $select = [
+                'id', 'customer_code', 'name', 'phone', 'address',
+                'email', 'gender', 'date_of_birth', 'id_card_number',
+            ];
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'khmer_name')) {
+                $select[] = 'khmer_name';
+            }
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'alternate_phone')) {
+                $select[] = 'alternate_phone';
+            }
+            foreach (['province', 'province_code', 'district', 'district_code', 'commune', 'commune_code', 'village', 'village_code', 'customer_photo_file_id', 'photo_url', 'profile_photo'] as $column) {
+                if (Schema::connection('mysql_loan')->hasColumn('loan_customers', $column)) {
+                    $select[] = $column;
+                }
+            }
+
+            $matched = $query->select($select)->orderByDesc('id')->first();
+
+            if ($matched) {
+                $photoUrl = null;
+                if (! empty($matched->customer_photo_file_id) && empty($matched->photo_url)) {
+                    $photoUrl = url('loan-management/chat-files/' . (int) $matched->customer_photo_file_id);
+                } elseif (! empty($matched->photo_url)) {
+                    $photoUrl = $matched->photo_url;
+                } elseif (! empty($matched->profile_photo)) {
+                    $photoUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($matched->profile_photo);
+                }
+
+                $matchedPhone = false;
+                $matchedId = false;
+
+                if ($cleanPhone !== '') {
+                    $cPhoneClean = preg_replace('/[^0-9+]/', '', (string) ($matched->phone ?? ''));
+                    $cAltPhoneClean = preg_replace('/[^0-9+]/', '', (string) ($matched->alternate_phone ?? ''));
+                    if ($cleanPhone === $cPhoneClean || ($cAltPhoneClean !== '' && $cleanPhone === $cAltPhoneClean)) {
+                        $matchedPhone = true;
+                    }
+                }
+
+                if ($cleanIdCard !== '' && ! empty($matched->id_card_number)) {
+                    $cIdClean = preg_replace('/[^a-zA-Z0-9]/', '', (string) $matched->id_card_number);
+                    if ($cleanIdCard === $cIdClean) {
+                        $matchedId = true;
+                    }
+                }
+
+                $matchedBy = ($matchedPhone && $matchedId) ? 'both' : ($matchedPhone ? 'phone' : 'id_card_number');
+
+                return [
+                    'exists' => true,
+                    'matched_by' => $matchedBy,
+                    'customer' => [
+                        'id' => $matched->id,
+                        'main_contact_id' => null,
+                        'customer_code' => $matched->customer_code ?? '',
+                        'name' => $matched->name ?? '',
+                        'khmer_name' => $matched->khmer_name ?? '',
+                        'phone' => $matched->phone ?? '',
+                        'alternate_phone' => $matched->alternate_phone ?? '',
+                        'id_card_number' => $matched->id_card_number ?? '',
+                        'address' => $matched->address ?? '',
+                        'province_code' => $matched->province_code ?? '',
+                        'district_code' => $matched->district_code ?? '',
+                        'commune_code' => $matched->commune_code ?? '',
+                        'village_code' => $matched->village_code ?? '',
+                        'province' => $matched->province ?? '',
+                        'district' => $matched->district ?? '',
+                        'commune' => $matched->commune ?? '',
+                        'village' => $matched->village ?? '',
+                        'photo_url' => $photoUrl,
+                        'status' => $matched->status ?? 'active',
+                        'blacklist_status' => (bool) ($matched->blacklist_status ?? false),
+                        'blacklist_reason' => $matched->blacklist_reason ?? '',
+                    ],
+                ];
+            }
+        }
+
+        if ($cleanPhone !== '' && Schema::hasTable('contacts')) {
+            $contact = DB::table('contacts')
+                ->where('type', 'customer')
+                ->where(function ($q) use ($phone, $cleanPhone) {
+                    $q->where('mobile', $phone)
+                        ->orWhere('alternate_number', $phone)
+                        ->orWhereRaw("REPLACE(REPLACE(REPLACE(mobile, ' ', ''), '-', ''), '.', '') = ?", [$cleanPhone]);
+                })
+                ->orderByDesc('id')
+                ->first();
+
+            if ($contact) {
+                return [
+                    'exists' => true,
+                    'matched_by' => 'phone',
+                    'customer' => [
+                        'id' => null,
+                        'main_contact_id' => $contact->id,
+                        'customer_code' => $contact->contact_id ?? '',
+                        'name' => $contact->name ?? '',
+                        'khmer_name' => '',
+                        'phone' => $contact->mobile ?? '',
+                        'alternate_phone' => $contact->alternate_number ?? '',
+                        'id_card_number' => '',
+                        'address' => trim(($contact->address_line_1 ?? '') . ' ' . ($contact->address_line_2 ?? '') . ' ' . ($contact->city ?? '')),
+                        'province_code' => '',
+                        'district_code' => '',
+                        'commune_code' => '',
+                        'village_code' => '',
+                        'province' => $contact->state ?? '',
+                        'district' => $contact->city ?? '',
+                        'commune' => '',
+                        'village' => '',
+                        'photo_url' => null,
+                        'status' => 'active',
+                        'blacklist_status' => false,
+                        'blacklist_reason' => '',
+                    ],
+                ];
+            }
+        }
+
+        return null;
     }
 
     public function previewSchedule(array $data): array
@@ -285,8 +527,28 @@ class CreateStandaloneLoanService
 
         $phone = trim((string) ($data['customer_phone'] ?? ''));
         if ($phone !== '' && $phone !== '-') {
+            $cleanPhone = preg_replace('/[^0-9+]/', '', $phone);
             $existing = DB::connection('mysql_loan')->table('loan_customers')
-                ->where('phone', $phone)
+                ->where(function ($q) use ($phone, $cleanPhone) {
+                    $q->where('phone', $phone)
+                        ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '.', '') = ?", [$cleanPhone]);
+                })
+                ->whereNull('deleted_at')
+                ->first();
+            if ($existing) {
+                $this->updateCustomerAddressFields((int) $existing->id, $data);
+                return (int) $existing->id;
+            }
+        }
+
+        $idCard = trim((string) ($data['id_card_number'] ?? ''));
+        if ($idCard !== '' && $idCard !== '-' && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id_card_number')) {
+            $cleanId = preg_replace('/[^a-zA-Z0-9]/', '', $idCard);
+            $existing = DB::connection('mysql_loan')->table('loan_customers')
+                ->where(function ($q) use ($idCard, $cleanId) {
+                    $q->where('id_card_number', $idCard)
+                        ->orWhereRaw("REPLACE(REPLACE(id_card_number, ' ', ''), '-', '') = ?", [$cleanId]);
+                })
                 ->whereNull('deleted_at')
                 ->first();
             if ($existing) {
@@ -569,14 +831,49 @@ class CreateStandaloneLoanService
             return;
         }
 
-        $profileImage = (string) ($data['customer_profile_image'] ?? '');
-        if ($profileImage !== '') {
-            $fileId = $this->storeDataUriFile($profileImage, $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
-            if ($fileId && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'customer_photo_file_id')) {
+        $profileImage = $data['customer_profile_image'] ?? ($data['customer_photo'] ?? null);
+        $fileId = null;
+
+        if ($profileImage instanceof \Illuminate\Http\UploadedFile) {
+            $path = $profileImage->store('loan-customers/'.$customerId, 'public');
+            $fileId = (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->filterColumns('loan_files', [
+                'fileable_type' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+                'fileable_id' => $customerId,
+                'category' => 'customer_photo',
+                'disk' => 'public',
+                'path' => $path,
+                'original_name' => $profileImage->getClientOriginalName(),
+                'mime_type' => $profileImage->getClientMimeType(),
+                'size_bytes' => $profileImage->getSize(),
+                'uploaded_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+        } elseif (is_string($profileImage) && trim($profileImage) !== '') {
+            $fileId = $this->storeDataUriFile(trim($profileImage), $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
+        }
+
+        if ($fileId && $fileId > 0) {
+            if (Schema::connection('mysql_loan')->hasColumn('loan_customers', 'customer_photo_file_id')) {
                 DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update([
                     'customer_photo_file_id' => $fileId,
                     'updated_at' => now(),
                 ]);
+            }
+            if (Schema::connection('mysql_loan')->hasColumn('loans', 'customer_photo_file_id')) {
+                DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->update([
+                    'customer_photo_file_id' => $fileId,
+                    'updated_at' => now(),
+                ]);
+            }
+            if (Schema::connection('mysql_loan')->hasColumn('loans', 'customer_photo_snapshot')) {
+                $filePath = DB::connection('mysql_loan')->table('loan_files')->where('id', $fileId)->value('path');
+                if ($filePath) {
+                    DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->update([
+                        'customer_photo_snapshot' => $filePath,
+                        'updated_at' => now(),
+                    ]);
+                }
             }
         }
 
@@ -652,7 +949,8 @@ class CreateStandaloneLoanService
             $mimeType = 'image/jpeg';
         }
 
-        $binary = base64_decode($dataUri, true);
+        $cleanBase64 = str_replace(' ', '+', trim($dataUri));
+        $binary = base64_decode($cleanBase64, true);
         if ($binary === false || $binary === '') {
             return null;
         }

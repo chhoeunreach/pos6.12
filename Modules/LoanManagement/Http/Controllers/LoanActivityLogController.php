@@ -21,11 +21,25 @@ class LoanActivityLogController extends Controller
 
     public function index(Request $request)
     {
+        $dateFrom = trim((string) $request->input('date_from', ''));
+        $dateTo = trim((string) $request->input('date_to', ''));
+        $dateRange = trim((string) $request->input('date_range', ''));
+
+        if ($dateRange !== '' && ($dateFrom === '' || $dateTo === '')) {
+            $parts = preg_split('/\s+-\s+|\s+~\s+/', $dateRange);
+            if (count($parts) === 2) {
+                try {
+                    $dateFrom = Carbon::parse(trim($parts[0]))->toDateString();
+                    $dateTo = Carbon::parse(trim($parts[1]))->toDateString();
+                } catch (\Throwable $e) {}
+            }
+        }
+
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'event' => trim((string) $request->input('event', '')),
-            'date_from' => trim((string) $request->input('date_from', '')),
-            'date_to' => trim((string) $request->input('date_to', '')),
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
         ];
 
         $rows = collect()
@@ -54,7 +68,11 @@ class LoanActivityLogController extends Controller
         ];
 
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 25;
+        $perPage = (int) $request->input('per_page', 250);
+        if ($perPage <= 0 || $perPage > 1000) {
+            $perPage = 250;
+        }
+
         $logs = new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),
             $rows->count(),

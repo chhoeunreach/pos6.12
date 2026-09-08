@@ -18,7 +18,7 @@
     </div>
     <div class="col-sm-6">
         <div class="form-group">
-            <label>Loan Invoice Prefix:</label>
+            <label>Installment Invoice Prefix:</label>
             <input type="text" name="loan_invoice_prefix" class="form-control" maxlength="50" placeholder="LN" value="{{ old('loan_invoice_prefix', $location->loan_invoice_prefix ?? '') }}">
         </div>
     </div>

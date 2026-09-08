@@ -174,6 +174,12 @@ class TelegramChatService
                 'location_id' => $profile['location_id'],
                 'location_name' => $profile['location_name'],
                 'avatar_url' => $profile['avatar_url'],
+                'loan_id' => $profile['loan_id'],
+                'loan_number' => $profile['loan_number'],
+                'invoice_no' => $profile['invoice_no'],
+                'installment_no' => $profile['installment_no'],
+                'installment_total' => $profile['installment_total'],
+                'balance_amount' => $profile['balance_amount'],
                 'last_message' => (string) ($thread->last_message ?? ''),
                 'last_message_type' => (string) ($thread->last_message_type ?? 'text'),
                 'last_message_at' => $thread->last_message_at?->format('Y-m-d H:i:s'),
@@ -204,6 +210,25 @@ class TelegramChatService
                     }
                 }
             });
+
+            if (Schema::connection('mysql_loan')->hasTable('loans')
+                && Schema::connection('mysql_loan')->hasColumn('loans', 'customer_id')) {
+                $query->orWhereExists(function ($q) use ($search) {
+                    $q->select(DB::raw(1))
+                        ->from('loans')
+                        ->whereColumn('loans.customer_id', 'loan_customers.id');
+                    if (Schema::connection('mysql_loan')->hasColumn('loans', 'deleted_at')) {
+                        $q->whereNull('loans.deleted_at');
+                    }
+                    $q->where(function ($inner) use ($search) {
+                        foreach (['source_invoice_no', 'loan_number', 'invoice_number_snapshot'] as $column) {
+                            if (Schema::connection('mysql_loan')->hasColumn('loans', $column)) {
+                                $inner->orWhere('loans.'.$column, 'like', '%'.$search.'%');
+                            }
+                        }
+                    });
+                });
+            }
         }
 
         $customers = $query->orderByDesc('id')->limit(300)->get();
@@ -226,6 +251,12 @@ class TelegramChatService
                 'location_id' => $profile['location_id'],
                 'location_name' => $profile['location_name'],
                 'avatar_url' => $profile['avatar_url'],
+                'loan_id' => $profile['loan_id'],
+                'loan_number' => $profile['loan_number'],
+                'invoice_no' => $profile['invoice_no'],
+                'installment_no' => $profile['installment_no'],
+                'installment_total' => $profile['installment_total'],
+                'balance_amount' => $profile['balance_amount'],
                 'last_message' => '',
                 'last_message_type' => 'text',
                 'last_message_at' => null,
@@ -254,6 +285,12 @@ class TelegramChatService
             'location_name' => $profile['location_name'],
             'telegram_linked' => $profile['telegram_linked'],
             'avatar_url' => $profile['avatar_url'],
+            'loan_id' => $profile['loan_id'],
+            'loan_number' => $profile['loan_number'],
+            'invoice_no' => $profile['invoice_no'],
+            'installment_no' => $profile['installment_no'],
+            'installment_total' => $profile['installment_total'],
+            'balance_amount' => $profile['balance_amount'],
             'customer_profile' => $profile,
             'status' => (string) $thread->status,
             'messages' => $thread->messages->map(fn ($m) => $this->formatMessage($m))->values()->all(),
@@ -265,7 +302,7 @@ class TelegramChatService
         $file = null;
         if (! empty($message->file_id)) {
             $file = [
-                'url' => (string) ($message->file_url ?? ''),
+                'url' => url('loan-management/chat-files/'.(int) $message->file_id),
                 'name' => (string) ($message->file_name ?? ''),
             ];
         }
@@ -435,7 +472,11 @@ class TelegramChatService
         }
 
         try {
-            RelayChatMessageToTelegramJob::dispatch((int) $message->id, (string) $customer->telegram_chat_id);
+            if (method_exists(RelayChatMessageToTelegramJob::class, 'dispatchAfterResponse')) {
+                RelayChatMessageToTelegramJob::dispatchAfterResponse((int) $message->id, (string) $customer->telegram_chat_id);
+            } else {
+                RelayChatMessageToTelegramJob::dispatch((int) $message->id, (string) $customer->telegram_chat_id);
+            }
         } catch (\Throwable $e) {
             Log::warning('Failed to dispatch Telegram chat relay job', ['error' => $e->getMessage()]);
         }
@@ -511,7 +552,32 @@ class TelegramChatService
                 return true;
             }
         }
-        return false;
+
+        return $this->customerHasLoanInvoiceMatching($customer, $needle);
+    }
+
+    protected function customerHasLoanInvoiceMatching(LoanCustomer $customer, string $needle): bool
+    {
+        $customerId = (int) ($customer->id ?? 0);
+        if ($customerId <= 0
+            || ! Schema::connection('mysql_loan')->hasTable('loans')
+            || ! Schema::connection('mysql_loan')->hasColumn('loans', 'customer_id')) {
+            return false;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loans')->where('customer_id', $customerId);
+        if (Schema::connection('mysql_loan')->hasColumn('loans', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+        $query->where(function ($inner) use ($needle) {
+            foreach (['source_invoice_no', 'loan_number', 'invoice_number_snapshot'] as $column) {
+                if (Schema::connection('mysql_loan')->hasColumn('loans', $column)) {
+                    $inner->orWhere($column, 'like', '%'.$needle.'%');
+                }
+            }
+        });
+
+        return $query->exists();
     }
 
     protected function customerProfile($customer): array
@@ -521,6 +587,20 @@ class TelegramChatService
         $code = trim((string) ($customer->customer_code ?? ''));
         $locationName = $this->customerLocationName($customer);
         $subtitle = collect([$phone, $code, $locationName])->filter()->implode(' · ');
+        $loan = $this->currentLoanForCustomer((int) ($customer->id ?? 0));
+
+        $invoice = '';
+        $installmentNo = null;
+        $installmentTotal = null;
+        if ($loan) {
+            $invoice = trim((string) ($loan->source_invoice_no ?? ''))
+                ?: trim((string) ($loan->invoice_number_snapshot ?? ''))
+                ?: trim((string) ($loan->loan_number ?? ''))
+                ?: (string) $loan->id;
+            $installmentInfo = $this->loanInstallmentInfo((int) $loan->id);
+            $installmentNo = $installmentInfo['installment_no'];
+            $installmentTotal = $installmentInfo['installment_total'];
+        }
 
         return [
             'id' => (int) ($customer->id ?? 0),
@@ -533,6 +613,67 @@ class TelegramChatService
             'telegram_username' => trim((string) ($customer->telegram_username ?? '')),
             'telegram_linked' => ! empty($customer->telegram_chat_id),
             'avatar_url' => $this->customerAvatarUrl($customer),
+            'loan_id' => $loan ? (int) $loan->id : null,
+            'loan_number' => $loan ? (string) ($loan->loan_number ?? $loan->id) : '',
+            'invoice_no' => $invoice,
+            'installment_no' => $installmentNo,
+            'installment_total' => $installmentTotal,
+            'balance_amount' => $loan ? (string) ($loan->balance_amount ?? '') : '',
+        ];
+    }
+
+    protected function currentLoanForCustomer(int $customerId)
+    {
+        if ($customerId <= 0
+            || ! Schema::connection('mysql_loan')->hasTable('loans')
+            || ! Schema::connection('mysql_loan')->hasColumn('loans', 'customer_id')) {
+            return null;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loans')->where('customer_id', $customerId);
+        if (Schema::connection('mysql_loan')->hasColumn('loans', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+        if (Schema::connection('mysql_loan')->hasColumn('loans', 'status')) {
+            $query->orderByRaw("CASE WHEN LOWER(COALESCE(status, '')) IN ('active', 'overdue', 'late', 'partial') THEN 0 ELSE 1 END");
+        }
+
+        $columns = ['id'];
+        foreach (['loan_number', 'balance_amount', 'source_invoice_no', 'invoice_number_snapshot'] as $column) {
+            if (Schema::connection('mysql_loan')->hasColumn('loans', $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $query->orderByDesc('id')->first($columns);
+    }
+
+    protected function loanInstallmentInfo(int $loanId): array
+    {
+        if ($loanId <= 0
+            || ! Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+            || ! Schema::connection('mysql_loan')->hasColumn('loan_payment_schedules', 'loan_id')) {
+            return ['installment_no' => null, 'installment_total' => null];
+        }
+
+        $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+            ->where('loan_id', $loanId)
+            ->when(Schema::connection('mysql_loan')->hasColumn('loan_payment_schedules', 'deleted_at'), fn ($query2) => $query2->whereNull('deleted_at'));
+
+        $total = (int) (clone $schedules)->count();
+
+        $next = null;
+        if (Schema::connection('mysql_loan')->hasColumn('loan_payment_schedules', 'balance_amount')) {
+            $next = (clone $schedules)
+                ->where('balance_amount', '>', 0)
+                ->orderBy('installment_no')
+                ->orderBy('id')
+                ->value('installment_no');
+        }
+
+        return [
+            'installment_no' => $next === null ? null : (int) $next,
+            'installment_total' => $total > 0 ? $total : null,
         ];
     }
 
