@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Barcode;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class BarcodesTableSeeder extends Seeder
 {
@@ -14,7 +14,7 @@ class BarcodesTableSeeder extends Seeder
      */
     public function run()
     {
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 1], [
             'id' => 1,
             'name' => '20 Labels per Sheet',
             'description' => 'Sheet Size: 8.5" x 11", Label Size: 4" x 1", Labels per sheet: 20',
@@ -35,7 +35,7 @@ class BarcodesTableSeeder extends Seeder
             'updated_at' => '2017-12-18 06:13:44',
         ]);
 
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 2], [
             'id' => 2,
             'name' => '30 Labels per sheet',
             'description' => 'Sheet Size: 8.5" x 11", Label Size: 2.625" x 1", Labels per sheet: 30',
@@ -56,7 +56,7 @@ class BarcodesTableSeeder extends Seeder
             'updated_at' => '2017-12-18 06:10:40',
         ]);
 
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 3], [
             'id' => 3,
             'name' => '32 Labels per sheet',
             'description' => 'Sheet Size: 8.5" x 11", Label Size: 2" x 1.25", Labels per sheet: 32',
@@ -77,7 +77,7 @@ class BarcodesTableSeeder extends Seeder
             'updated_at' => '2017-12-18 05:55:40',
         ]);
 
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 4], [
             'id' => 4,
             'name' => '40 Labels per sheet',
             'description' => 'Sheet Size: 8.5" x 11", Label Size: 2" x 1", Labels per sheet: 40',
@@ -98,7 +98,7 @@ class BarcodesTableSeeder extends Seeder
             'updated_at' => '2017-12-18 05:58:40',
         ]);
 
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 5], [
             'id' => 5,
             'name' => '50 Labels per Sheet',
             'description' => 'Sheet Size: 8.5" x 11", Label Size: 1.5" x 1", Labels per sheet: 50',
@@ -119,7 +119,7 @@ class BarcodesTableSeeder extends Seeder
             'updated_at' => '2017-12-18 05:51:10',
         ]);
 
-        Barcode::create([
+        DB::table('barcodes')->updateOrInsert(['id' => 6], [
             'id' => 6,
             'name' => 'Continuous Rolls - 31.75mm x 25.4mm',
             'description' => 'Label Size: 31.75mm x 25.4mm, Gap: 3.18mm',

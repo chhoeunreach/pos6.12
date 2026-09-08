@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Currency;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class CurrenciesTableSeeder extends Seeder
 {
@@ -284,9 +284,11 @@ class CurrenciesTableSeeder extends Seeder
             ['id' => '134', 'country' => 'Bangladesh', 'currency' => 'Taka', 'code' => 'BDT', 'symbol' => '৳', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
         ];
 
-        Currency::insert($data);
+        foreach ($data as $currency) {
+            DB::table('currencies')->updateOrInsert(['id' => $currency['id']], $currency);
+        }
 
-        Currency::insert([
+        $additionalCurrencies = [
             ['country' => 'Algerie', 'currency' => 'Algerian dinar', 'code' => 'DZD', 'symbol' => 'د.ج', 'thousand_separator' => ' ', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
             ['country' => 'United Arab Emirates', 'currency' => 'United Arab Emirates dirham', 'code' => 'AED', 'symbol' => 'د.إ', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
             ['country' => 'Uganda', 'currency' => 'Uganda shillings', 'code' => 'UGX', 'symbol' => 'USh', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
@@ -294,6 +296,17 @@ class CurrenciesTableSeeder extends Seeder
             ['country' => 'Angola', 'currency' => 'Kwanza', 'code' => 'AOA', 'symbol' => 'Kz', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
             ['country' => 'Kuwait', 'currency' => 'Kuwaiti dinar', 'code' => 'KWD', 'symbol' => 'KD', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
             ['country' => 'Bahrain', 'currency' => 'Bahraini dinar', 'code' => 'BHD', 'symbol' => 'BD', 'thousand_separator' => ',', 'decimal_separator' => '.', 'created_at' => null, 'updated_at' => null],
-        ]);
+        ];
+
+        foreach ($additionalCurrencies as $currency) {
+            DB::table('currencies')->updateOrInsert(
+                [
+                    'country' => $currency['country'],
+                    'currency' => $currency['currency'],
+                    'code' => $currency['code'],
+                ],
+                $currency
+            );
+        }
     }
 }

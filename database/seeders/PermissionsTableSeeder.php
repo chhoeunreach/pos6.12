@@ -90,8 +90,17 @@ class PermissionsTableSeeder extends Seeder
         foreach ($data as $d) {
             $d['guard_name'] = 'web';
             $d['created_at'] = $time_stamp;
+            $d['updated_at'] = $time_stamp;
             $insert_data[] = $d;
         }
-        Permission::insert($insert_data);
+        foreach ($insert_data as $permission) {
+            Permission::firstOrCreate(
+                [
+                    'name' => $permission['name'],
+                    'guard_name' => $permission['guard_name'],
+                ],
+                $permission
+            );
+        }
     }
 }
