@@ -47,11 +47,11 @@ class LoanManagementServiceProvider extends ServiceProvider
     private function registerConfig(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/config.php' => config_path('loanmanagement.php'),
+            __DIR__ . '/../Config/config.php' => config_path('loanmanagement.php'),
         ], 'config');
 
-        $this->mergeConfigFrom(__DIR__ . '/../config/config.php', 'loanmanagement');
-        $this->mergeConfigFrom(__DIR__ . '/../config/config.php', 'loan_management');
+        $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loanmanagement');
+        $this->mergeConfigFrom(__DIR__ . '/../Config/config.php', 'loan_management');
     }
 
     private function registerViews(): void
