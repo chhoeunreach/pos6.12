@@ -53,7 +53,7 @@ Route::middleware(['web'])->group(function () {
     Route::post('/customer/loan-request/{id}/cancel', [PublicAppController::class, 'cancelCustomerLoanRequest'])->name('loan-management.public.customer-loan-request.cancel');
 });
 
-Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.activity'])
+Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.user.sync', 'loan.activity'])
     ->prefix('loan-management')
     ->group(function () {
         Route::get('/', fn () => redirect()->route('loan-management.dashboard'))->name('loan-management.dashboard.home');
