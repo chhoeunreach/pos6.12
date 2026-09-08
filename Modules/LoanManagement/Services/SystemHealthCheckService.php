@@ -444,7 +444,7 @@ class SystemHealthCheckService
                 'table' => 'users',
                 'conn' => null,
                 'desc' => 'At least 1 active administrator account',
-                'remedy' => 'php artisan db:seed --class=Database\\Seeders\\DatabaseSeeder --force',
+                'remedy' => 'Create or activate a login-enabled user from LoanManagement > Manage Users.',
             ],
         ];
 
@@ -455,7 +455,33 @@ class SystemHealthCheckService
             $tableExists = false;
 
             try {
-                if ($conn) {
+                if ($key === 'users') {
+                    $tableExists = Schema::hasTable($table);
+                    if ($tableExists) {
+                        $query = DB::table($table);
+
+                        if (Schema::hasColumn($table, 'business_id')) {
+                            $businessId = self::currentBusinessId();
+                            if ($businessId !== null) {
+                                $query->where('business_id', $businessId);
+                            }
+                        }
+
+                        if (Schema::hasColumn($table, 'status')) {
+                            $query->where('status', 'active');
+                        }
+
+                        if (Schema::hasColumn($table, 'allow_login')) {
+                            $query->where('allow_login', 1);
+                        }
+
+                        if (Schema::hasColumn($table, 'deleted_at')) {
+                            $query->whereNull('deleted_at');
+                        }
+
+                        $count = (int) $query->count();
+                    }
+                } elseif ($conn) {
                     $tableExists = Schema::connection($conn)->hasTable($table);
                     if ($tableExists) {
                         $count = (int) DB::connection($conn)->table($table)->count();
@@ -484,9 +510,11 @@ class SystemHealthCheckService
                 'status' => $hasData ? 'pass' : ($tableExists ? 'warning' : 'fail'),
                 'title_en' => "Empty Reference Data: {$info['name']}",
                 'title_km' => "ទិន្នន័យគោលទទេ (Empty Data): {$info['name']}",
-                'message_en' => "Table '{$table}' has 0 records. Essential reference data ({$info['desc']}) is missing.",
+                'message_en' => $key === 'users'
+                    ? "Manage Users has no active login-enabled account for this business. {$info['desc']} is missing."
+                    : "Table '{$table}' has 0 records. Essential reference data ({$info['desc']}) is missing.",
                 'message_km' => "តារាង '{$table}' មិនទាន់មានទិន្នន័យ (0 កំណត់ត្រា)។ សូមដំណើរការ seed ទិន្នន័យគោល។",
-                'remedy' => "Run terminal command: {$info['remedy']}",
+                'remedy' => $key === 'users' ? $info['remedy'] : "Run terminal command: {$info['remedy']}",
             ];
         }
 
@@ -495,6 +523,13 @@ class SystemHealthCheckService
             'status' => $hasWarning ? 'warning' : 'pass',
             'items' => $items,
         ];
+    }
+
+    private static function currentBusinessId(): ?int
+    {
+        $businessId = session('user.business_id') ?? auth()->user()->business_id ?? null;
+
+        return $businessId ? (int) $businessId : null;
     }
 
     /**
