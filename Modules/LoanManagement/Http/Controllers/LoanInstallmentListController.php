@@ -906,7 +906,10 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('loan_date') ? 'l.loan_date' : 'l.created_at').' as loan_date, '.
                 ($this->hasCol('customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.
                 ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL').' as telegram_chat_id, '.
-                ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'customer_photo_file_id') ? 'c.customer_photo_file_id' : 'NULL').' as customer_photo_file_id, '.
+                'COALESCE('.
+                    ($this->hasCol('customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').', '.
+                    ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL').
+                ') as customer_photo_file_id, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
                 ($this->hasCol('product_name_snapshot') ? 'l.product_name_snapshot' : 'NULL').' as product_name_snapshot, '.
@@ -1066,11 +1069,12 @@ class LoanInstallmentListController extends Controller
                 $customerUrl = ! empty($r->customer_id) ? route('loan-management.customers.show', $r->customer_id, false) : '';
                 $displayName = $name !== '' ? $name : 'Customer #'.($r->customer_id ?: $r->id);
                 $photoFileId = (int) ($r->customer_photo_file_id ?? 0);
-                $photoUrl = $photoFileId > 0 ? url('loan-management/chat-files/'.$photoFileId) : '';
+                $photoUrl = $this->loanFileUrlById($photoFileId)
+                    ?: $this->latestCustomerFileUrlByCategory((int) ($r->customer_id ?? 0), 'customer_photo');
                 $initial = mb_substr(trim($displayName), 0, 1, 'UTF-8') ?: 'C';
 
                 $html = '<div class="lm-loan-customer-cell">';
-                $html .= $photoUrl !== ''
+                $html .= ! empty($photoUrl)
                     ? '<img src="'.e($photoUrl).'" class="lm-loan-customer-avatar" alt="'.e($displayName).'">'
                     : '<span class="lm-loan-customer-avatar-fallback">'.e(mb_strtoupper($initial, 'UTF-8')).'</span>';
                 $html .= '<div class="lm-loan-customer-info">';
