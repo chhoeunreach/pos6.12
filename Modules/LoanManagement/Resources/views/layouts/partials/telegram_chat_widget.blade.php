@@ -299,6 +299,7 @@
     var pendingVoiceFile = null;
     var pendingVoiceDuration = 0;
     var discardVoiceOnStop = false;
+    var sendingInvoiceImage = false;
 
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function pad2(v){ return String(v).padStart(2, '0'); }
@@ -827,13 +828,22 @@
         if (!activeThreadId || !activeLoanContext.loan_id) {
             return false;
         }
+        if (sendingInvoiceImage) {
+            return true;
+        }
 
         var caption = invoiceCaption();
         var $button = $('#lmTgSendInvoice');
+        sendingInvoiceImage = true;
         $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Previewing');
         showComposerError('');
 
-        confirmInvoiceSend(activeLoanContext.loan_id, caption)
+        function resetInvoiceButton(){
+            sendingInvoiceImage = false;
+            $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
+        }
+
+        Promise.resolve(confirmInvoiceSend(activeLoanContext.loan_id, caption))
             .then(function(sendOptions){
                 $button.html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
                 activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
@@ -858,14 +868,15 @@
                 loadThread(false);
                 loadContacts($('#lmTgSearchInput').val());
             })
-            .catch(function(error){
+            .then(function(){
+                resetInvoiceButton();
+            }, function(error){
                 if (error && error.cancelled) {
+                    resetInvoiceButton();
                     return;
                 }
                 showComposerError('Failed to send invoice image.');
-            })
-            .finally(function(){
-                $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
+                resetInvoiceButton();
             });
 
         return true;
