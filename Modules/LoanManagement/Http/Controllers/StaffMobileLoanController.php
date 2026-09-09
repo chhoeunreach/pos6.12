@@ -408,7 +408,7 @@ class StaffMobileLoanController extends Controller
             'items.*.serial_number' => ['nullable', 'string', 'max:255'],
             'items.*.qty' => ['nullable', 'integer', 'min:1'],
             'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
-            'items.*.product_photo' => ['nullable', 'string'],
+            'items.*.product_photo' => ['nullable'],
             'items.*.product_ocr_raw_text' => ['nullable', 'string'],
             'payment' => ['nullable', 'array'],
             'payment.amount' => ['nullable', 'numeric', 'min:0'],
@@ -426,12 +426,12 @@ class StaffMobileLoanController extends Controller
             'payments.*.currency' => ['nullable', Rule::in(['USD', 'KHR'])],
             'payments.*.exchange_rate' => ['nullable', 'numeric', 'min:0'],
             'payments.*.status' => ['nullable', Rule::in(['completed', 'pending', 'failed'])],
-            'customer_profile_image' => ['nullable', 'string'],
-            'id_card_image' => ['nullable', 'string'],
+            'customer_profile_image' => ['nullable'],
+            'id_card_image' => ['nullable'],
             'id_card_ocr_raw_text' => ['nullable', 'string'],
             'id_card_ocr_fields' => ['nullable', 'array'],
             'documents' => ['nullable', 'array'],
-            'documents.*' => ['nullable', 'string'],
+            'documents.*' => ['nullable'],
             'document_text' => ['nullable', 'string', 'max:5000'],
             'document_links' => ['nullable', 'array'],
             'document_links.*' => ['nullable', 'url', 'max:1000'],
@@ -702,31 +702,31 @@ class StaffMobileLoanController extends Controller
             return;
         }
 
-        $profileImage = trim((string) ($data['customer_profile_image'] ?? ''));
-        if ($profileImage !== '') {
-            $fileId = $this->storeMobileDataUriFile($profileImage, $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
+        $profileImage = $data['customer_profile_image'] ?? null;
+        if ($this->hasMobileFileInput($profileImage)) {
+            $fileId = $this->storeMobileFileInput($profileImage, $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
             $this->updateCustomerFileReference($customerId, 'customer_photo_file_id', $fileId);
             $this->updateLoanFileReference($loanId, 'customer_photo_file_id', $fileId);
         }
 
-        $idCardImage = trim((string) ($data['id_card_image'] ?? ''));
-        if ($idCardImage !== '') {
-            $fileId = $this->storeMobileDataUriFile($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.jpg');
+        $idCardImage = $data['id_card_image'] ?? null;
+        if ($this->hasMobileFileInput($idCardImage)) {
+            $fileId = $this->storeMobileFileInput($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.jpg');
             $this->updateCustomerFileReference($customerId, 'id_front_file_id', $fileId);
             $this->updateLoanFileReference($loanId, 'id_front_file_id', $fileId);
             $this->storeIdCardScan($customerId, $fileId, $data);
         }
 
         foreach ((array) ($data['documents'] ?? []) as $index => $document) {
-            if (! is_string($document) || trim($document) === '') {
+            if (! $this->hasMobileFileInput($document)) {
                 continue;
             }
 
-            $this->storeMobileDataUriFile(
+            $this->storeMobileFileInput(
                 $document,
                 $customerId,
                 'document',
-                'customer-document-'.$loanId.'-'.($index + 1).'.'.$this->extensionFromDataUri($document)
+                'customer-document-'.$loanId.'-'.($index + 1).'.'.$this->extensionFromMobileFileInput($document)
             );
         }
 
@@ -757,6 +757,11 @@ class StaffMobileLoanController extends Controller
 
     protected function storeMobileDataUriFile(string $dataUri, int $customerId, string $category, string $originalName): ?int
     {
+        $dataUri = trim($dataUri);
+        if ($dataUri === '' || preg_match('/^(unknown|invalid|unsupported)\s+url$/i', $dataUri) || preg_match('/^(blob|file):\/\//i', $dataUri)) {
+            return null;
+        }
+
         if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
             $mimeType = $match[1];
             $base64 = substr($dataUri, strpos($dataUri, ',') + 1);
@@ -765,7 +770,7 @@ class StaffMobileLoanController extends Controller
             $base64 = $dataUri;
         }
 
-        $binary = base64_decode($base64, true);
+        $binary = base64_decode(str_replace(' ', '+', trim($base64)), true);
         if ($binary === false || $binary === '') {
             return null;
         }
@@ -787,6 +792,68 @@ class StaffMobileLoanController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]));
+    }
+
+    protected function storeMobileUploadedFile(\Illuminate\Http\UploadedFile $file, int $customerId, string $category, string $originalName): ?int
+    {
+        if ($customerId <= 0 || ! Schema::connection($this->conn)->hasTable('loan_files') || ! $file->isValid()) {
+            return null;
+        }
+
+        $path = $file->store('loan-customers/'.$customerId, 'public');
+
+        return (int) DB::connection($this->conn)->table('loan_files')->insertGetId($this->onlyExistingColumns('loan_files', [
+            'fileable_type' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+            'fileable_id' => $customerId,
+            'category' => $category,
+            'disk' => 'public',
+            'path' => $path,
+            'original_name' => $originalName ?: $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+            'size_bytes' => $file->getSize(),
+            'uploaded_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+    }
+
+    protected function storeMobileFileInput($input, int $customerId, string $category, string $originalName): ?int
+    {
+        if ($input instanceof \Illuminate\Http\UploadedFile) {
+            return $this->storeMobileUploadedFile($input, $customerId, $category, $originalName);
+        }
+
+        if (is_string($input)) {
+            return $this->storeMobileDataUriFile($input, $customerId, $category, $originalName);
+        }
+
+        return null;
+    }
+
+    protected function hasMobileFileInput($input): bool
+    {
+        if ($input instanceof \Illuminate\Http\UploadedFile) {
+            return $input->isValid();
+        }
+
+        if (! is_string($input)) {
+            return false;
+        }
+
+        $input = trim($input);
+
+        return $input !== ''
+            && ! preg_match('/^(unknown|invalid|unsupported)\s+url$/i', $input)
+            && ! preg_match('/^(blob|file):\/\//i', $input);
+    }
+
+    protected function extensionFromMobileFileInput($input): string
+    {
+        if ($input instanceof \Illuminate\Http\UploadedFile) {
+            return $this->extensionFromMimeType($input->getClientMimeType());
+        }
+
+        return is_string($input) ? $this->extensionFromDataUri($input) : 'jpg';
     }
 
     protected function updateCustomerFileReference(int $customerId, string $column, ?int $fileId): void
