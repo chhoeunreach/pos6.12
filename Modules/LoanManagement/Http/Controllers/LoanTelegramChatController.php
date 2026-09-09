@@ -231,7 +231,7 @@ class LoanTelegramChatController extends Controller
         return $this->ok('Message sent', $this->chatService->formatMessage($message));
     }
 
-    public function file(int $file)
+    public function file(Request $request, int $file)
     {
         abort_unless($this->canUseTelegramChat(), 403);
 
@@ -263,7 +263,17 @@ class LoanTelegramChatController extends Controller
         $disk = $loanFile->disk ?: 'public';
         abort_if(! Storage::disk($disk)->exists($loanFile->path), 404);
 
-        return response()->file(Storage::disk($disk)->path($loanFile->path), [
+        $path = Storage::disk($disk)->path($loanFile->path);
+        $fileName = basename((string) ($loanFile->original_name ?: $loanFile->path));
+
+        if ($request->boolean('download')) {
+            return response()->download($path, $fileName, [
+                'Content-Type' => $loanFile->mime_type ?: 'application/octet-stream',
+                'Cache-Control' => 'private, max-age=3600',
+            ]);
+        }
+
+        return response()->file($path, [
             'Content-Type' => $loanFile->mime_type ?: 'application/octet-stream',
             'Cache-Control' => 'private, max-age=3600',
         ]);

@@ -20,20 +20,82 @@
 @endsection
 
 @section('javascript')
+<style>
+    .lm-chat-attachment{margin-top:6px}
+    .lm-chat-thumb{display:block;max-width:220px;max-height:260px;border-radius:8px;border:1px solid #e5e7eb;object-fit:cover;cursor:pointer}
+    .lm-chat-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .lm-chat-actions a,.lm-chat-actions button{border:1px solid #dbe4ef;background:#f8fafc;color:#334155;border-radius:12px;padding:3px 9px;font-size:11px;font-weight:700;text-decoration:none}
+    .lm-chat-actions a:hover,.lm-chat-actions button:hover{background:#eff6ff;color:#1d4ed8}
+    .lm-chat-image-viewer{display:none;position:fixed;inset:0;background:rgba(15,23,42,.86);z-index:1100;align-items:center;justify-content:center;padding:18px}
+    .lm-chat-image-viewer.open{display:flex}
+    .lm-chat-image-viewer img{max-width:96vw;max-height:84vh;object-fit:contain;border-radius:8px;background:#fff}
+</style>
+<div class="lm-chat-image-viewer" id="lmChatImageViewer">
+    <div>
+        <button type="button" class="btn btn-default btn-sm pull-right" id="lmChatImageViewerClose" style="margin-bottom:8px;">Close</button>
+        <img src="" alt="" id="lmChatImageViewerImage">
+        <div class="lm-chat-actions">
+            <a href="#" target="_blank" rel="noopener" id="lmChatImageViewerOpen"><i class="fa fa-external-link"></i> Open full</a>
+            <a href="#" download id="lmChatImageViewerDownload"><i class="fa fa-download"></i> Download</a>
+        </div>
+    </div>
+</div>
 <script>
 (function($){
     var threadId = {{ (int) $threadId }};
+    function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
+    function fileName(file, fallback){ return (file && file.name) || fallback || 'chat-file'; }
+    function downloadUrl(url){ return url ? url + (String(url).indexOf('?') === -1 ? '?' : '&') + 'download=1' : '#'; }
+    function imageHtml(file){
+        var name = fileName(file, 'chat-image');
+        return '<div class="lm-chat-attachment">' +
+            '<img src="'+esc(file.url)+'" alt="'+esc(name)+'" class="lm-chat-thumb js-lm-chat-view-image" data-url="'+esc(file.url)+'" data-name="'+esc(name)+'">' +
+            '<div class="lm-chat-actions">' +
+                '<button type="button" class="js-lm-chat-view-image" data-url="'+esc(file.url)+'" data-name="'+esc(name)+'"><i class="fa fa-search-plus"></i> View full</button>' +
+                '<a href="'+esc(file.url)+'" target="_blank" rel="noopener"><i class="fa fa-external-link"></i> Open</a>' +
+                '<a href="'+esc(downloadUrl(file.url))+'" download="'+esc(name)+'"><i class="fa fa-download"></i> Download</a>' +
+            '</div>' +
+        '</div>';
+    }
+    function fileHtml(file){
+        var name = fileName(file, 'Download file');
+        return '<div class="lm-chat-attachment">' +
+            '<a href="'+esc(file.url)+'" target="_blank" rel="noopener"><i class="fa fa-paperclip"></i> '+esc(name)+'</a>' +
+            '<div class="lm-chat-actions">' +
+                '<a href="'+esc(file.url)+'" target="_blank" rel="noopener"><i class="fa fa-external-link"></i> Open</a>' +
+                '<a href="'+esc(downloadUrl(file.url))+'" download="'+esc(name)+'"><i class="fa fa-download"></i> Download</a>' +
+            '</div>' +
+        '</div>';
+    }
     function loadDetail(){
         $.get('/api/loan-management/chats/'+threadId, function(resp){
             var d = resp.data || {};
             var msgs = d.messages || [];
             var box = $('#chat-box'); box.html('');
             msgs.forEach(function(m){
-                box.append('<div style="margin-bottom:6px;"><strong>'+m.sender_type+'#'+m.sender_id+':</strong> '+(m.message||'')+' <small class="text-muted">'+m.created_at+'</small></div>');
+                var file = m.file || {};
+                var attachment = '';
+                if (m.message_type === 'image' && file.url) attachment = imageHtml(file);
+                if (m.message_type === 'file' && file.url) attachment = fileHtml(file);
+                if (m.message_type === 'audio' && file.url) attachment = '<div class="lm-chat-attachment"><audio controls src="'+esc(file.url)+'" style="max-width:220px"></audio></div>';
+                box.append('<div style="margin-bottom:10px;"><strong>'+esc(m.sender_type)+'#'+esc(m.sender_id)+':</strong> '+esc(m.message||'')+' <small class="text-muted">'+esc(m.created_at)+'</small>'+attachment+'</div>');
             });
             box.scrollTop(box[0].scrollHeight);
         });
     }
+    function openImageViewer(url, name){
+        $('#lmChatImageViewerImage').attr('src', url).attr('alt', name || '');
+        $('#lmChatImageViewerOpen').attr('href', url);
+        $('#lmChatImageViewerDownload').attr('href', downloadUrl(url)).attr('download', name || 'chat-image');
+        $('#lmChatImageViewer').addClass('open');
+    }
+    function closeImageViewer(){
+        $('#lmChatImageViewer').removeClass('open');
+        $('#lmChatImageViewerImage').attr('src', '');
+    }
+    $(document).on('click', '.js-lm-chat-view-image', function(){ openImageViewer($(this).data('url'), $(this).data('name')); });
+    $('#lmChatImageViewerClose').on('click', closeImageViewer);
+    $('#lmChatImageViewer').on('click', function(e){ if (e.target === this) closeImageViewer(); });
     $('#btnSend').on('click', function(){
         $.post('/api/loan-management/chats/'+threadId+'/messages', {_token: '{{ csrf_token() }}', message_type:'text', message:$('#msg').val()}, function(){
             $('#msg').val(''); loadDetail();
@@ -46,4 +108,3 @@
 })(jQuery);
 </script>
 @endsection
-

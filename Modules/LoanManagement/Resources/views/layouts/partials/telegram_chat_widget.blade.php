@@ -132,6 +132,21 @@
     .lm-tg-action{border:0;background:rgba(15,23,42,.08);color:#334155;border-radius:10px;padding:2px 7px;font-size:10px;line-height:1.4;cursor:pointer}
     .lm-tg-action:hover{background:rgba(15,23,42,.14)}
     .lm-tg-action.delete{color:#b91c1c;background:rgba(239,68,68,.12)}
+    .lm-tg-image-wrap{margin-top:6px}
+    .lm-tg-image-thumb{display:block;max-width:220px;max-height:260px;border-radius:8px;object-fit:cover;cursor:pointer;border:1px solid rgba(15,23,42,.08)}
+    .lm-tg-file-card{display:flex;align-items:center;gap:8px;margin-top:6px;padding:7px 8px;border:1px solid rgba(15,23,42,.08);border-radius:10px;background:rgba(255,255,255,.58)}
+    .lm-tg-file-card i{color:#64748b}
+    .lm-tg-file-name{min-width:0;flex:1;color:#0f172a;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .lm-tg-media-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+    .lm-tg-media-action{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(15,23,42,.12);background:rgba(255,255,255,.82);color:#334155;border-radius:10px;padding:3px 8px;font-size:10.5px;font-weight:800;line-height:1.35;text-decoration:none;cursor:pointer}
+    .lm-tg-media-action:hover{background:#fff;color:#1d4ed8;text-decoration:none}
+    .lm-tg-image-viewer{display:none;position:fixed;inset:0;background:rgba(15,23,42,.86);z-index:1100;align-items:center;justify-content:center;padding:18px}
+    .lm-tg-image-viewer.open{display:flex}
+    .lm-tg-image-viewer-inner{position:relative;max-width:96vw;max-height:94vh;display:flex;flex-direction:column;gap:10px;align-items:center}
+    .lm-tg-image-viewer img{max-width:96vw;max-height:82vh;object-fit:contain;border-radius:8px;background:#fff;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+    .lm-tg-image-viewer-toolbar{display:flex;align-items:center;gap:8px;max-width:96vw}
+    .lm-tg-image-viewer-toolbar .lm-tg-media-action{font-size:12px;padding:7px 12px}
+    .lm-tg-image-viewer-close{position:absolute;top:-10px;right:-10px;width:34px;height:34px;border:0;border-radius:50%;background:#fff;color:#0f172a;font-size:22px;line-height:1;box-shadow:0 8px 20px rgba(0,0,0,.28)}
     .lm-tg-edited{font-style:italic;color:#94a3b8}
     .lm-tg-empty{text-align:center;color:#94a3b8;font-size:12px;margin-top:30px}
     .lm-tg-composer{flex:0 0 auto;background:#fff;padding:9px 10px;display:flex;gap:8px;align-items:center;border-top:1px solid #e2e8f0}
@@ -166,6 +181,7 @@
         .lm-tg-header-info .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .lm-tg-body{padding:10px}
         .lm-tg-bubble{max-width:86%;font-size:12.5px}
+        .lm-tg-image-thumb{max-width:190px;max-height:230px}
         .lm-tg-composer{padding:8px;gap:6px}
         .lm-tg-composer input[type=text]{min-width:0;padding:8px 11px;font-size:12px}
         .lm-tg-composer button{width:34px;height:34px;font-size:12px}
@@ -241,6 +257,16 @@
             <button type="submit" aria-label="Send"><i class="fa fa-paper-plane"></i></button>
         </form>
     </main>
+</div>
+<div class="lm-tg-image-viewer" id="lmTgImageViewer" aria-hidden="true">
+    <div class="lm-tg-image-viewer-inner">
+        <button type="button" class="lm-tg-image-viewer-close" id="lmTgImageViewerClose" aria-label="Close">&times;</button>
+        <img src="" alt="" id="lmTgImageViewerImage">
+        <div class="lm-tg-image-viewer-toolbar">
+            <a href="#" target="_blank" rel="noopener" class="lm-tg-media-action" id="lmTgImageViewerOpen"><i class="fa fa-external-link"></i> Open full</a>
+            <a href="#" download class="lm-tg-media-action" id="lmTgImageViewerDownload"><i class="fa fa-download"></i> Download</a>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -387,6 +413,57 @@
         return '<div class="lm-tg-text">' + safe + '</div>';
     }
 
+    function fileNameFromUrl(url){
+        try {
+            var path = new URL(url, window.location.origin).pathname;
+            var last = path.split('/').filter(Boolean).pop();
+            return decodeURIComponent(last || 'chat-file');
+        } catch (e) {
+            return 'chat-file';
+        }
+    }
+
+    function fileName(file, fallback){
+        return (file && file.name) || fallback || fileNameFromUrl(file && file.url ? file.url : '');
+    }
+
+    function downloadUrl(url){
+        if (!url) return '#';
+        return url + (String(url).indexOf('?') === -1 ? '?' : '&') + 'download=1';
+    }
+
+    function mediaActions(file, isImage){
+        if (!file || !file.url) return '';
+        var name = esc(fileName(file, isImage ? 'chat-image' : 'chat-file'));
+        return '' +
+            '<div class="lm-tg-media-actions">' +
+                (isImage ? '<button type="button" class="lm-tg-media-action js-lm-tg-view-image" data-url="' + esc(file.url) + '" data-name="' + name + '"><i class="fa fa-search-plus"></i> View full</button>' : '') +
+                '<a href="' + esc(file.url) + '" target="_blank" rel="noopener" class="lm-tg-media-action"><i class="fa fa-external-link"></i> Open</a>' +
+                '<a href="' + esc(downloadUrl(file.url)) + '" download="' + name + '" class="lm-tg-media-action"><i class="fa fa-download"></i> Download</a>' +
+            '</div>';
+    }
+
+    function renderImageMessage(file){
+        if (!file || !file.url) return '';
+        var name = fileName(file, 'chat-image');
+        return '' +
+            '<div class="lm-tg-image-wrap">' +
+                '<img src="' + esc(file.url) + '" alt="' + esc(name) + '" class="lm-tg-image-thumb js-lm-tg-view-image" data-url="' + esc(file.url) + '" data-name="' + esc(name) + '">' +
+                mediaActions(file, true) +
+            '</div>';
+    }
+
+    function renderFileMessage(file){
+        if (!file || !file.url) return '';
+        var name = fileName(file, 'Download file');
+        return '' +
+            '<div class="lm-tg-file-card">' +
+                '<i class="fa fa-paperclip"></i>' +
+                '<a href="' + esc(file.url) + '" target="_blank" rel="noopener" class="lm-tg-file-name">' + esc(name) + '</a>' +
+            '</div>' +
+            mediaActions(file, false);
+    }
+
     function renderMessages(messages){
         var box = $('#lmTgMessages').empty();
         if (!messages || !messages.length) {
@@ -402,8 +479,8 @@
             }
 
             var body = formatChatText(m.message || '');
-            if (m.message_type === 'image' && m.file && m.file.url) body += '<div><img src="'+esc(m.file.url)+'" style="max-width:200px;border-radius:8px;margin-top:6px"></div>';
-            if (m.message_type === 'file' && m.file && m.file.url) body += '<div><a href="'+esc(m.file.url)+'" target="_blank">'+esc(m.file.name || 'Download file')+'</a></div>';
+            if (m.message_type === 'image' && m.file && m.file.url) body += renderImageMessage(m.file);
+            if (m.message_type === 'file' && m.file && m.file.url) body += renderFileMessage(m.file);
             if (m.message_type === 'audio' && m.file && m.file.url) body += '<div><audio controls src="'+esc(m.file.url)+'" style="max-width:200px;margin-top:6px"></audio></div>';
             if (m.message_type === 'location' && m.latitude && m.longitude) body += '<div><a href="https://maps.google.com/?q='+esc(m.latitude)+','+esc(m.longitude)+'" target="_blank"><i class="fa fa-map-marker"></i> Open location</a></div>';
             var ticks = '';
@@ -434,6 +511,33 @@
         });
         box.scrollTop(box[0].scrollHeight);
     }
+
+    function openImageViewer(url, name){
+        if (!url) return;
+        name = name || fileNameFromUrl(url);
+        $('#lmTgImageViewerImage').attr('src', url).attr('alt', name);
+        $('#lmTgImageViewerOpen').attr('href', url);
+        $('#lmTgImageViewerDownload').attr('href', downloadUrl(url)).attr('download', name);
+        $('#lmTgImageViewer').addClass('open').attr('aria-hidden', 'false');
+    }
+
+    function closeImageViewer(){
+        $('#lmTgImageViewer').removeClass('open').attr('aria-hidden', 'true');
+        $('#lmTgImageViewerImage').attr('src', '');
+    }
+
+    $(document).on('click', '.js-lm-tg-view-image', function(){
+        openImageViewer($(this).data('url'), $(this).data('name'));
+    });
+    $('#lmTgImageViewerClose').on('click', closeImageViewer);
+    $('#lmTgImageViewer').on('click', function(e){
+        if (e.target === this) closeImageViewer();
+    });
+    $(document).on('keydown', function(e){
+        if (e.key === 'Escape' && $('#lmTgImageViewer').hasClass('open')) {
+            closeImageViewer();
+        }
+    });
 
     function renderContacts(rows){
         contacts = rows || [];
