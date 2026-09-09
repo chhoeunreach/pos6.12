@@ -21,6 +21,8 @@ class DataController extends Controller
         return [
             ['value' => 'loan_management.view', 'label' => 'Loan Management - Full View', 'default' => false],
             ['value' => 'loan_management.dashboard.view', 'label' => 'Dashboard - View', 'default' => false],
+            ['value' => 'loan_management.admin_loan.view', 'label' => 'Admin Loan - View', 'default' => false],
+            ['value' => 'loan_management.admin_loan.edit', 'label' => 'Admin Loan - Edit Inline Details', 'default' => false],
             ['value' => 'loan_management.create', 'label' => 'General - Create', 'default' => false],
             ['value' => 'loan_management.edit', 'label' => 'General - Edit', 'default' => false],
             ['value' => 'loan_management.delete', 'label' => 'General - Delete', 'default' => false],
@@ -29,6 +31,7 @@ class DataController extends Controller
             ['value' => 'loan_management.loans.view', 'label' => 'Loans - View', 'default' => false],
             ['value' => 'loan_management.loans.create', 'label' => 'Loans - Create Loan', 'default' => false],
             ['value' => 'loan_management.loans.edit', 'label' => 'Loans - Edit', 'default' => false],
+            ['value' => 'loan_management.loans.delete', 'label' => 'Loans - Delete', 'default' => false],
             ['value' => 'loan_management.loans.approve', 'label' => 'Loans - Approve', 'default' => false],
             ['value' => 'loan_management.loans.reject', 'label' => 'Loans - Reject', 'default' => false],
             ['value' => 'loan_management.sell_list', 'label' => 'Sell List - View', 'default' => false],
@@ -41,6 +44,10 @@ class DataController extends Controller
             ['value' => 'loan_management.guarantors.view', 'label' => 'Guarantors - View', 'default' => false],
             ['value' => 'loan_management.blacklist.view', 'label' => 'Blacklist - View', 'default' => false],
             ['value' => 'loan_management.customer_gps.manage', 'label' => 'Customer GPS - Manage', 'default' => false],
+            ['value' => 'loan_management.products.view', 'label' => 'Installment Products - View', 'default' => false],
+            ['value' => 'loan_management.products.create', 'label' => 'Installment Products - Create', 'default' => false],
+            ['value' => 'loan_management.products.edit', 'label' => 'Installment Products - Edit', 'default' => false],
+            ['value' => 'loan_management.products.delete', 'label' => 'Installment Products - Delete', 'default' => false],
 
             ['value' => 'loan_management.schedules.view', 'label' => 'Schedules - View', 'default' => false],
             ['value' => 'loan_management.monthly_payments.view', 'label' => 'Monthly Payments - View', 'default' => false],

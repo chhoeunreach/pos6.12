@@ -45,7 +45,7 @@ class LoanMenuHelper
                 ->filter()
                 ->contains(fn ($item) => $user->can($item));
         } catch (\Throwable $e) {
-            return true;
+            return false;
         }
     }
 

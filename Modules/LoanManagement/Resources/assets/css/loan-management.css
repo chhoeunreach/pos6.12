@@ -194,10 +194,13 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
     flex: 0 0 var(--lm-sidebar-width);
     display: flex;
     flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+    min-height: 0;
     background: var(--lm-sidebar);
     color: var(--lm-sidebar-text);
     position: relative;
-    overflow-y: auto;
+    overflow-y: hidden;
     overflow-x: hidden;
     z-index: 2;
     border-right: 1px solid var(--lm-border);
@@ -311,7 +314,17 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
 .lm-sidebar-mini-action { display: none; }
 
 /* Menu */
-.lm-menu { flex: 1 0 auto; padding: 0 0 8px; }
+.lm-menu {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    padding: 0 0 8px;
+}
+.lm-menu::-webkit-scrollbar { width: 5px; }
+.lm-menu::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
+.lm-menu::-webkit-scrollbar-track { background: transparent; }
 .lm-menu-section { margin: 0 0 4px; }
 .lm-menu-section-title {
     display: flex; align-items: center; gap: 8px;
