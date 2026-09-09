@@ -782,7 +782,8 @@
                             '<div style="display:grid;grid-template-columns:320px minmax(0,1fr);height:78vh;">' +
                                 '<div style="border-right:1px solid #e5e7eb;padding:16px;overflow:auto;background:#f8fafc;">' +
                                     '<div style="font-weight:700;margin-bottom:8px;color:#111827;">Message to customer</div>' +
-                                    '<div class="lm-tg-bubble" style="max-width:none;background:#e3fbd4;box-shadow:none;">' + formatChatText(caption) + '</div>' +
+                                    '<textarea class="form-control lm-send-invoice-message" rows="9" style="width:100%;resize:vertical;border-radius:8px;border:1px solid #cbd5e1;font-size:13px;line-height:1.45;color:#111827;background:#fff;">' + esc(caption || '') + '</textarea>' +
+                                    '<div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.4;">Edit this message before sending. It will be used as the Telegram invoice caption.</div>' +
                                 '</div>' +
                                 '<iframe id="lmSendInvoiceConfirmFrame" src="' + esc(invoicePrintUrl(loanId)) + '" style="width:100%;height:100%;border:0;background:#fff;"></iframe>' +
                             '</div>' +
@@ -803,11 +804,13 @@
 
         var resolved = false;
         $modal.on('click', '.lm-confirm-send-invoice-now', function(){
+            var editedMessage = $.trim($modal.find('.lm-send-invoice-message').val() || '');
             resolved = true;
             $modal.modal('hide');
             deferred.resolve({
                 previewFrameId: 'lmSendInvoiceConfirmFrame',
-                compress: String($(this).data('compress')) !== '0'
+                compress: String($(this).data('compress')) !== '0',
+                message: editedMessage
             });
         });
         $modal.on('hidden.bs.modal', function(){
@@ -848,9 +851,10 @@
                 return confirmInvoiceSend(activeLoanContext.loan_id, caption);
             })
             .then(function(sendOptions){
+                var editedCaption = sendOptions && typeof sendOptions.message === 'string' ? sendOptions.message : caption;
                 $button.html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
                 activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
-                return sendInvoiceImageFast(activeLoanContext.loan_id, caption, !(sendOptions && sendOptions.compress === false));
+                return sendInvoiceImageFast(activeLoanContext.loan_id, editedCaption, !(sendOptions && sendOptions.compress === false));
             })
             .then(function(resp){
                 if (resp && resp.success) {
@@ -1392,9 +1396,10 @@
                 var caption = context.message || invoiceCaption(activeCustomerName);
                 return confirmInvoiceSend(loanId, caption)
                     .then(function(sendOptions){
+                        var editedCaption = sendOptions && typeof sendOptions.message === 'string' ? sendOptions.message : caption;
                         activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
                         setHeader(thread.customer_profile || thread, !!thread.telegram_linked, 'Sending invoice...');
-                        return sendInvoiceImageFast(loanId, caption, !(sendOptions && sendOptions.compress === false));
+                        return sendInvoiceImageFast(loanId, editedCaption, !(sendOptions && sendOptions.compress === false));
                     });
             })
             .then(function(resp){
