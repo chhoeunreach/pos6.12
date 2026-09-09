@@ -97,6 +97,7 @@ class LoanDashboardService
                     ".($this->columnExists('loans', 'customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').",
                     ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL')."
                 ) as customer_photo_file_id,
+                ".($this->columnExists('loans', 'customer_photo_snapshot') ? 'l.customer_photo_snapshot' : 'NULL')." as customer_photo_snapshot,
                 {$loanNumberExpr} as loan_number,
                 {$customerNameExpr} as customer_name,
                 {$customerPhoneExpr} as customer_phone,
@@ -169,6 +170,7 @@ class LoanDashboardService
                 'customer_id' => (int) ($row->customer_id ?? 0),
                 'telegram_linked' => ! empty($row->telegram_chat_id),
                 'customer_photo_url' => $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
+                    ?: $this->loanFilePublicUrl($row->customer_photo_snapshot ?? null)
                     ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0)),
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
@@ -238,8 +240,7 @@ class LoanDashboardService
 
         $path = ltrim(str_replace('\\', '/', $path), '/');
         if (Str::startsWith($path, 'storage/')) {
-            $storagePath = substr($path, 8);
-            return Storage::disk('public')->exists($storagePath) ? asset($path) : null;
+            return asset($path);
         }
 
         if (is_file(public_path($path))) {
@@ -247,6 +248,10 @@ class LoanDashboardService
         }
 
         $disk = $disk ?: 'public';
+
+        if ($disk === 'public') {
+            return asset('storage/'.$path);
+        }
 
         return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->url($path) : null;
     }
@@ -845,10 +850,11 @@ class LoanDashboardService
         $this->whereOverdueInstallment($query);
 
         return $query
-            ->selectRaw('l.id, '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, '.$this->loanCustomerProfessionExpression('l').' as profession, '.$this->loanCustomerOccupationExpression('l').' as occupation, '.$this->loanCustomerWorkplaceExpression('l').' as workplace, COALESCE('.($this->columnExists('loans', 'customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').', '.($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL').') as customer_photo_file_id, '.$dateToPayExpr.' as date_to_pay, '.$overdueDaysExpr.' as overdue_days, '.($this->columnExists('loans', 'paid_amount') ? 'COALESCE(l.paid_amount, 0)' : '0').' as total_paid, '.$dueNowExpr.' as total_not_yet_paid, '.$balanceExpr.' as pay_off_now, '.$dueNowExpr.' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
+            ->selectRaw('l.id, '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, '.$this->loanCustomerProfessionExpression('l').' as profession, '.$this->loanCustomerOccupationExpression('l').' as occupation, '.$this->loanCustomerWorkplaceExpression('l').' as workplace, COALESCE('.($this->columnExists('loans', 'customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').', '.($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL').') as customer_photo_file_id, '.($this->columnExists('loans', 'customer_photo_snapshot') ? 'l.customer_photo_snapshot' : 'NULL').' as customer_photo_snapshot, '.$dateToPayExpr.' as date_to_pay, '.$overdueDaysExpr.' as overdue_days, '.($this->columnExists('loans', 'paid_amount') ? 'COALESCE(l.paid_amount, 0)' : '0').' as total_paid, '.$dueNowExpr.' as total_not_yet_paid, '.$balanceExpr.' as pay_off_now, '.$dueNowExpr.' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
             ->orderByDesc('overdue_days')->limit($limit)->get()->map(function ($row) {
                 $data = (array) $row;
                 $data['customer_photo_url'] = $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
+                    ?: $this->loanFilePublicUrl($row->customer_photo_snapshot ?? null)
                     ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0));
 
                 return $data;

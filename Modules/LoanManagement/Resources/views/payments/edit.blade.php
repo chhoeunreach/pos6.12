@@ -246,6 +246,60 @@
         padding: 6px 8px;
         resize: vertical;
     }
+    .lm-control-with-icon {
+        position: relative;
+    }
+    .lm-control-with-icon > i {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #64748b;
+        font-size: 12px;
+        pointer-events: none;
+    }
+    .lm-control-with-icon .lm-control {
+        padding-left: 28px;
+    }
+    .lm-method-select {
+        font-weight: 700;
+        color: #0f172a;
+        background-color: #f8fafc;
+    }
+    .lm-note-picker-group {
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+    }
+    .lm-note-picker-group textarea.lm-control {
+        flex: 1 1 auto;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        min-height: 62px;
+    }
+    .lm-note-datetime-btn {
+        width: 36px;
+        border: 1px solid #cbd5e1;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f8fafc;
+        color: #334155;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+    .lm-note-datetime-btn:hover {
+        background: #ecfdf5;
+        color: #15803d;
+    }
+    .lm-note-datetime-picker {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
 
     /* Shortcut Badges for Amount */
     .lm-amt-chips {
@@ -477,19 +531,30 @@
                                 </div>
                                 <div class="lm-field">
                                     <label class="lm-label">{{ $lmText('Payment Method', 'វិធីទូទាត់') }} <span class="text-danger">*</span></label>
-                                    <select name="method" class="lm-control" required>
-                                        @php $currentMethod = old('method', $payment->method ?? $payment->channel ?? $payment->payment_method_snapshot ?? ''); @endphp
-                                        @foreach($methods as $key => $label)
+                                    <div class="lm-control-with-icon">
+                                        <i class="fa fa-credit-card"></i>
+                                        <select name="method" class="lm-control lm-method-select" required>
                                             @php
-                                                $displayMethodLabel = (string) $label;
-                                                if (str_starts_with($displayMethodLabel, 'lang_v1.') || str_starts_with($displayMethodLabel, 'messages.')) {
-                                                    $rawKey = str_replace(['lang_v1.', 'messages.'], '', $displayMethodLabel);
-                                                    $displayMethodLabel = $rawKey === 'advance' ? $lmText('Advance Payment', 'ប្រាក់បង់មុន / បុរេប្រទាន (Advance)') : ucfirst(str_replace('_', ' ', $rawKey));
-                                                }
+                                                $currentMethod = old('method', $payment->method ?? $payment->channel ?? $payment->payment_method_snapshot ?? '');
+                                                $currentMethodShown = false;
                                             @endphp
-                                            <option value="{{ $key }}" {{ $currentMethod == $key || $currentMethod == $label ? 'selected' : '' }}>{{ $displayMethodLabel }}</option>
-                                        @endforeach
-                                    </select>
+                                            @foreach($methods as $key => $label)
+                                                @php
+                                                    $displayMethodLabel = (string) $label;
+                                                    if (str_starts_with($displayMethodLabel, 'lang_v1.') || str_starts_with($displayMethodLabel, 'messages.')) {
+                                                        $rawKey = str_replace(['lang_v1.', 'messages.'], '', $displayMethodLabel);
+                                                        $displayMethodLabel = $rawKey === 'advance' ? $lmText('Advance Payment', 'ប្រាក់បង់មុន / បុរេប្រទាន (Advance)') : ucfirst(str_replace('_', ' ', $rawKey));
+                                                    }
+                                                    $isCurrentMethod = (string) $currentMethod === (string) $key || (string) $currentMethod === (string) $label || (string) $currentMethod === $displayMethodLabel;
+                                                    $currentMethodShown = $currentMethodShown || $isCurrentMethod;
+                                                @endphp
+                                                <option value="{{ $key }}" {{ $isCurrentMethod ? 'selected' : '' }}>{{ $displayMethodLabel }}</option>
+                                            @endforeach
+                                            @if(trim((string) $currentMethod) !== '' && ! $currentMethodShown)
+                                                <option value="{{ $currentMethod }}" selected>{{ $currentMethod }}</option>
+                                            @endif
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -537,7 +602,13 @@
                             <!-- Notes -->
                             <div class="lm-field full-width" style="margin-top: 4px;">
                                 <label class="lm-label">{{ $lmText('Payment Note / Remarks', 'កំណត់ចំណាំការទូទាត់') }}</label>
-                                <textarea name="note" class="lm-control" rows="2" placeholder="{{ $lmText('Internal memo, collection remarks, customer notes...', 'កំណត់ចំណាំផ្ទៃក្នុង ការប្រមូលប្រាក់...') }}">{{ old('note', $payment->note ?? '') }}</textarea>
+                                <div class="lm-note-picker-group">
+                                    <textarea name="note" id="lmPaymentNote" class="lm-control" rows="2" placeholder="{{ $lmText('Internal memo, collection remarks, customer notes...', 'កំណត់ចំណាំផ្ទៃក្នុង ការប្រមូលប្រាក់...') }}">{{ old('note', $payment->note ?? '') }}</textarea>
+                                    <button type="button" class="lm-note-datetime-btn" id="lmPaymentNoteDateTimeBtn" title="{{ $lmText('Choose date time', 'ជ្រើសកាលបរិច្ឆេទ និងម៉ោង') }}">
+                                        <i class="fa fa-calendar"></i>
+                                    </button>
+                                    <input type="datetime-local" id="lmPaymentNoteDateTime" class="lm-note-datetime-picker" tabindex="-1">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -670,6 +741,9 @@
         var schedDueDate = document.getElementById('lmSchedDueDate');
         var schedDueAmt = document.getElementById('lmSchedDueAmt');
         var schedBalAmt = document.getElementById('lmSchedBalAmt');
+        var noteField = document.getElementById('lmPaymentNote');
+        var noteDateTimeBtn = document.getElementById('lmPaymentNoteDateTimeBtn');
+        var noteDateTimePicker = document.getElementById('lmPaymentNoteDateTime');
 
         window.setPaymentAmount = function (val) {
             if (amtInput) {
@@ -706,11 +780,72 @@
             }
         }
 
+        function localDateTimeValue(date) {
+            var pad = function (value) {
+                return String(value).padStart(2, '0');
+            };
+
+            return [
+                date.getFullYear(),
+                pad(date.getMonth() + 1),
+                pad(date.getDate())
+            ].join('-') + 'T' + [pad(date.getHours()), pad(date.getMinutes())].join(':');
+        }
+
+        function noteDateTimeText(value) {
+            if (!value) return '';
+            var parts = value.split('T');
+            var dateParts = (parts[0] || '').split('-');
+            var time = (parts[1] || '').slice(0, 5);
+            if (dateParts.length !== 3 || !time) {
+                return value;
+            }
+
+            return dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0] + ' ' + time;
+        }
+
+        function insertNoteDateTime() {
+            if (!noteField || !noteDateTimePicker) return;
+            var text = noteDateTimeText(noteDateTimePicker.value);
+            if (!text) return;
+
+            var value = noteField.value || '';
+            var start = typeof noteField.selectionStart === 'number' ? noteField.selectionStart : value.length;
+            var end = typeof noteField.selectionEnd === 'number' ? noteField.selectionEnd : value.length;
+            var prefix = value.slice(0, start);
+            var suffix = value.slice(end);
+            var spacerBefore = prefix && !/\s$/.test(prefix) ? ' ' : '';
+            var spacerAfter = suffix && !/^\s/.test(suffix) ? ' ' : '';
+
+            noteField.value = prefix + spacerBefore + text + spacerAfter + suffix;
+            noteField.focus();
+            var cursorPos = (prefix + spacerBefore + text).length;
+            if (typeof noteField.setSelectionRange === 'function') {
+                noteField.setSelectionRange(cursorPos, cursorPos);
+            }
+        }
+
         if (amtInput) {
             amtInput.addEventListener('input', updateForecast);
         }
         if (schedSelect) {
             schedSelect.addEventListener('change', updateSchedCard);
+        }
+        if (noteDateTimeBtn && noteDateTimePicker) {
+            noteDateTimeBtn.addEventListener('click', function () {
+                if (!noteDateTimePicker.value) {
+                    noteDateTimePicker.value = localDateTimeValue(new Date());
+                }
+
+                if (typeof noteDateTimePicker.showPicker === 'function') {
+                    noteDateTimePicker.showPicker();
+                    return;
+                }
+
+                noteDateTimePicker.focus();
+                noteDateTimePicker.click();
+            });
+            noteDateTimePicker.addEventListener('change', insertNoteDateTime);
         }
 
         updateForecast();

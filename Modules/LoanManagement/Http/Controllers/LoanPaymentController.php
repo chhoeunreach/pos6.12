@@ -149,6 +149,17 @@ class LoanPaymentController extends Controller
         $schedules = Schema::connection($this->connection)->hasTable('loan_payment_schedules')
             ? DB::connection($this->connection)->table('loan_payment_schedules')->where('loan_id', $row->loan_id)->orderBy('id')->get()
             : collect();
+        $detail = Schema::connection($this->connection)->hasTable('loan_payment_details')
+            ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->first()
+            : null;
+
+        if ($detail && empty($row->payment_method_snapshot) && empty($row->method) && empty($row->channel)) {
+            $row->payment_method_snapshot = $detail->payment_method_snapshot ?? $detail->method ?? null;
+            $row->method = $detail->method ?? $row->payment_method_snapshot;
+        }
+        if ($detail && empty($row->note) && ! empty($detail->note)) {
+            $row->note = $detail->note;
+        }
 
         return view('loanmanagement::payments.edit', [
             'payment' => $row,
@@ -611,17 +622,41 @@ class LoanPaymentController extends Controller
         ];
 
         $cleaned = [];
+        if (Schema::connection($this->connection)->hasTable('loan_payment_methods')) {
+            $methodQuery = DB::connection($this->connection)
+                ->table('loan_payment_methods')
+                ->orderBy($this->hasColumn('loan_payment_methods', 'sort_order') ? 'sort_order' : 'name')
+                ->orderBy('name');
+
+            if ($this->hasColumn('loan_payment_methods', 'is_active')) {
+                $methodQuery->where('is_active', 1);
+            }
+
+            foreach ($methodQuery->get() as $row) {
+                $name = trim((string) ($row->name ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+
+                $code = trim((string) ($row->code ?? ''));
+                $key = $code !== '' ? $code : strtolower(str_replace(' ', '_', $name));
+                $cleaned[$key] = $name;
+            }
+        }
+
         foreach ($types as $key => $label) {
             $keyStr = (string) $key;
             $labelStr = trim((string) $label);
 
-            if (isset($known[$keyStr])) {
+            if (array_key_exists($keyStr, $cleaned)) {
+                continue;
+            } elseif (isset($known[$keyStr])) {
                 $cleaned[$keyStr] = $known[$keyStr];
             } elseif (str_starts_with($labelStr, 'lang_v1.') || str_starts_with($labelStr, 'messages.')) {
                 $subKey = str_replace(['lang_v1.', 'messages.'], '', $labelStr);
                 $cleaned[$keyStr] = $known[$subKey] ?? ucfirst(str_replace('_', ' ', $subKey));
             } else {
-                $cleaned[$keyStr] = $labelStr;
+                $cleaned[$keyStr] = $labelStr !== '' ? $labelStr : ucfirst(str_replace('_', ' ', $keyStr));
             }
         }
 

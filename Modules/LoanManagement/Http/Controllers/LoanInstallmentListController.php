@@ -910,6 +910,7 @@ class LoanInstallmentListController extends Controller
                     ($this->hasCol('customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').', '.
                     ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL').
                 ') as customer_photo_file_id, '.
+                ($this->hasCol('customer_photo_snapshot') ? 'l.customer_photo_snapshot' : 'NULL').' as customer_photo_snapshot, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
                 ($this->hasCol('product_name_snapshot') ? 'l.product_name_snapshot' : 'NULL').' as product_name_snapshot, '.
@@ -1070,6 +1071,7 @@ class LoanInstallmentListController extends Controller
                 $displayName = $name !== '' ? $name : 'Customer #'.($r->customer_id ?: $r->id);
                 $photoFileId = (int) ($r->customer_photo_file_id ?? 0);
                 $photoUrl = $this->loanFileUrlById($photoFileId)
+                    ?: $this->loanFilePublicUrl($r->customer_photo_snapshot ?? null)
                     ?: $this->latestCustomerFileUrlByCategory((int) ($r->customer_id ?? 0), 'customer_photo');
                 $initial = mb_substr(trim($displayName), 0, 1, 'UTF-8') ?: 'C';
 
@@ -2424,8 +2426,7 @@ class LoanInstallmentListController extends Controller
 
         $path = ltrim(str_replace('\\', '/', $path), '/');
         if (Str::startsWith($path, 'storage/')) {
-            $storagePath = substr($path, 8);
-            return Storage::disk('public')->exists($storagePath) ? asset($path) : null;
+            return asset($path);
         }
 
         if (is_file(public_path($path))) {
@@ -2433,6 +2434,10 @@ class LoanInstallmentListController extends Controller
         }
 
         $disk = $disk ?: 'public';
+
+        if ($disk === 'public') {
+            return asset('storage/'.$path);
+        }
 
         return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->url($path) : null;
     }
