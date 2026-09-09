@@ -1,5 +1,5 @@
 {
-    "business_name": "KY Store",
+    "business_name": "KNEAYERNG",
     "system_name": "Loan Management",
     "system_subtitle": "Dedicated loan operation workspace",
     "start_date": null,
@@ -15,8 +15,8 @@
     "time_format": 24,
     "currency_precision": 2,
     "quantity_precision": 2,
-    "theme_color": "#6366f1",
-    "logo_path": null,
+    "theme_color": "#b5590e",
+    "logo_path": "loan-management/business/HROrBLh7KCc84nYSjvu4izpFHdvmMW02glpLpNc7.jpg",
     "login_background_path": null,
     "cms_enabled": false,
     "customer_login_enabled": false,

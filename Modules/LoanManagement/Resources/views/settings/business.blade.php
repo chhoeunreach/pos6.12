@@ -3,113 +3,186 @@
 
 @section('loan_css')
 <style>
-    .ultimate-settings-page { color: #111827; }
+    .ultimate-settings-page {
+        color: #0f172a;
+        max-width: 1480px;
+        margin: 0 auto;
+        padding-bottom: 18px;
+    }
+    .ultimate-settings-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+        gap: 14px;
+        align-items: end;
+        margin-bottom: 14px;
+        padding: 16px 18px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, .06);
+    }
+    .ultimate-settings-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 5px;
+        color: var(--lm-primary, #2563eb);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
     .ultimate-settings-title {
-        margin: 0 0 24px;
-        font-size: 28px;
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.2;
         font-weight: 800;
         color: #0f172a;
     }
+    .ultimate-settings-subtitle {
+        margin: 5px 0 0;
+        max-width: 760px;
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.4;
+    }
     .ultimate-settings-search {
-        max-width: 1280px;
-        margin: 0 auto 18px;
         display: grid;
-        grid-template-columns: 48px minmax(0, 1fr) 42px;
-        border: 1px solid #cfd8e3;
-        background: #fff;
-        box-shadow: 0 2px 5px rgba(15, 23, 42, .04);
+        grid-template-columns: 36px minmax(0, 1fr) 34px;
+        min-width: 0;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        overflow: hidden;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
     }
     .ultimate-settings-search span,
     .ultimate-settings-search button {
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #4b5563;
-        font-size: 18px;
+        color: #64748b;
+        font-size: 12px;
     }
-    .ultimate-settings-search span { border-right: 1px solid #d8e0ea; }
     .ultimate-settings-search button {
         border: 0;
-        border-left: 1px solid #d8e0ea;
-        background: #fff;
-        color: #6b7280;
+        background: transparent;
     }
     .ultimate-settings-search input {
-        height: 44px;
+        height: 34px;
         border: 0;
-        padding: 0 16px;
+        padding: 0 10px;
         outline: 0;
-        color: #111827;
-        font-size: 15px;
+        color: #0f172a;
+        background: transparent;
+        font-size: 12px;
     }
     .ultimate-settings-card {
         display: grid;
-        grid-template-columns: 320px minmax(0, 1fr);
+        grid-template-columns: 210px minmax(0, 1fr);
         min-height: 560px;
-        border: 1px solid #dde3ea;
-        border-radius: 4px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
         background: #fff;
-        box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+        box-shadow: 0 12px 32px rgba(15, 23, 42, .07);
         overflow: hidden;
     }
     .ultimate-settings-tabs {
-        padding: 24px 0;
-        background: #fff;
-        border-right: 1px solid #e5e7eb;
+        padding: 12px 10px;
+        background: #f8fafc;
+        border-right: 1px solid #e2e8f0;
     }
     .ultimate-settings-tab {
-        height: 58px;
-        margin: 0 24px;
+        min-height: 36px;
+        margin-bottom: 6px;
+        padding: 0 10px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        border: 1px solid #ddd;
-        border-bottom: 0;
-        color: #4b5563;
-        background: #fff;
-        font-size: 18px;
+        gap: 8px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: #475569;
+        background: transparent;
+        font-size: 12px;
         font-weight: 800;
+        transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
     }
-    .ultimate-settings-tab:last-child { border-bottom: 1px solid #ddd; }
+    .ultimate-settings-tab:hover {
+        color: #0f172a;
+        background: #fff;
+        border-color: #e2e8f0;
+        text-decoration: none;
+    }
     .ultimate-settings-tab.active {
-        color: #111827;
-        background: #f8fafc;
-        box-shadow: inset 4px 0 0 var(--lm-primary, #2563eb);
+        color: var(--lm-primary, #2563eb);
+        background: #fff;
+        border-color: rgba(var(--lm-primary-rgb, 37, 99, 235), .24);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
     }
     .ultimate-settings-tab i {
-        margin-left: 8px;
-        color: #22c1dc;
-        font-size: 15px;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: #e2e8f0;
+        color: #64748b;
+        font-size: 11px;
     }
-    .ultimate-settings-content { padding: 36px 42px; }
+    .ultimate-settings-tab.active i {
+        background: rgba(var(--lm-primary-rgb, 37, 99, 235), .12);
+        color: var(--lm-primary, #2563eb);
+    }
+    .ultimate-settings-content {
+        padding: 18px;
+        background: #fff;
+    }
     .ultimate-section-title {
-        margin: 0 0 18px;
-        color: #28345f;
-        font-size: 21px;
-        font-weight: 500;
+        margin: 22px 0 12px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 800;
+    }
+    .ultimate-settings-content > .ultimate-section-title:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
     }
     .ultimate-business-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(220px, 1fr));
-        gap: 22px 34px;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 12px;
     }
     .ultimate-field-full { grid-column: 1 / -1; }
+    .ultimate-field {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .03);
+    }
     .ultimate-field label {
         display: block;
-        margin-bottom: 8px;
-        color: #111827;
-        font-size: 14px;
+        margin-bottom: 6px;
+        color: #0f172a;
+        font-size: 11px;
         font-weight: 800;
     }
     .ultimate-input {
         width: 100%;
-        height: 42px;
-        border: 1px solid #cfd8e3;
-        border-radius: 0;
-        padding: 8px 12px;
-        color: #4b5563;
+        height: 34px;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #0f172a;
         background: #fff;
         box-shadow: none;
+        transition: border-color .16s ease, box-shadow .16s ease;
     }
     .ultimate-input:focus {
         border-color: var(--lm-primary, #2563eb);
@@ -118,39 +191,46 @@
     }
     .ultimate-input-group {
         display: grid;
-        grid-template-columns: 54px minmax(0, 1fr);
+        grid-template-columns: 34px minmax(0, 1fr);
         width: 100%;
     }
     .ultimate-input-icon {
-        height: 42px;
+        height: 34px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid #cfd8e3;
+        border: 1px solid #dbe4ee;
         border-right: 0;
+        border-radius: 8px 0 0 8px;
         background: #f8fafc;
-        color: #4b5563;
-        font-size: 16px;
+        color: #64748b;
+        font-size: 12px;
+    }
+    .ultimate-input-group .ultimate-input {
+        border-radius: 0 8px 8px 0;
     }
     .ultimate-input-group .ultimate-input {
         min-width: 0;
     }
     .ultimate-input-file {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 154px;
+        grid-template-columns: minmax(0, 1fr) 116px;
+        gap: 6px;
     }
     .ultimate-input-file input[type="text"] {
         background: #fff;
     }
     .ultimate-file-button {
-        height: 42px;
+        height: 34px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 6px;
         border: 1px solid var(--lm-primary, #2563eb);
+        border-radius: 8px;
         background: var(--lm-primary, #2563eb);
         color: #fff;
+        font-size: 12px;
         font-weight: 700;
         cursor: pointer;
     }
@@ -163,36 +243,56 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 18px;
-        height: 18px;
+        width: 15px;
+        height: 15px;
         margin-left: 6px;
         border-radius: 50%;
-        background: #22c1dc;
-        color: #fff;
-        font-size: 11px;
-        font-weight: 800;
+        background: rgba(var(--lm-primary-rgb, 37, 99, 235), .12);
+        color: var(--lm-primary, #2563eb);
+        font-size: 9px;
+        font-weight: 900;
+    }
+    .ultimate-field input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        accent-color: var(--lm-primary, #2563eb);
+    }
+    .ultimate-field label.ultimate-help {
+        padding: 8px 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+    .ultimate-field label.ultimate-toggle-line {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        color: #0f172a !important;
+        font-weight: 800 !important;
     }
     textarea.ultimate-input {
-        min-height: 118px;
+        min-height: 92px;
         resize: vertical;
         line-height: 1.5;
     }
     .ultimate-file-row {
         display: grid;
-        grid-template-columns: 96px minmax(0, 1fr);
-        gap: 14px;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 10px;
         align-items: center;
     }
     .ultimate-logo-box {
-        width: 96px;
-        height: 96px;
+        width: 72px;
+        height: 72px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid #cfd8e3;
+        border: 1px solid #dbe4ee;
+        border-radius: 10px;
         background: #f8fafc;
         color: var(--lm-primary, #2563eb);
-        font-size: 30px;
+        font-size: 22px;
         overflow: hidden;
     }
     .ultimate-logo-box img,
@@ -203,15 +303,17 @@
         display: block;
     }
     .ultimate-help {
-        margin-top: 7px;
-        color: #6b7280;
-        font-size: 12px;
+        margin-top: 5px;
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.35;
     }
     .ultimate-background-preview {
-        min-height: 190px;
-        border: 1px solid #cfd8e3;
+        min-height: 165px;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
         background:
-            linear-gradient(135deg, rgba(var(--lm-primary-rgb, 37, 99, 235), .80), rgba(15, 23, 42, .82)),
+            linear-gradient(135deg, rgba(15, 23, 42, .76), rgba(var(--lm-primary-rgb, 37, 99, 235), .36)),
             #1f2937;
         background-size: cover;
         background-position: center;
@@ -225,72 +327,74 @@
     }
     .ultimate-background-preview div {
         position: absolute;
-        left: 18px;
-        right: 18px;
-        bottom: 16px;
+        left: 14px;
+        right: 14px;
+        bottom: 12px;
         color: #fff;
     }
     .ultimate-background-preview strong {
         display: block;
-        font-size: 20px;
+        font-size: 16px;
         font-weight: 800;
     }
     .ultimate-background-preview span {
         display: block;
         margin-top: 5px;
         color: rgba(255,255,255,.82);
-        font-size: 12px;
+        font-size: 11px;
     }
     .ultimate-color-row {
         display: grid;
-        grid-template-columns: 58px minmax(0, 1fr);
-        gap: 10px;
+        grid-template-columns: 46px minmax(0, 1fr);
+        gap: 8px;
     }
     .ultimate-color-row input[type="color"] {
-        width: 58px;
-        height: 42px;
+        width: 46px;
+        height: 34px;
         padding: 4px;
-        border: 1px solid #cfd8e3;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
         background: #fff;
     }
     .ultimate-swatches {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 10px;
+        gap: 6px;
+        margin-top: 8px;
     }
     .ultimate-swatch {
-        width: 34px;
-        height: 34px;
+        width: 26px;
+        height: 26px;
         border: 2px solid #fff;
-        border-radius: 50%;
+        border-radius: 8px;
         box-shadow: 0 0 0 1px #cfd8e3;
         cursor: pointer;
     }
     .ultimate-divider {
-        margin: 30px 0;
-        border-top: 1px solid #6b7280;
+        display: none;
     }
     .ultimate-preview-grid {
         display: grid;
-        grid-template-columns: 330px minmax(0, 1fr);
-        gap: 18px;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 12px;
         align-items: stretch;
     }
     .ultimate-preview-brand {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 14px;
-        border: 1px solid #d8e0ea;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
         background: #f8fafc;
     }
     .ultimate-preview-icon {
-        width: 52px;
-        height: 52px;
+        width: 42px;
+        height: 42px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-radius: 10px;
         background: var(--lm-primary, #2563eb);
         color: #fff;
         overflow: hidden;
@@ -298,18 +402,19 @@
     .ultimate-preview-brand strong {
         display: block;
         color: #111827;
-        font-size: 16px;
+        font-size: 13px;
     }
     .ultimate-preview-brand span {
         display: block;
         margin-top: 3px;
         color: #6b7280;
-        font-size: 12px;
+        font-size: 11px;
     }
     .ultimate-login-mini {
-        min-height: 210px;
-        padding: 18px;
-        border: 1px solid #d8e0ea;
+        min-height: 155px;
+        padding: 12px;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
         background:
             linear-gradient(135deg, rgba(15, 23, 42, .76), rgba(var(--lm-primary-rgb, 37, 99, 235), .38)),
             #172033;
@@ -325,56 +430,89 @@
     }
     .ultimate-login-box {
         width: 100%;
-        padding: 14px;
+        padding: 10px;
+        border-radius: 8px;
         background: rgba(255,255,255,.94);
         box-shadow: 0 12px 28px rgba(15, 23, 42, .15);
     }
     .ultimate-login-box strong {
         display: block;
         color: #111827;
-        font-size: 14px;
+        font-size: 12px;
     }
     .ultimate-login-box span {
         display: block;
         margin-top: 4px;
         color: #6b7280;
-        font-size: 12px;
+        font-size: 11px;
     }
     .ultimate-login-button {
-        height: 8px;
-        margin-top: 12px;
+        height: 6px;
+        margin-top: 9px;
         border-radius: 999px;
         background: var(--lm-primary, #2563eb);
     }
     .ultimate-actions {
+        position: sticky;
+        bottom: 0;
         display: flex;
         justify-content: flex-end;
         gap: 10px;
-        margin-top: 28px;
-        padding-top: 18px;
+        margin: 22px -18px -18px;
+        padding: 10px 18px;
         border-top: 1px solid #e5e7eb;
+        background: rgba(255,255,255,.94);
+        backdrop-filter: blur(10px);
+        z-index: 5;
+    }
+    .ultimate-actions .btn {
+        min-height: 32px;
+        border-radius: 8px;
+        font-weight: 800;
+    }
+    #invoiceMessageTemplatePreview {
+        white-space: pre-wrap;
+        border: 1px solid #dbe4ee !important;
+        border-radius: 8px;
+        background: #f8fafc !important;
+        padding: 12px !important;
+        color: #334155 !important;
+        min-height: 48px;
+    }
+    .ultimate-field[data-business-field][style*="display: none"] {
+        display: none !important;
     }
     @media (max-width: 1199px) {
         .ultimate-preview-grid { grid-template-columns: 1fr; }
-        .ultimate-business-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+        .ultimate-business-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
     }
     @media (max-width: 991px) {
+        .ultimate-settings-hero { grid-template-columns: 1fr; padding: 14px; }
         .ultimate-settings-card { grid-template-columns: 1fr; }
         .ultimate-settings-tabs {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0;
-            padding: 16px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding: 10px;
             border-right: 0;
             border-bottom: 1px solid #e5e7eb;
         }
         .ultimate-settings-tab {
             margin: 0;
-            border: 1px solid #ddd;
+            justify-content: center;
+            min-height: 34px;
         }
-        .ultimate-settings-content { padding: 24px 18px; }
+        .ultimate-settings-content { padding: 16px; }
         .ultimate-business-grid { grid-template-columns: 1fr; }
         .ultimate-file-row { grid-template-columns: 1fr; }
+        .ultimate-actions { margin: 18px -16px -16px; padding: 10px 16px; }
+    }
+    @media (max-width: 575px) {
+        .ultimate-settings-tabs { grid-template-columns: 1fr; }
+        .ultimate-settings-tab { justify-content: flex-start; }
+        .ultimate-input-file { grid-template-columns: 1fr; }
+        .ultimate-actions { flex-direction: column-reverse; }
+        .ultimate-actions .btn { width: 100%; }
     }
 </style>
 @endsection
@@ -406,15 +544,27 @@
         'CMS' => route('loan-management.settings.cms'),
         'Payment' => route('loan-management.settings.payment-methods'),
     ];
+    $settingsTabIcons = [
+        'Business' => 'fa fa-building-o',
+        'CMS' => 'fa fa-globe',
+        'Payment' => 'fa fa-credit-card',
+    ];
 @endphp
 
 <div class="ultimate-settings-page" @if($loginBackgroundUrl) style="--lm-login-background: url('{{ $loginBackgroundUrl }}');" @endif>
-    <h1 class="ultimate-settings-title">Business Settings</h1>
-
-    <div class="ultimate-settings-search">
-        <span><i class="fa fa-search"></i></span>
-        <input type="search" id="businessSettingsSearch" placeholder="Search">
-        <button type="button" aria-label="Search options"><i class="fa fa-caret-down"></i></button>
+    <div class="ultimate-settings-hero">
+        <div>
+            <span class="ultimate-settings-eyebrow"><i class="fa fa-sliders"></i> {{ $lmText('Workspace Control', 'ការគ្រប់គ្រង Workspace') }}</span>
+            <h1 class="ultimate-settings-title">{{ $lmText('Business Settings', 'ការកំណត់អាជីវកម្ម') }}</h1>
+            <p class="ultimate-settings-subtitle">
+                {{ old('business_name', $settings['business_name']) }} · {{ $savedCurrencyCode }} · {{ old('time_zone', $settings['time_zone']) }}
+            </p>
+        </div>
+        <div class="ultimate-settings-search">
+            <span><i class="fa fa-search"></i></span>
+            <input type="search" id="businessSettingsSearch" placeholder="{{ $lmText('Search settings', 'ស្វែងរកការកំណត់') }}">
+            <button type="button" aria-label="Search options"><i class="fa fa-caret-down"></i></button>
+        </div>
     </div>
 
     @php
@@ -438,6 +588,7 @@
             <aside class="ultimate-settings-tabs">
                 @foreach($settingsTabs as $tab => $route)
                     <a href="{{ $route }}" class="ultimate-settings-tab {{ $tab === 'Business' ? 'active' : '' }}">
+                        <i class="{{ $settingsTabIcons[$tab] ?? 'fa fa-circle' }}"></i>
                         {{ $tab }}
                     </a>
                 @endforeach
@@ -518,7 +669,7 @@
                         </div>
                         <div class="ultimate-help">{{ $lmText('Previous logo (if exists) will be replaced.', 'រូបសញ្ញាចាស់នឹងត្រូវបានជំនួស។') }}</div>
                         @if($businessLogoUrl)
-                            <label class="ultimate-help" style="font-weight:600;color:#374151;">
+                            <label class="ultimate-help ultimate-toggle-line" style="font-weight:600;color:#374151;">
                                 <input type="checkbox" name="remove_logo" value="1">
                                 {{ $lmText('Remove current logo', 'លុបរូបសញ្ញាបច្ចុប្បន្ន') }}
                             </label>
@@ -618,7 +769,7 @@
                     <div class="ultimate-field ultimate-field-full" data-business-field>
                         <label for="cmsEnabledInput">{{ $lmText('Homepage CMS Module', 'ម៉ូឌុល CMS ទំព័រដើម') }}</label>
                         <input type="hidden" name="cms_enabled" value="0">
-                        <label class="ultimate-help" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;">
+                        <label class="ultimate-help ultimate-toggle-line" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;">
                             <input type="checkbox" id="cmsEnabledInput" name="cms_enabled" value="1" {{ old('cms_enabled', $settings['cms_enabled'] ?? true) ? 'checked' : '' }}>
                             {{ $lmText('Enable public homepage CMS', 'បើក CMS ទំព័រដើមសាធារណៈ') }}
                         </label>
@@ -630,7 +781,7 @@
                     <div class="ultimate-field ultimate-field-full" data-business-field>
                         <label>{{ $lmText('Customer Portal & Login Control', 'ការគ្រប់គ្រងច្រកចូលអតិថិជន') }}</label>
                         <input type="hidden" name="customer_login_enabled" value="0">
-                        <label class="ultimate-help" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;margin-bottom:6px;">
+                        <label class="ultimate-help ultimate-toggle-line" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;margin-bottom:6px;">
                             <input type="checkbox" id="customerLoginEnabledInput" name="customer_login_enabled" value="1" {{ old('customer_login_enabled', $settings['customer_login_enabled'] ?? true) ? 'checked' : '' }}>
                             {{ $lmText('Enable Customer Login & Registration Portal', 'បើកដំណើរការទំព័រចូលប្រើ និងចុះឈ្មោះរបស់អតិថិជន') }}
                         </label>
@@ -643,13 +794,13 @@
                         <label>{{ $lmText('Demo Logins Visibility', 'ការបង្ហាញគណនី Demo លើទំព័រចូលប្រើ') }}</label>
                         
                         <input type="hidden" name="demo_customer_login_enabled" value="0">
-                        <label class="ultimate-help" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;margin-bottom:8px;">
+                        <label class="ultimate-help ultimate-toggle-line" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;margin-bottom:8px;">
                             <input type="checkbox" id="demoCustomerLoginInput" name="demo_customer_login_enabled" value="1" {{ old('demo_customer_login_enabled', $settings['demo_customer_login_enabled'] ?? true) ? 'checked' : '' }}>
                             {{ $lmText('Show Demo Customer Login Widget (1-Click Auto-Fill)', 'បង្ហាញប្រអប់ Demo គណនីអតិថិជន (1-Click Auto-Fill) លើទំព័រចូលប្រើអតិថិជន') }}
                         </label>
 
                         <input type="hidden" name="demo_admin_login_enabled" value="0">
-                        <label class="ultimate-help" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;">
+                        <label class="ultimate-help ultimate-toggle-line" style="display:flex;align-items:center;gap:10px;font-weight:700;color:#111827;">
                             <input type="checkbox" id="demoAdminLoginInput" name="demo_admin_login_enabled" value="1" {{ old('demo_admin_login_enabled', $settings['demo_admin_login_enabled'] ?? false) ? 'checked' : '' }}>
                             {{ $lmText('Show Demo Admin Credentials on Admin Login', 'បង្ហាញព័ត៌មាន Demo អ្នកគ្រប់គ្រងនៅលើទំព័រចូលប្រើ Admin') }}
                         </label>
@@ -704,7 +855,7 @@
                         <input type="file" id="loginBackgroundInput" name="login_background" class="ultimate-input" style="margin-top:10px;" accept="image/png,image/jpeg,image/webp">
                         <div class="ultimate-help">{{ $lmText('Landscape JPG, PNG, or WEBP. Maximum 5 MB.', 'រូបភាពផ្តេក JPG, PNG ឬ WEBP។ ទំហំអតិបរមា 5 MB។') }}</div>
                         @if($loginBackgroundUrl)
-                            <label class="ultimate-help" style="font-weight:600;color:#374151;">
+                            <label class="ultimate-help ultimate-toggle-line" style="font-weight:600;color:#374151;">
                                 <input type="checkbox" name="remove_login_background" value="1">
                                 {{ $lmText('Remove current background', 'លុបផ្ទៃខាងក្រោយបច្ចុប្បន្ន') }}
                             </label>
