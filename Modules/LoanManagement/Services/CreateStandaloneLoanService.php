@@ -886,6 +886,12 @@ class CreateStandaloneLoanService
                     'updated_at' => now(),
                 ]);
             }
+            if ($fileId && Schema::connection('mysql_loan')->hasColumn('loans', 'id_front_file_id')) {
+                DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->update([
+                    'id_front_file_id' => $fileId,
+                    'updated_at' => now(),
+                ]);
+            }
 
             if ($fileId && Schema::connection('mysql_loan')->hasTable('loan_id_card_scans')) {
                 DB::connection('mysql_loan')->table('loan_id_card_scans')->insert($this->filterColumns('loan_id_card_scans', [

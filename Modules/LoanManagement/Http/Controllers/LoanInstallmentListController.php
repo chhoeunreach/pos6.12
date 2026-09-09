@@ -2431,7 +2431,32 @@ class LoanInstallmentListController extends Controller
         return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
     }
 
-    protected function latestCustomerImageUrl(int $customerId): ?string
+    protected function latestCustomerFileUrlByOriginalName(int $customerId, string $pattern): ?string
+    {
+        if ($customerId <= 0 || $pattern === '' || ! $this->loanTableExists('loan_files') || ! $this->loanTableHasCol('loan_files', 'original_name')) {
+            return null;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->where('original_name', 'like', $pattern)
+            ->orderByDesc('id');
+
+        if ($this->loanTableHasCol('loan_files', 'mime_type')) {
+            $query->where('mime_type', 'like', 'image/%');
+        }
+        $this->excludeDeletedLoanRows($query, 'loan_files');
+
+        $file = $query->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
+    }
+
+    protected function latestCustomerImageUrl(int $customerId, array $categories = []): ?string
     {
         if ($customerId <= 0 || ! $this->loanTableExists('loan_files')) {
             return null;
@@ -2443,6 +2468,9 @@ class LoanInstallmentListController extends Controller
             ->orderByRaw("CASE category WHEN 'customer_photo' THEN 0 WHEN 'document' THEN 1 WHEN 'id_front' THEN 2 ELSE 3 END")
             ->orderByDesc('id');
 
+        if (! empty($categories) && $this->loanTableHasCol('loan_files', 'category')) {
+            $query->whereIn('category', $categories);
+        }
         if ($this->loanTableHasCol('loan_files', 'mime_type')) {
             $query->where('mime_type', 'like', 'image/%');
         }
@@ -5262,10 +5290,15 @@ class LoanInstallmentListController extends Controller
 
         $customerProfilePhotoUrl = $this->loanFileUrlById((int) ($loanRow->customer_photo_file_id ?? 0))
             ?: $this->loanFileUrlById((int) ($loanCustomerRow->customer_photo_file_id ?? 0))
-            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'customer_photo');
+            ?: $this->loanFilePublicUrl($loanRow->customer_photo_snapshot ?? null)
+            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'customer_photo')
+            ?: $this->latestCustomerFileUrlByOriginalName($loanCustomerId, 'customer-profile-'.$loan.'.%')
+            ?: $this->latestCustomerImageUrl($loanCustomerId, ['customer_photo', 'document']);
         $idCardPhotoUrl = $this->loanFileUrlById((int) ($loanRow->id_front_file_id ?? 0))
             ?: $this->loanFileUrlById((int) ($loanCustomerRow->id_front_file_id ?? 0))
-            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'id_front');
+            ?: $this->latestCustomerFileUrlByCategory($loanCustomerId, 'id_front')
+            ?: $this->latestCustomerFileUrlByOriginalName($loanCustomerId, 'id-card-front-'.$loan.'.%')
+            ?: $this->latestCustomerImageUrl($loanCustomerId, ['id_front', 'document']);
         $loanDocumentFiles = $this->loanFilesByCategory($loan, 'document');
         $editSectionData = $this->loadLoanEditSectionData($loan);
 
