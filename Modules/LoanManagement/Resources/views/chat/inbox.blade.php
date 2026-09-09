@@ -115,6 +115,28 @@
     .lm-msg-row.own .lm-msg-meta{color:#dbeafe}
     .lm-chat-composer{flex:0 0 auto;background:#fff;border-top:1px solid #e5e7eb;padding:12px;display:flex;gap:8px;align-items:center}
     .lm-chat-composer input[type=text]{flex:1;height:40px;border:1px solid #d1d5db;border-radius:20px;padding:0 14px;outline:none}
+    .lm-chat-composer.is-recording #messageText{display:none}
+    .lm-voice-panel{display:none;flex:1;align-items:center;gap:10px;min-width:0;height:44px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:22px;padding:0 8px 0 12px}
+    .lm-chat-composer.is-recording .lm-voice-panel{display:flex}
+    .lm-voice-status{display:flex;align-items:center;gap:8px;min-width:126px;color:#0369a1;font-size:12px;font-weight:700}
+    .lm-voice-dot{width:9px;height:9px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.45);animation:lmVoicePulse 1.25s infinite}
+    .lm-voice-paused .lm-voice-dot{background:#f59e0b;animation:none}
+    .lm-voice-wave{height:24px;display:flex;align-items:center;gap:3px;flex:1;min-width:80px;overflow:hidden}
+    .lm-voice-wave span{display:block;width:3px;border-radius:3px;background:#38bdf8;height:8px;animation:lmVoiceWave .9s ease-in-out infinite}
+    .lm-voice-wave span:nth-child(2n){height:14px;animation-delay:.12s}
+    .lm-voice-wave span:nth-child(3n){height:20px;animation-delay:.2s}
+    .lm-voice-paused .lm-voice-wave span{animation-play-state:paused;opacity:.55}
+    .lm-voice-time{font-variant-numeric:tabular-nums;color:#0f172a;font-size:13px;font-weight:800;min-width:44px;text-align:center}
+    .lm-voice-actions{display:flex;align-items:center;gap:6px}
+    .lm-voice-btn{width:34px;height:34px;border-radius:50%;border:1px solid #cbd5e1;background:#fff;color:#334155;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+    .lm-voice-btn:hover{background:#f8fafc;color:#0f172a}
+    .lm-voice-btn.danger{border-color:#fecaca;color:#dc2626}
+    .lm-voice-btn.primary{border-color:#0ea5e9;background:#0ea5e9;color:#fff}
+    .lm-voice-btn.primary:hover{background:#0284c7;color:#fff}
+    .lm-voice-error{display:none;color:#b91c1c;font-size:12px;font-weight:700;padding:0 8px}
+    .lm-chat-composer.has-voice-error .lm-voice-error{display:block}
+    @keyframes lmVoicePulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+    @keyframes lmVoiceWave{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
     .lm-chat-side{min-height:0;border-left:1px solid #e5e7eb;background:#fff;overflow:auto}
     .lm-chat-side-section{padding:16px;border-bottom:1px solid #e5e7eb}
     .lm-chat-side-section h4{margin:0 0 12px;font-size:14px;font-weight:700;color:#0f172a}
@@ -211,6 +233,18 @@
                 <button type="button" class="btn btn-default btn-sm" id="btnFile"><i class="fa fa-paperclip"></i></button>
                 <button type="button" class="btn btn-default btn-sm" id="btnLocation"><i class="fa fa-map-marker"></i></button>
                 <input type="text" id="messageText" placeholder="Write a message">
+                <div class="lm-voice-panel" id="voicePanel" aria-live="polite">
+                    <div class="lm-voice-status" id="voiceStatus"><span class="lm-voice-dot"></span><span id="voiceStatusText">Recording</span></div>
+                    <div class="lm-voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <div class="lm-voice-time" id="voiceTimer">00:00</div>
+                    <div class="lm-voice-actions">
+                        <button type="button" class="lm-voice-btn" id="btnVoicePause" title="Pause"><i class="fa fa-pause"></i></button>
+                        <button type="button" class="lm-voice-btn danger" id="btnVoiceCancel" title="Cancel"><i class="fa fa-trash"></i></button>
+                        <button type="button" class="lm-voice-btn primary" id="btnVoiceSend" title="Send"><i class="fa fa-paper-plane"></i></button>
+                    </div>
+                </div>
+                <span class="lm-voice-error" id="voiceError"></span>
+                <button type="button" class="btn btn-default btn-sm" id="btnVoice" title="Voice message"><i class="fa fa-microphone"></i></button>
                 <button class="btn btn-primary" type="submit"><i class="fa fa-paper-plane"></i></button>
                 <input type="file" id="chatFile" style="display:none">
             </form>
@@ -261,6 +295,14 @@
     var threadLoading = false;
     var pollTimer = null;
     var searchTimer = null;
+    var voiceRecorder = null;
+    var voiceStream = null;
+    var voiceChunks = [];
+    var voiceTimer = null;
+    var voiceSeconds = 0;
+    var voiceSendAfterStop = false;
+    var voiceDiscardAfterStop = false;
+    var voiceMimeType = '';
 
     function apiData(resp){ return resp && resp.data && resp.data.data ? resp.data.data : (resp && resp.data ? resp.data : []); }
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
@@ -474,6 +516,219 @@
             .catch(function(){});
     }
 
+    function showVoiceError(message) {
+        $('#voiceError').text(message || 'Voice recorder is not available.').show();
+        $('#messageForm').addClass('has-voice-error');
+        window.setTimeout(function(){
+            $('#messageForm').removeClass('has-voice-error');
+            $('#voiceError').hide().text('');
+        }, 4200);
+    }
+
+    function formatVoiceSeconds(seconds) {
+        seconds = Math.max(0, Number(seconds || 0));
+        return pad2(Math.floor(seconds / 60)) + ':' + pad2(seconds % 60);
+    }
+
+    function setVoiceUi(state) {
+        var isRecording = state === 'recording';
+        var isPaused = state === 'paused';
+        $('#messageForm').toggleClass('is-recording', isRecording || isPaused);
+        $('#voicePanel').toggleClass('lm-voice-paused', isPaused);
+        $('#btnVoice').toggle(!(isRecording || isPaused));
+        $('#btnImage, #btnFile, #btnLocation, #messageForm button[type="submit"]').prop('disabled', isRecording || isPaused);
+        $('#voiceStatusText').text(isPaused ? 'Paused' : 'Recording');
+        $('#btnVoicePause').attr('title', isPaused ? 'Resume' : 'Pause')
+            .html(isPaused ? '<i class="fa fa-play"></i>' : '<i class="fa fa-pause"></i>');
+    }
+
+    function releaseVoiceStream() {
+        if (voiceStream) {
+            voiceStream.getTracks().forEach(function(track){ track.stop(); });
+        }
+        voiceStream = null;
+    }
+
+    function resetVoiceRecorder() {
+        if (voiceTimer) {
+            window.clearInterval(voiceTimer);
+            voiceTimer = null;
+        }
+        voiceRecorder = null;
+        voiceChunks = [];
+        voiceSeconds = 0;
+        voiceSendAfterStop = false;
+        voiceDiscardAfterStop = false;
+        voiceMimeType = '';
+        $('#voiceTimer').text('00:00');
+        setVoiceUi('idle');
+        releaseVoiceStream();
+    }
+
+    function tickVoiceTimer() {
+        if (!voiceRecorder || voiceRecorder.state !== 'recording') {
+            return;
+        }
+        voiceSeconds += 1;
+        $('#voiceTimer').text(formatVoiceSeconds(voiceSeconds));
+    }
+
+    function preferredVoiceMimeType() {
+        var candidates = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/ogg;codecs=opus',
+            'audio/ogg',
+            'audio/mp4'
+        ];
+        if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) {
+            return '';
+        }
+        for (var i = 0; i < candidates.length; i++) {
+            if (MediaRecorder.isTypeSupported(candidates[i])) {
+                return candidates[i];
+            }
+        }
+        return '';
+    }
+
+    function extensionForVoiceMime(mimeType) {
+        mimeType = String(mimeType || '').toLowerCase();
+        if (mimeType.indexOf('ogg') >= 0) return 'ogg';
+        if (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0) return 'm4a';
+        return 'webm';
+    }
+
+    function sendVoiceBlob(blob, durationSeconds) {
+        if (!activeThread || !blob || !blob.size) {
+            resetVoiceRecorder();
+            return;
+        }
+        releaseVoiceStream();
+        var extension = extensionForVoiceMime(blob.type || voiceMimeType);
+        var file = new File([blob], 'voice-message-' + Date.now() + '.' + extension, {type: blob.type || voiceMimeType || 'audio/webm'});
+        var data = new FormData();
+        data.append('_token', csrf);
+        data.append('message_type', 'audio');
+        data.append('file', file);
+        data.append('audio_duration_seconds', Math.max(1, durationSeconds || voiceSeconds));
+        data.append('message', $('#messageText').val() || '');
+        apiPost(chatBaseUrl + '/' + activeThread + '/messages', data)
+            .then(function(){
+                $('#messageText').val('');
+                loadThread(activeThread);
+                loadInbox(true);
+            })
+            .catch(function(){
+                showVoiceError('Cannot send voice message.');
+            })
+            .finally(resetVoiceRecorder);
+    }
+
+    function startVoiceRecording() {
+        if (!activeThread) {
+            showVoiceError('Select a chat before recording voice.');
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+            showVoiceError('Voice recording is not supported in this browser.');
+            return;
+        }
+        if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+            return;
+        }
+
+        navigator.mediaDevices.getUserMedia({audio: true}).then(function(stream){
+            voiceStream = stream;
+            voiceChunks = [];
+            voiceSeconds = 0;
+            voiceSendAfterStop = false;
+            voiceDiscardAfterStop = false;
+            voiceMimeType = preferredVoiceMimeType();
+            var options = voiceMimeType ? {mimeType: voiceMimeType} : {};
+            voiceRecorder = new MediaRecorder(stream, options);
+
+            voiceRecorder.ondataavailable = function(event) {
+                if (event.data && event.data.size > 0) {
+                    voiceChunks.push(event.data);
+                }
+            };
+            voiceRecorder.onstop = function() {
+                if (voiceDiscardAfterStop) {
+                    resetVoiceRecorder();
+                    return;
+                }
+                if (voiceSendAfterStop) {
+                    var blob = new Blob(voiceChunks, {type: voiceMimeType || (voiceChunks[0] && voiceChunks[0].type) || 'audio/webm'});
+                    sendVoiceBlob(blob, voiceSeconds);
+                    return;
+                }
+                resetVoiceRecorder();
+            };
+            voiceRecorder.onerror = function() {
+                showVoiceError('Voice recorder stopped unexpectedly.');
+                resetVoiceRecorder();
+            };
+
+            voiceRecorder.start(1000);
+            $('#voiceTimer').text('00:00');
+            setVoiceUi('recording');
+            voiceTimer = window.setInterval(tickVoiceTimer, 1000);
+        }).catch(function(){
+            showVoiceError('Microphone permission is required for voice messages.');
+            resetVoiceRecorder();
+        });
+    }
+
+    function pauseOrResumeVoice() {
+        if (!voiceRecorder) return;
+        if (voiceRecorder.state === 'recording') {
+            if (voiceRecorder.pause) {
+                voiceRecorder.pause();
+                setVoiceUi('paused');
+            }
+        } else if (voiceRecorder.state === 'paused') {
+            if (voiceRecorder.resume) {
+                voiceRecorder.resume();
+                setVoiceUi('recording');
+            }
+        }
+    }
+
+    function cancelVoiceRecording() {
+        if (!voiceRecorder) {
+            resetVoiceRecorder();
+            return;
+        }
+        if (voiceTimer) {
+            window.clearInterval(voiceTimer);
+            voiceTimer = null;
+        }
+        voiceDiscardAfterStop = true;
+        voiceSendAfterStop = false;
+        if (voiceRecorder.state !== 'inactive') {
+            voiceRecorder.stop();
+        } else {
+            resetVoiceRecorder();
+        }
+    }
+
+    function finishVoiceRecording() {
+        if (!voiceRecorder) return;
+        if (voiceTimer) {
+            window.clearInterval(voiceTimer);
+            voiceTimer = null;
+        }
+        voiceSendAfterStop = true;
+        voiceDiscardAfterStop = false;
+        if (voiceRecorder.state === 'paused' && voiceRecorder.resume) {
+            voiceRecorder.resume();
+        }
+        if (voiceRecorder.state !== 'inactive') {
+            voiceRecorder.stop();
+        }
+    }
+
     $('#chatTabs').on('click', '.lm-chat-tab', function(){
         activeView = $(this).data('view');
         $('.lm-chat-tab').removeClass('active');
@@ -534,6 +789,17 @@
     $('#btnImage').on('click', function(){ $('#chatFile').attr('accept','image/*').data('type','image').click(); });
     $('#btnFile').on('click', function(){ $('#chatFile').removeAttr('accept').data('type','file').click(); });
     $('#chatFile').on('change', function(){ sendFile($(this).data('type') || 'file', this.files[0]); });
+    $('#btnVoice').on('click', startVoiceRecording);
+    $('#btnVoicePause').on('click', pauseOrResumeVoice);
+    $('#btnVoiceCancel').on('click', cancelVoiceRecording);
+    $('#btnVoiceSend').on('click', finishVoiceRecording);
+    $(window).on('beforeunload', function(){
+        if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+            voiceDiscardAfterStop = true;
+            voiceRecorder.stop();
+        }
+        releaseVoiceStream();
+    });
     $('#btnLocation').on('click', function(){
         if (!activeThread || !navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition(function(pos){

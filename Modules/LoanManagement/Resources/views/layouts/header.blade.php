@@ -9,6 +9,7 @@
     $welcomeName = $welcomeName ?: (optional($loanUser)->username ?? optional($loanUser)->email ?? 'Staff');
     $welcomeText = $loanLanguage === 'km' ? 'សូមស្វាគមន៍, '.$welcomeName : 'Welcome, '.$welcomeName;
     $userInitial = strtoupper(substr($welcomeName, 0, 1));
+    $mainSystemUrl = Route::has('home') ? route('home') : url('/home');
 
     try {
         $locationName = session('user.business_location_name')
@@ -41,6 +42,14 @@
     </div>
 
     <div class="lm-header-right">
+        <a href="{{ $mainSystemUrl }}"
+           class="btn btn-default btn-sm lm-header-action"
+           title="{{ $loanLanguage === 'km' ? 'ត្រឡប់ទៅប្រព័ន្ធមេ' : 'Back to main system' }}">
+            <i class="fa fa-arrow-left"></i>
+            <span class="hidden-xs">{{ $loanLanguage === 'km' ? 'ត្រឡប់ទៅប្រព័ន្ធមេ' : 'Back to Main' }}</span>
+            <span class="visible-xs-inline">{{ $loanLanguage === 'km' ? 'ត្រឡប់' : 'Back' }}</span>
+        </a>
+
         @if(Route::has('loan-management.loans.calculator') && \Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create'))
             <a href="{{ route('loan-management.loans.calculator', ['_lm_modal' => 1]) }}"
                class="btn btn-default btn-sm lm-header-action js-loan-calculator-modal"

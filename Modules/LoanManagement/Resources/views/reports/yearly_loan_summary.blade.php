@@ -29,6 +29,39 @@
         'location_id' => $filters['location_id'],
         'search' => $filters['search'],
     ];
+    $chartRows = collect($displayRows)->sortBy('year')->values();
+    $chartData = [
+        'labels' => $chartRows->pluck('year')->map(fn ($year) => (string) $year)->all(),
+        'loanTotals' => $chartRows->pluck('loan_total')->map(fn ($value) => round((float) $value, 2))->all(),
+        'paidTotals' => $chartRows->pluck('payment_total')->map(fn ($value) => round((float) $value, 2))->all(),
+        'badBalances' => $chartRows->pluck('bad_balance_total')->map(fn ($value) => round((float) $value, 2))->all(),
+        'registeredCounts' => $chartRows->pluck('loan_count')->map(fn ($value) => (int) $value)->all(),
+        'paidOffCounts' => $chartRows->pluck('closed_count')->map(fn ($value) => (int) $value)->all(),
+        'badCounts' => $chartRows->pluck('bad_count')->map(fn ($value) => (int) $value)->all(),
+    ];
+    $totals = $payload['totals'] ?? [];
+    $statusChartData = [
+        'labels' => [
+            $bi('Active / Open', 'សកម្ម / បើក'),
+            $bi('Paid Off', 'បង់ផ្ដាច់'),
+            $bi('Bad / Risk', 'ខូច / ហានិភ័យ'),
+        ],
+        'values' => [
+            max(0, (int) ($totals['loan_count'] ?? 0) - (int) ($totals['closed_count'] ?? 0) - (int) ($totals['bad_count'] ?? 0)),
+            (int) ($totals['closed_count'] ?? 0),
+            (int) ($totals['bad_count'] ?? 0),
+        ],
+    ];
+    $topYears = $chartRows
+        ->sortByDesc(fn ($row) => (float) ($row['payment_total'] ?? 0))
+        ->take(4)
+        ->values();
+    $collectionRate = (float) ($totals['loan_total'] ?? 0) > 0
+        ? min(100, ((float) ($totals['payment_total'] ?? 0) / (float) ($totals['loan_total'] ?? 0)) * 100)
+        : 0;
+    $riskRate = (float) ($totals['loan_count'] ?? 0) > 0
+        ? (((float) ($totals['bad_count'] ?? 0) / (float) ($totals['loan_count'] ?? 0)) * 100)
+        : 0;
 @endphp
 
 @section('loan_css')
@@ -40,6 +73,52 @@
     .yls-wrap {
         font-family: 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #1f2937;
+    }
+    .yls-page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+        padding: 16px 18px;
+        margin-bottom: 16px;
+        border: 1px solid #dbe4ef;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fbfd 58%, #eef8f6 100%);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+    }
+    .yls-page-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #0f766e;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+        text-transform: uppercase;
+        margin-bottom: 7px;
+    }
+    .yls-page-title {
+        font-size: 24px;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.22;
+    }
+    .yls-page-subtitle {
+        display: block;
+        max-width: 760px;
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.45;
+        margin-top: 5px;
+    }
+    .yls-page-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
     }
 
     /* KPI Summary Cards Grid */
@@ -99,89 +178,249 @@
     .yls-tone-purple { color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; }
     .yls-tone-red { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; }
 
+    .yls-analytics-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(280px, .8fr);
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .yls-panel {
+        border: 1px solid #dbe4ef;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .05);
+        overflow: hidden;
+    }
+    .yls-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 13px 15px;
+        border-bottom: 1px solid #eef2f7;
+        background: #fbfdff;
+    }
+    .yls-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+    .yls-panel-title i { color: #0284c7; }
+    .yls-panel-note {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .yls-chart-box {
+        position: relative;
+        min-height: 320px;
+        padding: 14px;
+    }
+    .yls-chart-box canvas {
+        width: 100% !important;
+        height: 290px !important;
+    }
+    .yls-side-stack {
+        display: grid;
+        gap: 14px;
+    }
+    .yls-mini-chart {
+        min-height: 230px;
+    }
+    .yls-mini-chart canvas {
+        height: 205px !important;
+    }
+    .yls-insight-list {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+    }
+    .yls-insight-row {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .yls-insight-row:last-child { border-bottom: 0; }
+    .yls-year-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 50px;
+        height: 30px;
+        border-radius: 6px;
+        background: #ecfeff;
+        color: #0e7490;
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .yls-insight-label {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .yls-insight-value {
+        display: block;
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 800;
+        margin-top: 2px;
+    }
+    .yls-insight-meta {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .yls-health-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0 14px 14px;
+    }
+    .yls-health-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 11px;
+        background: #f8fafc;
+    }
+    .yls-health-label {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .yls-health-value {
+        color: #0f172a;
+        display: block;
+        font-size: 18px;
+        font-weight: 800;
+        margin-top: 4px;
+    }
+
     /* Ultimate POS DataTables Toolbar Layout */
     .lm-dt-top {
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
         flex-wrap: wrap !important;
-        gap: 12px !important;
-        padding: 12px 16px !important;
-        background: #ffffff !important;
-        border-bottom: 1px solid #f1f5f9 !important;
+        gap: 14px !important;
+        padding: 16px 18px !important;
+        background: #fbfdff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-bottom: 0 !important;
+        border-radius: 8px 8px 0 0 !important;
     }
     .lm-dt-length label {
         display: inline-flex !important;
         align-items: center !important;
-        gap: 8px !important;
+        gap: 10px !important;
         margin: 0 !important;
-        font-weight: 500 !important;
+        font-weight: 700 !important;
         font-size: 13px !important;
         color: #475569 !important;
     }
     .lm-dt-length select {
-        height: 34px !important;
-        padding: 2px 28px 2px 10px !important;
+        height: 38px !important;
+        padding: 4px 32px 4px 12px !important;
         border-radius: 6px !important;
         border: 1px solid #cbd5e1 !important;
         font-size: 13px !important;
         color: #1e293b !important;
         background-color: #fff !important;
         outline: none !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
     }
     .lm-dt-buttons {
         display: inline-flex !important;
         align-items: center !important;
-        gap: 4px !important;
+        gap: 6px !important;
         flex-wrap: wrap !important;
     }
     .lm-dt-buttons .btn {
         border-radius: 6px !important;
-        padding: 6px 12px !important;
+        padding: 8px 13px !important;
         font-size: 12.5px !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
         border: 1px solid #cbd5e1 !important;
         background: #ffffff !important;
         color: #334155 !important;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        line-height: 1.25 !important;
     }
     .lm-dt-buttons .btn:hover {
         background: #f8fafc !important;
         border-color: #94a3b8 !important;
         color: #0f172a !important;
     }
+    .lm-dt-buttons .btn i {
+        margin-right: 4px;
+    }
+    .lm-dt-search label {
+        margin: 0 !important;
+    }
     .lm-dt-search input {
-        height: 34px !important;
-        min-width: 220px !important;
+        height: 38px !important;
+        min-width: 260px !important;
         border-radius: 6px !important;
         border: 1px solid #cbd5e1 !important;
-        padding: 6px 12px !important;
+        padding: 8px 14px !important;
         font-size: 13px !important;
         outline: none !important;
+        background: #ffffff !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
+    }
+    .lm-dt-search input:focus,
+    .lm-dt-length select:focus {
+        border-color: #0284c7 !important;
+        box-shadow: 0 0 0 3px rgba(2, 132, 199, .12) !important;
     }
     .lm-dt-bottom {
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
         flex-wrap: wrap !important;
-        gap: 12px !important;
-        padding: 12px 16px !important;
-        background: #ffffff !important;
-        border-top: 1px solid #f1f5f9 !important;
+        gap: 14px !important;
+        padding: 15px 18px !important;
+        background: #fbfdff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-top: 0 !important;
+        border-radius: 0 0 8px 8px !important;
     }
     .lm-dt-info {
         font-size: 13px !important;
         color: #64748b !important;
         padding: 0 !important;
+        font-weight: 700 !important;
     }
     .lm-dt-pagination .pagination {
         margin: 0 !important;
+        display: inline-flex !important;
+        gap: 4px !important;
     }
     .lm-dt-pagination .pagination > li > a {
-        border-radius: 4px !important;
-        margin: 0 2px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px !important;
+        margin: 0 !important;
         border: 1px solid #e2e8f0 !important;
         color: #475569 !important;
+        font-weight: 700 !important;
+        padding: 7px 10px !important;
     }
     .lm-dt-pagination .pagination > .active > a {
         background-color: #0284c7 !important;
@@ -199,10 +438,18 @@
     }
     @media (max-width: 1200px) {
         .yls-card-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+        .yls-analytics-grid { grid-template-columns: 1fr; }
         .lm-pos-filter-grid { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 768px) {
+        .yls-page-head { padding: 14px; }
+        .yls-page-title { font-size: 20px; }
+        .yls-page-actions { width: 100%; }
+        .yls-page-actions .btn { flex: 1 1 130px; }
         .yls-card-grid { grid-template-columns: 1fr; }
+        .yls-chart-box { min-height: 260px; padding: 10px; }
+        .yls-chart-box canvas { height: 235px !important; }
+        .yls-health-grid { grid-template-columns: 1fr; }
         .lm-pos-filter-grid { grid-template-columns: 1fr; }
     }
     .lm-pos-filter-field {
@@ -282,43 +529,104 @@
     .lm-btn-pos-reset:hover { background: #e2e8f0; color: #1e293b; text-decoration: none; }
 
     /* Summary Table Styling */
+    .yls-data-shell {
+        border: 1px solid #e2e8f0;
+        border-radius: 0;
+        margin: 0;
+        background: #ffffff;
+    }
+    .dataTables_wrapper .yls-data-shell {
+        border-top: 0;
+        border-bottom: 0;
+    }
     .yls-table {
         width: 100%;
-        min-width: 1280px;
+        min-width: 1320px;
         margin-bottom: 0;
         table-layout: fixed;
         border-collapse: separate;
         border-spacing: 0;
     }
+    .yls-col-index { width: 42px; }
+    .yls-col-year { width: 64px; }
+    .yls-col-count { width: 54px; }
+    .yls-col-money { width: 60px; }
+    .yls-col-total { width: 66px; }
+    .yls-col-balance { width: 68px; }
     .yls-table thead th {
         text-align: center;
         vertical-align: middle !important;
         white-space: normal;
-        font-size: 11px;
+        font-size: 10.5px;
         line-height: 1.2;
         border-color: #dbe3ef !important;
-        padding: 6px 4px !important;
-        font-weight: 700;
+        padding: 7px 5px !important;
+        font-weight: 800;
+        text-transform: none;
     }
     .yls-table tbody td,
     .yls-table tfoot th {
         vertical-align: middle !important;
         white-space: nowrap;
-        font-size: 11px;
-        padding: 6px 6px !important;
+        font-size: 10.5px;
+        line-height: 1.25;
+        padding: 8px 5px !important;
         border-color: #e6edf5 !important;
     }
     .yls-table th:first-child,
     .yls-table td:first-child { width: 42px; }
     .yls-table th:nth-child(2),
-    .yls-table td:nth-child(2) { width: 68px; }
+    .yls-table td:nth-child(2) { width: 64px; }
+    .yls-table th:nth-child(3),
+    .yls-table th:nth-child(7),
+    .yls-table th:nth-child(11),
+    .yls-table th:nth-child(17),
+    .yls-table td:nth-child(3),
+    .yls-table td:nth-child(7),
+    .yls-table td:nth-child(11),
+    .yls-table td:nth-child(17) { width: 54px; }
+    .yls-table th:nth-child(4),
+    .yls-table th:nth-child(5),
+    .yls-table th:nth-child(6),
+    .yls-table th:nth-child(8),
+    .yls-table th:nth-child(9),
+    .yls-table th:nth-child(10),
+    .yls-table th:nth-child(n+12),
+    .yls-table td:nth-child(4),
+    .yls-table td:nth-child(5),
+    .yls-table td:nth-child(6),
+    .yls-table td:nth-child(8),
+    .yls-table td:nth-child(9),
+    .yls-table td:nth-child(10),
+    .yls-table td:nth-child(n+12) { width: 60px; }
+    .yls-table th:nth-child(6),
+    .yls-table th:nth-child(10),
+    .yls-table th:nth-child(14),
+    .yls-table th:nth-child(20),
+    .yls-table td:nth-child(6),
+    .yls-table td:nth-child(10),
+    .yls-table td:nth-child(14),
+    .yls-table td:nth-child(20) { width: 66px; }
+    .yls-table th:nth-child(16),
+    .yls-table th:nth-child(22),
+    .yls-table td:nth-child(16),
+    .yls-table td:nth-child(22) { width: 68px; }
     .yls-table thead tr:first-child th {
         color: #fff;
-        height: 32px;
+        height: 34px;
         border-bottom: 0 !important;
         box-shadow: inset 0 -2px 0 rgba(255, 255, 255, .35);
     }
-    .yls-table thead tr:nth-child(2) th { height: 30px; }
+    .yls-table thead tr:nth-child(2) th {
+        height: 32px;
+        color: #334155;
+        background-clip: padding-box;
+    }
+    .yls-table thead tr:nth-child(2) th {
+        font-size: 9.5px;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
     .yls-group-label { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
     .yls-group-loans { background: #0f766e; color: #fff; }
     .yls-group-payments { background: #15803d; color: #fff; }
@@ -336,11 +644,87 @@
     .yls-table thead tr:nth-child(2) th:nth-child(n+15):nth-child(-n+20),
     .yls-table tbody td:nth-child(n+17):nth-child(-n+22),
     .yls-table tfoot th:nth-child(n+16):nth-child(-n+21) { background: #fef2f2; }
+    .yls-table thead tr:nth-child(2) th:nth-child(1),
+    .yls-table tbody td:nth-child(3),
+    .yls-table tfoot th:nth-child(3),
+    .yls-table thead tr:nth-child(2) th:nth-child(5),
+    .yls-table tbody td:nth-child(7),
+    .yls-table tfoot th:nth-child(7),
+    .yls-table thead tr:nth-child(2) th:nth-child(9),
+    .yls-table tbody td:nth-child(11),
+    .yls-table tfoot th:nth-child(11),
+    .yls-table thead tr:nth-child(2) th:nth-child(15),
+    .yls-table tbody td:nth-child(17),
+    .yls-table tfoot th:nth-child(17) {
+        border-left-width: 1px !important;
+        border-left-color: #94a3b8 !important;
+    }
+    .yls-table tbody td:first-child,
+    .yls-table tbody td:nth-child(2) {
+        background: #ffffff !important;
+    }
+    .yls-table tbody td:first-child {
+        color: #64748b;
+        font-weight: 800;
+    }
+    .yls-table tbody td:nth-child(2) strong {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .yls-table tbody td[data-group],
+    .yls-table tfoot th.text-right {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+    }
+    .yls-table tbody td[data-group] {
+        color: #334155;
+        font-weight: 700;
+    }
+    .yls-table tbody td:nth-child(3),
+    .yls-table tbody td:nth-child(7),
+    .yls-table tbody td:nth-child(11),
+    .yls-table tbody td:nth-child(17) {
+        color: #0f172a;
+        font-weight: 800;
+    }
+    .yls-table tbody td:nth-child(6),
+    .yls-table tbody td:nth-child(10),
+    .yls-table tbody td:nth-child(14),
+    .yls-table tbody td:nth-child(20) {
+        color: #0f172a;
+        font-weight: 800;
+    }
+    .yls-table tbody td:nth-child(16),
+    .yls-table tbody td:nth-child(22) {
+        color: #b45309;
+        font-weight: 800;
+    }
+    .yls-table tbody td:empty::after {
+        content: '-';
+        color: #cbd5e1;
+        font-weight: 700;
+    }
+    .yls-table tbody tr:nth-child(even) td { filter: saturate(.96) brightness(.995); }
     .yls-table tbody tr:hover td { filter: brightness(.97); }
     .yls-table tbody tr { cursor: pointer; }
     .yls-table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 #0284c7; }
-    .yls-total-row th { background: #e2e8f0 !important; color: #0f172a; font-weight: 800; }
-    .yls-generated { color: #94a3b8; font-size: 11px; padding: 8px 4px 0; text-align: right; }
+    .yls-total-row th {
+        background: #e2e8f0 !important;
+        color: #0f172a;
+        font-weight: 800;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+    }
+    .yls-generated { color: #94a3b8; font-size: 11px; padding: 12px 4px 0; text-align: right; }
 
     /* Modal Styling */
     .yls-loan-modal {
@@ -404,16 +788,19 @@
 <div class="yls-wrap">
 
     {{-- Content Header --}}
-    <section class="content-header" style="padding: 0 0 16px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+    <section class="content-header yls-page-head">
         <div>
-            <h1 style="font-size: 22px; font-weight: 700; color: #1e293b; margin: 0;">
+            <div class="yls-page-kicker">
+                <i class="fa fa-line-chart"></i> {{ $bi('Annual Performance', 'លទ្ធផលប្រចាំឆ្នាំ') }}
+            </div>
+            <h1 class="yls-page-title">
                 {{ $bi('Yearly Installment Summary', 'របាយការណ៍សង្ខេបកម្ចីប្រចាំឆ្នាំ') }}
-                <small style="font-size: 13px; color: #64748b; font-weight: 400; margin-left: 8px;">
+                <small class="yls-page-subtitle">
                     {{ $bi('Annual loan, schedule, collection, deposit, and overdue totals', 'សរុបកម្ចី កាលវិភាគ ការប្រមូលប្រាក់ ប្រាក់កក់ និងហួសកំណត់ប្រចាំឆ្នាំ') }}
                 </small>
             </h1>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="yls-page-actions">
             <a class="btn btn-success btn-sm" style="font-weight: 600; border-radius: 6px;"
                href="{{ route('loan-management.reports.yearly-loan-summary', array_merge(request()->query(), ['export' => 'csv'])) }}">
                 <i class="fa fa-file-excel-o"></i> {{ $bi('Export Excel', 'នាំចេញ Excel') }}
@@ -437,6 +824,65 @@
                 </div>
             </div>
         @endforeach
+    </div>
+
+    {{-- Analytics Charts --}}
+    <div class="yls-analytics-grid">
+        <div class="yls-panel">
+            <div class="yls-panel-head">
+                <h3 class="yls-panel-title"><i class="fa fa-area-chart"></i> {{ $bi('Yearly Value Trend', 'និន្នាការតម្លៃប្រចាំឆ្នាំ') }}</h3>
+                <span class="yls-panel-note">{{ $dateRangeDisplay }}</span>
+            </div>
+            <div class="yls-chart-box">
+                <canvas id="ylsTrendChart"></canvas>
+            </div>
+        </div>
+        <div class="yls-side-stack">
+            <div class="yls-panel">
+                <div class="yls-panel-head">
+                    <h3 class="yls-panel-title"><i class="fa fa-pie-chart"></i> {{ $bi('Portfolio Mix', 'សមាសភាពកម្ចី') }}</h3>
+                </div>
+                <div class="yls-chart-box yls-mini-chart">
+                    <canvas id="ylsStatusChart"></canvas>
+                </div>
+                <div class="yls-health-grid">
+                    <div class="yls-health-item">
+                        <span class="yls-health-label">{{ $bi('Collection Rate', 'អត្រាប្រមូល') }}</span>
+                        <strong class="yls-health-value">{{ number_format($collectionRate, 1) }}%</strong>
+                    </div>
+                    <div class="yls-health-item">
+                        <span class="yls-health-label">{{ $bi('Risk Rate', 'អត្រាហានិភ័យ') }}</span>
+                        <strong class="yls-health-value">{{ number_format($riskRate, 1) }}%</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="yls-panel">
+                <div class="yls-panel-head">
+                    <h3 class="yls-panel-title"><i class="fa fa-trophy"></i> {{ $bi('Top Collection Years', 'ឆ្នាំប្រមូលប្រាក់ខ្ពស់') }}</h3>
+                </div>
+                <div class="yls-insight-list">
+                    @forelse($topYears as $row)
+                        <div class="yls-insight-row">
+                            <span class="yls-year-pill">{{ $row['year'] }}</span>
+                            <span>
+                                <span class="yls-insight-label">{{ $bi('Collected', 'បានប្រមូល') }}</span>
+                                <strong class="yls-insight-value">{{ $money($row['payment_total'] ?? 0) }}</strong>
+                            </span>
+                            <span class="yls-insight-meta">{{ $number($row['loan_count'] ?? 0) }} {{ $bi('loans', 'កម្ចី') }}</span>
+                        </div>
+                    @empty
+                        <div class="yls-insight-row">
+                            <span class="yls-year-pill">-</span>
+                            <span>
+                                <span class="yls-insight-label">{{ $bi('Collected', 'បានប្រមូល') }}</span>
+                                <strong class="yls-insight-value">{{ $bi('No yearly data', 'មិនមានទិន្នន័យប្រចាំឆ្នាំ') }}</strong>
+                            </span>
+                            <span class="yls-insight-meta">0</span>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- Ultimate POS Collapsible Filters Component --}}
@@ -483,8 +929,32 @@
 
     {{-- Ultimate POS Standard Widget Component --}}
     @component('components.widget', ['class' => 'box-primary', 'title' => $bi('Yearly Installment Summary Data', 'ទិន្នន័យសង្ខេបកម្ចីប្រចាំឆ្នាំ')])
-        <div class="table-responsive">
+        <div class="table-responsive yls-data-shell">
             <table class="table table-bordered table-hover yls-table" id="yearlyLoanSummaryTable">
+                <colgroup>
+                    <col class="yls-col-index">
+                    <col class="yls-col-year">
+                    <col class="yls-col-count">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-total">
+                    <col class="yls-col-count">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-total">
+                    <col class="yls-col-count">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-total">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-balance">
+                    <col class="yls-col-count">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-total">
+                    <col class="yls-col-money">
+                    <col class="yls-col-money yls-col-balance">
+                </colgroup>
                 <thead>
                     <tr>
                         <th rowspan="2">{{ $bi('No.', 'ល.រ') }}</th>
@@ -595,6 +1065,7 @@
 @section('loan_js')
 <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/min/moment.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
@@ -684,6 +1155,8 @@
 
         var detailUrl = @json(route('loan-management.admin-loan.details'));
         var filters = @json($yearlyLoanDetailFilterPayload);
+        var chartData = @json($chartData);
+        var statusChartData = @json($statusChartData);
         var labels = {
             all: @json($bi('All Installments', 'កម្ចីទាំងអស់')),
             registered: @json($bi('Registered Installments', 'អតិថិជនចុះឈ្មោះរំលស់')),
@@ -698,6 +1171,143 @@
             if (index >= 10 && index <= 15) return 'paidOff';
             if (index >= 16 && index <= 21) return 'badDebt';
             return 'all';
+        }
+
+        function shortMoney(value) {
+            var numberValue = Number(value || 0);
+            if (Math.abs(numberValue) >= 1000000) return '$' + (numberValue / 1000000).toFixed(1) + 'M';
+            if (Math.abs(numberValue) >= 1000) return '$' + (numberValue / 1000).toFixed(1) + 'K';
+            return '$' + numberValue.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+
+        function initYearlyCharts() {
+            if (!window.Chart || !chartData.labels || !chartData.labels.length) {
+                return;
+            }
+
+            Chart.defaults.font.family = "'Kantumruy Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+            Chart.defaults.color = '#64748b';
+
+            var trendCanvas = document.getElementById('ylsTrendChart');
+            if (trendCanvas) {
+                var trendGradient = trendCanvas.getContext('2d').createLinearGradient(0, 0, 0, 290);
+                trendGradient.addColorStop(0, 'rgba(2, 132, 199, .22)');
+                trendGradient.addColorStop(1, 'rgba(2, 132, 199, .02)');
+
+                new Chart(trendCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: @json($bi('Registered Total', 'សរុបចុះឈ្មោះ')),
+                                data: chartData.loanTotals,
+                                backgroundColor: trendGradient,
+                                borderColor: '#0284c7',
+                                borderWidth: 1,
+                                borderRadius: 5,
+                                maxBarThickness: 42
+                            },
+                            {
+                                type: 'line',
+                                label: @json($bi('Paid Total', 'បានបង់សរុប')),
+                                data: chartData.paidTotals,
+                                borderColor: '#16a34a',
+                                backgroundColor: 'rgba(22, 163, 74, .12)',
+                                borderWidth: 3,
+                                tension: .35,
+                                fill: false,
+                                pointRadius: 3,
+                                pointHoverRadius: 5
+                            },
+                            {
+                                type: 'line',
+                                label: @json($bi('Bad Balance', 'សមតុល្យខូច')),
+                                data: chartData.badBalances,
+                                borderColor: '#dc2626',
+                                backgroundColor: 'rgba(220, 38, 38, .10)',
+                                borderDash: [6, 4],
+                                borderWidth: 2,
+                                tension: .35,
+                                fill: false,
+                                pointRadius: 2,
+                                pointHoverRadius: 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { usePointStyle: true, boxWidth: 8, padding: 18 }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        return context.dataset.label + ': ' + shortMoney(context.parsed.y);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { weight: '700' } }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#eef2f7' },
+                                ticks: {
+                                    callback: function (value) { return shortMoney(value); }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            var statusCanvas = document.getElementById('ylsStatusChart');
+            if (statusCanvas) {
+                new Chart(statusCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: statusChartData.labels,
+                        datasets: [{
+                            data: statusChartData.values,
+                            backgroundColor: ['#0f766e', '#d97706', '#dc2626'],
+                            borderColor: '#ffffff',
+                            borderWidth: 3,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '62%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { usePointStyle: true, boxWidth: 8, padding: 12 }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        var total = context.dataset.data.reduce(function (sum, value) {
+                                            return sum + Number(value || 0);
+                                        }, 0);
+                                        var percent = total > 0 ? ((Number(context.parsed || 0) / total) * 100).toFixed(1) : '0.0';
+                                        return context.label + ': ' + Number(context.parsed || 0).toLocaleString() + ' (' + percent + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         function openLoanModal(year, group) {
@@ -750,6 +1360,8 @@
                 closeLoanModal();
             }
         });
+
+        initYearlyCharts();
 
         // Initialize Ultimate POS Standard DataTables
         if ($.fn.DataTable && !$.fn.DataTable.isDataTable('#yearlyLoanSummaryTable')) {
