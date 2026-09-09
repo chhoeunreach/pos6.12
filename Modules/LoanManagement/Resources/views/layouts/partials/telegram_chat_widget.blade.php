@@ -843,7 +843,10 @@
             $button.prop('disabled', false).html('<i class="fa fa-file-text-o"></i> Send Invoice');
         }
 
-        Promise.resolve(confirmInvoiceSend(activeLoanContext.loan_id, caption))
+        Promise.resolve()
+            .then(function(){
+                return confirmInvoiceSend(activeLoanContext.loan_id, caption);
+            })
             .then(function(sendOptions){
                 $button.html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
                 activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
@@ -853,20 +856,12 @@
                 if (resp && resp.success) {
                     loadThread(false);
                     loadContacts($('#lmTgSearchInput').val());
-                    return null;
-                }
-            })
-            .then(function(resp){
-                if (resp === null) {
-                    return;
-                }
-                if (!(resp && resp.success)) {
-                    showComposerError((resp && resp.message) || 'Failed to send invoice image.');
                     return;
                 }
 
-                loadThread(false);
-                loadContacts($('#lmTgSearchInput').val());
+                if (!(resp && resp.success)) {
+                    showComposerError((resp && resp.message) || 'Failed to send invoice image.');
+                }
             })
             .then(function(){
                 resetInvoiceButton();
@@ -890,7 +885,7 @@
     }
 
     function sendInvoiceImageFast(loanId, caption, compressPreview){
-        return sendInvoiceImageFromPreview(caption, compressPreview !== false)
+        return sendInvoiceImageFromPreview(loanId, caption, compressPreview !== false)
             .then(function(resp){
                 if (resp && resp.success) {
                     return resp;
@@ -911,18 +906,19 @@
             });
     }
 
-    function sendInvoiceImageFromPreview(caption, compressPreview){
+    function sendInvoiceImageFromPreview(loanId, caption, compressPreview){
         caption = caption || invoiceCaption();
         showComposerError(compressPreview ? 'Compressing invoice image...' : 'Preparing original invoice image...');
 
-        return buildLoanPrintImageFromPreview(activeLoanContext.loan_id, activeLoanContext.preview_frame_id || '')
+        return buildLoanPrintImageFromPreview(loanId, activeLoanContext.preview_frame_id || '', compressPreview)
             .then(function(blob){
                 return compressPreview ? compressInvoiceImageBlob(blob, 820, 1300, 0.58) : blob;
             })
             .then(function(blob){
                 showComposerError('');
-                var fileName = 'loan-invoice-' + String(activeLoanContext.loan_number || activeLoanContext.loan_id).replace(/[^a-zA-Z0-9_-]+/g, '-') + '.jpg';
-                var file = new File([blob], fileName, {type: 'image/jpeg'});
+                var isPng = blob && blob.type === 'image/png';
+                var fileName = 'loan-invoice-' + String(activeLoanContext.loan_number || loanId).replace(/[^a-zA-Z0-9_-]+/g, '-') + (isPng ? '.png' : '.jpg');
+                var file = new File([blob], fileName, {type: blob.type || (isPng ? 'image/png' : 'image/jpeg')});
                 return sendTelegramFile(file, 'image', caption);
             });
     }
@@ -965,19 +961,27 @@
         });
     }
 
-    function buildLoanPrintImageFromPreview(loanId, previewFrameId){
+    function invoiceImageBuildOptions(compressPreview){
+        return compressPreview
+            ? {scale: 0.9, mimeType: 'image/jpeg', quality: 0.66}
+            : {scale: 2, mimeType: 'image/png', quality: 1};
+    }
+
+    function buildLoanPrintImageFromPreview(loanId, previewFrameId, compressPreview){
+        var options = invoiceImageBuildOptions(compressPreview);
         var existingFrame = previewFrameId ? document.getElementById(previewFrameId) : null;
         if (existingFrame && existingFrame.contentWindow && typeof existingFrame.contentWindow.loanManagementBuildLoanPrintImageBlob === 'function') {
-            return existingFrame.contentWindow.loanManagementBuildLoanPrintImageBlob(0.9, 'image/jpeg', 0.66)
+            return existingFrame.contentWindow.loanManagementBuildLoanPrintImageBlob(options.scale, options.mimeType, options.quality)
                 .catch(function(){
-                    return buildLoanPrintImageFromHiddenFrame(loanId);
+                    return buildLoanPrintImageFromHiddenFrame(loanId, compressPreview);
                 });
         }
 
-        return buildLoanPrintImageFromHiddenFrame(loanId);
+        return buildLoanPrintImageFromHiddenFrame(loanId, compressPreview);
     }
 
-    function buildLoanPrintImageFromHiddenFrame(loanId){
+    function buildLoanPrintImageFromHiddenFrame(loanId, compressPreview){
+        var options = invoiceImageBuildOptions(compressPreview);
         return new Promise(function(resolve, reject){
             var iframe = document.createElement('iframe');
             var timeout = window.setTimeout(function(){
@@ -1007,7 +1011,7 @@
                         throw new Error('Print preview image builder is not available.');
                     }
 
-                    win.loanManagementBuildLoanPrintImageBlob(0.9, 'image/jpeg', 0.66)
+                    win.loanManagementBuildLoanPrintImageBlob(options.scale, options.mimeType, options.quality)
                         .then(function(blob){
                             cleanup();
                             resolve(blob);
