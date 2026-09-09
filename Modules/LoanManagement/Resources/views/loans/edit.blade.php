@@ -98,6 +98,19 @@
     }
     .lm-btn-nav:hover { background: rgba(255, 255, 255, 0.2); color: #fff; text-decoration: none; }
 
+    .lm-edit-feedback {
+        display: none;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .lm-edit-feedback.show { display: flex; align-items: center; gap: 8px; }
+    .lm-edit-feedback.success { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+    .lm-edit-feedback.error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
     /* Workspace Content */
     .lm-pro-edit-body {
         flex: 1;
@@ -757,6 +770,20 @@
         <input type="hidden" name="expected_customer_id" value="{{ $loanRow->customer_id ?? '' }}">
 
         <div class="lm-pro-edit-body">
+            <div class="lm-edit-feedback" id="wizEditFeedback" role="alert"></div>
+
+            @php
+                $loanSessionStatus = session('status');
+                $loanSessionStatusMessage = is_array($loanSessionStatus) ? data_get($loanSessionStatus, 'msg') : $loanSessionStatus;
+                $loanSessionStatusSuccess = is_array($loanSessionStatus) ? data_get($loanSessionStatus, 'success', 1) : 1;
+            @endphp
+            @if($loanSessionStatusMessage)
+                <div class="lm-edit-feedback show {{ $loanSessionStatusSuccess ? 'success' : 'error' }}" role="alert">
+                    <i class="fa {{ $loanSessionStatusSuccess ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
+                    <span>{{ $loanSessionStatusMessage }}</span>
+                </div>
+            @endif
+
             @if ($errors->any())
                 <div class="alert alert-danger" style="border-radius: 10px; margin-bottom: 16px;">
                     <strong>{{ $lmText('Unable to save changes.', 'មិនអាចរក្សាទុកការផ្លាស់ប្តូរបានទេ។') }}</strong> {{ $lmText('Please check the highlighted fields below.', 'សូមពិនិត្យមើលប្រអប់ដែលបានរំលេចខាងក្រោម។') }}
@@ -1382,7 +1409,7 @@
                 <button type="button" class="lm-btn lm-btn-secondary" id="wizBtnPreviewSchedule">
                     <i class="fa fa-table"></i> {{ $lmText('Preview Schedule', 'គណនាកាលវិភាគ') }}
                 </button>
-                <button type="button" class="lm-btn lm-btn-primary" id="wizBtnSubmit">
+                <button type="submit" class="lm-btn lm-btn-primary" id="wizBtnSubmit">
                     <i class="fa fa-save"></i> {{ $lmText('Save Changes & Update', 'រក្សាទុក & កែប្រែកម្ចី') }}
                 </button>
                 <a href="{{ route('loan-management.loans') }}" class="lm-btn lm-btn-outline">
@@ -2211,10 +2238,32 @@
         });
     });
 
-    $('#wizBtnSubmit').on('click', function () {
+    function wizShowEditFeedback(type, message) {
+        var isSuccess = type === 'success';
+        var icon = isSuccess ? 'fa-check-circle' : 'fa-exclamation-circle';
+        var $box = $('#wizEditFeedback');
+        $box
+            .removeClass('success error')
+            .addClass('show ' + (isSuccess ? 'success' : 'error'))
+            .html('<i class="fa ' + icon + '"></i><span>' + $('<div>').text(message || '').html() + '</span>');
+        if ($box.length && $('#scrollable-container').length) {
+            $('#scrollable-container').animate({ scrollTop: Math.max(0, $box.offset().top - 120) }, 200);
+        }
+    }
+
+    try {
+        var savedEditNotice = window.sessionStorage ? sessionStorage.getItem('loan_edit_notice') : '';
+        if (savedEditNotice) {
+            sessionStorage.removeItem('loan_edit_notice');
+            wizShowEditFeedback('success', savedEditNotice);
+        }
+    } catch (e) {}
+
+    $('#wizEditForm').on('submit', function (e) {
+        e.preventDefault();
         wizSyncCustomerNameFromKhmer();
         wizSyncDuration();
-        var $btn = $(this);
+        var $btn = $('#wizBtnSubmit');
         $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> {{ $lmText('Saving...', 'កំពុងរក្សាទុក...') }}');
         $.ajax({
             url: wizUrls.updateAction,
@@ -2223,20 +2272,33 @@
             dataType: 'json',
             headers: { Accept: 'application/json' },
             success: function (res) {
-                if (window.toastr) toastr.success(res.message || '{{ $lmText('Installment updated successfully.', 'កម្ចីត្រូវបានកែប្រែដោយជោគជ័យ។') }}');
+                if (res && res.success === false) {
+                    var errMsg = res.message || '{{ $lmText('Failed to save installment.', 'មិនអាចរក្សាទុកកម្ចីបានទេ។') }}';
+                    wizShowEditFeedback('error', errMsg);
+                    if (window.toastr) toastr.error(errMsg); else alert(errMsg);
+                    return;
+                }
+                var msg = (res && res.message) || '{{ $lmText('Installment updated successfully.', 'កម្ចីត្រូវបានកែប្រែដោយជោគជ័យ។') }}';
+                wizShowEditFeedback('success', msg);
+                if (window.toastr) toastr.success(msg);
                 wizEditRecalcTotals();
-                setTimeout(function() {
+                try {
+                    if (window.sessionStorage) sessionStorage.setItem('loan_edit_notice', msg);
+                } catch (e) {}
+                setTimeout(function () {
                     window.location.reload();
-                }, 1000);
+                }, 900);
             },
             error: function (xhr) {
                 var msg = '{{ $lmText('Failed to save installment.', 'មិនអាចរក្សាទុកកម្ចីបានទេ។') }}';
-                if (xhr.status === 422 && xhr.responseJSON?.errors) {
-                    var errors = xhr.responseJSON.errors;
+                var json = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+                if (xhr && xhr.status === 422 && json && json.errors) {
+                    var errors = json.errors;
                     msg = errors[Object.keys(errors)[0]][0] || msg;
-                } else if (xhr.responseJSON?.message) {
-                    msg = xhr.responseJSON.message;
+                } else if (json && json.message) {
+                    msg = json.message;
                 }
+                wizShowEditFeedback('error', msg);
                 if (window.toastr) toastr.error(msg); else alert(msg);
             },
             complete: function () {
