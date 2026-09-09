@@ -159,6 +159,8 @@
     .lm-tg-tools button{border:1px solid #dbe4ef;background:#f8fafc;color:#334155;border-radius:14px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer}
     .lm-tg-tools button:hover{background:#eff6ff;color:#1d4ed8}
     .lm-tg-tools button.recording{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .lm-tg-tools button.clear-voice{background:#fff1f2;color:#be123c;border-color:#fecdd3}
+    .lm-tg-tools button.clear-voice:hover{background:#ffe4e6;color:#9f1239}
 
     @media (max-width:760px){
         #lmTgFab{right:14px;left:auto;top:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));width:48px;height:48px;font-size:20px;box-shadow:0 6px 18px rgba(41,148,224,.4);z-index:1030}
@@ -249,6 +251,7 @@
             <button type="button" id="lmTgVoiceBtn"><i class="fa fa-microphone"></i> Voice</button>
             <button type="button" id="lmTgVoiceStopBtn" style="display:none"><i class="fa fa-stop"></i> Stop</button>
             <button type="button" id="lmTgVoiceSendBtn" style="display:none"><i class="fa fa-paper-plane"></i> Send Voice</button>
+            <button type="button" id="lmTgVoiceClearBtn" class="clear-voice" style="display:none"><i class="fa fa-times"></i> Clear</button>
             <input type="file" id="lmTgImageInput" accept="image/*" multiple style="display:none">
             <input type="file" id="lmTgDocInput" multiple style="display:none">
         </div>
@@ -295,6 +298,7 @@
     var voicePausedAt = null;
     var pendingVoiceFile = null;
     var pendingVoiceDuration = 0;
+    var discardVoiceOnStop = false;
 
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function pad2(v){ return String(v).padStart(2, '0'); }
@@ -1123,8 +1127,10 @@
         voiceStartedAt = null;
         voiceElapsedBeforePause = 0;
         voicePausedAt = null;
+        discardVoiceOnStop = false;
         $('#lmTgVoiceStopBtn').hide().prop('disabled', false).html('<i class="fa fa-stop"></i> Stop');
         $('#lmTgVoiceSendBtn').hide().prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+        $('#lmTgVoiceClearBtn').hide().prop('disabled', false).html('<i class="fa fa-times"></i> Clear');
         $('#lmTgVoiceBtn').removeClass('recording').prop('disabled', false).html('<i class="fa fa-microphone"></i> Voice').show();
     }
 
@@ -1176,12 +1182,19 @@
             voiceElapsedBeforePause = 0;
             pendingVoiceFile = null;
             pendingVoiceDuration = 0;
+            discardVoiceOnStop = false;
             mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.ondataavailable = function(event){
                 if (event.data && event.data.size) voiceChunks.push(event.data);
             };
             mediaRecorder.onstop = function(){
                 stream.getTracks().forEach(function(track){ track.stop(); });
+                if (discardVoiceOnStop) {
+                    mediaRecorder = null;
+                    resetVoiceDraft();
+                    showComposerError('Voice recording cleared.');
+                    return;
+                }
                 var blob = new Blob(voiceChunks, {type: mediaRecorder.mimeType || 'audio/webm'});
                 pendingVoiceFile = new File([blob], 'voice-message.webm', {type: blob.type});
                 pendingVoiceDuration = currentVoiceDuration();
@@ -1191,12 +1204,14 @@
                 $('#lmTgVoiceBtn').removeClass('recording').hide();
                 $('#lmTgVoiceStopBtn').hide().prop('disabled', false);
                 $('#lmTgVoiceSendBtn').show().prop('disabled', false);
+                $('#lmTgVoiceClearBtn').show().prop('disabled', false).html('<i class="fa fa-times"></i> Clear');
                 showComposerError('Voice ready. Click Send Voice.');
             };
             mediaRecorder.start();
             $btn.addClass('recording').html('<i class="fa fa-pause"></i> Pause');
             $('#lmTgVoiceStopBtn').show().prop('disabled', false);
             $('#lmTgVoiceSendBtn').hide();
+            $('#lmTgVoiceClearBtn').show().prop('disabled', false).html('<i class="fa fa-times"></i> Cancel');
             showComposerError('Recording voice...');
         }).catch(function(){
             resetVoiceDraft();
@@ -1217,6 +1232,27 @@
         mediaRecorder.stop();
     });
 
+    $('#lmTgVoiceClearBtn').on('click', function(){
+        if (mediaRecorder) {
+            discardVoiceOnStop = true;
+            $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Clearing');
+            $('#lmTgVoiceStopBtn, #lmTgVoiceSendBtn, #lmTgVoiceBtn').prop('disabled', true);
+            if (['recording', 'paused'].indexOf(mediaRecorder.state) !== -1) {
+                try {
+                    mediaRecorder.stop();
+                } catch (e) {
+                    mediaRecorder = null;
+                    resetVoiceDraft();
+                    showComposerError('Voice recording cleared.');
+                }
+            }
+            return;
+        }
+
+        resetVoiceDraft();
+        showComposerError('Voice recording cleared.');
+    });
+
     $('#lmTgVoiceSendBtn').on('click', function(){
         if (!pendingVoiceFile) {
             showVisibleError('No voice recording is ready to send.');
@@ -1224,6 +1260,7 @@
         }
 
         var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending');
+        $('#lmTgVoiceClearBtn').prop('disabled', true);
         sendTelegramFile(pendingVoiceFile, 'audio', '', pendingVoiceDuration)
             .then(function(resp){
                 if (resp && resp.success) {
@@ -1233,11 +1270,13 @@
                 } else {
                     showVisibleError((resp && resp.message) || 'Failed to send voice message.');
                     $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+                    $('#lmTgVoiceClearBtn').prop('disabled', false);
                 }
             })
             .catch(function(){
                 showVisibleError('Failed to send voice message.');
                 $btn.prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Voice');
+                $('#lmTgVoiceClearBtn').prop('disabled', false);
             });
     });
 
