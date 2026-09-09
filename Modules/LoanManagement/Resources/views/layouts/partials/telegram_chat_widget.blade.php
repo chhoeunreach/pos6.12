@@ -788,8 +788,11 @@
                         '</div>' +
                         '<div class="modal-footer">' +
                             '<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>' +
-                            '<button type="button" class="btn btn-success lm-confirm-send-invoice-now">' +
-                                '<i class="fa fa-paper-plane"></i> Send Now' +
+                            '<button type="button" class="btn btn-primary lm-confirm-send-invoice-now" data-compress="1">' +
+                                '<i class="fa fa-compress"></i> Send Compressed' +
+                            '</button>' +
+                            '<button type="button" class="btn btn-success lm-confirm-send-invoice-now" data-compress="0">' +
+                                '<i class="fa fa-image"></i> Send Original' +
                             '</button>' +
                         '</div>' +
                     '</div>' +
@@ -801,7 +804,10 @@
         $modal.on('click', '.lm-confirm-send-invoice-now', function(){
             resolved = true;
             $modal.modal('hide');
-            deferred.resolve('lmSendInvoiceConfirmFrame');
+            deferred.resolve({
+                previewFrameId: 'lmSendInvoiceConfirmFrame',
+                compress: String($(this).data('compress')) !== '0'
+            });
         });
         $modal.on('hidden.bs.modal', function(){
             $modal.remove();
@@ -828,10 +834,10 @@
         showComposerError('');
 
         confirmInvoiceSend(activeLoanContext.loan_id, caption)
-            .then(function(previewFrameId){
+            .then(function(sendOptions){
                 $button.html('<i class="fa fa-spinner fa-spin"></i> Sending Invoice');
-                activeLoanContext.preview_frame_id = previewFrameId || activeLoanContext.preview_frame_id || '';
-                return sendInvoiceImageFast(activeLoanContext.loan_id, caption);
+                activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
+                return sendInvoiceImageFast(activeLoanContext.loan_id, caption, !(sendOptions && sendOptions.compress === false));
             })
             .then(function(resp){
                 if (resp && resp.success) {
@@ -872,8 +878,8 @@
         });
     }
 
-    function sendInvoiceImageFast(loanId, caption){
-        return sendInvoiceImageFromPreview(caption)
+    function sendInvoiceImageFast(loanId, caption, compressPreview){
+        return sendInvoiceImageFromPreview(caption, compressPreview !== false)
             .then(function(resp){
                 if (resp && resp.success) {
                     return resp;
@@ -894,13 +900,13 @@
             });
     }
 
-    function sendInvoiceImageFromPreview(caption){
+    function sendInvoiceImageFromPreview(caption, compressPreview){
         caption = caption || invoiceCaption();
-        showComposerError('Compressing invoice image...');
+        showComposerError(compressPreview ? 'Compressing invoice image...' : 'Preparing original invoice image...');
 
         return buildLoanPrintImageFromPreview(activeLoanContext.loan_id, activeLoanContext.preview_frame_id || '')
             .then(function(blob){
-                return compressInvoiceImageBlob(blob, 820, 1300, 0.58);
+                return compressPreview ? compressInvoiceImageBlob(blob, 820, 1300, 0.58) : blob;
             })
             .then(function(blob){
                 showComposerError('');
@@ -1370,10 +1376,10 @@
 
                 var caption = context.message || invoiceCaption(activeCustomerName);
                 return confirmInvoiceSend(loanId, caption)
-                    .then(function(previewFrameId){
-                        activeLoanContext.preview_frame_id = previewFrameId || activeLoanContext.preview_frame_id || '';
+                    .then(function(sendOptions){
+                        activeLoanContext.preview_frame_id = (sendOptions && sendOptions.previewFrameId) || activeLoanContext.preview_frame_id || '';
                         setHeader(thread.customer_profile || thread, !!thread.telegram_linked, 'Sending invoice...');
-                        return sendInvoiceImageFast(loanId, caption);
+                        return sendInvoiceImageFast(loanId, caption, !(sendOptions && sendOptions.compress === false));
                     });
             })
             .then(function(resp){
