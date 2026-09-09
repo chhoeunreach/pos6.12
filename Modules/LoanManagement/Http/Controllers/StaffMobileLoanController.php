@@ -706,12 +706,14 @@ class StaffMobileLoanController extends Controller
         if ($profileImage !== '') {
             $fileId = $this->storeMobileDataUriFile($profileImage, $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
             $this->updateCustomerFileReference($customerId, 'customer_photo_file_id', $fileId);
+            $this->updateLoanFileReference($loanId, 'customer_photo_file_id', $fileId);
         }
 
         $idCardImage = trim((string) ($data['id_card_image'] ?? ''));
         if ($idCardImage !== '') {
             $fileId = $this->storeMobileDataUriFile($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.jpg');
             $this->updateCustomerFileReference($customerId, 'id_front_file_id', $fileId);
+            $this->updateLoanFileReference($loanId, 'id_front_file_id', $fileId);
             $this->storeIdCardScan($customerId, $fileId, $data);
         }
 
@@ -797,6 +799,30 @@ class StaffMobileLoanController extends Controller
             $column => $fileId,
             'updated_at' => now(),
         ]);
+    }
+
+    protected function updateLoanFileReference(int $loanId, string $column, ?int $fileId): void
+    {
+        if (! $fileId || $loanId <= 0 || ! Schema::connection($this->conn)->hasTable('loans')) {
+            return;
+        }
+
+        $filePath = Schema::connection($this->conn)->hasTable('loan_files')
+            ? DB::connection($this->conn)->table('loan_files')->where('id', $fileId)->value('path')
+            : null;
+
+        $payload = [
+            $column => $fileId,
+            'updated_at' => now(),
+        ];
+
+        if ($column === 'customer_photo_file_id' && $filePath) {
+            $payload['customer_photo_snapshot'] = $filePath;
+        }
+
+        DB::connection($this->conn)->table('loans')->where('id', $loanId)->update(
+            $this->onlyExistingColumns('loans', $payload)
+        );
     }
 
     protected function storeIdCardScan(int $customerId, ?int $fileId, array $data): void

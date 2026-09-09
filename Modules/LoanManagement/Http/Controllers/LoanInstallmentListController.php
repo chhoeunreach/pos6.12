@@ -892,9 +892,26 @@ class LoanInstallmentListController extends Controller
             : '0';
 
         $hasItems = $this->loanTableExists('loan_items');
+        $itemDeletedFilter = $hasItems && $this->loanTableHasCol('loan_items', 'deleted_at') ? ' AND deleted_at IS NULL' : '';
         $itemPriceExpr = $hasItems
-            ? 'COALESCE((SELECT unit_price FROM loan_items WHERE loan_id = l.id AND deleted_at IS NULL AND unit_price > 0 LIMIT 1), ('.($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' + COALESCE('.($this->hasCol('down_payment') ? 'l.down_payment' : '0').', 0)))'
+            ? 'COALESCE((SELECT unit_price FROM loan_items WHERE loan_id = l.id'.$itemDeletedFilter.' AND unit_price > 0 LIMIT 1), ('.($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' + COALESCE('.($this->hasCol('down_payment') ? 'l.down_payment' : '0').', 0)))'
             : '('.($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' + COALESCE('.($this->hasCol('down_payment') ? 'l.down_payment' : '0').', 0))';
+        $productNameExpr = 'COALESCE('.
+            ($this->hasCol('product_name_snapshot') ? 'NULLIF(l.product_name_snapshot, "")' : 'NULL').', '.
+            ($hasItems ? '(SELECT COALESCE('.
+                ($this->loanTableHasCol('loan_items', 'product_name_snapshot') ? 'NULLIF(product_name_snapshot, "")' : 'NULL').', '.
+                ($this->loanTableHasCol('loan_items', 'product_name') ? 'NULLIF(product_name, "")' : 'NULL').
+            ') FROM loan_items WHERE loan_id = l.id'.$itemDeletedFilter.' ORDER BY id LIMIT 1)' : 'NULL').
+        ')';
+        $imeiExpr = 'COALESCE('.
+            ($this->hasCol('imei_snapshot') ? 'NULLIF(l.imei_snapshot, "")' : 'NULL').', '.
+            ($hasItems ? '(SELECT COALESCE('.
+                ($this->loanTableHasCol('loan_items', 'imei_snapshot') ? 'NULLIF(imei_snapshot, "")' : 'NULL').', '.
+                ($this->loanTableHasCol('loan_items', 'imei') ? 'NULLIF(imei, "")' : 'NULL').', '.
+                ($this->loanTableHasCol('loan_items', 'serial_number_snapshot') ? 'NULLIF(serial_number_snapshot, "")' : 'NULL').', '.
+                ($this->loanTableHasCol('loan_items', 'serial_number') ? 'NULLIF(serial_number, "")' : 'NULL').
+            ') FROM loan_items WHERE loan_id = l.id'.$itemDeletedFilter.' ORDER BY id LIMIT 1)' : 'NULL').
+        ')';
 
         $q = DB::connection('mysql_loan')->table('loans as l')
             ->when($canJoinCustomers, function ($query) {
@@ -913,8 +930,8 @@ class LoanInstallmentListController extends Controller
                 ($this->hasCol('customer_photo_snapshot') ? 'l.customer_photo_snapshot' : 'NULL').' as customer_photo_snapshot, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
                 ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
-                ($this->hasCol('product_name_snapshot') ? 'l.product_name_snapshot' : 'NULL').' as product_name_snapshot, '.
-                ($this->hasCol('imei_snapshot') ? 'l.imei_snapshot' : 'NULL').' as imei_snapshot, '.
+                $productNameExpr.' as product_name_snapshot, '.
+                $imeiExpr.' as imei_snapshot, '.
                 $itemPriceExpr.' as item_price, '.
                 ($this->hasCol('installment_count') ? 'l.installment_count' : '0').' as installment_count, '.
                 ($this->hasCol('payment_frequency') ? 'l.payment_frequency' : "'monthly'").' as payment_frequency, '.
@@ -1072,7 +1089,8 @@ class LoanInstallmentListController extends Controller
                 $photoFileId = (int) ($r->customer_photo_file_id ?? 0);
                 $photoUrl = $this->loanFileUrlById($photoFileId)
                     ?: $this->loanFilePublicUrl($r->customer_photo_snapshot ?? null)
-                    ?: $this->latestCustomerFileUrlByCategory((int) ($r->customer_id ?? 0), 'customer_photo');
+                    ?: $this->latestCustomerFileUrlByCategory((int) ($r->customer_id ?? 0), 'customer_photo')
+                    ?: $this->latestCustomerImageUrl((int) ($r->customer_id ?? 0));
                 $initial = mb_substr(trim($displayName), 0, 1, 'UTF-8') ?: 'C';
 
                 $html = '<div class="lm-loan-customer-cell">';
@@ -2403,6 +2421,31 @@ class LoanInstallmentListController extends Controller
             ->where('fileable_id', $customerId)
             ->where('category', $category)
             ->orderByDesc('id');
+        $this->excludeDeletedLoanRows($query, 'loan_files');
+
+        $file = $query->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
+    }
+
+    protected function latestCustomerImageUrl(int $customerId): ?string
+    {
+        if ($customerId <= 0 || ! $this->loanTableExists('loan_files')) {
+            return null;
+        }
+
+        $query = DB::connection('mysql_loan')->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->orderByRaw("CASE category WHEN 'customer_photo' THEN 0 WHEN 'document' THEN 1 WHEN 'id_front' THEN 2 ELSE 3 END")
+            ->orderByDesc('id');
+
+        if ($this->loanTableHasCol('loan_files', 'mime_type')) {
+            $query->where('mime_type', 'like', 'image/%');
+        }
         $this->excludeDeletedLoanRows($query, 'loan_files');
 
         $file = $query->first();

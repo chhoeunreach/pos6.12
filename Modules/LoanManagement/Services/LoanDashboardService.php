@@ -171,7 +171,8 @@ class LoanDashboardService
                 'telegram_linked' => ! empty($row->telegram_chat_id),
                 'customer_photo_url' => $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
                     ?: $this->loanFilePublicUrl($row->customer_photo_snapshot ?? null)
-                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0)),
+                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0))
+                    ?: $this->latestCustomerImageUrl((int) ($row->customer_id ?? 0)),
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
                 'customer_phone' => $row->customer_phone ?: '-',
@@ -214,6 +215,34 @@ class LoanDashboardService
             ->where('category', 'customer_photo')
             ->orderByDesc('id');
 
+        if ($this->columnExists('loan_files', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        $file = $query->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public')
+            ?: url('loan-management/chat-files/'.(int) $file->id);
+    }
+
+    protected function latestCustomerImageUrl(int $customerId): ?string
+    {
+        if ($customerId <= 0 || ! $this->tableExists('loan_files')) {
+            return null;
+        }
+
+        $query = DB::connection($this->connection)->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->orderByRaw("CASE category WHEN 'customer_photo' THEN 0 WHEN 'document' THEN 1 WHEN 'id_front' THEN 2 ELSE 3 END")
+            ->orderByDesc('id');
+
+        if ($this->columnExists('loan_files', 'mime_type')) {
+            $query->where('mime_type', 'like', 'image/%');
+        }
         if ($this->columnExists('loan_files', 'deleted_at')) {
             $query->whereNull('deleted_at');
         }
@@ -855,7 +884,8 @@ class LoanDashboardService
                 $data = (array) $row;
                 $data['customer_photo_url'] = $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
                     ?: $this->loanFilePublicUrl($row->customer_photo_snapshot ?? null)
-                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0));
+                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0))
+                    ?: $this->latestCustomerImageUrl((int) ($row->customer_id ?? 0));
 
                 return $data;
             })->all();
