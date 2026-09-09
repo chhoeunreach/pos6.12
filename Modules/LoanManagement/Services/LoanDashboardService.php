@@ -7,6 +7,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LoanDashboardService
 {
@@ -91,7 +93,10 @@ class LoanDashboardService
                 l.id,
                 ".($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL')." as customer_id,
                 ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL')." as telegram_chat_id,
-                ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'c.customer_photo_file_id' : 'NULL')." as customer_photo_file_id,
+                COALESCE(
+                    ".($this->columnExists('loans', 'customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').",
+                    ".($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL')."
+                ) as customer_photo_file_id,
                 {$loanNumberExpr} as loan_number,
                 {$customerNameExpr} as customer_name,
                 {$customerPhoneExpr} as customer_phone,
@@ -163,7 +168,8 @@ class LoanDashboardService
                 'id' => (int) $row->id,
                 'customer_id' => (int) ($row->customer_id ?? 0),
                 'telegram_linked' => ! empty($row->telegram_chat_id),
-                'customer_photo_url' => $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0)),
+                'customer_photo_url' => $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
+                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0)),
                 'loan_number' => $row->loan_number ?: ('#'.$row->id),
                 'customer_name' => $row->customer_name ?: '-',
                 'customer_phone' => $row->customer_phone ?: '-',
@@ -190,7 +196,59 @@ class LoanDashboardService
             return null;
         }
 
-        return url('loan-management/chat-files/'.$fileId);
+        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public')
+            ?: url('loan-management/chat-files/'.$fileId);
+    }
+
+    protected function latestCustomerPhotoUrl(int $customerId): ?string
+    {
+        if ($customerId <= 0 || ! $this->tableExists('loan_files')) {
+            return null;
+        }
+
+        $query = DB::connection($this->connection)->table('loan_files')
+            ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
+            ->where('fileable_id', $customerId)
+            ->where('category', 'customer_photo')
+            ->orderByDesc('id');
+
+        if ($this->columnExists('loan_files', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        $file = $query->first();
+        if (! $file || empty($file->path)) {
+            return null;
+        }
+
+        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public')
+            ?: url('loan-management/chat-files/'.(int) $file->id);
+    }
+
+    protected function loanFilePublicUrl(?string $path, ?string $disk = 'public'): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '//', 'data:image/'])) {
+            return $path;
+        }
+
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        if (Str::startsWith($path, 'storage/')) {
+            $storagePath = substr($path, 8);
+            return Storage::disk('public')->exists($storagePath) ? asset($path) : null;
+        }
+
+        if (is_file(public_path($path))) {
+            return asset($path);
+        }
+
+        $disk = $disk ?: 'public';
+
+        return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->url($path) : null;
     }
 
     public function searchSellsForDashboard(string $term, int $limit = 10): array
@@ -787,10 +845,11 @@ class LoanDashboardService
         $this->whereOverdueInstallment($query);
 
         return $query
-            ->selectRaw('l.id, '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, '.$this->loanCustomerProfessionExpression('l').' as profession, '.$this->loanCustomerOccupationExpression('l').' as occupation, '.$this->loanCustomerWorkplaceExpression('l').' as workplace, '.($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'c.customer_photo_file_id' : 'NULL').' as customer_photo_file_id, '.$dateToPayExpr.' as date_to_pay, '.$overdueDaysExpr.' as overdue_days, '.($this->columnExists('loans', 'paid_amount') ? 'COALESCE(l.paid_amount, 0)' : '0').' as total_paid, '.$dueNowExpr.' as total_not_yet_paid, '.$balanceExpr.' as pay_off_now, '.$dueNowExpr.' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
+            ->selectRaw('l.id, '.($this->columnExists('loans', 'loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.($this->columnExists('loans', 'customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.$this->loanCustomerNameExpression('l').' as customer, '.$this->loanCustomerPhoneExpression('l').' as phone, '.$this->loanCustomerProfessionExpression('l').' as profession, '.$this->loanCustomerOccupationExpression('l').' as occupation, '.$this->loanCustomerWorkplaceExpression('l').' as workplace, COALESCE('.($this->columnExists('loans', 'customer_photo_file_id') ? 'NULLIF(l.customer_photo_file_id, 0)' : 'NULL').', '.($this->canJoinLoanCustomers() && $this->columnExists('loan_customers', 'customer_photo_file_id') ? 'NULLIF(c.customer_photo_file_id, 0)' : 'NULL').') as customer_photo_file_id, '.$dateToPayExpr.' as date_to_pay, '.$overdueDaysExpr.' as overdue_days, '.($this->columnExists('loans', 'paid_amount') ? 'COALESCE(l.paid_amount, 0)' : '0').' as total_paid, '.$dueNowExpr.' as total_not_yet_paid, '.$balanceExpr.' as pay_off_now, '.$dueNowExpr.' as overdue_amount, '.$this->loanCollectorExpression('l').' as collector, NULL as last_visit')
             ->orderByDesc('overdue_days')->limit($limit)->get()->map(function ($row) {
                 $data = (array) $row;
-                $data['customer_photo_url'] = $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0));
+                $data['customer_photo_url'] = $this->customerPhotoUrl((int) ($row->customer_photo_file_id ?? 0))
+                    ?: $this->latestCustomerPhotoUrl((int) ($row->customer_id ?? 0));
 
                 return $data;
             })->all();
