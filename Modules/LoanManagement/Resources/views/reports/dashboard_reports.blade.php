@@ -643,7 +643,6 @@
     }
     @media print {
         @page {
-            size: A4 landscape;
             margin: 8mm;
         }
         .lm-sidebar,
@@ -1325,7 +1324,7 @@
         var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
         html += '<style>';
         html += '@import url("https://fonts.googleapis.com/css2?family=Moul&family=Inter:wght@400;600;700;800&display=swap");';
-        html += '@page{size:A4 landscape;margin:7mm;}';
+        html += '@page{margin:7mm;}';
         html += '*{box-sizing:border-box;}';
         html += 'body{font-family:"Inter","Noto Sans Khmer","Khmer OS Siemreap",Arial,sans-serif;color:#000;background:#fff;font-size:10px;margin:0;padding:0;}';
         html += '.report-title{margin:0 0 12px;padding:9px 12px;border:1px solid #8fa1ba;border-bottom:4px solid #111827;background:#d9e8fa;color:#0000ff;text-align:center;font-family:"Khmer OS Muol Light","Khmer OS Muol","Khmer OS Moul","Moul","Noto Sans Khmer",serif;font-size:25px;font-weight:400;line-height:1.35;}';
