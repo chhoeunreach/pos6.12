@@ -1,0 +1,26 @@
+[
+    {
+        "id": "personal",
+        "name": "Personal",
+        "type": "system",
+        "customer_ids": [],
+        "icon": "fa-folder",
+        "color": "#3390ec"
+    },
+    {
+        "id": "invoices",
+        "name": "វិក្កយបត្រ",
+        "type": "system",
+        "customer_ids": [],
+        "icon": "fa-folder",
+        "color": "#3390ec"
+    },
+    {
+        "id": "installments",
+        "name": "រំលស់",
+        "type": "system",
+        "customer_ids": [],
+        "icon": "fa-folder",
+        "color": "#3390ec"
+    }
+]

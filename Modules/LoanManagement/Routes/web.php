@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\LoanManagement\Http\Controllers\AdminCustomerTrackingController;
 use Modules\LoanManagement\Http\Controllers\CambodiaAddressController;
+use Modules\LoanManagement\Http\Controllers\ChatFolderController;
 use Modules\LoanManagement\Http\Controllers\CustomerTelegramChatController;
 use Modules\LoanManagement\Http\Controllers\DashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanActivityLogController;
@@ -254,6 +255,12 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/telegram-chat-api/chats/{thread}/invoice-image', [LoanTelegramChatController::class, 'sendInvoiceImage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.invoice-image');
         Route::put('/telegram-chat-api/chats/{thread}/messages/{message}', [LoanTelegramChatController::class, 'updateMessage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.messages.update');
         Route::delete('/telegram-chat-api/chats/{thread}/messages/{message}', [LoanTelegramChatController::class, 'destroyMessage'])->middleware('loan.permission:loan_management.chat.delete')->name('loan-management.telegram-chat-api.messages.destroy');
+        Route::get('/telegram-chat-api/folders', [ChatFolderController::class, 'index'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.index');
+        Route::post('/telegram-chat-api/folders', [ChatFolderController::class, 'store'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.store');
+        Route::put('/telegram-chat-api/folders/{id}', [ChatFolderController::class, 'update'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.update');
+        Route::delete('/telegram-chat-api/folders/{id}', [ChatFolderController::class, 'destroy'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.destroy');
+        Route::get('/telegram-chat-api/customers/{customer}/folders', [ChatFolderController::class, 'customerFolders'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.customer');
+        Route::post('/telegram-chat-api/customers/{customer}/folders', [ChatFolderController::class, 'updateCustomerFolders'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.folders.customer.update');
 
         Route::middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->group(function () {
             Route::get('/locations', [LoanLocationController::class, 'index'])->name('loan-management.locations.index');
@@ -278,8 +285,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get('/settings/business/logo', [SettingsController::class, 'businessLogo'])->name('loan-management.settings.business.logo');
             Route::get('/settings/cms', [SettingsController::class, 'cms'])->name('loan-management.settings.cms');
             Route::get('/settings/payment-methods', [SettingsController::class, 'paymentMethods'])->name('loan-management.settings.payment-methods');
-            Route::get('/settings/currencies', fn () => redirect()->route('loan-management.settings.payment-methods'))->name('loan-management.settings.currencies');
             Route::get('/settings/telegram', [SettingsController::class, 'telegram'])->name('loan-management.settings.telegram');
+            Route::get('/settings/telegram-index', [SettingsController::class, 'telegram'])->name('loan-management.settings.telegram.index');
         });
         Route::middleware('loan.permission:loan_management.setting')->group(function () {
             Route::post('/settings/business', [SettingsController::class, 'updateBusiness'])->name('loan-management.settings.business.update');

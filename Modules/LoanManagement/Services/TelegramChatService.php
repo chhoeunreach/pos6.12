@@ -328,20 +328,31 @@ class TelegramChatService
     ): array
     {
         $file = null;
+        $loanFile = null;
+        $resolvedUrl = '';
         if (! empty($message->file_id)) {
             $loanFile = LoanFile::query()->find($message->file_id);
-            $fileUrl = $viewerType === 'customer'
+            $resolvedUrl = $viewerType === 'customer'
                 ? ($this->publicLoanFileUrl($loanFile) ?: url('api/loan-management/customer/telegram/chat-files/'.(int) $message->file_id))
-                : url('api/loan-management/telegram/chat-files/'.(int) $message->file_id);
+                : (Route::has('loan-management.chat-files.show')
+                    ? route('loan-management.chat-files.show', ['file' => (int) $message->file_id])
+                    : url('loan-management/chat-files/'.(int) $message->file_id));
+        } elseif (! empty($message->file_url)) {
+            $resolvedUrl = $this->absoluteUrl((string) $message->file_url);
+        }
 
+        if ($resolvedUrl !== '' || ! empty($message->file_id)) {
             $file = [
-                'url' => $fileUrl,
-                'preview_url' => $fileUrl,
+                'id' => (int) ($message->file_id ?? 0),
+                'file_id' => (int) ($message->file_id ?? 0),
+                'url' => $resolvedUrl,
+                'preview_url' => $resolvedUrl,
                 'name' => (string) ($message->file_name ?? ''),
                 'mime_type' => (string) ($message->file_mime ?? $loanFile?->mime_type ?? ''),
                 'size_bytes' => (int) ($message->file_size ?? $loanFile?->size_bytes ?? $loanFile?->size ?? 0),
             ];
         }
+        $meta = is_array($message->metadata) ? $message->metadata : (json_decode((string) $message->metadata, true) ?: []);
         $user = auth()->user();
         $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
         $isOwn = $viewerType === 'customer'
@@ -363,6 +374,10 @@ class TelegramChatService
             'message' => (string) ($message->message ?? ''),
             'message_type' => (string) $message->message_type,
             'file' => $file ?? (object) [],
+            'file_url' => $resolvedUrl,
+            'quote_text' => (string) ($meta['quote_text'] ?? $meta['reply_to_text'] ?? ''),
+            'quote_author' => (string) ($meta['quote_author'] ?? $meta['reply_to_author'] ?? ''),
+            'reaction' => (string) ($meta['reaction'] ?? ''),
             'latitude' => $message->latitude,
             'longitude' => $message->longitude,
             'audio_duration_seconds' => $message->audio_duration_seconds,

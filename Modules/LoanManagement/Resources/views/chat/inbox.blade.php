@@ -1,5 +1,6 @@
 @extends('loanmanagement::layouts.app')
 @section('title', 'Telegram Chats')
+@section('hide_breadcrumb', '1')
 
 @php
     $isEmbedded = request()->boolean('_lm_embed');
@@ -55,23 +56,38 @@
 
 @section('loan_css')
 <style>
-    /* Hide floating Telegram fab button on the dedicated Chats page */
+    /* Clean layout on dedicated chat view */
+    .lm-footer {
+        display: none !important;
+    }
+    .lm-breadcrumb-wrap {
+        display: none !important;
+    }
     #lmTgFab {
         display: none !important;
+    }
+    .lm-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .container-fluid.lm-workspace {
+        padding: 0 !important;
+        margin: 0 !important;
     }
 
     /* Overall Shell */
     .tg-mobile-wrapper {
         position: relative;
         width: 100%;
-        height: calc(100dvh - 120px);
-        min-height: 580px;
+        height: calc(100dvh - 65px) !important;
+        max-height: calc(100dvh - 65px) !important;
+        min-height: 520px;
         background: #fff;
-        border-radius: 14px;
+        border-radius: 0;
         overflow: hidden;
-        border: 1px solid #e5e7eb;
+        border: none;
         display: flex;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        box-shadow: none;
         font-family: "Khmer OS Battambang", "Noto Sans Khmer", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
 
@@ -85,18 +101,22 @@
         background: #ffffff;
         position: relative;
         z-index: 10;
-        height: 100%;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
     }
 
     /* Conversation View (Screen 2) */
     .tg-pane-chat {
         flex: 1 1 auto;
-        display: flex;
-        flex-direction: column;
+        display: flex !important;
+        flex-direction: column !important;
         background: #87ab8c;
         position: relative;
         min-width: 0;
-        height: 100%;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
     }
 
     /* Top Telegram App Header */
@@ -127,11 +147,6 @@
         font-size: 19px;
         box-shadow: 0 2px 6px rgba(25, 118, 210, 0.35);
         overflow: hidden;
-    }
-    .tg-app-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
     }
     .tg-app-title {
         font-size: 21px;
@@ -225,6 +240,7 @@
         padding: 4px 14px 10px;
         background: #fff;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
         white-space: nowrap;
         border-bottom: 1px solid #f1f3f5;
         scrollbar-width: none;
@@ -247,6 +263,7 @@
         gap: 6px;
         transition: all 0.18s ease;
         flex: 0 0 auto;
+        user-select: none;
     }
     .tg-pill:hover {
         background: #f7f9fa;
@@ -269,6 +286,16 @@
     .tg-pill.active .tg-pill-badge {
         background: #2481cc;
         color: #fff;
+    }
+    .tg-pill-manage {
+        background: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+        color: #0284c7 !important;
+        font-weight: 600;
+    }
+    .tg-pill-manage:hover {
+        background: #e0f2fe !important;
+        border-color: #0284c7 !important;
     }
 
     /* Chat List Items */
@@ -458,15 +485,15 @@
 
     /* Conversation Pane Header */
     .tg-chat-header {
-        height: 60px;
+        height: 58px;
         background: #ffffff;
-        border-bottom: 1px solid rgba(0,0,0,0.08);
-        padding: 8px 14px;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        padding: 8px 12px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        flex: 0 0 60px;
+        flex: 0 0 58px;
         z-index: 30;
         box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
@@ -483,25 +510,29 @@
         border-radius: 50%;
         border: none;
         background: transparent;
-        color: #333;
-        display: none; /* Shown on mobile */
+        color: #222;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 19px;
+        font-size: 18px;
         cursor: pointer;
         flex: 0 0 36px;
+        transition: background 0.15s ease;
+    }
+    .tg-back-btn:hover {
+        background: rgba(0,0,0,0.05);
     }
     .tg-header-avatar {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         color: #fff;
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 700;
-        flex: 0 0 42px;
+        flex: 0 0 40px;
         overflow: hidden;
         text-transform: uppercase;
     }
@@ -515,12 +546,13 @@
         flex: 1 1 auto;
     }
     .tg-header-name {
-        font-size: 15.5px;
+        font-size: 15px;
         font-weight: 700;
-        color: #0f172a;
+        color: #111827;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        line-height: 1.25;
     }
     .tg-header-status {
         font-size: 12px;
@@ -528,6 +560,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        line-height: 1.25;
     }
     .tg-header-status.online {
         color: #22c55e;
@@ -536,29 +569,23 @@
     .tg-header-right {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
         flex: 0 0 auto;
     }
 
     /* Telegram Doodle Wallpaper Chat Body */
     .tg-chat-body {
-        flex: 1 1 auto;
+        flex: 1 1 0;
+        height: 0;
+        min-height: 0;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         padding: 16px 14px 20px;
         position: relative;
-        min-height: 0;
-        /* Authentic Telegram sage green doodle pattern */
-        background-color: #88ad8d;
-        background-image: radial-gradient(#6e9874 1.2px, transparent 1.2px), radial-gradient(#6e9874 1.2px, #88ad8d 1.2px);
-        background-size: 24px 24px;
-        background-position: 0 0, 12px 12px;
-    }
-    .tg-chat-body::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Cpath d='M15 15h6v6h-6zm40 10c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm35-8l5 9h-10zm-65 48c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8-8 3.6-8 8zm65 15h12v4H90zm-45 15l-6-8h12zm60-35c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'/%3E%3C/g%3E%3C/svg%3E");
-        pointer-events: none;
+        background-color: #8dae90;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' opacity='0.16'%3E%3Cpath d='M25 20c-4 0-7 3-7 7v10c0 4 3 7 7 7h12l8 6v-6h2c4 0 7-3 7-7V27c0-4-3-7-7-7H25z'/%3E%3Cpath d='M32 30h14M32 36h8'/%3E%3Ccircle cx='110' cy='30' r='10'/%3E%3Cpath d='M106 28l3 3 6-6'/%3E%3Cpath d='M75 55c0-6 5-10 11-10s11 4 11 10c0 8-11 14-11 14s-11-6-11-14z'/%3E%3Cpath d='M22 85l6-6 6 6-6 6z'/%3E%3Cpath d='M125 75c-3-5-9-7-14-4s-7 9-4 14c3 5 9 7 14 4s7-9 4-14z'/%3E%3Cpath d='M120 78l4 6'/%3E%3Ccircle cx='35' cy='125' r='12'/%3E%3Cpath d='M31 123a2 2 0 1 0 4 0a2 2 0 1 0-4 0'/%3E%3Cpath d='M39 123a2 2 0 1 0 4 0a2 2 0 1 0-4 0'/%3E%3Cpath d='M31 129c2 2 6 2 8 0'/%3E%3Cpath d='M80 110l10 5-5 10-10-5z'/%3E%3Cpath d='M115 125c0-4 4-8 9-8s9 4 9 8v10h-18v-10z'/%3E%3Cpath d='M124 117v18'/%3E%3Cpath d='M65 25l4 4-4 4'/%3E%3Ccircle cx='70' cy='85' r='3'/%3E%3Ccircle cx='140' cy='45' r='2'/%3E%3Ccircle cx='15' cy='60' r='2'/%3E%3Ccircle cx='95' cy='140' r='2.5'/%3E%3Ccircle cx='55' cy='145' r='1.5'/%3E%3C/g%3E%3C/svg%3E");
+        background-repeat: repeat;
+        background-size: 160px 160px;
     }
 
     /* Date Separator */
@@ -581,7 +608,7 @@
     /* Message Bubbles */
     .tg-msg-row {
         display: flex;
-        margin-bottom: 8px;
+        margin-bottom: 7px;
         position: relative;
         z-index: 2;
     }
@@ -591,28 +618,25 @@
     .tg-bubble {
         max-width: 82%;
         min-width: 80px;
-        padding: 8px 12px 6px;
+        padding: 7px 11px 5px;
         border-radius: 16px;
         position: relative;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-        font-size: 14px;
-        line-height: 1.45;
+        font-size: 14.5px;
+        line-height: 1.4;
         overflow-wrap: anywhere;
     }
-    /* Outgoing Bubble (Telegram green) */
     .tg-msg-row.own .tg-bubble {
         background: #e1ffc7;
-        color: #000;
+        color: #000000;
         border-bottom-right-radius: 4px;
     }
-    /* Incoming Bubble (White) */
     .tg-msg-row:not(.own) .tg-bubble {
         background: #ffffff;
         color: #0f172a;
         border-bottom-left-radius: 4px;
     }
 
-    /* Sender Name for group / customer */
     .tg-msg-sender {
         font-size: 12px;
         font-weight: 700;
@@ -620,42 +644,46 @@
         margin-bottom: 3px;
     }
 
-    /* Quoted Message */
     .tg-quote-box {
         border-left: 3px solid #e53935;
-        background: rgba(229, 57, 53, 0.07);
+        background: rgba(229, 57, 53, 0.08);
         padding: 4px 8px;
         border-radius: 4px 8px 8px 4px;
-        margin-bottom: 6px;
-        font-size: 12px;
+        margin-bottom: 5px;
+        font-size: 12.5px;
     }
     .tg-quote-author {
         font-weight: 700;
         color: #e53935;
+        font-size: 12px;
         margin-bottom: 1px;
     }
     .tg-quote-text {
-        color: #555;
+        color: #555555;
+        font-size: 11.5px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    /* Message Meta Info (Time & Double Check) */
     .tg-msg-meta {
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 4px;
+        gap: 3px;
         margin-top: 2px;
-        font-size: 11px;
+        font-size: 10.5px;
         color: #687987;
         float: right;
         margin-left: 8px;
+        user-select: none;
     }
     .tg-msg-meta i.fa-check, .tg-msg-meta .tg-ticks {
         color: #4fae63;
         font-size: 11px;
+    }
+    .tg-msg-meta .tg-ticks i:last-child {
+        margin-left: -5px;
     }
 
     /* Voice Message Audio Player Bubble */
@@ -663,26 +691,31 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 4px 0;
+        padding: 2px 0;
         min-width: 210px;
     }
     .tg-voice-play-btn {
-        width: 42px;
-        height: 42px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         border: none;
-        background: #4fae63;
-        color: #fff;
+        color: #ffffff;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 16px;
+        font-size: 17px;
         cursor: pointer;
-        flex: 0 0 42px;
-        transition: transform 0.15s ease, background 0.15s ease;
+        flex: 0 0 44px;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    .tg-voice-play-btn:active {
+        transform: scale(0.92);
     }
     .tg-msg-row.own .tg-voice-play-btn {
-        background: #4fae63;
+        background: #4fae63 !important;
+    }
+    .tg-msg-row:not(.own) .tg-voice-play-btn {
+        background: #2481cc !important;
     }
     .tg-voice-wave-wrap {
         flex: 1 1 auto;
@@ -704,14 +737,17 @@
         background: #a3c4a8;
         transition: background 0.15s ease;
     }
-    .tg-voice-bar.played {
+    .tg-msg-row.own .tg-voice-bar {
+        background: #9cd19f;
+    }
+    .tg-msg-row.own .tg-voice-bar.played {
         background: #2e7d32;
     }
     .tg-msg-row:not(.own) .tg-voice-bar {
         background: #cfd8dc;
     }
     .tg-msg-row:not(.own) .tg-voice-bar.played {
-        background: #1976d2;
+        background: #2481cc;
     }
     .tg-voice-timing {
         display: flex;
@@ -722,36 +758,39 @@
         font-variant-numeric: tabular-nums;
     }
 
-    /* Reaction Badge */
     .tg-reaction-badge {
         position: absolute;
         bottom: -9px;
         left: 8px;
         background: #ffffff;
-        border: 1px solid #e0e4e8;
-        border-radius: 14px;
-        padding: 1px 6px;
+        border-radius: 12px;
+        padding: 2px 6px;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        font-size: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        z-index: 3;
+        box-shadow: 0 1.5px 4px rgba(0,0,0,0.16);
+        z-index: 5;
+        font-size: 13px;
+        border: 1px solid rgba(0,0,0,0.06);
     }
     .tg-reaction-avatar {
-        width: 14px;
-        height: 14px;
+        width: 16px;
+        height: 16px;
         border-radius: 50%;
-        background: #1d74b8;
-        color: #fff;
-        font-size: 8px;
-        display: flex;
+        overflow: hidden;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        overflow: hidden;
+        font-size: 9px;
+        font-weight: 700;
+        color: #fff;
+    }
+    .tg-reaction-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
-    /* Image Attachment */
     .tg-image-wrap {
         margin: 4px 0;
         border-radius: 12px;
@@ -766,7 +805,6 @@
         border-radius: 12px;
     }
 
-    /* File / Invoice Card */
     .tg-file-card {
         display: flex;
         align-items: center;
@@ -807,40 +845,74 @@
         color: #64748b;
     }
 
-    /* Bottom Telegram Composer Bar */
+    /* Bottom Telegram Composer Bar - Fixed at the Bottom with Floating Capsule */
     .tg-composer-bar {
-        background: #ffffff;
-        border-top: 1px solid #eef0f2;
-        padding: 8px 12px;
+        background: transparent !important;
+        border-top: none !important;
+        padding: 6px 10px 10px !important;
         display: flex;
         align-items: center;
         gap: 8px;
         flex: 0 0 auto;
-        z-index: 30;
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        z-index: 50;
+        box-shadow: none !important;
     }
     .tg-composer-input-wrap {
         flex: 1 1 auto;
         position: relative;
         display: flex;
         align-items: center;
-        background: #f0f2f5;
-        border-radius: 22px;
-        padding: 0 12px;
-        min-height: 44px;
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 0 6px 0 8px;
+        min-height: 46px;
+        border: none;
+        box-shadow: 0 1.5px 4px rgba(0,0,0,0.12);
+        transition: box-shadow 0.15s ease;
+    }
+    .tg-composer-input-wrap:focus-within {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .tg-composer-inner-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: #707579;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        cursor: pointer;
+        flex: 0 0 36px;
+        padding: 0;
+        transition: color 0.15s ease, transform 0.1s ease;
+    }
+    .tg-composer-inner-btn:hover {
+        color: #2481cc;
+    }
+    .tg-composer-inner-btn:active {
+        transform: scale(0.92);
     }
     .tg-composer-input {
         flex: 1 1 auto;
         border: none;
         background: transparent;
         outline: none;
-        font-size: 14.5px;
+        font-size: 16px;
         color: #111827;
-        padding: 8px 0;
-        max-height: 100px;
-        resize: none;
+        padding: 8px 6px;
+        min-width: 0;
     }
     .tg-composer-input::placeholder {
-        color: #8c9398;
+        color: #707579;
+        font-size: 15px;
     }
     .tg-composer-btn {
         width: 38px;
@@ -862,32 +934,40 @@
         color: #222;
     }
     .tg-send-action-btn {
-        width: 44px;
-        height: 44px;
+        width: 46px;
+        height: 46px;
         border-radius: 50%;
         border: none;
         background: #2481cc;
-        color: #fff;
+        color: #ffffff;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
+        font-size: 20px;
         cursor: pointer;
-        flex: 0 0 44px;
-        box-shadow: 0 4px 12px rgba(36, 129, 204, 0.35);
-        transition: transform 0.15s ease, background 0.15s ease;
+        flex: 0 0 46px;
+        box-shadow: 0 2px 8px rgba(36, 129, 204, 0.45);
+        transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease;
+    }
+    .tg-send-action-btn:hover {
+        background: #1c72b8;
     }
     .tg-send-action-btn:active {
-        transform: scale(0.92);
+        transform: scale(0.90);
+    }
+    .tg-send-action-btn.is-send-ready {
+        background: #2481cc;
+    }
+    .tg-send-action-btn.is-send-ready i {
+        margin-left: 2px;
     }
     .tg-send-action-btn.recording {
         background: #dc2626;
         animation: tgPulse 1.2s infinite;
     }
-    @keyframes tgPulse {
-        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
-        70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    .tg-send-action-btn.recording {
+        background: #dc2626;
+        animation: tgPulse 1.2s infinite;
     }
 
     /* Live Voice Recording Overlay in Composer */
@@ -967,7 +1047,7 @@
         box-shadow: 0 10px 30px rgba(0,0,0,0.18);
         border: 1px solid #e2e8f0;
         padding: 8px;
-        z-index: 50;
+        z-index: 150;
         width: 190px;
     }
     .tg-attach-sheet.open {
@@ -1013,7 +1093,7 @@
         box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         border: 1px solid #e2e8f0;
         padding: 10px;
-        z-index: 50;
+        z-index: 150;
         max-width: 290px;
         display: flex;
         flex-wrap: wrap;
@@ -1045,7 +1125,7 @@
         box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         border: 1px solid #e2e8f0;
         padding: 6px;
-        z-index: 60;
+        z-index: 150;
         min-width: 175px;
     }
     .tg-dropdown-menu.open {
@@ -1129,10 +1209,217 @@
     }
 
     /* ==========================================================================
-       MOBILE RESPONSIVE ADAPTATION (Matches Screenshots 1 & 2)
+       CHAT FOLDERS MODALS & CONTROLS
+       ========================================================================== */
+    .tg-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        z-index: 1000000 !important;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        backdrop-filter: blur(3px);
+    }
+    .tg-modal-overlay.open {
+        display: flex;
+    }
+    .tg-modal-card {
+        background: #ffffff;
+        border-radius: 16px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 88vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+        animation: tgModalIn 0.18s ease-out;
+    }
+    @keyframes tgModalIn {
+        from { transform: scale(0.95); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+    .tg-modal-head {
+        padding: 14px 18px;
+        border-bottom: 1px solid #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: #fff;
+    }
+    .tg-modal-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .tg-modal-close {
+        background: transparent;
+        border: none;
+        font-size: 22px;
+        color: #94a3b8;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0 4px;
+    }
+    .tg-modal-close:hover {
+        color: #0f172a;
+    }
+    .tg-modal-body {
+        padding: 16px 18px;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .tg-modal-foot {
+        padding: 12px 18px;
+        border-top: 1px solid #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        background: #f8fafc;
+    }
+    .tg-btn-primary {
+        background: #2481cc;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 9px 18px;
+        font-size: 13.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+    .tg-btn-primary:hover {
+        background: #1b6cae;
+    }
+    .tg-btn-secondary {
+        background: #e2e8f0;
+        color: #334155;
+        border: none;
+        border-radius: 10px;
+        padding: 9px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .tg-btn-secondary:hover {
+        background: #cbd5e1;
+    }
+    .tg-folder-list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        gap: 10px;
+    }
+    .tg-folder-item-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+    }
+    .tg-folder-item-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #e0f2fe;
+        color: #0284c7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex: 0 0 36px;
+    }
+    .tg-folder-item-name {
+        font-weight: 700;
+        font-size: 14px;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-folder-item-count {
+        font-size: 12px;
+        color: #64748b;
+    }
+    .tg-folder-item-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+    }
+    .tg-cust-select-list {
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fff;
+        margin-top: 8px;
+    }
+    .tg-cust-select-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid #f1f3f5;
+        cursor: pointer;
+        user-select: none;
+    }
+    .tg-cust-select-item:hover {
+        background: #f8fafc;
+    }
+    .tg-cust-select-item input[type="checkbox"] {
+        width: 17px;
+        height: 17px;
+        accent-color: #2481cc;
+        cursor: pointer;
+    }
+    .tg-cust-mini-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 32px;
+        text-transform: uppercase;
+    }
+    .tg-cust-name {
+        font-weight: 700;
+        font-size: 13px;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-cust-sub {
+        font-size: 11.5px;
+        color: #64748b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ==========================================================================
+       MOBILE RESPONSIVE ADAPTATION
        ========================================================================== */
     @media (max-width: 991px) {
-        /* Hide bulky desktop headers/breadcrumbs on mobile */
         .content-header,
         .lm-breadcrumb-wrap,
         .content > .row {
@@ -1144,15 +1431,17 @@
         }
         .container-fluid.lm-workspace {
             padding: 0 !important;
+            margin: 0 !important;
         }
 
         /* Full mobile screen wrapper */
         .tg-mobile-wrapper {
-            height: calc(100dvh - 56px);
-            min-height: 100dvh;
-            border-radius: 0;
-            border: none;
-            box-shadow: none;
+            height: calc(100vh - 56px) !important;
+            height: calc(100dvh - 56px) !important;
+            min-height: calc(100vh - 56px) !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
         }
 
         /* Single Pane State Machine */
@@ -1160,11 +1449,20 @@
             width: 100% !important;
             flex: 1 1 auto !important;
             border-right: none;
+            padding-bottom: 60px;
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100% !important;
+        }
+        .tg-fabs-wrap {
+            bottom: 74px !important;
         }
         .tg-pane-chat {
             width: 100% !important;
             flex: 1 1 auto !important;
-            display: none;
+            display: none !important;
+            height: 100% !important;
+            flex-direction: column !important;
         }
 
         /* When Conversation view is active on mobile */
@@ -1180,22 +1478,72 @@
             display: inline-flex !important;
         }
 
-        /* Hide bottom navigation bar while in full conversation view */
+        /* Hide headers/nav while viewing full chat conversation */
         body.tg-viewing-chat #loanMobileNav {
             display: none !important;
         }
+        body.tg-viewing-chat #loanManagementHeader {
+            display: none !important;
+        }
         body.tg-viewing-chat .tg-mobile-wrapper {
+            height: 100vh !important;
             height: 100dvh !important;
+            min-height: 100vh !important;
         }
 
-        /* Safe area composer spacing */
+        /* Fixed / Sticky Composer Bar at the Bottom */
         .tg-composer-bar {
-            padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+            position: sticky !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            z-index: 100 !important;
+            background: #87ab8c !important;
+            padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+            border-top: none !important;
+            box-shadow: none !important;
         }
 
         .tg-bubble {
             max-width: 88%;
         }
+    }
+
+    .tg-pill-action {
+        padding: 5px 12px;
+        border-radius: 18px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        background: #f1f5f9;
+        color: #2481cc;
+        border: 1px dashed #93c5fd;
+        transition: all 0.15s ease;
+        flex: 0 0 auto;
+    }
+    .tg-pill-action:hover {
+        background: #e0f2fe;
+        border-color: #38bdf8;
+    }
+    .tg-item-quick-folder {
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 14px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+        margin-left: 6px;
+    }
+    .tg-item-quick-folder:hover {
+        color: #2481cc;
+        background: #e0f2fe;
     }
 </style>
 @endsection
@@ -1236,22 +1584,21 @@
                 <span>All</span>
                 <span class="tg-pill-badge" id="tgBadgeAll">0</span>
             </button>
-            <button type="button" class="tg-pill" data-filter="personal">
-                <span>Personal</span>
-            </button>
-            <button type="button" class="tg-pill" data-filter="invoices">
-                <span>វិក្កយបត្រ</span>
-                <span class="tg-pill-badge" id="tgBadgeInvoices">0</span>
-            </button>
-            <button type="button" class="tg-pill" data-filter="installments">
-                <span>រំលស់</span>
-                <span class="tg-pill-badge" id="tgBadgeInstallments">0</span>
-            </button>
+            <!-- Dynamic Folder Pills -->
+            <div id="tgDynamicFolderPills" style="display:contents"></div>
             @foreach($chatLocationOptions as $loc)
-                <button type="button" class="tg-pill" data-filter="location" data-location-id="{{ $loc->id }}">
+                <button type="button" class="tg-pill" data-filter="loc_{{ $loc->id }}" data-location-id="{{ $loc->id }}">
                     <span>{{ $loc->name }}</span>
                 </button>
             @endforeach
+            <!-- Add New Folder Button -->
+            <button type="button" class="tg-pill-action" id="tgBtnDirectNewFolder" title="Create New Folder">
+                <i class="fa fa-plus"></i> <span>New Folder</span>
+            </button>
+            <!-- Manage / Add Folders Button -->
+            <button type="button" class="tg-pill-action" id="tgBtnManageFolders" title="Edit / Add Folders">
+                <i class="fa fa-folder-open-o"></i> <span>Edit</span>
+            </button>
         </div>
 
         <!-- Chats List -->
@@ -1262,21 +1609,22 @@
             </div>
         </div>
 
-        <!-- Floating Action Buttons (Camera & Pencil/Compose) -->
-        <div class="tg-fab-stack">
-            <button type="button" class="tg-fab-cam" id="tgFabCamera" title="Camera" aria-label="Take Photo">
+        <!-- Bottom Floating Action Buttons (Telegram Style) -->
+        <div class="tg-fabs-wrap">
+            <button type="button" class="tg-fab tg-fab-camera" id="tgFabCamera" title="Take photo / media" aria-label="Media">
                 <i class="fa fa-camera"></i>
             </button>
-            <button type="button" class="tg-fab-compose" id="tgFabCompose" title="New Chat" aria-label="New Chat">
+            <button type="button" class="tg-fab tg-fab-compose" id="tgFabCompose" title="New message" aria-label="Compose">
                 <i class="fa fa-pencil"></i>
             </button>
         </div>
 
-        <!-- Top Menu Dropdown -->
-        <div class="tg-dropdown-menu" id="tgListDropdown">
-            <a class="tg-dropdown-item" id="tgActionRefresh" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh Chats</a>
-            <a class="tg-dropdown-item" id="tgActionNewCustomer" href="{{ route('loan-management.customers.create') }}"><i class="fa fa-user-plus"></i> New Customer</a>
-            <a class="tg-dropdown-item" id="tgActionSettings" href="{{ route('loan-management.settings.telegram.index') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
+        <!-- Compose Customer Dropdown Menu -->
+        <div class="tg-dropdown-menu" id="tgComposeDropdown">
+            <a class="tg-dropdown-item" id="tgActionRefreshAll" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh All Chats</a>
+            <a class="tg-dropdown-item" id="tgActionManageFoldersDropdown" href="javascript:void(0)"><i class="fa fa-folder-open-o"></i> Manage Chat Folders</a>
+            <a class="tg-dropdown-item" id="tgActionNewFolderDropdown" href="javascript:void(0)"><i class="fa fa-plus-circle"></i> Create New Folder</a>
+            <a class="tg-dropdown-item" href="{{ route('loan-management.settings.telegram.index') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
         </div>
     </aside>
 
@@ -1300,6 +1648,9 @@
                 <a href="tel:" class="tg-icon-btn" id="tgHeaderCallBtn" title="Call Customer" style="display:none">
                     <i class="fa fa-phone"></i>
                 </a>
+                <button type="button" class="tg-icon-btn" id="tgHeaderFolderBtn" title="Add / Move Customer to Folder" aria-label="Add to Folder">
+                    <i class="fa fa-folder-open-o"></i>
+                </button>
                 <button type="button" class="tg-icon-btn" id="tgChatMenuBtn" title="More options" aria-label="More options">
                     <i class="fa fa-ellipsis-v"></i>
                 </button>
@@ -1313,15 +1664,17 @@
             </div>
         </div>
 
-        <!-- Telegram Bottom Message Composer Bar -->
-        <form class="tg-composer-bar" id="tgComposerForm" style="display:none">
-            <button type="button" class="tg-composer-btn" id="tgEmojiBtn" title="Emoji" aria-label="Insert Emoji">
-                <i class="fa fa-smile-o"></i>
-            </button>
-
-            <!-- Regular Text Input Container -->
+        <!-- Telegram Bottom Message Composer Bar (Strictly Fixed at the Bottom) -->
+        <form class="tg-composer-bar" id="tgComposerForm" style="display:none" onsubmit="return false;">
+            <!-- Regular Text Input Container (Capsule with Emoji, Text & Paperclip inside) -->
             <div class="tg-composer-input-wrap">
+                <button type="button" class="tg-composer-inner-btn" id="tgEmojiBtn" title="Emoji" aria-label="Insert Emoji">
+                    <i class="fa fa-smile-o"></i>
+                </button>
                 <input type="text" class="tg-composer-input" id="tgMessageInput" placeholder="Message" autocomplete="off">
+                <button type="button" class="tg-composer-inner-btn" id="tgAttachBtn" title="Attach file" aria-label="Attach">
+                    <i class="fa fa-paperclip"></i>
+                </button>
             </div>
 
             <!-- Voice Recording Panel -->
@@ -1334,12 +1687,7 @@
                 <button type="button" class="tg-rec-cancel-btn" id="tgVoiceCancelBtn" title="Cancel"><i class="fa fa-trash"></i></button>
             </div>
 
-            <!-- Paperclip Attachment Button -->
-            <button type="button" class="tg-composer-btn" id="tgAttachBtn" title="Attach file" aria-label="Attach">
-                <i class="fa fa-paperclip"></i>
-            </button>
-
-            <!-- Send or Microphone Action Button -->
+            <!-- Send or Microphone Action Button (Telegram Round Blue Button) -->
             <button type="submit" class="tg-send-action-btn" id="tgActionSendBtn" title="Record Voice">
                 <i class="fa fa-microphone" id="tgActionSendIcon"></i>
             </button>
@@ -1387,12 +1735,99 @@
 
         <!-- Chat Header Kebab Dropdown -->
         <div class="tg-dropdown-menu" id="tgChatDropdown">
+            <a class="tg-dropdown-item" id="tgMenuAddToFolder" href="javascript:void(0)"><i class="fa fa-folder-open-o"></i> Add to Folder...</a>
             <a class="tg-dropdown-item" id="tgMenuSendInvoice" href="javascript:void(0)"><i class="fa fa-file-text-o"></i> Send Invoice</a>
             <a class="tg-dropdown-item" id="tgMenuQuickPay" href="javascript:void(0)"><i class="fa fa-money"></i> Quick Pay</a>
             <a class="tg-dropdown-item" id="tgMenuViewCustomer" href="javascript:void(0)" target="_blank"><i class="fa fa-user"></i> View Profile</a>
             <a class="tg-dropdown-item" id="tgMenuRefreshChat" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh Thread</a>
         </div>
     </main>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL 1: MANAGE CHAT FOLDERS (List, Edit, Delete)                   -->
+<!-- ================================================================== -->
+<div class="tg-modal-overlay" id="tgFoldersModal">
+    <div class="tg-modal-card">
+        <div class="tg-modal-head">
+            <h3 class="tg-modal-title"><i class="fa fa-folder-open" style="color:#2481cc"></i> Chat Folders</h3>
+            <button type="button" class="tg-modal-close" data-close-modal="#tgFoldersModal">&times;</button>
+        </div>
+        <div class="tg-modal-body">
+            <div style="font-size:12.5px;color:#64748b;margin-bottom:14px">
+                Create and organize chat folders to group customers, invoices, and installments.
+            </div>
+            <div id="tgFoldersListContainer">
+                <div style="text-align:center;padding:20px;color:#94a3b8"><i class="fa fa-circle-o-notch fa-spin"></i> Loading folders...</div>
+            </div>
+        </div>
+        <div class="tg-modal-foot">
+            <button type="button" class="tg-btn-secondary" data-close-modal="#tgFoldersModal">Close</button>
+            <button type="button" class="tg-btn-primary" id="tgBtnCreateFolderOpen"><i class="fa fa-plus"></i> New Folder</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL 2: CREATE / EDIT FOLDER FORM (Name + Customer Selection)     -->
+<!-- ================================================================== -->
+<div class="tg-modal-overlay" id="tgFolderEditModal">
+    <div class="tg-modal-card">
+        <div class="tg-modal-head">
+            <h3 class="tg-modal-title"><i class="fa fa-folder" style="color:#2481cc"></i> <span id="tgFolderModalTitle">Create Folder</span></h3>
+            <button type="button" class="tg-modal-close" data-close-modal="#tgFolderEditModal">&times;</button>
+        </div>
+        <div class="tg-modal-body">
+            <input type="hidden" id="tgEditFolderId" value="">
+            <div style="margin-bottom:14px">
+                <label style="font-size:12.5px;font-weight:700;color:#334155;margin-bottom:4px;display:block">Folder Name</label>
+                <input type="text" id="tgFolderInputName" placeholder="e.g. VIP, Special, Bad Debt, Branch..." style="width:100%;height:38px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;outline:none;font-size:14px" required>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <label style="font-size:12.5px;font-weight:700;color:#334155;margin:0">Add Customers</label>
+                <div>
+                    <button type="button" id="tgBtnCustSelectAll" style="border:none;background:none;color:#2481cc;font-size:12px;font-weight:700;cursor:pointer">Select All</button>
+                    <span style="color:#cbd5e1;margin:0 4px">·</span>
+                    <button type="button" id="tgBtnCustClearAll" style="border:none;background:none;color:#64748b;font-size:12px;font-weight:600;cursor:pointer">Clear</button>
+                </div>
+            </div>
+            <input type="text" id="tgFolderCustSearch" placeholder="Search customer name or phone..." style="width:100%;height:34px;border:1px solid #e2e8f0;border-radius:8px;padding:0 10px;outline:none;font-size:12.5px;background:#f8fafc">
+
+            <div class="tg-cust-select-list" id="tgCustSelectList">
+                <!-- Populated dynamically with customer checkboxes -->
+            </div>
+        </div>
+        <div class="tg-modal-foot">
+            <button type="button" class="tg-btn-secondary" data-close-modal="#tgFolderEditModal">Cancel</button>
+            <button type="button" class="tg-btn-primary" id="tgBtnSaveFolder">Save Folder</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL 3: ADD CURRENT CUSTOMER TO FOLDERS                            -->
+<!-- ================================================================== -->
+<div class="tg-modal-overlay" id="tgCustomerFoldersModal">
+    <div class="tg-modal-card" style="max-width:380px">
+        <div class="tg-modal-head">
+            <h3 class="tg-modal-title"><i class="fa fa-folder-open-o" style="color:#2481cc"></i> Add to Folder</h3>
+            <button type="button" class="tg-modal-close" data-close-modal="#tgCustomerFoldersModal">&times;</button>
+        </div>
+        <div class="tg-modal-body">
+            <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:12px;padding:8px 12px;background:#f1f5f9;border-radius:8px" id="tgCustomerFolderNameDisplay">
+                Customer Name
+            </div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:8px">Select folders for this chat:</div>
+            <div id="tgCustomerFolderCheckboxes">
+                <!-- Checkboxes populated dynamically -->
+            </div>
+        </div>
+        <div class="tg-modal-foot">
+            <button type="button" class="tg-btn-secondary" data-close-modal="#tgCustomerFoldersModal">Cancel</button>
+            <button type="button" class="tg-btn-primary" id="tgBtnSaveCustomerFolders">Save</button>
+        </div>
+    </div>
 </div>
 
 <!-- Image Viewer Modal -->
@@ -1407,11 +1842,13 @@
 (function($){
     var csrf = '{{ csrf_token() }}';
     var apiBaseUrl = '{{ url("loan-management/telegram-chat-api/chats") }}';
+    var apiFolderBaseUrl = '{{ url("loan-management/telegram-chat-api/folders") }}';
     var pollMs = {{ (int) config("loanmanagement.chat_polling_seconds", 5) * 1000 }};
     var initialThreadId = @json($initialThreadId ?? null);
     var initialCustomerId = @json($initialCustomerId ?? null);
 
     var contacts = [];
+    var folders = [];
     var activeContact = null;
     var activeThreadId = null;
     var currentFilter = 'all';
@@ -1494,6 +1931,380 @@
     }
 
     // -------------------------------------------------------------
+    // FOLDERS SERVICE CALLS & UI
+    // -------------------------------------------------------------
+    function loadFolders(){
+        $.ajax({
+            url: apiFolderBaseUrl,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(resp){
+                folders = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : []) : [];
+                renderFolderPills();
+                updatePillBadges();
+            }
+        });
+    }
+
+    function renderFolderPills(){
+        var $container = $('#tgDynamicFolderPills');
+        var html = '';
+
+        folders.forEach(function(f){
+            var fid = String(f.id);
+            var isActive = (currentFilter === fid);
+            var count = countMatchingFolder(f);
+            html += '<button type="button" class="tg-pill ' + (isActive ? 'active' : '') + '" data-filter="' + esc(fid) + '">' +
+                '<span>' + esc(f.name) + '</span>' +
+                '<span class="tg-pill-badge">' + count + '</span>' +
+            '</button>';
+        });
+
+        $container.html(html);
+    }
+
+    function countMatchingFolder(folder){
+        var cids = (folder.customer_ids || []).map(Number);
+        return contacts.filter(function(c){
+            var cid = Number(c.customer_id);
+            if (folder.id === 'personal') {
+                return !!c.telegram_linked || cids.indexOf(cid) >= 0;
+            } else if (folder.id === 'invoices') {
+                return !!c.invoice_no || cids.indexOf(cid) >= 0;
+            } else if (folder.id === 'installments') {
+                return !!c.loan_id || !!c.installment_no || cids.indexOf(cid) >= 0;
+            } else {
+                return cids.indexOf(cid) >= 0;
+            }
+        }).length;
+    }
+
+    var folderEditingCustomerIds = [];
+
+    // Open Folders Manager Modal
+    function openFoldersModal(){
+        var $list = $('#tgFoldersListContainer');
+        var html = '';
+
+        if (!folders.length) {
+            html = '<div style="text-align:center;padding:20px;color:#94a3b8">No folders yet. Click New Folder to create one.</div>';
+        } else {
+            folders.forEach(function(f){
+                var isSystem = (f.type === 'system');
+                var count = (f.customer_ids || []).length;
+                var countLabel = isSystem ? countMatchingFolder(f) + ' chats (auto/custom)' : count + ' customer(s)';
+
+                html += '<div class="tg-folder-list-item" data-folder-id="' + esc(f.id) + '">' +
+                    '<div class="tg-folder-item-left">' +
+                        '<div class="tg-folder-item-icon"><i class="fa fa-folder"></i></div>' +
+                        '<div style="min-width:0">' +
+                            '<div class="tg-folder-item-name">' + esc(f.name) + (isSystem ? ' <span style="font-size:10px;background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:6px;font-weight:600">Default</span>' : '') + '</div>' +
+                            '<div class="tg-folder-item-count">' + countLabel + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="tg-folder-item-actions">' +
+                        '<button type="button" class="tg-btn-edit js-edit-folder" data-folder-id="' + esc(f.id) + '" title="Edit Folder"><i class="fa fa-pencil"></i> Edit</button>' +
+                        '<button type="button" class="tg-btn-danger js-delete-folder" data-folder-id="' + esc(f.id) + '" title="Delete Folder"><i class="fa fa-trash"></i></button>' +
+                    '</div>' +
+                '</div>';
+            });
+        }
+
+        $list.html(html);
+        $('#tgFoldersModal').addClass('open');
+    }
+
+    // Open Create or Edit Folder Modal
+    function openFolderEditModal(folderId){
+        var isEdit = !!folderId;
+        var folder = isEdit ? folders.find(function(f){ return String(f.id) === String(folderId); }) : null;
+
+        $('#tgEditFolderId').val(isEdit ? folder.id : '');
+        $('#tgFolderModalTitle').text(isEdit ? 'Edit Folder' : 'Create Folder');
+        $('#tgFolderInputName').val(isEdit ? folder.name : '');
+        $('#tgFolderCustSearch').val('');
+
+        folderEditingCustomerIds = isEdit ? (folder.customer_ids || []).map(Number) : [];
+
+        renderCustomerChecklist();
+        $('#tgFoldersModal').removeClass('open');
+        $('#tgFolderEditModal').addClass('open');
+        $('#tgFolderInputName').focus();
+    }
+
+    function renderCustomerChecklist(){
+        var $list = $('#tgCustSelectList');
+        var q = ($('#tgFolderCustSearch').val() || '').toLowerCase().trim();
+
+        if (!contacts.length) {
+            $list.html('<div style="text-align:center;padding:20px;color:#94a3b8">No customers loaded.</div>');
+            return;
+        }
+
+        var html = '';
+        contacts.forEach(function(c){
+            var cid = Number(c.customer_id);
+            var name = c.display_name || c.customer_name || 'Customer';
+            var phone = c.customer_phone || '';
+            var sub = c.display_subtitle || phone;
+
+            if (q) {
+                var hay = (name + ' ' + phone + ' ' + sub).toLowerCase();
+                if (hay.indexOf(q) === -1) return;
+            }
+
+            var isChecked = folderEditingCustomerIds.indexOf(cid) >= 0;
+            var color = getAvatarColor(name);
+            var initials = getInitials(name);
+
+            html += '<label class="tg-cust-select-item">' +
+                '<input type="checkbox" class="js-folder-cust-cb" value="' + cid + '" ' + (isChecked ? 'checked' : '') + '>' +
+                '<div class="tg-cust-mini-avatar" style="background:' + color + '">' + initials + '</div>' +
+                '<div class="tg-cust-info">' +
+                    '<div class="tg-cust-name">' + esc(name) + '</div>' +
+                    '<div class="tg-cust-sub">' + esc(sub) + '</div>' +
+                '</div>' +
+            '</label>';
+        });
+
+        if (!html) {
+            html = '<div style="text-align:center;padding:16px;color:#94a3b8">No matching customers</div>';
+        }
+
+        $list.html(html);
+    }
+
+    // Persistent customer checkbox tracking in Folder Edit modal
+    $(document).on('change', '.js-folder-cust-cb', function(){
+        var cid = Number($(this).val());
+        if ($(this).is(':checked')) {
+            if (folderEditingCustomerIds.indexOf(cid) === -1) {
+                folderEditingCustomerIds.push(cid);
+            }
+        } else {
+            folderEditingCustomerIds = folderEditingCustomerIds.filter(function(id){ return id !== cid; });
+        }
+    });
+
+    $('#tgBtnCustSelectAll').on('click', function(){
+        $('.js-folder-cust-cb').each(function(){
+            var cid = Number($(this).val());
+            $(this).prop('checked', true);
+            if (folderEditingCustomerIds.indexOf(cid) === -1) {
+                folderEditingCustomerIds.push(cid);
+            }
+        });
+    });
+
+    $('#tgBtnCustClearAll').on('click', function(){
+        $('.js-folder-cust-cb').each(function(){
+            var cid = Number($(this).val());
+            $(this).prop('checked', false);
+            folderEditingCustomerIds = folderEditingCustomerIds.filter(function(id){ return id !== cid; });
+        });
+    });
+
+    $('#tgFolderCustSearch').on('input', function(){
+        renderCustomerChecklist();
+    });
+
+    // Save Folder
+    $('#tgBtnSaveFolder').on('click', function(){
+        var folderId = $('#tgEditFolderId').val();
+        var name = $('#tgFolderInputName').val().trim();
+        if (!name) {
+            alert('Please enter a folder name.');
+            $('#tgFolderInputName').focus();
+            return;
+        }
+
+        var customerIds = folderEditingCustomerIds;
+        var isEdit = !!folderId;
+        var url = isEdit ? (apiFolderBaseUrl + '/' + folderId) : apiFolderBaseUrl;
+        var method = isEdit ? 'PUT' : 'POST';
+
+        var $btn = $(this).prop('disabled', true).text('Saving...');
+
+        $.ajax({
+            url: url,
+            method: method,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            data: {
+                _token: csrf,
+                name: name,
+                customer_ids: customerIds
+            },
+            success: function(resp){
+                $('#tgFolderEditModal').removeClass('open');
+                loadFolders();
+                loadChatList(true);
+            },
+            error: function(err){
+                alert('Cannot save folder. ' + (err.responseJSON && err.responseJSON.message ? err.responseJSON.message : ''));
+            },
+            complete: function(){
+                $btn.prop('disabled', false).text('Save Folder');
+            }
+        });
+    });
+
+    // Delete Folder
+    $(document).on('click', '.js-delete-folder', function(){
+        var folderId = $(this).data('folder-id');
+        if (!confirm('Are you sure you want to delete this folder? (Customers will not be deleted).')) {
+            return;
+        }
+
+        $.ajax({
+            url: apiFolderBaseUrl + '/' + folderId,
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            data: { _token: csrf },
+            success: function(){
+                if (currentFilter === String(folderId)) {
+                    currentFilter = 'all';
+                    $('#tgFilterPills .tg-pill').removeClass('active');
+                    $('#tgFilterPills .tg-pill[data-filter="all"]').addClass('active');
+                }
+                loadFolders();
+                openFoldersModal();
+                loadChatList(true);
+            }
+        });
+    });
+
+    // Edit button click in folder list
+    $(document).on('click', '.js-edit-folder', function(){
+        var folderId = $(this).data('folder-id');
+        openFolderEditModal(folderId);
+    });
+
+    // Open "Add customer to folder" modal from active chat dropdown or header
+    $('#tgMenuAddToFolder, #tgHeaderFolderBtn').on('click', function(){
+        $('#tgChatDropdown').removeClass('open');
+        if (!activeContact || !activeContact.customer_id) {
+            alert('Select a customer chat first.');
+            return;
+        }
+
+        var cid = Number(activeContact.customer_id);
+        var cname = activeContact.display_name || activeContact.customer_name || 'Customer';
+
+        openCustomerFoldersModal(cid, cname);
+    });
+
+    // Quick Folder button from chat list item
+    $(document).on('click', '.js-quick-folder-btn', function(e){
+        e.stopPropagation();
+        var cid = Number($(this).data('customer-id'));
+        var cname = $(this).data('customer-name') || 'Customer';
+        if (!cid) return;
+
+        openCustomerFoldersModal(cid, cname);
+    });
+
+    function openCustomerFoldersModal(customerId, customerName){
+        $('#tgCustomerFolderNameDisplay').text(customerName);
+        $('#tgCustomerFoldersModal').data('target-cid', customerId);
+
+        $.ajax({
+            url: '{{ url("loan-management/telegram-chat-api/customers") }}/' + customerId + '/folders',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(resp){
+                var activeFids = (resp && resp.data && Array.isArray(resp.data.folder_ids)) ? resp.data.folder_ids.map(String) : [];
+                renderCustomerFolderCheckboxes(activeFids);
+                $('#tgCustomerFoldersModal').addClass('open');
+            }
+        });
+    }
+
+    function renderCustomerFolderCheckboxes(activeFids){
+        var $box = $('#tgCustomerFolderCheckboxes').empty();
+        if (!folders.length) {
+            $box.html('<div style="text-align:center;padding:12px;color:#94a3b8">No folders available. Create a folder first.</div>');
+            return;
+        }
+
+        var html = '';
+        folders.forEach(function(f){
+            var isChecked = activeFids.indexOf(String(f.id)) >= 0;
+            html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;margin-bottom:6px;cursor:pointer">' +
+                '<input type="checkbox" class="js-cust-folder-cb" value="' + esc(f.id) + '" ' + (isChecked ? 'checked' : '') + ' style="width:17px;height:17px;accent-color:#2481cc">' +
+                '<span style="font-weight:700;font-size:13.5px;color:#0f172a;flex:1"><i class="fa fa-folder-o" style="color:#2481cc;margin-right:6px"></i>' + esc(f.name) + '</span>' +
+            '</label>';
+        });
+
+        $box.html(html);
+    }
+
+    // Save Customer Folders
+    $('#tgBtnSaveCustomerFolders').on('click', function(){
+        var cid = $('#tgCustomerFoldersModal').data('target-cid') || (activeContact ? Number(activeContact.customer_id) : null);
+        if (!cid) return;
+
+        var selectedFids = [];
+        $('.js-cust-folder-cb:checked').each(function(){
+            selectedFids.push($(this).val());
+        });
+
+        var $btn = $(this).prop('disabled', true).text('Saving...');
+
+        $.ajax({
+            url: '{{ url("loan-management/telegram-chat-api/customers") }}/' + cid + '/folders',
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            data: {
+                _token: csrf,
+                folder_ids: selectedFids
+            },
+            success: function(){
+                $('#tgCustomerFoldersModal').removeClass('open');
+                loadFolders();
+                loadChatList(true);
+            },
+            complete: function(){
+                $btn.prop('disabled', false).text('Save');
+            }
+        });
+    });
+
+    // Customer search in Folder Edit modal
+    $('#tgFolderCustSearch').on('input', function(){
+        var currentSelected = [];
+        $('.js-folder-cust-cb:checked').each(function(){
+            currentSelected.push(Number($(this).val()));
+        });
+        renderCustomerChecklist(currentSelected);
+    });
+
+    $('#tgBtnCustSelectAll').on('click', function(){
+        $('.js-folder-cust-cb').prop('checked', true);
+    });
+    $('#tgBtnCustClearAll').on('click', function(){
+        $('.js-folder-cust-cb').prop('checked', false);
+    });
+
+    // Close Modals
+    $(document).on('click', '[data-close-modal]', function(){
+        var target = $(this).data('close-modal');
+        $(target).removeClass('open');
+    });
+    $('.tg-modal-overlay').on('click', function(e){
+        if (e.target === this) $(this).removeClass('open');
+    });
+
+    $('#tgBtnManageFolders, #tgActionManageFoldersDropdown').on('click', function(){
+        $('#tgListDropdown, #tgComposeDropdown').removeClass('open');
+        openFoldersModal();
+    });
+    $('#tgBtnCreateFolderOpen, #tgBtnDirectNewFolder, #tgActionNewFolderDropdown').on('click', function(){
+        $('#tgListDropdown, #tgComposeDropdown').removeClass('open');
+        openFolderEditModal(null);
+    });
+    $('#tgHeaderFolderBtn').on('click', function(){
+        $('#tgMenuAddToFolder').trigger('click');
+    });
+
+    // -------------------------------------------------------------
     // LOAD CONTACTS / CHAT LIST
     // -------------------------------------------------------------
     function loadChatList(silent){
@@ -1521,24 +2332,35 @@
 
     function updatePillBadges(){
         $('#tgBadgeAll').text(contacts.length);
-        var invoiceCount = contacts.filter(function(c){ return !!c.invoice_no; }).length;
-        $('#tgBadgeInvoices').text(invoiceCount);
-        var installmentCount = contacts.filter(function(c){ return !!c.loan_id || !!c.installment_no; }).length;
-        $('#tgBadgeInstallments').text(installmentCount);
+        renderFolderPills();
     }
 
     function filterContacts(){
         var q = ($('#tgSearchInput').val() || '').toLowerCase().trim();
+
         return contacts.filter(function(c){
-            if (currentFilter === 'personal') {
-                if (!c.telegram_linked) return false;
-            } else if (currentFilter === 'invoices') {
-                if (!c.invoice_no) return false;
-            } else if (currentFilter === 'installments') {
-                if (!c.loan_id && !c.installment_no) return false;
-            } else if (currentFilter === 'location') {
-                var locId = $('#tgFilterPills .tg-pill.active').data('location-id');
-                if (locId && String(c.location_id) !== String(locId)) return false;
+            var cid = Number(c.customer_id);
+
+            // Folder / Tab filtering
+            if (currentFilter && currentFilter !== 'all') {
+                if (currentFilter.startsWith('loc_')) {
+                    var locId = currentFilter.replace('loc_', '');
+                    if (String(c.location_id) !== String(locId)) return false;
+                } else {
+                    var folder = folders.find(function(f){ return String(f.id) === String(currentFilter); });
+                    if (folder) {
+                        var cids = (folder.customer_ids || []).map(Number);
+                        if (folder.id === 'personal') {
+                            if (!c.telegram_linked && cids.indexOf(cid) === -1) return false;
+                        } else if (folder.id === 'invoices') {
+                            if (!c.invoice_no && cids.indexOf(cid) === -1) return false;
+                        } else if (folder.id === 'installments') {
+                            if (!c.loan_id && !c.installment_no && cids.indexOf(cid) === -1) return false;
+                        } else {
+                            if (cids.indexOf(cid) === -1) return false;
+                        }
+                    }
+                }
             }
 
             if (q) {
@@ -1554,7 +2376,7 @@
         var filtered = filterContacts();
 
         if (!filtered.length) {
-            $list.html('<div class="tg-empty-chats"><i class="fa fa-telegram"></i><div>No chats found</div></div>');
+            $list.html('<div class="tg-empty-chats"><i class="fa fa-telegram"></i><div>No chats in this folder</div></div>');
             return;
         }
 
@@ -1593,6 +2415,20 @@
                 badgeHtml = '<span class="tg-check-icon"><i class="fa fa-check"></i><i class="fa fa-check" style="margin-left:-4px"></i></span>';
             }
 
+            // Folders customer belongs to
+            var cid = Number(c.customer_id);
+            var custFolders = folders.filter(function(f){
+                return (f.customer_ids || []).map(Number).indexOf(cid) >= 0;
+            });
+            var folderTagsHtml = '';
+            if (custFolders.length > 0) {
+                custFolders.forEach(function(cf){
+                    folderTagsHtml += '<span class="tg-item-folder-tag" style="background:#e0f2fe;color:#0369a1;border-radius:4px;padding:1px 5px;font-size:10px;margin-left:4px;font-weight:600">' + esc(cf.name) + '</span>';
+                });
+            }
+
+            var quickFolderBtn = '<button type="button" class="tg-item-quick-folder js-quick-folder-btn" data-customer-id="' + cid + '" data-customer-name="' + esc(c.display_name || c.customer_name) + '" title="Assign to folder"><i class="fa fa-folder-o"></i></button>';
+
             html += '<div class="tg-chat-item ' + (isActive ? 'active' : '') + '" data-thread-id="' + (c.id || '') + '" data-customer-id="' + (c.customer_id || '') + '">' +
                 '<div class="tg-avatar-wrap">' +
                     '<div class="tg-avatar" style="background:' + color + '">' + avatarHtml + '</div>' +
@@ -1600,8 +2436,11 @@
                 '</div>' +
                 '<div class="tg-item-body">' +
                     '<div class="tg-item-row-top">' +
-                        '<div class="tg-item-name">' + esc(c.display_name || c.customer_name || 'Customer') + '</div>' +
-                        '<div class="tg-item-time">' + timeHtml + '</div>' +
+                        '<div class="tg-item-name" style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">' + esc(c.display_name || c.customer_name || 'Customer') + folderTagsHtml + '</div>' +
+                        '<div style="display:flex;align-items:center;gap:2px">' +
+                            quickFolderBtn +
+                            '<div class="tg-item-time">' + timeHtml + '</div>' +
+                        '</div>' +
                     '</div>' +
                     '<div class="tg-item-row-bottom">' +
                         '<div class="tg-item-preview">' + snippetIcon + '<span>' + esc(snippetText) + '</span></div>' +
@@ -1631,8 +2470,8 @@
 
         renderHeader(activeContact);
         $('#tgDesktopPlaceholder').hide();
-        $('#tgChatHeader').show();
-        $('#tgComposerForm').show();
+        $('#tgChatHeader').css('display', 'flex');
+        $('#tgComposerForm').css('display', 'flex');
 
         // Load messages
         if (threadId) {
@@ -1642,6 +2481,7 @@
             $.ajax({
                 url: apiBaseUrl,
                 method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
                 data: { _token: csrf, customer_id: customerId },
                 success: function(resp){
                     if (resp && resp.data && resp.data.id) {
@@ -1657,6 +2497,7 @@
     }
 
     function renderHeader(c){
+        if (!c) return;
         var name = c.display_name || c.customer_name || 'Customer';
         var phone = c.customer_phone || '';
         var color = getAvatarColor(name);
@@ -1685,6 +2526,7 @@
     }
 
     function loadThreadMessages(threadId, markAsRead){
+        if (!threadId) return;
         if (isFetchingThread) return;
         isFetchingThread = true;
 
@@ -1697,10 +2539,13 @@
                 activeContact = threadData;
                 renderHeader(threadData);
                 renderMessages(threadData.messages || []);
-
-                if (markAsRead) {
-                    $.post(apiBaseUrl + '/' + threadId + '/read', { _token: csrf });
-                }
+            },
+            error: function(xhr){
+                $('#tgChatMessages').html(
+                    '<div class="tg-date-divider"><span>Cannot load conversation' +
+                    (xhr && xhr.status ? ' (' + xhr.status + ')' : '') +
+                    '</span></div>'
+                );
             },
             complete: function(){
                 isFetchingThread = false;
@@ -1708,11 +2553,22 @@
         });
     }
 
+    function chatFileUrlFromMessage(m){
+        var file = m && m.file ? m.file : {};
+        var url = file.url || file.preview_url || m.file_url || '';
+        var fileId = file.id || file.file_id || m.file_id || '';
+
+        if (!url && fileId) {
+            url = '{{ url("loan-management/chat-files") }}/' + fileId;
+        }
+
+        return url;
+    }
+
     function renderMessages(messages){
         var $body = $('#tgChatMessages');
-        var prevScrollHeight = $body[0].scrollHeight;
 
-        if (!messages.length) {
+        if (!messages || !messages.length) {
             $body.html('<div class="tg-date-divider"><span>No messages yet</span></div>');
             return;
         }
@@ -1721,7 +2577,6 @@
         var lastDate = '';
 
         messages.forEach(function(m){
-            // Date Divider
             var msgDate = m.created_at ? m.created_at.split(' ')[0] : '';
             if (msgDate && msgDate !== lastDate) {
                 lastDate = msgDate;
@@ -1730,7 +2585,7 @@
 
             var isOwn = m.is_own || m.sender_type === 'staff' || m.sender_type === 'admin';
             var timeFormatted = formatTime(m.created_at);
-            var ticks = isOwn ? '<span class="tg-ticks"><i class="fa fa-check"></i><i class="fa fa-check" style="margin-left:-4px"></i></span>' : '';
+            var ticks = isOwn ? '<span class="tg-ticks"><i class="fa fa-check"></i><i class="fa fa-check"></i></span>' : '';
 
             var bubbleContent = '';
 
@@ -1740,13 +2595,14 @@
             }
 
             // 2. Voice Audio Message
-            if (m.message_type === 'audio' && m.file && m.file.url) {
+            if (m.message_type === 'audio') {
+                var audioUrl = chatFileUrlFromMessage(m);
                 var dur = m.audio_duration_seconds ? formatDuration(m.audio_duration_seconds) : '00:20';
-                bubbleContent += '<div class="tg-voice-card" data-audio-url="' + esc(m.file.url) + '" data-msg-id="' + m.id + '">' +
-                    '<button type="button" class="tg-voice-play-btn js-voice-play" aria-label="Play"><i class="fa fa-play"></i></button>' +
+                bubbleContent += '<div class="tg-voice-card" data-audio-url="' + esc(audioUrl) + '" data-msg-id="' + m.id + '">' +
+                    '<button type="button" class="tg-voice-play-btn js-voice-play" aria-label="Play" ' + (!audioUrl ? 'disabled title="Voice file unavailable"' : '') + '><i class="fa fa-play"></i></button>' +
                     '<div class="tg-voice-wave-wrap">' +
                         '<div class="tg-voice-waveform js-voice-waveform">' + generateWaveformBars() + '</div>' +
-                        '<div class="tg-voice-timing"><span class="js-voice-timer">' + dur + '</span></div>' +
+                        '<div class="tg-voice-timing"><span class="js-voice-timer">' + (audioUrl ? dur : 'Unavailable') + '</span></div>' +
                     '</div>' +
                 '</div>';
                 if (m.message) {
@@ -1755,24 +2611,30 @@
             }
 
             // 3. Image Message
-            if (m.message_type === 'image' && m.file && m.file.url) {
-                bubbleContent += '<div class="tg-image-wrap js-view-image" data-full-url="' + esc(m.file.url) + '">' +
-                    '<img src="' + esc(m.file.url) + '" alt="Image">' +
-                '</div>';
+            if (m.message_type === 'image') {
+                var imgUrl = chatFileUrlFromMessage(m);
+                if (imgUrl) {
+                    bubbleContent += '<div class="tg-image-wrap js-view-image" data-full-url="' + esc(imgUrl) + '">' +
+                        '<img src="' + esc(imgUrl) + '" alt="Image">' +
+                    '</div>';
+                }
                 if (m.message) {
                     bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
                 }
             }
 
             // 4. Document / File Message
-            if (m.message_type === 'file' && m.file && m.file.url) {
-                bubbleContent += '<a href="' + esc(m.file.url) + '" target="_blank" download class="tg-file-card">' +
-                    '<div class="tg-file-icon"><i class="fa fa-file-text"></i></div>' +
-                    '<div class="tg-file-details">' +
-                        '<div class="tg-file-name">' + esc(m.file.name || 'Invoice / Document') + '</div>' +
-                        '<div class="tg-file-size">Download file</div>' +
-                    '</div>' +
-                '</a>';
+            if (m.message_type === 'file') {
+                var docUrl = chatFileUrlFromMessage(m);
+                if (docUrl) {
+                    bubbleContent += '<a href="' + esc(docUrl) + '" target="_blank" download class="tg-file-card">' +
+                        '<div class="tg-file-icon"><i class="fa fa-file-text"></i></div>' +
+                        '<div class="tg-file-details">' +
+                            '<div class="tg-file-name">' + esc(m.file && m.file.name ? m.file.name : 'Invoice / Document') + '</div>' +
+                            '<div class="tg-file-size">Download file</div>' +
+                        '</div>' +
+                    '</a>';
+                }
                 if (m.message) {
                     bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
                 }
@@ -1799,19 +2661,28 @@
                 '</div>';
             }
 
+            // Reaction badge support
+            var reactionHtml = '';
+            if (m.reaction) {
+                var reactionAvatar = isOwn ? (activeContact && activeContact.avatar_url ? '<span class="tg-reaction-avatar"><img src="' + esc(activeContact.avatar_url) + '" alt=""></span>' : '') : '';
+                reactionHtml = '<div class="tg-reaction-badge">' +
+                    '<span class="tg-reaction-emoji">' + esc(m.reaction) + '</span>' +
+                    reactionAvatar +
+                '</div>';
+            }
+
             html += '<div class="tg-msg-row ' + (isOwn ? 'own' : '') + '">' +
                 '<div class="tg-bubble">' +
                     (!isOwn && m.sender_name ? '<div class="tg-msg-sender">' + esc(m.sender_name) + '</div>' : '') +
                     quoteHtml +
                     bubbleContent +
                     '<div class="tg-msg-meta"><span>' + timeFormatted + '</span> ' + ticks + '</div>' +
+                    reactionHtml +
                 '</div>' +
             '</div>';
         });
 
         $body.html(html);
-
-        // Scroll to bottom if user was near bottom or on initial load
         $body.scrollTop($body[0].scrollHeight);
     }
 
@@ -1825,24 +2696,32 @@
     // -------------------------------------------------------------
     // AUDIO VOICE PLAYBACK
     // -------------------------------------------------------------
-    $(document).on('click', '.js-voice-play', function(){
+    $(document).on('click', '.js-voice-play, .js-voice-waveform', function(){
         var $card = $(this).closest('.tg-voice-card');
+        var $btn = $card.find('.js-voice-play').first();
         var audioUrl = $card.data('audio-url');
         var msgId = $card.data('msg-id');
+
+        if (!audioUrl || $btn.prop('disabled')) {
+            $card.find('.js-voice-timer').text('Unavailable');
+            return;
+        }
 
         if (currentAudio && currentAudioMsgId === msgId) {
             if (!currentAudio.paused) {
                 currentAudio.pause();
-                $(this).html('<i class="fa fa-play"></i>');
+                $btn.html('<i class="fa fa-play"></i>');
                 return;
             } else {
-                currentAudio.play();
-                $(this).html('<i class="fa fa-pause"></i>');
+                var resumePlayback = currentAudio.play();
+                if (resumePlayback && resumePlayback.catch) {
+                    resumePlayback.catch(function(){ $card.find('.js-voice-timer').text('Cannot play'); });
+                }
+                $btn.html('<i class="fa fa-pause"></i>');
                 return;
             }
         }
 
-        // Stop any currently playing audio
         if (currentAudio) {
             currentAudio.pause();
             $('.js-voice-play').html('<i class="fa fa-play"></i>');
@@ -1850,15 +2729,31 @@
         }
 
         var audio = new Audio(audioUrl);
-        var $btn = $(this);
         var $bars = $card.find('.tg-voice-bar');
         var $timer = $card.find('.js-voice-timer');
 
+        audio.preload = 'metadata';
         currentAudio = audio;
         currentAudioMsgId = msgId;
 
         $btn.html('<i class="fa fa-pause"></i>');
-        audio.play();
+        var playback = audio.play();
+        if (playback && playback.catch) {
+            playback.catch(function(){
+                $btn.html('<i class="fa fa-play"></i>');
+                $timer.text('Cannot play');
+                currentAudio = null;
+                currentAudioMsgId = null;
+            });
+        }
+
+        audio.onerror = function(){
+            $btn.html('<i class="fa fa-play"></i>');
+            $bars.removeClass('played');
+            $timer.text('Cannot play');
+            currentAudio = null;
+            currentAudioMsgId = null;
+        };
 
         audio.ontimeupdate = function(){
             if (!audio.duration) return;
@@ -1880,60 +2775,128 @@
     });
 
     // -------------------------------------------------------------
-    // SEND TEXT MESSAGE
+    // SEND TEXT MESSAGE (Super Fast & Optimistic UI)
     // -------------------------------------------------------------
-    $('#tgComposerForm').on('submit', function(e){
-        e.preventDefault();
-        if (!activeThreadId) return;
-
-        // If recording voice, stop & send voice
+    function sendTextMessage(){
         if (isRecording) {
             finishVoiceRecording();
             return;
         }
 
-        var text = $('#tgMessageInput').val().trim();
+        var $input = $('#tgMessageInput');
+        var text = $input.val().trim();
         if (!text) return;
 
-        $('#tgMessageInput').val('');
+        // Clear input immediately and keep focus for seamless rapid texting
+        $input.val('').focus();
         toggleSendActionIcon();
 
-        $.ajax({
-            url: apiBaseUrl + '/' + activeThreadId + '/messages',
-            method: 'POST',
-            data: {
-                _token: csrf,
-                message_type: 'text',
-                message: text
-            },
-            success: function(){
-                loadThreadMessages(activeThreadId, false);
-                loadChatList(true);
-            }
-        });
+        // 1. Instant Optimistic Render
+        var tempId = 'opt_' + Date.now();
+        var now = new Date();
+        var hh = String(now.getHours()).padStart(2, '0');
+        var mm = String(now.getMinutes()).padStart(2, '0');
+        var timeStr = hh + ':' + mm;
+
+        var optHtml = '<div class="tg-msg-row own" id="' + tempId + '">' +
+            '<div class="tg-bubble">' +
+                '<div class="tg-msg-text">' + esc(text) + '</div>' +
+                '<div class="tg-msg-meta"><span>' + timeStr + '</span> <span class="tg-ticks js-opt-status"><i class="fa fa-clock-o" style="color:#8c9398"></i></span></div>' +
+            '</div>' +
+        '</div>';
+
+        var $body = $('#tgChatMessages');
+        $body.append(optHtml);
+        $body.stop().animate({ scrollTop: $body[0].scrollHeight }, 150);
+
+        // 2. Ensure Thread Exists & Send via API
+        var sendAction = function(threadId){
+            $.ajax({
+                url: apiBaseUrl + '/' + threadId + '/messages',
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+                data: {
+                    _token: csrf,
+                    message_type: 'text',
+                    message: text
+                },
+                success: function(resp){
+                    $('#' + tempId).find('.js-opt-status').html('<i class="fa fa-check"></i><i class="fa fa-check" style="margin-left:-4px"></i>');
+                    loadChatList(true);
+                },
+                error: function(){
+                    $('#' + tempId).find('.js-opt-status').html('<i class="fa fa-exclamation-circle" style="color:#ef4444" title="Failed to send. Click to retry."></i>');
+                }
+            });
+        };
+
+        if (activeThreadId) {
+            sendAction(activeThreadId);
+        } else if (activeContact && activeContact.customer_id) {
+            $.ajax({
+                url: apiBaseUrl,
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+                data: { _token: csrf, customer_id: activeContact.customer_id },
+                success: function(resp){
+                    if (resp && resp.data && resp.data.id) {
+                        activeThreadId = resp.data.id;
+                        activeContact = resp.data;
+                        renderHeader(activeContact);
+                        sendAction(activeThreadId);
+                    }
+                }
+            });
+        }
+    }
+
+    $('#tgComposerForm').on('submit', function(e){
+        e.preventDefault();
+        sendTextMessage();
     });
 
-    // Dynamic Send Button Icon (Microphone vs Send Arrow)
+    // Enter key sends message immediately
+    $('#tgMessageInput').on('keydown', function(e){
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            if (!e.shiftKey) {
+                e.preventDefault();
+                sendTextMessage();
+            }
+        }
+    });
+
+    // Mobile viewport & keyboard scroll
+    $('#tgMessageInput').on('focus', function(){
+        setTimeout(function(){
+            var $body = $('#tgChatMessages');
+            if ($body.length) $body.scrollTop($body[0].scrollHeight);
+        }, 250);
+    });
+
     function toggleSendActionIcon(){
         var hasText = $('#tgMessageInput').val().trim().length > 0;
         if (hasText) {
             $('#tgActionSendIcon').removeClass('fa-microphone').addClass('fa-paper-plane');
-            $('#tgActionSendBtn').attr('title', 'Send Message');
+            $('#tgActionSendBtn').attr('title', 'Send Message').addClass('is-send-ready');
         } else {
             $('#tgActionSendIcon').removeClass('fa-paper-plane').addClass('fa-microphone');
-            $('#tgActionSendBtn').attr('title', 'Record Voice');
+            $('#tgActionSendBtn').attr('title', 'Record Voice').removeClass('is-send-ready');
         }
     }
-    $('#tgMessageInput').on('input', toggleSendActionIcon);
+    $('#tgMessageInput').on('input propertychange', toggleSendActionIcon);
 
     // -------------------------------------------------------------
     // VOICE RECORDING (MediaRecorder)
     // -------------------------------------------------------------
     $('#tgActionSendBtn').on('click', function(e){
+        e.preventDefault();
         var hasText = $('#tgMessageInput').val().trim().length > 0;
-        if (!hasText && !isRecording) {
-            e.preventDefault();
+        if (hasText) {
+            sendTextMessage();
+        } else if (!isRecording) {
             startVoiceRecording();
+        } else {
+            finishVoiceRecording();
         }
     });
 
@@ -2186,17 +3149,25 @@
     // -------------------------------------------------------------
     // NAVIGATION (LIST <-> CHAT VIEW)
     // -------------------------------------------------------------
-    $('#tgChatList').on('click', '.tg-chat-item', function(){
+    $('#tgChatList').on('click', '.tg-chat-item', function(e){
+        if ($(e.target).closest('.js-quick-folder-btn').length) return;
         var threadId = $(this).data('thread-id');
         var customerId = $(this).data('customer-id');
         $('.tg-chat-item').removeClass('active');
         $(this).addClass('active');
-        openConversation(threadId, customerId);
+        openConversation(threadId || null, customerId || null);
     });
 
     $('#tgBackToListBtn').on('click', function(){
+        isFetchingThread = false;
+        activeThreadId = null;
+        activeContact = null;
         $('#tgAppWrapper').removeClass('in-conversation');
         $('body').removeClass('tg-viewing-chat');
+        $('#tgChatHeader').hide();
+        $('#tgComposerForm').hide();
+        $('#tgDesktopPlaceholder').show();
+        $('.tg-chat-item').removeClass('active');
         loadChatList(true);
     });
 
@@ -2210,10 +3181,12 @@
         $('#tgSearchInput').val('').trigger('input');
     });
 
-    $('#tgFilterPills').on('click', '.tg-pill', function(){
-        $('#tgFilterPills .tg-pill').removeClass('active');
+    $('#tgFilterPills').on('click', '.tg-pill[data-filter]', function(){
+        var filterVal = $(this).attr('data-filter');
+        if (!filterVal) return;
+        $('#tgFilterPills .tg-pill[data-filter]').removeClass('active');
         $(this).addClass('active');
-        currentFilter = $(this).data('filter');
+        currentFilter = String(filterVal);
         renderChatList();
     });
 
@@ -2252,6 +3225,7 @@
     // -------------------------------------------------------------
     // INITIALIZATION & REAL-TIME POLLING
     // -------------------------------------------------------------
+    loadFolders();
     loadChatList(false);
 
     if (initialThreadId) {

@@ -770,10 +770,15 @@ class LoanChatService
         $file = null;
 
         if (! empty($message->file_id)) {
+            $fileUrl = (string) ($message->file_url ?? '');
+            if ($fileUrl === '') {
+                $fileUrl = url('loan-management/chat-files/'.(int) $message->file_id);
+            }
+
             $file = [
                 'id' => (int) $message->file_id,
                 'file_id' => (int) $message->file_id,
-                'url' => (string) ($message->file_url ?? ''),
+                'url' => $fileUrl,
                 'name' => (string) ($message->file_name ?? ''),
                 'mime' => (string) ($message->file_mime ?? ''),
                 'size' => (int) ($message->file_size ?? 0),
