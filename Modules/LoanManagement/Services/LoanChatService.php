@@ -196,12 +196,54 @@ class LoanChatService
         });
     }
 
-    public function showThread(LoanChatThread|int $thread, bool $withMessages = true): LoanChatThread
+    public function showThread(LoanChatThread|int $thread, bool $withMessages = true, array $messageOptions = []): LoanChatThread
     {
         $row = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
         $row->load(['participants', 'customer', 'loan']);
         if ($withMessages) {
-            $row->setRelation('messages', $row->messages()->orderBy('created_at')->orderBy('id')->get());
+            if (empty($messageOptions)) {
+                $row->setRelation('messages', $row->messages()->orderBy('created_at')->orderBy('id')->get());
+                return $row;
+            }
+
+            $limit = max(1, min(100, (int) ($messageOptions['limit'] ?? 25)));
+            $beforeId = max(0, (int) ($messageOptions['before_id'] ?? 0));
+            $afterId = max(0, (int) ($messageOptions['after_id'] ?? 0));
+            $countTotal = (bool) ($messageOptions['count_total'] ?? true);
+            $query = $row->messages();
+
+            if ($beforeId > 0) {
+                $messages = $query->where('id', '<', $beforeId)
+                    ->orderByDesc('id')
+                    ->limit($limit + 1)
+                    ->get();
+                $hasMoreOlder = $messages->count() > $limit;
+                $messages = $messages->take($limit)->sortBy('id')->values();
+            } elseif ($afterId > 0) {
+                $messages = $query->where('id', '>', $afterId)
+                    ->orderBy('id')
+                    ->limit($limit)
+                    ->get()
+                    ->values();
+                $hasMoreOlder = false;
+            } else {
+                $messages = $query->orderByDesc('id')
+                    ->limit($limit + 1)
+                    ->get();
+                $hasMoreOlder = $messages->count() > $limit;
+                $messages = $messages->take($limit)->sortBy('id')->values();
+            }
+
+            $row->setRelation('messages', $messages);
+            if ($countTotal) {
+                $row->setAttribute('messages_total_count', (int) $row->messages()->count());
+            }
+            $row->setAttribute('message_pagination', [
+                'limit' => $limit,
+                'has_more_older' => $hasMoreOlder,
+                'oldest_message_id' => $messages->first()?->id ? (int) $messages->first()->id : null,
+                'newest_message_id' => $messages->last()?->id ? (int) $messages->last()->id : null,
+            ]);
         }
         return $row;
     }

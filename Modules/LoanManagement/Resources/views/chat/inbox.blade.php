@@ -693,6 +693,24 @@
         border-radius: 14px;
         backdrop-filter: blur(4px);
     }
+    .tg-load-more-wrap {
+        text-align: center;
+        margin: 10px 0 14px;
+    }
+    .tg-load-more-btn {
+        border: 1px solid #c7d8ea;
+        background: #fff;
+        color: var(--tg-primary);
+        border-radius: 18px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .tg-load-more-btn:disabled {
+        opacity: .6;
+        cursor: default;
+    }
 
     /* Message Bubbles */
     .tg-msg-row {
@@ -2001,6 +2019,12 @@
     var chatListUnreadCounts = {};
     var threadMessageSeenInitialized = false;
     var threadMessageSeen = {};
+    var messagePageSize = 25;
+    var threadMessages = [];
+    var hasMoreOlderMessages = false;
+    var loadingOlderMessages = false;
+    var autoLoadOlderThreshold = 120;
+    var autoLoadOlderTimer = null;
 
     // Audio Voice Player State
     var currentAudio = null;
@@ -2144,6 +2168,47 @@
         });
 
         return shouldPlay;
+    }
+
+    function sortMessagesById(messages){
+        return (messages || []).sort(function(a, b){
+            return Number(a.id || 0) - Number(b.id || 0);
+        });
+    }
+
+    function mergeThreadMessages(existing, incoming){
+        var byId = {};
+        (existing || []).concat(incoming || []).forEach(function(m){
+            if (!m) return;
+            byId[String(m.id || messageSoundKey(m))] = m;
+        });
+
+        return sortMessagesById(Object.keys(byId).map(function(key){ return byId[key]; }));
+    }
+
+    function oldestLoadedMessageId(){
+        return threadMessages.length ? Number(threadMessages[0].id || 0) : 0;
+    }
+
+    function newestLoadedMessageId(){
+        return threadMessages.length ? Number(threadMessages[threadMessages.length - 1].id || 0) : 0;
+    }
+
+    function loadOlderMessages(){
+        var oldestId = oldestLoadedMessageId();
+        if (activeThreadId && oldestId && hasMoreOlderMessages && !loadingOlderMessages && !isFetchingThread) {
+            loadThreadMessages(activeThreadId, false, {beforeId: oldestId});
+        }
+    }
+
+    function scheduleAutoLoadOlderMessages(){
+        if (autoLoadOlderTimer) return;
+        autoLoadOlderTimer = window.setTimeout(function(){
+            autoLoadOlderTimer = null;
+            if ($('#tgChatMessages').scrollTop() <= autoLoadOlderThreshold) {
+                loadOlderMessages();
+            }
+        }, 120);
     }
 
     function formatTime(dateStr){
@@ -2733,6 +2798,8 @@
         activeThreadId = threadId;
         threadMessageSeenInitialized = false;
         threadMessageSeen = {};
+        threadMessages = [];
+        hasMoreOlderMessages = false;
 
         // Find contact profile
         activeContact = contacts.find(function(c){
@@ -2807,23 +2874,58 @@
         }
     }
 
-    function loadThreadMessages(threadId, markAsRead){
+    function loadThreadMessages(threadId, markAsRead, options){
         if (!threadId) return;
+        options = options || {};
         if (isFetchingThread) return;
+        if (options.beforeId && loadingOlderMessages) return;
+        if (options.beforeId) loadingOlderMessages = true;
         isFetchingThread = true;
+        var $body = $('#tgChatMessages');
+        var previousScrollHeight = $body[0] ? $body[0].scrollHeight : 0;
+        var previousScrollTop = $body.scrollTop();
+        var params = ['message_limit=' + encodeURIComponent(messagePageSize)];
+        if (options.beforeId) {
+            params.push('before_message_id=' + encodeURIComponent(options.beforeId));
+        } else if (options.afterId) {
+            params.push('after_message_id=' + encodeURIComponent(options.afterId));
+        }
 
         $.ajax({
-            url: apiBaseUrl + '/' + threadId,
+            url: apiBaseUrl + '/' + threadId + '?' + params.join('&'),
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
                 var threadData = resp && resp.data ? resp.data : null;
                 if (!threadData) return;
                 activeContact = threadData;
                 renderHeader(threadData);
-                if (shouldPlayForNewIncomingMessages(threadData.messages || [])) {
+                var incomingMessages = threadData.messages || [];
+                var pagination = threadData.message_pagination || {};
+
+                if (options.beforeId) {
+                    threadMessages = mergeThreadMessages(incomingMessages, threadMessages);
+                    hasMoreOlderMessages = !!pagination.has_more_older;
+                    renderMessages(threadMessages, {preserveScroll: true, previousScrollHeight: previousScrollHeight, previousScrollTop: previousScrollTop});
+                    return;
+                }
+
+                if (options.afterId) {
+                    if (incomingMessages.length) {
+                        if (shouldPlayForNewIncomingMessages(incomingMessages)) {
+                            playChatNotificationSound();
+                        }
+                        threadMessages = mergeThreadMessages(threadMessages, incomingMessages);
+                        renderMessages(threadMessages);
+                    }
+                    return;
+                }
+
+                threadMessages = sortMessagesById(incomingMessages);
+                hasMoreOlderMessages = !!pagination.has_more_older;
+                if (shouldPlayForNewIncomingMessages(threadMessages)) {
                     playChatNotificationSound();
                 }
-                renderMessages(threadData.messages || []);
+                renderMessages(threadMessages);
             },
             error: function(xhr){
                 $('#tgChatMessages').html(
@@ -2834,6 +2936,7 @@
             },
             complete: function(){
                 isFetchingThread = false;
+                loadingOlderMessages = false;
             }
         });
     }
@@ -2850,7 +2953,8 @@
         return url;
     }
 
-    function renderMessages(messages){
+    function renderMessages(messages, options){
+        options = options || {};
         var $body = $('#tgChatMessages');
 
         if (!messages || !messages.length) {
@@ -2860,6 +2964,10 @@
 
         var html = '';
         var lastDate = '';
+
+        if (hasMoreOlderMessages) {
+            html += '<div class="tg-load-more-wrap"><button type="button" class="tg-load-more-btn" id="tgLoadOlderMessages" ' + (loadingOlderMessages ? 'disabled' : '') + '>' + (loadingOlderMessages ? 'Loading...' : 'Load more') + '</button></div>';
+        }
 
         messages.forEach(function(m){
             var msgDate = m.created_at ? m.created_at.split(' ')[0] : '';
@@ -2968,8 +3076,22 @@
         });
 
         $body.html(html);
-        $body.scrollTop($body[0].scrollHeight);
+        if (options.preserveScroll) {
+            $body.scrollTop(($body[0].scrollHeight - (options.previousScrollHeight || 0)) + (options.previousScrollTop || 0));
+        } else if (!options.keepPosition) {
+            $body.scrollTop($body[0].scrollHeight);
+        }
     }
+
+    $(document).on('click', '#tgLoadOlderMessages', function(){
+        loadOlderMessages();
+    });
+
+    $('#tgChatMessages').on('scroll', function(){
+        if (hasMoreOlderMessages && !loadingOlderMessages && !isFetchingThread && $(this).scrollTop() <= autoLoadOlderThreshold) {
+            scheduleAutoLoadOlderMessages();
+        }
+    });
 
     function generateWaveformBars(){
         var heights = [6, 12, 18, 10, 16, 22, 14, 8, 18, 24, 12, 20, 16, 10, 22, 18, 14, 8, 16, 20, 12, 16, 22, 14, 8, 12];
@@ -3524,7 +3646,7 @@
     // Polling
     pollTimer = setInterval(function(){
         if (activeThreadId) {
-            loadThreadMessages(activeThreadId, false);
+            loadThreadMessages(activeThreadId, false, {afterId: newestLoadedMessageId()});
         }
         loadChatList(true);
     }, pollMs);

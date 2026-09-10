@@ -182,10 +182,12 @@ class LoanTelegramChatController extends Controller
 
         $thread = $this->chatService->findOrCreateThread((int) $data['customer_id']);
 
-        return $this->ok('Thread loaded', $this->chatService->formatThread($thread));
+        return $this->ok('Thread loaded', $this->chatService->formatThread($thread, null, null, [
+            'include_messages' => false,
+        ]));
     }
 
-    public function show(int $thread)
+    public function show(Request $request, int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
         $row = LoanTelegramChatThread::query()->find($thread);
@@ -193,9 +195,18 @@ class LoanTelegramChatController extends Controller
             return $this->fail('Thread not found', 404, (object) []);
         }
 
-        $this->chatService->markRead($row, 'staff');
+        $beforeId = (int) $request->input('before_message_id', 0);
+        $afterId = (int) $request->input('after_message_id', 0);
+        if ($beforeId <= 0) {
+            $this->chatService->markRead($row, 'staff');
+        }
 
-        return $this->ok('Thread loaded', $this->chatService->formatThread($row));
+        return $this->ok('Thread loaded', $this->chatService->formatThread($row, null, null, [
+            'limit' => (int) $request->input('message_limit', 25),
+            'before_id' => $beforeId,
+            'after_id' => $afterId,
+            'count_total' => $afterId <= 0,
+        ]));
     }
 
     public function sendMessage(Request $request, int $thread)

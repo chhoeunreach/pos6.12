@@ -105,6 +105,13 @@ class TelegramChatService
 
     public function markRead(LoanTelegramChatThread $thread, string $viewerType): void
     {
+        if ($viewerType === 'customer' && (int) ($thread->unread_customer_count ?? 0) <= 0) {
+            return;
+        }
+        if ($viewerType !== 'customer' && (int) ($thread->unread_staff_count ?? 0) <= 0) {
+            return;
+        }
+
         $now = now();
         $query = LoanTelegramChatMessage::query()->where('thread_id', $thread->id)->where('is_read', false);
 
@@ -275,13 +282,15 @@ class TelegramChatService
     public function formatThread(
         LoanTelegramChatThread $thread,
         ?string $viewerType = null,
-        ?int $viewerId = null
+        ?int $viewerId = null,
+        array $messageOptions = []
     ): array
     {
-        $thread->loadMissing(['customer', 'messages' => fn ($query) => $query->orderBy('created_at')->orderBy('id')]);
+        $thread->loadMissing(['customer']);
         $customer = $thread->customer;
         $profile = $this->customerProfile($customer);
-        $messages = $thread->messages;
+        $messagePage = $this->threadMessagePage($thread, $messageOptions);
+        $messages = $messagePage['messages'];
         $isCustomerViewer = $viewerType === 'customer';
         $avatarUrl = $profile['avatar_url'];
 
@@ -312,12 +321,76 @@ class TelegramChatService
             'unread_count' => $isCustomerViewer
                 ? (int) ($thread->unread_customer_count ?? 0)
                 : (int) ($thread->unread_staff_count ?? 0),
-            'message_count' => $messages->count(),
-            'can_delete' => $messages->isEmpty(),
+            'message_count' => $messagePage['total'],
+            'can_delete' => $messagePage['total'] !== null ? $messagePage['total'] === 0 : false,
+            'message_pagination' => [
+                'limit' => $messagePage['limit'],
+                'has_more_older' => $messagePage['has_more_older'],
+                'oldest_message_id' => $messages->first()?->id ? (int) $messages->first()->id : null,
+                'newest_message_id' => $messages->last()?->id ? (int) $messages->last()->id : null,
+            ],
             'messages' => $messages
                 ->map(fn ($m) => $this->formatMessage($m, $viewerType, $viewerId))
                 ->values()
                 ->all(),
+        ];
+    }
+
+    protected function threadMessagePage(LoanTelegramChatThread $thread, array $options = []): array
+    {
+        if (($options['include_messages'] ?? true) === false) {
+            return [
+                'messages' => collect(),
+                'limit' => 0,
+                'has_more_older' => false,
+                'total' => (int) $thread->messages()->count(),
+            ];
+        }
+
+        if (empty($options)) {
+            $messages = $thread->messages()->orderBy('created_at')->orderBy('id')->get()->values();
+
+            return [
+                'messages' => $messages,
+                'limit' => $messages->count(),
+                'has_more_older' => false,
+                'total' => $messages->count(),
+            ];
+        }
+
+        $limit = max(1, min(100, (int) ($options['limit'] ?? 25)));
+        $beforeId = max(0, (int) ($options['before_id'] ?? 0));
+        $afterId = max(0, (int) ($options['after_id'] ?? 0));
+        $countTotal = (bool) ($options['count_total'] ?? true);
+        $query = $thread->messages();
+
+        if ($beforeId > 0) {
+            $rows = $query->where('id', '<', $beforeId)
+                ->orderByDesc('id')
+                ->limit($limit + 1)
+                ->get();
+            $hasMoreOlder = $rows->count() > $limit;
+            $messages = $rows->take($limit)->sortBy('id')->values();
+        } elseif ($afterId > 0) {
+            $messages = $query->where('id', '>', $afterId)
+                ->orderBy('id')
+                ->limit($limit)
+                ->get()
+                ->values();
+            $hasMoreOlder = false;
+        } else {
+            $rows = $query->orderByDesc('id')
+                ->limit($limit + 1)
+                ->get();
+            $hasMoreOlder = $rows->count() > $limit;
+            $messages = $rows->take($limit)->sortBy('id')->values();
+        }
+
+        return [
+            'messages' => $messages,
+            'limit' => $limit,
+            'has_more_older' => $hasMoreOlder,
+            'total' => $countTotal ? (int) $thread->messages()->count() : null,
         ];
     }
 

@@ -135,10 +135,19 @@ class LoanChatController extends Controller
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
-        $row = $this->chatService->showThread($row, true);
+        $beforeId = (int) $request->input('before_message_id', 0);
+        $afterId = (int) $request->input('after_message_id', 0);
+        $row = $this->chatService->showThread($row, true, [
+            'limit' => (int) $request->input('message_limit', 25),
+            'before_id' => $beforeId,
+            'after_id' => $afterId,
+            'count_total' => $afterId <= 0,
+        ]);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
-        $this->chatService->markSeen($row, 'staff');
+        if ($beforeId <= 0) {
+            $this->chatService->markSeen($row, 'staff');
+        }
         foreach ($row->messages as $message) {
             if ($message->sender_type === 'customer') {
                 $this->chatService->markDelivered($message);

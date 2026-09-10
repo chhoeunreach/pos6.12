@@ -8,9 +8,11 @@ class ChatThreadResource extends JsonResource
 {
     public function toArray($request): array
     {
-        $messageCount = $this->relationLoaded('messages')
-            ? $this->messages->count()
-            : (int) ($this->messages_count ?? 0);
+        $messageCount = isset($this->messages_total_count)
+            ? (int) $this->messages_total_count
+            : ($this->relationLoaded('messages')
+                ? $this->messages->count()
+                : (int) ($this->messages_count ?? 0));
         if ($messageCount === 0 && ! $this->relationLoaded('messages') && ! isset($this->messages_count)) {
             $messageCount = (int) $this->messages()->count();
         }
@@ -22,6 +24,9 @@ class ChatThreadResource extends JsonResource
             $data['can_delete'] = $messageCount === 0;
             if ($this->relationLoaded('messages')) {
                 $data['messages'] = ChatMessageResource::collection($this->messages)->resolve($request);
+            }
+            if (isset($this->message_pagination)) {
+                $data['message_pagination'] = (array) $this->message_pagination;
             }
 
             return $data;
@@ -67,6 +72,7 @@ class ChatThreadResource extends JsonResource
             'created_by_id' => (int) ($this->created_by_id ?? 0),
             'message_count' => $messageCount,
             'can_delete' => $messageCount === 0,
+            'message_pagination' => isset($this->message_pagination) ? (array) $this->message_pagination : null,
             'participants' => $participants,
             'messages' => $this->relationLoaded('messages') ? ChatMessageResource::collection($this->messages)->resolve() : [],
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
