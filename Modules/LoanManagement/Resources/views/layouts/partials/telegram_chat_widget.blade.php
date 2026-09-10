@@ -300,6 +300,13 @@
     var pendingVoiceDuration = 0;
     var discardVoiceOnStop = false;
     var sendingInvoiceImage = false;
+    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationAudio = null;
+    var notificationAudioUnlocked = false;
+    var contactUnreadInitialized = false;
+    var contactUnreadCounts = {};
+    var threadMessageSeenInitialized = false;
+    var threadMessageSeen = {};
 
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function pad2(v){ return String(v).padStart(2, '0'); }
@@ -382,6 +389,108 @@
     }
     function singleData(resp){ return resp && resp.data ? resp.data : null; }
     function listData(resp){ return resp && Array.isArray(resp.data) ? resp.data : []; }
+
+    function ensureNotificationAudio(){
+        if (!notificationAudio) {
+            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio.preload = 'auto';
+        }
+        return notificationAudio;
+    }
+
+    function unlockNotificationAudio(){
+        if (notificationAudioUnlocked) return;
+        var audio = ensureNotificationAudio();
+        audio.muted = true;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.then) {
+            playPromise.then(function(){
+                audio.pause();
+                audio.currentTime = 0;
+                audio.muted = false;
+                notificationAudioUnlocked = true;
+            }).catch(function(){
+                audio.muted = false;
+            });
+        } else {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+            notificationAudioUnlocked = true;
+        }
+    }
+
+    function playChatNotificationSound(){
+        var audio = ensureNotificationAudio();
+        audio.muted = false;
+        audio.currentTime = 0;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.catch) {
+            playPromise.catch(function(){});
+        }
+    }
+
+    function contactSoundKey(contact){
+        return String((contact && (contact.id || contact.thread_id || contact.customer_id)) || '');
+    }
+
+    function shouldPlayForUnreadIncrease(rows){
+        if (!contactUnreadInitialized) {
+            (rows || []).forEach(function(c){
+                var key = contactSoundKey(c);
+                if (key) contactUnreadCounts[key] = Number(c.unread_count || 0);
+            });
+            contactUnreadInitialized = true;
+            return false;
+        }
+
+        var shouldPlay = false;
+        (rows || []).forEach(function(c){
+            var key = contactSoundKey(c);
+            if (!key) return;
+            var current = Number(c.unread_count || 0);
+            var previous = Number(contactUnreadCounts[key] || 0);
+            if (current > previous) {
+                shouldPlay = true;
+            }
+            contactUnreadCounts[key] = current;
+        });
+
+        return shouldPlay;
+    }
+
+    function isIncomingMessage(message){
+        return !(message && message.is_own);
+    }
+
+    function messageSoundKey(message){
+        if (!message) return '';
+        return String(message.id || [message.sender_type, message.sender_id, message.created_at, message.message_type, message.message].join('|'));
+    }
+
+    function shouldPlayForNewIncomingMessages(messages){
+        if (!threadMessageSeenInitialized) {
+            threadMessageSeen = {};
+            (messages || []).forEach(function(m){
+                var key = messageSoundKey(m);
+                if (key) threadMessageSeen[key] = true;
+            });
+            threadMessageSeenInitialized = true;
+            return false;
+        }
+
+        var shouldPlay = false;
+        (messages || []).forEach(function(m){
+            var key = messageSoundKey(m);
+            if (!key) return;
+            if (!threadMessageSeen[key] && isIncomingMessage(m)) {
+                shouldPlay = true;
+            }
+            threadMessageSeen[key] = true;
+        });
+
+        return shouldPlay;
+    }
 
     function profileName(profile, fallback){
         return (profile && (profile.display_name || profile.customer_name || profile.name)) || fallback || 'Customer';
@@ -579,7 +688,11 @@
             'telegram_status=' + encodeURIComponent($('#lmTgLinkedFilter').val() || '')
         ];
         return apiGet(chatBaseUrl + '?' + params.join('&')).then(function(resp){
-            renderContacts(listData(resp));
+            var rows = listData(resp);
+            if (shouldPlayForUnreadIncrease(rows)) {
+                playChatNotificationSound();
+            }
+            renderContacts(rows);
         }).catch(function(){});
     }
 
@@ -593,7 +706,11 @@
                 setHeader(thread.customer_profile || thread, !!thread.telegram_linked);
                 activeCustomerName = profileName(thread.customer_profile || thread, activeCustomerName);
             }
-            renderMessages(thread ? thread.messages : []);
+            var messages = thread ? (thread.messages || []) : [];
+            if (shouldPlayForNewIncomingMessages(messages)) {
+                playChatNotificationSound();
+            }
+            renderMessages(messages);
             apiPostJson(chatBaseUrl + '/' + activeThreadId + '/read', {});
         }).catch(function(){}).finally(function(){ loadingThread = false; });
     }
@@ -619,6 +736,8 @@
         }
         activeCustomerName = profileName(initialProfile, name);
         activeCustomerId = customerId;
+        threadMessageSeenInitialized = false;
+        threadMessageSeen = {};
         $('.lm-tg-contact').removeClass('active');
         $('.lm-tg-contact[data-customer-id="'+customerId+'"]').addClass('active');
         $('#lmTgComposerForm').show();
@@ -681,6 +800,7 @@
         stopPolling();
     }
 
+    $(document).one('pointerdown keydown', unlockNotificationAudio);
     $('#lmTgFab').on('click', openDrawer);
     $('#lmTgDrawerCloseX, #lmTgDrawerOverlay').on('click', closeDrawer);
 

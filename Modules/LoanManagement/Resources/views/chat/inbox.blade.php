@@ -1994,6 +1994,13 @@
     var pollTimer = null;
     var isFetchingList = false;
     var isFetchingThread = false;
+    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationAudio = null;
+    var notificationAudioUnlocked = false;
+    var chatListUnreadInitialized = false;
+    var chatListUnreadCounts = {};
+    var threadMessageSeenInitialized = false;
+    var threadMessageSeen = {};
 
     // Audio Voice Player State
     var currentAudio = null;
@@ -2031,6 +2038,112 @@
 
     function esc(s){
         return $('<div>').text(s == null ? '' : String(s)).html();
+    }
+
+    function ensureNotificationAudio(){
+        if (!notificationAudio) {
+            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio.preload = 'auto';
+        }
+        return notificationAudio;
+    }
+
+    function unlockNotificationAudio(){
+        if (notificationAudioUnlocked) return;
+        var audio = ensureNotificationAudio();
+        audio.muted = true;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.then) {
+            playPromise.then(function(){
+                audio.pause();
+                audio.currentTime = 0;
+                audio.muted = false;
+                notificationAudioUnlocked = true;
+            }).catch(function(){
+                audio.muted = false;
+            });
+        } else {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+            notificationAudioUnlocked = true;
+        }
+    }
+
+    function playChatNotificationSound(){
+        var audio = ensureNotificationAudio();
+        audio.muted = false;
+        audio.currentTime = 0;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.catch) {
+            playPromise.catch(function(){});
+        }
+    }
+
+    function contactSoundKey(contact){
+        return String((contact && (contact.id || contact.thread_id || contact.customer_id)) || '');
+    }
+
+    function rememberUnreadCounts(rows){
+        (rows || []).forEach(function(c){
+            var key = contactSoundKey(c);
+            if (key) chatListUnreadCounts[key] = Number(c.unread_count || 0);
+        });
+    }
+
+    function shouldPlayForUnreadIncrease(rows){
+        if (!chatListUnreadInitialized) {
+            rememberUnreadCounts(rows);
+            chatListUnreadInitialized = true;
+            return false;
+        }
+
+        var shouldPlay = false;
+        (rows || []).forEach(function(c){
+            var key = contactSoundKey(c);
+            if (!key) return;
+            var current = Number(c.unread_count || 0);
+            var previous = Number(chatListUnreadCounts[key] || 0);
+            if (current > previous) {
+                shouldPlay = true;
+            }
+            chatListUnreadCounts[key] = current;
+        });
+
+        return shouldPlay;
+    }
+
+    function isIncomingMessage(message){
+        return !(message && (message.is_own || message.sender_type === 'staff' || message.sender_type === 'admin'));
+    }
+
+    function messageSoundKey(message){
+        if (!message) return '';
+        return String(message.id || [message.sender_type, message.sender_id, message.created_at, message.message_type, message.message].join('|'));
+    }
+
+    function shouldPlayForNewIncomingMessages(messages){
+        if (!threadMessageSeenInitialized) {
+            threadMessageSeen = {};
+            (messages || []).forEach(function(m){
+                var key = messageSoundKey(m);
+                if (key) threadMessageSeen[key] = true;
+            });
+            threadMessageSeenInitialized = true;
+            return false;
+        }
+
+        var shouldPlay = false;
+        (messages || []).forEach(function(m){
+            var key = messageSoundKey(m);
+            if (!key) return;
+            if (!threadMessageSeen[key] && isIncomingMessage(m)) {
+                shouldPlay = true;
+            }
+            threadMessageSeen[key] = true;
+        });
+
+        return shouldPlay;
     }
 
     function formatTime(dateStr){
@@ -2460,6 +2573,9 @@
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
                 contacts = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : (resp.data.data || [])) : [];
+                if (shouldPlayForUnreadIncrease(contacts)) {
+                    playChatNotificationSound();
+                }
                 renderChatList();
                 updatePillBadges();
             },
@@ -2615,6 +2731,8 @@
         $('body').addClass('tg-viewing-chat');
 
         activeThreadId = threadId;
+        threadMessageSeenInitialized = false;
+        threadMessageSeen = {};
 
         // Find contact profile
         activeContact = contacts.find(function(c){
@@ -2702,6 +2820,9 @@
                 if (!threadData) return;
                 activeContact = threadData;
                 renderHeader(threadData);
+                if (shouldPlayForNewIncomingMessages(threadData.messages || [])) {
+                    playChatNotificationSound();
+                }
                 renderMessages(threadData.messages || []);
             },
             error: function(xhr){
@@ -2856,6 +2977,8 @@
             return '<div class="tg-voice-bar" style="height:' + h + 'px"></div>';
         }).join('');
     }
+
+    $(document).one('pointerdown keydown', unlockNotificationAudio);
 
     // -------------------------------------------------------------
     // AUDIO VOICE PLAYBACK

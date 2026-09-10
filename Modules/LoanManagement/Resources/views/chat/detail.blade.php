@@ -43,7 +43,79 @@
 <script>
 (function($){
     var threadId = {{ (int) $threadId }};
+    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationAudio = null;
+    var notificationAudioUnlocked = false;
+    var seenMessagesInitialized = false;
+    var seenMessages = {};
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
+    function ensureNotificationAudio(){
+        if (!notificationAudio) {
+            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio.preload = 'auto';
+        }
+        return notificationAudio;
+    }
+    function unlockNotificationAudio(){
+        if (notificationAudioUnlocked) return;
+        var audio = ensureNotificationAudio();
+        audio.muted = true;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.then) {
+            playPromise.then(function(){
+                audio.pause();
+                audio.currentTime = 0;
+                audio.muted = false;
+                notificationAudioUnlocked = true;
+            }).catch(function(){
+                audio.muted = false;
+            });
+        } else {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+            notificationAudioUnlocked = true;
+        }
+    }
+    function playChatNotificationSound(){
+        var audio = ensureNotificationAudio();
+        audio.muted = false;
+        audio.currentTime = 0;
+        var playPromise = audio.play();
+        if (playPromise && playPromise.catch) {
+            playPromise.catch(function(){});
+        }
+    }
+    function isIncomingMessage(message){
+        return !(message && (message.is_own || message.sender_type === 'staff' || message.sender_type === 'admin'));
+    }
+    function messageSoundKey(message){
+        if (!message) return '';
+        return String(message.id || [message.sender_type, message.sender_id, message.created_at, message.message_type, message.message].join('|'));
+    }
+    function shouldPlayForNewIncomingMessages(messages){
+        if (!seenMessagesInitialized) {
+            seenMessages = {};
+            (messages || []).forEach(function(m){
+                var key = messageSoundKey(m);
+                if (key) seenMessages[key] = true;
+            });
+            seenMessagesInitialized = true;
+            return false;
+        }
+
+        var shouldPlay = false;
+        (messages || []).forEach(function(m){
+            var key = messageSoundKey(m);
+            if (!key) return;
+            if (!seenMessages[key] && isIncomingMessage(m)) {
+                shouldPlay = true;
+            }
+            seenMessages[key] = true;
+        });
+
+        return shouldPlay;
+    }
     function fileName(file, fallback){ return (file && file.name) || fallback || 'chat-file'; }
     function downloadUrl(url){ return url ? url + (String(url).indexOf('?') === -1 ? '?' : '&') + 'download=1' : '#'; }
     function imageHtml(file){
@@ -72,6 +144,9 @@
             var d = resp.data || {};
             var msgs = d.messages || [];
             var box = $('#chat-box'); box.html('');
+            if (shouldPlayForNewIncomingMessages(msgs)) {
+                playChatNotificationSound();
+            }
             msgs.forEach(function(m){
                 var file = m.file || {};
                 var attachment = '';
@@ -103,6 +178,7 @@
     });
     $('#btnClose').on('click', function(){ $.post('/api/loan-management/chats/'+threadId+'/close', {_token:'{{ csrf_token() }}'}, loadDetail); });
     $('#btnReopen').on('click', function(){ $.post('/api/loan-management/chats/'+threadId+'/reopen', {_token:'{{ csrf_token() }}'}, loadDetail); });
+    $(document).one('pointerdown keydown', unlockNotificationAudio);
     loadDetail();
     setInterval(loadDetail, {{ (int) config('loanmanagement.chat_polling_seconds', 5) * 1000 }});
 })(jQuery);
