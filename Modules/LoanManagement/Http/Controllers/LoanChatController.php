@@ -145,7 +145,7 @@ class LoanChatController extends Controller
         ]);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
-        if ($beforeId <= 0) {
+        if ($beforeId <= 0 && ! $request->boolean('skip_read')) {
             $this->chatService->markSeen($row, 'staff');
         }
         foreach ($row->messages as $message) {
@@ -275,6 +275,19 @@ class LoanChatController extends Controller
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $this->chatService->markAsRead($row, $this->isAdmin() ? 'admin' : 'staff', (int) auth()->id());
         return $this->ok('Marked as read', (object) []);
+    }
+
+    public function unread(MarkChatReadRequest $request, int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $row = LoanChatThread::query()->find($thread);
+        if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
+
+        if (! $this->chatService->markAsUnread($row, $this->isAdmin() ? 'admin' : 'staff', (int) auth()->id())) {
+            return $this->fail('No incoming message to mark unread', 422, (object) []);
+        }
+
+        return $this->ok('Marked as unread', (new ChatThreadResource($row->fresh()))->resolve());
     }
 
     public function typing(MarkChatTypingRequest $request, int $thread)

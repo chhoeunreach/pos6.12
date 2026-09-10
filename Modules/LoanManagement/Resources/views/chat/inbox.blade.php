@@ -1900,6 +1900,7 @@
             <a class="tg-dropdown-item" id="tgMenuSendInvoice" href="javascript:void(0)"><i class="fa fa-file-text-o"></i> Send Invoice</a>
             <a class="tg-dropdown-item" id="tgMenuQuickPay" href="javascript:void(0)"><i class="fa fa-money"></i> Quick Pay</a>
             <a class="tg-dropdown-item" id="tgMenuViewCustomer" href="javascript:void(0)" target="_blank"><i class="fa fa-user"></i> View Profile</a>
+            <a class="tg-dropdown-item" id="tgMenuMarkUnread" href="javascript:void(0)"><i class="fa fa-envelope-o"></i> Mark as unread</a>
             <a class="tg-dropdown-item" id="tgMenuRefreshChat" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh Thread</a>
         </div>
     </main>
@@ -2012,6 +2013,7 @@
     var folders = [];
     var activeContact = null;
     var activeThreadId = null;
+    var activeThreadMarkedUnread = false;
     var currentFilter = 'all';
     var pollTimer = null;
     var isFetchingList = false;
@@ -2628,9 +2630,11 @@
     // -------------------------------------------------------------
     // LOAD CONTACTS / CHAT LIST
     // -------------------------------------------------------------
-    function loadChatList(silent){
+    function loadChatList(silent, options){
+        options = options || {};
         if (isFetchingList && !silent) return;
         isFetchingList = true;
+        silent = !!silent;
 
         var params = {
             search: $('#tgSearchInput').val().trim()
@@ -2642,7 +2646,7 @@
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
                 contacts = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : (resp.data.data || [])) : [];
-                if (shouldPlayForUnreadIncrease(contacts)) {
+                if (!options.suppressSound && shouldPlayForUnreadIncrease(contacts)) {
                     playChatNotificationSound();
                 }
                 renderChatList();
@@ -2805,6 +2809,7 @@
         $('body').addClass('tg-viewing-chat');
 
         activeThreadId = threadId;
+        activeThreadMarkedUnread = false;
         threadMessageSeenInitialized = false;
         threadMessageSeen = {};
         threadMessages = [];
@@ -2898,6 +2903,9 @@
             params.push('before_message_id=' + encodeURIComponent(options.beforeId));
         } else if (options.afterId) {
             params.push('after_message_id=' + encodeURIComponent(options.afterId));
+        }
+        if (activeThreadMarkedUnread && !options.beforeId) {
+            params.push('skip_read=1');
         }
 
         $.ajax({
@@ -3229,6 +3237,7 @@
 
         // 2. Ensure Thread Exists & Send via API
         var sendAction = function(threadId){
+            activeThreadMarkedUnread = false;
             $.ajax({
                 url: apiBaseUrl + '/' + threadId + '/messages',
                 method: 'POST',
@@ -3399,6 +3408,7 @@
     }
 
     function sendVoiceBlob(blob, durationSec){
+        activeThreadMarkedUnread = false;
         var ext = blob.type.indexOf('ogg') >= 0 ? 'ogg' : 'webm';
         var file = new File([blob], 'voice-' + Date.now() + '.' + ext, { type: blob.type });
         var formData = new FormData();
@@ -3454,6 +3464,7 @@
             return;
         }
 
+        activeThreadMarkedUnread = false;
         $.ajax({
             url: apiBaseUrl + '/' + activeThreadId + '/invoice-image',
             method: 'POST',
@@ -3503,6 +3514,7 @@
     });
 
     function sendFileMessage(type, file){
+        activeThreadMarkedUnread = false;
         var formData = new FormData();
         formData.append('_token', csrf);
         formData.append('message_type', type);
@@ -3530,6 +3542,7 @@
         if (!navigator.geolocation || !activeThreadId) return;
 
         navigator.geolocation.getCurrentPosition(function(pos){
+            activeThreadMarkedUnread = false;
             $.ajax({
                 url: apiBaseUrl + '/' + activeThreadId + '/messages',
                 method: 'POST',
@@ -3628,6 +3641,27 @@
     $('#tgMenuRefreshChat').on('click', function(){
         $('#tgChatDropdown').removeClass('open');
         if (activeThreadId) loadThreadMessages(activeThreadId, false);
+    });
+    $('#tgMenuMarkUnread').on('click', function(){
+        $('#tgChatDropdown').removeClass('open');
+        if (!activeThreadId) return;
+        $.ajax({
+            url: apiBaseUrl + '/' + activeThreadId + '/unread',
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            data: { _token: csrf },
+            success: function(resp){
+                activeThreadMarkedUnread = true;
+                if (resp && resp.data) {
+                    activeContact = resp.data;
+                }
+                loadChatList(true, {suppressSound: true});
+            },
+            error: function(xhr){
+                var msg = (xhr && xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot mark chat unread';
+                alert(msg);
+            }
+        });
     });
 
     // Image Viewer Modal

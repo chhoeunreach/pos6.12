@@ -130,6 +130,37 @@ class TelegramChatService
         $thread->save();
     }
 
+    public function markUnread(LoanTelegramChatThread $thread, string $viewerType): bool
+    {
+        $viewerIsCustomer = $viewerType === 'customer';
+        $message = LoanTelegramChatMessage::query()
+            ->where('thread_id', $thread->id)
+            ->when($viewerIsCustomer, function ($query) {
+                $query->where('sender_type', '!=', 'customer');
+            }, function ($query) {
+                $query->where('sender_type', 'customer');
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $message) {
+            return false;
+        }
+
+        $message->is_read = false;
+        $message->read_at = null;
+        $message->save();
+
+        if ($viewerIsCustomer) {
+            $thread->unread_customer_count = max(1, (int) ($thread->unread_customer_count ?? 0));
+        } else {
+            $thread->unread_staff_count = max(1, (int) ($thread->unread_staff_count ?? 0));
+        }
+        $thread->save();
+
+        return true;
+    }
+
     /**
      * Contacts for the staff sidebar: existing threads (with last message/unread info) plus
      * customer-only rows for customers who don't have a thread yet. Optionally scoped to a

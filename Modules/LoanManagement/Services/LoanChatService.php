@@ -432,6 +432,56 @@ class LoanChatService
             ->update(['last_read_at' => now(), 'updated_at' => now()]);
     }
 
+    public function markAsUnread($thread, string $participantType, int $participantId): bool
+    {
+        $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);
+        $viewerIsCustomer = $participantType === 'customer';
+        $message = LoanChatMessage::query()
+            ->where('thread_id', $thread->id)
+            ->when($viewerIsCustomer, function ($query) {
+                $query->where('sender_type', '!=', 'customer');
+            }, function ($query) {
+                $query->where('sender_type', 'customer');
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $message) {
+            return false;
+        }
+
+        $payload = [
+            'is_read' => 0,
+            'read_at' => null,
+            'updated_at' => now(),
+        ];
+        if ($viewerIsCustomer && self::hasMessageColumn('read_by_customer_at')) {
+            $payload['read_by_customer_at'] = null;
+        }
+        if (! $viewerIsCustomer && self::hasMessageColumn('read_by_staff_at')) {
+            $payload['read_by_staff_at'] = null;
+        }
+
+        LoanChatMessage::query()->whereKey($message->id)->update($payload);
+
+        if ($viewerIsCustomer) {
+            $thread->unread_customer_count = max(1, (int) ($thread->unread_customer_count ?? 0));
+        } else {
+            $thread->unread_staff_count = max(1, (int) ($thread->unread_staff_count ?? 0));
+        }
+        $thread->save();
+
+        if (self::hasParticipantColumn('unread_count')) {
+            LoanChatParticipant::query()
+                ->where('thread_id', $thread->id)
+                ->where('participant_type', $participantType)
+                ->where('participant_id', $participantId)
+                ->update(['unread_count' => DB::raw('GREATEST(COALESCE(unread_count, 0), 1)'), 'updated_at' => now()]);
+        }
+
+        return true;
+    }
+
     public function markRead($thread, string $viewerType): void
     {
         $thread = $thread instanceof LoanChatThread ? $thread : LoanChatThread::query()->findOrFail($thread);

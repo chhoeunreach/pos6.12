@@ -244,6 +244,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get("/{$prefix}/chats/{thread}", [$controller, 'show'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.show");
             Route::post("/{$prefix}/chats/{thread}/messages", [$controller, 'sendMessage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name("loan-management.{$prefix}.messages");
             Route::post("/{$prefix}/chats/{thread}/read", [$controller, 'read'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.read");
+            Route::post("/{$prefix}/chats/{thread}/unread", [$controller, 'unread'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.unread");
         }
         Route::post('/chat-api/chats/{thread}/assign', [LoanChatController::class, 'assign'])->middleware('loan.permission:loan_management.chat.assign')->name('loan-management.chat-api.assign');
         Route::post('/chat-api/chats/{thread}/transfer', [LoanChatController::class, 'transfer'])->middleware('loan.permission:loan_management.chat.transfer|loan_management.chat.assign')->name('loan-management.chat-api.transfer');

@@ -197,7 +197,7 @@ class LoanTelegramChatController extends Controller
 
         $beforeId = (int) $request->input('before_message_id', 0);
         $afterId = (int) $request->input('after_message_id', 0);
-        if ($beforeId <= 0) {
+        if ($beforeId <= 0 && ! $request->boolean('skip_read')) {
             $this->chatService->markRead($row, 'staff');
         }
 
@@ -458,6 +458,23 @@ class LoanTelegramChatController extends Controller
         $this->chatService->markRead($row, 'staff');
 
         return $this->ok('Marked as read', (object) []);
+    }
+
+    public function unread(int $thread)
+    {
+        abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $row = LoanTelegramChatThread::query()->find($thread);
+        if (! $row || ! $this->canAccessThread($row)) {
+            return $this->fail('Thread not found', 404, (object) []);
+        }
+
+        if (! $this->chatService->markUnread($row, 'staff')) {
+            return $this->fail('No incoming message to mark unread', 422, (object) []);
+        }
+
+        return $this->ok('Marked as unread', $this->chatService->formatThread($row, null, null, [
+            'include_messages' => false,
+        ]));
     }
 
     protected function canUpdateMessage(LoanTelegramChatMessage $message): bool
