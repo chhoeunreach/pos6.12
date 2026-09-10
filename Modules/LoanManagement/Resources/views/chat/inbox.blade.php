@@ -377,6 +377,30 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .tg-item-customer-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 3px;
+        font-size: 11.5px;
+        color: #64748b;
+        line-height: 1.25;
+    }
+    .tg-item-customer-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tg-item-customer-meta i {
+        color: #2481cc;
+        font-size: 10.5px;
+        flex: 0 0 auto;
+    }
     .tg-item-time {
         font-size: 12px;
         color: #8c9398;
@@ -561,6 +585,16 @@
         overflow: hidden;
         text-overflow: ellipsis;
         line-height: 1.25;
+    }
+    .tg-header-status .tg-header-meta-part {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 8px;
+    }
+    .tg-header-status i {
+        color: #2481cc;
+        font-size: 10.5px;
     }
     .tg-header-status.online {
         color: #22c55e;
@@ -1624,7 +1658,7 @@
             <a class="tg-dropdown-item" id="tgActionRefreshAll" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh All Chats</a>
             <a class="tg-dropdown-item" id="tgActionManageFoldersDropdown" href="javascript:void(0)"><i class="fa fa-folder-open-o"></i> Manage Chat Folders</a>
             <a class="tg-dropdown-item" id="tgActionNewFolderDropdown" href="javascript:void(0)"><i class="fa fa-plus-circle"></i> Create New Folder</a>
-            <a class="tg-dropdown-item" href="{{ route('loan-management.settings.telegram.index') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
+            <a class="tg-dropdown-item" href="{{ route('loan-management.settings.telegram') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
         </div>
     </aside>
 
@@ -2385,9 +2419,22 @@
             var isActive = (activeThreadId && String(c.id) === String(activeThreadId)) || (activeContact && String(c.customer_id) === String(activeContact.customer_id));
             var color = getAvatarColor(c.display_name || c.customer_name);
             var initials = getInitials(c.display_name || c.customer_name);
+            var phone = c.customer_phone || '';
+            var invoiceNo = c.invoice_no || c.loan_number || '';
             var avatarHtml = c.avatar_url
                 ? '<img src="' + esc(c.avatar_url) + '" alt="">'
                 : initials;
+            var customerMetaHtml = '';
+
+            if (phone) {
+                customerMetaHtml += '<span title="Phone"><i class="fa fa-phone"></i>' + esc(phone) + '</span>';
+            }
+            if (invoiceNo) {
+                customerMetaHtml += '<span title="Invoice"><i class="fa fa-file-text-o"></i>' + esc(invoiceNo) + '</span>';
+            }
+            if (customerMetaHtml) {
+                customerMetaHtml = '<div class="tg-item-customer-meta">' + customerMetaHtml + '</div>';
+            }
 
             // Last message snippet with icon
             var snippetIcon = '';
@@ -2442,6 +2489,7 @@
                             '<div class="tg-item-time">' + timeHtml + '</div>' +
                         '</div>' +
                     '</div>' +
+                    customerMetaHtml +
                     '<div class="tg-item-row-bottom">' +
                         '<div class="tg-item-preview">' + snippetIcon + '<span>' + esc(snippetText) + '</span></div>' +
                         badgeHtml +
@@ -2500,6 +2548,7 @@
         if (!c) return;
         var name = c.display_name || c.customer_name || 'Customer';
         var phone = c.customer_phone || '';
+        var invoiceNo = c.invoice_no || c.loan_number || '';
         var color = getAvatarColor(name);
         var initials = getInitials(name);
 
@@ -2508,11 +2557,21 @@
             c.avatar_url ? '<img src="' + esc(c.avatar_url) + '" alt="">' : initials
         );
 
-        if (c.telegram_linked) {
-            $('#tgHeaderStatus').text('online').addClass('online');
-        } else {
-            $('#tgHeaderStatus').text(phone ? phone + (c.location_name ? ' · ' + c.location_name : '') : 'last seen recently').removeClass('online');
+        var headerMeta = '';
+        if (phone) {
+            headerMeta += '<span class="tg-header-meta-part"><i class="fa fa-phone"></i>' + esc(phone) + '</span>';
         }
+        if (invoiceNo) {
+            headerMeta += '<span class="tg-header-meta-part"><i class="fa fa-file-text-o"></i>' + esc(invoiceNo) + '</span>';
+        }
+        if (c.location_name) {
+            headerMeta += '<span class="tg-header-meta-part"><i class="fa fa-map-marker"></i>' + esc(c.location_name) + '</span>';
+        }
+        if (!headerMeta) {
+            headerMeta = c.telegram_linked ? 'online' : 'last seen recently';
+        }
+
+        $('#tgHeaderStatus').html(headerMeta).toggleClass('online', !!c.telegram_linked && !phone && !invoiceNo);
 
         if (phone) {
             $('#tgHeaderCallBtn').attr('href', 'tel:' + phone.replace(/[^0-9+]/g, '')).show();
