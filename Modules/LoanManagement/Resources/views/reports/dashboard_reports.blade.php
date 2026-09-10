@@ -227,9 +227,7 @@
         text-transform: uppercase;
         letter-spacing: 0.3px;
     }
-    .lm-loan-list-filter-toggle-label::before {
-        content: "\f0b0";
-        font-family: FontAwesome;
+    .lm-loan-list-filter-toggle-label .fa {
         color: #2563eb;
         font-size: 13px;
     }
@@ -680,13 +678,13 @@
                     <!-- Standard Filter for Detailed Report -->
                     <div class="lm-loan-list-filter" id="loanFilterPanel">
                         <div class="lm-loan-list-filter-toggle">
-                            <span class="lm-loan-list-filter-toggle-label">{{ $t('Filters', 'តម្រង') }}</span>
+                            <span class="lm-loan-list-filter-toggle-label"><i class="fa fa-filter"></i> {{ $t('Filters', 'តម្រង') }}</span>
                             <span class="lm-loan-list-filter-toggle-actions">
                                 <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-loan-list-reset">
                                     <i class="fa fa-refresh"></i> {{ $t('Reset', 'កំណត់ឡើងវិញ') }}
                                 </a>
                                 <button type="button" class="btn btn-success btn-xs" onclick="window.loanExportRecentActivityExcel()">
-                                    <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
+                                    <i class="fa fa-file-excel"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
                                 </button>
                                 <button type="button" class="btn btn-default btn-xs" onclick="window.loanPrintRecentActivity()">
                                     <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
@@ -715,6 +713,10 @@
                                             <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
                                         @endforeach
                                     </select>
+                                </div>
+                                <div class="lm-loan-list-field search-field">
+                                    <label for="recent_search">{{ $t('Search', 'ស្វែងរក') }}</label>
+                                    <input type="text" name="recent_search" id="recent_search" class="form-control" value="{{ $recentActivityFilters['search'] ?? '' }}" placeholder="{{ $t('Customer, phone, or loan #', 'អតិថិជន ទូរស័ព្ទ ឬលេខកម្ចី') }}">
                                 </div>
                                 <div class="lm-loan-list-field lm-loan-list-field-actions">
                                     <button type="submit" class="btn btn-primary btn-block">
@@ -1023,6 +1025,17 @@
                 width: '100%'
             }).on('change', function () {
                 jQuery('#loanRecentActivityFilterForm').submit();
+            });
+        }
+
+        if (window.jQuery) {
+            jQuery('#loanRecentActivityFilterForm').off('submit.loanRecentActivityFilters').on('submit.loanRecentActivityFilters', function () {
+                var raw = String(jQuery('#loanRecentActivityDateRange').val() || '').trim();
+                var parts = raw.split(/\s+-\s+|\s+~\s+/);
+                if (parts.length === 2) {
+                    jQuery('#recent_date_from').val(parts[0]);
+                    jQuery('#recent_date_to').val(parts[1]);
+                }
             });
         }
 
