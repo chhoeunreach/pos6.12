@@ -654,6 +654,15 @@
     }
 
     function openDrawer(){
+        if (window.innerWidth <= 768) {
+            var chatUrl = '{{ route('loan-management.chat.index') }}';
+            if (boundCustomerId) {
+                chatUrl += '?customer_id=' + boundCustomerId;
+            }
+            window.location.href = chatUrl;
+            return;
+        }
+
         $('#lmTgDrawer').addClass('open');
         $('#lmTgDrawerOverlay').addClass('open');
         $('#lmTgFab').addClass('open');

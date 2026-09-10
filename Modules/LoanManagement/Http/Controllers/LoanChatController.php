@@ -333,14 +333,23 @@ class LoanChatController extends Controller
         return $this->ok('Empty chat deleted successfully.', (object) []);
     }
 
-    public function webInbox()
+    public function webInbox(Request $request)
     {
-        return view('loanmanagement::chat.inbox', ['initialThreadId' => null]);
+        $initialThreadId = $request->input('thread') ? (int) $request->input('thread') : null;
+        $initialCustomerId = $request->input('customer_id') ? (int) $request->input('customer_id') : null;
+
+        return view('loanmanagement::chat.inbox', [
+            'initialThreadId' => $initialThreadId,
+            'initialCustomerId' => $initialCustomerId,
+        ]);
     }
 
     public function webDetail(int $thread)
     {
-        return view('loanmanagement::chat.inbox', ['initialThreadId' => $thread]);
+        return view('loanmanagement::chat.inbox', [
+            'initialThreadId' => $thread,
+            'initialCustomerId' => null,
+        ]);
     }
 
     protected function userBankBranchLoanLocationIds($user): array

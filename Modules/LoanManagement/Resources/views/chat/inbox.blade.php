@@ -1,5 +1,5 @@
 @extends('loanmanagement::layouts.app')
-@section('title', 'Live Chat')
+@section('title', 'Telegram Chats')
 
 @php
     $isEmbedded = request()->boolean('_lm_embed');
@@ -55,790 +55,2224 @@
 
 @section('loan_css')
 <style>
-    @if($isEmbedded)
-    #loanManagementSidebar,
-    #loanManagementHeader,
-    .lm-breadcrumb-wrap,
-    .lm-footer,
-    .content-header {
+    /* Hide floating Telegram fab button on the dedicated Chats page */
+    #lmTgFab {
         display: none !important;
     }
-    #loanManagementMain {
-        margin-left: 0 !important;
-        width: 100% !important;
+
+    /* Overall Shell */
+    .tg-mobile-wrapper {
+        position: relative;
+        width: 100%;
+        height: calc(100dvh - 120px);
+        min-height: 580px;
+        background: #fff;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        display: flex;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        font-family: "Khmer OS Battambang", "Noto Sans Khmer", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
-    #loanManagementMain .lm-content {
-        padding-top: 0 !important;
+
+    /* Sidebar / Chat List View (Screen 1) */
+    .tg-pane-list {
+        width: 380px;
+        flex: 0 0 380px;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #e5e7eb;
+        background: #ffffff;
+        position: relative;
+        z-index: 10;
+        height: 100%;
     }
-    #loanManagementMain .lm-workspace {
-        padding: 0 !important;
+
+    /* Conversation View (Screen 2) */
+    .tg-pane-chat {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        background: #87ab8c;
+        position: relative;
+        min-width: 0;
+        height: 100%;
     }
-    .content {
-        min-height: 100% !important;
-        margin: 0 !important;
+
+    /* Top Telegram App Header */
+    .tg-top-bar {
+        padding: 10px 16px 8px;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid #f1f3f5;
+        flex: 0 0 auto;
     }
-    @endif
-    .lm-chat-shell{height:calc(100dvh - 190px);min-height:620px;display:grid;grid-template-columns:320px minmax(420px,1fr) 300px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;font-family:"Khmer OS Battambang","Noto Sans Khmer","Khmer UI","Segoe UI",Arial,sans-serif}
-    .lm-chat-inbox{border-right:1px solid #e5e7eb;background:#f8fafc;display:flex;flex-direction:column;min-width:0;min-height:0}
-    .lm-chat-toolbar{padding:14px;border-bottom:1px solid #e5e7eb;background:#fff}
-    .lm-chat-toolbar h3{margin:0 0 10px;font-size:18px;font-weight:700;color:#0f172a}
-    .lm-chat-current-location{font-size:12px;color:#64748b;margin:-4px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .lm-chat-search{height:36px;border:1px solid #d1d5db;border-radius:18px;padding:0 14px;width:100%;outline:none}
-    .lm-chat-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-    .lm-chat-filter-grid select{height:34px;border:1px solid #d1d5db;border-radius:17px;padding:0 10px;background:#fff;font-size:12px;outline:none;min-width:0}
-    .lm-chat-filter-grid select:focus,.lm-chat-search:focus{border-color:#0ea5e9}
-    .lm-chat-tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;border-bottom:1px solid #e5e7eb;background:#fff}
-    .lm-chat-tab{white-space:nowrap;border:1px solid #d1d5db;background:#fff;border-radius:16px;padding:6px 10px;font-size:12px;color:#475569;cursor:pointer}
-    .lm-chat-tab.active{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
-    .lm-chat-list{overflow:auto;flex:1}
-    .lm-chat-item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;padding:12px 14px;border-bottom:1px solid #e5e7eb;cursor:pointer;background:#fff}
-    .lm-chat-item:hover,.lm-chat-item.active{background:#eef6ff}
-    .lm-chat-avatar{width:44px;height:44px;border-radius:50%;background:#dbeafe;color:#0369a1;display:flex;align-items:center;justify-content:center;font-weight:700;position:relative;overflow:hidden}
-    .lm-chat-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
-    .lm-chat-avatar.online:after{content:"";position:absolute;right:1px;bottom:1px;width:10px;height:10px;background:#22c55e;border:2px solid #fff;border-radius:50%}
-    .lm-chat-title{font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .lm-chat-subtitle,.lm-chat-preview{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .lm-chat-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;padding:0 6px}
-    .lm-chat-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:#f1f5f9}
-    .lm-chat-header{height:72px;flex:0 0 72px;background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .lm-chat-header-title{font-size:16px;font-weight:700;color:#0f172a}
-    .lm-chat-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-    .lm-chat-actions .btn{border-radius:16px}
-    .lm-chat-messages{flex:1 1 auto;min-height:0;overflow:auto;padding:18px}
-    .lm-chat-empty{height:100%;display:flex;align-items:center;justify-content:center;color:#64748b;text-align:center}
-    .lm-msg-row{display:flex;margin-bottom:12px}
-    .lm-msg-row.own{justify-content:flex-end}
-    .lm-msg{max-width:72%;border-radius:18px;padding:10px 13px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 1px rgba(15,23,42,.04);overflow-wrap:anywhere;line-height:1.45}
-    .lm-msg-row.own .lm-msg{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
-    .lm-msg-name{font-size:11px;font-weight:700;margin-bottom:4px;color:#64748b}
-    .lm-msg-row.own .lm-msg-name{color:#e0f2fe}
-    .lm-msg-meta{font-size:10px;margin-top:5px;color:#94a3b8}
-    .lm-msg-row.own .lm-msg-meta{color:#dbeafe}
-    .lm-chat-composer{flex:0 0 auto;background:#fff;border-top:1px solid #e5e7eb;padding:12px;display:flex;gap:8px;align-items:center}
-    .lm-chat-composer input[type=text]{flex:1;height:40px;border:1px solid #d1d5db;border-radius:20px;padding:0 14px;outline:none}
-    .lm-chat-composer.is-recording #messageText{display:none}
-    .lm-voice-panel{display:none;flex:1;align-items:center;gap:10px;min-width:0;height:44px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:22px;padding:0 8px 0 12px}
-    .lm-chat-composer.is-recording .lm-voice-panel{display:flex}
-    .lm-voice-status{display:flex;align-items:center;gap:8px;min-width:126px;color:#0369a1;font-size:12px;font-weight:700}
-    .lm-voice-dot{width:9px;height:9px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.45);animation:lmVoicePulse 1.25s infinite}
-    .lm-voice-paused .lm-voice-dot{background:#f59e0b;animation:none}
-    .lm-voice-wave{height:24px;display:flex;align-items:center;gap:3px;flex:1;min-width:80px;overflow:hidden}
-    .lm-voice-wave span{display:block;width:3px;border-radius:3px;background:#38bdf8;height:8px;animation:lmVoiceWave .9s ease-in-out infinite}
-    .lm-voice-wave span:nth-child(2n){height:14px;animation-delay:.12s}
-    .lm-voice-wave span:nth-child(3n){height:20px;animation-delay:.2s}
-    .lm-voice-paused .lm-voice-wave span{animation-play-state:paused;opacity:.55}
-    .lm-voice-time{font-variant-numeric:tabular-nums;color:#0f172a;font-size:13px;font-weight:800;min-width:44px;text-align:center}
-    .lm-voice-actions{display:flex;align-items:center;gap:6px}
-    .lm-voice-btn{width:34px;height:34px;border-radius:50%;border:1px solid #cbd5e1;background:#fff;color:#334155;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-    .lm-voice-btn:hover{background:#f8fafc;color:#0f172a}
-    .lm-voice-btn.danger{border-color:#fecaca;color:#dc2626}
-    .lm-voice-btn.primary{border-color:#0ea5e9;background:#0ea5e9;color:#fff}
-    .lm-voice-btn.primary:hover{background:#0284c7;color:#fff}
-    .lm-voice-error{display:none;color:#b91c1c;font-size:12px;font-weight:700;padding:0 8px}
-    .lm-chat-composer.has-voice-error .lm-voice-error{display:block}
-    @keyframes lmVoicePulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-    @keyframes lmVoiceWave{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
-    .lm-chat-side{min-height:0;border-left:1px solid #e5e7eb;background:#fff;overflow:auto}
-    .lm-chat-side-section{padding:16px;border-bottom:1px solid #e5e7eb}
-    .lm-chat-side-section h4{margin:0 0 12px;font-size:14px;font-weight:700;color:#0f172a}
-    .lm-info-row{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:6px 0;border-bottom:1px dashed #e5e7eb}
-    .lm-info-row span:first-child{color:#64748b}
-    .lm-info-row span:last-child{font-weight:700;color:#111827;text-align:right}
-    .lm-priority{font-size:11px;border-radius:10px;padding:2px 7px;background:#e2e8f0;color:#334155;text-transform:capitalize}
-    .lm-priority.new{background:#dcfce7;color:#166534}
-    .lm-priority.high,.lm-priority.urgent{background:#fee2e2;color:#991b1b}
-    .lm-chat-shell--embedded{height:100dvh;min-height:100dvh;grid-template-columns:minmax(0,1fr);border:0;border-radius:0}
-    .lm-chat-shell--embedded .lm-chat-main{background:#fff}
-    .lm-chat-shell--embedded .lm-chat-header{padding:12px 18px}
-    .lm-chat-shell--embedded .lm-chat-messages{padding:16px}
-    .lm-chat-shell--embedded .lm-chat-composer{padding:10px 12px}
-    @media(max-width:1100px){.lm-chat-shell{grid-template-columns:280px 1fr}.lm-chat-side{display:none}}
-    @media(max-width:760px){.lm-chat-shell{height:auto;min-height:700px;grid-template-columns:1fr}.lm-chat-inbox{height:260px}.lm-chat-main{min-height:520px}.lm-chat-composer{position:sticky;bottom:0}}
+    .tg-top-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .tg-app-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #42a5f5, #1976d2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 19px;
+        box-shadow: 0 2px 6px rgba(25, 118, 210, 0.35);
+        overflow: hidden;
+    }
+    .tg-app-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .tg-app-title {
+        font-size: 21px;
+        font-weight: 700;
+        color: #2481cc;
+        letter-spacing: -0.2px;
+        margin: 0;
+    }
+    .tg-top-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .tg-icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: #707579;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .tg-icon-btn:hover, .tg-icon-btn:active {
+        background: #f0f2f5;
+        color: #222;
+    }
+
+    /* Search Bar */
+    .tg-search-wrap {
+        padding: 6px 14px 10px;
+        background: #ffffff;
+        flex: 0 0 auto;
+    }
+    .tg-search-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: #f0f2f5;
+        border-radius: 20px;
+        padding: 0 14px;
+        height: 38px;
+        border: 1.5px solid transparent;
+        transition: all 0.2s ease;
+    }
+    .tg-search-box:focus-within {
+        background: #fff;
+        border-color: #2481cc;
+        box-shadow: 0 0 0 3px rgba(36, 129, 204, 0.12);
+    }
+    .tg-search-box i.fa-search {
+        color: #949a9e;
+        font-size: 14px;
+        margin-right: 10px;
+    }
+    .tg-search-input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 14px;
+        color: #111827;
+    }
+    .tg-search-input::placeholder {
+        color: #8c9398;
+    }
+    .tg-search-clear {
+        display: none;
+        border: none;
+        background: #cfd4d9;
+        color: #fff;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    /* Filter Pills Bar */
+    .tg-filter-pills {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 14px 10px;
+        background: #fff;
+        overflow-x: auto;
+        white-space: nowrap;
+        border-bottom: 1px solid #f1f3f5;
+        scrollbar-width: none;
+        flex: 0 0 auto;
+    }
+    .tg-filter-pills::-webkit-scrollbar {
+        display: none;
+    }
+    .tg-pill {
+        border: 1px solid #e0e4e8;
+        background: #ffffff;
+        color: #555b61;
+        border-radius: 18px;
+        padding: 5px 12px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.18s ease;
+        flex: 0 0 auto;
+    }
+    .tg-pill:hover {
+        background: #f7f9fa;
+        color: #222;
+    }
+    .tg-pill.active {
+        background: #e7f2fb;
+        border-color: #2481cc;
+        color: #2481cc;
+        font-weight: 700;
+    }
+    .tg-pill-badge {
+        background: #cfd8dc;
+        color: #455a64;
+        font-size: 10.5px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-weight: 700;
+    }
+    .tg-pill.active .tg-pill-badge {
+        background: #2481cc;
+        color: #fff;
+    }
+
+    /* Chat List Items */
+    .tg-chat-list {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 4px 0 70px;
+        min-height: 0;
+    }
+    .tg-chat-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 14px;
+        cursor: pointer;
+        position: relative;
+        background: #fff;
+        transition: background 0.15s ease;
+        border-bottom: 1px solid #f8f9fa;
+        user-select: none;
+    }
+    .tg-chat-item:hover {
+        background: #f4f6f8;
+    }
+    .tg-chat-item.active {
+        background: #ebf4fb;
+    }
+    .tg-avatar-wrap {
+        position: relative;
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+    }
+    .tg-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        overflow: hidden;
+        text-transform: uppercase;
+    }
+    .tg-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+    .tg-avatar-dot {
+        position: absolute;
+        bottom: 0px;
+        right: 0px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #22c55e;
+        border: 2.5px solid #fff;
+    }
+    .tg-item-body {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .tg-item-row-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 3px;
+        gap: 8px;
+    }
+    .tg-item-name {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-item-time {
+        font-size: 12px;
+        color: #8c9398;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .tg-item-row-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .tg-item-preview {
+        font-size: 13px;
+        color: #707579;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .tg-item-preview i {
+        font-size: 12px;
+        color: #2481cc;
+    }
+    .tg-item-badge {
+        background: #2481cc;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+    }
+    .tg-check-icon {
+        color: #2481cc;
+        font-size: 13px;
+    }
+    .tg-empty-chats {
+        padding: 50px 20px;
+        text-align: center;
+        color: #8c9398;
+    }
+    .tg-empty-chats i {
+        font-size: 42px;
+        color: #b0bec5;
+        margin-bottom: 12px;
+        display: block;
+    }
+
+    /* Floating Action Buttons */
+    .tg-fab-stack {
+        position: absolute;
+        right: 16px;
+        bottom: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        z-index: 20;
+    }
+    .tg-fab-cam {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #ffffff;
+        color: #555b61;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+    }
+    .tg-fab-cam:active {
+        transform: scale(0.92);
+    }
+    .tg-fab-compose {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2ea5e8, #1d74b8);
+        color: #fff;
+        box-shadow: 0 6px 20px rgba(36, 129, 204, 0.45);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+    }
+    .tg-fab-compose:active {
+        transform: scale(0.92);
+    }
+
+    /* Conversation Pane Header */
+    .tg-chat-header {
+        height: 60px;
+        background: #ffffff;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex: 0 0 60px;
+        z-index: 30;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .tg-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .tg-back-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: #333;
+        display: none; /* Shown on mobile */
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        cursor: pointer;
+        flex: 0 0 36px;
+    }
+    .tg-header-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        flex: 0 0 42px;
+        overflow: hidden;
+        text-transform: uppercase;
+    }
+    .tg-header-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .tg-header-info {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .tg-header-name {
+        font-size: 15.5px;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-header-status {
+        font-size: 12px;
+        color: #707579;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-header-status.online {
+        color: #22c55e;
+        font-weight: 600;
+    }
+    .tg-header-right {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+    }
+
+    /* Telegram Doodle Wallpaper Chat Body */
+    .tg-chat-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 16px 14px 20px;
+        position: relative;
+        min-height: 0;
+        /* Authentic Telegram sage green doodle pattern */
+        background-color: #88ad8d;
+        background-image: radial-gradient(#6e9874 1.2px, transparent 1.2px), radial-gradient(#6e9874 1.2px, #88ad8d 1.2px);
+        background-size: 24px 24px;
+        background-position: 0 0, 12px 12px;
+    }
+    .tg-chat-body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Cpath d='M15 15h6v6h-6zm40 10c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm35-8l5 9h-10zm-65 48c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8-8 3.6-8 8zm65 15h12v4H90zm-45 15l-6-8h12zm60-35c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'/%3E%3C/g%3E%3C/svg%3E");
+        pointer-events: none;
+    }
+
+    /* Date Separator */
+    .tg-date-divider {
+        text-align: center;
+        margin: 14px 0 10px;
+        position: relative;
+        z-index: 2;
+    }
+    .tg-date-divider span {
+        background: rgba(0, 0, 0, 0.22);
+        color: #ffffff;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 14px;
+        border-radius: 14px;
+        backdrop-filter: blur(4px);
+    }
+
+    /* Message Bubbles */
+    .tg-msg-row {
+        display: flex;
+        margin-bottom: 8px;
+        position: relative;
+        z-index: 2;
+    }
+    .tg-msg-row.own {
+        justify-content: flex-end;
+    }
+    .tg-bubble {
+        max-width: 82%;
+        min-width: 80px;
+        padding: 8px 12px 6px;
+        border-radius: 16px;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    /* Outgoing Bubble (Telegram green) */
+    .tg-msg-row.own .tg-bubble {
+        background: #e1ffc7;
+        color: #000;
+        border-bottom-right-radius: 4px;
+    }
+    /* Incoming Bubble (White) */
+    .tg-msg-row:not(.own) .tg-bubble {
+        background: #ffffff;
+        color: #0f172a;
+        border-bottom-left-radius: 4px;
+    }
+
+    /* Sender Name for group / customer */
+    .tg-msg-sender {
+        font-size: 12px;
+        font-weight: 700;
+        color: #168acd;
+        margin-bottom: 3px;
+    }
+
+    /* Quoted Message */
+    .tg-quote-box {
+        border-left: 3px solid #e53935;
+        background: rgba(229, 57, 53, 0.07);
+        padding: 4px 8px;
+        border-radius: 4px 8px 8px 4px;
+        margin-bottom: 6px;
+        font-size: 12px;
+    }
+    .tg-quote-author {
+        font-weight: 700;
+        color: #e53935;
+        margin-bottom: 1px;
+    }
+    .tg-quote-text {
+        color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Message Meta Info (Time & Double Check) */
+    .tg-msg-meta {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        margin-top: 2px;
+        font-size: 11px;
+        color: #687987;
+        float: right;
+        margin-left: 8px;
+    }
+    .tg-msg-meta i.fa-check, .tg-msg-meta .tg-ticks {
+        color: #4fae63;
+        font-size: 11px;
+    }
+
+    /* Voice Message Audio Player Bubble */
+    .tg-voice-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 0;
+        min-width: 210px;
+    }
+    .tg-voice-play-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: none;
+        background: #4fae63;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        flex: 0 0 42px;
+        transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .tg-msg-row.own .tg-voice-play-btn {
+        background: #4fae63;
+    }
+    .tg-voice-wave-wrap {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+    .tg-voice-waveform {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        height: 24px;
+        cursor: pointer;
+    }
+    .tg-voice-bar {
+        width: 3px;
+        border-radius: 2px;
+        background: #a3c4a8;
+        transition: background 0.15s ease;
+    }
+    .tg-voice-bar.played {
+        background: #2e7d32;
+    }
+    .tg-msg-row:not(.own) .tg-voice-bar {
+        background: #cfd8dc;
+    }
+    .tg-msg-row:not(.own) .tg-voice-bar.played {
+        background: #1976d2;
+    }
+    .tg-voice-timing {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Reaction Badge */
+    .tg-reaction-badge {
+        position: absolute;
+        bottom: -9px;
+        left: 8px;
+        background: #ffffff;
+        border: 1px solid #e0e4e8;
+        border-radius: 14px;
+        padding: 1px 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 3;
+    }
+    .tg-reaction-avatar {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #1d74b8;
+        color: #fff;
+        font-size: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    /* Image Attachment */
+    .tg-image-wrap {
+        margin: 4px 0;
+        border-radius: 12px;
+        overflow: hidden;
+        max-width: 260px;
+        cursor: pointer;
+    }
+    .tg-image-wrap img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 12px;
+    }
+
+    /* File / Invoice Card */
+    .tg-file-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(0,0,0,0.04);
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin: 4px 0;
+        text-decoration: none !important;
+        color: inherit;
+    }
+    .tg-file-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #2481cc;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex: 0 0 36px;
+    }
+    .tg-file-details {
+        min-width: 0;
+        flex: 1;
+    }
+    .tg-file-name {
+        font-weight: 700;
+        font-size: 12.5px;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tg-file-size {
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    /* Bottom Telegram Composer Bar */
+    .tg-composer-bar {
+        background: #ffffff;
+        border-top: 1px solid #eef0f2;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        z-index: 30;
+    }
+    .tg-composer-input-wrap {
+        flex: 1 1 auto;
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: #f0f2f5;
+        border-radius: 22px;
+        padding: 0 12px;
+        min-height: 44px;
+    }
+    .tg-composer-input {
+        flex: 1 1 auto;
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 14.5px;
+        color: #111827;
+        padding: 8px 0;
+        max-height: 100px;
+        resize: none;
+    }
+    .tg-composer-input::placeholder {
+        color: #8c9398;
+    }
+    .tg-composer-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: #707579;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        cursor: pointer;
+        flex: 0 0 38px;
+        transition: color 0.15s ease, background 0.15s ease;
+    }
+    .tg-composer-btn:hover {
+        background: rgba(0,0,0,0.05);
+        color: #222;
+    }
+    .tg-send-action-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: #2481cc;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        cursor: pointer;
+        flex: 0 0 44px;
+        box-shadow: 0 4px 12px rgba(36, 129, 204, 0.35);
+        transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .tg-send-action-btn:active {
+        transform: scale(0.92);
+    }
+    .tg-send-action-btn.recording {
+        background: #dc2626;
+        animation: tgPulse 1.2s infinite;
+    }
+    @keyframes tgPulse {
+        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+        70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+
+    /* Live Voice Recording Overlay in Composer */
+    .tg-voice-recording-panel {
+        display: none;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: 10px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 22px;
+        padding: 0 14px;
+        height: 44px;
+    }
+    .tg-composer-bar.is-recording .tg-composer-input-wrap {
+        display: none;
+    }
+    .tg-composer-bar.is-recording .tg-voice-recording-panel {
+        display: flex;
+    }
+    .tg-rec-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #dc2626;
+        animation: tgDotBlink 1s infinite;
+    }
+    @keyframes tgDotBlink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.2; }
+    }
+    .tg-rec-timer {
+        font-size: 14px;
+        font-weight: 700;
+        color: #15803d;
+        min-width: 46px;
+    }
+    .tg-rec-wave {
+        flex: 1;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        overflow: hidden;
+    }
+    .tg-rec-wave span {
+        display: block;
+        width: 3px;
+        border-radius: 2px;
+        background: #22c55e;
+        height: 6px;
+        animation: tgWaveAnim 0.8s ease-in-out infinite alternate;
+    }
+    .tg-rec-wave span:nth-child(2n) { animation-delay: 0.15s; height: 14px; }
+    .tg-rec-wave span:nth-child(3n) { animation-delay: 0.3s; height: 18px; }
+    @keyframes tgWaveAnim {
+        from { transform: scaleY(0.4); }
+        to { transform: scaleY(1); }
+    }
+    .tg-rec-cancel-btn {
+        border: none;
+        background: transparent;
+        color: #dc2626;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 4px 8px;
+    }
+
+    /* Attachment Action Sheet Popup */
+    .tg-attach-sheet {
+        display: none;
+        position: absolute;
+        bottom: 64px;
+        right: 54px;
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+        border: 1px solid #e2e8f0;
+        padding: 8px;
+        z-index: 50;
+        width: 190px;
+    }
+    .tg-attach-sheet.open {
+        display: block;
+    }
+    .tg-attach-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        color: #334155;
+        font-size: 13.5px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: left;
+    }
+    .tg-attach-item:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+    .tg-attach-item i {
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+    }
+    .tg-attach-item.invoice i { color: #f59e0b; }
+    .tg-attach-item.photo i { color: #0ea5e9; }
+    .tg-attach-item.file i { color: #8b5cf6; }
+    .tg-attach-item.location i { color: #ef4444; }
+
+    /* Emoji Picker Bar Popup */
+    .tg-emoji-panel {
+        display: none;
+        position: absolute;
+        bottom: 64px;
+        left: 14px;
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: 1px solid #e2e8f0;
+        padding: 10px;
+        z-index: 50;
+        max-width: 290px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .tg-emoji-panel.hidden {
+        display: none !important;
+    }
+    .tg-emoji-item {
+        font-size: 20px;
+        cursor: pointer;
+        padding: 3px;
+        border-radius: 6px;
+        transition: transform 0.15s ease;
+    }
+    .tg-emoji-item:hover {
+        transform: scale(1.25);
+        background: #f1f5f9;
+    }
+
+    /* Kebab Dropdown Menu */
+    .tg-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 54px;
+        right: 14px;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        border: 1px solid #e2e8f0;
+        padding: 6px;
+        z-index: 60;
+        min-width: 175px;
+    }
+    .tg-dropdown-menu.open {
+        display: block;
+    }
+    .tg-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #334155;
+        cursor: pointer;
+        border-radius: 6px;
+        text-decoration: none !important;
+    }
+    .tg-dropdown-item:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+    .tg-dropdown-item i {
+        font-size: 14px;
+        color: #64748b;
+        width: 18px;
+        text-align: center;
+    }
+
+    /* Full-Screen Image Viewer Modal */
+    .tg-viewer-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.88);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+    .tg-viewer-modal.open {
+        display: flex;
+    }
+    .tg-viewer-modal img {
+        max-width: 95vw;
+        max-height: 85vh;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+    .tg-viewer-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background: rgba(255,255,255,0.2);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+        cursor: pointer;
+    }
+
+    /* Desktop Placeholder when no chat is open */
+    .tg-chat-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #ffffff;
+        text-align: center;
+        padding: 30px;
+    }
+    .tg-placeholder-badge {
+        background: rgba(0,0,0,0.22);
+        backdrop-filter: blur(6px);
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    }
+
+    /* ==========================================================================
+       MOBILE RESPONSIVE ADAPTATION (Matches Screenshots 1 & 2)
+       ========================================================================== */
+    @media (max-width: 991px) {
+        /* Hide bulky desktop headers/breadcrumbs on mobile */
+        .content-header,
+        .lm-breadcrumb-wrap,
+        .content > .row {
+            display: none !important;
+        }
+        .content {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .container-fluid.lm-workspace {
+            padding: 0 !important;
+        }
+
+        /* Full mobile screen wrapper */
+        .tg-mobile-wrapper {
+            height: calc(100dvh - 56px);
+            min-height: 100dvh;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+        }
+
+        /* Single Pane State Machine */
+        .tg-pane-list {
+            width: 100% !important;
+            flex: 1 1 auto !important;
+            border-right: none;
+        }
+        .tg-pane-chat {
+            width: 100% !important;
+            flex: 1 1 auto !important;
+            display: none;
+        }
+
+        /* When Conversation view is active on mobile */
+        .tg-mobile-wrapper.in-conversation .tg-pane-list {
+            display: none !important;
+        }
+        .tg-mobile-wrapper.in-conversation .tg-pane-chat {
+            display: flex !important;
+        }
+
+        /* Show Back Button in Chat Header */
+        .tg-back-btn {
+            display: inline-flex !important;
+        }
+
+        /* Hide bottom navigation bar while in full conversation view */
+        body.tg-viewing-chat #loanMobileNav {
+            display: none !important;
+        }
+        body.tg-viewing-chat .tg-mobile-wrapper {
+            height: 100dvh !important;
+        }
+
+        /* Safe area composer spacing */
+        .tg-composer-bar {
+            padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .tg-bubble {
+            max-width: 88%;
+        }
+    }
 </style>
 @endsection
 
 @section('content_body')
-@if(! $isEmbedded)
-<section class="content-header">
-    <h1>Live Chat <small>Support inbox</small></h1>
-</section>
-<section class="content">
-    <div class="row" style="margin-bottom:12px">
-        <div class="col-sm-2"><div class="small-box bg-aqua"><div class="inner"><h3 id="card_active">0</h3><p>Active Chats</p></div></div></div>
-        <div class="col-sm-2"><div class="small-box bg-yellow"><div class="inner"><h3 id="card_unread">0</h3><p>Unread Chats</p></div></div></div>
-        <div class="col-sm-2"><div class="small-box bg-orange"><div class="inner"><h3 id="card_overdue">0</h3><p>Overdue Chats</p></div></div></div>
-        <div class="col-sm-2"><div class="small-box bg-purple"><div class="inner"><h3 id="card_recovery">0</h3><p>Recovery Chats</p></div></div></div>
-        <div class="col-sm-2"><div class="small-box bg-red"><div class="inner"><h3 id="card_legal">0</h3><p>Legal Chats</p></div></div></div>
-        <div class="col-sm-2"><div class="small-box bg-green"><div class="inner"><h3 id="card_closed">0</h3><p>Closed Today</p></div></div></div>
-    </div>
-@endif
+<div class="tg-mobile-wrapper" id="tgAppWrapper">
+    <!-- ================================================================== -->
+    <!-- SCREEN 1: TELEGRAM CHATS LIST (Screenshot 1)                        -->
+    <!-- ================================================================== -->
+    <aside class="tg-pane-list" id="tgPaneList">
+        <!-- Top App Bar -->
+        <div class="tg-top-bar">
+            <div class="tg-top-left">
+                <div class="tg-app-avatar" title="Telegram">
+                    <i class="fa fa-telegram"></i>
+                </div>
+                <h1 class="tg-app-title">Telegram</h1>
+            </div>
+            <div class="tg-top-actions">
+                <button type="button" class="tg-icon-btn" id="tgListMenuBtn" aria-label="Menu" title="Menu">
+                    <i class="fa fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
 
-    <div class="lm-chat-shell{{ $isEmbedded ? ' lm-chat-shell--embedded' : '' }}" id="lmChatApp">
-        @if(! $isEmbedded)
-        <aside class="lm-chat-inbox">
-            <div class="lm-chat-toolbar">
-                <h3>Staff Support Inbox</h3>
-                <div class="lm-chat-current-location"><i class="fa fa-map-marker"></i> {{ $chatLocationText }}</div>
-                <input type="text" class="lm-chat-search" id="chatSearch" placeholder="Search customer, phone, loan, location">
-                <div class="lm-chat-filter-grid">
-                    <select id="chatLocationFilter" aria-label="Filter by location">
-                        <option value="">All branches</option>
-                        @foreach($chatLocationOptions as $location)
-                            <option value="{{ (int) $location->id }}" {{ (string) $chatDefaultLocationId === (string) $location->id ? 'selected' : '' }}>{{ $location->name }}</option>
-                        @endforeach
-                    </select>
-                    <select id="chatPriorityFilter" aria-label="Filter by priority">
-                        <option value="">All priority</option>
-                        <option value="normal">Normal</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="low">Low</option>
-                    </select>
-                </div>
+        <!-- Search Bar -->
+        <div class="tg-search-wrap">
+            <div class="tg-search-box">
+                <i class="fa fa-search"></i>
+                <input type="text" class="tg-search-input" id="tgSearchInput" placeholder="Search Chats" autocomplete="off">
+                <button type="button" class="tg-search-clear" id="tgSearchClear" aria-label="Clear">&times;</button>
             </div>
-            <div class="lm-chat-tabs" id="chatTabs">
-                <button class="lm-chat-tab active" data-view="all">All</button>
-                <button class="lm-chat-tab" data-view="unread">Unread</button>
-                <button class="lm-chat-tab" data-view="assigned_to_me">Assigned To Me</button>
-                <button class="lm-chat-tab" data-view="active_customers">Active Customers</button>
-                <button class="lm-chat-tab" data-view="overdue_customers">Overdue</button>
-                <button class="lm-chat-tab" data-view="skip_customers">Skip</button>
-                <button class="lm-chat-tab" data-view="recovery">Recovery</button>
-                <button class="lm-chat-tab" data-view="legal">Legal</button>
-                <button class="lm-chat-tab" data-view="closed">Closed</button>
-            </div>
-            <div class="lm-chat-list" id="chatList"></div>
-        </aside>
-        @endif
+        </div>
 
-        <main class="lm-chat-main">
-            <div class="lm-chat-header">
-                <div>
-                    <div class="lm-chat-header-title" id="activeTitle">Select a chat</div>
-                    <div class="lm-chat-subtitle" id="activeSubtitle">Customer support, collection, recovery and legal conversations</div>
-                </div>
-                <div class="lm-chat-actions">
-                    <button class="btn btn-default btn-sm" id="btnPin"><i class="fa fa-thumb-tack"></i></button>
-                    <button class="btn btn-default btn-sm" id="btnMute"><i class="fa fa-bell-slash"></i></button>
-                    <button class="btn btn-default btn-sm" id="btnAssign"><i class="fa fa-user-plus"></i> Assign</button>
-                    <button class="btn btn-default btn-sm" id="btnTransfer"><i class="fa fa-exchange"></i> Transfer</button>
-                    <button class="btn btn-warning btn-sm" id="btnReopen">Reopen</button>
-                    <button class="btn btn-danger btn-sm" id="btnClose">Close</button>
-                </div>
-            </div>
-            <div class="lm-chat-messages" id="messageList">
-                <div class="lm-chat-empty">Choose a conversation from the inbox.</div>
-            </div>
-            <form class="lm-chat-composer" id="messageForm">
-                <button type="button" class="btn btn-default btn-sm" id="btnImage"><i class="fa fa-image"></i></button>
-                <button type="button" class="btn btn-default btn-sm" id="btnFile"><i class="fa fa-paperclip"></i></button>
-                <button type="button" class="btn btn-default btn-sm" id="btnLocation"><i class="fa fa-map-marker"></i></button>
-                <input type="text" id="messageText" placeholder="Write a message">
-                <div class="lm-voice-panel" id="voicePanel" aria-live="polite">
-                    <div class="lm-voice-status" id="voiceStatus"><span class="lm-voice-dot"></span><span id="voiceStatusText">Recording</span></div>
-                    <div class="lm-voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-                    <div class="lm-voice-time" id="voiceTimer">00:00</div>
-                    <div class="lm-voice-actions">
-                        <button type="button" class="lm-voice-btn" id="btnVoicePause" title="Pause"><i class="fa fa-pause"></i></button>
-                        <button type="button" class="lm-voice-btn danger" id="btnVoiceCancel" title="Cancel"><i class="fa fa-trash"></i></button>
-                        <button type="button" class="lm-voice-btn primary" id="btnVoiceSend" title="Send"><i class="fa fa-paper-plane"></i></button>
-                    </div>
-                </div>
-                <span class="lm-voice-error" id="voiceError"></span>
-                <button type="button" class="btn btn-default btn-sm" id="btnVoice" title="Voice message"><i class="fa fa-microphone"></i></button>
-                <button class="btn btn-primary" type="submit"><i class="fa fa-paper-plane"></i></button>
-                <input type="file" id="chatFile" style="display:none">
-            </form>
-        </main>
+        <!-- Filter Category Pills (Scrollable) -->
+        <div class="tg-filter-pills" id="tgFilterPills">
+            <button type="button" class="tg-pill active" data-filter="all">
+                <span>All</span>
+                <span class="tg-pill-badge" id="tgBadgeAll">0</span>
+            </button>
+            <button type="button" class="tg-pill" data-filter="personal">
+                <span>Personal</span>
+            </button>
+            <button type="button" class="tg-pill" data-filter="invoices">
+                <span>វិក្កយបត្រ</span>
+                <span class="tg-pill-badge" id="tgBadgeInvoices">0</span>
+            </button>
+            <button type="button" class="tg-pill" data-filter="installments">
+                <span>រំលស់</span>
+                <span class="tg-pill-badge" id="tgBadgeInstallments">0</span>
+            </button>
+            @foreach($chatLocationOptions as $loc)
+                <button type="button" class="tg-pill" data-filter="location" data-location-id="{{ $loc->id }}">
+                    <span>{{ $loc->name }}</span>
+                </button>
+            @endforeach
+        </div>
 
-        @if(! $isEmbedded)
-        <aside class="lm-chat-side">
-            <div class="lm-chat-side-section">
-                <h4>Customer Info</h4>
-                <div id="customerInfo"></div>
+        <!-- Chats List -->
+        <div class="tg-chat-list" id="tgChatList">
+            <div class="tg-empty-chats">
+                <i class="fa fa-circle-o-notch fa-spin"></i>
+                <div>Loading Telegram chats...</div>
             </div>
-            <div class="lm-chat-side-section">
-                <h4>Assignment</h4>
-                <div class="form-group">
-                    <label>Staff ID</label>
-                    <input type="number" class="form-control" id="assignStaffId" placeholder="Collector/Admin ID">
-                </div>
-                <div class="form-group">
-                    <label>Team</label>
-                    <select class="form-control" id="assignTeam">
-                        <option value="">Support Team</option>
-                        <option value="collection">Collection</option>
-                        <option value="recovery">Recovery</option>
-                        <option value="legal">Legal</option>
-                        <option value="skip">Skip Customers</option>
-                    </select>
+        </div>
+
+        <!-- Floating Action Buttons (Camera & Pencil/Compose) -->
+        <div class="tg-fab-stack">
+            <button type="button" class="tg-fab-cam" id="tgFabCamera" title="Camera" aria-label="Take Photo">
+                <i class="fa fa-camera"></i>
+            </button>
+            <button type="button" class="tg-fab-compose" id="tgFabCompose" title="New Chat" aria-label="New Chat">
+                <i class="fa fa-pencil"></i>
+            </button>
+        </div>
+
+        <!-- Top Menu Dropdown -->
+        <div class="tg-dropdown-menu" id="tgListDropdown">
+            <a class="tg-dropdown-item" id="tgActionRefresh" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh Chats</a>
+            <a class="tg-dropdown-item" id="tgActionNewCustomer" href="{{ route('loan-management.customers.create') }}"><i class="fa fa-user-plus"></i> New Customer</a>
+            <a class="tg-dropdown-item" id="tgActionSettings" href="{{ route('loan-management.settings.telegram.index') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
+        </div>
+    </aside>
+
+    <!-- ================================================================== -->
+    <!-- SCREEN 2: TELEGRAM CONVERSATION VIEW (Screenshot 2)                -->
+    <!-- ================================================================== -->
+    <main class="tg-pane-chat" id="tgPaneChat">
+        <!-- Chat Header -->
+        <div class="tg-chat-header" id="tgChatHeader" style="display:none">
+            <div class="tg-header-left">
+                <button type="button" class="tg-back-btn" id="tgBackToListBtn" title="Back" aria-label="Back to chats">
+                    <i class="fa fa-arrow-left"></i>
+                </button>
+                <div class="tg-header-avatar" id="tgHeaderAvatar"></div>
+                <div class="tg-header-info">
+                    <div class="tg-header-name" id="tgHeaderName">Customer Name</div>
+                    <div class="tg-header-status" id="tgHeaderStatus">last seen recently</div>
                 </div>
             </div>
-        </aside>
-        @endif
-    </div>
-@if(! $isEmbedded)
-</section>
-@endif
+            <div class="tg-header-right">
+                <a href="tel:" class="tg-icon-btn" id="tgHeaderCallBtn" title="Call Customer" style="display:none">
+                    <i class="fa fa-phone"></i>
+                </a>
+                <button type="button" class="tg-icon-btn" id="tgChatMenuBtn" title="More options" aria-label="More options">
+                    <i class="fa fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Conversation Body (Telegram Doodle Pattern Wallpaper) -->
+        <div class="tg-chat-body" id="tgChatMessages">
+            <div class="tg-chat-placeholder" id="tgDesktopPlaceholder">
+                <div class="tg-placeholder-badge">Select a chat to start messaging</div>
+            </div>
+        </div>
+
+        <!-- Telegram Bottom Message Composer Bar -->
+        <form class="tg-composer-bar" id="tgComposerForm" style="display:none">
+            <button type="button" class="tg-composer-btn" id="tgEmojiBtn" title="Emoji" aria-label="Insert Emoji">
+                <i class="fa fa-smile-o"></i>
+            </button>
+
+            <!-- Regular Text Input Container -->
+            <div class="tg-composer-input-wrap">
+                <input type="text" class="tg-composer-input" id="tgMessageInput" placeholder="Message" autocomplete="off">
+            </div>
+
+            <!-- Voice Recording Panel -->
+            <div class="tg-voice-recording-panel" id="tgVoicePanel">
+                <div class="tg-rec-dot"></div>
+                <div class="tg-rec-timer" id="tgVoiceTimer">00:00</div>
+                <div class="tg-rec-wave">
+                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <button type="button" class="tg-rec-cancel-btn" id="tgVoiceCancelBtn" title="Cancel"><i class="fa fa-trash"></i></button>
+            </div>
+
+            <!-- Paperclip Attachment Button -->
+            <button type="button" class="tg-composer-btn" id="tgAttachBtn" title="Attach file" aria-label="Attach">
+                <i class="fa fa-paperclip"></i>
+            </button>
+
+            <!-- Send or Microphone Action Button -->
+            <button type="submit" class="tg-send-action-btn" id="tgActionSendBtn" title="Record Voice">
+                <i class="fa fa-microphone" id="tgActionSendIcon"></i>
+            </button>
+        </form>
+
+        <!-- Hidden File Inputs -->
+        <input type="file" id="tgFileInputImage" accept="image/*" style="display:none">
+        <input type="file" id="tgFileInputDoc" style="display:none">
+
+        <!-- Attachment Menu Sheet -->
+        <div class="tg-attach-sheet" id="tgAttachSheet">
+            <button type="button" class="tg-attach-item invoice" id="tgAttachInvoice">
+                <i class="fa fa-file-text-o"></i> Send Invoice
+            </button>
+            <button type="button" class="tg-attach-item photo" id="tgAttachPhoto">
+                <i class="fa fa-picture-o"></i> Photo / Camera
+            </button>
+            <button type="button" class="tg-attach-item file" id="tgAttachFile">
+                <i class="fa fa-file-o"></i> Document
+            </button>
+            <button type="button" class="tg-attach-item location" id="tgAttachLocation">
+                <i class="fa fa-map-marker"></i> Location
+            </button>
+        </div>
+
+        <!-- Quick Emoji Picker Panel -->
+        <div class="tg-emoji-panel hidden" id="tgEmojiPanel">
+            <span class="tg-emoji-item">❤️</span>
+            <span class="tg-emoji-item">👍</span>
+            <span class="tg-emoji-item">😂</span>
+            <span class="tg-emoji-item">🙏</span>
+            <span class="tg-emoji-item">👏</span>
+            <span class="tg-emoji-item">🔥</span>
+            <span class="tg-emoji-item">💰</span>
+            <span class="tg-emoji-item">📦</span>
+            <span class="tg-emoji-item">📞</span>
+            <span class="tg-emoji-item">🤝</span>
+            <span class="tg-emoji-item">🏍️</span>
+            <span class="tg-emoji-item">🚗</span>
+            <span class="tg-emoji-item">📍</span>
+            <span class="tg-emoji-item">✅</span>
+            <span class="tg-emoji-item">❌</span>
+            <span class="tg-emoji-item">⏳</span>
+        </div>
+
+        <!-- Chat Header Kebab Dropdown -->
+        <div class="tg-dropdown-menu" id="tgChatDropdown">
+            <a class="tg-dropdown-item" id="tgMenuSendInvoice" href="javascript:void(0)"><i class="fa fa-file-text-o"></i> Send Invoice</a>
+            <a class="tg-dropdown-item" id="tgMenuQuickPay" href="javascript:void(0)"><i class="fa fa-money"></i> Quick Pay</a>
+            <a class="tg-dropdown-item" id="tgMenuViewCustomer" href="javascript:void(0)" target="_blank"><i class="fa fa-user"></i> View Profile</a>
+            <a class="tg-dropdown-item" id="tgMenuRefreshChat" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh Thread</a>
+        </div>
+    </main>
+</div>
+
+<!-- Image Viewer Modal -->
+<div class="tg-viewer-modal" id="tgViewerModal">
+    <button type="button" class="tg-viewer-close" id="tgViewerClose">&times;</button>
+    <img src="" alt="Full view" id="tgViewerImage">
+</div>
 @endsection
 
 @section('loan_js')
 <script>
 (function($){
-    var activeThread = @json($initialThreadId ?? null);
-    var activeView = 'all';
-    var isEmbedded = @json($isEmbedded);
-    var threads = [];
     var csrf = '{{ csrf_token() }}';
-    var chatBaseUrl = '{{ url('loan-management/chat-api/chats') }}';
-    var pollMs = {{ (int) config('loanmanagement.chat_polling_seconds', 5) * 1000 }};
-    var inboxLoading = false;
-    var threadLoading = false;
+    var apiBaseUrl = '{{ url("loan-management/telegram-chat-api/chats") }}';
+    var pollMs = {{ (int) config("loanmanagement.chat_polling_seconds", 5) * 1000 }};
+    var initialThreadId = @json($initialThreadId ?? null);
+    var initialCustomerId = @json($initialCustomerId ?? null);
+
+    var contacts = [];
+    var activeContact = null;
+    var activeThreadId = null;
+    var currentFilter = 'all';
     var pollTimer = null;
-    var searchTimer = null;
-    var voiceRecorder = null;
+    var isFetchingList = false;
+    var isFetchingThread = false;
+
+    // Audio Voice Player State
+    var currentAudio = null;
+    var currentAudioMsgId = null;
+
+    // MediaRecorder State for Voice Recording
+    var mediaRecorder = null;
     var voiceStream = null;
     var voiceChunks = [];
     var voiceTimer = null;
     var voiceSeconds = 0;
-    var voiceSendAfterStop = false;
-    var voiceDiscardAfterStop = false;
-    var voiceMimeType = '';
+    var isRecording = false;
 
-    function apiData(resp){ return resp && resp.data && resp.data.data ? resp.data.data : (resp && resp.data ? resp.data : []); }
-    function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
-    function initials(name){ name = (name || 'Support Team').trim(); return esc(name.charAt(0).toUpperCase() || 'S'); }
-    function money(v){ var n = parseFloat(v || 0); return '$ ' + n.toFixed(2); }
-    function pad2(v){ return String(v).padStart(2, '0'); }
-    function formatChatTime(value, fallback){
-        if (!value) return fallback || '';
-        var raw = String(value).trim();
-        var date = new Date(raw);
-        if (isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-            date = new Date(raw.replace(' ', 'T'));
-        }
-        if (isNaN(date.getTime())) return fallback || raw;
-        return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' +
-            pad2(date.getHours()) + ':' + pad2(date.getMinutes()) + ':' + pad2(date.getSeconds());
-    }
-    function stopPolling(){
-        if (pollTimer) {
-            window.clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-    function buildUrl(url, params){
-        var query = [];
-        params = params || {};
-        Object.keys(params).forEach(function(key){
-            if (params[key] !== undefined && params[key] !== null) {
-                query.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
-            }
-        });
-        return url + (query.length ? (url.indexOf('?') >= 0 ? '&' : '?') + query.join('&') : '');
-    }
-    function parseJsonResponse(response){
-        var contentType = response.headers.get('content-type') || '';
-        if (!response.ok || contentType.indexOf('application/json') === -1) {
-            stopPolling();
-            throw new Error('Chat request did not return JSON.');
-        }
-        return response.json();
-    }
-    function apiGet(url, params){
-        return fetch(buildUrl(url, params), {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(parseJsonResponse);
-    }
-    function apiPost(url, data){
-        var body = data instanceof FormData ? data : new FormData();
-        if (!(data instanceof FormData)) {
-            data = data || {};
-            Object.keys(data).forEach(function(key){ body.append(key, data[key]); });
-        }
-        if (!body.has('_token')) {
-            body.append('_token', csrf);
-        }
+    // Palette for avatar backgrounds (authentic Telegram colors)
+    var avatarColors = ['#e56c55', '#f68b36', '#54b73b', '#2ca5e0', '#4ba3e3', '#916dd5', '#d665aa', '#3ea3b8'];
 
-        return fetch(url, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+    function getAvatarColor(name){
+        if (!name) return avatarColors[0];
+        var hash = 0;
+        for (var i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        var index = Math.abs(hash) % avatarColors.length;
+        return avatarColors[index];
+    }
+
+    function getInitials(name){
+        if (!name) return 'TG';
+        var parts = name.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    }
+
+    function esc(s){
+        return $('<div>').text(s == null ? '' : String(s)).html();
+    }
+
+    function formatTime(dateStr){
+        if (!dateStr) return '';
+        var d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        var hours = d.getHours();
+        var mins = d.getMinutes();
+        var ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        mins = mins < 10 ? '0' + mins : mins;
+        return hours + ':' + mins + ' ' + ampm;
+    }
+
+    function formatDateOrTime(dateStr){
+        if (!dateStr) return '';
+        var d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        var now = new Date();
+        var isToday = d.toDateString() === now.toDateString();
+        if (isToday) return formatTime(dateStr);
+
+        var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        if (d.getFullYear() === now.getFullYear()) {
+            return monthNames[d.getMonth()] + ' ' + d.getDate();
+        }
+        var day = d.getDate() < 10 ? '0' + d.getDate() : d.getDate();
+        var m = (d.getMonth() + 1) < 10 ? '0' + (d.getMonth() + 1) : (d.getMonth() + 1);
+        return day + '.' + m + '.' + String(d.getFullYear()).slice(-2);
+    }
+
+    function formatDuration(sec){
+        sec = Math.max(0, parseInt(sec, 10) || 0);
+        var m = Math.floor(sec / 60);
+        var s = sec % 60;
+        return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+    }
+
+    // -------------------------------------------------------------
+    // LOAD CONTACTS / CHAT LIST
+    // -------------------------------------------------------------
+    function loadChatList(silent){
+        if (isFetchingList && !silent) return;
+        isFetchingList = true;
+
+        var params = {
+            search: $('#tgSearchInput').val().trim()
+        };
+
+        $.ajax({
+            url: apiBaseUrl,
+            data: params,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(resp){
+                contacts = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : (resp.data.data || [])) : [];
+                renderChatList();
+                updatePillBadges();
             },
-            body: body
-        }).then(parseJsonResponse);
-    }
-
-    function loadInbox(keepActive){
-        if (isEmbedded) {
-            if (activeThread) {
-                loadThread(activeThread, false);
+            complete: function(){
+                isFetchingList = false;
             }
-            return;
-        }
-        if (inboxLoading) return;
-        inboxLoading = true;
-        apiGet(chatBaseUrl, {
-            view: activeView,
-            search: $('#chatSearch').val() || '',
-            location_id: $('#chatLocationFilter').val() || '',
-            priority: $('#chatPriorityFilter').val() || ''
-        }).then(function(resp){
-            threads = apiData(resp) || [];
-            renderCards(threads);
-            renderThreads();
-            if (activeThread) {
-                var exists = threads.some(function(t){ return String(t.id) === String(activeThread); });
-                if (exists) loadThread(activeThread, false);
-            }
-        }).catch(function(){}).finally(function(){ inboxLoading = false; });
-    }
-
-    function renderCards(rows){
-        if (isEmbedded) return;
-        $('#card_active').text(rows.filter(function(r){ return ['open','active','pending'].indexOf(r.status) >= 0; }).length);
-        $('#card_unread').text(rows.filter(function(r){ return Number(r.unread_count || 0) > 0; }).length);
-        $('#card_overdue').text(rows.filter(function(r){ return ['high','urgent'].indexOf(r.priority) >= 0 || r.type === 'overdue'; }).length);
-        $('#card_recovery').text(rows.filter(function(r){ return r.type === 'recovery' || r.assigned_team === 'recovery'; }).length);
-        $('#card_legal').text(rows.filter(function(r){ return r.type === 'legal' || r.assigned_team === 'legal'; }).length);
-        $('#card_closed').text(rows.filter(function(r){ return r.status === 'closed'; }).length);
-    }
-
-    function renderThreads(){
-        if (isEmbedded) return;
-        var q = ($('#chatSearch').val() || '').toLowerCase();
-        var list = $('#chatList').empty();
-        var filtered = threads.filter(function(r){
-            var priority = $('#chatPriorityFilter').val() || '';
-            var locationId = $('#chatLocationFilter').val() || '';
-            var hay = [r.display_name, r.display_subtitle, r.customer_name, r.customer_phone, r.location_name, r.last_message].join(' ').toLowerCase();
-            if (priority && r.priority !== priority) return false;
-            if (locationId && String(r.location_id || '') !== String(locationId)) return false;
-            return !q || hay.indexOf(q) >= 0;
         });
+    }
+
+    function updatePillBadges(){
+        $('#tgBadgeAll').text(contacts.length);
+        var invoiceCount = contacts.filter(function(c){ return !!c.invoice_no; }).length;
+        $('#tgBadgeInvoices').text(invoiceCount);
+        var installmentCount = contacts.filter(function(c){ return !!c.loan_id || !!c.installment_no; }).length;
+        $('#tgBadgeInstallments').text(installmentCount);
+    }
+
+    function filterContacts(){
+        var q = ($('#tgSearchInput').val() || '').toLowerCase().trim();
+        return contacts.filter(function(c){
+            if (currentFilter === 'personal') {
+                if (!c.telegram_linked) return false;
+            } else if (currentFilter === 'invoices') {
+                if (!c.invoice_no) return false;
+            } else if (currentFilter === 'installments') {
+                if (!c.loan_id && !c.installment_no) return false;
+            } else if (currentFilter === 'location') {
+                var locId = $('#tgFilterPills .tg-pill.active').data('location-id');
+                if (locId && String(c.location_id) !== String(locId)) return false;
+            }
+
+            if (q) {
+                var hay = [c.display_name, c.customer_name, c.customer_phone, c.invoice_no, c.loan_number, c.last_message].join(' ').toLowerCase();
+                if (hay.indexOf(q) === -1) return false;
+            }
+            return true;
+        });
+    }
+
+    function renderChatList(){
+        var $list = $('#tgChatList');
+        var filtered = filterContacts();
+
         if (!filtered.length) {
-            list.html('<div class="lm-chat-empty" style="height:160px">No chats found.</div>');
+            $list.html('<div class="tg-empty-chats"><i class="fa fa-telegram"></i><div>No chats found</div></div>');
             return;
         }
-        filtered.forEach(function(r){
-            var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-chat-badge">'+Number(r.unread_count)+'</span>' : '';
-            var avatar = r.avatar_url
-                ? '<img src="' + esc(r.avatar_url) + '" alt="">'
-                : initials(r.display_name);
-            var item = $('<div class="lm-chat-item" data-id="'+(r.id || '')+'" data-customer-id="'+(r.customer_id || '')+'" data-new-chat="'+(r.is_customer_only ? '1' : '0')+'">'+
-                '<div class="lm-chat-avatar '+(r.is_online ? 'online' : '')+'">'+avatar+'</div>'+
-                '<div style="min-width:0"><div class="lm-chat-title">'+esc(r.display_name)+'</div>'+
-                '<div class="lm-chat-subtitle">'+esc(threadSubtitle(r))+'</div>'+
-                '<div class="lm-chat-preview">'+esc(r.typing ? 'Typing...' : (r.last_sender_name ? r.last_sender_name + ': ' : '') + (r.last_message || 'No messages yet'))+'</div></div>'+
-                '<div style="text-align:right"><span class="lm-priority '+esc(r.status === 'new' ? 'new' : (r.priority || ''))+'">'+esc(r.status === 'new' ? 'new' : (r.priority || 'normal'))+'</span><div style="margin-top:6px">'+badge+'</div></div>'+
-            '</div>');
-            if (String(r.id) === String(activeThread)) item.addClass('active');
-            list.append(item);
-        });
-    }
 
-    function threadSubtitle(row){
-        var subtitle = row.display_subtitle || '';
-        var location = row.location_name || '';
-        if (!location || subtitle.indexOf(location) >= 0) {
-            return subtitle;
-        }
-        return [subtitle, location].filter(Boolean).join(' · ');
-    }
+        var html = '';
+        filtered.forEach(function(c){
+            var isActive = (activeThreadId && String(c.id) === String(activeThreadId)) || (activeContact && String(c.customer_id) === String(activeContact.customer_id));
+            var color = getAvatarColor(c.display_name || c.customer_name);
+            var initials = getInitials(c.display_name || c.customer_name);
+            var avatarHtml = c.avatar_url
+                ? '<img src="' + esc(c.avatar_url) + '" alt="">'
+                : initials;
 
-    function loadThread(id, markRead){
-        if (threadLoading) return;
-        activeThread = id;
-        $('.lm-chat-item').removeClass('active');
-        $('.lm-chat-item[data-id="'+id+'"]').addClass('active');
-        threadLoading = true;
-        apiGet(chatBaseUrl + '/' + id).then(function(resp){
-            var row = apiData(resp);
-            $('#activeTitle').text(row.display_name || 'Customer');
-            $('#activeSubtitle').text((row.display_subtitle || '') + (row.status ? ' - ' + row.status : ''));
-            $('#btnReopen').toggle(row.status === 'closed');
-            $('#btnClose').toggle(row.status !== 'closed');
-            renderMessages(row.messages || []);
-            renderSidebar(row.sidebar || {});
-            if (markRead !== false) {
-                apiPost(chatBaseUrl + '/' + id + '/read', {});
+            // Last message snippet with icon
+            var snippetIcon = '';
+            var snippetText = c.last_message || 'No messages yet';
+            if (c.last_message_type === 'image') {
+                snippetIcon = '<i class="fa fa-camera"></i> ';
+                snippetText = 'Photo';
+            } else if (c.last_message_type === 'audio') {
+                snippetIcon = '<i class="fa fa-microphone"></i> ';
+                snippetText = 'Voice message';
+            } else if (c.last_message_type === 'file') {
+                snippetIcon = '<i class="fa fa-paperclip"></i> ';
+                snippetText = 'Document';
+            } else if (c.last_message_type === 'location') {
+                snippetIcon = '<i class="fa fa-map-marker"></i> ';
+                snippetText = 'Location';
             }
-        }).catch(function(){}).finally(function(){ threadLoading = false; });
+
+            // Right column: Time + Badge or Checkmark
+            var timeHtml = formatDateOrTime(c.last_message_at);
+            var badgeHtml = '';
+            if (c.unread_count > 0) {
+                badgeHtml = '<span class="tg-item-badge">' + c.unread_count + '</span>';
+            } else if (c.last_message) {
+                badgeHtml = '<span class="tg-check-icon"><i class="fa fa-check"></i><i class="fa fa-check" style="margin-left:-4px"></i></span>';
+            }
+
+            html += '<div class="tg-chat-item ' + (isActive ? 'active' : '') + '" data-thread-id="' + (c.id || '') + '" data-customer-id="' + (c.customer_id || '') + '">' +
+                '<div class="tg-avatar-wrap">' +
+                    '<div class="tg-avatar" style="background:' + color + '">' + avatarHtml + '</div>' +
+                    (c.telegram_linked ? '<span class="tg-avatar-dot" title="Linked to Telegram"></span>' : '') +
+                '</div>' +
+                '<div class="tg-item-body">' +
+                    '<div class="tg-item-row-top">' +
+                        '<div class="tg-item-name">' + esc(c.display_name || c.customer_name || 'Customer') + '</div>' +
+                        '<div class="tg-item-time">' + timeHtml + '</div>' +
+                    '</div>' +
+                    '<div class="tg-item-row-bottom">' +
+                        '<div class="tg-item-preview">' + snippetIcon + '<span>' + esc(snippetText) + '</span></div>' +
+                        badgeHtml +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        $list.html(html);
+    }
+
+    // -------------------------------------------------------------
+    // OPEN CONVERSATION (SCREEN 2)
+    // -------------------------------------------------------------
+    function openConversation(threadId, customerId){
+        // Mobile layout state
+        $('#tgAppWrapper').addClass('in-conversation');
+        $('body').addClass('tg-viewing-chat');
+
+        activeThreadId = threadId;
+
+        // Find contact profile
+        activeContact = contacts.find(function(c){
+            return (threadId && String(c.id) === String(threadId)) || (customerId && String(c.customer_id) === String(customerId));
+        }) || { id: threadId, customer_id: customerId };
+
+        renderHeader(activeContact);
+        $('#tgDesktopPlaceholder').hide();
+        $('#tgChatHeader').show();
+        $('#tgComposerForm').show();
+
+        // Load messages
+        if (threadId) {
+            loadThreadMessages(threadId, true);
+        } else if (customerId) {
+            // Create or find thread
+            $.ajax({
+                url: apiBaseUrl,
+                method: 'POST',
+                data: { _token: csrf, customer_id: customerId },
+                success: function(resp){
+                    if (resp && resp.data && resp.data.id) {
+                        activeThreadId = resp.data.id;
+                        activeContact = resp.data;
+                        renderHeader(activeContact);
+                        loadThreadMessages(resp.data.id, true);
+                        loadChatList(true);
+                    }
+                }
+            });
+        }
+    }
+
+    function renderHeader(c){
+        var name = c.display_name || c.customer_name || 'Customer';
+        var phone = c.customer_phone || '';
+        var color = getAvatarColor(name);
+        var initials = getInitials(name);
+
+        $('#tgHeaderName').text(name);
+        $('#tgHeaderAvatar').css('background', color).html(
+            c.avatar_url ? '<img src="' + esc(c.avatar_url) + '" alt="">' : initials
+        );
+
+        if (c.telegram_linked) {
+            $('#tgHeaderStatus').text('online').addClass('online');
+        } else {
+            $('#tgHeaderStatus').text(phone ? phone + (c.location_name ? ' · ' + c.location_name : '') : 'last seen recently').removeClass('online');
+        }
+
+        if (phone) {
+            $('#tgHeaderCallBtn').attr('href', 'tel:' + phone.replace(/[^0-9+]/g, '')).show();
+        } else {
+            $('#tgHeaderCallBtn').hide();
+        }
+
+        if (c.customer_id) {
+            $('#tgMenuViewCustomer').attr('href', '{{ url("loan-management/customers") }}/' + c.customer_id);
+        }
+    }
+
+    function loadThreadMessages(threadId, markAsRead){
+        if (isFetchingThread) return;
+        isFetchingThread = true;
+
+        $.ajax({
+            url: apiBaseUrl + '/' + threadId,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(resp){
+                var threadData = resp && resp.data ? resp.data : null;
+                if (!threadData) return;
+                activeContact = threadData;
+                renderHeader(threadData);
+                renderMessages(threadData.messages || []);
+
+                if (markAsRead) {
+                    $.post(apiBaseUrl + '/' + threadId + '/read', { _token: csrf });
+                }
+            },
+            complete: function(){
+                isFetchingThread = false;
+            }
+        });
     }
 
     function renderMessages(messages){
-        var box = $('#messageList').empty();
+        var $body = $('#tgChatMessages');
+        var prevScrollHeight = $body[0].scrollHeight;
+
         if (!messages.length) {
-            box.html('<div class="lm-chat-empty">No messages yet.</div>');
+            $body.html('<div class="tg-date-divider"><span>No messages yet</span></div>');
             return;
         }
+
+        var html = '';
+        var lastDate = '';
+
         messages.forEach(function(m){
-            var body = esc(m.message || '');
-            if (m.message_type === 'image' && m.file && m.file.url) body += '<div><img src="'+esc(m.file.url)+'" style="max-width:220px;border-radius:8px;margin-top:6px"></div>';
-            if (m.message_type === 'file' && m.file && m.file.url) body += '<div><a href="'+esc(m.file.url)+'" target="_blank">'+esc(m.file.name || 'Download file')+'</a></div>';
-            if (m.message_type === 'audio' && m.file && m.file.url) body += '<div><audio controls src="'+esc(m.file.url)+'" style="max-width:220px;margin-top:6px"></audio></div>';
-            if (m.message_type === 'location' && m.location && m.location.latitude) body += '<div><a target="_blank" href="https://maps.google.com/?q='+esc(m.location.latitude)+','+esc(m.location.longitude)+'">Open location</a></div>';
-            box.append('<div class="lm-msg-row '+(m.is_own ? 'own' : '')+'"><div class="lm-msg"><div class="lm-msg-name">'+esc(m.sender_name || '')+'</div><div>'+body+'</div><div class="lm-msg-meta">'+esc(formatChatTime(m.created_at_iso || m.created_at, m.created_at_display || m.created_at || ''))+'</div></div></div>');
+            // Date Divider
+            var msgDate = m.created_at ? m.created_at.split(' ')[0] : '';
+            if (msgDate && msgDate !== lastDate) {
+                lastDate = msgDate;
+                html += '<div class="tg-date-divider"><span>' + formatDateOrTime(m.created_at) + '</span></div>';
+            }
+
+            var isOwn = m.is_own || m.sender_type === 'staff' || m.sender_type === 'admin';
+            var timeFormatted = formatTime(m.created_at);
+            var ticks = isOwn ? '<span class="tg-ticks"><i class="fa fa-check"></i><i class="fa fa-check" style="margin-left:-4px"></i></span>' : '';
+
+            var bubbleContent = '';
+
+            // 1. Text Message
+            if (m.message_type === 'text' || (!m.message_type && m.message)) {
+                bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+            }
+
+            // 2. Voice Audio Message
+            if (m.message_type === 'audio' && m.file && m.file.url) {
+                var dur = m.audio_duration_seconds ? formatDuration(m.audio_duration_seconds) : '00:20';
+                bubbleContent += '<div class="tg-voice-card" data-audio-url="' + esc(m.file.url) + '" data-msg-id="' + m.id + '">' +
+                    '<button type="button" class="tg-voice-play-btn js-voice-play" aria-label="Play"><i class="fa fa-play"></i></button>' +
+                    '<div class="tg-voice-wave-wrap">' +
+                        '<div class="tg-voice-waveform js-voice-waveform">' + generateWaveformBars() + '</div>' +
+                        '<div class="tg-voice-timing"><span class="js-voice-timer">' + dur + '</span></div>' +
+                    '</div>' +
+                '</div>';
+                if (m.message) {
+                    bubbleContent += '<div class="tg-msg-text" style="margin-top:4px">' + esc(m.message) + '</div>';
+                }
+            }
+
+            // 3. Image Message
+            if (m.message_type === 'image' && m.file && m.file.url) {
+                bubbleContent += '<div class="tg-image-wrap js-view-image" data-full-url="' + esc(m.file.url) + '">' +
+                    '<img src="' + esc(m.file.url) + '" alt="Image">' +
+                '</div>';
+                if (m.message) {
+                    bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+                }
+            }
+
+            // 4. Document / File Message
+            if (m.message_type === 'file' && m.file && m.file.url) {
+                bubbleContent += '<a href="' + esc(m.file.url) + '" target="_blank" download class="tg-file-card">' +
+                    '<div class="tg-file-icon"><i class="fa fa-file-text"></i></div>' +
+                    '<div class="tg-file-details">' +
+                        '<div class="tg-file-name">' + esc(m.file.name || 'Invoice / Document') + '</div>' +
+                        '<div class="tg-file-size">Download file</div>' +
+                    '</div>' +
+                '</a>';
+                if (m.message) {
+                    bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+                }
+            }
+
+            // 5. Location Message
+            if (m.message_type === 'location' && m.latitude && m.longitude) {
+                var mapUrl = 'https://maps.google.com/?q=' + m.latitude + ',' + m.longitude;
+                bubbleContent += '<a href="' + esc(mapUrl) + '" target="_blank" class="tg-file-card">' +
+                    '<div class="tg-file-icon" style="background:#ef4444"><i class="fa fa-map-marker"></i></div>' +
+                    '<div class="tg-file-details">' +
+                        '<div class="tg-file-name">Location Pin</div>' +
+                        '<div class="tg-file-size">Tap to open in Google Maps</div>' +
+                    '</div>' +
+                '</a>';
+            }
+
+            // Quoted message support
+            var quoteHtml = '';
+            if (m.quote_text) {
+                quoteHtml = '<div class="tg-quote-box">' +
+                    '<div class="tg-quote-author">' + esc(m.quote_author || 'Reply') + '</div>' +
+                    '<div class="tg-quote-text">' + esc(m.quote_text) + '</div>' +
+                '</div>';
+            }
+
+            html += '<div class="tg-msg-row ' + (isOwn ? 'own' : '') + '">' +
+                '<div class="tg-bubble">' +
+                    (!isOwn && m.sender_name ? '<div class="tg-msg-sender">' + esc(m.sender_name) + '</div>' : '') +
+                    quoteHtml +
+                    bubbleContent +
+                    '<div class="tg-msg-meta"><span>' + timeFormatted + '</span> ' + ticks + '</div>' +
+                '</div>' +
+            '</div>';
         });
-        box.scrollTop(box[0].scrollHeight);
+
+        $body.html(html);
+
+        // Scroll to bottom if user was near bottom or on initial load
+        $body.scrollTop($body[0].scrollHeight);
     }
 
-    function renderSidebar(info){
-        if (isEmbedded) return;
-        var rows = [
-            ['Customer', info.customer_name],
-            ['Phone', info.phone],
-            ['Location', info.location_name],
-            ['Installment #', info.loan_number],
-            ['Overdue Days', info.overdue_days],
-            ['Balance', money(info.balance)],
-            ['Next Due', info.next_due_date],
-            ['Risk', info.risk_level],
-            ['Guarantor', info.guarantor],
-            ['GPS', info.gps_location && info.gps_location.latitude ? info.gps_location.latitude + ', ' + info.gps_location.longitude : '-'],
-            ['Notes', info.collection_notes]
-        ];
-        $('#customerInfo').html(rows.map(function(r){ return '<div class="lm-info-row"><span>'+esc(r[0])+'</span><span>'+esc(r[1] || '-')+'</span></div>'; }).join(''));
+    function generateWaveformBars(){
+        var heights = [6, 12, 18, 10, 16, 22, 14, 8, 18, 24, 12, 20, 16, 10, 22, 18, 14, 8, 16, 20, 12, 16, 22, 14, 8, 12];
+        return heights.map(function(h){
+            return '<div class="tg-voice-bar" style="height:' + h + 'px"></div>';
+        }).join('');
     }
 
-    function sendFile(type, file){
-        if (!activeThread || !file) return;
-        var data = new FormData();
-        data.append('_token', csrf);
-        data.append('message_type', type);
-        data.append('file', file);
-        data.append('message', $('#messageText').val() || '');
-        apiPost(chatBaseUrl + '/' + activeThread + '/messages', data)
-            .then(function(){ $('#messageText').val(''); $('#chatFile').val(''); loadThread(activeThread); loadInbox(true); })
-            .catch(function(){});
-    }
+    // -------------------------------------------------------------
+    // AUDIO VOICE PLAYBACK
+    // -------------------------------------------------------------
+    $(document).on('click', '.js-voice-play', function(){
+        var $card = $(this).closest('.tg-voice-card');
+        var audioUrl = $card.data('audio-url');
+        var msgId = $card.data('msg-id');
 
-    function showVoiceError(message) {
-        $('#voiceError').text(message || 'Voice recorder is not available.').show();
-        $('#messageForm').addClass('has-voice-error');
-        window.setTimeout(function(){
-            $('#messageForm').removeClass('has-voice-error');
-            $('#voiceError').hide().text('');
-        }, 4200);
-    }
-
-    function formatVoiceSeconds(seconds) {
-        seconds = Math.max(0, Number(seconds || 0));
-        return pad2(Math.floor(seconds / 60)) + ':' + pad2(seconds % 60);
-    }
-
-    function setVoiceUi(state) {
-        var isRecording = state === 'recording';
-        var isPaused = state === 'paused';
-        $('#messageForm').toggleClass('is-recording', isRecording || isPaused);
-        $('#voicePanel').toggleClass('lm-voice-paused', isPaused);
-        $('#btnVoice').toggle(!(isRecording || isPaused));
-        $('#btnImage, #btnFile, #btnLocation, #messageForm button[type="submit"]').prop('disabled', isRecording || isPaused);
-        $('#voiceStatusText').text(isPaused ? 'Paused' : 'Recording');
-        $('#btnVoicePause').attr('title', isPaused ? 'Resume' : 'Pause')
-            .html(isPaused ? '<i class="fa fa-play"></i>' : '<i class="fa fa-pause"></i>');
-    }
-
-    function releaseVoiceStream() {
-        if (voiceStream) {
-            voiceStream.getTracks().forEach(function(track){ track.stop(); });
-        }
-        voiceStream = null;
-    }
-
-    function resetVoiceRecorder() {
-        if (voiceTimer) {
-            window.clearInterval(voiceTimer);
-            voiceTimer = null;
-        }
-        voiceRecorder = null;
-        voiceChunks = [];
-        voiceSeconds = 0;
-        voiceSendAfterStop = false;
-        voiceDiscardAfterStop = false;
-        voiceMimeType = '';
-        $('#voiceTimer').text('00:00');
-        setVoiceUi('idle');
-        releaseVoiceStream();
-    }
-
-    function tickVoiceTimer() {
-        if (!voiceRecorder || voiceRecorder.state !== 'recording') {
-            return;
-        }
-        voiceSeconds += 1;
-        $('#voiceTimer').text(formatVoiceSeconds(voiceSeconds));
-    }
-
-    function preferredVoiceMimeType() {
-        var candidates = [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/ogg;codecs=opus',
-            'audio/ogg',
-            'audio/mp4'
-        ];
-        if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) {
-            return '';
-        }
-        for (var i = 0; i < candidates.length; i++) {
-            if (MediaRecorder.isTypeSupported(candidates[i])) {
-                return candidates[i];
+        if (currentAudio && currentAudioMsgId === msgId) {
+            if (!currentAudio.paused) {
+                currentAudio.pause();
+                $(this).html('<i class="fa fa-play"></i>');
+                return;
+            } else {
+                currentAudio.play();
+                $(this).html('<i class="fa fa-pause"></i>');
+                return;
             }
         }
-        return '';
-    }
 
-    function extensionForVoiceMime(mimeType) {
-        mimeType = String(mimeType || '').toLowerCase();
-        if (mimeType.indexOf('ogg') >= 0) return 'ogg';
-        if (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0) return 'm4a';
-        return 'webm';
-    }
+        // Stop any currently playing audio
+        if (currentAudio) {
+            currentAudio.pause();
+            $('.js-voice-play').html('<i class="fa fa-play"></i>');
+            $('.tg-voice-bar').removeClass('played');
+        }
 
-    function sendVoiceBlob(blob, durationSeconds) {
-        if (!activeThread || !blob || !blob.size) {
-            resetVoiceRecorder();
+        var audio = new Audio(audioUrl);
+        var $btn = $(this);
+        var $bars = $card.find('.tg-voice-bar');
+        var $timer = $card.find('.js-voice-timer');
+
+        currentAudio = audio;
+        currentAudioMsgId = msgId;
+
+        $btn.html('<i class="fa fa-pause"></i>');
+        audio.play();
+
+        audio.ontimeupdate = function(){
+            if (!audio.duration) return;
+            var progress = audio.currentTime / audio.duration;
+            var playedCount = Math.floor(progress * $bars.length);
+            $bars.each(function(idx){
+                $(this).toggleClass('played', idx <= playedCount);
+            });
+            $timer.text(formatDuration(Math.floor(audio.currentTime)));
+        };
+
+        audio.onended = function(){
+            $btn.html('<i class="fa fa-play"></i>');
+            $bars.removeClass('played');
+            $timer.text(formatDuration(Math.floor(audio.duration || 0)));
+            currentAudio = null;
+            currentAudioMsgId = null;
+        };
+    });
+
+    // -------------------------------------------------------------
+    // SEND TEXT MESSAGE
+    // -------------------------------------------------------------
+    $('#tgComposerForm').on('submit', function(e){
+        e.preventDefault();
+        if (!activeThreadId) return;
+
+        // If recording voice, stop & send voice
+        if (isRecording) {
+            finishVoiceRecording();
             return;
         }
-        releaseVoiceStream();
-        var extension = extensionForVoiceMime(blob.type || voiceMimeType);
-        var file = new File([blob], 'voice-message-' + Date.now() + '.' + extension, {type: blob.type || voiceMimeType || 'audio/webm'});
-        var data = new FormData();
-        data.append('_token', csrf);
-        data.append('message_type', 'audio');
-        data.append('file', file);
-        data.append('audio_duration_seconds', Math.max(1, durationSeconds || voiceSeconds));
-        data.append('message', $('#messageText').val() || '');
-        apiPost(chatBaseUrl + '/' + activeThread + '/messages', data)
-            .then(function(){
-                $('#messageText').val('');
-                loadThread(activeThread);
-                loadInbox(true);
-            })
-            .catch(function(){
-                showVoiceError('Cannot send voice message.');
-            })
-            .finally(resetVoiceRecorder);
-    }
 
-    function startVoiceRecording() {
-        if (!activeThread) {
-            showVoiceError('Select a chat before recording voice.');
-            return;
+        var text = $('#tgMessageInput').val().trim();
+        if (!text) return;
+
+        $('#tgMessageInput').val('');
+        toggleSendActionIcon();
+
+        $.ajax({
+            url: apiBaseUrl + '/' + activeThreadId + '/messages',
+            method: 'POST',
+            data: {
+                _token: csrf,
+                message_type: 'text',
+                message: text
+            },
+            success: function(){
+                loadThreadMessages(activeThreadId, false);
+                loadChatList(true);
+            }
+        });
+    });
+
+    // Dynamic Send Button Icon (Microphone vs Send Arrow)
+    function toggleSendActionIcon(){
+        var hasText = $('#tgMessageInput').val().trim().length > 0;
+        if (hasText) {
+            $('#tgActionSendIcon').removeClass('fa-microphone').addClass('fa-paper-plane');
+            $('#tgActionSendBtn').attr('title', 'Send Message');
+        } else {
+            $('#tgActionSendIcon').removeClass('fa-paper-plane').addClass('fa-microphone');
+            $('#tgActionSendBtn').attr('title', 'Record Voice');
         }
+    }
+    $('#tgMessageInput').on('input', toggleSendActionIcon);
+
+    // -------------------------------------------------------------
+    // VOICE RECORDING (MediaRecorder)
+    // -------------------------------------------------------------
+    $('#tgActionSendBtn').on('click', function(e){
+        var hasText = $('#tgMessageInput').val().trim().length > 0;
+        if (!hasText && !isRecording) {
+            e.preventDefault();
+            startVoiceRecording();
+        }
+    });
+
+    function startVoiceRecording(){
+        if (!activeThreadId) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-            showVoiceError('Voice recording is not supported in this browser.');
-            return;
-        }
-        if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+            alert('Voice recording is not supported in this browser.');
             return;
         }
 
-        navigator.mediaDevices.getUserMedia({audio: true}).then(function(stream){
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
             voiceStream = stream;
             voiceChunks = [];
             voiceSeconds = 0;
-            voiceSendAfterStop = false;
-            voiceDiscardAfterStop = false;
-            voiceMimeType = preferredVoiceMimeType();
-            var options = voiceMimeType ? {mimeType: voiceMimeType} : {};
-            voiceRecorder = new MediaRecorder(stream, options);
+            isRecording = true;
 
-            voiceRecorder.ondataavailable = function(event) {
-                if (event.data && event.data.size > 0) {
-                    voiceChunks.push(event.data);
-                }
+            var options = {};
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                options = { mimeType: 'audio/webm;codecs=opus' };
+            } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+                options = { mimeType: 'audio/ogg;codecs=opus' };
+            }
+
+            mediaRecorder = new MediaRecorder(stream, options);
+
+            mediaRecorder.ondataavailable = function(e){
+                if (e.data && e.data.size > 0) voiceChunks.push(e.data);
             };
-            voiceRecorder.onstop = function() {
-                if (voiceDiscardAfterStop) {
-                    resetVoiceRecorder();
-                    return;
-                }
-                if (voiceSendAfterStop) {
-                    var blob = new Blob(voiceChunks, {type: voiceMimeType || (voiceChunks[0] && voiceChunks[0].type) || 'audio/webm'});
+
+            mediaRecorder.onstop = function(){
+                if (voiceSeconds >= 1 && voiceChunks.length) {
+                    var mime = mediaRecorder.mimeType || 'audio/webm';
+                    var blob = new Blob(voiceChunks, { type: mime });
                     sendVoiceBlob(blob, voiceSeconds);
-                    return;
                 }
                 resetVoiceRecorder();
             };
-            voiceRecorder.onerror = function() {
-                showVoiceError('Voice recorder stopped unexpectedly.');
-                resetVoiceRecorder();
-            };
 
-            voiceRecorder.start(1000);
-            $('#voiceTimer').text('00:00');
-            setVoiceUi('recording');
-            voiceTimer = window.setInterval(tickVoiceTimer, 1000);
-        }).catch(function(){
-            showVoiceError('Microphone permission is required for voice messages.');
-            resetVoiceRecorder();
+            mediaRecorder.start(500);
+            $('#tgComposerForm').addClass('is-recording');
+            $('#tgActionSendBtn').addClass('recording');
+            $('#tgVoiceTimer').text('00:00');
+
+            voiceTimer = setInterval(function(){
+                voiceSeconds++;
+                $('#tgVoiceTimer').text(formatDuration(voiceSeconds));
+            }, 1000);
+        }).catch(function(err){
+            alert('Microphone permission required to record voice notes.');
         });
     }
 
-    function pauseOrResumeVoice() {
-        if (!voiceRecorder) return;
-        if (voiceRecorder.state === 'recording') {
-            if (voiceRecorder.pause) {
-                voiceRecorder.pause();
-                setVoiceUi('paused');
-            }
-        } else if (voiceRecorder.state === 'paused') {
-            if (voiceRecorder.resume) {
-                voiceRecorder.resume();
-                setVoiceUi('recording');
-            }
+    function finishVoiceRecording(){
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
         }
     }
 
-    function cancelVoiceRecording() {
-        if (!voiceRecorder) {
-            resetVoiceRecorder();
+    function cancelVoiceRecording(){
+        if (voiceTimer) clearInterval(voiceTimer);
+        voiceChunks = [];
+        voiceSeconds = 0;
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+        resetVoiceRecorder();
+    }
+    $('#tgVoiceCancelBtn').on('click', cancelVoiceRecording);
+
+    function resetVoiceRecorder(){
+        if (voiceTimer) clearInterval(voiceTimer);
+        voiceTimer = null;
+        if (voiceStream) {
+            voiceStream.getTracks().forEach(function(t){ t.stop(); });
+            voiceStream = null;
+        }
+        mediaRecorder = null;
+        isRecording = false;
+        $('#tgComposerForm').removeClass('is-recording');
+        $('#tgActionSendBtn').removeClass('recording');
+        toggleSendActionIcon();
+    }
+
+    function sendVoiceBlob(blob, durationSec){
+        var ext = blob.type.indexOf('ogg') >= 0 ? 'ogg' : 'webm';
+        var file = new File([blob], 'voice-' + Date.now() + '.' + ext, { type: blob.type });
+        var formData = new FormData();
+        formData.append('_token', csrf);
+        formData.append('message_type', 'audio');
+        formData.append('file', file);
+        formData.append('duration_seconds', durationSec);
+
+        $.ajax({
+            url: apiBaseUrl + '/' + activeThreadId + '/messages',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(){
+                loadThreadMessages(activeThreadId, false);
+                loadChatList(true);
+            }
+        });
+    }
+
+    // -------------------------------------------------------------
+    // ATTACHMENTS (Invoice, Photo, Document, Location)
+    // -------------------------------------------------------------
+    $('#tgAttachBtn').on('click', function(e){
+        e.stopPropagation();
+        $('#tgAttachSheet').toggleClass('open');
+        $('#tgEmojiPanel').addClass('hidden');
+    });
+    $(document).on('click', function(e){
+        if (!$(e.target).closest('#tgAttachSheet, #tgAttachBtn').length) {
+            $('#tgAttachSheet').removeClass('open');
+        }
+        if (!$(e.target).closest('#tgEmojiPanel, #tgEmojiBtn').length) {
+            $('#tgEmojiPanel').addClass('hidden');
+        }
+        if (!$(e.target).closest('#tgChatDropdown, #tgChatMenuBtn').length) {
+            $('#tgChatDropdown').removeClass('open');
+        }
+        if (!$(e.target).closest('#tgListDropdown, #tgListMenuBtn').length) {
+            $('#tgListDropdown').removeClass('open');
+        }
+    });
+
+    // Send Invoice
+    $('#tgAttachInvoice, #tgMenuSendInvoice').on('click', function(){
+        $('#tgAttachSheet').removeClass('open');
+        $('#tgChatDropdown').removeClass('open');
+        if (!activeThreadId) return;
+
+        var invoiceNum = activeContact ? (activeContact.invoice_no || activeContact.loan_number || '') : '';
+        if (!confirm('Send installment invoice snapshot' + (invoiceNum ? ' (' + invoiceNum + ')' : '') + ' to customer?')) {
             return;
         }
-        if (voiceTimer) {
-            window.clearInterval(voiceTimer);
-            voiceTimer = null;
-        }
-        voiceDiscardAfterStop = true;
-        voiceSendAfterStop = false;
-        if (voiceRecorder.state !== 'inactive') {
-            voiceRecorder.stop();
+
+        $.ajax({
+            url: apiBaseUrl + '/' + activeThreadId + '/invoice-image',
+            method: 'POST',
+            data: { _token: csrf },
+            success: function(){
+                loadThreadMessages(activeThreadId, false);
+                loadChatList(true);
+            },
+            error: function(err){
+                alert('Cannot generate invoice image. ' + (err.responseJSON && err.responseJSON.message ? err.responseJSON.message : ''));
+            }
+        });
+    });
+
+    // Quick Pay action
+    $('#tgMenuQuickPay').on('click', function(){
+        $('#tgChatDropdown').removeClass('open');
+        if (!activeContact) return;
+        var loanId = activeContact.loan_id;
+        if (loanId && typeof window.openLoanQuickPayModal === 'function') {
+            window.openLoanQuickPayModal(loanId);
         } else {
-            resetVoiceRecorder();
+            alert('Quick Pay is available for customers with an active installment loan.');
         }
-    }
-
-    function finishVoiceRecording() {
-        if (!voiceRecorder) return;
-        if (voiceTimer) {
-            window.clearInterval(voiceTimer);
-            voiceTimer = null;
-        }
-        voiceSendAfterStop = true;
-        voiceDiscardAfterStop = false;
-        if (voiceRecorder.state === 'paused' && voiceRecorder.resume) {
-            voiceRecorder.resume();
-        }
-        if (voiceRecorder.state !== 'inactive') {
-            voiceRecorder.stop();
-        }
-    }
-
-    $('#chatTabs').on('click', '.lm-chat-tab', function(){
-        activeView = $(this).data('view');
-        $('.lm-chat-tab').removeClass('active');
-        $(this).addClass('active');
-        loadInbox(false);
     });
-    function openCustomerTarget(customerId){
-        $('#activeTitle').text('Opening customer chat...');
-        $('#activeSubtitle').text('Preparing conversation');
-        apiPost(chatBaseUrl, {customer_id: customerId, type: 'customer_staff', priority: 'normal'}).then(function(resp){
-            var row = apiData(resp);
-            if (row && row.id) {
-                activeThread = row.id;
-                loadInbox(true);
-                loadThread(row.id);
+
+    // Photo / Camera
+    $('#tgAttachPhoto, #tgFabCamera').on('click', function(){
+        $('#tgAttachSheet').removeClass('open');
+        $('#tgFileInputImage').click();
+    });
+    $('#tgFileInputImage').on('change', function(){
+        var file = this.files[0];
+        if (!file || !activeThreadId) return;
+        sendFileMessage('image', file);
+    });
+
+    // Document / File
+    $('#tgAttachFile').on('click', function(){
+        $('#tgAttachSheet').removeClass('open');
+        $('#tgFileInputDoc').click();
+    });
+    $('#tgFileInputDoc').on('change', function(){
+        var file = this.files[0];
+        if (!file || !activeThreadId) return;
+        sendFileMessage('file', file);
+    });
+
+    function sendFileMessage(type, file){
+        var formData = new FormData();
+        formData.append('_token', csrf);
+        formData.append('message_type', type);
+        formData.append('file', file);
+        formData.append('message', $('#tgMessageInput').val().trim());
+        $('#tgMessageInput').val('');
+        toggleSendActionIcon();
+
+        $.ajax({
+            url: apiBaseUrl + '/' + activeThreadId + '/messages',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(){
+                loadThreadMessages(activeThreadId, false);
+                loadChatList(true);
             }
-        }).catch(function(){
-            var message = 'Cannot open chat for this customer.';
-            $('#messageList').html('<div class="lm-chat-empty">'+esc(message)+'</div>');
-            $('#activeTitle').text('Chat not opened');
-            $('#activeSubtitle').text('Please check Live Chat permission');
         });
     }
 
-    $('#chatList').on('click', '.lm-chat-item', function(){
-        var id = $(this).data('id');
-        if (id) {
-            loadThread(id);
-            return;
-        }
-        var customerId = $(this).data('customer-id');
-        if (customerId) {
-            openCustomerTarget(customerId);
-        }
-    });
-    $('#chatSearch').on('input', function(){
-        renderThreads();
-        if (searchTimer) window.clearTimeout(searchTimer);
-        searchTimer = window.setTimeout(function(){ loadInbox(false); }, 350);
-    });
-    $('#chatLocationFilter, #chatPriorityFilter').on('change', function(){
-        renderThreads();
-        loadInbox(false);
-    });
-    $('#messageText').on('input', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/typing', {}); });
-    $('#messageForm').on('submit', function(e){
-        e.preventDefault();
-        if (!activeThread || !$('#messageText').val().trim()) return;
-        apiPost(chatBaseUrl + '/' + activeThread + '/messages', {message_type:'text', message:$('#messageText').val()}).then(function(){
-            $('#messageText').val('');
-            loadThread(activeThread);
-            loadInbox(true);
-        }).catch(function(){
-            var message = 'Cannot send reply.';
-            $('#messageList').append('<div class="lm-chat-empty" style="height:auto;padding:10px">'+esc(message)+'</div>');
-        });
-    });
-    $('#btnImage').on('click', function(){ $('#chatFile').attr('accept','image/*').data('type','image').click(); });
-    $('#btnFile').on('click', function(){ $('#chatFile').removeAttr('accept').data('type','file').click(); });
-    $('#chatFile').on('change', function(){ sendFile($(this).data('type') || 'file', this.files[0]); });
-    $('#btnVoice').on('click', startVoiceRecording);
-    $('#btnVoicePause').on('click', pauseOrResumeVoice);
-    $('#btnVoiceCancel').on('click', cancelVoiceRecording);
-    $('#btnVoiceSend').on('click', finishVoiceRecording);
-    $(window).on('beforeunload', function(){
-        if (voiceRecorder && voiceRecorder.state !== 'inactive') {
-            voiceDiscardAfterStop = true;
-            voiceRecorder.stop();
-        }
-        releaseVoiceStream();
-    });
-    $('#btnLocation').on('click', function(){
-        if (!activeThread || !navigator.geolocation) return;
+    // Location
+    $('#tgAttachLocation').on('click', function(){
+        $('#tgAttachSheet').removeClass('open');
+        if (!navigator.geolocation || !activeThreadId) return;
+
         navigator.geolocation.getCurrentPosition(function(pos){
-            apiPost(chatBaseUrl + '/' + activeThread + '/messages', {message_type:'location',latitude:pos.coords.latitude,longitude:pos.coords.longitude}).then(function(){ loadThread(activeThread); });
+            $.ajax({
+                url: apiBaseUrl + '/' + activeThreadId + '/messages',
+                method: 'POST',
+                data: {
+                    _token: csrf,
+                    message_type: 'location',
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude
+                },
+                success: function(){
+                    loadThreadMessages(activeThreadId, false);
+                    loadChatList(true);
+                }
+            });
+        }, function(){
+            alert('Cannot access GPS location.');
         });
     });
-    $('#btnAssign').on('click', function(){
-        if (!activeThread || !$('#assignStaffId').val()) return;
-        apiPost(chatBaseUrl + '/' + activeThread + '/assign', {staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}).then(function(){ loadThread(activeThread); loadInbox(true); });
-    });
-    $('#btnTransfer').on('click', function(){
-        if (!activeThread || !$('#assignStaffId').val()) return;
-        apiPost(chatBaseUrl + '/' + activeThread + '/transfer', {staff_id:$('#assignStaffId').val(), assigned_team:$('#assignTeam').val()}).then(function(){ loadThread(activeThread); loadInbox(true); });
-    });
-    $('#btnClose').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/close', {}).then(function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnReopen').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/reopen', {}).then(function(){ loadThread(activeThread); loadInbox(true); }); });
-    $('#btnPin').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/pin', {is_pinned:1}).then(function(){ loadInbox(true); }); });
-    $('#btnMute').on('click', function(){ if(activeThread) apiPost(chatBaseUrl + '/' + activeThread + '/mute', {is_muted:1}).then(function(){ loadInbox(true); }); });
 
-    if (isEmbedded && activeThread) {
-        loadThread(activeThread, false);
-    } else {
-        loadInbox(false);
+    // -------------------------------------------------------------
+    // EMOJI PICKER
+    // -------------------------------------------------------------
+    $('#tgEmojiBtn').on('click', function(e){
+        e.stopPropagation();
+        $('#tgEmojiPanel').toggleClass('hidden');
+        $('#tgAttachSheet').removeClass('open');
+    });
+    $(document).on('click', '.tg-emoji-item', function(){
+        var emoji = $(this).text();
+        var $input = $('#tgMessageInput');
+        $input.val($input.val() + emoji).focus();
+        toggleSendActionIcon();
+    });
+
+    // -------------------------------------------------------------
+    // NAVIGATION (LIST <-> CHAT VIEW)
+    // -------------------------------------------------------------
+    $('#tgChatList').on('click', '.tg-chat-item', function(){
+        var threadId = $(this).data('thread-id');
+        var customerId = $(this).data('customer-id');
+        $('.tg-chat-item').removeClass('active');
+        $(this).addClass('active');
+        openConversation(threadId, customerId);
+    });
+
+    $('#tgBackToListBtn').on('click', function(){
+        $('#tgAppWrapper').removeClass('in-conversation');
+        $('body').removeClass('tg-viewing-chat');
+        loadChatList(true);
+    });
+
+    // Search & Filter Actions
+    $('#tgSearchInput').on('input', function(){
+        var val = $(this).val();
+        $('#tgSearchClear').toggle(val.length > 0);
+        renderChatList();
+    });
+    $('#tgSearchClear').on('click', function(){
+        $('#tgSearchInput').val('').trigger('input');
+    });
+
+    $('#tgFilterPills').on('click', '.tg-pill', function(){
+        $('#tgFilterPills .tg-pill').removeClass('active');
+        $(this).addClass('active');
+        currentFilter = $(this).data('filter');
+        renderChatList();
+    });
+
+    $('#tgFabCompose').on('click', function(){
+        $('#tgSearchInput').focus();
+    });
+
+    // Menus
+    $('#tgListMenuBtn').on('click', function(e){
+        e.stopPropagation();
+        $('#tgListDropdown').toggleClass('open');
+    });
+    $('#tgChatMenuBtn').on('click', function(e){
+        e.stopPropagation();
+        $('#tgChatDropdown').toggleClass('open');
+    });
+    $('#tgActionRefresh').on('click', function(){
+        $('#tgListDropdown').removeClass('open');
+        loadChatList(false);
+    });
+    $('#tgMenuRefreshChat').on('click', function(){
+        $('#tgChatDropdown').removeClass('open');
+        if (activeThreadId) loadThreadMessages(activeThreadId, false);
+    });
+
+    // Image Viewer Modal
+    $(document).on('click', '.js-view-image', function(){
+        var url = $(this).data('full-url');
+        $('#tgViewerImage').attr('src', url);
+        $('#tgViewerModal').addClass('open');
+    });
+    $('#tgViewerClose, #tgViewerModal').on('click', function(e){
+        if (e.target === this) $('#tgViewerModal').removeClass('open');
+    });
+
+    // -------------------------------------------------------------
+    // INITIALIZATION & REAL-TIME POLLING
+    // -------------------------------------------------------------
+    loadChatList(false);
+
+    if (initialThreadId) {
+        openConversation(initialThreadId, null);
+    } else if (initialCustomerId) {
+        openConversation(null, initialCustomerId);
     }
-    if (window.loanChatPollTimer) {
-        window.clearInterval(window.loanChatPollTimer);
-    }
-    pollTimer = window.setInterval(function(){
-        if (isEmbedded && activeThread) {
-            loadThread(activeThread, false);
-            return;
+
+    // Polling
+    pollTimer = setInterval(function(){
+        if (activeThreadId) {
+            loadThreadMessages(activeThreadId, false);
         }
-        loadInbox(true);
+        loadChatList(true);
     }, pollMs);
-    window.loanChatPollTimer = pollTimer;
+
+    $(window).on('beforeunload', function(){
+        if (pollTimer) clearInterval(pollTimer);
+        resetVoiceRecorder();
+    });
+
 })(jQuery);
 </script>
 @endsection

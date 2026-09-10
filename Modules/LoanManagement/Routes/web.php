@@ -239,9 +239,9 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::delete('/chat/{thread}', [LoanChatController::class, 'destroy'])->middleware('loan.permission:loan_management.chat.delete')->name('loan-management.chat.destroy');
         foreach (['chat-api' => LoanChatController::class, 'telegram-chat-api' => LoanTelegramChatController::class] as $prefix => $controller) {
             Route::get("/{$prefix}/chats", [$controller, 'index'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.index");
-            Route::post("/{$prefix}/chats", [$controller, 'store'])->middleware('loan.permission:loan_management.chat.reply')->name("loan-management.{$prefix}.store");
+            Route::post("/{$prefix}/chats", [$controller, 'store'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name("loan-management.{$prefix}.store");
             Route::get("/{$prefix}/chats/{thread}", [$controller, 'show'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.show");
-            Route::post("/{$prefix}/chats/{thread}/messages", [$controller, 'sendMessage'])->middleware('loan.permission:loan_management.chat.reply')->name("loan-management.{$prefix}.messages");
+            Route::post("/{$prefix}/chats/{thread}/messages", [$controller, 'sendMessage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name("loan-management.{$prefix}.messages");
             Route::post("/{$prefix}/chats/{thread}/read", [$controller, 'read'])->middleware('loan.permission:loan_management.chat.view')->name("loan-management.{$prefix}.read");
         }
         Route::post('/chat-api/chats/{thread}/assign', [LoanChatController::class, 'assign'])->middleware('loan.permission:loan_management.chat.assign')->name('loan-management.chat-api.assign');
@@ -251,8 +251,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/chat-api/chats/{thread}/reopen', [LoanChatController::class, 'reopen'])->middleware('loan.permission:loan_management.chat.close')->name('loan-management.chat-api.reopen');
         Route::post('/chat-api/chats/{thread}/pin', [LoanChatController::class, 'pin'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.pin');
         Route::post('/chat-api/chats/{thread}/mute', [LoanChatController::class, 'mute'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.mute');
-        Route::post('/telegram-chat-api/chats/{thread}/invoice-image', [LoanTelegramChatController::class, 'sendInvoiceImage'])->middleware('loan.permission:loan_management.chat.reply')->name('loan-management.telegram-chat-api.invoice-image');
-        Route::put('/telegram-chat-api/chats/{thread}/messages/{message}', [LoanTelegramChatController::class, 'updateMessage'])->middleware('loan.permission:loan_management.chat.reply')->name('loan-management.telegram-chat-api.messages.update');
+        Route::post('/telegram-chat-api/chats/{thread}/invoice-image', [LoanTelegramChatController::class, 'sendInvoiceImage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.invoice-image');
+        Route::put('/telegram-chat-api/chats/{thread}/messages/{message}', [LoanTelegramChatController::class, 'updateMessage'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.telegram-chat-api.messages.update');
         Route::delete('/telegram-chat-api/chats/{thread}/messages/{message}', [LoanTelegramChatController::class, 'destroyMessage'])->middleware('loan.permission:loan_management.chat.delete')->name('loan-management.telegram-chat-api.messages.destroy');
 
         Route::middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->group(function () {
