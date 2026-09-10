@@ -6,7 +6,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -334,9 +333,7 @@ class TelegramChatService
             $loanFile = LoanFile::query()->find($message->file_id);
             $resolvedUrl = $viewerType === 'customer'
                 ? ($this->publicLoanFileUrl($loanFile) ?: url('api/loan-management/customer/telegram/chat-files/'.(int) $message->file_id))
-                : (Route::has('loan-management.chat-files.show')
-                    ? route('loan-management.chat-files.show', ['file' => (int) $message->file_id])
-                    : url('loan-management/chat-files/'.(int) $message->file_id));
+                : url('api/loan-management/telegram/chat-files/'.(int) $message->file_id);
         } elseif (! empty($message->file_url)) {
             $resolvedUrl = $this->absoluteUrl((string) $message->file_url);
         }

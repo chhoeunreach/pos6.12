@@ -47,7 +47,9 @@ class LoanChatUploadService
         if (in_array('url', $columns, true)) {
             DB::connection('mysql_loan')->table('loan_files')
                 ->where('id', $id)
-                ->update(['url' => url('loan-management/chat-files/'.$id)]);
+                // Flutter uses the API bearer token, so attachment URLs must resolve
+                // through the API file endpoint instead of the web-session endpoint.
+                ->update(['url' => url('api/loan-management/telegram/chat-files/'.$id)]);
         }
 
         return LoanFile::query()->findOrFail($id);
@@ -56,7 +58,7 @@ class LoanChatUploadService
     public function url(LoanFile $file): ?string
     {
         if (! empty($file->id)) {
-            return url('loan-management/chat-files/'.$file->id);
+            return url('api/loan-management/telegram/chat-files/'.$file->id);
         }
 
         if (! empty($file->url)) {

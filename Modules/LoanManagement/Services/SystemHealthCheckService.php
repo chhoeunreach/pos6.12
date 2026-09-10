@@ -425,19 +425,19 @@ class SystemHealthCheckService
                 'name' => 'Business Locations',
                 'table' => 'loan_business_locations',
                 'desc' => 'At least 1 active branch location',
-                'remedy' => 'php artisan db:seed --class=Database\\Seeders\\LoanManagementReferenceSeeder --force',
+                'remedy' => 'php artisan db:seed --class=Modules\\LoanManagement\\Database\\Seeders\\LoanManagementReferenceSeeder --force',
             ],
             'currencies' => [
                 'name' => 'Currencies (USD / KHR)',
                 'table' => 'loan_currencies',
                 'desc' => 'Supported currencies and exchange rates',
-                'remedy' => 'php artisan db:seed --class=Database\\Seeders\\LoanManagementReferenceSeeder --force',
+                'remedy' => 'php artisan db:seed --class=Modules\\LoanManagement\\Database\\Seeders\\LoanManagementReferenceSeeder --force',
             ],
             'payment_methods' => [
                 'name' => 'Payment Methods',
                 'table' => 'loan_payment_methods',
                 'desc' => 'Standard payment channels (Cash, ABA, ACLEDA, Wing)',
-                'remedy' => 'php artisan db:seed --class=Database\\Seeders\\LoanManagementReferenceSeeder --force',
+                'remedy' => 'php artisan db:seed --class=Modules\\LoanManagement\\Database\\Seeders\\LoanManagementReferenceSeeder --force',
             ],
             'users' => [
                 'name' => 'Admin User Accounts',
