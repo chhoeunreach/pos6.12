@@ -643,7 +643,7 @@
     }
     @media print {
         @page {
-            size: A4 portrait;
+            size: A4 landscape;
             margin: 8mm;
         }
         .lm-sidebar,
@@ -1325,14 +1325,13 @@
         var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
         html += '<style>';
         html += '@import url("https://fonts.googleapis.com/css2?family=Moul&family=Inter:wght@400;600;700;800&display=swap");';
-        html += '@page{size:A4 portrait;margin:8mm;}';
+        html += '@page{size:A4 landscape;margin:7mm;}';
         html += '*{box-sizing:border-box;}';
         html += 'body{font-family:"Inter","Noto Sans Khmer","Khmer OS Siemreap",Arial,sans-serif;color:#000;background:#fff;font-size:10px;margin:0;padding:0;}';
         html += '.report-title{margin:0 0 12px;padding:9px 12px;border:1px solid #8fa1ba;border-bottom:4px solid #111827;background:#d9e8fa;color:#0000ff;text-align:center;font-family:"Khmer OS Muol Light","Khmer OS Muol","Khmer OS Moul","Moul","Noto Sans Khmer",serif;font-size:25px;font-weight:400;line-height:1.35;}';
         html += '.summary{margin-bottom:12px;}';
-        html += '.recent-grid{display:block;}';
+        html += '.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:12mm;align-items:start;}';
         html += '.print-section{min-width:0;}';
-        html += '.print-section + .print-section{margin-top:10mm;}';
         html += 'h3{margin:0 0 5px;padding:7px 8px;border:1px solid #9aa8ba;background:#e6f0fb;color:#000;text-align:center;font-size:13px;font-weight:800;line-height:1.2;}';
         html += 'table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 8px;}';
         html += 'th,td{border:1px solid #9aa3b2;padding:4px 6px;vertical-align:top;font-size:9.5px;line-height:1.2;word-break:break-word;}';
@@ -1342,9 +1341,9 @@
         html += '.summary table{table-layout:auto;}';
         html += '.summary th,.summary td{font-size:11px;padding:4px 7px;}';
         html += '.summary td:not(:first-child),.summary th:not(:first-child){text-align:center;white-space:nowrap;}';
-        html += '.recent-grid th,.recent-grid td{font-size:9px;padding:4px 5px;}';
-        html += '.recent-grid th:nth-child(1){width:5%;}.recent-grid th:nth-child(2){width:10%;}.recent-grid th:nth-child(3){width:15%;}.recent-grid th:nth-child(4){width:18%;}.recent-grid th:nth-child(5){width:17%;}.recent-grid th:nth-child(6){width:12%;}.recent-grid th:nth-child(7){width:23%;}';
-        html += '.recent-grid .print-section:nth-child(2) th:nth-child(1){width:5%;}.recent-grid .print-section:nth-child(2) th:nth-child(2){width:9%;}.recent-grid .print-section:nth-child(2) th:nth-child(3){width:14%;}.recent-grid .print-section:nth-child(2) th:nth-child(4){width:15%;}.recent-grid .print-section:nth-child(2) th:nth-child(5){width:19%;}.recent-grid .print-section:nth-child(2) th:nth-child(6){width:18%;}.recent-grid .print-section:nth-child(2) th:nth-child(7){width:10%;}.recent-grid .print-section:nth-child(2) th:nth-child(8){width:10%;}';
+        html += '.recent-grid th,.recent-grid td{font-size:8.5px;padding:4px 5px;}';
+        html += '.recent-grid th:nth-child(1){width:5%;}.recent-grid th:nth-child(2){width:9%;}.recent-grid th:nth-child(3){width:15%;}.recent-grid th:nth-child(4){width:15%;}.recent-grid th:nth-child(5){width:17%;}.recent-grid th:nth-child(6){width:10%;}.recent-grid th:nth-child(7){width:29%;}';
+        html += '.recent-grid .print-section:nth-child(2) th:nth-child(1){width:5%;}.recent-grid .print-section:nth-child(2) th:nth-child(2){width:9%;}.recent-grid .print-section:nth-child(2) th:nth-child(3){width:15%;}.recent-grid .print-section:nth-child(2) th:nth-child(4){width:11%;}.recent-grid .print-section:nth-child(2) th:nth-child(5){width:22%;}.recent-grid .print-section:nth-child(2) th:nth-child(6){width:24%;}.recent-grid .print-section:nth-child(2) th:nth-child(7){width:9%;}.recent-grid .print-section:nth-child(2) th:nth-child(8){width:5%;}';
         html += '.text-right{text-align:right;}';
         html += 'a{color:#000;text-decoration:none;}';
         html += '</style></head><body>';
