@@ -990,6 +990,8 @@
                     setRange(s, e);
                 });
 
+                setRange(currentStartDate, currentEndDate);
+
                 $range.on('apply.daterangepicker', function (event, picker) {
                     setRange(picker.startDate, picker.endDate);
                 });
@@ -1003,9 +1005,13 @@
                 $range.prop('readonly', false).on('change', function () {
                     var raw = String(jQuery(this).val() || '').trim();
                     var parts = raw.split(/\s+-\s+|\s+~\s+/);
-                    if (parts.length === 2) {
-                        $from.val(parts[0]);
-                        $to.val(parts[1]);
+                    if (parts.length === 2 && hasMoment) {
+                        var s = moment(parts[0], loanDateFormat, true);
+                        var e = moment(parts[1], loanDateFormat, true);
+                        if (s.isValid() && e.isValid()) {
+                            $from.val(s.format('YYYY-MM-DD'));
+                            $to.val(e.format('YYYY-MM-DD'));
+                        }
                     }
                 });
             }
@@ -1032,9 +1038,13 @@
             jQuery('#loanRecentActivityFilterForm').off('submit.loanRecentActivityFilters').on('submit.loanRecentActivityFilters', function () {
                 var raw = String(jQuery('#loanRecentActivityDateRange').val() || '').trim();
                 var parts = raw.split(/\s+-\s+|\s+~\s+/);
-                if (parts.length === 2) {
-                    jQuery('#recent_date_from').val(parts[0]);
-                    jQuery('#recent_date_to').val(parts[1]);
+                if (parts.length === 2 && window.moment) {
+                    var start = moment(parts[0], loanDateFormat, true);
+                    var end = moment(parts[1], loanDateFormat, true);
+                    if (start.isValid() && end.isValid()) {
+                        jQuery('#recent_date_from').val(start.format('YYYY-MM-DD'));
+                        jQuery('#recent_date_to').val(end.format('YYYY-MM-DD'));
+                    }
                 }
             });
         }
