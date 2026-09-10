@@ -854,6 +854,7 @@ body.lm-sidebar-collapsed .lm-main { width: calc(100% - var(--lm-sidebar-rail-wi
     }
     .lm-mobile-nav a,
     .lm-mobile-nav button {
+        position: relative;
         flex: 1 1 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 2px;
         padding: 6px 4px; background: none; border: 0;
