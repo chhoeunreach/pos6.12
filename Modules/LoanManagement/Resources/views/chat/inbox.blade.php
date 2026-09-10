@@ -1741,6 +1741,10 @@
                 <span>All</span>
                 <span class="tg-pill-badge" id="tgBadgeAll">0</span>
             </button>
+            <button type="button" class="tg-pill" data-filter="unread">
+                <span>Unread Chat</span>
+                <span class="tg-pill-badge" id="tgBadgeUnread">0</span>
+            </button>
             <!-- Dynamic Folder Pills -->
             <div id="tgDynamicFolderPills" style="display:contents"></div>
             @foreach($chatLocationOptions as $loc)
@@ -2652,6 +2656,9 @@
 
     function updatePillBadges(){
         $('#tgBadgeAll').text(contacts.length);
+        $('#tgBadgeUnread').text(contacts.filter(function(c){
+            return Number(c.unread_count || 0) > 0;
+        }).length);
         renderFolderPills();
     }
 
@@ -2663,7 +2670,9 @@
 
             // Folder / Tab filtering
             if (currentFilter && currentFilter !== 'all') {
-                if (currentFilter.startsWith('loc_')) {
+                if (currentFilter === 'unread') {
+                    if (Number(c.unread_count || 0) <= 0) return false;
+                } else if (currentFilter.startsWith('loc_')) {
                     var locId = currentFilter.replace('loc_', '');
                     if (String(c.location_id) !== String(locId)) return false;
                 } else {
