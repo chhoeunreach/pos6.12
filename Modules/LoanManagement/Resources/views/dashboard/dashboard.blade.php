@@ -29,7 +29,7 @@
         ? ($systemHealth['has_critical_errors'] ? 'danger' : 'warning')
         : 'success';
     $dashboardActions = [
-        ['label' => $lmText('New Installment', 'បង្កើតរំលស់ថ្មី'), 'icon' => 'fa fa-plus-circle', 'tone' => 'primary', 'url' => route('loan-management.loans.create')],
+        ['label' => $lmText('Telegram Chats', 'ជជែក Telegram'), 'icon' => 'fa fa-comments', 'tone' => 'primary', 'url' => route('loan-management.chat.index')],
         ['label' => $lmText('Collect Payment', 'ប្រមូលប្រាក់បង់'), 'icon' => 'fa fa-money', 'tone' => 'success', 'url' => route('loan-management.operations.page', ['page' => 'due-today'])],
         ['label' => $lmText('Customers', 'អតិថិជន'), 'icon' => 'fa fa-users', 'tone' => 'info', 'url' => route('loan-management.customers.index')],
         ['label' => $lmText('Reports', 'របាយការណ៍'), 'icon' => 'fa fa-line-chart', 'tone' => 'neutral', 'url' => route('loan-management.reports.index')],
