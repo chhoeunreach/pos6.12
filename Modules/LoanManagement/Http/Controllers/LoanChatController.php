@@ -448,7 +448,7 @@ class LoanChatController extends Controller
                 'thread_number' => '',
                 'display_name' => $name,
                 'display_subtitle' => collect([$phone, $locationName, 'New chat'])->filter()->implode(' - '),
-                'avatar_url' => '',
+                'avatar_url' => $this->chatService->customerAvatarUrl($customer),
                 'customer_name' => $name,
                 'customer_phone' => $phone,
                 'location_id' => $customer->business_location_id === null ? null : (int) $customer->business_location_id,

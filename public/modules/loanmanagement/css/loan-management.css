@@ -2029,7 +2029,9 @@ body.lm-sidebar-collapsed .lm-main { width: calc(100% - var(--lm-sidebar-rail-wi
 .lm-live-chat-item { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 10px; border: 0; border-radius: var(--lm-radius); background: transparent; text-align: left; transition: background var(--lm-transition-fast); cursor: pointer; }
 .lm-live-chat-item:hover,
 .lm-live-chat-item.is-active { background: var(--lm-primary-50); }
-.lm-live-chat-avatar { position: relative; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #e0f2fe, #dbeafe); color: #1e3a8a; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
+.lm-live-chat-avatar { position: relative; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #e0f2fe, #dbeafe); color: #1e3a8a; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; overflow: hidden; }
+.lm-live-chat-avatar img,
+.lm-live-chat-profile-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .lm-live-chat-avatar::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--lm-success); border: 2px solid #fff; }
 .lm-live-chat-name { display: block; color: var(--lm-text); font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lm-live-chat-preview { display: block; margin-top: 3px; color: var(--lm-muted); font-size: 12px; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2044,7 +2046,7 @@ body.lm-sidebar-collapsed .lm-main { width: calc(100% - var(--lm-sidebar-rail-wi
 .lm-live-chat-frame { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: #fff; }
 .lm-live-chat-side { padding: 18px; background: #fff; overflow-y: auto; }
 .lm-live-chat-profile { text-align: center; padding-bottom: 16px; border-bottom: 1px solid var(--lm-border-light); }
-.lm-live-chat-profile-avatar { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 12px; background: linear-gradient(135deg, var(--lm-primary-100), var(--lm-primary-200)); color: var(--lm-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; }
+.lm-live-chat-profile-avatar { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 12px; background: linear-gradient(135deg, var(--lm-primary-100), var(--lm-primary-200)); color: var(--lm-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; overflow: hidden; }
 .lm-live-chat-profile-name { margin: 0; color: var(--lm-text); font-size: 24px; font-weight: 800; }
 .lm-live-chat-profile-subtitle, .lm-live-chat-profile-time { margin: 6px 0 0; color: var(--lm-muted); font-size: 13px; }
 .lm-live-chat-side-section { padding: 16px 0; border-bottom: 1px solid var(--lm-border-light); }

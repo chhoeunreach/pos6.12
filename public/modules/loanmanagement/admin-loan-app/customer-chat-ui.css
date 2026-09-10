@@ -1,0 +1,56 @@
+#root img[src*="/customer/telegram/chat-files/"],
+#root img[src*="/telegram/chat-files/"] {
+    background: #f8fafc;
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+    transition: opacity 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+}
+
+#root .rounded-full img[src*="/customer/telegram/chat-files/"],
+#root .rounded-full img[src*="/telegram/chat-files/"] {
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    object-fit: cover;
+    box-shadow: none;
+}
+
+#root .h-64 img[src*="/customer/telegram/chat-files/"],
+#root .h-72 img[src*="/customer/telegram/chat-files/"],
+#root .h-80 img[src*="/customer/telegram/chat-files/"],
+#root .h-96 img[src*="/customer/telegram/chat-files/"],
+#root .h-64 img[src*="/telegram/chat-files/"],
+#root .h-72 img[src*="/telegram/chat-files/"],
+#root .h-80 img[src*="/telegram/chat-files/"],
+#root .h-96 img[src*="/telegram/chat-files/"] {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#root audio {
+    width: 100%;
+    min-width: 220px;
+    border-radius: 9999px;
+}
+
+#root button,
+#root a,
+#root input,
+#root textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+#root button:active,
+#root a:active {
+    transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #root img[src*="/customer/telegram/chat-files/"],
+    #root img[src*="/telegram/chat-files/"],
+    #root button,
+    #root a {
+        transition: none !important;
+    }
+}

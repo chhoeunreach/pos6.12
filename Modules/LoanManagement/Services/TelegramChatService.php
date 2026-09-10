@@ -6,7 +6,10 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use App\Services\TelegramBotService;
 use Modules\LoanManagement\Entities\LoanCustomer;
 use Modules\LoanManagement\Entities\LoanFile;
@@ -269,11 +272,18 @@ class TelegramChatService
         return $rows;
     }
 
-    public function formatThread(LoanTelegramChatThread $thread): array
+    public function formatThread(
+        LoanTelegramChatThread $thread,
+        ?string $viewerType = null,
+        ?int $viewerId = null
+    ): array
     {
         $thread->loadMissing(['customer', 'messages' => fn ($query) => $query->orderBy('created_at')->orderBy('id')]);
         $customer = $thread->customer;
         $profile = $this->customerProfile($customer);
+        $messages = $thread->messages;
+        $isCustomerViewer = $viewerType === 'customer';
+        $avatarUrl = $profile['avatar_url'];
 
         return [
             'id' => (int) $thread->id,
@@ -284,7 +294,8 @@ class TelegramChatService
             'location_id' => $profile['location_id'],
             'location_name' => $profile['location_name'],
             'telegram_linked' => $profile['telegram_linked'],
-            'avatar_url' => $profile['avatar_url'],
+            'avatar_url' => $avatarUrl,
+            'customer_photo_url' => $avatarUrl,
             'loan_id' => $profile['loan_id'],
             'loan_number' => $profile['loan_number'],
             'invoice_no' => $profile['invoice_no'],
@@ -293,21 +304,49 @@ class TelegramChatService
             'balance_amount' => $profile['balance_amount'],
             'customer_profile' => $profile,
             'status' => (string) $thread->status,
-            'messages' => $thread->messages->map(fn ($m) => $this->formatMessage($m))->values()->all(),
+            'display_name' => $profile['display_name'],
+            'display_subtitle' => $profile['subtitle'],
+            'last_message' => (string) ($thread->last_message ?? ''),
+            'last_message_type' => (string) ($thread->last_message_type ?? ''),
+            'last_message_at' => $thread->last_message_at?->toIso8601String(),
+            'unread_count' => $isCustomerViewer
+                ? (int) ($thread->unread_customer_count ?? 0)
+                : (int) ($thread->unread_staff_count ?? 0),
+            'message_count' => $messages->count(),
+            'can_delete' => $messages->isEmpty(),
+            'messages' => $messages
+                ->map(fn ($m) => $this->formatMessage($m, $viewerType, $viewerId))
+                ->values()
+                ->all(),
         ];
     }
 
-    public function formatMessage(LoanTelegramChatMessage $message): array
+    public function formatMessage(
+        LoanTelegramChatMessage $message,
+        ?string $viewerType = null,
+        ?int $viewerId = null
+    ): array
     {
         $file = null;
         if (! empty($message->file_id)) {
+            $loanFile = LoanFile::query()->find($message->file_id);
+            $fileUrl = $viewerType === 'customer'
+                ? ($this->publicLoanFileUrl($loanFile) ?: url('api/loan-management/customer/telegram/chat-files/'.(int) $message->file_id))
+                : url('api/loan-management/telegram/chat-files/'.(int) $message->file_id);
+
             $file = [
-                'url' => url('loan-management/chat-files/'.(int) $message->file_id),
+                'url' => $fileUrl,
+                'preview_url' => $fileUrl,
                 'name' => (string) ($message->file_name ?? ''),
+                'mime_type' => (string) ($message->file_mime ?? $loanFile?->mime_type ?? ''),
+                'size_bytes' => (int) ($message->file_size ?? $loanFile?->size_bytes ?? $loanFile?->size ?? 0),
             ];
         }
         $user = auth()->user();
         $isOutbound = in_array($message->sender_type, ['staff', 'admin'], true);
+        $isOwn = $viewerType === 'customer'
+            ? $message->sender_type === 'customer' && (int) $message->sender_id === (int) $viewerId
+            : $isOutbound;
         $canManageTelegramChat = $user && (
             $user->can('loan_management.chat.view')
             || $user->can('loan_management.chat.reply')
@@ -327,15 +366,16 @@ class TelegramChatService
             'latitude' => $message->latitude,
             'longitude' => $message->longitude,
             'audio_duration_seconds' => $message->audio_duration_seconds,
-            'is_own' => in_array($message->sender_type, ['staff', 'admin'], true),
+            'is_own' => $isOwn,
             'read_at' => $message->read_at?->toIso8601String(),
             'created_at' => $message->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $message->updated_at?->format('Y-m-d H:i:s'),
             'edited' => $message->updated_at && $message->created_at && $message->updated_at->gt($message->created_at->copy()->addSeconds(2)),
-            'can_update' => $message->message_type === 'text'
+            'can_update' => $viewerType !== 'customer'
+                && $message->message_type === 'text'
                 && $isOutbound
                 && $canManageTelegramChat,
-            'can_delete' => $isOutbound && $canManageTelegramChat,
+            'can_delete' => $viewerType !== 'customer' && $isOutbound && $canManageTelegramChat,
         ];
     }
 
@@ -710,12 +750,64 @@ class TelegramChatService
 
     protected function customerAvatarUrl($customer): string
     {
-        if (empty($customer->customer_photo_file_id)) {
+        if (! $customer) {
             return '';
         }
 
-        $file = LoanFile::query()->find($customer->customer_photo_file_id);
+        if (! empty($customer->customer_photo_file_id)) {
+            $file = LoanFile::query()->find($customer->customer_photo_file_id);
+            if ($file) {
+                return $this->publicLoanFileUrl($file) ?: url('api/loan-management/telegram/chat-files/'.(int) $file->id);
+            }
+        }
 
-        return $file ? (string) (app(LoanChatUploadService::class)->url($file) ?? '') : '';
+        if (! empty($customer->photo_url)) {
+            return (string) $customer->photo_url;
+        }
+
+        if (! empty($customer->profile_photo)) {
+            return $this->absoluteUrl(Storage::disk('public')->url($customer->profile_photo));
+        }
+
+        return '';
+    }
+
+    protected function publicLoanFileUrl(?LoanFile $file): string
+    {
+        if (! $file) {
+            return '';
+        }
+
+        if (! empty($file->id) && Route::has('loan-management.public.customer-telegram-file')) {
+            return URL::temporarySignedRoute(
+                'loan-management.public.customer-telegram-file',
+                now()->addDay(),
+                ['file' => (int) $file->id]
+            );
+        }
+
+        if (! empty($file->path)) {
+            return $this->absoluteUrl(Storage::disk($file->disk ?: 'public')->url($file->path));
+        }
+
+        if (! empty($file->url) && ! str_contains((string) $file->url, '/api/')) {
+            return $this->absoluteUrl((string) $file->url);
+        }
+
+        return '';
+    }
+
+    protected function absoluteUrl(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        return url($path);
     }
 }

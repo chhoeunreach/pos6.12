@@ -11,6 +11,7 @@ use Modules\LoanManagement\Http\Controllers\CustomerAppLoanController;
 use Modules\LoanManagement\Http\Controllers\CustomerAppPaymentController;
 use Modules\LoanManagement\Http\Controllers\CustomerAppProfileController;
 use Modules\LoanManagement\Http\Controllers\CustomerChatController;
+use Modules\LoanManagement\Http\Controllers\CustomerTelegramChatController;
 use Modules\LoanManagement\Http\Controllers\CustomerLocationTrackingController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
 use Modules\LoanManagement\Http\Controllers\LoanCreateController;
@@ -60,7 +61,9 @@ Route::prefix('loan-management')->group(function () {
         Route::post('/telegram/chats', [LoanTelegramChatController::class, 'store'])->middleware('loan.permission:loan_management.chat.reply');
         Route::get('/telegram/chats/{thread}', [LoanTelegramChatController::class, 'show'])->middleware('loan.permission:loan_management.chat.view');
         Route::post('/telegram/chats/{thread}/messages', [LoanTelegramChatController::class, 'sendMessage'])->middleware('loan.permission:loan_management.chat.reply');
+        Route::post('/telegram/chats/{thread}/invoice-image', [LoanTelegramChatController::class, 'sendInvoiceImage'])->middleware('loan.permission:loan_management.chat.reply');
         Route::post('/telegram/chats/{thread}/read', [LoanTelegramChatController::class, 'read'])->middleware('loan.permission:loan_management.chat.view');
+        Route::get('/telegram/chat-files/{file}', [LoanTelegramChatController::class, 'file'])->middleware('loan.permission:loan_management.chat.view');
         Route::post('/mobile/staff-location', [StaffMobileActionController::class, 'staffLocation'])->middleware('loan.permission:loan_management.customer_gps.manage|loan_management.gps.view');
         Route::post('/mobile/collection-visits', [StaffMobileActionController::class, 'collectionVisit'])->middleware('loan.permission:loan_management.collection_visits.view|loan_management.collection.view');
 
@@ -86,6 +89,13 @@ Route::prefix('loan-management')->group(function () {
         Route::get('/location/status', [CustomerLocationTrackingController::class, 'status']);
         Route::post('/location/enable', [CustomerLocationTrackingController::class, 'enable']);
         Route::post('/location/disable', [CustomerLocationTrackingController::class, 'disable']);
+        Route::get('/telegram/chats', [CustomerTelegramChatController::class, 'index']);
+        Route::post('/telegram/chats', [CustomerTelegramChatController::class, 'store']);
+        Route::get('/telegram/chats/{thread}', [CustomerTelegramChatController::class, 'show']);
+        Route::post('/telegram/chats/{thread}/messages', [CustomerTelegramChatController::class, 'sendMessage']);
+        Route::post('/telegram/chats/{thread}/read', [CustomerTelegramChatController::class, 'read']);
+        Route::post('/telegram/chats/{thread}/typing', [CustomerTelegramChatController::class, 'typing']);
+        Route::get('/telegram/chat-files/{file}', [CustomerTelegramChatController::class, 'file']);
         Route::get('/chats', [CustomerChatController::class, 'index']);
         Route::post('/chats', [CustomerChatController::class, 'store']);
         Route::get('/chats/{thread}', [CustomerChatController::class, 'show']);

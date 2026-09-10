@@ -7,10 +7,13 @@
     $moduleCssPath = module_path('LoanManagement', 'Resources/assets/css/loan-management.css');
     $moduleJsPath = module_path('LoanManagement', 'Resources/assets/js/loan-management.js');
     $adminLoanCssAsset = 'modules/loanmanagement/admin-loan-app/assets/index-tfrm5V5v.css';
+    $adminLoanUiCssAsset = 'modules/loanmanagement/admin-loan-app/customer-chat-ui.css';
     $adminLoanJsAsset = 'modules/loanmanagement/admin-loan-app/assets/index-BpfyckyY.js';
     $adminLoanCssPath = public_path($adminLoanCssAsset);
+    $adminLoanUiCssPath = public_path($adminLoanUiCssAsset);
     $adminLoanJsPath = public_path($adminLoanJsAsset);
     $adminLoanCssExists = file_exists($adminLoanCssPath);
+    $adminLoanUiCssExists = file_exists($adminLoanUiCssPath);
     $adminLoanJsExists = file_exists($adminLoanJsPath);
     $loanBadgeCounts = LoanMenuHelper::badgeCounts();
     $loanLanguage = session('user.language', config('app.locale'));
@@ -128,6 +131,9 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
     @if ($adminLoanCssExists)
         <link rel="stylesheet" href="{{ asset($adminLoanCssAsset) }}?v={{ filemtime($adminLoanCssPath) }}">
+    @endif
+    @if ($adminLoanUiCssExists)
+        <link rel="stylesheet" href="{{ asset($adminLoanUiCssAsset) }}?v={{ filemtime($adminLoanUiCssPath) }}">
     @endif
     @if (file_exists($moduleCssPath))
         <style>{!! file_get_contents($moduleCssPath) !!}</style>

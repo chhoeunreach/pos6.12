@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\LoanManagement\Http\Controllers\AdminCustomerTrackingController;
 use Modules\LoanManagement\Http\Controllers\CambodiaAddressController;
+use Modules\LoanManagement\Http\Controllers\CustomerTelegramChatController;
 use Modules\LoanManagement\Http\Controllers\DashboardController;
 use Modules\LoanManagement\Http\Controllers\LoanActivityLogController;
 use Modules\LoanManagement\Http\Controllers\LoanChatController;
@@ -48,6 +49,10 @@ Route::middleware(['web'])->group(function () {
 
     Route::get('/customer/dashboard', [PublicAppController::class, 'customerDashboard'])->name('loan-management.public.customer-dashboard');
     Route::post('/customer/profile-photo', [PublicAppController::class, 'updateProfilePhoto'])->name('loan-management.public.customer-profile-photo');
+    Route::get('/customer/telegram/chat-files/{file}', [CustomerTelegramChatController::class, 'publicFile'])
+        ->middleware('signed')
+        ->where(['file' => '[0-9]+'])
+        ->name('loan-management.public.customer-telegram-file');
     Route::get('/customer/loan-request', [PublicAppController::class, 'customerLoanRequest'])->name('loan-management.public.customer-loan-request');
     Route::post('/customer/loan-request', [PublicAppController::class, 'storeCustomerLoanRequest'])->name('loan-management.public.customer-loan-request.store');
     Route::post('/customer/loan-request/{id}/cancel', [PublicAppController::class, 'cancelCustomerLoanRequest'])->name('loan-management.public.customer-loan-request.cancel');

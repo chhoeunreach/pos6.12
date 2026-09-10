@@ -584,7 +584,11 @@
                     <aside class="lm-live-chat-side">
                         <div class="lm-live-chat-profile">
                             <div class="lm-live-chat-profile-avatar" id="loanDashboardLiveChatProfileAvatar">
-                                {{ strtoupper(substr((string) ($initialLiveChat['display_name'] ?? 'C'), 0, 1)) }}
+                                @if(!empty($initialLiveChat['avatar_url']))
+                                    <img src="{{ $initialLiveChat['avatar_url'] }}" alt="">
+                                @else
+                                    {{ strtoupper(substr((string) ($initialLiveChat['display_name'] ?? 'C'), 0, 1)) }}
+                                @endif
                             </div>
                             <h4 class="lm-live-chat-profile-name" id="loanDashboardLiveChatProfileName">{{ $initialLiveChat['display_name'] ?? $lmText('Customer Chat', 'ជជែកជាមួយអតិថិជន') }}</h4>
                             <p class="lm-live-chat-profile-subtitle" id="loanDashboardLiveChatProfileSubtitle">{{ $initialLiveChat['display_subtitle'] ?? $lmText('Installment support inbox', 'ប្រអប់សារគាំទ្ររំលស់') }}</p>
@@ -1648,7 +1652,7 @@
             var name = thread.display_name || (isKhmer ? 'ជជែកជាមួយអតិថិជន' : 'Customer Chat');
             $('#loanDashboardLiveChatTitle, #loanDashboardLiveChatProfileName').text(name);
             $('#loanDashboardLiveChatSubtitle, #loanDashboardLiveChatProfileSubtitle').text(thread.display_subtitle || (isKhmer ? 'ប្រអប់សារគាំទ្ររំលស់' : 'Installment support inbox'));
-            $('#loanDashboardLiveChatProfileAvatar').text((name.charAt(0) || 'C').toUpperCase());
+            $('#loanDashboardLiveChatProfileAvatar').html(thread.avatar_url ? '<img src="' + esc(thread.avatar_url) + '" alt="">' : esc((name.charAt(0) || 'C').toUpperCase()));
             $('#loanDashboardLiveChatProfileTime').text(thread.last_message_at ? formatLiveChatTime(thread.last_message_at) : i18n.waitingLiveActivity);
             $('#loanDashboardLiveChatStatus').text(thread.status ? String(thread.status).replace(/_/g, ' ') : (isKhmer ? 'បើក' : 'open'));
             $('#loanDashboardLiveChatPriority').text(thread.priority ? String(thread.priority).replace(/_/g, ' ') : (isKhmer ? 'ធម្មតា' : 'normal'));
@@ -1698,8 +1702,11 @@
             rows.forEach(function (thread) {
                 var activeClass = String(activeLiveChatId || '') === String(thread.id || '') ? ' is-active' : '';
                 var unread = Number(thread.unread_count || 0);
+                var avatar = thread.avatar_url
+                    ? '<img src="' + esc(thread.avatar_url) + '" alt="">'
+                    : esc((thread.display_name || 'C').charAt(0).toUpperCase());
                 html += '<button type="button" class="lm-live-chat-item' + activeClass + '" data-live-chat-id="' + esc(thread.id || '') + '">'
-                    + '<span class="lm-live-chat-avatar">' + esc((thread.display_name || 'C').charAt(0).toUpperCase()) + '</span>'
+                    + '<span class="lm-live-chat-avatar">' + avatar + '</span>'
                     + '<span>'
                     + '<span class="lm-live-chat-name">' + esc(thread.display_name || (isKhmer ? 'ជជែកជាមួយអតិថិជន' : 'Customer Chat')) + '</span>'
                     + '<span class="lm-live-chat-preview">' + esc(thread.last_message || thread.display_subtitle || (isKhmer ? 'បើកការសន្ទនា' : 'Open conversation')) + '</span>'

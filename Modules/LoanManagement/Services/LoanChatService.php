@@ -669,11 +669,31 @@ class LoanChatService
         }
 
         if ($viewerType !== 'customer') {
-            $customer = $this->threadCustomer($thread);
-            if ($customer && ! empty($customer->customer_photo_file_id)) {
-                $file = $this->cachedLoanFile((int) $customer->customer_photo_file_id);
-                return $file ? (string) ($this->safeFileUrl($file) ?? '') : '';
+            return $this->customerAvatarUrl($this->threadCustomer($thread));
+        }
+
+        return '';
+    }
+
+    public function customerAvatarUrl($customer): string
+    {
+        if (! $customer) {
+            return '';
+        }
+
+        if (! empty($customer->customer_photo_file_id)) {
+            $file = $this->cachedLoanFile((int) $customer->customer_photo_file_id);
+            if ($file) {
+                return (string) ($this->safeFileUrl($file) ?? '');
             }
+        }
+
+        if (! empty($customer->photo_url)) {
+            return (string) $customer->photo_url;
+        }
+
+        if (! empty($customer->profile_photo)) {
+            return \Illuminate\Support\Facades\Storage::disk('public')->url($customer->profile_photo);
         }
 
         return '';
@@ -1291,12 +1311,7 @@ class LoanChatService
         }
 
         $customer = LoanCustomer::query()->find($message->sender_id);
-        if (! $customer || empty($customer->customer_photo_file_id)) {
-            return '';
-        }
-
-        $file = LoanFile::query()->find($customer->customer_photo_file_id);
-        return $file ? (string) ($this->safeFileUrl($file) ?? '') : '';
+        return $this->customerAvatarUrl($customer);
     }
 
     protected function storeLoanFile(UploadedFile $file, string $category, ?int $uploadedBy = null): LoanFile

@@ -93,7 +93,8 @@
     .lm-chat-list{overflow:auto;flex:1}
     .lm-chat-item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;padding:12px 14px;border-bottom:1px solid #e5e7eb;cursor:pointer;background:#fff}
     .lm-chat-item:hover,.lm-chat-item.active{background:#eef6ff}
-    .lm-chat-avatar{width:44px;height:44px;border-radius:50%;background:#dbeafe;color:#0369a1;display:flex;align-items:center;justify-content:center;font-weight:700;position:relative}
+    .lm-chat-avatar{width:44px;height:44px;border-radius:50%;background:#dbeafe;color:#0369a1;display:flex;align-items:center;justify-content:center;font-weight:700;position:relative;overflow:hidden}
+    .lm-chat-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
     .lm-chat-avatar.online:after{content:"";position:absolute;right:1px;bottom:1px;width:10px;height:10px;background:#22c55e;border:2px solid #fff;border-radius:50%}
     .lm-chat-title{font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .lm-chat-subtitle,.lm-chat-preview{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -428,8 +429,11 @@
         }
         filtered.forEach(function(r){
             var badge = Number(r.unread_count || 0) > 0 ? '<span class="lm-chat-badge">'+Number(r.unread_count)+'</span>' : '';
+            var avatar = r.avatar_url
+                ? '<img src="' + esc(r.avatar_url) + '" alt="">'
+                : initials(r.display_name);
             var item = $('<div class="lm-chat-item" data-id="'+(r.id || '')+'" data-customer-id="'+(r.customer_id || '')+'" data-new-chat="'+(r.is_customer_only ? '1' : '0')+'">'+
-                '<div class="lm-chat-avatar '+(r.is_online ? 'online' : '')+'">'+initials(r.display_name)+'</div>'+
+                '<div class="lm-chat-avatar '+(r.is_online ? 'online' : '')+'">'+avatar+'</div>'+
                 '<div style="min-width:0"><div class="lm-chat-title">'+esc(r.display_name)+'</div>'+
                 '<div class="lm-chat-subtitle">'+esc(threadSubtitle(r))+'</div>'+
                 '<div class="lm-chat-preview">'+esc(r.typing ? 'Typing...' : (r.last_sender_name ? r.last_sender_name + ': ' : '') + (r.last_message || 'No messages yet'))+'</div></div>'+

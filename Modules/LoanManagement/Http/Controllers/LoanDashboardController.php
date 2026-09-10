@@ -250,8 +250,10 @@ class LoanDashboardController extends Controller
                 ->table('loan_chat_threads')
                 ->select([
                     'id',
+                    'customer_id',
                     'display_name',
                     'display_subtitle',
+                    'avatar_url',
                     'status',
                     'priority',
                     'assigned_team',
@@ -265,10 +267,17 @@ class LoanDashboardController extends Controller
                 ->limit(10);
 
             return $query->get()->map(function ($row) {
+                $avatarUrl = (string) ($row->avatar_url ?? '');
+                if ($avatarUrl === '' && ! empty($row->customer_id) && $this->service->tableExists('loan_customers')) {
+                    $customer = DB::connection('mysql_loan')->table('loan_customers')->where('id', (int) $row->customer_id)->first();
+                    $avatarUrl = app(\Modules\LoanManagement\Services\LoanChatService::class)->customerAvatarUrl($customer);
+                }
+
                 return [
                     'id' => (int) $row->id,
                     'display_name' => (string) ($row->display_name ?: 'Customer Chat'),
                     'display_subtitle' => (string) ($row->display_subtitle ?: ''),
+                    'avatar_url' => $avatarUrl,
                     'status' => (string) ($row->status ?: 'open'),
                     'priority' => (string) ($row->priority ?: 'normal'),
                     'assigned_team' => (string) ($row->assigned_team ?: ''),

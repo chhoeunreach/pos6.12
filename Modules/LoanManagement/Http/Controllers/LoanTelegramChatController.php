@@ -306,6 +306,7 @@ class LoanTelegramChatController extends Controller
         $data = $request->validate([
             'loan_id' => 'required|integer',
             'message' => 'nullable|string|max:1000',
+            'image_mode' => 'nullable|in:original,compressed',
         ]);
 
         $loan = DB::connection('mysql_loan')->table('loans')->where('id', (int) $data['loan_id'])->first();
@@ -316,12 +317,11 @@ class LoanTelegramChatController extends Controller
             return $this->fail('This loan does not belong to the selected customer.', 422, (object) []);
         }
 
-        $rendererBinary = env('WKHTMLTOIMAGE_BINARY');
-        if (! $rendererBinary || ! is_file($rendererBinary)) {
-            return $this->fail('Invoice image renderer is not configured. Using browser invoice image fallback.', 422, (object) [
-                'fallback' => 'browser_invoice_image',
-            ]);
-        }
+        // Prefer an image for Telegram previews, but keep invoice sending available
+        // on servers that only have the PDF renderer (including the mPDF fallback).
+        $rendererBinary = $renderService->resolveImageBinaryPath();
+        $sendAsImage = is_file($rendererBinary) && is_executable($rendererBinary);
+        $imageMode = $data['image_mode'] ?? 'compressed';
 
         $html = app(LoanInstallmentListController::class)->print((int) $data['loan_id'])->render();
         $html = preg_replace('/<div class="no-print".*?<\/div>/is', '', $html, 1) ?: $html;
@@ -333,13 +333,20 @@ class LoanTelegramChatController extends Controller
             File::makeDirectory($tmpDir, 0755, true);
         }
 
-        $filename = 'loan-invoice-'.Str::slug((string) ($loan->loan_number ?? $loan->id), '-').'-'.time().'.png';
+        $extension = $sendAsImage ? 'png' : 'pdf';
+        $filename = 'loan-invoice-'.Str::slug((string) ($loan->loan_number ?? $loan->id), '-').'-'.time().'.'.$extension;
         $path = $tmpDir.DIRECTORY_SEPARATOR.$filename;
 
         try {
-            $renderService->saveHtmlToImage($html, $path);
-
-            $uploaded = new UploadedFile($path, $filename, 'image/png', null, true);
+            if ($sendAsImage) {
+                $renderService->saveHtmlToImage($html, $path, $imageMode === 'original'
+                    ? ['width' => 1600, 'quality' => 100]
+                    : ['width' => 900, 'quality' => 72]);
+                $uploaded = new UploadedFile($path, $filename, 'image/png', null, true);
+            } else {
+                $renderService->saveHtmlToPdf($html, $path);
+                $uploaded = new UploadedFile($path, $filename, 'application/pdf', null, true);
+            }
             $senderType = $this->isAdmin() ? 'admin' : 'staff';
             $caption = trim((string) ($data['message'] ?? ''));
             if ($caption === '') {
@@ -356,11 +363,13 @@ class LoanTelegramChatController extends Controller
                 $caption = BusinessSettingsService::invoiceMessage($customerName);
             }
 
-            $message = $this->chatService->sendImageMessage($row, $senderType, (int) auth()->id(), $uploaded, $caption);
+            $message = $sendAsImage
+                ? $this->chatService->sendImageMessage($row, $senderType, (int) auth()->id(), $uploaded, $caption)
+                : $this->chatService->sendFileMessage($row, $senderType, (int) auth()->id(), $uploaded, 'file', $caption);
 
-            return $this->ok('Invoice image sent', $this->chatService->formatMessage($message));
+            return $this->ok($sendAsImage ? 'Invoice image sent' : 'Invoice PDF sent', $this->chatService->formatMessage($message));
         } catch (\Throwable $e) {
-            return $this->fail('Unable to create invoice image: '.$e->getMessage(), 500, (object) []);
+            return $this->fail('Unable to create invoice: '.$e->getMessage(), 500, (object) []);
         } finally {
             if (File::exists($path)) {
                 File::delete($path);
