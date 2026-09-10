@@ -161,6 +161,16 @@ class LoanTelegramChatController extends Controller
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
 
+        if ($request->boolean('snapshot') && trim((string) $request->input('search', '')) === '') {
+            return $this->ok('Chat snapshot loaded', $this->chatService->staffContactSnapshot(
+                $this->permittedLoanLocationIds(),
+                [
+                    'location_id' => $request->input('location_id'),
+                    'telegram_status' => $request->input('telegram_status'),
+                ]
+            ));
+        }
+
         $rows = $this->chatService->listContactsForStaff(
             trim((string) $request->input('search', '')),
             $this->permittedLoanLocationIds(),
@@ -205,7 +215,7 @@ class LoanTelegramChatController extends Controller
             'limit' => (int) $request->input('message_limit', 25),
             'before_id' => $beforeId,
             'after_id' => $afterId,
-            'count_total' => $afterId <= 0,
+            'count_total' => $beforeId <= 0 && $afterId <= 0,
         ]));
     }
 

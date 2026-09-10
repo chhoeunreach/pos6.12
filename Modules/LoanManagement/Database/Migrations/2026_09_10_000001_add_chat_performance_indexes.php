@@ -16,6 +16,7 @@ return new class extends Migration
         $this->addIndexIfMissing('loan_telegram_chat_messages', ['thread_id', 'id'], 'lm_tg_messages_thread_id_idx');
         $this->addIndexIfMissing('loan_telegram_chat_messages', ['thread_id', 'sender_type', 'is_read'], 'lm_tg_messages_thread_sender_read_idx');
         $this->addIndexIfMissing('loan_telegram_chat_threads', ['status', 'last_message_at', 'id'], 'lm_tg_threads_status_last_idx');
+        $this->addIndexIfMissing('loan_telegram_chat_threads', ['status', 'updated_at'], 'lm_tg_threads_status_updated_idx');
     }
 
     public function down(): void
@@ -24,6 +25,7 @@ return new class extends Migration
         $this->dropIndexIfExists('loan_chat_messages', 'lm_chat_messages_thread_id_idx');
         $this->dropIndexIfExists('loan_telegram_chat_messages', 'lm_tg_messages_thread_sender_read_idx');
         $this->dropIndexIfExists('loan_telegram_chat_messages', 'lm_tg_messages_thread_id_idx');
+        $this->dropIndexIfExists('loan_telegram_chat_threads', 'lm_tg_threads_status_updated_idx');
         $this->dropIndexIfExists('loan_telegram_chat_threads', 'lm_tg_threads_status_last_idx');
     }
 

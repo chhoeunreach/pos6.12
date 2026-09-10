@@ -310,6 +310,53 @@ class TelegramChatService
         return $rows;
     }
 
+    public function staffContactSnapshot(?array $locationIds = null, array $filters = []): array
+    {
+        $filterLocationId = (int) ($filters['location_id'] ?? 0);
+        if ($filterLocationId > 0) {
+            if ($locationIds !== null && ! in_array($filterLocationId, $locationIds, true)) {
+                return [
+                    'version' => 'empty',
+                    'thread_count' => 0,
+                    'unread_count' => 0,
+                ];
+            }
+            $locationIds = [$filterLocationId];
+        }
+
+        $query = LoanTelegramChatThread::query()
+            ->where('status', 'open');
+
+        if ($locationIds !== null
+            && Schema::connection('mysql_loan')->hasTable('loan_customers')
+            && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'business_location_id')) {
+            $query->whereExists(function ($inner) use ($locationIds) {
+                $inner->select(DB::raw(1))
+                    ->from('loan_customers')
+                    ->whereColumn('loan_customers.id', 'loan_telegram_chat_threads.customer_id')
+                    ->where(function ($locationQuery) use ($locationIds) {
+                        $locationQuery->whereNull('loan_customers.business_location_id')
+                            ->orWhereIn('loan_customers.business_location_id', $locationIds);
+                    });
+            });
+        }
+
+        $stats = (clone $query)
+            ->selectRaw('COUNT(*) as thread_count, COALESCE(SUM(unread_staff_count), 0) as unread_count, UNIX_TIMESTAMP(MAX(updated_at)) as updated_version, UNIX_TIMESTAMP(MAX(last_message_at)) as message_version')
+            ->first();
+
+        $threadCount = (int) ($stats->thread_count ?? 0);
+        $unreadCount = (int) ($stats->unread_count ?? 0);
+        $updatedVersion = (int) ($stats->updated_version ?? 0);
+        $messageVersion = (int) ($stats->message_version ?? 0);
+
+        return [
+            'version' => implode(':', [$threadCount, $unreadCount, max($updatedVersion, $messageVersion)]),
+            'thread_count' => $threadCount,
+            'unread_count' => $unreadCount,
+        ];
+    }
+
     public function formatThread(
         LoanTelegramChatThread $thread,
         ?string $viewerType = null,

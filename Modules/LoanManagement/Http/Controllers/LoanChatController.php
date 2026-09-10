@@ -141,7 +141,7 @@ class LoanChatController extends Controller
             'limit' => (int) $request->input('message_limit', 25),
             'before_id' => $beforeId,
             'after_id' => $afterId,
-            'count_total' => $afterId <= 0,
+            'count_total' => $beforeId <= 0 && $afterId <= 0,
         ]);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());

@@ -2018,6 +2018,12 @@
     var pollTimer = null;
     var isFetchingList = false;
     var isFetchingThread = false;
+    var pendingListXhr = null;
+    var pendingThreadXhr = null;
+    var queuedListLoadOptions = null;
+    var chatListSnapshotVersion = '';
+    var contactListRenderSignature = '';
+    var renderedMessageIds = {};
     var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
     var notificationAudio = null;
     var notificationAudioUnlocked = false;
@@ -2182,6 +2188,19 @@
         });
     }
 
+    function contactListSignature(rows){
+        return (rows || []).map(function(c){
+            return [
+                c.id || '',
+                c.customer_id || '',
+                c.last_message_at || '',
+                c.last_message_type || '',
+                c.last_message || '',
+                Number(c.unread_count || 0)
+            ].join('|');
+        }).join('~');
+    }
+
     function mergeThreadMessages(existing, incoming){
         var byId = {};
         (existing || []).concat(incoming || []).forEach(function(m){
@@ -2262,6 +2281,7 @@
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
                 folders = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : []) : [];
+                contactListRenderSignature = '';
                 renderFolderPills();
                 updatePillBadges();
             }
@@ -2633,6 +2653,7 @@
     function loadChatList(silent, options){
         options = options || {};
         if (isFetchingList && !silent) return;
+        if (pendingListXhr && pendingListXhr.readyState !== 4) return;
         isFetchingList = true;
         silent = !!silent;
 
@@ -2640,20 +2661,47 @@
             search: $('#tgSearchInput').val().trim()
         };
 
-        $.ajax({
+        if (options.snapshot) {
+            params.snapshot = 1;
+        }
+
+        pendingListXhr = $.ajax({
             url: apiBaseUrl,
             data: params,
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
+                if (options.snapshot) {
+                    var snapshot = resp && resp.data ? resp.data : {};
+                    if (snapshot.version && snapshot.version === chatListSnapshotVersion) {
+                        return;
+                    }
+                    chatListSnapshotVersion = snapshot.version || '';
+                    queuedListLoadOptions = {suppressSound: !!options.suppressSound};
+                    return;
+                }
+
                 contacts = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : (resp.data.data || [])) : [];
+                var signature = contactListSignature(contacts);
                 if (!options.suppressSound && shouldPlayForUnreadIncrease(contacts)) {
                     playChatNotificationSound();
                 }
+                if (signature === contactListRenderSignature) {
+                    return;
+                }
+                contactListRenderSignature = signature;
                 renderChatList();
                 updatePillBadges();
             },
             complete: function(){
                 isFetchingList = false;
+                pendingListXhr = null;
+                if (queuedListLoadOptions) {
+                    var nextOptions = queuedListLoadOptions;
+                    queuedListLoadOptions = null;
+                    window.setTimeout(function(){
+                        loadChatList(true, nextOptions);
+                    }, 0);
+                }
             }
         });
     }
@@ -2707,6 +2755,15 @@
     function renderChatList(){
         var $list = $('#tgChatList');
         var filtered = filterContacts();
+        var foldersByCustomer = {};
+
+        folders.forEach(function(f){
+            (f.customer_ids || []).forEach(function(customerId){
+                var key = String(Number(customerId));
+                if (!foldersByCustomer[key]) foldersByCustomer[key] = [];
+                foldersByCustomer[key].push(f);
+            });
+        });
 
         if (!filtered.length) {
             $list.html('<div class="tg-empty-chats"><i class="fa fa-telegram"></i><div>No chats in this folder</div></div>');
@@ -2763,9 +2820,7 @@
 
             // Folders customer belongs to
             var cid = Number(c.customer_id);
-            var custFolders = folders.filter(function(f){
-                return (f.customer_ids || []).map(Number).indexOf(cid) >= 0;
-            });
+            var custFolders = foldersByCustomer[String(cid)] || [];
             var folderTagsHtml = '';
             if (custFolders.length > 0) {
                 custFolders.forEach(function(cf){
@@ -2810,9 +2865,13 @@
 
         activeThreadId = threadId;
         activeThreadMarkedUnread = false;
+        if (pendingThreadXhr && pendingThreadXhr.readyState !== 4) {
+            pendingThreadXhr.abort();
+        }
         threadMessageSeenInitialized = false;
         threadMessageSeen = {};
         threadMessages = [];
+        renderedMessageIds = {};
         hasMoreOlderMessages = false;
 
         // Find contact profile
@@ -2908,10 +2967,11 @@
             params.push('skip_read=1');
         }
 
-        $.ajax({
+        pendingThreadXhr = $.ajax({
             url: apiBaseUrl + '/' + threadId + '?' + params.join('&'),
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
+                if (String(threadId) !== String(activeThreadId)) return;
                 var threadData = resp && resp.data ? resp.data : null;
                 if (!threadData) return;
                 activeContact = threadData;
@@ -2920,24 +2980,27 @@
                 var pagination = threadData.message_pagination || {};
 
                 if (options.beforeId) {
+                    var previousFirstDate = threadMessages.length ? messageDateKey(threadMessages[0]) : '';
                     threadMessages = mergeThreadMessages(incomingMessages, threadMessages);
                     hasMoreOlderMessages = !!pagination.has_more_older;
-                    renderMessages(threadMessages, {preserveScroll: true, previousScrollHeight: previousScrollHeight, previousScrollTop: previousScrollTop});
+                    prependMessages(incomingMessages, {previousFirstDate: previousFirstDate, previousScrollHeight: previousScrollHeight, previousScrollTop: previousScrollTop});
                     return;
                 }
 
                 if (options.afterId) {
                     if (incomingMessages.length) {
+                        var previousLastDate = threadMessages.length ? messageDateKey(threadMessages[threadMessages.length - 1]) : '';
                         if (shouldPlayForNewIncomingMessages(incomingMessages)) {
                             playChatNotificationSound();
                         }
                         threadMessages = mergeThreadMessages(threadMessages, incomingMessages);
-                        renderMessages(threadMessages);
+                        appendMessages(incomingMessages, {previousLastDate: previousLastDate});
                     }
                     return;
                 }
 
                 threadMessages = sortMessagesById(incomingMessages);
+                renderedMessageIds = {};
                 hasMoreOlderMessages = !!pagination.has_more_older;
                 if (shouldPlayForNewIncomingMessages(threadMessages)) {
                     playChatNotificationSound();
@@ -2954,6 +3017,7 @@
             complete: function(){
                 isFetchingThread = false;
                 loadingOlderMessages = false;
+                pendingThreadXhr = null;
             }
         });
     }
@@ -2970,6 +3034,128 @@
         return url;
     }
 
+    function messageDateKey(m){
+        return m && m.created_at ? String(m.created_at).split(' ')[0] : '';
+    }
+
+    function messageHtml(m){
+        var idKey = String(m.id || messageSoundKey(m));
+        if (idKey && renderedMessageIds[idKey]) return '';
+        if (idKey) renderedMessageIds[idKey] = true;
+
+        var isOwn = m.is_own || m.sender_type === 'staff' || m.sender_type === 'admin';
+        var timeFormatted = formatTime(m.created_at);
+        var ticks = isOwn ? '<span class="tg-ticks"><i class="fa fa-check"></i><i class="fa fa-check"></i></span>' : '';
+        var bubbleContent = '';
+
+        if (m.message_type === 'text' || (!m.message_type && m.message)) {
+            bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+        }
+
+        if (m.message_type === 'audio') {
+            var audioUrl = chatFileUrlFromMessage(m);
+            var dur = m.audio_duration_seconds ? formatDuration(m.audio_duration_seconds) : '00:20';
+            bubbleContent += '<div class="tg-voice-card" data-audio-url="' + esc(audioUrl) + '" data-msg-id="' + m.id + '">' +
+                '<button type="button" class="tg-voice-play-btn js-voice-play" aria-label="Play" ' + (!audioUrl ? 'disabled title="Voice file unavailable"' : '') + '><i class="fa fa-play"></i></button>' +
+                '<div class="tg-voice-wave-wrap">' +
+                    '<div class="tg-voice-waveform js-voice-waveform">' + generateWaveformBars() + '</div>' +
+                    '<div class="tg-voice-timing"><span class="js-voice-timer">' + (audioUrl ? dur : 'Unavailable') + '</span></div>' +
+                '</div>' +
+            '</div>';
+            if (m.message) {
+                bubbleContent += '<div class="tg-msg-text" style="margin-top:4px">' + esc(m.message) + '</div>';
+            }
+        }
+
+        if (m.message_type === 'image') {
+            var imgUrl = chatFileUrlFromMessage(m);
+            if (imgUrl) {
+                bubbleContent += '<div class="tg-image-wrap js-view-image" data-full-url="' + esc(imgUrl) + '">' +
+                    '<img src="' + esc(imgUrl) + '" alt="Image" loading="lazy">' +
+                '</div>';
+            }
+            if (m.message) {
+                bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+            }
+        }
+
+        if (m.message_type === 'file') {
+            var docUrl = chatFileUrlFromMessage(m);
+            if (docUrl) {
+                bubbleContent += '<a href="' + esc(docUrl) + '" target="_blank" download class="tg-file-card">' +
+                    '<div class="tg-file-icon"><i class="fa fa-file-text"></i></div>' +
+                    '<div class="tg-file-details">' +
+                        '<div class="tg-file-name">' + esc(m.file && m.file.name ? m.file.name : 'Invoice / Document') + '</div>' +
+                        '<div class="tg-file-size">Download file</div>' +
+                    '</div>' +
+                '</a>';
+            }
+            if (m.message) {
+                bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
+            }
+        }
+
+        if (m.message_type === 'location' && m.latitude && m.longitude) {
+            var mapUrl = 'https://maps.google.com/?q=' + m.latitude + ',' + m.longitude;
+            bubbleContent += '<a href="' + esc(mapUrl) + '" target="_blank" class="tg-file-card">' +
+                '<div class="tg-file-icon" style="background:#ef4444"><i class="fa fa-map-marker"></i></div>' +
+                '<div class="tg-file-details">' +
+                    '<div class="tg-file-name">Location Pin</div>' +
+                    '<div class="tg-file-size">Tap to open in Google Maps</div>' +
+                '</div>' +
+            '</a>';
+        }
+
+        var quoteHtml = '';
+        if (m.quote_text) {
+            quoteHtml = '<div class="tg-quote-box">' +
+                '<div class="tg-quote-author">' + esc(m.quote_author || 'Reply') + '</div>' +
+                '<div class="tg-quote-text">' + esc(m.quote_text) + '</div>' +
+            '</div>';
+        }
+
+        var reactionHtml = '';
+        if (m.reaction) {
+            var reactionAvatar = isOwn ? (activeContact && activeContact.avatar_url ? '<span class="tg-reaction-avatar"><img src="' + esc(activeContact.avatar_url) + '" alt=""></span>' : '') : '';
+            reactionHtml = '<div class="tg-reaction-badge">' +
+                '<span class="tg-reaction-emoji">' + esc(m.reaction) + '</span>' +
+                reactionAvatar +
+            '</div>';
+        }
+
+        return '<div class="tg-msg-row ' + (isOwn ? 'own' : '') + '" data-message-id="' + esc(idKey) + '">' +
+            '<div class="tg-bubble">' +
+                (!isOwn && m.sender_name ? '<div class="tg-msg-sender">' + esc(m.sender_name) + '</div>' : '') +
+                quoteHtml +
+                bubbleContent +
+                '<div class="tg-msg-meta"><span>' + timeFormatted + '</span> ' + ticks + '</div>' +
+                reactionHtml +
+            '</div>' +
+        '</div>';
+    }
+
+    function messagesHtml(messages, options){
+        options = options || {};
+        var html = '';
+        var lastDate = options.previousDate || '';
+
+        sortMessagesById(messages || []).forEach(function(m){
+            var msgDate = messageDateKey(m);
+            if (msgDate && msgDate !== lastDate) {
+                lastDate = msgDate;
+                html += '<div class="tg-date-divider"><span>' + formatDateOrTime(m.created_at) + '</span></div>';
+            }
+            html += messageHtml(m);
+        });
+
+        return html;
+    }
+
+    function loadMoreHtml(){
+        if (!hasMoreOlderMessages) return '';
+        return '<div class="tg-load-more-wrap"><button type="button" class="tg-load-more-btn" id="tgLoadOlderMessages" ' + (loadingOlderMessages ? 'disabled' : '') + '>' + (loadingOlderMessages ? 'Loading...' : 'Load more') + '</button></div>';
+    }
+
     function renderMessages(messages, options){
         options = options || {};
         var $body = $('#tgChatMessages');
@@ -2979,125 +3165,35 @@
             return;
         }
 
-        var html = '';
-        var lastDate = '';
-
-        if (hasMoreOlderMessages) {
-            html += '<div class="tg-load-more-wrap"><button type="button" class="tg-load-more-btn" id="tgLoadOlderMessages" ' + (loadingOlderMessages ? 'disabled' : '') + '>' + (loadingOlderMessages ? 'Loading...' : 'Load more') + '</button></div>';
-        }
-
-        messages.forEach(function(m){
-            var msgDate = m.created_at ? m.created_at.split(' ')[0] : '';
-            if (msgDate && msgDate !== lastDate) {
-                lastDate = msgDate;
-                html += '<div class="tg-date-divider"><span>' + formatDateOrTime(m.created_at) + '</span></div>';
-            }
-
-            var isOwn = m.is_own || m.sender_type === 'staff' || m.sender_type === 'admin';
-            var timeFormatted = formatTime(m.created_at);
-            var ticks = isOwn ? '<span class="tg-ticks"><i class="fa fa-check"></i><i class="fa fa-check"></i></span>' : '';
-
-            var bubbleContent = '';
-
-            // 1. Text Message
-            if (m.message_type === 'text' || (!m.message_type && m.message)) {
-                bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
-            }
-
-            // 2. Voice Audio Message
-            if (m.message_type === 'audio') {
-                var audioUrl = chatFileUrlFromMessage(m);
-                var dur = m.audio_duration_seconds ? formatDuration(m.audio_duration_seconds) : '00:20';
-                bubbleContent += '<div class="tg-voice-card" data-audio-url="' + esc(audioUrl) + '" data-msg-id="' + m.id + '">' +
-                    '<button type="button" class="tg-voice-play-btn js-voice-play" aria-label="Play" ' + (!audioUrl ? 'disabled title="Voice file unavailable"' : '') + '><i class="fa fa-play"></i></button>' +
-                    '<div class="tg-voice-wave-wrap">' +
-                        '<div class="tg-voice-waveform js-voice-waveform">' + generateWaveformBars() + '</div>' +
-                        '<div class="tg-voice-timing"><span class="js-voice-timer">' + (audioUrl ? dur : 'Unavailable') + '</span></div>' +
-                    '</div>' +
-                '</div>';
-                if (m.message) {
-                    bubbleContent += '<div class="tg-msg-text" style="margin-top:4px">' + esc(m.message) + '</div>';
-                }
-            }
-
-            // 3. Image Message
-            if (m.message_type === 'image') {
-                var imgUrl = chatFileUrlFromMessage(m);
-                if (imgUrl) {
-                    bubbleContent += '<div class="tg-image-wrap js-view-image" data-full-url="' + esc(imgUrl) + '">' +
-                        '<img src="' + esc(imgUrl) + '" alt="Image">' +
-                    '</div>';
-                }
-                if (m.message) {
-                    bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
-                }
-            }
-
-            // 4. Document / File Message
-            if (m.message_type === 'file') {
-                var docUrl = chatFileUrlFromMessage(m);
-                if (docUrl) {
-                    bubbleContent += '<a href="' + esc(docUrl) + '" target="_blank" download class="tg-file-card">' +
-                        '<div class="tg-file-icon"><i class="fa fa-file-text"></i></div>' +
-                        '<div class="tg-file-details">' +
-                            '<div class="tg-file-name">' + esc(m.file && m.file.name ? m.file.name : 'Invoice / Document') + '</div>' +
-                            '<div class="tg-file-size">Download file</div>' +
-                        '</div>' +
-                    '</a>';
-                }
-                if (m.message) {
-                    bubbleContent += '<div class="tg-msg-text">' + esc(m.message) + '</div>';
-                }
-            }
-
-            // 5. Location Message
-            if (m.message_type === 'location' && m.latitude && m.longitude) {
-                var mapUrl = 'https://maps.google.com/?q=' + m.latitude + ',' + m.longitude;
-                bubbleContent += '<a href="' + esc(mapUrl) + '" target="_blank" class="tg-file-card">' +
-                    '<div class="tg-file-icon" style="background:#ef4444"><i class="fa fa-map-marker"></i></div>' +
-                    '<div class="tg-file-details">' +
-                        '<div class="tg-file-name">Location Pin</div>' +
-                        '<div class="tg-file-size">Tap to open in Google Maps</div>' +
-                    '</div>' +
-                '</a>';
-            }
-
-            // Quoted message support
-            var quoteHtml = '';
-            if (m.quote_text) {
-                quoteHtml = '<div class="tg-quote-box">' +
-                    '<div class="tg-quote-author">' + esc(m.quote_author || 'Reply') + '</div>' +
-                    '<div class="tg-quote-text">' + esc(m.quote_text) + '</div>' +
-                '</div>';
-            }
-
-            // Reaction badge support
-            var reactionHtml = '';
-            if (m.reaction) {
-                var reactionAvatar = isOwn ? (activeContact && activeContact.avatar_url ? '<span class="tg-reaction-avatar"><img src="' + esc(activeContact.avatar_url) + '" alt=""></span>' : '') : '';
-                reactionHtml = '<div class="tg-reaction-badge">' +
-                    '<span class="tg-reaction-emoji">' + esc(m.reaction) + '</span>' +
-                    reactionAvatar +
-                '</div>';
-            }
-
-            html += '<div class="tg-msg-row ' + (isOwn ? 'own' : '') + '">' +
-                '<div class="tg-bubble">' +
-                    (!isOwn && m.sender_name ? '<div class="tg-msg-sender">' + esc(m.sender_name) + '</div>' : '') +
-                    quoteHtml +
-                    bubbleContent +
-                    '<div class="tg-msg-meta"><span>' + timeFormatted + '</span> ' + ticks + '</div>' +
-                    reactionHtml +
-                '</div>' +
-            '</div>';
-        });
-
-        $body.html(html);
+        renderedMessageIds = {};
+        $body.html(loadMoreHtml() + messagesHtml(messages));
         if (options.preserveScroll) {
             $body.scrollTop(($body[0].scrollHeight - (options.previousScrollHeight || 0)) + (options.previousScrollTop || 0));
         } else if (!options.keepPosition) {
             $body.scrollTop($body[0].scrollHeight);
         }
+    }
+
+    function appendMessages(messages, options){
+        options = options || {};
+        var $body = $('#tgChatMessages');
+        var html = messagesHtml(messages, {previousDate: options.previousLastDate || ''});
+        if (!html) return;
+        var wasNearBottom = !$body[0] || ($body[0].scrollHeight - $body.scrollTop() - $body.outerHeight()) < 160;
+        $body.append(html);
+        if (wasNearBottom) {
+            $body.scrollTop($body[0].scrollHeight);
+        }
+    }
+
+    function prependMessages(messages, options){
+        options = options || {};
+        var $body = $('#tgChatMessages');
+        var html = messagesHtml(messages);
+        if (!html) return;
+        $body.find('.tg-load-more-wrap').remove();
+        $body.prepend(loadMoreHtml() + html);
+        $body.scrollTop(($body[0].scrollHeight - (options.previousScrollHeight || 0)) + (options.previousScrollTop || 0));
     }
 
     $(document).on('click', '#tgLoadOlderMessages', function(){
@@ -3590,6 +3686,9 @@
     });
 
     $('#tgBackToListBtn').on('click', function(){
+        if (pendingThreadXhr && pendingThreadXhr.readyState !== 4) {
+            pendingThreadXhr.abort();
+        }
         isFetchingThread = false;
         activeThreadId = null;
         activeContact = null;
@@ -3686,13 +3785,19 @@
         openConversation(null, initialCustomerId);
     }
 
-    // Polling
-    pollTimer = setInterval(function(){
+    function pollChatUpdates(){
+        if (document.hidden) {
+            loadChatList(true, {snapshot: true});
+            return;
+        }
         if (activeThreadId) {
             loadThreadMessages(activeThreadId, false, {afterId: newestLoadedMessageId()});
         }
-        loadChatList(true);
-    }, pollMs);
+        loadChatList(true, {snapshot: true});
+    }
+
+    // Polling
+    pollTimer = setInterval(pollChatUpdates, pollMs);
 
     $(window).on('beforeunload', function(){
         if (pollTimer) clearInterval(pollTimer);
