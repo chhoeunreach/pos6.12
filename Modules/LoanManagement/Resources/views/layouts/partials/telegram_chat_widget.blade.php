@@ -303,7 +303,11 @@
     var pendingVoiceDuration = 0;
     var discardVoiceOnStop = false;
     var sendingInvoiceImage = false;
-    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationSoundUrls = [
+        '{{ asset("audio/success.mp3") }}',
+        '{{ asset("audio/success.ogg") }}'
+    ];
+    var notificationSoundIndex = 0;
     var notificationAudio = null;
     var notificationAudioUnlocked = false;
     var contactUnreadInitialized = false;
@@ -401,10 +405,23 @@
 
     function ensureNotificationAudio(){
         if (!notificationAudio) {
-            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio = new Audio(notificationSoundUrls[notificationSoundIndex] || notificationSoundUrls[0]);
             notificationAudio.preload = 'auto';
+            notificationAudio.onerror = function(){
+                resetNotificationAudioToNextSource();
+            };
         }
         return notificationAudio;
+    }
+
+    function resetNotificationAudioToNextSource(){
+        if (notificationSoundIndex >= notificationSoundUrls.length - 1) {
+            return false;
+        }
+        notificationSoundIndex += 1;
+        notificationAudio = null;
+        notificationAudioUnlocked = false;
+        return true;
     }
 
     function unlockNotificationAudio(){
@@ -420,6 +437,9 @@
                 notificationAudioUnlocked = true;
             }).catch(function(){
                 audio.muted = false;
+                if (resetNotificationAudioToNextSource()) {
+                    unlockNotificationAudio();
+                }
             });
         } else {
             audio.pause();
@@ -435,7 +455,11 @@
         audio.currentTime = 0;
         var playPromise = audio.play();
         if (playPromise && playPromise.catch) {
-            playPromise.catch(function(){});
+            playPromise.catch(function(){
+                if (resetNotificationAudioToNextSource()) {
+                    playChatNotificationSound();
+                }
+            });
         }
     }
 
@@ -647,9 +671,15 @@
             }
 
             var body = formatChatText(m.message || '');
-            if (m.message_type === 'image' && m.file && m.file.url) body += renderImageMessage(m.file);
-            if (m.message_type === 'file' && m.file && m.file.url) body += renderFileMessage(m.file);
-            if (m.message_type === 'audio' && m.file && m.file.url) body += '<div><audio controls src="'+esc(m.file.url)+'" style="max-width:200px;margin-top:6px"></audio></div>';
+            var file = m.file || {};
+            var fileUrl = file.url || file.preview_url || m.file_url || '';
+            if (fileUrl) {
+                file.url = fileUrl;
+                file.preview_url = file.preview_url || fileUrl;
+            }
+            if (m.message_type === 'image' && fileUrl) body += renderImageMessage(file);
+            if (m.message_type === 'file' && fileUrl) body += renderFileMessage(file);
+            if (m.message_type === 'audio' && fileUrl) body += '<div><audio controls src="'+esc(fileUrl)+'" style="max-width:200px;margin-top:6px"></audio></div>';
             if (m.message_type === 'location' && m.latitude && m.longitude) body += '<div><a href="https://maps.google.com/?q='+esc(m.latitude)+','+esc(m.longitude)+'" target="_blank"><i class="fa fa-map-marker"></i> Open location</a></div>';
             var ticks = '';
             if (m.is_own) {

@@ -485,7 +485,7 @@ class TelegramChatService
             $loanFile = LoanFile::query()->find($message->file_id);
             $resolvedUrl = $viewerType === 'customer'
                 ? ($this->publicLoanFileUrl($loanFile) ?: url('api/loan-management/customer/telegram/chat-files/'.(int) $message->file_id))
-                : url('api/loan-management/telegram/chat-files/'.(int) $message->file_id);
+                : url('loan-management/chat-files/'.(int) $message->file_id);
         } elseif (! empty($message->file_url)) {
             $resolvedUrl = $this->absoluteUrl((string) $message->file_url);
         }
@@ -921,7 +921,7 @@ class TelegramChatService
         if (! empty($customer->customer_photo_file_id)) {
             $file = LoanFile::query()->find($customer->customer_photo_file_id);
             if ($file) {
-                return $this->publicLoanFileUrl($file) ?: url('api/loan-management/telegram/chat-files/'.(int) $file->id);
+                return $this->publicLoanFileUrl($file) ?: url('loan-management/chat-files/'.(int) $file->id);
             }
         }
 
@@ -969,6 +969,13 @@ class TelegramChatService
         }
 
         if (preg_match('#^https?://#i', $path)) {
+            $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+            $pathHost = parse_url($path, PHP_URL_HOST);
+            $appScheme = parse_url((string) config('app.url'), PHP_URL_SCHEME);
+            if ($appScheme === 'https' && $appHost && $pathHost && strcasecmp($appHost, $pathHost) === 0) {
+                return preg_replace('#^http://#i', 'https://', $path);
+            }
+
             return $path;
         }
 

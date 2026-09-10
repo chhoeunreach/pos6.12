@@ -2024,7 +2024,11 @@
     var chatListSnapshotVersion = '';
     var contactListRenderSignature = '';
     var renderedMessageIds = {};
-    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationSoundUrls = [
+        '{{ asset("audio/success.mp3") }}',
+        '{{ asset("audio/success.ogg") }}'
+    ];
+    var notificationSoundIndex = 0;
     var notificationAudio = null;
     var notificationAudioUnlocked = false;
     var chatListUnreadInitialized = false;
@@ -2078,10 +2082,23 @@
 
     function ensureNotificationAudio(){
         if (!notificationAudio) {
-            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio = new Audio(notificationSoundUrls[notificationSoundIndex] || notificationSoundUrls[0]);
             notificationAudio.preload = 'auto';
+            notificationAudio.onerror = function(){
+                resetNotificationAudioToNextSource();
+            };
         }
         return notificationAudio;
+    }
+
+    function resetNotificationAudioToNextSource(){
+        if (notificationSoundIndex >= notificationSoundUrls.length - 1) {
+            return false;
+        }
+        notificationSoundIndex += 1;
+        notificationAudio = null;
+        notificationAudioUnlocked = false;
+        return true;
     }
 
     function unlockNotificationAudio(){
@@ -2097,6 +2114,9 @@
                 notificationAudioUnlocked = true;
             }).catch(function(){
                 audio.muted = false;
+                if (resetNotificationAudioToNextSource()) {
+                    unlockNotificationAudio();
+                }
             });
         } else {
             audio.pause();
@@ -2112,7 +2132,11 @@
         audio.currentTime = 0;
         var playPromise = audio.play();
         if (playPromise && playPromise.catch) {
-            playPromise.catch(function(){});
+            playPromise.catch(function(){
+                if (resetNotificationAudioToNextSource()) {
+                    playChatNotificationSound();
+                }
+            });
         }
     }
 

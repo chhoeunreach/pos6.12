@@ -43,7 +43,11 @@
 <script>
 (function($){
     var threadId = {{ (int) $threadId }};
-    var notificationSoundUrl = '{{ asset("audio/success.mp3") }}';
+    var notificationSoundUrls = [
+        '{{ asset("audio/success.mp3") }}',
+        '{{ asset("audio/success.ogg") }}'
+    ];
+    var notificationSoundIndex = 0;
     var notificationAudio = null;
     var notificationAudioUnlocked = false;
     var seenMessagesInitialized = false;
@@ -51,10 +55,22 @@
     function esc(v){ return $('<div>').text(v == null ? '' : String(v)).html(); }
     function ensureNotificationAudio(){
         if (!notificationAudio) {
-            notificationAudio = new Audio(notificationSoundUrl);
+            notificationAudio = new Audio(notificationSoundUrls[notificationSoundIndex] || notificationSoundUrls[0]);
             notificationAudio.preload = 'auto';
+            notificationAudio.onerror = function(){
+                resetNotificationAudioToNextSource();
+            };
         }
         return notificationAudio;
+    }
+    function resetNotificationAudioToNextSource(){
+        if (notificationSoundIndex >= notificationSoundUrls.length - 1) {
+            return false;
+        }
+        notificationSoundIndex += 1;
+        notificationAudio = null;
+        notificationAudioUnlocked = false;
+        return true;
     }
     function unlockNotificationAudio(){
         if (notificationAudioUnlocked) return;
@@ -69,6 +85,9 @@
                 notificationAudioUnlocked = true;
             }).catch(function(){
                 audio.muted = false;
+                if (resetNotificationAudioToNextSource()) {
+                    unlockNotificationAudio();
+                }
             });
         } else {
             audio.pause();
@@ -83,7 +102,11 @@
         audio.currentTime = 0;
         var playPromise = audio.play();
         if (playPromise && playPromise.catch) {
-            playPromise.catch(function(){});
+            playPromise.catch(function(){
+                if (resetNotificationAudioToNextSource()) {
+                    playChatNotificationSound();
+                }
+            });
         }
     }
     function isIncomingMessage(message){
@@ -149,10 +172,15 @@
             }
             msgs.forEach(function(m){
                 var file = m.file || {};
+                var fileUrl = file.url || file.preview_url || m.file_url || '';
+                if (fileUrl) {
+                    file.url = fileUrl;
+                    file.preview_url = file.preview_url || fileUrl;
+                }
                 var attachment = '';
-                if (m.message_type === 'image' && file.url) attachment = imageHtml(file);
-                if (m.message_type === 'file' && file.url) attachment = fileHtml(file);
-                if (m.message_type === 'audio' && file.url) attachment = '<div class="lm-chat-attachment"><audio controls src="'+esc(file.url)+'" style="max-width:220px"></audio></div>';
+                if (m.message_type === 'image' && fileUrl) attachment = imageHtml(file);
+                if (m.message_type === 'file' && fileUrl) attachment = fileHtml(file);
+                if (m.message_type === 'audio' && fileUrl) attachment = '<div class="lm-chat-attachment"><audio controls src="'+esc(fileUrl)+'" style="max-width:220px"></audio></div>';
                 box.append('<div style="margin-bottom:10px;"><strong>'+esc(m.sender_type)+'#'+esc(m.sender_id)+':</strong> '+esc(m.message||'')+' <small class="text-muted">'+esc(m.created_at)+'</small>'+attachment+'</div>');
             });
             box.scrollTop(box[0].scrollHeight);
