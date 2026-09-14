@@ -2023,6 +2023,8 @@
     var queuedListLoadOptions = null;
     var chatListSnapshotVersion = '';
     var contactListRenderSignature = '';
+    var contactListRendered = false;
+    var fullContactListLoaded = false;
     var renderedMessageIds = {};
     var notificationSoundUrls = [
         '{{ asset("audio/success.mp3") }}',
@@ -2688,6 +2690,9 @@
         if (options.snapshot) {
             params.snapshot = 1;
         }
+        if (options.threadsOnly) {
+            params.threads_only = 1;
+        }
 
         pendingListXhr = $.ajax({
             url: apiBaseUrl,
@@ -2705,16 +2710,34 @@
                 }
 
                 contacts = resp && resp.data ? (Array.isArray(resp.data) ? resp.data : (resp.data.data || [])) : [];
+                if (!options.threadsOnly) {
+                    fullContactListLoaded = true;
+                }
                 var signature = contactListSignature(contacts);
                 if (!options.suppressSound && shouldPlayForUnreadIncrease(contacts)) {
                     playChatNotificationSound();
                 }
-                if (signature === contactListRenderSignature) {
+                if (contactListRendered && signature === contactListRenderSignature) {
                     return;
                 }
                 contactListRenderSignature = signature;
+                contactListRendered = true;
                 renderChatList();
                 updatePillBadges();
+                if (options.threadsOnly && !fullContactListLoaded) {
+                    window.setTimeout(function(){
+                        loadChatList(true, {suppressSound: true});
+                    }, 350);
+                }
+            },
+            error: function(xhr){
+                if (!silent || !contacts.length) {
+                    $('#tgChatList').html(
+                        '<div class="tg-empty-chats"><i class="fa fa-exclamation-circle"></i><div>Cannot load Telegram chats' +
+                        (xhr && xhr.status ? ' (' + xhr.status + ')' : '') +
+                        '</div></div>'
+                    );
+                }
             },
             complete: function(){
                 isFetchingList = false;
@@ -3801,7 +3824,7 @@
     // INITIALIZATION & REAL-TIME POLLING
     // -------------------------------------------------------------
     loadFolders();
-    loadChatList(false);
+    loadChatList(false, {threadsOnly: true});
 
     if (initialThreadId) {
         openConversation(initialThreadId, null);

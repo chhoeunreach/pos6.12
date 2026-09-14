@@ -176,6 +176,7 @@ class TelegramChatService
             $locationIds = [$filterLocationId];
         }
         $telegramStatus = (string) ($filters['telegram_status'] ?? '');
+        $includeCustomers = (bool) ($filters['include_customers'] ?? true);
 
         $threads = LoanTelegramChatThread::query()
             ->where('status', 'open')
@@ -230,7 +231,7 @@ class TelegramChatService
             ]);
         }
 
-        if (! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+        if (! $includeCustomers || ! Schema::connection('mysql_loan')->hasTable('loan_customers')) {
             return $rows;
         }
 

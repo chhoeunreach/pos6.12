@@ -177,6 +177,7 @@ class LoanTelegramChatController extends Controller
             [
                 'location_id' => $request->input('location_id'),
                 'telegram_status' => $request->input('telegram_status'),
+                'include_customers' => ! $request->boolean('threads_only'),
             ]
         );
 

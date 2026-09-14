@@ -19,5 +19,6 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 
-    RewriteRule ^uploads/.*\.(htaccess|htpasswd|ini|phps|fla|psd|log|sh|zip|exe|pl|jsp|asp|htm|sh|cgi|py|php)$ - [NC,F]
+    RewriteRule ^install(/|$) - [NC,F]
+    RewriteRule ^(uploads|storage)/.*\.(htaccess|htpasswd|ini|phps|phtml|phar|fla|psd|log|sh|zip|exe|pl|jsp|asp|aspx|htm|html|shtml|cgi|py|php[0-9]?)$ - [NC,F]
 </IfModule>

@@ -1,0 +1,10 @@
+Options -ExecCGI -Indexes
+
+<FilesMatch "\.(php[0-9]?|phtml|phar|phps|pl|py|cgi|asp|aspx|shtml|sh|exe|jsp|htaccess|htpasswd|ini)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.(php[0-9]?|phtml|phar|phps|pl|py|cgi|asp|aspx|shtml|sh|exe|jsp|htaccess|htpasswd|ini)$ - [NC,F]
+</IfModule>
