@@ -20,28 +20,59 @@ class DataController extends Controller
 
     public function modifyAdminMenu()
     {
-        if (! auth()->check() || ! auth()->user()->can('local_cashier_report.view')) {
+        if (! auth()->check()) {
             return;
         }
 
-        Menu::modify('admin-sidebar-menu', function ($menu) {
+        $canViewLocalCashier = auth()->user()->can('local_cashier_report.view');
+        $canViewExpense = auth()->user()->can('expense_report.view') || $canViewLocalCashier;
+
+        if (! $canViewLocalCashier && ! $canViewExpense) {
+            return;
+        }
+
+        Menu::modify('admin-sidebar-menu', function ($menu) use ($canViewLocalCashier, $canViewExpense) {
             $reports = $menu->whereTitle(__('report.reports'));
 
+            $isLocalCashierActive = request()->segment(1) === 'local-cashier-report' && request()->segment(2) !== 'expenses-list';
+            $isExpensesListActive = (request()->segment(1) === 'local-cashier-report' && request()->segment(2) === 'expenses-list')
+                || (request()->segment(1) === 'reports' && (request()->segment(2) === 'expenses-list' || request()->segment(2) === 'cashier-expenses-list'));
+
             if (! empty($reports)) {
-                $reports->url(
-                    route('local-cashier-report.index'),
-                    'Local Cashier Report',
-                    ['icon' => '', 'active' => request()->segment(1) === 'local-cashier-report']
-                )->order(999);
+                if ($canViewLocalCashier) {
+                    $reports->url(
+                        route('local-cashier-report.index'),
+                        'Local Cashier Report',
+                        ['icon' => '', 'active' => $isLocalCashierActive]
+                    )->order(999);
+                }
+
+                if ($canViewExpense) {
+                    $reports->url(
+                        route('local-cashier-report.expenses-list'),
+                        'Expenses list',
+                        ['icon' => '', 'active' => $isExpensesListActive]
+                    )->order(1000);
+                }
 
                 return;
             }
 
-            $menu->url(
-                route('local-cashier-report.index'),
-                'Local Cashier Report',
-                ['icon' => 'fa fa-file-text-o', 'active' => request()->segment(1) === 'local-cashier-report']
-            )->order(999);
+            if ($canViewLocalCashier) {
+                $menu->url(
+                    route('local-cashier-report.index'),
+                    'Local Cashier Report',
+                    ['icon' => 'fa fa-file-text-o', 'active' => $isLocalCashierActive]
+                )->order(999);
+            }
+
+            if ($canViewExpense) {
+                $menu->url(
+                    route('local-cashier-report.expenses-list'),
+                    'Expenses list',
+                    ['icon' => 'fa fa-money', 'active' => $isExpensesListActive]
+                )->order(1000);
+            }
         });
     }
 }
