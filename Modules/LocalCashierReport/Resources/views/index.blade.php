@@ -78,6 +78,54 @@
     $t = fn ($key) => $dashboardTranslations[$currentReportLang][$key]
         ?? $dashboardTranslations['en'][$key]
         ?? $key;
+    $paymentLabel = function ($method) use ($report, $currentReportLang) {
+        $raw = (string) ($report['payment_labels'][$method] ?? $method);
+        $key = strtolower(trim((string) $method));
+        $rawLower = strtolower($raw);
+
+        if ($key === 'custom_pay_1' || strpos($rawLower, 'wing') !== false || strpos($raw, 'វីង') !== false) {
+            return $currentReportLang === 'km' ? 'វីង' : 'WING';
+        }
+        if ($key === 'custom_pay_2' || strpos($rawLower, 'aba') !== false || strpos($raw, 'អេប៊ីអេ') !== false) {
+            return $currentReportLang === 'km' ? 'អេប៊ីអេ' : 'ABA';
+        }
+        if ($key === 'custom_pay_3' || strpos($rawLower, 'acleda') !== false || strpos($raw, 'អេស៊ីលីដា') !== false) {
+            return $currentReportLang === 'km' ? 'អេស៊ីលីដា' : 'ACLEDA';
+        }
+        if ($key === 'custom_pay_4' || strpos($rawLower, 'true') !== false || strpos($raw, 'ទ្រូម៉ានី') !== false) {
+            return $currentReportLang === 'km' ? 'ទ្រូម៉ានី' : 'TRUE MONEY';
+        }
+        if ($key === 'custom_pay_5' || strpos($rawLower, 'emoney') !== false || strpos($rawLower, 'e-money') !== false || strpos($raw, 'អ៊ីម៉ានី') !== false) {
+            return $currentReportLang === 'km' ? 'អ៊ីម៉ានី' : 'E-MONEY';
+        }
+        if ($key === 'custom_pay_6' || strpos($raw, 'កាត់អីវ៉ាន់') !== false || strpos($rawLower, 'cut') !== false) {
+            return $currentReportLang === 'km' ? 'កាត់អីវ៉ាន់' : 'CUT';
+        }
+        if ($key === 'custom_pay_7' || strpos($raw, 'បង់ប្រចាំខែ') !== false || strpos($rawLower, 'monthly') !== false) {
+            return $currentReportLang === 'km' ? 'បង់ប្រចាំខែ' : 'MONTHLY';
+        }
+        if ($key === 'cash' || strpos($rawLower, 'cash') !== false || strpos($raw, 'សាច់ប្រាក់') !== false) {
+            return $currentReportLang === 'km' ? 'សាច់ប្រាក់' : 'CASH';
+        }
+        if ($key === 'card' || strpos($rawLower, 'card') !== false || strpos($raw, 'កាត') !== false) {
+            return $currentReportLang === 'km' ? 'កាត' : 'CARD';
+        }
+        if ($key === 'cheque' || strpos($rawLower, 'cheque') !== false || strpos($raw, 'សែក') !== false) {
+            return $currentReportLang === 'km' ? 'សែក' : 'CHEQUE';
+        }
+        if ($key === 'bank_transfer' || strpos($rawLower, 'bank') !== false || strpos($raw, 'ផ្ទេរប្រាក់') !== false) {
+            return $currentReportLang === 'km' ? 'ផ្ទេរប្រាក់' : 'BANK TRANSFER';
+        }
+        if ($key === 'other' || strpos($rawLower, 'other') !== false || strpos($raw, 'ផ្សេងៗ') !== false) {
+            return $currentReportLang === 'km' ? 'ផ្សេងៗ' : 'OTHER';
+        }
+
+        if (preg_match('/^([^\(]+)\s*\((.+)\)$/u', $raw, $matches)) {
+            return $currentReportLang === 'km' ? trim($matches[1]) : strtoupper(trim($matches[2]));
+        }
+
+        return $raw;
+    };
 @endphp
 @section('title', $t('local_cashier_report'))
 
@@ -303,7 +351,7 @@
                 <tr>
                     <th>{{ $t('cashier_user') }}</th>
                     @foreach($report['payment_columns'] as $method)
-                        <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                        <th class="text-right">{{ $paymentLabel($method) }}</th>
                     @endforeach
                     <th class="text-right">{{ $t('total_paid') }}</th>
                     <th class="text-right">{{ $t('due') }}</th>
@@ -381,7 +429,7 @@
                     <th>{{ $t('business_location') }}</th>
                     <th class="text-right">{{ $t('grand_total') }}</th>
                     @foreach($report['payment_columns'] as $method)
-                        <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                        <th class="text-right">{{ $paymentLabel($method) }}</th>
                     @endforeach
                     <th class="text-right">{{ $t('due') }}</th>
                 </tr>
@@ -477,7 +525,7 @@
                     <th>{{ $t('business_location_qty') }}</th>
                     <th class="text-right">{{ $t('total_price') }}</th>
                     @foreach($report['payment_columns'] as $method)
-                        <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                        <th class="text-right">{{ $paymentLabel($method) }}</th>
                     @endforeach
                     <th class="text-right">{{ $t('total') }}</th>
                     <th class="text-right">{{ $t('due') }}</th>
@@ -1092,7 +1140,7 @@
                             <th class="text-right">Discount</th>
                             <th class="text-right">Total Paid</th>
                             @foreach($report['payment_columns'] as $method)
-                                <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                <th class="text-right">{{ $paymentLabel($method) }}</th>
                             @endforeach
                             <th class="text-right">Due</th>
                             <th class="all-sale-cashier-column">User/Cashier</th>
@@ -1275,7 +1323,7 @@
                                         <th class="all-sale-cashier-column">Cashier</th>
                                         <th>Method</th>
                                         @foreach($report['payment_columns'] as $method)
-                                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                                            <th class="text-right">{{ $paymentLabel($method) }}</th>
                                         @endforeach
                                         <th class="text-right">Amount Paid</th>
                                     </tr>

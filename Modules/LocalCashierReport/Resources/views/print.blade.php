@@ -83,11 +83,53 @@
         ],
     ];
     $t = fn ($key) => $translations[$reportLang][$key] ?? $translations['en'][$key] ?? $key;
-    $paymentLabel = function ($method) use ($report, $t) {
-        $label = (string) ($report['payment_labels'][$method] ?? $method);
-        $key = strtolower(str_replace([' ', '-'], '_', $label));
+    $paymentLabel = function ($method) use ($report, $reportLang) {
+        $raw = (string) ($report['payment_labels'][$method] ?? $method);
+        $key = strtolower(trim((string) $method));
+        $rawLower = strtolower($raw);
 
-        return $t($key) !== $key ? $t($key) : $label;
+        if ($key === 'custom_pay_1' || strpos($rawLower, 'wing') !== false || strpos($raw, 'វីង') !== false) {
+            return $reportLang === 'km' ? 'វីង' : 'WING';
+        }
+        if ($key === 'custom_pay_2' || strpos($rawLower, 'aba') !== false || strpos($raw, 'អេប៊ីអេ') !== false) {
+            return $reportLang === 'km' ? 'អេប៊ីអេ' : 'ABA';
+        }
+        if ($key === 'custom_pay_3' || strpos($rawLower, 'acleda') !== false || strpos($raw, 'អេស៊ីលីដា') !== false) {
+            return $reportLang === 'km' ? 'អេស៊ីលីដា' : 'ACLEDA';
+        }
+        if ($key === 'custom_pay_4' || strpos($rawLower, 'true') !== false || strpos($raw, 'ទ្រូម៉ានី') !== false) {
+            return $reportLang === 'km' ? 'ទ្រូម៉ានី' : 'TRUE MONEY';
+        }
+        if ($key === 'custom_pay_5' || strpos($rawLower, 'emoney') !== false || strpos($rawLower, 'e-money') !== false || strpos($raw, 'អ៊ីម៉ានី') !== false) {
+            return $reportLang === 'km' ? 'អ៊ីម៉ានី' : 'E-MONEY';
+        }
+        if ($key === 'custom_pay_6' || strpos($raw, 'កាត់អីវ៉ាន់') !== false || strpos($rawLower, 'cut') !== false) {
+            return $reportLang === 'km' ? 'កាត់អីវ៉ាន់' : 'CUT';
+        }
+        if ($key === 'custom_pay_7' || strpos($raw, 'បង់ប្រចាំខែ') !== false || strpos($rawLower, 'monthly') !== false) {
+            return $reportLang === 'km' ? 'បង់ប្រចាំខែ' : 'MONTHLY';
+        }
+        if ($key === 'cash' || strpos($rawLower, 'cash') !== false || strpos($raw, 'សាច់ប្រាក់') !== false) {
+            return $reportLang === 'km' ? 'សាច់ប្រាក់' : 'CASH';
+        }
+        if ($key === 'card' || strpos($rawLower, 'card') !== false || strpos($raw, 'កាត') !== false) {
+            return $reportLang === 'km' ? 'កាត' : 'CARD';
+        }
+        if ($key === 'cheque' || strpos($rawLower, 'cheque') !== false || strpos($raw, 'សែក') !== false) {
+            return $reportLang === 'km' ? 'សែក' : 'CHEQUE';
+        }
+        if ($key === 'bank_transfer' || strpos($rawLower, 'bank') !== false || strpos($raw, 'ផ្ទេរប្រាក់') !== false) {
+            return $reportLang === 'km' ? 'ផ្ទេរប្រាក់' : 'BANK TRANSFER';
+        }
+        if ($key === 'other' || strpos($rawLower, 'other') !== false || strpos($raw, 'ផ្សេងៗ') !== false) {
+            return $reportLang === 'km' ? 'ផ្សេងៗ' : 'OTHER';
+        }
+
+        if (preg_match('/^([^\(]+)\s*\((.+)\)$/u', $raw, $matches)) {
+            return $reportLang === 'km' ? trim($matches[1]) : strtoupper(trim($matches[2]));
+        }
+
+        return $raw;
     };
     $languageQuery = function ($language) {
         return array_merge(request()->query(), ['report_lang' => $language]);
@@ -116,24 +158,23 @@
         .name-main { color: #1b62d1; font-weight: 700; }
         .section { margin-top: 16px; }
         table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-        tfoot { display: table-row-group; }
         .sheet-theme th, .sheet-theme td { border: 1px dashed #000; padding: 6px 8px; }
         .sheet-theme thead th { background: #d9edf7; font-weight: 700; }
         .sheet-theme tbody tr.row-sale { background: #fde2ea; }
-        .sheet-theme tfoot tr.row-total, .sheet-theme tfoot tr.row-summary { background: #dff0d8; font-weight: 700; }
+        .sheet-theme tfoot tr.row-total, .sheet-theme tfoot tr.row-summary,
+        .sheet-theme tbody.table-totals tr.row-total, .sheet-theme tbody.table-totals tr.row-summary { background: #dff0d8; font-weight: 700; }
         .classic-theme th, .classic-theme td { border: 1px solid #d9d9d9; padding: 6px 8px; }
         .classic-theme thead th { background: #f5f7fa; font-weight: 700; }
         .classic-theme tbody tr { background: #fff; }
-        .classic-theme tfoot tr { background: #f7f7f7; font-weight: 700; }
+        .classic-theme tfoot tr, .classic-theme tbody.table-totals tr { background: #f7f7f7; font-weight: 700; }
         .print-toolbar { margin-bottom: 14px; }
         .print-toolbar a, .print-toolbar button, .print-toolbar select { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
         .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
         @media print {
             .no-print { display: none !important; }
-            tfoot { display: table-row-group !important; }
             thead { display: table-header-group; }
+            tbody.table-totals tr, tfoot tr { page-break-inside: avoid; break-inside: avoid; }
             tr { page-break-inside: avoid; break-inside: avoid; }
-            tfoot tr { page-break-inside: avoid; break-inside: avoid; }
         }
     </style>
 </head>
@@ -200,9 +241,9 @@
                         </tr>
                     @endforeach
                 </tbody>
-                <tfoot>
+                <tbody class="table-totals">
                     <tr class="row-total">
-                        <th>{{ $t('total_paid') }}</th>
+                        <th>{{ $t('grand_total') }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
@@ -228,7 +269,7 @@
                         <th class="text-right">$ -</th>
                         <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
-                </tfoot>
+                </tbody>
             </table>
         </div>
     @elseif($styleMode === 'business_location_report')
@@ -257,7 +298,7 @@
                         </tr>
                     @endforeach
                 </tbody>
-                <tfoot>
+                <tbody class="table-totals">
                     <tr class="row-total">
                         <th class="text-right">{{ $t('grand_total') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
@@ -282,7 +323,7 @@
                         @endforeach
                         <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                     </tr>
-                </tfoot>
+                </tbody>
             </table>
         </div>
     @else
@@ -332,9 +373,12 @@
                         </tr>
                     @endforeach
                 </tbody>
-                <tfoot>
+                <tbody class="table-totals">
                     <tr class="row-total">
-                        <th colspan="{{ 2 + count($report['payment_columns']) }}" class="text-right">{{ $t('grand_total') }}</th>
+                        <th colspan="2" class="text-right">{{ $t('grand_total') }}</th>
+                        @foreach($report['payment_columns'] as $method)
+                            <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                        @endforeach
                         <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                         <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
                     </tr>
@@ -354,7 +398,7 @@
                         <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
                         <th class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
-                </tfoot>
+                </tbody>
             </table>
         </div>
 
