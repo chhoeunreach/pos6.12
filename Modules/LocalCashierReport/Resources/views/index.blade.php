@@ -1,5 +1,85 @@
 @extends('layouts.app')
-@section('title', 'Local Cashier Report')
+@php
+    $currentReportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
+    $dashboardTranslations = [
+        'en' => [
+            'local_cashier_report' => 'Local Cashier Report',
+            'dashboard' => 'Dashboard',
+            'view_report' => 'View Report',
+            'business_location_report' => 'Business Location Report',
+            'print_dashboard' => 'Print Dashboard',
+            'date_range' => 'Date Range',
+            'business_location' => 'Business Location',
+            'cashier_user' => 'Cashier/User',
+            'payment_status' => 'Payment Status',
+            'qty_type' => 'Qty Type',
+            'all' => 'All',
+            'search' => 'Search',
+            'export_excel' => 'Export Excel',
+            'print' => 'Print',
+            'total_paid' => 'Total Paid',
+            'due' => 'Due',
+            'grand_total' => 'Grand Total',
+            'expenses' => 'Expenses',
+            'actual_income' => 'Actual Income',
+            'actual_total_income' => 'Actual Total Income (Paid - Expenses - Sell Return)',
+            'business_location_qty' => 'Business Location (Qty)',
+            'total_price' => 'Total Price',
+            'total' => 'Total',
+            'summary' => 'Summary',
+            'user_cashier' => 'User/Cashier',
+            'location' => 'Location',
+            'brand' => 'Brand',
+            'name' => 'Name',
+            'amount' => 'Amount',
+            'qty' => 'Qty',
+            'total_sale' => 'Total Sale',
+            'customer_payment' => 'Customer Payment',
+            'collection_payment' => 'Collection Payment',
+            'no_data' => 'No data found.',
+        ],
+        'km' => [
+            'local_cashier_report' => 'របាយការណ៍អ្នកគិតលុយតាមតំបន់',
+            'dashboard' => 'ផ្ទាំងគ្រប់គ្រង',
+            'view_report' => 'មើលរបាយការណ៍',
+            'business_location_report' => 'របាយការណ៍ទីតាំងអាជីវកម្ម',
+            'print_dashboard' => 'បោះពុម្ពផ្ទាំងគ្រប់គ្រង',
+            'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',
+            'business_location' => 'ទីតាំងអាជីវកម្ម',
+            'cashier_user' => 'អ្នកគិតលុយ/អ្នកប្រើប្រាស់',
+            'payment_status' => 'ស្ថានភាពទូទាត់',
+            'qty_type' => 'ប្រភេទបរិមាណ',
+            'all' => 'ទាំងអស់',
+            'search' => 'ស្វែងរក',
+            'export_excel' => 'នាំចេញ Excel',
+            'print' => 'បោះពុម្ព',
+            'total_paid' => 'សរុបបានទូទាត់',
+            'due' => 'នៅជំពាក់',
+            'grand_total' => 'សរុបរួម',
+            'expenses' => 'ចំណាយ',
+            'actual_income' => 'ចំណូលជាក់ស្តែង',
+            'actual_total_income' => 'ចំណូលសរុបជាក់ស្តែង (បានទូទាត់ - ចំណាយ - ទំនិញត្រឡប់)',
+            'business_location_qty' => 'ទីតាំងអាជីវកម្ម (បរិមាណ)',
+            'total_price' => 'តម្លៃសរុប',
+            'total' => 'សរុប',
+            'summary' => 'សេចក្តីសង្ខេប',
+            'user_cashier' => 'អ្នកប្រើប្រាស់/អ្នកគិតលុយ',
+            'location' => 'ទីតាំង',
+            'brand' => 'ម៉ាក',
+            'name' => 'ឈ្មោះ',
+            'amount' => 'ចំនួនទឹកប្រាក់',
+            'qty' => 'បរិមាណ',
+            'total_sale' => 'ការលក់សរុប',
+            'customer_payment' => 'ការទូទាត់របស់អតិថិជន',
+            'collection_payment' => 'ការប្រមូលប្រាក់',
+            'no_data' => 'មិនមានទិន្នន័យ។',
+        ],
+    ];
+    $t = fn ($key) => $dashboardTranslations[$currentReportLang][$key]
+        ?? $dashboardTranslations['en'][$key]
+        ?? $key;
+@endphp
+@section('title', $t('local_cashier_report'))
 
 @section('content')
 <style>
@@ -12,7 +92,7 @@
     }
 </style>
 <section class="content-header no-print">
-    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Local Cashier Report</h1>
+    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">{{ $t('local_cashier_report') }}</h1>
     @php
         $baseQuery = array_merge(request()->query(), [
             'start_date' => $filters['start_date'],
@@ -29,20 +109,35 @@
         $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain']);
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
         $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);
+        $englishQuery = array_merge($baseQuery, ['report_lang' => 'en']);
+        $khmerQuery = array_merge($baseQuery, ['report_lang' => 'km']);
+        $printDashboardQuery = array_merge($baseQuery, [
+            'style_mode' => 'classic_plain',
+            'report_lang' => $currentReportLang,
+        ]);
     @endphp
     <div style="margin-top:10px;">
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($classicPlainQuery) }}"
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'classic_plain' ? 'btn-primary' : 'btn-default' }}">
-            Dashboard
+            {{ $t('dashboard') }}
         </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($viewReportQuery) }}"
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
-            View Report
+            {{ $t('view_report') }}
         </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($businessLocationQuery) }}"
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'business_location_report' ? 'btn-primary' : 'btn-default' }}">
-            Business Location Report
+            {{ $t('business_location_report') }}
         </a>
+        <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}" target="_blank" class="btn btn-info">
+            <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
+        </a>
+        <span class="btn-group" style="margin-left:8px;">
+            <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($englishQuery) }}"
+               class="btn btn-sm {{ $currentReportLang === 'en' ? 'btn-primary' : 'btn-default' }}">English</a>
+            <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($khmerQuery) }}"
+               class="btn btn-sm {{ $currentReportLang === 'km' ? 'btn-primary' : 'btn-default' }}">ខ្មែរ</a>
+        </span>
     </div>
 </section>
 
@@ -123,7 +218,7 @@
         <form method="get" action="{{ route('local-cashier-report.index') }}" class="row">
             <div class="col-md-3">
                 <div class="form-group">
-                    <label>Date Range</label>
+                    <label>{{ $t('date_range') }}</label>
                     <input type="text" id="date_range_picker" class="form-control" readonly>
                     <input type="hidden" name="start_date" id="start_date" value="{{ $filters['start_date'] }}">
                     <input type="hidden" name="end_date" id="end_date" value="{{ $filters['end_date'] }}">
@@ -131,7 +226,7 @@
             </div>
             <div class="col-md-3">
                 <div class="form-group">
-                    <label>Business Location</label>
+                    <label>{{ $t('business_location') }}</label>
                     <input type="text" id="location_preview" class="form-control" readonly
                            value="{{ $locations->whereIn('id', $filters['location_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#location_modal" style="margin-top:6px;">
@@ -146,7 +241,7 @@
             </div>
             <div class="col-md-3">
                 <div class="form-group">
-                    <label>Cashier/User</label>
+                    <label>{{ $t('cashier_user') }}</label>
                     <input type="text" id="cashier_preview" class="form-control" readonly
                            value="{{ $cashiers->whereIn('id', $filters['user_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#cashier_modal" style="margin-top:6px;">
@@ -161,9 +256,9 @@
             </div>
             <div class="col-md-2">
                 <div class="form-group">
-                    <label>Payment Status</label>
+                    <label>{{ $t('payment_status') }}</label>
                     <select name="payment_status" class="form-control">
-                        <option value="">All</option>
+                        <option value="">{{ $t('all') }}</option>
                         @foreach($paymentStatuses as $status)
                             <option value="{{ $status }}" @if($filters['payment_status'] === $status) selected @endif>{{ ucfirst($status) }}</option>
                         @endforeach
@@ -172,7 +267,7 @@
             </div>
             <div class="col-md-2">
                 <div class="form-group">
-                    <label>Qty Type</label>
+                    <label>{{ $t('qty_type') }}</label>
                     <select name="qty_type" class="form-control">
                         @foreach($qtyTypes as $key => $label)
                             <option value="{{ $key }}" @if($filters['qty_type'] === $key) selected @endif>{{ $label }}</option>
@@ -181,9 +276,12 @@
                 </div>
             </div>
             <div class="col-md-12">
-                <button type="submit" class="btn btn-primary">Search</button>
-                <a href="{{ route('local-cashier-report.export', $baseQuery) }}" class="btn btn-success">Export Excel</a>
-                <a href="{{ route('local-cashier-report.print', $baseQuery) }}" target="_blank" class="btn btn-info">Print</a>
+                <button type="submit" class="btn btn-primary">{{ $t('search') }}</button>
+                <a href="{{ route('local-cashier-report.export', $baseQuery) }}" class="btn btn-success">{{ $t('export_excel') }}</a>
+                <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}" target="_blank" class="btn btn-info">
+                    <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
+                </a>
+                <a href="{{ route('local-cashier-report.print', $baseQuery) }}" target="_blank" class="btn btn-info">{{ $t('print') }}</a>
             </div>
         </form>
     @endcomponent
@@ -194,12 +292,12 @@
         <table class="table sheet-table report-view-table" id="local_cashier_report_table">
             <thead>
                 <tr>
-                    <th>Cashier/User</th>
+                    <th>{{ $t('cashier_user') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
-                    <th class="text-right">Total Paid</th>
-                    <th class="text-right">Due</th>
+                    <th class="text-right">{{ $t('total_paid') }}</th>
+                    <th class="text-right">{{ $t('due') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -240,7 +338,7 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th>Grand Total</th>
+                    <th>{{ $t('grand_total') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                     @endforeach
@@ -248,7 +346,7 @@
                     <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                 </tr>
                 <tr class="row-summary">
-                    <th>Expenses</th>
+                    <th>{{ $t('expenses') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                     @endforeach
@@ -256,7 +354,7 @@
                     <th class="text-right">{{ $fmtStrict($report['grand_expenses'] ?? 0) }}</th>
                 </tr>
                 <tr class="row-summary">
-                    <th>Actual Total Income (Paid - Expenses - Sell Return)</th>
+                    <th>{{ $t('actual_total_income') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                     @endforeach
@@ -271,12 +369,12 @@
         <table class="table sheet-table business-location-table">
             <thead>
                 <tr>
-                    <th>Business Location</th>
-                    <th class="text-right">Grand Total</th>
+                    <th>{{ $t('business_location') }}</th>
+                    <th class="text-right">{{ $t('grand_total') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
-                    <th class="text-right">Due</th>
+                    <th class="text-right">{{ $t('due') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -336,7 +434,7 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th class="text-right">Grand Total</th>
+                    <th class="text-right">{{ $t('grand_total') }}</th>
                     <th class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
@@ -344,7 +442,7 @@
                     <th class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                 </tr>
                 <tr class="row-summary">
-                    <th class="text-right">Expenses</th>
+                    <th class="text-right">{{ $t('expenses') }}</th>
                     <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
@@ -352,7 +450,7 @@
                     <th class="text-right">$ -</th>
                 </tr>
                 <tr class="row-summary">
-                    <th class="text-right">Actual Income</th>
+                    <th class="text-right">{{ $t('actual_income') }}</th>
                     <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
@@ -367,13 +465,13 @@
         <table class="table sheet-table">
             <thead>
                 <tr>
-                    <th>Business Location (Qty)</th>
-                    <th class="text-right">Total Price</th>
+                    <th>{{ $t('business_location_qty') }}</th>
+                    <th class="text-right">{{ $t('total_price') }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
                     @endforeach
-                    <th class="text-right">Total</th>
-                    <th class="text-right">Due</th>
+                    <th class="text-right">{{ $t('total') }}</th>
+                    <th class="text-right">{{ $t('due') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -506,7 +604,7 @@
             </tbody>
             <tfoot>
                 <tr class="row-total">
-                    <th class="text-right">Grand Total</th>
+                    <th class="text-right">{{ $t('grand_total') }}</th>
                     <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                     @foreach($report['payment_columns'] as $method)
                         <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
@@ -516,7 +614,7 @@
                 </tr>
                 @if(($filters['style_mode'] ?? 'sheet') === 'classic_plain')
                     <tr class="row-summary">
-                        <th class="text-right">Expenses</th>
+                        <th class="text-right">{{ $t('expenses') }}</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
@@ -525,7 +623,7 @@
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">Actual Income</th>
+                        <th class="text-right">{{ $t('actual_income') }}</th>
                         <th class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>

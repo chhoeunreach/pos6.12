@@ -1,8 +1,103 @@
+@php
+    $reportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
+    $translations = [
+        'en' => [
+            'local_cashier_report' => 'Local Cashier Report',
+            'business' => 'Business',
+            'date_range' => 'Date Range',
+            'locations' => 'Locations',
+            'style_option' => 'Style Option',
+            'generated' => 'Generated',
+            'all' => 'All',
+            'view_report' => 'View Report',
+            'business_location_report' => 'Business Location Report',
+            'old_dashboard' => 'Dashboard',
+            'cashier_user' => 'Cashier/User',
+            'business_location' => 'Business Location',
+            'business_location_qty' => 'Business Location (Qty)',
+            'expenses' => 'Expenses',
+            'actual_income' => 'Actual Income',
+            'actual_total_income' => 'Actual Total Income (Paid - Expenses - Sell Return)',
+            'due' => 'Due',
+            'total_paid' => 'Total Paid',
+            'total_payment' => 'Total Payment',
+            'grand_total' => 'Grand Total',
+            'total' => 'Total',
+            'summary' => 'Summary',
+            'summary_by_user' => 'Summary by User/Cashier',
+            'summary_by_location' => 'Summary by Location',
+            'summary_by_brand' => 'Summary by Brand',
+            'summary_by_payment' => 'Summary by Payment Method',
+            'name' => 'Name',
+            'amount' => 'Amount',
+            'qty' => 'Qty',
+            'total_price' => 'Total Price',
+            'print' => 'Print',
+            'english' => 'English',
+            'khmer' => 'Khmer',
+            'cash' => 'Cash',
+            'card' => 'Card',
+            'other' => 'Other',
+            'cut' => 'Cut',
+            'monthly' => 'Monthly',
+        ],
+        'km' => [
+            'local_cashier_report' => 'របាយការណ៍បេឡាករមូលដ្ឋាន',
+            'business' => 'អាជីវកម្ម',
+            'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',
+            'locations' => 'ទីតាំង',
+            'style_option' => 'ជម្រើសបង្ហាញ',
+            'generated' => 'បានបង្កើត',
+            'all' => 'ទាំងអស់',
+            'view_report' => 'មើលរបាយការណ៍',
+            'business_location_report' => 'របាយការណ៍តាមទីតាំងអាជីវកម្ម',
+            'old_dashboard' => 'ផ្ទាំងសង្ខេប',
+            'cashier_user' => 'បេឡាករ/អ្នកប្រើ',
+            'business_location' => 'ទីតាំងអាជីវកម្ម',
+            'business_location_qty' => 'ទីតាំងអាជីវកម្ម (ចំនួន)',
+            'expenses' => 'ចំណាយ',
+            'actual_income' => 'ចំណូលជាក់ស្តែង',
+            'actual_total_income' => 'ចំណូលសរុបជាក់ស្តែង (ប្រាក់បានបង់ - ចំណាយ - ត្រឡប់លក់)',
+            'due' => 'ជំពាក់',
+            'total_paid' => 'បានបង់សរុប',
+            'total_payment' => 'ការទូទាត់សរុប',
+            'grand_total' => 'សរុបរួម',
+            'total' => 'សរុប',
+            'summary' => 'សេចក្តីសង្ខេប',
+            'summary_by_user' => 'សង្ខេបតាមបេឡាករ/អ្នកប្រើ',
+            'summary_by_location' => 'សង្ខេបតាមទីតាំង',
+            'summary_by_brand' => 'សង្ខេបតាមម៉ាក',
+            'summary_by_payment' => 'សង្ខេបតាមវិធីបង់ប្រាក់',
+            'name' => 'ឈ្មោះ',
+            'amount' => 'ចំនួនទឹកប្រាក់',
+            'qty' => 'ចំនួន',
+            'total_price' => 'តម្លៃសរុប',
+            'print' => 'បោះពុម្ព',
+            'english' => 'អង់គ្លេស',
+            'khmer' => 'ខ្មែរ',
+            'cash' => 'សាច់ប្រាក់',
+            'card' => 'កាត',
+            'other' => 'ផ្សេងៗ',
+            'cut' => 'កាត់',
+            'monthly' => 'បង់ប្រចាំខែ',
+        ],
+    ];
+    $t = fn ($key) => $translations[$reportLang][$key] ?? $translations['en'][$key] ?? $key;
+    $paymentLabel = function ($method) use ($report, $t) {
+        $label = (string) ($report['payment_labels'][$method] ?? $method);
+        $key = strtolower(str_replace([' ', '-'], '_', $label));
+
+        return $t($key) !== $key ? $t($key) : $label;
+    };
+    $languageQuery = function ($language) {
+        return array_merge(request()->query(), ['report_lang' => $language]);
+    };
+@endphp
 <!doctype html>
-<html>
+<html lang="{{ $reportLang === 'km' ? 'km' : 'en' }}">
 <head>
     <meta charset="utf-8">
-    <title>Local Cashier Report</title>
+    <title>{{ $t('local_cashier_report') }}</title>
     <style>
         @font-face {
             font-family: 'KhmerFont';
@@ -30,6 +125,10 @@
         .classic-theme tfoot tr { background: #f7f7f7; font-weight: 700; }
         .summary-grid { display: table; width: 100%; table-layout: fixed; border-spacing: 8px 0; }
         .summary-col { display: table-cell; vertical-align: top; }
+        .print-toolbar { margin-bottom: 14px; }
+        .print-toolbar a, .print-toolbar button { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
+        .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
+        @media print { .no-print { display: none !important; } }
     </style>
 </head>
 @php
@@ -54,26 +153,31 @@
     };
 @endphp
 <body onload="window.print()" class="{{ $themeClass }}">
-    <h2>Local Cashier Report</h2>
-    <div class="meta"><b>Business:</b> {{ $businessName }}</div>
-    <div class="meta"><b>Date Range:</b> {{ \Carbon\Carbon::parse($filters['start_date'])->format('Y-m-d') }} ~ {{ \Carbon\Carbon::parse($filters['end_date'])->format('Y-m-d') }}</div>
-    <div class="meta"><b>Locations:</b> {{ !empty($selectedLocations) ? implode(', ', $selectedLocations) : 'All' }}</div>
-    <div class="meta"><b>Style Option:</b> {{ ucfirst(str_replace('_', ' ', $styleMode)) }}</div>
-    <div class="meta"><b>Generated:</b> {{ now()->format('Y-m-d H:i:s') }}</div>
+    <div class="print-toolbar no-print">
+        <button type="button" onclick="window.print()">{{ $t('print') }}</button>
+        <a href="{{ route('local-cashier-report.print', $languageQuery('en')) }}" class="{{ $reportLang === 'en' ? 'active' : '' }}">{{ $t('english') }}</a>
+        <a href="{{ route('local-cashier-report.print', $languageQuery('km')) }}" class="{{ $reportLang === 'km' ? 'active' : '' }}">{{ $t('khmer') }}</a>
+    </div>
+    <h2>{{ $t('local_cashier_report') }}</h2>
+    <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
+    <div class="meta"><b>{{ $t('date_range') }}:</b> {{ \Carbon\Carbon::parse($filters['start_date'])->format('Y-m-d') }} ~ {{ \Carbon\Carbon::parse($filters['end_date'])->format('Y-m-d') }}</div>
+    <div class="meta"><b>{{ $t('locations') }}:</b> {{ !empty($selectedLocations) ? implode(', ', $selectedLocations) : $t('all') }}</div>
+    <div class="meta"><b>{{ $t('style_option') }}:</b> {{ $t($styleMode === 'view_report' ? 'view_report' : ($styleMode === 'business_location_report' ? 'business_location_report' : 'old_dashboard')) }}</div>
+    <div class="meta"><b>{{ $t('generated') }}:</b> {{ now()->format('Y-m-d H:i:s') }}</div>
 
     @if($styleMode === 'view_report')
         <div class="section">
-            <h3>View Report</h3>
+            <h3>{{ $t('view_report') }}</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>Cashier/User</th>
+                        <th>{{ $t('cashier_user') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                            <th class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">Expenses</th>
-                        <th class="text-right">Actual Income</th>
-                        <th class="text-right">Due</th>
+                        <th class="text-right">{{ $t('expenses') }}</th>
+                        <th class="text-right">{{ $t('actual_income') }}</th>
+                        <th class="text-right">{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -91,7 +195,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="row-total">
-                        <th>Total Paid</th>
+                        <th>{{ $t('total_paid') }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
@@ -100,19 +204,19 @@
                         <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Expenses</th>
+                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('expenses') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
                         <th class="text-right">$ -</th>
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Actual Total Income (Paid - Expenses - Sell Return)</th>
+                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('actual_total_income') }}</th>
                         <th class="text-right">$ -</th>
                         <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">Due</th>
+                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('due') }}</th>
                         <th class="text-right">$ -</th>
                         <th class="text-right">$ -</th>
                         <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
@@ -122,16 +226,16 @@
         </div>
     @elseif($styleMode === 'business_location_report')
         <div class="section">
-            <h3>Business Location Report</h3>
+            <h3>{{ $t('business_location_report') }}</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>Business Location</th>
-                        <th class="text-right">Grand Total</th>
+                        <th>{{ $t('business_location') }}</th>
+                        <th class="text-right">{{ $t('grand_total') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                            <th class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">Total Payment</th>
+                        <th class="text-right">{{ $t('total_payment') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -148,7 +252,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="row-total">
-                        <th class="text-right">Grand Total</th>
+                        <th class="text-right">{{ $t('grand_total') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
@@ -156,7 +260,7 @@
                         <th class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">Expenses</th>
+                        <th class="text-right">{{ $t('expenses') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
@@ -164,7 +268,7 @@
                         <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">Actual Income</th>
+                        <th class="text-right">{{ $t('actual_income') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
@@ -176,14 +280,14 @@
         </div>
     @else
         <div class="section">
-            <h3>Old Dashboard</h3>
+            <h3>{{ $t('old_dashboard') }}</h3>
             <table style="margin-bottom:10px;">
                 <thead>
                     <tr>
-                        <th>Grand Total</th>
-                        <th>Expenses</th>
-                        <th>Actual Income</th>
-                        <th>Due</th>
+                        <th>{{ $t('grand_total') }}</th>
+                        <th>{{ $t('expenses') }}</th>
+                        <th>{{ $t('actual_income') }}</th>
+                        <th>{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -199,13 +303,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Cashier/User</th>
-                        <th>Business Location (Qty)</th>
+                        <th>{{ $t('cashier_user') }}</th>
+                        <th>{{ $t('business_location_qty') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $report['payment_labels'][$method] ?? $method }}</th>
+                            <th class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">Total</th>
-                        <th class="text-right">Due</th>
+                        <th class="text-right">{{ $t('total') }}</th>
+                        <th class="text-right">{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,12 +327,12 @@
                 </tbody>
                 <tfoot>
                     <tr class="row-total">
-                        <th colspan="{{ 2 + count($report['payment_columns']) }}" class="text-right">Grand Total</th>
+                        <th colspan="{{ 2 + count($report['payment_columns']) }}" class="text-right">{{ $t('grand_total') }}</th>
                         <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
                         <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Expenses</th>
+                        <th colspan="2" class="text-right">{{ $t('expenses') }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
@@ -236,7 +340,7 @@
                         <th class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">Actual Income</th>
+                        <th colspan="2" class="text-right">{{ $t('actual_income') }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
@@ -248,61 +352,61 @@
         </div>
 
         <div class="section">
-            <h3>Summary</h3>
+            <h3>{{ $t('summary') }}</h3>
             <div class="summary-grid">
                 <div class="summary-col">
-                    <h4>Summary by User/Cashier</h4>
+                    <h4>{{ $t('summary_by_user') }}</h4>
                     <table>
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach(($report['summary_user'] ?? []) as $r)
                                 <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
                             @endforeach
                         </tbody>
                         <tfoot>
-                            <tr><th>Total</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.user.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.user.qty', 0), 2), '0'), '.') }}</th></tr>
+                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.user.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.user.qty', 0), 2), '0'), '.') }}</th></tr>
                         </tfoot>
                     </table>
                 </div>
                 <div class="summary-col">
-                    <h4>Summary by Location</h4>
+                    <h4>{{ $t('summary_by_location') }}</h4>
                     <table>
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach(($report['summary_location'] ?? []) as $r)
                                 <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
                             @endforeach
                         </tbody>
                         <tfoot>
-                            <tr><th>Total</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.location.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.location.qty', 0), 2), '0'), '.') }}</th></tr>
+                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.location.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.location.qty', 0), 2), '0'), '.') }}</th></tr>
                         </tfoot>
                     </table>
                 </div>
                 <div class="summary-col">
-                    <h4>Summary by Brand</h4>
+                    <h4>{{ $t('summary_by_brand') }}</h4>
                     <table>
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach(($report['summary_brand'] ?? []) as $r)
                                 <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
                             @endforeach
                         </tbody>
                         <tfoot>
-                            <tr><th>Total</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th></tr>
+                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th></tr>
                         </tfoot>
                     </table>
                 </div>
                 <div class="summary-col">
-                    <h4>Summary by Payment Method</h4>
+                    <h4>{{ $t('summary_by_payment') }}</h4>
                     <table>
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th></tr></thead>
                         <tbody>
                             @foreach(($report['summary_payment'] ?? []) as $r)
                                 <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td></tr>
                             @endforeach
                         </tbody>
                         <tfoot>
-                            <tr><th>Total</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.payment.amount', 0)) }}</th></tr>
+                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.payment.amount', 0)) }}</th></tr>
                         </tfoot>
                     </table>
                 </div>
