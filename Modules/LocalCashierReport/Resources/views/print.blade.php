@@ -167,9 +167,25 @@
         .classic-theme thead th { background: #f5f7fa; font-weight: 700; }
         .classic-theme tbody tr { background: #fff; }
         .classic-theme tfoot tr, .classic-theme tbody.table-totals tr { background: #f7f7f7; font-weight: 700; }
-        .print-toolbar { margin-bottom: 14px; }
-        .print-toolbar a, .print-toolbar button, .print-toolbar select { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
+        .print-toolbar { margin-bottom: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .print-toolbar a, .print-toolbar button, .print-toolbar select { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 12px; text-decoration: none; cursor: pointer; font-size: 13px; border-radius: 4px; line-height: 1.4; }
         .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
+        .btn-print-main { background: #1b62d1 !important; color: #fff !important; border-color: #1b62d1 !important; font-weight: 700; }
+        .btn-print-main:hover { background: #144ba3 !important; }
+        .btn-colvis { background: #f8f9fa !important; font-weight: 600; }
+        .btn-colvis:hover { background: #e9ecef !important; }
+        .btn-close-print { background: #f8f9fa !important; color: #555 !important; }
+        .btn-close-print:hover { background: #e2e6ea !important; color: #111 !important; }
+        .colvis-dropdown { position: relative; display: inline-block; }
+        .colvis-menu { display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: #ffffff; border: 1px solid #c0c0c0; box-shadow: 0 4px 14px rgba(0,0,0,0.2); border-radius: 4px; padding: 10px; z-index: 9999; min-width: 270px; max-height: 420px; overflow-y: auto; text-align: left; }
+        .colvis-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-bottom: 8px; }
+        .colvis-header strong { font-size: 13px; color: #333; }
+        .colvis-actions { display: flex; gap: 4px; }
+        .colvis-actions .btn-xs { font-size: 11px; padding: 2px 6px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; }
+        .colvis-actions .btn-xs:hover { background: #e2e2e2; }
+        .colvis-item { display: flex; align-items: center; padding: 5px 6px; cursor: pointer; font-size: 13px; user-select: none; border-radius: 3px; }
+        .colvis-item:hover { background: #f0f5ff; }
+        .colvis-item input[type="checkbox"] { margin-right: 8px; cursor: pointer; transform: scale(1.1); }
         @media print {
             .no-print { display: none !important; }
             thead { display: table-header-group; }
@@ -198,14 +214,64 @@
         }
         return '$ ' . number_format($number, 2);
     };
+
+    $colList = [];
+    if ($styleMode === 'view_report') {
+        $colList[] = ['id' => 'cashier_user', 'label' => $t('cashier_user'), 'default' => true];
+        foreach ($report['payment_columns'] as $m) {
+            $colList[] = ['id' => 'pay_' . $m, 'label' => $paymentLabel($m), 'default' => true];
+        }
+        $colList[] = ['id' => 'expenses', 'label' => $t('expenses'), 'default' => true];
+        $colList[] = ['id' => 'actual_income', 'label' => $t('actual_income'), 'default' => true];
+        $colList[] = ['id' => 'due', 'label' => $t('due'), 'default' => false];
+    } elseif ($styleMode === 'business_location_report') {
+        $colList[] = ['id' => 'business_location', 'label' => $t('business_location'), 'default' => true];
+        $colList[] = ['id' => 'grand_total', 'label' => $t('grand_total'), 'default' => true];
+        foreach ($report['payment_columns'] as $m) {
+            $colList[] = ['id' => 'pay_' . $m, 'label' => $paymentLabel($m), 'default' => true];
+        }
+        $colList[] = ['id' => 'total_payment', 'label' => $t('total_payment'), 'default' => true];
+    } else {
+        $colList[] = ['id' => 'cashier_user', 'label' => $t('cashier_user'), 'default' => true];
+        $colList[] = ['id' => 'business_location_qty', 'label' => $t('business_location_qty'), 'default' => true];
+        foreach ($report['payment_columns'] as $m) {
+            $colList[] = ['id' => 'pay_' . $m, 'label' => $paymentLabel($m), 'default' => true];
+        }
+        $colList[] = ['id' => 'total', 'label' => $t('total'), 'default' => true];
+        $colList[] = ['id' => 'due', 'label' => $t('due'), 'default' => false];
+    }
 @endphp
-<body onload="window.print()" class="{{ $themeClass }}">
+<body onload="initAndPrint()" class="{{ $themeClass }}">
     <div class="print-toolbar no-print">
-        <button type="button" onclick="window.print()">{{ $t('print') }}</button>
+        <button type="button" class="btn-print-main" onclick="window.print()">🖨️ {{ $t('print') }}</button>
+        <div class="colvis-dropdown">
+            <button type="button" class="btn-colvis" id="colvis_toggle_btn" onclick="toggleColvisMenu(event)">
+                👁️ {{ $reportLang === 'km' ? 'បង្ហាញ/លាក់ ជួរឈរ' : 'Column Visibility' }} ▾
+            </button>
+            <div class="colvis-menu" id="colvis_menu">
+                <div class="colvis-header">
+                    <strong>{{ $reportLang === 'km' ? 'ជួរឈរ' : 'Columns' }}</strong>
+                    <div class="colvis-actions">
+                        <button type="button" class="btn-xs" onclick="setAllColumns(true)">{{ $reportLang === 'km' ? 'ទាំងអស់' : 'All' }}</button>
+                        <button type="button" class="btn-xs" onclick="setAllColumns(false)">{{ $reportLang === 'km' ? 'លាក់' : 'None' }}</button>
+                        <button type="button" class="btn-xs" onclick="resetDefaultColumns()">{{ $reportLang === 'km' ? 'ដើម' : 'Reset' }}</button>
+                    </div>
+                </div>
+                <div class="colvis-list">
+                    @foreach($colList as $c)
+                        <label class="colvis-item">
+                            <input type="checkbox" id="cb_col_{{ $c['id'] }}" onchange="toggleColumn('{{ $c['id'] }}')">
+                            <span>{{ $c['label'] }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        </div>
         <select aria-label="Language" onchange="window.location.href = this.value">
             <option value="{{ route('local-cashier-report.print', $languageQuery('en')) }}" @if($reportLang === 'en') selected @endif>English</option>
             <option value="{{ route('local-cashier-report.print', $languageQuery('km')) }}" @if($reportLang === 'km') selected @endif>ខ្មែរ</option>
         </select>
+        <button type="button" class="btn-close-print" onclick="window.close()">✕ {{ $reportLang === 'km' ? 'បិទ' : 'Close' }}</button>
     </div>
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
@@ -219,55 +285,55 @@
             <table>
                 <thead>
                     <tr>
-                        <th>{{ $t('cashier_user') }}</th>
+                        <th data-col="cashier_user">{{ $t('cashier_user') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $paymentLabel($method) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $t('expenses') }}</th>
-                        <th class="text-right">{{ $t('actual_income') }}</th>
-                        <th class="text-right">{{ $t('due') }}</th>
+                        <th data-col="expenses" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="actual_income" class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="due" class="text-right">{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($report['rows'] as $row)
                         <tr class="row-sale">
-                            <td class="name-main">{{ $row['cashier_name'] }}</td>
+                            <td data-col="cashier_user" class="name-main">{{ $row['cashier_name'] }}</td>
                             @foreach($report['payment_columns'] as $method)
-                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                             @endforeach
-                            <td class="text-right">{{ $fmtStrict($row['expenses'] ?? 0) }}</td>
-                            <td class="text-right">{{ $fmtStrict($row['actual_income'] ?? 0) }}</td>
-                            <td class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
+                            <td data-col="expenses" class="text-right">{{ $fmtStrict($row['expenses'] ?? 0) }}</td>
+                            <td data-col="actual_income" class="text-right">{{ $fmtStrict($row['actual_income'] ?? 0) }}</td>
+                            <td data-col="due" class="text-right @if(($row['due'] ?? 0) < 0) due-negative @endif">{{ $fmt($row['due'] ?? null) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tbody class="table-totals">
                     <tr class="row-total">
-                        <th>{{ $t('grand_total') }}</th>
+                        <th data-col="cashier_user">{{ $t('grand_total') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmtStrict($report['grand_expenses'] ?? 0) }}</th>
-                        <th class="text-right">{{ $fmtStrict($report['grand_actual_income'] ?? 0) }}</th>
-                        <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                        <th data-col="expenses" class="text-right">{{ $fmtStrict($report['grand_expenses'] ?? 0) }}</th>
+                        <th data-col="actual_income" class="text-right">{{ $fmtStrict($report['grand_actual_income'] ?? 0) }}</th>
+                        <th data-col="due" class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('expenses') }}</th>
-                        <th class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
-                        <th class="text-right">$ -</th>
-                        <th class="text-right">$ -</th>
+                        <th class="summary-leading-th text-right" colspan="{{ count($report['payment_columns']) + 1 }}">{{ $t('expenses') }}</th>
+                        <th data-col="expenses" class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
+                        <th data-col="actual_income" class="text-right">$ -</th>
+                        <th data-col="due" class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('actual_total_income') }}</th>
-                        <th class="text-right">$ -</th>
-                        <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
-                        <th class="text-right">$ -</th>
+                        <th class="summary-leading-th text-right" colspan="{{ count($report['payment_columns']) + 1 }}">{{ $t('actual_total_income') }}</th>
+                        <th data-col="expenses" class="text-right">$ -</th>
+                        <th data-col="actual_income" class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
+                        <th data-col="due" class="text-right">$ -</th>
                     </tr>
-                    <tr class="row-summary">
-                        <th colspan="{{ count($report['payment_columns']) + 1 }}" class="text-right">{{ $t('due') }}</th>
-                        <th class="text-right">$ -</th>
-                        <th class="text-right">$ -</th>
-                        <th class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                    <tr class="row-summary summary-due-row" data-col="due">
+                        <th class="summary-leading-th text-right" colspan="{{ count($report['payment_columns']) + 1 }}">{{ $t('due') }}</th>
+                        <th data-col="expenses" class="text-right">$ -</th>
+                        <th data-col="actual_income" class="text-right">$ -</th>
+                        <th data-col="due" class="text-right @if(($report['grand_due'] ?? 0) < 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
                 </tbody>
             </table>
@@ -278,50 +344,50 @@
             <table>
                 <thead>
                     <tr>
-                        <th>{{ $t('business_location') }}</th>
-                        <th class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="business_location">{{ $t('business_location') }}</th>
+                        <th data-col="grand_total" class="text-right">{{ $t('grand_total') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $paymentLabel($method) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $t('total_payment') }}</th>
+                        <th data-col="total_payment" class="text-right">{{ $t('total_payment') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach(($report['rows_by_location'] ?? []) as $row)
                         <tr class="row-sale">
-                            <td class="name-main">{{ $row['location_name'] }}</td>
-                            <td class="text-right">{{ $fmt($row['total'] ?? null) }}</td>
+                            <td data-col="business_location" class="name-main">{{ $row['location_name'] }}</td>
+                            <td data-col="grand_total" class="text-right">{{ $fmt($row['total'] ?? null) }}</td>
                             @foreach($report['payment_columns'] as $method)
-                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                             @endforeach
-                            <td class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
+                            <td data-col="total_payment" class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tbody class="table-totals">
                     <tr class="row-total">
-                        <th class="text-right">{{ $t('grand_total') }}</th>
-                        <th class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
+                        <th data-col="business_location" class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="grand_total" class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
+                        <th data-col="total_payment" class="text-right">{{ $fmt($report['grand_paid'] ?? null) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">{{ $t('expenses') }}</th>
-                        <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
+                        <th data-col="business_location" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="grand_total" class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
+                        <th data-col="total_payment" class="text-right">{{ $fmt($report['grand_expenses'] ?? 0) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th class="text-right">{{ $t('actual_income') }}</th>
-                        <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
+                        <th data-col="business_location" class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="grand_total" class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
+                        <th data-col="total_payment" class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
                     </tr>
                 </tbody>
             </table>
@@ -332,18 +398,18 @@
             <table style="margin-bottom:10px;">
                 <thead>
                     <tr>
-                        <th>{{ $t('grand_total') }}</th>
-                        <th>{{ $t('expenses') }}</th>
-                        <th>{{ $t('actual_income') }}</th>
-                        <th>{{ $t('due') }}</th>
+                        <th data-col="grand_total">{{ $t('grand_total') }}</th>
+                        <th data-col="expenses">{{ $t('expenses') }}</th>
+                        <th data-col="actual_income">{{ $t('actual_income') }}</th>
+                        <th data-col="due">{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr class="row-summary">
-                        <td class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</td>
-                        <td class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</td>
-                        <td class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</td>
-                        <td class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</td>
+                        <td data-col="grand_total" class="text-right">{{ $fmt($report['grand_total'] ?? null) }}</td>
+                        <td data-col="expenses" class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</td>
+                        <td data-col="actual_income" class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</td>
+                        <td data-col="due" class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -351,52 +417,55 @@
             <table>
                 <thead>
                     <tr>
-                        <th>{{ $t('cashier_user') }}</th>
-                        <th>{{ $t('business_location_qty') }}</th>
+                        <th data-col="cashier_user">{{ $t('cashier_user') }}</th>
+                        <th data-col="business_location_qty">{{ $t('business_location_qty') }}</th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $paymentLabel($method) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $t('total') }}</th>
-                        <th class="text-right">{{ $t('due') }}</th>
+                        <th data-col="total" class="text-right">{{ $t('total') }}</th>
+                        <th data-col="due" class="text-right">{{ $t('due') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($report['rows'] as $row)
                         <tr class="row-sale">
-                            <td class="name-main">{{ $row['cashier_name'] }}</td>
-                            <td>{{ $row['location_qty_text'] }}</td>
+                            <td data-col="cashier_user" class="name-main">{{ $row['cashier_name'] }}</td>
+                            <td data-col="business_location_qty">{{ $row['location_qty_text'] }}</td>
                             @foreach($report['payment_columns'] as $method)
-                                <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
+                                <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                             @endforeach
-                            <td class="text-right">{{ $fmt($row['total']) }}</td>
-                            <td class="text-right @if($row['due'] != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
+                            <td data-col="total" class="text-right">{{ $fmt($row['total']) }}</td>
+                            <td data-col="due" class="text-right @if($row['due'] != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tbody class="table-totals">
                     <tr class="row-total">
-                        <th colspan="2" class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="cashier_user" class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="business_location_qty"></th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_total']) }}</th>
-                        <th class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
+                        <th data-col="total" class="text-right">{{ $fmt($report['grand_total']) }}</th>
+                        <th data-col="due" class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="cashier_user" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="business_location_qty"></th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
-                        <th class="text-right">$ -</th>
+                        <th data-col="total" class="text-right">{{ $fmt($report['grand_expenses'] ?? null) }}</th>
+                        <th data-col="due" class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th colspan="2" class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="cashier_user" class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="business_location_qty"></th>
                         @foreach($report['payment_columns'] as $method)
-                            <th class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
-                        <th class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
-                        <th class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                        <th data-col="total" class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
+                        <th data-col="due" class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
                     </tr>
                 </tbody>
             </table>
@@ -404,28 +473,114 @@
 
     @endif
     <script>
-        (function () {
-            var returnUrl = @json($returnUrl);
-            var returning = false;
+        var defaultCols = @json(collect($colList)->pluck('default', 'id'));
+        var paymentColsList = @json($report['payment_columns'] ?? []);
+        var storageKey = 'colvis_local_cashier_' + @json($styleMode);
+        var colState = {};
 
-            function returnToSystem() {
-                if (returning) {
-                    return;
+        function getColState() {
+            try {
+                var saved = localStorage.getItem(storageKey);
+                if (saved) {
+                    var parsed = JSON.parse(saved);
+                    return Object.assign({}, defaultCols, parsed);
                 }
+            } catch (e) {}
+            return Object.assign({}, defaultCols);
+        }
 
-                returning = true;
-                if (window.opener && !window.opener.closed) {
-                    window.opener.focus();
-                    window.close();
+        function saveColState(state) {
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(state));
+            } catch (e) {}
+        }
+
+        function applyColState(state) {
+            var styleEl = document.getElementById('colvis_dynamic_style');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'colvis_dynamic_style';
+                document.head.appendChild(styleEl);
+            }
+            var css = '';
+            for (var colId in state) {
+                if (state[colId] === false) {
+                    css += '[data-col="' + colId + '"] { display: none !important; }\n';
                 }
+            }
+            styleEl.textContent = css;
 
-                window.setTimeout(function () {
-                    window.location.replace(returnUrl);
-                }, 150);
+            // Recalculate leading colspan for summary rows in view_report
+            var leadingThs = document.querySelectorAll('.summary-leading-th');
+            if (leadingThs.length > 0) {
+                var count = 0;
+                if (state['cashier_user'] !== false) count++;
+                paymentColsList.forEach(function (m) {
+                    if (state['pay_' + m] !== false) count++;
+                });
+                leadingThs.forEach(function (th) {
+                    th.colSpan = Math.max(1, count);
+                });
             }
 
-            window.addEventListener('afterprint', returnToSystem);
-        })();
+            // Sync checkboxes
+            for (var id in state) {
+                var cb = document.getElementById('cb_col_' + id);
+                if (cb) {
+                    cb.checked = (state[id] !== false);
+                }
+            }
+        }
+
+        function toggleColumn(colId) {
+            var cb = document.getElementById('cb_col_' + colId);
+            if (!cb) return;
+            colState[colId] = cb.checked;
+            saveColState(colState);
+            applyColState(colState);
+        }
+
+        function setAllColumns(show) {
+            for (var id in colState) {
+                colState[id] = !!show;
+            }
+            saveColState(colState);
+            applyColState(colState);
+        }
+
+        function resetDefaultColumns() {
+            colState = Object.assign({}, defaultCols);
+            saveColState(colState);
+            applyColState(colState);
+        }
+
+        function toggleColvisMenu(e) {
+            e.stopPropagation();
+            var menu = document.getElementById('colvis_menu');
+            if (menu) {
+                menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            var menu = document.getElementById('colvis_menu');
+            var btn = document.getElementById('colvis_toggle_btn');
+            if (menu && !menu.contains(e.target) && e.target !== btn) {
+                menu.style.display = 'none';
+            }
+        });
+
+        // Initialize column visibility
+        colState = getColState();
+        applyColState(colState);
+
+        function initAndPrint() {
+            colState = getColState();
+            applyColState(colState);
+            window.setTimeout(function () {
+                window.print();
+            }, 100);
+        }
     </script>
 </body>
 </html>
