@@ -92,6 +92,7 @@
     $languageQuery = function ($language) {
         return array_merge(request()->query(), ['report_lang' => $language]);
     };
+    $returnUrl = route('local-cashier-report.index') . '?' . http_build_query(request()->query());
 @endphp
 <!doctype html>
 <html lang="{{ $reportLang === 'km' ? 'km' : 'en' }}">
@@ -413,5 +414,29 @@
             </div>
         </div>
     @endif
+    <script>
+        (function () {
+            var returnUrl = @json($returnUrl);
+            var returning = false;
+
+            function returnToSystem() {
+                if (returning) {
+                    return;
+                }
+
+                returning = true;
+                if (window.opener && !window.opener.closed) {
+                    window.opener.focus();
+                    window.close();
+                }
+
+                window.setTimeout(function () {
+                    window.location.replace(returnUrl);
+                }, 150);
+            }
+
+            window.addEventListener('afterprint', returnToSystem);
+        })();
+    </script>
 </body>
 </html>
