@@ -116,6 +116,7 @@
         .name-main { color: #1b62d1; font-weight: 700; }
         .section { margin-top: 16px; }
         table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+        tfoot { display: table-row-group; }
         .sheet-theme th, .sheet-theme td { border: 1px dashed #000; padding: 6px 8px; }
         .sheet-theme thead th { background: #d9edf7; font-weight: 700; }
         .sheet-theme tbody tr.row-sale { background: #fde2ea; }
@@ -127,7 +128,13 @@
         .print-toolbar { margin-bottom: 14px; }
         .print-toolbar a, .print-toolbar button { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
         .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
-        @media print { .no-print { display: none !important; } }
+        @media print {
+            .no-print { display: none !important; }
+            tfoot { display: table-row-group !important; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
+            tfoot tr { page-break-inside: avoid; break-inside: avoid; }
+        }
     </style>
 </head>
 @php
@@ -160,7 +167,6 @@
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
     <div class="meta"><b>{{ $t('date_range') }}:</b> {{ \Carbon\Carbon::parse($filters['start_date'])->format('Y-m-d') }} ~ {{ \Carbon\Carbon::parse($filters['end_date'])->format('Y-m-d') }}</div>
-    <div class="meta"><b>{{ $t('locations') }}:</b> {{ !empty($selectedLocations) ? implode(', ', $selectedLocations) : $t('all') }}</div>
     <div class="meta"><b>{{ $t('style_option') }}:</b> {{ $t($styleMode === 'view_report' ? 'view_report' : ($styleMode === 'business_location_report' ? 'business_location_report' : 'old_dashboard')) }}</div>
     <div class="meta"><b>{{ $t('generated') }}:</b> {{ now()->format('Y-m-d H:i:s') }}</div>
 
