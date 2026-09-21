@@ -124,8 +124,6 @@
         .classic-theme thead th { background: #f5f7fa; font-weight: 700; }
         .classic-theme tbody tr { background: #fff; }
         .classic-theme tfoot tr { background: #f7f7f7; font-weight: 700; }
-        .summary-grid { display: table; width: 100%; table-layout: fixed; border-spacing: 8px 0; }
-        .summary-col { display: table-cell; vertical-align: top; }
         .print-toolbar { margin-bottom: 14px; }
         .print-toolbar a, .print-toolbar button { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
         .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
@@ -352,67 +350,6 @@
             </table>
         </div>
 
-        <div class="section">
-            <h3>{{ $t('summary') }}</h3>
-            <div class="summary-grid">
-                <div class="summary-col">
-                    <h4>{{ $t('summary_by_user') }}</h4>
-                    <table>
-                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
-                        <tbody>
-                            @foreach(($report['summary_user'] ?? []) as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.user.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.user.qty', 0), 2), '0'), '.') }}</th></tr>
-                        </tfoot>
-                    </table>
-                </div>
-                <div class="summary-col">
-                    <h4>{{ $t('summary_by_location') }}</h4>
-                    <table>
-                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
-                        <tbody>
-                            @foreach(($report['summary_location'] ?? []) as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.location.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.location.qty', 0), 2), '0'), '.') }}</th></tr>
-                        </tfoot>
-                    </table>
-                </div>
-                <div class="summary-col">
-                    <h4>{{ $t('summary_by_brand') }}</h4>
-                    <table>
-                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
-                        <tbody>
-                            @foreach(($report['summary_brand'] ?? []) as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td><td class="text-right">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</td></tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th><th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th></tr>
-                        </tfoot>
-                    </table>
-                </div>
-                <div class="summary-col">
-                    <h4>{{ $t('summary_by_payment') }}</h4>
-                    <table>
-                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th></tr></thead>
-                        <tbody>
-                            @foreach(($report['summary_payment'] ?? []) as $r)
-                                <tr><td>{{ $r['name'] }}</td><td class="text-right">{{ $fmt($r['amount']) }}</td></tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr><th>{{ $t('total') }}</th><th class="text-right">{{ $fmt(data_get($report, 'summary_totals.payment.amount', 0)) }}</th></tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-        </div>
     @endif
     <script>
         (function () {
