@@ -3,7 +3,7 @@
     $currentReportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
     $dashboardTranslations = [
         'en' => [
-            'local_cashier_report' => 'Local Cashier Report',
+            'local_cashier_report' => 'Cashier Report',
             'dashboard' => 'Dashboard',
             'view_report' => 'View Report',
             'business_location_report' => 'Business Location Report',
@@ -39,7 +39,7 @@
             'no_data' => 'No data found.',
         ],
         'km' => [
-            'local_cashier_report' => 'របាយការណ៍អ្នកគិតលុយតាមតំបន់',
+            'local_cashier_report' => 'របាយការណ៍បេឡាករ',
             'dashboard' => 'ផ្ទាំងគ្រប់គ្រង',
             'view_report' => 'មើលរបាយការណ៍',
             'business_location_report' => 'របាយការណ៍ទីតាំងអាជីវកម្ម',
@@ -133,10 +133,19 @@
             <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
         </a>
         <span class="btn-group" style="margin-left:8px;">
-            <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($englishQuery) }}"
-               class="btn btn-sm {{ $currentReportLang === 'en' ? 'btn-primary' : 'btn-default' }}">English</a>
-            <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($khmerQuery) }}"
-               class="btn btn-sm {{ $currentReportLang === 'km' ? 'btn-primary' : 'btn-default' }}">ខ្មែរ</a>
+            <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fa fa-globe"></i>
+                {{ $currentReportLang === 'km' ? 'ខ្មែរ' : 'English' }}
+                <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-right">
+                <li class="{{ $currentReportLang === 'en' ? 'active' : '' }}">
+                    <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($englishQuery) }}">English</a>
+                </li>
+                <li class="{{ $currentReportLang === 'km' ? 'active' : '' }}">
+                    <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($khmerQuery) }}">ខ្មែរ</a>
+                </li>
+            </ul>
         </span>
     </div>
 </section>

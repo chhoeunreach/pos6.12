@@ -2,7 +2,7 @@
     $reportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
     $translations = [
         'en' => [
-            'local_cashier_report' => 'Local Cashier Report',
+            'local_cashier_report' => 'Cashier Report',
             'business' => 'Business',
             'date_range' => 'Date Range',
             'locations' => 'Locations',
@@ -42,7 +42,7 @@
             'monthly' => 'Monthly',
         ],
         'km' => [
-            'local_cashier_report' => 'របាយការណ៍បេឡាករមូលដ្ឋាន',
+            'local_cashier_report' => 'របាយការណ៍បេឡាករ',
             'business' => 'អាជីវកម្ម',
             'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',
             'locations' => 'ទីតាំង',
@@ -126,7 +126,7 @@
         .classic-theme tbody tr { background: #fff; }
         .classic-theme tfoot tr { background: #f7f7f7; font-weight: 700; }
         .print-toolbar { margin-bottom: 14px; }
-        .print-toolbar a, .print-toolbar button { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
+        .print-toolbar a, .print-toolbar button, .print-toolbar select { border: 1px solid #999; background: #fff; color: #111; display: inline-block; padding: 6px 10px; text-decoration: none; cursor: pointer; font-size: 13px; }
         .print-toolbar .active { background: #1b62d1; color: #fff; border-color: #1b62d1; }
         @media print {
             .no-print { display: none !important; }
@@ -161,8 +161,10 @@
 <body onload="window.print()" class="{{ $themeClass }}">
     <div class="print-toolbar no-print">
         <button type="button" onclick="window.print()">{{ $t('print') }}</button>
-        <a href="{{ route('local-cashier-report.print', $languageQuery('en')) }}" class="{{ $reportLang === 'en' ? 'active' : '' }}">{{ $t('english') }}</a>
-        <a href="{{ route('local-cashier-report.print', $languageQuery('km')) }}" class="{{ $reportLang === 'km' ? 'active' : '' }}">{{ $t('khmer') }}</a>
+        <select aria-label="Language" onchange="window.location.href = this.value">
+            <option value="{{ route('local-cashier-report.print', $languageQuery('en')) }}" @if($reportLang === 'en') selected @endif>English</option>
+            <option value="{{ route('local-cashier-report.print', $languageQuery('km')) }}" @if($reportLang === 'km') selected @endif>ខ្មែរ</option>
+        </select>
     </div>
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
