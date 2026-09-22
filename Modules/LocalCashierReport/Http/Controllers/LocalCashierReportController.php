@@ -422,6 +422,8 @@ class LocalCashierReportController extends Controller
             $locKey = $cashierId . '_' . $locationId;
             if (isset($qtyByCashierLocation[$locKey])) {
                 $rowsByCashier[$cashierId]['location_qty_map'][$locationId] = $qtyByCashierLocation[$locKey];
+            } elseif (! array_key_exists($locationId, $rowsByCashier[$cashierId]['location_qty_map'])) {
+                $rowsByCashier[$cashierId]['location_qty_map'][$locationId] = 0.0;
             }
             $txnQty = (float) ($qtyByTransaction[(int) $t->id] ?? 0);
             $rowsByLocation[$locationId]['qty_total'] += $txnQty;
@@ -457,6 +459,10 @@ class LocalCashierReportController extends Controller
             }
 
             $rowsByCashier[$cashierId]['customer_groups']['loan_payment'] = $loanGroupRow;
+            foreach (($loanGroupRow['location_qty_map'] ?? []) as $locationId => $qty) {
+                $rowsByCashier[$cashierId]['location_qty_map'][$locationId] =
+                    ($rowsByCashier[$cashierId]['location_qty_map'][$locationId] ?? 0) + (float) $qty;
+            }
             foreach (($loanGroupRow['payments'] ?? []) as $method => $amount) {
                 $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + (float) $amount;
                 $rowsByCashier[$cashierId]['paid'] += (float) $amount;
@@ -547,6 +553,12 @@ class LocalCashierReportController extends Controller
                 $rowsByCashier[$cashierId]['payments'][$method] = ($rowsByCashier[$cashierId]['payments'][$method] ?? 0) + $amount;
                 $rowsByCashier[$cashierId]['paid'] += $amount;
                 $rowsByCashier[$cashierId]['customer_due_payment_total'] = ($rowsByCashier[$cashierId]['customer_due_payment_total'] ?? 0) + $amount;
+                if (! array_key_exists($locationId, $rowsByCashier[$cashierId]['location_qty_map'])) {
+                    $rowsByCashier[$cashierId]['location_qty_map'][$locationId] = 0.0;
+                }
+                if (! array_key_exists($locationId, $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['location_qty_map'])) {
+                    $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['location_qty_map'][$locationId] = 0.0;
+                }
                 $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] = ($rowsByCashier[$cashierId]['customer_groups']['customer_payment']['payments'][$method] ?? 0) + $amount;
                 $rowsByCashier[$cashierId]['customer_groups']['customer_payment']['paid'] += $amount;
 
@@ -1891,7 +1903,8 @@ class LocalCashierReportController extends Controller
         $parts = [];
         foreach ($locationQtyMap as $locationId => $qty) {
             $name = (string) ($locationMap[$locationId] ?? 'N/A');
-            $parts[] = $name . ' (' . rtrim(rtrim(number_format((float) $qty, 2), '0'), '.') . ')';
+            $formattedQty = rtrim(rtrim(number_format((float) $qty, 2), '0'), '.');
+            $parts[] = (float) $qty > 0 ? $name . ' (' . $formattedQty . ')' : $name;
         }
 
         return implode(', ', $parts);
