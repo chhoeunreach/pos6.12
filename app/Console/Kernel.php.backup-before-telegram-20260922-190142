@@ -44,12 +44,6 @@ class Kernel extends ConsoleKernel
         //Keep LoanManagement collection workflow statuses fresh regardless of environment
         $schedule->command('loan-management:collection-automation')->dailyAt('02:30');
 
-        // POS database backup to Telegram:
-        // 02:00, 09:00, 14:00, 17:00, 21:00 every day
-        $schedule->command('backup:database-telegram')
-            ->cron('0 2,9,14,17,21 * * *')
-            ->withoutOverlapping();
-
         if ($env === 'demo') {
             //IMPORTANT NOTE: This command will delete all business details and create dummy business, run only in demo server.
             $schedule->command('pos:dummyBusiness')
