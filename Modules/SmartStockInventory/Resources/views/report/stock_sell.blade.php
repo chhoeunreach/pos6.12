@@ -138,16 +138,22 @@
             var clonedButton = $.extend(true, {}, button);
 
             if (clonedButton.extend === 'copy') {
-                clonedButton.title = null;
-                clonedButton.header = false;
-                clonedButton.footer = false;
-                clonedButton.exportOptions = $.extend(true, {}, clonedButton.exportOptions, {
-                    format: {
-                        body: function(data, row, column, node) {
-                            return __format_datatable_export_cell(data, node, { preserveDateText: true });
+                return {
+                    extend: 'copyHtml5',
+                    text: clonedButton.text,
+                    className: clonedButton.className,
+                    title: null,
+                    header: false,
+                    footer: false,
+                    exportOptions: {
+                        columns: ':visible',
+                        format: {
+                            body: function(data, row, column, node) {
+                                return __format_datatable_export_cell(data, node, { preserveDateText: true });
+                            }
                         }
                     }
-                });
+                };
             }
 
             return clonedButton;
