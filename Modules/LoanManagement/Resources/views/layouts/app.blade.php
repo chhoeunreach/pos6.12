@@ -1464,7 +1464,6 @@
     @yield('loan_js')
 
     @unless($isLoanEmbeddedModal)
-        @include('loanmanagement::layouts.partials.telegram_chat_widget')
     @endunless
 
     <style>

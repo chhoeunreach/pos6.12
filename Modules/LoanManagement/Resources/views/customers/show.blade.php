@@ -33,26 +33,6 @@
                     <div class="col-md-4"><strong>Can Login:</strong> {{ !empty($customerRow->can_login) ? 'Yes' : 'No' }}</div>
                     <div class="col-md-4"><strong>GPS Tracking:</strong> {{ !empty($customerRow->allow_gps_tracking) ? 'Enabled' : 'Disabled' }}</div>
                 </div>
-                <div class="row" style="margin-top:10px">
-                    <div class="col-md-12">
-                        <span id="lmTelegramStatus">
-                            @if($telegramLinked)
-                                <span class="label label-success"><i class="fa fa-telegram"></i> Telegram Connected @if(!empty($customerRow->telegram_username)){{ '(@'.$customerRow->telegram_username.')' }}@endif</span>
-                                <button type="button" class="btn btn-default btn-xs" id="lmUnlinkTelegram" style="margin-left:6px">Unlink</button>
-                            @else
-                                <span class="label label-default"><i class="fa fa-telegram"></i> Telegram Not Connected</span>
-                                <button type="button" class="btn btn-info btn-xs" id="lmGenerateTelegramLink" style="margin-left:6px">Connect Telegram</button>
-                            @endif
-                        </span>
-                        <div id="lmTelegramLinkBox" style="display:none;margin-top:8px;padding:12px;border:1px dashed #d1d5db;border-radius:6px;background:#f8fafc">
-                            <div style="font-size:12px;color:#64748b;margin-bottom:8px">Send this QR code or link to the customer. Valid for a limited time and can only be used once.</div>
-                            <div style="margin-bottom:8px">
-                                <img id="lmTelegramQr" src="" alt="Telegram QR code" style="width:180px;height:180px;max-width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:#fff;display:none;">
-                            </div>
-                            <input type="text" id="lmTelegramLinkValue" readonly class="form-control input-sm" style="display:inline-block;width:70%">
-                            <button type="button" class="btn btn-default btn-sm" id="lmCopyTelegramLink">Copy</button>
-                            <div id="lmTelegramLinkExpiry" style="font-size:11px;color:#94a3b8;margin-top:6px"></div>
-                        </div>
                         <div style="font-size:11px;color:#94a3b8;margin-top:6px"><i class="fa fa-arrow-down"></i> Use the Telegram button in the bottom-right corner to open the chat.</div>
                     </div>
                 </div>
@@ -74,50 +54,3 @@
 </section>
 @endsection
 
-@section('loan_js')
-<script>
-(function($){
-    var csrf = '{{ csrf_token() }}';
-
-    $('#lmGenerateTelegramLink').on('click', function(){
-        var btn = $(this).prop('disabled', true);
-        fetch('{{ route("loan-management.customers.telegram.link", $customerRow->id) }}', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf}
-        }).then(function(r){ return r.json(); }).then(function(resp){
-            btn.prop('disabled', false);
-            if (resp && resp.link) {
-                $('#lmTelegramLinkValue').val(resp.link);
-                var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(resp.link);
-                $('#lmTelegramQr').attr('src', qrUrl).show();
-                if (resp.expires_at) {
-                    $('#lmTelegramLinkExpiry').text('Expires: ' + new Date(resp.expires_at).toLocaleString());
-                }
-                $('#lmTelegramLinkBox').show();
-            } else if (resp && resp.message && window.toastr) {
-                toastr.error(resp.message);
-            }
-        }).catch(function(){
-            btn.prop('disabled', false);
-            if (window.toastr) { toastr.error('Unable to create a Telegram connection link.'); }
-        });
-    });
-
-    $('#lmCopyTelegramLink').on('click', function(){
-        var input = document.getElementById('lmTelegramLinkValue');
-        input.select();
-        document.execCommand('copy');
-    });
-
-    $('#lmUnlinkTelegram').on('click', function(){
-        if (!confirm('Unlink this customer\'s Telegram account?')) return;
-        fetch('{{ route("loan-management.customers.telegram.unlink", $customerRow->id) }}', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf}
-        }).then(function(){ window.location.reload(); }).catch(function(){});
-    });
-})(jQuery);
-</script>
-@endsection

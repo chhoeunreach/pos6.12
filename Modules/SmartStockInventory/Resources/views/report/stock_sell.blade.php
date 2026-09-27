@@ -134,10 +134,30 @@
             $('#stock_sell_footer_due').html(ssiFormatFooterMoney(totals.due));
         });
 
+        var stockSellButtons = $.map($.fn.dataTable.defaults.buttons || [], function(button) {
+            var clonedButton = $.extend(true, {}, button);
+
+            if (clonedButton.extend === 'copy') {
+                clonedButton.title = null;
+                clonedButton.header = false;
+                clonedButton.footer = false;
+                clonedButton.exportOptions = $.extend(true, {}, clonedButton.exportOptions, {
+                    format: {
+                        body: function(data, row, column, node) {
+                            return __format_datatable_export_cell(data, node, { preserveDateText: true });
+                        }
+                    }
+                });
+            }
+
+            return clonedButton;
+        });
+
         stock_sell_report_table = $('#stock_sell_report_table').DataTable({
             processing: true,
             serverSide: true,
             fixedHeader: false,
+            buttons: stockSellButtons,
             aaSorting: [[0, 'desc']],
             ajax: {
                 url: "{{ ssi_route('ssi.report.stock_sell') }}",

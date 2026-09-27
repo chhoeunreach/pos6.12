@@ -1229,13 +1229,6 @@ class LoanInstallmentListController extends Controller
                 $actions .= '<ul class="dropdown-menu lm-loan-action-dropdown" role="menu" style="display:none;">';
                 $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id, false).'"><i class="fa fa-eye"></i> View</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
-                if (! empty($r->customer_id) && $canEdit) {
-                    if (! empty($r->telegram_chat_id)) {
-                        $actions .= '<li><a href="#" class="disabled text-muted" onclick="return false;"><i class="fa fa-check-circle"></i> Telegram Connected</a></li>';
-                    } else {
-                        $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.telegram.link', $r->customer_id, false).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-telegram-link"><i class="fa fa-paper-plane"></i> Connect Telegram</a></li>';
-                    }
-                }
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
                 $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id, false).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
                 if (! empty($r->customer_id) && $canEdit) {

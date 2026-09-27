@@ -109,7 +109,6 @@
                 ['label' => $lmText('Audit Logs', 'កំណត់ហេតុសវនកម្ម'), 'icon' => 'fa fa-check-circle-o', 'route' => 'loan-management.activity-logs.index', 'can' => 'loan_management.setting|loan_management.view', 'tone' => 'blue'],
                 ['label' => $lmText('System Settings', 'ការកំណត់ប្រព័ន្ធ'), 'icon' => 'fa fa-cog', 'tone' => 'blue', 'children' => [
                     ['label' => $lmText('Business Settings', 'ការកំណត់អាជីវកម្ម'), 'route' => 'loan-management.settings.business', 'can' => 'loan_management.settings.view|loan_management.setting|loan_management.view'],
-                    ['label' => $lmText('Telegram Bot', 'ប៊ូតតេឡេក្រាម'), 'route' => 'loan-management.settings.telegram', 'can' => 'loan_management.settings.view|loan_management.setting|loan_management.view'],
                 ]],
             ],
         ],
