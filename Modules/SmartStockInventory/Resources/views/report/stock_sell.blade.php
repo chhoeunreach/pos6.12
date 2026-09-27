@@ -138,21 +138,26 @@
             var clonedButton = $.extend(true, {}, button);
 
             if (clonedButton.extend === 'copy') {
-                return {
-                    extend: 'copyHtml5',
-                    text: clonedButton.text,
-                    className: clonedButton.className,
-                    title: null,
-                    header: false,
-                    footer: false,
-                    exportOptions: {
-                        columns: ':visible',
-                        format: {
-                            body: function(data, row, column, node) {
-                                return __format_datatable_export_cell(data, node, { preserveDateText: true });
-                            }
-                        }
-                    }
+                clonedButton.title = '';
+                clonedButton.messageTop = null;
+                clonedButton.messageBottom = null;
+                clonedButton.header = false;
+                clonedButton.footer = false;
+                clonedButton.action = function(e, dt, buttonNode, config, callback) {
+                    config.title = '';
+                    config.messageTop = null;
+                    config.messageBottom = null;
+                    config.header = false;
+                    config.footer = false;
+
+                    $.fn.dataTable.ext.buttons.copyHtml5.action.call(
+                        this,
+                        e,
+                        dt,
+                        buttonNode,
+                        config,
+                        callback
+                    );
                 };
             }
 
