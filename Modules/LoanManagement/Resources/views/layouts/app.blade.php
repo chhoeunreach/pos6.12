@@ -28,6 +28,7 @@
 
     @include('layouts.partials.css')
     @include('layouts.partials.extracss')
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap" as="style">
 
     @if (file_exists($moduleCssPath))
@@ -166,6 +167,9 @@
 
     @include('layouts.partials.javascripts')
     @include('layouts.module-assets')
+    {{-- Keep the DataTables core compatible with the Buttons 2.4.x extension used by module pages. --}}
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap.min.js"></script>
     @if (file_exists($moduleJsPath))
         <script>{!! file_get_contents($moduleJsPath) !!}</script>
     @endif

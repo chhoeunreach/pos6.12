@@ -766,14 +766,19 @@ class LoanInstallmentListController extends Controller
                 ? 'collector_id'
                 : ($this->hasCol('assigned_to') ? 'assigned_to' : null);
 
-            if ($this->hasCol('location_name_snapshot')) {
-                $locations = DB::connection('mysql_loan')->table('loans')
-                    ->whereNotNull('location_name_snapshot')
-                    ->where('location_name_snapshot', '!=', '')
-                    ->distinct()
-                    ->orderBy('location_name_snapshot')
-                    ->pluck('location_name_snapshot', 'location_name_snapshot')
-                    ->all();
+            foreach (['location_name_snapshot', 'business_location_name_snapshot'] as $locationNameColumn) {
+                if (! $this->hasCol($locationNameColumn)) {
+                    continue;
+                }
+
+                $locationQuery = DB::connection('mysql_loan')->table('loans')
+                    ->whereNotNull($locationNameColumn)
+                    ->where($locationNameColumn, '!=', '');
+                $this->excludeDeletedLoanRows($locationQuery, 'loans');
+
+                foreach ($locationQuery->distinct()->orderBy($locationNameColumn)->pluck($locationNameColumn) as $name) {
+                    $locations[$name] = $name;
+                }
             }
             if ($this->hasCol('business_location_id')) {
                 $loanLocationIds = DB::connection('mysql_loan')->table('loans')
@@ -841,11 +846,13 @@ class LoanInstallmentListController extends Controller
 
             $statusCounts['all'] = (int) (clone $baseQuery)->count();
 
-            $counts = (clone $baseQuery)
-                ->selectRaw('LOWER(COALESCE(status, "pending")) as st, count(*) as cnt')
-                ->groupBy(DB::raw('LOWER(COALESCE(status, "pending"))'))
-                ->pluck('cnt', 'st')
-                ->all();
+            $counts = $this->hasCol('status')
+                ? (clone $baseQuery)
+                    ->selectRaw('LOWER(COALESCE(status, "pending")) as st, count(*) as cnt')
+                    ->groupBy(DB::raw('LOWER(COALESCE(status, "pending"))'))
+                    ->pluck('cnt', 'st')
+                    ->all()
+                : ['pending' => $statusCounts['all']];
 
             foreach (['pending', 'approved', 'active', 'completed', 'rejected', 'cancelled'] as $st) {
                 $statusCounts[$st] = (int) ($counts[$st] ?? 0);
@@ -879,21 +886,65 @@ class LoanInstallmentListController extends Controller
             && $this->loanTableHasCol('loan_customers', 'id');
         $canJoinCustomersForKhmerName = $canJoinCustomers
             && $this->loanTableHasCol('loan_customers', 'khmer_name');
-        $customerNameExpr = $canJoinCustomersForKhmerName
-            ? 'COALESCE(NULLIF(c.khmer_name, ""), '.($this->hasCol('customer_name_snapshot') ? 'l.customer_name_snapshot' : 'NULL').')'
-            : ($this->hasCol('customer_name_snapshot') ? 'l.customer_name_snapshot' : 'NULL');
 
-        $hasSchedules = $this->loanTableExists('loan_payment_schedules');
-        $nextDueExpr = $hasSchedules
-            ? '(SELECT MIN(due_date) FROM loan_payment_schedules WHERE loan_id = l.id AND LOWER(COALESCE(status, "unpaid")) IN ("pending", "unpaid", "partial", "late", "overdue") AND deleted_at IS NULL)'
+        $customerNameParts = [];
+        if ($canJoinCustomersForKhmerName) {
+            $customerNameParts[] = 'NULLIF(c.khmer_name, "")';
+        }
+        if ($this->hasCol('customer_name_snapshot')) {
+            $customerNameParts[] = 'NULLIF(l.customer_name_snapshot, "")';
+        }
+        if ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'name')) {
+            $customerNameParts[] = 'NULLIF(c.name, "")';
+        }
+        $customerNameParts[] = "CONCAT('Customer #', l.id)";
+        $customerNameExpr = 'COALESCE('.implode(', ', $customerNameParts).')';
+
+        $customerPhoneParts = [];
+        if ($this->hasCol('customer_phone_snapshot')) {
+            $customerPhoneParts[] = 'NULLIF(l.customer_phone_snapshot, "")';
+        }
+        foreach (['phone', 'login_phone', 'mobile'] as $customerPhoneColumn) {
+            if ($canJoinCustomers && $this->loanTableHasCol('loan_customers', $customerPhoneColumn)) {
+                $customerPhoneParts[] = 'NULLIF(c.'.$customerPhoneColumn.', "")';
+            }
+        }
+        $customerPhoneExpr = empty($customerPhoneParts)
+            ? 'NULL'
+            : 'COALESCE('.implode(', ', array_merge($customerPhoneParts, ['NULL'])).')';
+
+        $customerSearchColumns = [];
+        if ($this->hasCol('customer_name_snapshot')) {
+            $customerSearchColumns[] = 'l.customer_name_snapshot';
+        }
+        if ($this->hasCol('customer_phone_snapshot')) {
+            $customerSearchColumns[] = 'l.customer_phone_snapshot';
+        }
+        foreach (['khmer_name', 'name', 'phone', 'login_phone', 'mobile'] as $customerColumn) {
+            if ($canJoinCustomers && $this->loanTableHasCol('loan_customers', $customerColumn)) {
+                $customerSearchColumns[] = 'c.'.$customerColumn;
+            }
+        }
+
+        $hasSchedules = $this->loanTableExists('loan_payment_schedules')
+            && $this->loanTableHasCol('loan_payment_schedules', 'loan_id');
+        $scheduleDeletedFilter = $hasSchedules && $this->loanTableHasCol('loan_payment_schedules', 'deleted_at')
+            ? ' AND deleted_at IS NULL'
+            : '';
+        $scheduleOpenFilter = $hasSchedules && $this->loanTableHasCol('loan_payment_schedules', 'status')
+            ? ' AND LOWER(COALESCE(status, "unpaid")) IN ("pending", "unpaid", "partial", "late", "overdue")'
+            : '';
+        $nextDueExpr = $hasSchedules && $this->loanTableHasCol('loan_payment_schedules', 'due_date')
+            ? '(SELECT MIN(due_date) FROM loan_payment_schedules WHERE loan_id = l.id'.$scheduleOpenFilter.$scheduleDeletedFilter.')'
             : 'NULL';
-        $paidInstallmentsExpr = $hasSchedules
-            ? '(SELECT COUNT(*) FROM loan_payment_schedules WHERE loan_id = l.id AND status = "paid" AND deleted_at IS NULL)'
+        $paidInstallmentsExpr = $hasSchedules && $this->loanTableHasCol('loan_payment_schedules', 'status')
+            ? '(SELECT COUNT(*) FROM loan_payment_schedules WHERE loan_id = l.id AND status = "paid"'.$scheduleDeletedFilter.')'
             : '0';
 
-        $hasItems = $this->loanTableExists('loan_items');
+        $hasItems = $this->loanTableExists('loan_items')
+            && $this->loanTableHasCol('loan_items', 'loan_id');
         $itemDeletedFilter = $hasItems && $this->loanTableHasCol('loan_items', 'deleted_at') ? ' AND deleted_at IS NULL' : '';
-        $itemPriceExpr = $hasItems
+        $itemPriceExpr = $hasItems && $this->loanTableHasCol('loan_items', 'unit_price')
             ? 'COALESCE((SELECT unit_price FROM loan_items WHERE loan_id = l.id'.$itemDeletedFilter.' AND unit_price > 0 LIMIT 1), ('.($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' + COALESCE('.($this->hasCol('down_payment') ? 'l.down_payment' : '0').', 0)))'
             : '('.($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' + COALESCE('.($this->hasCol('down_payment') ? 'l.down_payment' : '0').', 0))';
         $productNameExpr = 'COALESCE('.
@@ -913,6 +964,29 @@ class LoanInstallmentListController extends Controller
             ') FROM loan_items WHERE loan_id = l.id'.$itemDeletedFilter.' ORDER BY id LIMIT 1)' : 'NULL').
         ')';
 
+        $locationNameParts = [];
+        foreach (['location_name_snapshot', 'business_location_name_snapshot'] as $locationColumn) {
+            if ($this->hasCol($locationColumn)) {
+                $locationNameParts[] = 'NULLIF(l.'.$locationColumn.', "")';
+            }
+        }
+        if ($this->hasCol('business_location_id')) {
+            $locationNameParts[] = "CONCAT('Location #', l.business_location_id)";
+        }
+        $locationNameExpr = empty($locationNameParts)
+            ? 'NULL'
+            : 'COALESCE('.implode(', ', array_merge($locationNameParts, ['NULL'])).')';
+
+        $principalExpr = $this->hasCol('principal_amount') ? 'COALESCE(l.principal_amount, 0)' : '0';
+        $downPaymentExpr = $this->hasCol('down_payment') ? 'COALESCE(l.down_payment, 0)' : '0';
+        $totalExpr = $this->hasCol('total_amount')
+            ? 'COALESCE(NULLIF(l.total_amount, 0), '.$principalExpr.')'
+            : $principalExpr;
+        $paidExpr = $this->hasCol('paid_amount') ? 'COALESCE(l.paid_amount, 0)' : '0';
+        $balanceExpr = $this->hasCol('balance_amount')
+            ? 'COALESCE(l.balance_amount, GREATEST('.$totalExpr.' - '.$paidExpr.', 0))'
+            : 'GREATEST('.$totalExpr.' - '.$paidExpr.', 0)';
+
         $q = DB::connection('mysql_loan')->table('loans as l')
             ->when($canJoinCustomers, function ($query) {
                 $query->leftJoin('loan_customers as c', 'c.id', '=', 'l.customer_id');
@@ -920,7 +994,7 @@ class LoanInstallmentListController extends Controller
             ->selectRaw(
                 'l.id, '.
                 ($this->hasCol('loan_number') ? 'l.loan_number' : 'CAST(l.id as CHAR)').' as loan_number, '.
-                ($this->hasCol('loan_date') ? 'l.loan_date' : 'l.created_at').' as loan_date, '.
+                ($this->hasCol('loan_date') ? 'l.loan_date' : ($this->hasCol('created_at') ? 'l.created_at' : 'NULL')).' as loan_date, '.
                 ($this->hasCol('customer_id') ? 'l.customer_id' : 'NULL').' as customer_id, '.
                 ($canJoinCustomers && $this->loanTableHasCol('loan_customers', 'telegram_chat_id') ? 'c.telegram_chat_id' : 'NULL').' as telegram_chat_id, '.
                 'COALESCE('.
@@ -929,22 +1003,22 @@ class LoanInstallmentListController extends Controller
                 ') as customer_photo_file_id, '.
                 ($this->hasCol('customer_photo_snapshot') ? 'l.customer_photo_snapshot' : 'NULL').' as customer_photo_snapshot, '.
                 $customerNameExpr.' as customer_name_snapshot, '.
-                ($this->hasCol('customer_phone_snapshot') ? 'l.customer_phone_snapshot' : 'NULL').' as customer_phone_snapshot, '.
+                $customerPhoneExpr.' as customer_phone_snapshot, '.
                 $productNameExpr.' as product_name_snapshot, '.
                 $imeiExpr.' as imei_snapshot, '.
                 $itemPriceExpr.' as item_price, '.
                 ($this->hasCol('installment_count') ? 'l.installment_count' : '0').' as installment_count, '.
                 ($this->hasCol('payment_frequency') ? 'l.payment_frequency' : "'monthly'").' as payment_frequency, '.
-                ($this->hasCol('total_amount') ? 'l.total_amount' : 'l.principal_amount').' as total_amount, '.
-                ($this->hasCol('down_payment') ? 'l.down_payment' : '0').' as down_payment, '.
+                $totalExpr.' as total_amount, '.
+                $downPaymentExpr.' as down_payment, '.
                 $nextDueExpr.' as next_due_date, '.
                 $paidInstallmentsExpr.' as paid_installments, '.
                 ($this->hasCol('main_location_id') ? 'l.main_location_id' : 'NULL').' as main_location_id, '.
                 ($this->hasCol('business_location_id') ? 'l.business_location_id' : 'NULL').' as business_location_id, '.
-                ($this->hasCol('location_name_snapshot') ? 'l.location_name_snapshot' : ($this->hasCol('business_location_id') ? "CONCAT('Location #', l.business_location_id)" : 'NULL')).' as location_name_snapshot, '.
-                ($this->hasCol('principal_amount') ? 'l.principal_amount' : '0').' as principal_amount, '.
-                ($this->hasCol('paid_amount') ? 'l.paid_amount' : '0').' as paid_amount, '.
-                ($this->hasCol('balance_amount') ? 'l.balance_amount' : '0').' as balance_amount, '.
+                $locationNameExpr.' as location_name_snapshot, '.
+                $principalExpr.' as principal_amount, '.
+                $paidExpr.' as paid_amount, '.
+                $balanceExpr.' as balance_amount, '.
                 ($this->hasCol('status') ? 'l.status' : "'pending'").' as status, '.
                 ($this->hasCol('currency') ? 'l.currency' : "'USD'").' as currency, '.
                 ($this->hasCol('source_invoice_no') ? 'l.source_invoice_no' : 'NULL').' as source_invoice_no, '.
@@ -976,6 +1050,9 @@ class LoanInstallmentListController extends Controller
                 if ($this->hasCol('location_name_snapshot')) {
                     $query->orWhere('l.location_name_snapshot', $locationFilter);
                 }
+                if ($this->hasCol('business_location_name_snapshot')) {
+                    $query->orWhere('l.business_location_name_snapshot', $locationFilter);
+                }
                 $loanLocationIds = $this->loanLocationIdsByName($locationFilter);
                 if (! empty($loanLocationIds) && $this->hasCol('business_location_id')) {
                     $query->orWhereIn('l.business_location_id', $loanLocationIds);
@@ -1002,34 +1079,34 @@ class LoanInstallmentListController extends Controller
                 }
             });
         }
-        if ($request->filled('customer')) {
-            $q->where(function ($query) use ($request, $canJoinCustomersForKhmerName) {
-                $like = '%'.$request->customer.'%';
-                if ($this->hasCol('customer_name_snapshot')) {
-                    $query->where('l.customer_name_snapshot', 'like', $like);
-                }
-                if ($canJoinCustomersForKhmerName) {
-                    $query->orWhere('c.khmer_name', 'like', $like);
+        if ($request->filled('customer') && ! empty($customerSearchColumns)) {
+            $customerSearch = trim((string) $request->customer);
+            $q->where(function ($query) use ($customerSearch, $customerSearchColumns) {
+                $like = '%'.$customerSearch.'%';
+                foreach ($customerSearchColumns as $index => $column) {
+                    $index === 0
+                        ? $query->where($column, 'like', $like)
+                        : $query->orWhere($column, 'like', $like);
                 }
             });
         }
 
         if ($this->hasCol('loan_date')) {
             $q->orderByDesc('l.loan_date');
-        } else {
+        } elseif ($this->hasCol('created_at')) {
             $q->orderByDesc('l.created_at');
         }
         $q->orderByDesc('l.id');
 
         return DataTables::of($q)
-            ->filter(function ($query) use ($request, $canJoinCustomersForKhmerName) {
+            ->filter(function ($query) use ($request, $customerSearchColumns) {
                 $search = trim((string) data_get($request->all(), 'search.value', ''));
                 if ($search === '') {
                     return;
                 }
 
                 $like = '%'.$search.'%';
-                $query->where(function ($where) use ($like, $canJoinCustomersForKhmerName) {
+                $query->where(function ($where) use ($like, $customerSearchColumns) {
                     $hasCondition = false;
 
                     foreach ([
@@ -1060,10 +1137,11 @@ class LoanInstallmentListController extends Controller
                         $hasCondition = true;
                     }
 
-                    if ($canJoinCustomersForKhmerName) {
+                    foreach ($customerSearchColumns as $column) {
                         $hasCondition
-                            ? $where->orWhere('c.khmer_name', 'like', $like)
-                            : $where->where('c.khmer_name', 'like', $like);
+                            ? $where->orWhere($column, 'like', $like)
+                            : $where->where($column, 'like', $like);
+                        $hasCondition = true;
                     }
                 });
             })

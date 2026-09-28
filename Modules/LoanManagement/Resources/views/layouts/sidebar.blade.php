@@ -42,16 +42,16 @@
                 ['label' => $lmText('Installment Applications', 'ពាក្យស្នើសុំកម្ចី'), 'icon' => 'fa fa-file-text-o', 'tone' => 'slate', 'children' => [
                     ['label' => $lmText('New Installment', 'កម្ចីថ្មី'), 'route' => 'loan-management.loans.create', 'can' => 'loan_management.loans.create|loan_management.create'],
                     ['label' => $lmText('All Installments', 'បញ្ជីកម្ចីទាំងអស់'), 'route' => 'loan-management.loans', 'can' => 'loan_management.loans.view|loan_management.view'],
+                    ['label' => $lmText('Installment Products', 'ទំនិញបង់រំលស់'), 'route' => 'loan-management.products.index', 'can' => 'loan_management.products.view|loan_management.view'],
                     ['label' => $lmText('Installment Calculator', 'ម៉ាស៊ីនគណនាកម្ចី'), 'route' => 'loan-management.loans.calculator', 'can' => 'loan_management.loans.create|loan_management.create'],
                 ]],
                 ['label' => $lmText('Installment Operations', 'ប្រតិបត្តិការកម្ចី'), 'icon' => 'fa fa-database', 'tone' => 'slate', 'children' => [
+                    ['label' => $lmText('Installment Schedule', 'កាលវិភាគកម្ចី'), 'route' => 'loan-management.schedules.index', 'can' => 'loan_management.schedules.view|loan_management.view'],
+                    ['label' => $lmText('Installment Calendar', 'ប្រតិទិនបង់ប្រាក់'), 'route' => 'loan-management.schedules.calendar', 'can' => 'loan_management.schedules.view|loan_management.view'],
                     ['label' => $lmText('Due Today', 'ត្រូវបង់ថ្ងៃនេះ'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'due-today'], 'can' => 'loan_management.collection.view|loan_management.view'],
                     ['label' => $lmText('Partial Payments', 'ការបង់ប្រាក់មិនពេញ'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'partial-payments'], 'can' => 'loan_management.collection.view|loan_management.view'],
                     ['label' => $lmText('Closed Accounts', 'គណនីបិទរួច'), 'route' => 'loan-management.operations.page', 'params' => ['page' => 'closed-accounts'], 'can' => 'loan_management.collection.view|loan_management.view'],
                 ]],
-                ['label' => $lmText('Installment Schedule', 'កាលវិភាគកម្ចី'), 'icon' => 'fa fa-calendar', 'route' => 'loan-management.schedules.index', 'can' => 'loan_management.schedules.view|loan_management.view', 'tone' => 'slate'],
-                ['label' => $lmText('Installment Calendar', 'ប្រតិទិនបង់ប្រាក់'), 'icon' => 'fa fa-calendar-check-o', 'route' => 'loan-management.schedules.calendar', 'can' => 'loan_management.schedules.view|loan_management.view', 'tone' => 'teal'],
-                ['label' => $lmText('Installment Products', 'ទំនិញបង់រំលស់'), 'icon' => 'fa fa-cubes', 'route' => 'loan-management.products.index', 'can' => 'loan_management.products.view|loan_management.view', 'tone' => 'blue'],
             ],
         ],
         [

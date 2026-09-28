@@ -349,6 +349,55 @@
         padding: 14px;
         overflow: hidden;
     }
+    .lm-loan-table-feedback {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .lm-loan-table-feedback.is-visible {
+        display: flex;
+    }
+    .lm-loan-table-feedback.is-error {
+        border-color: #fecaca;
+        background: #fef2f2;
+        color: #b91c1c;
+    }
+    .lm-loan-table-feedback-message {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+    .lm-loan-table-feedback .btn {
+        flex: 0 0 auto;
+        border-radius: 6px !important;
+        font-weight: 700;
+    }
+    .lm-active-filter-count {
+        display: none;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: var(--lm-primary);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .lm-active-filter-count.is-visible {
+        display: inline-flex;
+    }
     .lm-loan-list-table-card .lm-dt-top {
         display: flex !important;
         flex-direction: row !important;
@@ -1233,7 +1282,10 @@
 
         <div class="lm-loan-list-filter collapsed" id="loanFilterPanel">
             <div class="lm-loan-list-filter-toggle">
-                <span class="lm-loan-list-filter-toggle-label">{{ $text('Filters', 'តម្រង') }}</span>
+                <span class="lm-loan-list-filter-toggle-label">
+                    {{ $text('Filters', 'តម្រង') }}
+                    <span class="lm-active-filter-count" id="loanActiveFilterCount" aria-label="{{ $text('Active filters', 'តម្រងកំពុងប្រើ') }}"></span>
+                </span>
                 <span class="lm-loan-list-filter-toggle-actions">
                     <a href="javascript:void(0)" id="loanFilterReset" class="lm-loan-list-reset">{{ $text('Reset', 'កំណត់ឡើងវិញ') }}</a>
                     <button type="button" class="lm-loan-list-collapse-btn" id="loanFilterToggle" aria-expanded="false" aria-controls="loanFilterBody">
@@ -1284,6 +1336,15 @@
         </div>
 
         <div class="lm-loan-list-table-card">
+            <div class="lm-loan-table-feedback" id="loanTableFeedback" role="status" aria-live="polite">
+                <span class="lm-loan-table-feedback-message">
+                    <i class="fa fa-spinner fa-spin" id="loanTableFeedbackIcon" aria-hidden="true"></i>
+                    <span id="loanTableFeedbackText">{{ $text('Loading installment data...', 'កំពុងផ្ទុកទិន្នន័យបង់រំលស់...') }}</span>
+                </span>
+                <button type="button" class="btn btn-default btn-xs" id="loanTableRetry" style="display:none;">
+                    <i class="fa fa-refresh"></i> {{ $text('Retry', 'ព្យាយាមម្តងទៀត') }}
+                </button>
+            </div>
             <div class="lm-mobile-loan-list" id="loan_mobile_list">
                 <div class="text-center text-muted" style="padding: 16px;">{{ $text('Loading loans...', 'កំពុងផ្ទុកកម្ចី...') }}</div>
             </div>
@@ -1398,15 +1459,53 @@ $(document).ready(function(){
         telegram: @json($text('Telegram', 'តេឡេក្រាម')),
         connectTelegram: @json($text('Connect Telegram', 'ភ្ជាប់ Telegram')),
         addBlacklist: @json($text('Blacklist', 'បញ្ជីខ្មៅ')),
-        blacklistReasonRequired: @json($text('Please enter a blacklist reason.', 'សូមបញ្ចូលមូលហេតុបញ្ជីខ្មៅ។'))
+        blacklistReasonRequired: @json($text('Please enter a blacklist reason.', 'សូមបញ្ចូលមូលហេតុបញ្ជីខ្មៅ។')),
+        loadFailed: @json($text('Unable to load installment data. Check the connection and try again.', 'មិនអាចផ្ទុកទិន្នន័យបង់រំលស់បានទេ។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។')),
+        invalidResponse: @json($text('The server returned an invalid installment-data response.', 'ម៉ាស៊ីនមេបានបញ្ជូនទិន្នន័យបង់រំលស់មិនត្រឹមត្រូវ។')),
+        retry: @json($text('Retry', 'ព្យាយាមម្តងទៀត')),
+        refresh: @json($text('Refresh', 'ផ្ទុកឡើងវិញ'))
     };
 
     function plainText(value) {
         return $('<div>').html(value || '').text().trim() || '-';
     }
 
-function escapeHtml(value) {
+    function escapeHtml(value) {
         return $('<div>').text(value || '').html();
+    }
+
+    function setLoanTableFeedback(type, message) {
+        var $feedback = $('#loanTableFeedback');
+        var isError = type === 'error';
+        $feedback
+            .toggleClass('is-error', isError)
+            .addClass('is-visible');
+        $('#loanTableFeedbackIcon')
+            .attr('class', isError ? 'fa fa-exclamation-circle' : 'fa fa-spinner fa-spin');
+        $('#loanTableFeedbackText').text(message || loanListText.processing);
+        $('#loanTableRetry').toggle(isError);
+    }
+
+    function clearLoanTableFeedback() {
+        $('#loanTableFeedback').removeClass('is-visible is-error');
+        $('#loanTableRetry').hide();
+    }
+
+    function activeLoanFilterCount() {
+        var count = 0;
+        if ($('#date_from').val() || $('#date_to').val()) count++;
+        if ($('#status').val()) count++;
+        if ($('#location_name').val()) count++;
+        if ($('#collector_name').val()) count++;
+        if ($.trim($('#customer').val() || '') !== '') count++;
+        return count;
+    }
+
+    function updateActiveLoanFilterCount() {
+        var count = activeLoanFilterCount();
+        $('#loanActiveFilterCount')
+            .text(count)
+            .toggleClass('is-visible', count > 0);
     }
 
     function formatLmExpiry(value) {
@@ -1533,6 +1632,14 @@ function escapeHtml(value) {
     if ($.fn.dataTable && $.fn.dataTable.Buttons) {
         tableButtons = [
             {
+                text: '<i class="fa fa-refresh" aria-hidden="true"></i> ' + loanListText.refresh,
+                className: 'btn btn-default btn-sm',
+                titleAttr: loanListText.refresh,
+                action: function(e, dt) {
+                    dt.ajax.reload(null, false);
+                }
+            },
+            {
                 extend: 'copy',
                 text: '<i class="fa fa-copy" aria-hidden="true"></i> Copy',
                 className: 'btn btn-default btn-sm',
@@ -1594,6 +1701,7 @@ function escapeHtml(value) {
         $('#allLoansDateRange,#date_from,#date_to').val('');
     }
 
+    try {
     if (typeof moment !== 'undefined' && $.fn.daterangepicker) {
         var loanDrs = (typeof dateRangeSettings !== 'undefined') ? dateRangeSettings : {};
         var defaultStartDate = moment().startOf('month');
@@ -1651,12 +1759,12 @@ function escapeHtml(value) {
 
         $('#allLoansDateRange').on('apply.daterangepicker', function(event, picker){
             setRange(picker.startDate, picker.endDate);
-            reloadLoanTable();
+            updateActiveLoanFilterCount();
         });
 
         $('#allLoansDateRange').on('cancel.daterangepicker', function(){
             clearRange();
-            reloadLoanTable();
+            updateActiveLoanFilterCount();
         });
     } else {
         $('#allLoansDateRange').prop('readonly', false).on('change', function(){
@@ -1668,26 +1776,47 @@ function escapeHtml(value) {
             } else {
                 clearRange();
             }
-            reloadLoanTable();
+            updateActiveLoanFilterCount();
         });
+    }
+    } catch (loanDateRangeError) {
+        console.error('Loan date filter failed to initialize:', loanDateRangeError);
+        $('#allLoansDateRange').prop('readonly', false);
     }
 
     if (!$.fn.DataTable) {
-        $('#loan_mobile_list').html('<div class="lm-mobile-loan-empty text-danger">DataTable library is not loaded.</div>');
+        var dataTableMissingMessage = 'DataTable library is not loaded. Please refresh the page.';
+        $('#loan_mobile_list').html('<div class="lm-mobile-loan-empty text-danger">' + dataTableMissingMessage + '</div>');
+        $('#loan_list_table').append('<tbody><tr><td colspan="16" class="text-center text-danger" style="padding:24px;">' + dataTableMissingMessage + '</td></tr></tbody>');
         return;
     }
 
+    if ($.fn.DataTable.isDataTable('#loan_list_table')) {
+        $('#loan_list_table').DataTable().destroy();
+    }
+
     $.fn.dataTable.ext.errMode = 'none';
-    $('#loan_list_table').on('error.dt', function(e, settings, techNote, message) {
-        $('#loan_mobile_list').html('<div class="lm-mobile-loan-empty text-danger">' + escapeHtml(message || loanListText.emptyTable) + '</div>');
-        if (window.toastr) {
-            toastr.error(message || loanListText.emptyTable);
-        }
-    });
+    $('#loan_list_table')
+        .on('preXhr.dt', function() {
+            setLoanTableFeedback('loading', loanListText.processing);
+            $('#loanFilterApply').prop('disabled', true);
+        })
+        .on('xhr.dt', function(e, settings, json) {
+            $('#loanFilterApply').prop('disabled', false);
+            if (json && Array.isArray(json.data)) {
+                clearLoanTableFeedback();
+            }
+        })
+        .on('error.dt', function() {
+            $('#loanFilterApply').prop('disabled', false);
+            setLoanTableFeedback('error', loanListText.loadFailed);
+        });
 
     loanTable = $('#loan_list_table').DataTable({
         processing: true,
         serverSide: true,
+        deferRender: true,
+        searchDelay: 450,
         autoWidth: false,
         scrollX: true,
         pageLength: 25,
@@ -1713,6 +1842,8 @@ function escapeHtml(value) {
         order: [[2, 'desc']],
         ajax: {
             url: "{{ route('loan-management.loans.list-data', [], false) }}",
+            dataType: 'json',
+            timeout: 45000,
             data: function(d){
                 d.date_from = $('#date_from').val();
                 d.date_to = $('#date_to').val();
@@ -1720,13 +1851,24 @@ function escapeHtml(value) {
                 d.status = $('#status').val();
                 d.location_name = $('#location_name').val();
                 d.collector_name = $('#collector_name').val();
-                d.customer = $('#customer').val();
+                d.customer = $.trim($('#customer').val() || '');
             },
-            error: function(xhr) {
-                var message = (xhr.responseJSON && xhr.responseJSON.message) || xhr.responseText || loanListText.emptyTable;
-                $('#loan_mobile_list').html('<div class="lm-mobile-loan-empty text-danger">' + escapeHtml(message) + '</div>');
+            dataSrc: function(json) {
+                if (!json || !Array.isArray(json.data)) {
+                    setLoanTableFeedback('error', loanListText.invalidResponse);
+                    return [];
+                }
+                return json.data;
+            },
+            error: function() {
+                $('#loanFilterApply').prop('disabled', false);
+                setLoanTableFeedback('error', loanListText.loadFailed);
+                $('#loan_mobile_list').html('<div class="lm-mobile-loan-empty text-danger">' + escapeHtml(loanListText.loadFailed) + '</div>');
             }
         },
+        columnDefs: [
+            {targets: '_all', defaultContent: '-'}
+        ],
         columns: [
             {data:'action', name:'action', orderable:false, searchable:false, className:'no-export text-center lm-action-col'},
             {data:'loan_number', name:'loan_number'},
@@ -1781,6 +1923,7 @@ function escapeHtml(value) {
         $(this).addClass('active');
 
         $('#status').val(status).trigger('change.select2');
+        updateActiveLoanFilterCount();
         loanTable.ajax.reload();
     });
 
@@ -1795,12 +1938,19 @@ function escapeHtml(value) {
     });
 
     $(document).on('change', '#status,#location_name,#collector_name', function(){
-        loanTable.ajax.reload();
+        updateActiveLoanFilterCount();
     });
 
-    $('#customer').on('input', debounce(function(){
-        loanTable.ajax.reload();
-    }, 300));
+    $('#customer').on('input', updateActiveLoanFilterCount).on('keydown', function(event){
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            $('#loanFilterApply').trigger('click');
+        }
+    });
+
+    $(document).on('click', '#loanTableRetry', function(){
+        reloadLoanTable();
+    });
 
     $(document).on('click', '#loanFilterReset', function(){
         clearRange();
@@ -1810,6 +1960,7 @@ function escapeHtml(value) {
         $('.lm-status-card[data-status=""]').addClass('active');
         loanTable.search('');
         $('#loan_list_table_filter input[type="search"]').val('');
+        updateActiveLoanFilterCount();
         loanTable.ajax.reload();
         setLoanFilterCollapsed(true);
     });
@@ -1851,6 +2002,7 @@ function escapeHtml(value) {
         });
 
         $('#loanFilterApply').on('click', function(){
+            updateActiveLoanFilterCount();
             loanTable.ajax.reload();
             setLoanFilterCollapsed(true);
         });
@@ -2015,7 +2167,7 @@ function escapeHtml(value) {
                 $button.prop('disabled', false);
             });
     });
-    });
 });
 </script>
 @endsection
+
