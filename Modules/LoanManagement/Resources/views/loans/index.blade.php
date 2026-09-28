@@ -1820,7 +1820,7 @@ $(document).ready(function(){
         autoWidth: false,
         scrollX: true,
         pageLength: 25,
-        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        lengthMenu: [[10, 25, 50, 100, 200, 500, 1000, -1], [10, 25, 50, 100, 200, 500, 1000, @json($text('All', 'ទាំងអស់'))]],
         dom: "<'lm-dt-top'<'lm-dt-length'l><'lm-dt-buttons'B><'lm-dt-search'f>>" +
              "<'row'<'col-sm-12'tr>>" +
              "<'row lm-dt-bottom'<'col-sm-5'i><'col-sm-7'p>>",
