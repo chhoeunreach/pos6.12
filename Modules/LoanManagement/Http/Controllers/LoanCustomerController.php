@@ -91,11 +91,7 @@ class LoanCustomerController extends Controller
             $paginated = $q->paginate($perPage)->appends($request->query());
 
             $paginated->getCollection()->transform(function ($c) {
-                if (!empty($c->customer_photo_file_id) && empty($c->photo_url)) {
-                    $c->photo_url = url('loan-management/chat-files/' . (int) $c->customer_photo_file_id);
-                } elseif (!empty($c->profile_photo) && empty($c->photo_url)) {
-                    $c->photo_url = Storage::disk('public')->url($c->profile_photo);
-                }
+                $c->photo_url = $this->customerPhotoUrl($c);
                 return $c;
             });
 
@@ -166,14 +162,7 @@ class LoanCustomerController extends Controller
                 ->limit(30)
                 ->get()
                 ->map(function ($customer) {
-                    $photoUrl = null;
-                    if (! empty($customer->customer_photo_file_id) && empty($customer->photo_url)) {
-                        $photoUrl = url('loan-management/chat-files/' . (int) $customer->customer_photo_file_id);
-                    } elseif (! empty($customer->photo_url)) {
-                        $photoUrl = $customer->photo_url;
-                    } elseif (! empty($customer->profile_photo)) {
-                        $photoUrl = Storage::disk('public')->url($customer->profile_photo);
-                    }
+                    $photoUrl = $this->customerPhotoUrl($customer);
 
                     return [
                         'id' => (int) $customer->id,
@@ -521,16 +510,43 @@ class LoanCustomerController extends Controller
 
     protected function customerPhotoUrl(object $customer): ?string
     {
-        if (empty($customer->customer_photo_file_id) || ! Schema::connection($this->connection)->hasTable('loan_files')) {
-            return null;
+        $fileId = (int) ($customer->customer_photo_file_id ?? 0);
+        if ($fileId > 0 && Schema::connection($this->connection)->hasTable('loan_files')) {
+            $file = DB::connection($this->connection)->table('loan_files')->where('id', $fileId)->first();
+            if ($file && ! empty($file->path)) {
+                $path = ltrim(str_replace('\\', '/', $file->path), '/');
+                $cleanPath = \Illuminate\Support\Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+                $candidates = [
+                    public_path('storage/' . $cleanPath),
+                    storage_path('app/public/' . $cleanPath),
+                    public_path($path),
+                    base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+                ];
+                foreach ($candidates as $cand) {
+                    if (is_file($cand)) {
+                        return url('loan-management/chat-files/' . $fileId);
+                    }
+                }
+            }
         }
 
-        $file = DB::connection($this->connection)->table('loan_files')->where('id', $customer->customer_photo_file_id)->first();
-        if (! $file || empty($file->path)) {
-            return null;
+        if (! empty($customer->profile_photo)) {
+            $path = ltrim(str_replace('\\', '/', $customer->profile_photo), '/');
+            $cleanPath = \Illuminate\Support\Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+            $candidates = [
+                public_path('storage/' . $cleanPath),
+                storage_path('app/public/' . $cleanPath),
+                public_path($path),
+                base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+            ];
+            foreach ($candidates as $cand) {
+                if (is_file($cand)) {
+                    return asset('storage/' . $cleanPath);
+                }
+            }
         }
 
-        return url('loan-management/chat-files/'.(int) $customer->customer_photo_file_id);
+        return null;
     }
 
     protected function attachFileToCustomer(int $fileId, int $customerId): void

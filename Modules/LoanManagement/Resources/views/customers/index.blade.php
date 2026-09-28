@@ -707,7 +707,10 @@
                                 <td>
                                     <div class="lm-cust-cell">
                                         @if(!empty($c->photo_url))
-                                            <img src="{{ $c->photo_url }}" class="lm-cust-avatar" alt="Avatar">
+                                            <img src="{{ $c->photo_url }}" class="lm-cust-avatar" alt="Avatar" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+                                            <div class="lm-cust-avatar-icon" style="display:none;">
+                                                <i class="fa fa-user"></i>
+                                            </div>
                                         @else
                                             <div class="lm-cust-avatar-icon">
                                                 <i class="fa fa-user"></i>

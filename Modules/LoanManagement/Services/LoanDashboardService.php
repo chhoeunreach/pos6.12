@@ -268,6 +268,31 @@ class LoanDashboardService
         }
 
         $path = ltrim(str_replace('\\', '/', $path), '/');
+        $cleanPath = Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+
+        $candidates = [
+            public_path('storage/' . $cleanPath),
+            storage_path('app/public/' . $cleanPath),
+            public_path($path),
+            base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+        ];
+
+        $found = false;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $found = true;
+                break;
+            }
+        }
+
+        if (! $found) {
+            $disk = $disk ?: 'public';
+            if ($disk !== 'public' && Storage::disk($disk)->exists($cleanPath)) {
+                return Storage::disk($disk)->url($cleanPath);
+            }
+            return null;
+        }
+
         if (Str::startsWith($path, 'storage/')) {
             return asset($path);
         }
@@ -276,13 +301,7 @@ class LoanDashboardService
             return asset($path);
         }
 
-        $disk = $disk ?: 'public';
-
-        if ($disk === 'public') {
-            return asset('storage/'.$path);
-        }
-
-        return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->url($path) : null;
+        return asset('storage/' . $cleanPath);
     }
 
     public function searchSellsForDashboard(string $term, int $limit = 10): array

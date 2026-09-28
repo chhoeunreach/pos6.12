@@ -510,4 +510,51 @@ class LoanChatController extends Controller
 
         return $threads;
     }
+
+    public function serveFile($file)
+    {
+        $fileId = is_numeric($file) ? (int) $file : 0;
+        if ($fileId <= 0) {
+            abort(404);
+        }
+
+        $connection = config('loanmanagement.connection', 'mysql_loan');
+        $row = null;
+        if (Schema::connection($connection)->hasTable('loan_files')) {
+            $row = DB::connection($connection)->table('loan_files')->where('id', $fileId)->first();
+        }
+
+        if (! $row || empty($row->path)) {
+            abort(404);
+        }
+
+        $path = ltrim(str_replace('\\', '/', $row->path), '/');
+        $cleanPath = \Illuminate\Support\Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+
+        $candidates = [
+            public_path('storage/' . $cleanPath),
+            storage_path('app/public/' . $cleanPath),
+            public_path($path),
+            base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+        ];
+
+        $found = null;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $found = $candidate;
+                break;
+            }
+        }
+
+        if (! $found) {
+            abort(404);
+        }
+
+        $mime = $row->mime_type ?: (function_exists('mime_content_type') ? mime_content_type($found) : null) ?: 'application/octet-stream';
+
+        return response()->file($found, [
+            'Content-Type' => $mime,
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
 }

@@ -16,7 +16,8 @@
             <div class="col-md-2 col-sm-3">
                 <div class="lm-customer-detail-photo">
                     @if(!empty($customerPhotoUrl))
-                        <img src="{{ $customerPhotoUrl }}" alt="Customer profile photo">
+                        <img src="{{ $customerPhotoUrl }}" alt="Customer profile photo" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='inline-block';}">
+                        <i class="fa fa-user" style="display:none;"></i>
                     @else
                         <i class="fa fa-user"></i>
                     @endif

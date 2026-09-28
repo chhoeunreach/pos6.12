@@ -668,30 +668,66 @@ class LoanInstallmentListController extends Controller
         })->values();
     }
 
+    protected static array $coreLocationCache = [];
+    protected static array $loanLocationCache = [];
+    protected static array $coreUserNamesCache = [];
+
     protected function coreLocationNames($ids): array
     {
-        $ids = collect($ids)->filter()->unique()->values();
+        $ids = collect($ids)->filter()->unique()->map(fn ($id) => (int) $id)->values();
         if ($ids->isEmpty() || ! Schema::hasTable('business_locations')) {
             return [];
         }
 
-        return DB::table('business_locations')
-            ->whereIn('id', $ids)
-            ->pluck('name', 'id')
-            ->all();
+        $missing = $ids->filter(fn ($id) => ! array_key_exists($id, static::$coreLocationCache))->values();
+        if ($missing->isNotEmpty()) {
+            $fetched = DB::table('business_locations')
+                ->whereIn('id', $missing)
+                ->pluck('name', 'id')
+                ->all();
+
+            foreach ($missing as $id) {
+                static::$coreLocationCache[$id] = $fetched[$id] ?? null;
+            }
+        }
+
+        $result = [];
+        foreach ($ids as $id) {
+            if (! empty(static::$coreLocationCache[$id])) {
+                $result[$id] = static::$coreLocationCache[$id];
+            }
+        }
+
+        return $result;
     }
 
     protected function loanLocationNames($ids): array
     {
-        $ids = collect($ids)->filter()->unique()->values();
+        $ids = collect($ids)->filter()->unique()->map(fn ($id) => (int) $id)->values();
         if ($ids->isEmpty() || ! $this->loanTableExists('loan_business_locations')) {
             return [];
         }
 
-        return DB::connection('mysql_loan')->table('loan_business_locations')
-            ->whereIn('id', $ids)
-            ->pluck('name', 'id')
-            ->all();
+        $missing = $ids->filter(fn ($id) => ! array_key_exists($id, static::$loanLocationCache))->values();
+        if ($missing->isNotEmpty()) {
+            $fetched = DB::connection('mysql_loan')->table('loan_business_locations')
+                ->whereIn('id', $missing)
+                ->pluck('name', 'id')
+                ->all();
+
+            foreach ($missing as $id) {
+                static::$loanLocationCache[$id] = $fetched[$id] ?? null;
+            }
+        }
+
+        $result = [];
+        foreach ($ids as $id) {
+            if (! empty(static::$loanLocationCache[$id])) {
+                $result[$id] = static::$loanLocationCache[$id];
+            }
+        }
+
+        return $result;
     }
 
     protected function coreLocationIdsByName(string $name): array
@@ -744,16 +780,32 @@ class LoanInstallmentListController extends Controller
 
     protected function coreUserNames($ids): array
     {
-        $ids = collect($ids)->filter()->unique()->values();
+        $ids = collect($ids)->filter()->unique()->map(fn ($id) => (int) $id)->values();
         if ($ids->isEmpty() || ! Schema::hasTable('users')) {
             return [];
         }
 
-        return DB::table('users')
-            ->whereIn('id', $ids)
-            ->selectRaw("id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))), ''), username) as display_name")
-            ->pluck('display_name', 'id')
-            ->all();
+        $missing = $ids->filter(fn ($id) => ! array_key_exists($id, static::$coreUserNamesCache))->values();
+        if ($missing->isNotEmpty()) {
+            $fetched = DB::table('users')
+                ->whereIn('id', $missing)
+                ->selectRaw("id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))), ''), username) as display_name")
+                ->pluck('display_name', 'id')
+                ->all();
+
+            foreach ($missing as $id) {
+                static::$coreUserNamesCache[$id] = $fetched[$id] ?? null;
+            }
+        }
+
+        $result = [];
+        foreach ($ids as $id) {
+            if (! empty(static::$coreUserNamesCache[$id])) {
+                $result[$id] = static::$coreUserNamesCache[$id];
+            }
+        }
+
+        return $result;
     }
 
     public function index()
@@ -1033,15 +1085,23 @@ class LoanInstallmentListController extends Controller
         $listDateColumn = $this->hasCol('loan_date') ? 'loan_date' : ($this->hasCol('created_at') ? 'created_at' : null);
         if ($listDateColumn) {
             [$startDate, $endDate] = $this->loanListDateRange($request);
-            if ($startDate) $q->whereDate('l.'.$listDateColumn, '>=', $startDate);
-            if ($endDate) $q->whereDate('l.'.$listDateColumn, '<=', $endDate);
+            if ($startDate) {
+                $q->where('l.'.$listDateColumn, '>=', $startDate.' 00:00:00');
+            }
+            if ($endDate) {
+                $q->where('l.'.$listDateColumn, '<=', $endDate.' 23:59:59');
+            }
         }
         if ($request->filled('status') && $this->hasCol('status')) {
             $statusFilter = strtolower((string) $request->status);
             if ($statusFilter === 'completed') {
-                $q->whereIn(DB::raw('LOWER(COALESCE(l.status, "pending"))'), ['completed', 'closed']);
+                $q->whereIn('l.status', ['completed', 'closed']);
+            } elseif ($statusFilter === 'pending') {
+                $q->where(function ($sq) {
+                    $sq->where('l.status', 'pending')->orWhereNull('l.status');
+                });
             } else {
-                $q->whereRaw('LOWER(COALESCE(l.status, "pending")) = ?', [$statusFilter]);
+                $q->where('l.status', $statusFilter);
             }
         }
         if ($request->filled('location_name')) {
@@ -1098,7 +1158,12 @@ class LoanInstallmentListController extends Controller
         }
         $q->orderByDesc('l.id');
 
+        $totalLoansCount = $this->hasCol('deleted_at')
+            ? DB::connection('mysql_loan')->table('loans')->whereNull('deleted_at')->count()
+            : DB::connection('mysql_loan')->table('loans')->count();
+
         return DataTables::of($q)
+            ->setTotalRecords($totalLoansCount)
             ->filter(function ($query) use ($request, $customerSearchColumns) {
                 $search = trim((string) data_get($request->all(), 'search.value', ''));
                 if ($search === '') {
@@ -1165,16 +1230,18 @@ class LoanInstallmentListController extends Controller
                 $customerUrl = ! empty($r->customer_id) ? route('loan-management.customers.show', $r->customer_id, false) : '';
                 $displayName = $name !== '' ? $name : 'Customer #'.($r->customer_id ?: $r->id);
                 $photoFileId = (int) ($r->customer_photo_file_id ?? 0);
-                $photoUrl = $this->loanFileUrlById($photoFileId)
-                    ?: $this->loanFilePublicUrl($r->customer_photo_snapshot ?? null)
-                    ?: $this->latestCustomerFileUrlByCategory((int) ($r->customer_id ?? 0), 'customer_photo')
-                    ?: $this->latestCustomerImageUrl((int) ($r->customer_id ?? 0));
+                $photoUrl = $photoFileId > 0
+                    ? $this->loanFileUrlById($photoFileId)
+                    : $this->loanFilePublicUrl($r->customer_photo_snapshot ?? null);
                 $initial = mb_substr(trim($displayName), 0, 1, 'UTF-8') ?: 'C';
 
                 $html = '<div class="lm-loan-customer-cell">';
-                $html .= ! empty($photoUrl)
-                    ? '<img src="'.e($photoUrl).'" class="lm-loan-customer-avatar" alt="'.e($displayName).'">'
-                    : '<span class="lm-loan-customer-avatar-fallback">'.e(mb_strtoupper($initial, 'UTF-8')).'</span>';
+                if (! empty($photoUrl)) {
+                    $html .= '<img src="'.e($photoUrl).'" class="lm-loan-customer-avatar" alt="'.e($displayName).'" onerror="this.onerror=null; this.style.display=\'none\'; var fb=this.nextElementSibling; if(fb){fb.style.display=\'inline-flex\';}">';
+                    $html .= '<span class="lm-loan-customer-avatar-fallback" style="display:none;">'.e(mb_strtoupper($initial, 'UTF-8')).'</span>';
+                } else {
+                    $html .= '<span class="lm-loan-customer-avatar-fallback">'.e(mb_strtoupper($initial, 'UTF-8')).'</span>';
+                }
                 $html .= '<div class="lm-loan-customer-info">';
                 if ($customerUrl !== '') {
                     $html .= '<a href="'.e($customerUrl).'" class="lm-loan-customer-name"><i class="fa fa-user-circle"></i> '.e($displayName).'</a>';
@@ -2448,18 +2515,40 @@ class LoanInstallmentListController extends Controller
         ]));
     }
 
+    protected static array $loanFileUrlCache = [];
+    protected static array $latestCustomerFileCache = [];
+    protected static array $latestCustomerImageCache = [];
+
     protected function loanFileUrlById(int $fileId): ?string
     {
         if ($fileId <= 0 || ! $this->loanTableExists('loan_files')) {
             return null;
         }
 
-        $file = DB::connection('mysql_loan')->table('loan_files')->where('id', $fileId)->first();
-        if (! $file || empty($file->path)) {
-            return null;
+        if (array_key_exists($fileId, static::$loanFileUrlCache)) {
+            return static::$loanFileUrlCache[$fileId];
         }
 
-        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
+        $minId = max(1, $fileId - 50);
+        $maxId = $fileId + 50;
+
+        $rows = DB::connection('mysql_loan')->table('loan_files')
+            ->where('id', '>=', $minId)
+            ->where('id', '<=', $maxId)
+            ->select('id', 'path', 'disk')
+            ->get();
+
+        foreach ($rows as $row) {
+            static::$loanFileUrlCache[(int) $row->id] = ! empty($row->path)
+                ? $this->loanFilePublicUrl($row->path, $row->disk ?? 'public')
+                : null;
+        }
+
+        if (! array_key_exists($fileId, static::$loanFileUrlCache)) {
+            static::$loanFileUrlCache[$fileId] = null;
+        }
+
+        return static::$loanFileUrlCache[$fileId];
     }
 
     protected function loanFilesByCategory(int $loanId, string $category)
@@ -2487,6 +2576,11 @@ class LoanInstallmentListController extends Controller
             return null;
         }
 
+        $cacheKey = $customerId . '_' . $category;
+        if (array_key_exists($cacheKey, static::$latestCustomerFileCache)) {
+            return static::$latestCustomerFileCache[$cacheKey];
+        }
+
         $query = DB::connection('mysql_loan')->table('loan_files')
             ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
             ->where('fileable_id', $customerId)
@@ -2496,10 +2590,10 @@ class LoanInstallmentListController extends Controller
 
         $file = $query->first();
         if (! $file || empty($file->path)) {
-            return null;
+            return static::$latestCustomerFileCache[$cacheKey] = null;
         }
 
-        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
+        return static::$latestCustomerFileCache[$cacheKey] = $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
     }
 
     protected function latestCustomerFileUrlByOriginalName(int $customerId, string $pattern): ?string
@@ -2533,6 +2627,11 @@ class LoanInstallmentListController extends Controller
             return null;
         }
 
+        $cacheKey = $customerId . '_' . implode(',', $categories);
+        if (array_key_exists($cacheKey, static::$latestCustomerImageCache)) {
+            return static::$latestCustomerImageCache[$cacheKey];
+        }
+
         $query = DB::connection('mysql_loan')->table('loan_files')
             ->where('fileable_type', \Modules\LoanManagement\Entities\LoanCustomer::class)
             ->where('fileable_id', $customerId)
@@ -2549,10 +2648,10 @@ class LoanInstallmentListController extends Controller
 
         $file = $query->first();
         if (! $file || empty($file->path)) {
-            return null;
+            return static::$latestCustomerImageCache[$cacheKey] = null;
         }
 
-        return $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
+        return static::$latestCustomerImageCache[$cacheKey] = $this->loanFilePublicUrl($file->path, $file->disk ?? 'public');
     }
 
     protected function loanFilePublicUrl(?string $path, ?string $disk = 'public'): ?string
@@ -2567,6 +2666,32 @@ class LoanInstallmentListController extends Controller
         }
 
         $path = ltrim(str_replace('\\', '/', $path), '/');
+        $cleanPath = Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+
+        // Verify physical file exists on disk
+        $candidates = [
+            public_path('storage/' . $cleanPath),
+            storage_path('app/public/' . $cleanPath),
+            public_path($path),
+            base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+        ];
+
+        $found = false;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $found = true;
+                break;
+            }
+        }
+
+        if (! $found) {
+            $disk = $disk ?: 'public';
+            if ($disk !== 'public' && Storage::disk($disk)->exists($cleanPath)) {
+                return Storage::disk($disk)->url($cleanPath);
+            }
+            return null;
+        }
+
         if (Str::startsWith($path, 'storage/')) {
             return asset($path);
         }
@@ -2575,13 +2700,7 @@ class LoanInstallmentListController extends Controller
             return asset($path);
         }
 
-        $disk = $disk ?: 'public';
-
-        if ($disk === 'public') {
-            return asset('storage/'.$path);
-        }
-
-        return Storage::disk($disk)->exists($path) ? Storage::disk($disk)->url($path) : null;
+        return asset('storage/' . $cleanPath);
     }
 
     protected function updateLoanCustomerFileReference(int $customerId, string $column, int $fileId): void

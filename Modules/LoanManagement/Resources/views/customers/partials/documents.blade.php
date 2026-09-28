@@ -10,7 +10,8 @@
             <div class="lm-customer-photo-uploader">
                 <div class="lm-customer-photo-preview" id="customer_photo_preview">
                     @if($currentPhotoUrl)
-                        <img src="{{ $currentPhotoUrl }}" alt="Customer profile photo">
+                        <img src="{{ $currentPhotoUrl }}" alt="Customer profile photo" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='inline-block';}">
+                        <i class="fa fa-user" style="display:none;"></i>
                     @else
                         <i class="fa fa-user"></i>
                     @endif

@@ -31,6 +31,10 @@ Route::middleware(['web'])
     ->get('/loan-management/settings/business/public-logo', [SettingsController::class, 'businessPublicLogo'])
     ->name('loan-management.settings.business.public-logo');
 
+Route::middleware(['web'])
+    ->get('/loan-management/chat-files/{file}', [LoanChatController::class, 'serveFile'])
+    ->name('loan-management.chat-files.show');
+
 Route::middleware(['web'])->group(function () {
     Route::get('/', [PublicAppController::class, 'home'])->name('loan-management.public.home');
     Route::get('/register', [PublicAppController::class, 'register'])->name('loan-management.public.register');

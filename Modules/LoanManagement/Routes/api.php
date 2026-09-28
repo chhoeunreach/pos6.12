@@ -21,6 +21,8 @@ use Modules\LoanManagement\Http\Controllers\StaffMobileLoanController;
 Route::prefix('loan-management')->group(function () {
     Route::get('/app-settings', [PublicAppController::class, 'appSettings']);
     Route::get('/app-version', [PublicAppController::class, 'appVersion']);
+    Route::get('/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile']);
+    Route::get('/customer/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile']);
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
         Route::post('/customer/login', [CustomerAppAuthController::class, 'login']);

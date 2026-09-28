@@ -103,11 +103,46 @@ class LoanCustomer extends Authenticatable
 
     public function getCustomerPhotoUrlAttribute(): ?string
     {
-        if (empty($this->customer_photo_file_id)) {
-            return null;
+        $fileId = (int) ($this->customer_photo_file_id ?? 0);
+        if ($fileId > 0) {
+            $connection = config('loanmanagement.connection', 'mysql_loan');
+            if (\Illuminate\Support\Facades\Schema::connection($connection)->hasTable('loan_files')) {
+                $file = \Illuminate\Support\Facades\DB::connection($connection)->table('loan_files')->where('id', $fileId)->first();
+                if ($file && ! empty($file->path)) {
+                    $path = ltrim(str_replace('\\', '/', $file->path), '/');
+                    $cleanPath = \Illuminate\Support\Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+                    $candidates = [
+                        public_path('storage/' . $cleanPath),
+                        storage_path('app/public/' . $cleanPath),
+                        public_path($path),
+                        base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+                    ];
+                    foreach ($candidates as $cand) {
+                        if (is_file($cand)) {
+                            return url('loan-management/chat-files/' . $fileId);
+                        }
+                    }
+                }
+            }
         }
 
-        return url('loan-management/chat-files/'.(int) $this->customer_photo_file_id);
+        if (! empty($this->profile_photo)) {
+            $path = ltrim(str_replace('\\', '/', $this->profile_photo), '/');
+            $cleanPath = \Illuminate\Support\Str::startsWith($path, 'storage/') ? substr($path, 8) : $path;
+            $candidates = [
+                public_path('storage/' . $cleanPath),
+                storage_path('app/public/' . $cleanPath),
+                public_path($path),
+                base_path('Modules/LoanManagement/storage/app/public/' . $cleanPath),
+            ];
+            foreach ($candidates as $cand) {
+                if (is_file($cand)) {
+                    return asset('storage/' . $cleanPath);
+                }
+            }
+        }
+
+        return null;
     }
 
     public function loans()
