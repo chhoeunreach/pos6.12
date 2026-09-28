@@ -228,8 +228,6 @@
                     <span class="lm-payment-summary-card__label">Customer</span>
                     <span class="lm-payment-summary-card__value">{{ $customerName }}</span>
                     <span class="lm-payment-summary-card__sub">Installment # {{ $loanNumber }}</span>
-</div>
-                        @endif
                 </div>
                 <div class="lm-payment-summary-card">
                     <span class="lm-payment-summary-card__label">Current Balance</span>
@@ -240,8 +238,6 @@
                     <span class="lm-payment-summary-card__label">Pay Off Amount</span>
                     <span class="lm-payment-summary-card__value">{{ $payOffAmount }}</span>
                     <span class="lm-payment-summary-card__sub">{{ $loanCurrency }}</span>
-                </div>
-            </div>
                 </div>
             </div>
 
