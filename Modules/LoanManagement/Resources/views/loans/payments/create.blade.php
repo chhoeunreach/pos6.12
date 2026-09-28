@@ -165,6 +165,14 @@
         opacity: 0;
         pointer-events: none;
     }
+    #loan_payment_add_form .payment-note-datetime.is-fallback-visible {
+        position: static;
+        width: 100%;
+        height: 38px;
+        margin-top: 6px;
+        opacity: 1;
+        pointer-events: auto;
+    }
     #loan_payment_add_form .loan-payment-line-action {
         display: flex;
         justify-content: center;
@@ -832,7 +840,6 @@ $(function () {
         document.body.removeChild(textarea);
         return deferred.promise();
     }
-    });
 
     function applyPayTarget(formatDiscount) {
         formatDiscount = formatDiscount !== false;
@@ -981,9 +988,9 @@ $(function () {
         updatePaymentDocHelp($(this));
     });
 
-    $form.on('focus click', '.payment-line-doc', function () {
+    $form.on('focus click', '.payment-line-doc, .payment-line-doc-text', function () {
         $form.find('.payment-line-doc').removeClass('active-payment-doc-input');
-        $(this).addClass('active-payment-doc-input');
+        $(this).closest('.loan-payment-line').find('.payment-line-doc').addClass('active-payment-doc-input');
     });
 
     $form.on('click', '.add-payment-note-datetime', function () {
@@ -994,10 +1001,14 @@ $(function () {
         }
         var picker = $picker[0];
         if (picker && typeof picker.showPicker === 'function') {
-            picker.showPicker();
-            return;
+            try {
+                picker.showPicker();
+                return;
+            } catch (error) {
+                // Fall through to a visible native control when showPicker is unavailable.
+            }
         }
-        $picker.trigger('focus').trigger('click');
+        $picker.addClass('is-fallback-visible').attr('tabindex', '0').trigger('focus').trigger('click');
     });
 
     $form.on('change', '.payment-note-datetime', function () {
@@ -1013,7 +1024,8 @@ $(function () {
         var text = clipboardText(event);
 
         if (files.length) {
-            var input = $form.find('.payment-line-doc.active-payment-doc-input')[0]
+            var input = $(event.target).closest('.loan-payment-line').find('.payment-line-doc')[0]
+            || $form.find('.payment-line-doc.active-payment-doc-input')[0]
             || $form.find('.payment-line-doc:visible').last()[0];
 
             if (appendFilesToInput(input, files)) {
