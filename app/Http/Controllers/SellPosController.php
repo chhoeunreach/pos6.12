@@ -354,36 +354,36 @@ class SellPosController extends Controller
         $location = BusinessLocation::find($location_id);
         if (empty($location)) {
             $cache[$location_id] = ['', ''];
-            return ['', ''];
+            return $cache[$location_id];
         }
 
         $location_name = trim((string) $location->name);
         $code = $location->location_id;
         $group = config("hr.location_group_map.{$code}");
-        $mappedSellType = is_array($group) ? ($group[1] ?? '') : '';
+
+        // POS location codes explicitly map module sub-locations to HR branches.
+        // Display names contain suffixes such as Accessory and are fallback-only.
+        if (is_array($group) && ! empty($group[0])) {
+            $cache[$location_id] = [
+                trim((string) $group[0]),
+                trim((string) ($group[1] ?? '')),
+            ];
+            return $cache[$location_id];
+        }
+
+        if (is_string($group) && trim($group) !== '') {
+            $cache[$location_id] = [trim($group), ''];
+            return $cache[$location_id];
+        }
 
         $branchFromLocationName = $this->resolveHrBranchNameFromLocationName($location_name);
-        if (!empty($branchFromLocationName)) {
-            $cache[$location_id] = [$branchFromLocationName, $mappedSellType];
-            return [$branchFromLocationName, $mappedSellType];
-        }
-
-        if (!empty($location_name)) {
-            $cache[$location_id] = [$location_name, $mappedSellType];
-            return [$location_name, $mappedSellType];
-        }
-
-        if (is_array($group) && count($group) >= 2) {
-            $cache[$location_id] = [$group[0], $group[1]];
-            return [$group[0], $group[1]];
-        }
-        if (is_string($group) && $group !== '') {
-            $cache[$location_id] = [$group, ''];
-            return [$group, ''];
+        if (! empty($branchFromLocationName)) {
+            $cache[$location_id] = [$branchFromLocationName, ''];
+            return $cache[$location_id];
         }
 
         $cache[$location_id] = [$location_name, ''];
-        return [$location_name, ''];
+        return $cache[$location_id];
     }
 
     private function resolveHrBranchNameFromLocationName($location_name)

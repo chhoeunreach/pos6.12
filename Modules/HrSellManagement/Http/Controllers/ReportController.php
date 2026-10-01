@@ -596,45 +596,36 @@ class ReportController extends Controller
                 ->orderBy('staff_name')
                 ->orderBy('branch_name');
 
-            $commissionTotalRows = (clone $rowsQuery)->get();
+            $allRows = $this->prepareCommissionRows($rowsQuery->get(), $request, $commissionColumns, $period)
+                ->filter(fn ($row) => (float) ($row->commission_total ?? 0) > 0)
+                ->values();
+
             foreach ($commissionColumns as $column) {
-                $totals[$column['key'] . '_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_total'} ?? 0));
+                $totals[$column['key'] . '_total'] = $allRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_total'} ?? 0));
 
                 if ($column['has_commission']) {
-                    $totals[$column['key'] . '_raw_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_raw_total'} ?? 0));
-                    $totals[$column['key'] . '_commission_total'] = $commissionTotalRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_commission_total'} ?? 0));
+                    $totals[$column['key'] . '_raw_total'] = $allRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_raw_total'} ?? 0));
+                    $totals[$column['key'] . '_commission_total'] = $allRows->sum(fn ($row) => (float) ($row->{$column['key'] . '_commission_total'} ?? 0));
                 }
             }
             $totals['commission_total'] = $this->sumCommissionTotals((object) $totals, $commissionColumns);
 
             $commissionPerPage = $this->commissionPerPage($request);
-            if ($paginate && $commissionPerPage === 'all') {
-                $allRows = $rowsQuery->get();
-                $rows = new LengthAwarePaginator($allRows, $allRows->count(), max($allRows->count(), 1), 1, [
+            if ($paginate) {
+                $currentPage = max(1, (int) $request->input('commission_page', 1));
+                $pageSize = $commissionPerPage === 'all' ? max($allRows->count(), 1) : $commissionPerPage;
+                $pageRows = $commissionPerPage === 'all'
+                    ? $allRows
+                    : $allRows->forPage($currentPage, $pageSize)->values();
+
+                $rows = new LengthAwarePaginator($pageRows, $allRows->count(), $pageSize, $currentPage, [
                     'path' => $request->url(),
                     'pageName' => 'commission_page',
                     'query' => $request->query(),
                 ]);
             } else {
-                $rows = $paginate
-                    ? $rowsQuery->paginate($commissionPerPage, ['*'], 'commission_page')->appends($request->query())
-                    : $rowsQuery->get();
+                $rows = $allRows;
             }
-
-            $rowCollection = method_exists($rows, 'getCollection') ? $rows->getCollection() : $rows;
-            $officeTimes = $this->officeTimesByUser($rowCollection, $request, $period);
-            $rowCollection->transform(function ($row) use ($request, $commissionColumns, $officeTimes, $period) {
-                $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
-                $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
-                $fallbackMinutes = max(0, (int) ($row->office_minutes ?? 0));
-                $officeTime = $officeTimes[$this->officeTimeKey($row, $period)] ?? null;
-                $officeMinutes = (int) ($officeTime['minutes'] ?? $fallbackMinutes);
-                $row->office_time = ! empty($officeTime['time']) ? $officeTime['time'] : '-';
-                $row->total_hour_day = ! empty($officeTime['hours']) ? $officeTime['hours'] : $this->formatTotalHourDay($fallbackMinutes);
-                $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
-
-                return $row;
-            });
 
             return [$rows, $totals, $commissionColumns, $period];
         } catch (\Throwable $e) {
@@ -659,11 +650,92 @@ class ReportController extends Controller
 
     private function formatTotalHourDay(int $minutes): string
     {
-        return intdiv($minutes, 60) . ' hour';
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+
+        return $remainingMinutes > 0 ? $hours . ' hour ' . $remainingMinutes . ' min' : $hours . ' hour';
+    }
+
+    private function prepareCommissionRows($rows, Request $request, array $commissionColumns, string $period)
+    {
+        $officeTimes = $this->officeTimesByUser($rows, $request, $period);
+
+        return collect($rows)->transform(function ($row) use ($request, $commissionColumns, $officeTimes, $period) {
+            $officeTime = $officeTimes[$this->officeTimeKey($row, $period)] ?? null;
+            $officeMinutes = $officeTime ? (int) ($officeTime['minutes'] ?? 0) : 0;
+            $row->office_minutes = $officeMinutes;
+            $row->office_time = ! empty($officeTime['time']) ? $officeTime['time'] : '-';
+            $row->total_hour_day = ! empty($officeTime['hours']) ? $officeTime['hours'] : '-';
+            $row->time_work = $officeMinutes >= 480 ? 'Full time' : 'Part-time';
+
+            $this->applySellCommissionTimeWorkCondition($row, $commissionColumns, $officeMinutes);
+
+            $row->commission_total = $this->sumCommissionTotals($row, $commissionColumns);
+            $row->detail_urls = $this->commissionDetailUrls($row, $request, $commissionColumns);
+
+            return $row;
+        });
+    }
+
+    private function applySellCommissionTimeWorkCondition(object $row, array $commissionColumns, int $officeMinutes): void
+    {
+        $sellColumn = collect($commissionColumns)->firstWhere('key', 'sell');
+
+        if (empty($sellColumn['sell_qty_thresholds'])) {
+            return;
+        }
+
+        $rawQty = (float) ($row->sell_raw_total ?? $row->sell_total ?? 0);
+        $threshold = $officeMinutes >= 480
+            ? (float) $sellColumn['sell_qty_thresholds']['full_time']
+            : (float) $sellColumn['sell_qty_thresholds']['part_time'];
+        $qualifiedQty = $rawQty >= $threshold ? $rawQty : 0;
+
+        $row->sell_total = $qualifiedQty;
+        $row->sell_commission_total = $qualifiedQty * (float) $sellColumn['commission_rate'];
     }
 
     private function officeTimesByUser($rows, Request $request, string $period): array
     {
+        if (Schema::connection('hr')->hasTable('office_times') && Schema::connection('hr')->hasColumn('users', 'office_time_id')) {
+            $userIds = collect($rows)->pluck('user_id')->filter()->unique()->values();
+
+            if ($userIds->isEmpty()) {
+                return [];
+            }
+
+            $schedules = DB::connection('hr')
+                ->table('users as u')
+                ->join('office_times as ot', 'ot.id', '=', 'u.office_time_id')
+                ->whereIn('u.id', $userIds)
+                ->select('u.id as user_id', 'ot.opening_time', 'ot.closing_time')
+                ->get()
+                ->keyBy('user_id');
+
+            return collect($rows)->mapWithKeys(function ($row) use ($schedules, $period) {
+                $schedule = $schedules[(int) ($row->user_id ?? 0)] ?? null;
+
+                if (! $schedule || empty($schedule->opening_time) || empty($schedule->closing_time)) {
+                    return [];
+                }
+
+                $opening = \Carbon\Carbon::parse('2000-01-01 ' . $schedule->opening_time);
+                $closing = \Carbon\Carbon::parse('2000-01-01 ' . $schedule->closing_time);
+
+                if ($closing->lt($opening)) {
+                    $closing->addDay();
+                }
+
+                $minutes = (int) $opening->diffInMinutes($closing);
+
+                return [$this->officeTimeKey($row, $period) => [
+                    'time' => $opening->format('g:i A') . ' - ' . $closing->format('g:i A'),
+                    'hours' => $this->formatTotalHourDay($minutes),
+                    'minutes' => $minutes,
+                ]];
+            })->all();
+        }
+
         if (! Schema::connection('hr')->hasTable('essentials_user_shifts') || ! Schema::connection('hr')->hasTable('essentials_shifts')) {
             return [];
         }
@@ -867,16 +939,6 @@ class ReportController extends Controller
         }
 
         if ($column['commission_basis'] === 'qty') {
-            if (! empty($column['sell_qty_thresholds'])) {
-                $qtyExpression = 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
-                $fullTimeMinimum = (float) $column['sell_qty_thresholds']['full_time'];
-                $partTimeMinimum = (float) $column['sell_qty_thresholds']['part_time'];
-
-                return 'CASE WHEN ' . $this->officeMinutesExpression() . ' >= 480 '
-                    . 'THEN CASE WHEN ' . $qtyExpression . ' >= ' . $fullTimeMinimum . ' THEN ' . $qtyExpression . ' ELSE 0 END '
-                    . 'ELSE CASE WHEN ' . $qtyExpression . ' >= ' . $partTimeMinimum . ' THEN ' . $qtyExpression . ' ELSE 0 END END';
-            }
-
             return 'COALESCE(SUM(CASE WHEN ' . $condition . ' THEN ' . $lineExpressions['qty'] . ' ELSE 0 END), 0)';
         }
 
@@ -885,12 +947,7 @@ class ReportController extends Controller
 
     private function commissionBaseExpressionBindings(array $column): array
     {
-        $repeat = ! empty($column['sell_qty_thresholds']) ? 4 : 1;
-
-        return collect(range(1, $repeat))
-            ->flatMap(fn () => $column['values'])
-            ->values()
-            ->all();
+        return $column['values'];
     }
 
     private function commissionRawExpression(array $column, array $lineExpressions): string
