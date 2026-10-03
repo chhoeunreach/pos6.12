@@ -232,14 +232,27 @@
         }
         $colList[] = ['id' => 'total_payment', 'label' => $t('total_payment'), 'default' => true];
     } else {
-        $colList[] = ['id' => 'cashier_user', 'label' => $t('cashier_user'), 'default' => true];
         $colList[] = ['id' => 'business_location_qty', 'label' => $t('business_location_qty'), 'default' => true];
+        $colList[] = ['id' => 'total_price', 'label' => $t('total_price'), 'default' => true];
         foreach ($report['payment_columns'] as $m) {
             $colList[] = ['id' => 'pay_' . $m, 'label' => $paymentLabel($m), 'default' => true];
         }
         $colList[] = ['id' => 'total', 'label' => $t('total'), 'default' => true];
-        $colList[] = ['id' => 'due', 'label' => $t('due'), 'default' => false];
+        $colList[] = ['id' => 'due', 'label' => $t('due'), 'default' => true];
     }
+    $dashboardRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($locationRow) {
+        return collect($locationRow['customer_groups'] ?? [])->values()->map(function ($row) use ($locationRow) {
+            $row['location_name'] = $locationRow['location_name'] ?? 'N/A';
+            return $row;
+        });
+    })->merge(collect($report['module_dashboard_rows'] ?? [])->map(function ($row) {
+        $row['location_name'] = $row['label'];
+        $row['name'] = 'លក់';
+        $row['sort'] = 1;
+        return $row;
+    }))->sortBy(fn ($row) => sprintf('%02d-%s', (int) ($row['sort'] ?? 99), $row['location_name']))->values();
+    $dashboardDue = $dashboardRows->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
+        ->sum(fn ($row) => (float) ($row['due'] ?? 0));
 @endphp
 <body onload="initAndPrint()" class="{{ $themeClass }}">
     <div class="print-toolbar no-print">
@@ -417,8 +430,8 @@
             <table>
                 <thead>
                     <tr>
-                        <th data-col="cashier_user">{{ $t('cashier_user') }}</th>
                         <th data-col="business_location_qty">{{ $t('business_location_qty') }}</th>
+                        <th data-col="total_price" class="text-right">{{ $t('total_price') }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
                         @endforeach
@@ -427,31 +440,38 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($report['rows'] as $row)
+                    @php $lastDashboardGroup = null; @endphp
+                    @foreach($dashboardRows as $row)
+                        @if($lastDashboardGroup !== ($row['name'] ?? 'លក់'))
+                            <tr class="row-summary">
+                                <th colspan="{{ count($report['payment_columns']) + 4 }}">{{ $row['name'] ?? 'លក់' }}</th>
+                            </tr>
+                            @php $lastDashboardGroup = $row['name'] ?? 'លក់'; @endphp
+                        @endif
                         <tr class="row-sale">
-                            <td data-col="cashier_user" class="name-main">{{ $row['cashier_name'] }}</td>
-                            <td data-col="business_location_qty">{{ $row['location_qty_text'] }}</td>
+                            <td data-col="business_location_qty" class="name-main">{{ $row['location_name'] }} ({{ rtrim(rtrim(number_format((float) ($row['qty_total'] ?? 0), 2), '0'), '.') }})</td>
+                            <td data-col="total_price" class="text-right">{{ $fmt($row['total'] ?? null) }}</td>
                             @foreach($report['payment_columns'] as $method)
                                 <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                             @endforeach
-                            <td data-col="total" class="text-right">{{ $fmt($row['total']) }}</td>
-                            <td data-col="due" class="text-right @if($row['due'] != 0) due-negative @endif">{{ $fmt($row['due']) }}</td>
+                            <td data-col="total" class="text-right">{{ $fmt($row['paid'] ?? null) }}</td>
+                            <td data-col="due" class="text-right @if(! in_array((int) ($row['sort'] ?? 0), [2, 3], true) && ($row['due'] ?? 0) != 0) due-negative @endif">{{ in_array((int) ($row['sort'] ?? 0), [2, 3], true) ? '$ -' : $fmt($row['due'] ?? null) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tbody class="table-totals">
                     <tr class="row-total">
-                        <th data-col="cashier_user" class="text-right">{{ $t('grand_total') }}</th>
-                        <th data-col="business_location_qty"></th>
+                        <th data-col="business_location_qty" class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="total_price" class="text-right">{{ $fmt($report['grand_total']) }}</th>
                         @foreach($report['payment_columns'] as $method)
                             <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['payment_with_expenses'][$method] ?? null) }}</th>
                         @endforeach
-                        <th data-col="total" class="text-right">{{ $fmt($report['grand_total']) }}</th>
-                        <th data-col="due" class="text-right @if($report['grand_due'] != 0) due-negative @endif">{{ $fmt($report['grand_due']) }}</th>
+                        <th data-col="total" class="text-right">{{ $fmt($report['grand_paid']) }}</th>
+                        <th data-col="due" class="text-right @if($dashboardDue != 0) due-negative @endif">{{ $fmt($dashboardDue) }}</th>
                     </tr>
                     <tr class="row-summary">
-                        <th data-col="cashier_user" class="text-right">{{ $t('expenses') }}</th>
-                        <th data-col="business_location_qty"></th>
+                        <th data-col="business_location_qty" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="total_price" class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['expense_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
@@ -459,13 +479,13 @@
                         <th data-col="due" class="text-right">$ -</th>
                     </tr>
                     <tr class="row-summary">
-                        <th data-col="cashier_user" class="text-right">{{ $t('actual_income') }}</th>
-                        <th data-col="business_location_qty"></th>
+                        <th data-col="business_location_qty" class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="total_price" class="text-right">$ -</th>
                         @foreach($report['payment_columns'] as $method)
                             <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
                         <th data-col="total" class="text-right">{{ $fmt($report['grand_actual_income'] ?? null) }}</th>
-                        <th data-col="due" class="text-right @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</th>
+                        <th data-col="due" class="text-right @if($dashboardDue != 0) due-negative @endif">{{ $fmt($dashboardDue) }}</th>
                     </tr>
                 </tbody>
             </table>

@@ -234,38 +234,7 @@
 
             return $amount;
         };
-        $moduleDashboardSummary = function ($rows, $tabTarget) use ($report, $filters) {
-            $rows = collect($rows ?? []);
-
-            return $rows
-                ->groupBy(fn ($row) => (string) ($row['location_name'] ?? 'N/A'))
-                ->map(function ($locationRows, $locationName) use ($tabTarget, $report, $filters) {
-                    $payments = [];
-                    foreach ($report['payment_columns'] as $method) {
-                        $payments[$method] = $locationRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
-                    }
-
-                    return [
-                        'label' => $locationName,
-                        'tab_target' => $tabTarget,
-                        'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
-                            ? $locationRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
-                            : $locationRows->pluck('transaction_id')->filter()->unique()->count(),
-                        'total' => $locationRows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
-                        'paid' => $locationRows->sum(fn ($row) => (float) ($row['paid'] ?? 0)),
-                        'due' => $locationRows->sum(fn ($row) => (float) ($row['due'] ?? 0)),
-                        'payments' => $payments,
-                    ];
-                })
-                ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
-                ->values()
-                ->all();
-        };
-        $moduleDashboardRows = collect()
-            ->merge($moduleDashboardSummary($accessorySaleRows, '#accessory_sales_detail_tab'))
-            ->merge($moduleDashboardSummary($serviceSaleRows, '#service_sales_detail_tab'))
-            ->values()
-            ->all();
+        $moduleDashboardRows = $report['module_dashboard_rows'] ?? [];
     @endphp
     <div class="local-filter-wrap">
         <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-sm local-filter-reset">

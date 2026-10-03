@@ -1061,8 +1061,33 @@ class LocalCashierReportController extends Controller
             $groupedDetailRows[] = $row;
         }
         $collectionPaymentDetailRows = $this->normalizeCollectionPaymentRows($loanPaymentData['detail_rows'] ?? [], $paymentColumns, $cashierMap, $locationMap, $paymentTypes);
+        $moduleDashboardRows = collect();
+        foreach (['#accessory_sales_detail_tab' => $accessorySaleSummaryRows, '#service_sales_detail_tab' => $serviceSaleSummaryRows] as $tabTarget => $moduleRows) {
+            $moduleDashboardRows = $moduleDashboardRows->merge(
+                collect($moduleRows)->groupBy(fn ($row) => (string) ($row['location_name'] ?? 'N/A'))
+                    ->map(function ($rows, $locationName) use ($tabTarget, $filters, $paymentColumns) {
+                        $payments = [];
+                        foreach ($paymentColumns as $method) {
+                            $payments[$method] = $rows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0));
+                        }
+
+                        return [
+                            'label' => $locationName,
+                            'tab_target' => $tabTarget,
+                            'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
+                                ? $rows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
+                                : $rows->pluck('transaction_id')->filter()->unique()->count(),
+                            'total' => $rows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
+                            'paid' => $rows->sum(fn ($row) => (float) ($row['paid'] ?? 0)),
+                            'due' => $rows->sum(fn ($row) => (float) ($row['due'] ?? 0)),
+                            'payments' => $payments,
+                        ];
+                    })->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)->values()
+            );
+        }
 
         return [
+            'module_dashboard_rows' => $moduleDashboardRows->values()->all(),
             'rows' => $rows,
             'rows_by_location' => $locationRows,
             'payment_columns' => $paymentColumns,
