@@ -262,8 +262,16 @@ class HrSellController extends Controller
                 ->when($request->filled('end_date'), fn ($q) => $q->where('sor.created_at', '<=', $request->input('end_date') . ' 23:59:59'))
                 ->when($request->filled('branch_name'), fn ($q) => $q->whereRaw('TRIM(sor.branch_name) = ?', [$request->input('branch_name')]))
                 ->when($request->filled('sell_type'), function ($q) use ($request) {
-                    $sellType = $request->input('sell_type');
-                    $q->whereIn('sor.service_type', $this->sellTypeValues($sellType));
+                    $sellTypes = collect((array) $request->input('sell_type', []))
+                        ->filter(fn ($type) => is_string($type) && trim($type) !== '')
+                        ->flatMap(fn ($type) => $this->sellTypeValues($type))
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    if ($sellTypes) {
+                        $q->whereIn('sor.service_type', $sellTypes);
+                    }
                 })
                 ->when($request->filled('seller_key'), function ($q) use ($request) {
                     $sellerKey = $request->input('seller_key');

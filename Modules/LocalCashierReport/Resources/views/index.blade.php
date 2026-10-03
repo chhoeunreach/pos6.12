@@ -533,30 +533,34 @@
             </thead>
             <tbody>
                 @php
-                    $dashboardCashierGroupRows = collect($report['rows'] ?? [])->flatMap(function ($cashierRow) {
-                        return collect($cashierRow['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($cashierRow) {
-                            $customerGroupRow['cashier_id'] = (int) ($cashierRow['cashier_id'] ?? 0);
-                            $customerGroupRow['cashier_name'] = (string) ($cashierRow['cashier_name'] ?? 'N/A');
+                    $dashboardLocationGroupRows = collect($report['rows_by_location'] ?? [])->flatMap(function ($locationRow) {
+                        return collect($locationRow['customer_groups'] ?? [])->values()->map(function ($customerGroupRow) use ($locationRow) {
+                            $customerGroupRow['location_id'] = (int) ($locationRow['location_id'] ?? 0);
+                            $customerGroupRow['location_name'] = (string) ($locationRow['location_name'] ?? 'N/A');
+                            $customerGroupRow['location_qty_text'] = (string) ($locationRow['location_name'] ?? 'N/A')
+                                . ' ('
+                                . rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.')
+                                . ')';
                             return $customerGroupRow;
                         });
                     })->sortBy(function ($customerGroupRow) {
                         $name = trim((string) ($customerGroupRow['name'] ?? 'លក់'));
                         $groupSort = ['លក់' => 1, 'អ៊ីអន' => 2, 'រំលស់' => 3, 'Collection Payment' => 4, 'Customer Payment' => 5][$name] ?? (int) ($customerGroupRow['sort'] ?? 99);
-                        return sprintf('%02d-%s-%s', $groupSort, $customerGroupRow['cashier_name'] ?? '', $customerGroupRow['location_qty_text'] ?? '');
+                        return sprintf('%02d-%s', $groupSort, $customerGroupRow['location_name'] ?? '');
                     })->values();
-                    $dashboardDueTotal = $dashboardCashierGroupRows
+                    $dashboardDueTotal = $dashboardLocationGroupRows
                         ->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
                         ->sum(fn ($row) => (float) ($row['due'] ?? 0));
-                    $hasNormalDashboardGroup = $dashboardCashierGroupRows
+                    $hasNormalDashboardGroup = $dashboardLocationGroupRows
                         ->contains(fn ($row) => (int) ($row['sort'] ?? 0) === 1);
                     $lastDashboardCustomerGroup = null;
                 @endphp
-                @forelse($dashboardCashierGroupRows as $customerGroupRow)
+                @forelse($dashboardLocationGroupRows as $customerGroupRow)
                     @php
                         $dashboardCustomerGroup = (string) ($customerGroupRow['name'] ?? 'លក់');
                         $dashboardDetailQuery = array_merge($baseQuery, [
                             'style_mode' => 'classic_plain',
-                            'user_ids' => [(int) ($customerGroupRow['cashier_id'] ?? 0)],
+                            'location_ids' => [(int) ($customerGroupRow['location_id'] ?? 0)],
                             'customer_group' => $dashboardCustomerGroup,
                         ]);
                     @endphp
@@ -593,7 +597,7 @@
                             </td>
                         </tr>
                         @php
-                            $nextDashboardCustomerGroup = $dashboardCashierGroupRows->get($loop->index + 1);
+                            $nextDashboardCustomerGroup = $dashboardLocationGroupRows->get($loop->index + 1);
                             $isLastNormalDashboardGroup = (int) ($customerGroupRow['sort'] ?? 0) === 1
                                 && (int) data_get($nextDashboardCustomerGroup, 'sort', 0) !== 1;
                         @endphp

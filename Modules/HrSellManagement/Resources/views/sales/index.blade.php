@@ -4,6 +4,7 @@
     $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key');
     $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
     $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
+    $selectedSellTypes = array_map('strval', (array) request('sell_type', []));
 @endphp
 @section('module_content')
 <style>
@@ -134,7 +135,7 @@
 <div class="col-md-3"><div class="form-group"><label>Date Range:</label><div class="input-group"><span class="input-group-addon"><i class="fa fa-calendar"></i></span><input type="text" id="hr_sell_date_range" class="form-control" readonly placeholder="{{ __('lang_v1.select_a_date_range') }}" value="{{ request('start_date') && request('end_date') ? request('start_date') . ' ~ ' . request('end_date') : '' }}"></div><input type="hidden" name="start_date" id="hr_sell_start_date" value="{{ request('start_date') }}"><input type="hidden" name="end_date" id="hr_sell_end_date" value="{{ request('end_date') }}"></div></div>
 </div>
 <div class="row">
-<div class="col-md-3"><div class="form-group"><label>Sell Type:</label><select name="sell_type" class="form-control select2"><option value="">All</option>@foreach($hrSellTypes as $type => $name)<option value="{{ $type }}" @selected((string) request('sell_type') === (string) $type)>{{ $name }}</option>@endforeach</select></div></div>
+<div class="col-md-3"><div class="form-group"><label>Sell Type:</label><select name="sell_type[]" class="form-control select2" multiple data-placeholder="All">@foreach($hrSellTypes as $type => $name)<option value="{{ $type }}" @selected(in_array((string) $type, $selectedSellTypes, true))>{{ $name }}</option>@endforeach</select></div></div>
 <div class="col-md-9"><div class="hr-sell-filter-actions"><button class="btn btn-primary"><i class="fa fa-filter"></i> Filter</button> <a class="btn btn-default" href="{{ route('hr-sell.sales.index') }}">Reset</a></div></div>
 </div>
 </form>
@@ -162,14 +163,14 @@
 <span class="text-muted" style="margin-left: 5px;">records</span>
 </form>
 </div>
-<table class="table table-bordered table-striped" id="pos_hr_sell_table"><thead><tr><th>Invoice</th><th>Date</th><th>Branch</th><th>Customer</th><th>Phone</th><th>Seller</th><th>Type</th><th>Total</th><th>Action</th></tr></thead><tbody>
+<table class="table table-bordered table-striped" id="pos_hr_sell_table"><thead><tr><th>Invoice</th><th>Date</th><th>Branch</th><th>Customer</th><th>Phone Number</th><th>Seller</th><th>Type</th><th>Total</th><th>Action</th></tr></thead><tbody>
 @forelse($posHrSales as $sale)
 <tr>
 <td>{{ $sale->invoice_no }}</td>
 <td>{{ $sale->created_at }}</td>
 <td>{{ $sale->branch_name }}</td>
 <td>{{ $sale->customer_name }}</td>
-<td>{{ $sale->customer_phone }}</td>
+<td class="text-nowrap">{{ $sale->customer_phone ?: '-' }}</td>
 <td>{{ $sale->staff_name ?: $sale->seller_name }} @if(! empty($sale->staff_code))<small class="text-muted">({{ $sale->staff_code }})</small>@endif</td>
 <td>{{ $sale->service_type_label ?? $sale->service_type }}</td>
 <td>{{ number_format((float) $sale->total_amount, 2) }}</td>
