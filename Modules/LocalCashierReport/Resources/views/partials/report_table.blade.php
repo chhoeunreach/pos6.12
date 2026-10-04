@@ -1,10 +1,14 @@
+@php
+    $currentReportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
+    $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $currentReportLang);
+@endphp
 <div class="box box-solid" style="font-family: {{ $khmerFontFamily ?? "'KhmerFont', 'Noto Sans Khmer', sans-serif" }};">
     <div class="box-body table-responsive">
         @if(!empty($isPdf))
-            <h3 style="margin:0 0 10px 0;">Local Cashier Report</h3>
+            <h3 style="margin:0 0 10px 0;">{{ $t('local_cashier_report') }}</h3>
             <table width="100%" border="1" cellspacing="0" cellpadding="4" style="border-collapse: collapse; margin-bottom: 10px;">
                 <tr style="background:#ffe65a;">
-                    <th>Total Sale</th><th>Total Paid</th><th>Total Due</th><th>Total Discount</th><th>Total Qty Sold</th>
+                    <th>{{ $t('total_sale') }}</th><th>{{ $t('total_paid') }}</th><th>{{ $t('total_due') }}</th><th>{{ $t('total_discount') }}</th><th>{{ $t('total_qty_sold') }}</th>
                 </tr>
                 <tr>
                     <td>{{ $currencySymbol }}{{ number_format(data_get($summary, 'cards.total_sale', 0), 2) }}</td>
@@ -19,7 +23,7 @@
         <table class="table table-bordered table-striped ajax_view" id="local_cashier_report_table" width="100%">
             <thead>
                 <tr>
-                    <th>@lang('messages.action')</th><th>Date</th><th>Invoice No</th><th>Cashier/User</th><th>Location</th><th>SKU</th><th>Product Name</th><th>Quantity</th><th>Unit Price</th><th>Line Total</th><th>Discount</th><th>Total Paid</th><th>{{ $paymentLabels['cash'] ?? 'Cash' }}</th><th>{{ $paymentLabels['aba'] ?? 'ABA' }}</th><th>{{ $paymentLabels['acleda'] ?? 'ACLEDA' }}</th><th>{{ $paymentLabels['wing'] ?? 'WING' }}</th><th>{{ $paymentLabels['e_and_t'] ?? 'E&T' }}</th><th>{{ $paymentLabels['card'] ?? 'Card' }}</th><th>{{ $paymentLabels['other'] ?? 'Other' }}</th><th>Due</th>
+                    <th>{{ $t('action') }}</th><th>{{ $t('date') }}</th><th>{{ $t('invoice_no') }}</th><th>{{ $t('cashier_user') }}</th><th>{{ $t('location') }}</th><th>{{ $t('sku') }}</th><th>{{ $t('product_name') }}</th><th>{{ $t('quantity') }}</th><th>{{ $t('unit_price') }}</th><th>{{ $t('line_total') }}</th><th>{{ $t('discount') }}</th><th>{{ $t('total_paid') }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('cash', (string) ($paymentLabels['cash'] ?? 'Cash')) }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('aba', (string) ($paymentLabels['aba'] ?? 'ABA')) }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('acleda', (string) ($paymentLabels['acleda'] ?? 'ACLEDA')) }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('wing', (string) ($paymentLabels['wing'] ?? 'WING')) }}</th><th>{{ $paymentLabels['e_and_t'] ?? 'E&T' }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('card', (string) ($paymentLabels['card'] ?? 'Card')) }}</th><th>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment('other', (string) ($paymentLabels['other'] ?? 'Other')) }}</th><th>{{ $t('due') }}</th>
                 </tr>
             </thead>
             @if(!empty($isPdf))

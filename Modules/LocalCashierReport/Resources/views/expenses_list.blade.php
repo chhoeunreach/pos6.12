@@ -1,7 +1,19 @@
 @extends('layouts.app')
-@section('title', 'Expenses list')
+@php
+    $currentReportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
+    $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $currentReportLang);
+@endphp
+@section('title', $t('expenses_list'))
 
 @section('content')
+<style>
+    @font-face {
+        font-family: 'KhmerFont';
+        src: url('{{ asset("fonts/khmer/NotoSansKhmer-Regular.ttf") }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+    }
+</style>
 @php
     $fmt = function ($value) {
         if ($value === null || abs((float) $value) < 0.00001) {
@@ -37,24 +49,24 @@
 <!-- Content Header (Page header) -->
 <section class="content-header no-print">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">
-        Expenses list
-        <small class="tw-text-sm md:tw-text-base tw-text-gray-700 tw-font-semibold">Copied from Local Cashier Report</small>
+        {{ $t('expenses_list') }}
     </h1>
 </section>
 
 <!-- Main content -->
 <section class="content no-print" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
     <div class="local-filter-wrap">
-        <a href="{{ route('local-cashier-report.expenses-list') }}" class="btn btn-sm local-filter-reset">
-            <i class="fa fa-refresh"></i> Reset
+        <a href="{{ route('local-cashier-report.expenses-list', ['report_lang' => $currentReportLang]) }}" class="btn btn-sm local-filter-reset">
+            <i class="fa fa-refresh"></i> {{ $t('reset') }}
         </a>
     </div>
 
-    @component('components.filters', ['title' => __('report.filters')])
-        <form method="get" action="{{ route('local-cashier-report.expenses-list') }}" class="row" id="expenses_filter_form">
+    @component('components.filters', ['title' => $t('filters')])
+        <form method="get" action="{{ route('local-cashier-report.expenses-list', ['report_lang' => $currentReportLang]) }}" class="row" id="expenses_filter_form">
+            <input type="hidden" name="report_lang" value="{{ $currentReportLang }}">
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Date Range</label>
+                    <label>{{ $t('date_range') }}</label>
                     <input type="text" id="date_range_picker" class="form-control" readonly>
                     <input type="hidden" name="start_date" id="start_date" value="{{ $filters['start_date'] }}">
                     <input type="hidden" name="end_date" id="end_date" value="{{ $filters['end_date'] }}">
@@ -63,11 +75,11 @@
 
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Business Location</label>
+                    <label>{{ $t('business_location') }}</label>
                     <input type="text" id="location_preview" class="form-control" readonly
                            value="{{ $locations->whereIn('id', $filters['location_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#location_modal" style="margin-top:6px;">
-                        Select Locations
+                        {{ $t('select_locations') }}
                     </button>
                     <select name="location_ids[]" id="location_ids_hidden" class="form-control" multiple style="display:none;">
                         @foreach($locations as $location)
@@ -79,11 +91,11 @@
 
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Cashier / User</label>
+                    <label>{{ $t('cashier_user') }}</label>
                     <input type="text" id="cashier_preview" class="form-control" readonly
                            value="{{ $cashiers->whereIn('id', $filters['user_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#cashier_modal" style="margin-top:6px;">
-                        Select Cashiers
+                        {{ $t('select_cashiers') }}
                     </button>
                     <select name="user_ids[]" id="user_ids_hidden" class="form-control" multiple style="display:none;">
                         @foreach($cashiers as $cashier)
@@ -95,9 +107,9 @@
 
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Expense Category</label>
+                    <label>{{ $t('expense_category') }}</label>
                     <select name="expense_category_id" id="expense_category_id" class="form-control select2" style="width: 100%;">
-                        <option value="">All categories</option>
+                        <option value="">{{ $t('all_categories') }}</option>
                         @foreach($categories as $catId => $catName)
                             <option value="{{ $catId }}" @if(($filters['expense_category_id'] ?? null) == $catId) selected @endif>{{ $catName }}</option>
                         @endforeach
@@ -109,11 +121,11 @@
 
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Payment Status</label>
+                    <label>{{ $t('payment_status') }}</label>
                     <select name="payment_status" id="payment_status" class="form-control select2" style="width: 100%;">
-                        <option value="">All payment statuses</option>
+                        <option value="">{{ $t('all_payment_statuses') }}</option>
                         @foreach($paymentStatuses as $status)
-                            <option value="{{ $status }}" @if(($filters['payment_status'] ?? '') === $status) selected @endif>{{ ucfirst($status) }}</option>
+                            <option value="{{ $status }}" @if(($filters['payment_status'] ?? '') === $status) selected @endif>{{ $t($status) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -121,10 +133,10 @@
 
             <div class="col-md-3 col-sm-6" style="margin-top: 24px;">
                 <button type="submit" class="btn btn-primary">
-                    <i class="fa fa-filter"></i> Apply Filters
+                    <i class="fa fa-filter"></i> {{ $t('apply_filters') }}
                 </button>
-                <a href="{{ route('local-cashier-report.expenses-list') }}" class="btn btn-default">
-                    Reset
+                <a href="{{ route('local-cashier-report.expenses-list', ['report_lang' => $currentReportLang]) }}" class="btn btn-default">
+                    {{ $t('reset') }}
                 </a>
             </div>
         </form>
@@ -133,19 +145,19 @@
     <!-- KPI Summary Grid -->
     <div class="summary-kpi-grid">
         <div class="summary-kpi-card">
-            <div class="kpi-label">Total Expenses</div>
+            <div class="kpi-label">{{ $t('total_expenses') }}</div>
             <div class="kpi-value">{{ $fmt($summary['total_amount'] ?? 0) }}</div>
         </div>
         <div class="summary-kpi-card">
-            <div class="kpi-label">Total Paid</div>
+            <div class="kpi-label">{{ $t('total_paid') }}</div>
             <div class="kpi-value">{{ $fmt($summary['total_paid'] ?? 0) }}</div>
         </div>
         <div class="summary-kpi-card">
-            <div class="kpi-label">Total Due</div>
+            <div class="kpi-label">{{ $t('total_due') }}</div>
             <div class="kpi-value">{{ $fmt($summary['total_due'] ?? 0) }}</div>
         </div>
         <div class="summary-kpi-card">
-            <div class="kpi-label">Expense Count</div>
+            <div class="kpi-label">{{ $t('expense_count') }}</div>
             <div class="kpi-value">{{ number_format($summary['displayed_count'] ?? 0) }} / {{ number_format($summary['total_count'] ?? 0) }}</div>
         </div>
     </div>
@@ -154,47 +166,47 @@
     <div class="box box-solid">
         <div class="box-header with-border">
             <h3 class="box-title" style="font-weight: 700;">
-                <i class="fa fa-list-alt text-primary"></i> Expenses List
+                <i class="fa fa-list-alt text-primary"></i> {{ $t('expenses_list') }}
             </h3>
             <div class="box-tools pull-right">
                 <span class="badge bg-primary" style="font-size: 13px; padding: 6px 12px; border-radius: 999px;">
-                    {{ number_format($summary['displayed_count'] ?? 0) }} entries
+                    {{ number_format($summary['displayed_count'] ?? 0) }} {{ $t('rows') }}
                 </span>
             </div>
         </div>
         <div class="box-body">
             <div class="sale-table-filter-toggle">
                 <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_expenses_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_expenses_detail_table_filters">
-                    <i class="fa fa-filter"></i> Filters
+                    <i class="fa fa-filter"></i> {{ $t('filters') }}
                 </button>
             </div>
             <div class="collapse" id="local_cashier_expenses_detail_table_filters">
                 <div class="row all-sale-table-filters">
                     <div class="col-md-3 col-sm-6">
                         <div class="form-group">
-                            <label>Location</label>
-                            <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All locations">
+                            <label>{{ $t('location') }}</label>
+                            <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                 @foreach($expenseLocations as $locationName)
                                     <option value="{{ $locationName }}">{{ $locationName }}</option>
                                 @endforeach
                             </select>
                             <div class="all-sale-filter-actions">
-                                <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
-                                <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('select_all') }}</button>
+                                <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('clear') }}</button>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-sm-6">
                         <div class="form-group">
-                            <label>Cashier / User</label>
-                            <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All cashiers">
+                            <label>{{ $t('cashier_user') }}</label>
+                            <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                 @foreach($expenseCashiers as $cashierName)
                                     <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                 @endforeach
                             </select>
                             <div class="all-sale-filter-actions">
-                                <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
-                                <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('select_all') }}</button>
+                                <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('clear') }}</button>
                             </div>
                         </div>
                     </div>
@@ -205,21 +217,21 @@
                 <table class="table table-bordered table-striped ajax_view" id="local_cashier_expenses_detail_table" style="width:100%;">
                     <thead>
                         <tr>
-                            <th>Action</th>
-                            <th>Date</th>
-                            <th>Ref No</th>
-                            <th class="all-sale-cashier-column">Cashier/User</th>
-                            <th>Expense For</th>
-                            <th class="all-sale-location-column">Location</th>
-                            <th>Category</th>
-                            <th>Payment Status</th>
+                            <th>{{ $t('action') }}</th>
+                            <th>{{ $t('date') }}</th>
+                            <th>{{ $t('ref_no') }}</th>
+                            <th class="all-sale-cashier-column">{{ $t('cashier_user') }}</th>
+                            <th>{{ $t('expense_for') }}</th>
+                            <th class="all-sale-location-column">{{ $t('location') }}</th>
+                            <th>{{ $t('category') }}</th>
+                            <th>{{ $t('payment_status') }}</th>
                             @foreach($staticPaymentColumns as $column)
-                                <th class="text-right">{{ $column['label'] ?? '' }}</th>
+                                <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($column['key'] ?? ''), (string) ($column['label'] ?? '')) }}</th>
                             @endforeach
-                            <th class="text-right">Amount</th>
-                            <th class="text-right">Paid</th>
-                            <th class="text-right">Due</th>
-                            <th>Note</th>
+                            <th class="text-right">{{ $t('amount') }}</th>
+                            <th class="text-right">{{ $t('paid') }}</th>
+                            <th class="text-right">{{ $t('due') }}</th>
+                            <th>{{ $t('note') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -230,7 +242,7 @@
                                         <a class="btn btn-xs btn-primary action-icon-btn action-edit"
                                            href="{{ action([\App\Http\Controllers\ExpenseController::class, 'edit'], [$row['transaction_id']]) }}"
                                            target="_blank"
-                                           title="Edit Expense">
+                                           title="{{ $t('edit_expense') }}">
                                             <i class="fas fa-pen"></i>
                                         </a>
                                     @endcan
@@ -241,7 +253,7 @@
                                 <td>{{ $row['expense_for_name'] }}</td>
                                 <td>{{ $row['location_name'] }}</td>
                                 <td>{{ $row['category_name'] }}</td>
-                                <td>{{ ucfirst($row['payment_status']) }}</td>
+                                <td>{{ $t($row['payment_status']) }}</td>
                                 @foreach($staticPaymentColumns as $column)
                                     <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
                                 @endforeach
@@ -260,7 +272,7 @@
                                     $expensePaymentStaticTotals[$column['key'] ?? ''] = $expenseRows->sum(fn ($row) => $staticPaymentAmount($row, $column));
                                 }
                             @endphp
-                            <th colspan="8" class="text-right">Total</th>
+                            <th colspan="8" class="text-right">{{ $t('total') }}</th>
                             @foreach($staticPaymentColumns as $column)
                                 <th class="text-right">{{ $fmt($expensePaymentStaticTotals[$column['key'] ?? ''] ?? 0) }}</th>
                             @endforeach
@@ -283,14 +295,14 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="locationModalLabel">Select Business Locations</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="locationModalLabel">{{ $t('select_business_locations') }}</h4>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom:10px;">
-                    <button type="button" class="btn btn-xs btn-primary" id="select_all_locations">Select All</button>
-                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_locations">Deselect All</button>
-                    <input type="text" id="location_search" class="form-control input-sm pull-right" style="width:200px; display:inline-block;" placeholder="Search location...">
+                    <button type="button" class="btn btn-xs btn-primary" id="select_all_locations">{{ $t('select_all') }}</button>
+                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_locations">{{ $t('deselect_all') }}</button>
+                    <input type="text" id="location_search" class="form-control input-sm pull-right" style="width:200px; display:inline-block;" placeholder="{{ $t('search_location') }}">
                 </div>
                 <div style="max-height:350px; overflow-y:auto;">
                     @foreach($locations as $location)
@@ -305,8 +317,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="apply_locations">Apply</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-primary" id="apply_locations">{{ $t('apply') }}</button>
             </div>
         </div>
     </div>
@@ -317,14 +329,14 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="cashierModalLabel">Select Cashiers / Users</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="cashierModalLabel">{{ $t('select_cashiers_users') }}</h4>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom:10px;">
-                    <button type="button" class="btn btn-xs btn-primary" id="select_all_cashiers">Select All</button>
-                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_cashiers">Deselect All</button>
-                    <input type="text" id="cashier_search" class="form-control input-sm pull-right" style="width:200px; display:inline-block;" placeholder="Search cashier...">
+                    <button type="button" class="btn btn-xs btn-primary" id="select_all_cashiers">{{ $t('select_all') }}</button>
+                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_cashiers">{{ $t('deselect_all') }}</button>
+                    <input type="text" id="cashier_search" class="form-control input-sm pull-right" style="width:200px; display:inline-block;" placeholder="{{ $t('search_cashier') }}">
                 </div>
                 <div style="max-height:350px; overflow-y:auto;">
                     @foreach($cashiers as $cashier)
@@ -339,8 +351,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="apply_cashiers">Apply</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-primary" id="apply_cashiers">{{ $t('apply') }}</button>
             </div>
         </div>
     </div>
@@ -350,7 +362,8 @@
 @section('javascript')
 <script>
     $(function () {
-        $('#local_cashier_report_app .select2').select2();
+        @include('localcashierreport::partials.table_language')
+        $('#local_cashier_report_app .select2').select2({ language: reportSelect2Language });
 
         const $startDate = $('#start_date');
         const $endDate = $('#end_date');
@@ -359,7 +372,8 @@
         const end = $endDate.val() ? moment($endDate.val(), 'YYYY-MM-DD') : moment();
 
         $dr.daterangepicker(
-            $.extend(true, {}, dateRangeSettings, {
+            $.extend(true, {}, $.extend({}, dateRangeSettings, { ranges: reportDateRanges }), reportDateSettings, {
+                ranges: reportDateRanges,
                 startDate: start,
                 endDate: end
             }),
@@ -463,7 +477,7 @@
 
             var button = {
                 extend: 'copy',
-                text: 'Copy',
+                text: @json($t('copy')),
                 className: 'btn btn-sm btn-outline-primary',
                 exportOptions: localCashierCopyExportOptions(options.columns || ':visible')
             };
@@ -485,18 +499,12 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 buttons: [
                     localCashierCopyButton({
                         withoutHeader: true,
@@ -504,11 +512,11 @@
                             return index !== 0 && $(node).is(':visible');
                         }
                     }),
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -572,7 +580,7 @@
         $(document).on('shown.bs.collapse hidden.bs.collapse', '#local_cashier_expenses_detail_table_filters', function () {
             var isOpen = $(this).hasClass('in');
             var $button = $('[data-toggle="collapse"][data-target="#' + this.id + '"]');
-            $button.html('<i class="fa fa-filter"></i> ' + (isOpen ? 'Hide filters' : 'Filters'));
+            $button.html('<i class="fa fa-filter"></i> ' + (isOpen ? @json($t('hide_filters')) : @json($t('filters'))));
         });
     });
 </script>

@@ -4,6 +4,7 @@ namespace Modules\LocalCashierReport\Http\Controllers;
 
 use Illuminate\Routing\Controller;
 use Menu;
+use Modules\LocalCashierReport\Support\ReportLanguage;
 
 class DataController extends Controller
 {
@@ -12,7 +13,7 @@ class DataController extends Controller
         return [
             [
                 'value' => 'local_cashier_report.view',
-                'label' => 'Local Cashier Report (view)',
+                'label' => ReportLanguage::text('permission_view'),
                 'default' => false,
             ],
         ];
@@ -42,7 +43,7 @@ class DataController extends Controller
                 if ($canViewLocalCashier) {
                     $reports->url(
                         route('local-cashier-report.index'),
-                        'Local Cashier Report',
+                        ReportLanguage::text('local_cashier_report'),
                         ['icon' => '', 'active' => $isLocalCashierActive]
                     )->order(999);
                 }
@@ -50,7 +51,7 @@ class DataController extends Controller
                 if ($canViewExpense) {
                     $reports->url(
                         route('local-cashier-report.expenses-list'),
-                        'Expenses list',
+                        ReportLanguage::text('expenses_list'),
                         ['icon' => '', 'active' => $isExpensesListActive]
                     )->order(1000);
                 }
@@ -61,7 +62,7 @@ class DataController extends Controller
             if ($canViewLocalCashier) {
                 $menu->url(
                     route('local-cashier-report.index'),
-                    'Local Cashier Report',
+                    ReportLanguage::text('local_cashier_report'),
                     ['icon' => 'fa fa-file-text-o', 'active' => $isLocalCashierActive]
                 )->order(999);
             }
@@ -69,7 +70,7 @@ class DataController extends Controller
             if ($canViewExpense) {
                 $menu->url(
                     route('local-cashier-report.expenses-list'),
-                    'Expenses list',
+                    ReportLanguage::text('expenses_list'),
                     ['icon' => 'fa fa-money', 'active' => $isExpensesListActive]
                 )->order(1000);
             }

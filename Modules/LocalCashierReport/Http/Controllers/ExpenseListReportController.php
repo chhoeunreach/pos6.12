@@ -289,6 +289,7 @@ class ExpenseListReportController extends Controller
 
         return DB::table('business_locations')
             ->where('business_id', $businessId)
+            ->where('is_active', 1)
             ->when($permitted !== 'all', function ($query) use ($permitted) {
                 $query->whereIn('id', (array) $permitted);
             })

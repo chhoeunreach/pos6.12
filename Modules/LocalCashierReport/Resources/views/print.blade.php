@@ -1,136 +1,7 @@
 @php
-    $reportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
-    $translations = [
-        'en' => [
-            'local_cashier_report' => 'Cashier Report',
-            'business' => 'Business',
-            'date_range' => 'Date Range',
-            'locations' => 'Locations',
-            'style_option' => 'Style Option',
-            'generated' => 'Generated',
-            'all' => 'All',
-            'view_report' => 'View Report',
-            'business_location_report' => 'Business Location Report',
-            'old_dashboard' => 'Dashboard',
-            'cashier_user' => 'Cashier/User',
-            'business_location' => 'Business Location',
-            'business_location_qty' => 'Business Location (Qty)',
-            'expenses' => 'Expenses',
-            'actual_income' => 'Actual Income',
-            'actual_total_income' => 'Actual Total Income (Paid - Expenses - Sell Return)',
-            'due' => 'Due',
-            'total_paid' => 'Total Paid',
-            'total_payment' => 'Total Payment',
-            'grand_total' => 'Grand Total',
-            'total' => 'Total',
-            'summary' => 'Summary',
-            'summary_by_user' => 'Summary by User/Cashier',
-            'summary_by_location' => 'Summary by Location',
-            'summary_by_brand' => 'Summary by Brand',
-            'summary_by_payment' => 'Summary by Payment Method',
-            'name' => 'Name',
-            'amount' => 'Amount',
-            'qty' => 'Qty',
-            'total_price' => 'Total Price',
-            'print' => 'Print',
-            'english' => 'English',
-            'khmer' => 'Khmer',
-            'cash' => 'Cash',
-            'card' => 'Card',
-            'other' => 'Other',
-            'cut' => 'Cut',
-            'monthly' => 'Monthly',
-        ],
-        'km' => [
-            'local_cashier_report' => 'របាយការណ៍បេឡាករ',
-            'business' => 'អាជីវកម្ម',
-            'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',
-            'locations' => 'ទីតាំង',
-            'style_option' => 'ជម្រើសបង្ហាញ',
-            'generated' => 'បានបង្កើត',
-            'all' => 'ទាំងអស់',
-            'view_report' => 'មើលរបាយការណ៍',
-            'business_location_report' => 'របាយការណ៍តាមទីតាំងអាជីវកម្ម',
-            'old_dashboard' => 'ផ្ទាំងសង្ខេប',
-            'cashier_user' => 'បេឡាករ/អ្នកប្រើ',
-            'business_location' => 'ទីតាំងអាជីវកម្ម',
-            'business_location_qty' => 'ទីតាំងអាជីវកម្ម (ចំនួន)',
-            'expenses' => 'ចំណាយ',
-            'actual_income' => 'ចំណូលជាក់ស្តែង',
-            'actual_total_income' => 'ចំណូលសរុបជាក់ស្តែង (ប្រាក់បានបង់ - ចំណាយ - ត្រឡប់លក់)',
-            'due' => 'ជំពាក់',
-            'total_paid' => 'បានបង់សរុប',
-            'total_payment' => 'ការទូទាត់សរុប',
-            'grand_total' => 'សរុបរួម',
-            'total' => 'សរុប',
-            'summary' => 'សេចក្តីសង្ខេប',
-            'summary_by_user' => 'សង្ខេបតាមបេឡាករ/អ្នកប្រើ',
-            'summary_by_location' => 'សង្ខេបតាមទីតាំង',
-            'summary_by_brand' => 'សង្ខេបតាមម៉ាក',
-            'summary_by_payment' => 'សង្ខេបតាមវិធីបង់ប្រាក់',
-            'name' => 'ឈ្មោះ',
-            'amount' => 'ចំនួនទឹកប្រាក់',
-            'qty' => 'ចំនួន',
-            'total_price' => 'តម្លៃសរុប',
-            'print' => 'បោះពុម្ព',
-            'english' => 'អង់គ្លេស',
-            'khmer' => 'ខ្មែរ',
-            'cash' => 'សាច់ប្រាក់',
-            'card' => 'កាត',
-            'other' => 'ផ្សេងៗ',
-            'cut' => 'កាត់',
-            'monthly' => 'បង់ប្រចាំខែ',
-        ],
-    ];
-    $t = fn ($key) => $translations[$reportLang][$key] ?? $translations['en'][$key] ?? $key;
-    $paymentLabel = function ($method) use ($report, $reportLang) {
-        $raw = (string) ($report['payment_labels'][$method] ?? $method);
-        $key = strtolower(trim((string) $method));
-        $rawLower = strtolower($raw);
-
-        if ($key === 'custom_pay_1' || strpos($rawLower, 'wing') !== false || strpos($raw, 'វីង') !== false) {
-            return $reportLang === 'km' ? 'វីង' : 'WING';
-        }
-        if ($key === 'custom_pay_2' || strpos($rawLower, 'aba') !== false || strpos($raw, 'អេប៊ីអេ') !== false) {
-            return $reportLang === 'km' ? 'អេប៊ីអេ' : 'ABA';
-        }
-        if ($key === 'custom_pay_3' || strpos($rawLower, 'acleda') !== false || strpos($raw, 'អេស៊ីលីដា') !== false) {
-            return $reportLang === 'km' ? 'អេស៊ីលីដា' : 'ACLEDA';
-        }
-        if ($key === 'custom_pay_4' || strpos($rawLower, 'true') !== false || strpos($raw, 'ទ្រូម៉ានី') !== false) {
-            return $reportLang === 'km' ? 'ទ្រូម៉ានី' : 'TRUE MONEY';
-        }
-        if ($key === 'custom_pay_5' || strpos($rawLower, 'emoney') !== false || strpos($rawLower, 'e-money') !== false || strpos($raw, 'អ៊ីម៉ានី') !== false) {
-            return $reportLang === 'km' ? 'អ៊ីម៉ានី' : 'E-MONEY';
-        }
-        if ($key === 'custom_pay_6' || strpos($raw, 'កាត់អីវ៉ាន់') !== false || strpos($rawLower, 'cut') !== false) {
-            return $reportLang === 'km' ? 'កាត់អីវ៉ាន់' : 'CUT';
-        }
-        if ($key === 'custom_pay_7' || strpos($raw, 'បង់ប្រចាំខែ') !== false || strpos($rawLower, 'monthly') !== false) {
-            return $reportLang === 'km' ? 'បង់ប្រចាំខែ' : 'MONTHLY';
-        }
-        if ($key === 'cash' || strpos($rawLower, 'cash') !== false || strpos($raw, 'សាច់ប្រាក់') !== false) {
-            return $reportLang === 'km' ? 'សាច់ប្រាក់' : 'CASH';
-        }
-        if ($key === 'card' || strpos($rawLower, 'card') !== false || strpos($raw, 'កាត') !== false) {
-            return $reportLang === 'km' ? 'កាត' : 'CARD';
-        }
-        if ($key === 'cheque' || strpos($rawLower, 'cheque') !== false || strpos($raw, 'សែក') !== false) {
-            return $reportLang === 'km' ? 'សែក' : 'CHEQUE';
-        }
-        if ($key === 'bank_transfer' || strpos($rawLower, 'bank') !== false || strpos($raw, 'ផ្ទេរប្រាក់') !== false) {
-            return $reportLang === 'km' ? 'ផ្ទេរប្រាក់' : 'BANK TRANSFER';
-        }
-        if ($key === 'other' || strpos($rawLower, 'other') !== false || strpos($raw, 'ផ្សេងៗ') !== false) {
-            return $reportLang === 'km' ? 'ផ្សេងៗ' : 'OTHER';
-        }
-
-        if (preg_match('/^([^\(]+)\s*\((.+)\)$/u', $raw, $matches)) {
-            return $reportLang === 'km' ? trim($matches[1]) : strtoupper(trim($matches[2]));
-        }
-
-        return $raw;
-    };
+    $reportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
+    $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $reportLang);
+    $paymentLabel = fn ($method) => \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) $method, (string) ($report['payment_labels'][$method] ?? $method));
     $languageQuery = function ($language) {
         return array_merge(request()->query(), ['report_lang' => $language]);
     };
@@ -259,15 +130,15 @@
         <button type="button" class="btn-print-main" onclick="window.print()">🖨️ {{ $t('print') }}</button>
         <div class="colvis-dropdown">
             <button type="button" class="btn-colvis" id="colvis_toggle_btn" onclick="toggleColvisMenu(event)">
-                👁️ {{ $reportLang === 'km' ? 'បង្ហាញ/លាក់ ជួរឈរ' : 'Column Visibility' }} ▾
+                👁️ {{ $t('column_visibility') }} ▾
             </button>
             <div class="colvis-menu" id="colvis_menu">
                 <div class="colvis-header">
-                    <strong>{{ $reportLang === 'km' ? 'ជួរឈរ' : 'Columns' }}</strong>
+                    <strong>{{ $t('columns') }}</strong>
                     <div class="colvis-actions">
-                        <button type="button" class="btn-xs" onclick="setAllColumns(true)">{{ $reportLang === 'km' ? 'ទាំងអស់' : 'All' }}</button>
-                        <button type="button" class="btn-xs" onclick="setAllColumns(false)">{{ $reportLang === 'km' ? 'លាក់' : 'None' }}</button>
-                        <button type="button" class="btn-xs" onclick="resetDefaultColumns()">{{ $reportLang === 'km' ? 'ដើម' : 'Reset' }}</button>
+                        <button type="button" class="btn-xs" onclick="setAllColumns(true)">{{ $t('all') }}</button>
+                        <button type="button" class="btn-xs" onclick="setAllColumns(false)">{{ $t('none') }}</button>
+                        <button type="button" class="btn-xs" onclick="resetDefaultColumns()">{{ $t('reset') }}</button>
                     </div>
                 </div>
                 <div class="colvis-list">
@@ -280,11 +151,11 @@
                 </div>
             </div>
         </div>
-        <select aria-label="Language" onchange="window.location.href = this.value">
-            <option value="{{ route('local-cashier-report.print', $languageQuery('en')) }}" @if($reportLang === 'en') selected @endif>English</option>
+        <select aria-label="{{ $t('language') }}" onchange="window.location.href = this.value">
+            <option value="{{ route('local-cashier-report.print', $languageQuery('en')) }}" @if($reportLang === 'en') selected @endif>{{ $t('english') }}</option>
             <option value="{{ route('local-cashier-report.print', $languageQuery('km')) }}" @if($reportLang === 'km') selected @endif>ខ្មែរ</option>
         </select>
-        <button type="button" class="btn-close-print" onclick="window.close()">✕ {{ $reportLang === 'km' ? 'បិទ' : 'Close' }}</button>
+        <button type="button" class="btn-close-print" onclick="window.close()">✕ {{ $t('close') }}</button>
     </div>
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
@@ -444,7 +315,7 @@
                     @foreach($dashboardRows as $row)
                         @if($lastDashboardGroup !== ($row['name'] ?? 'លក់'))
                             <tr class="row-summary">
-                                <th colspan="{{ count($report['payment_columns']) + 4 }}">{{ $row['name'] ?? 'លក់' }}</th>
+                                <th colspan="{{ count($report['payment_columns']) + 4 }}">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['name'] ?? 'លក់')) }}</th>
                             </tr>
                             @php $lastDashboardGroup = $row['name'] ?? 'លក់'; @endphp
                         @endif

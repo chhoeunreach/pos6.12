@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
+use Modules\LocalCashierReport\Support\ReportLanguage;
 
 class LocalCashierReportController extends Controller
 {
@@ -60,14 +61,14 @@ class LocalCashierReportController extends Controller
         $rows = [];
         foreach ($report['rows'] as $row) {
             $line = [
-                'Cashier/User' => $row['cashier_name'],
-                'Business Location (Qty)' => $row['location_qty_text'],
+                ReportLanguage::text('cashier_user') => $row['cashier_name'],
+                ReportLanguage::text('business_location_qty') => $row['location_qty_text'],
             ];
             foreach ($report['payment_columns'] as $method) {
-                $line[$report['payment_labels'][$method] ?? $method] = $this->formatCurrency($row['payments'][$method] ?? null);
+                $line[ReportLanguage::payment($method, (string) ($report['payment_labels'][$method] ?? $method))] = $this->formatCurrency($row['payments'][$method] ?? null);
             }
-            $line['Total'] = $this->formatCurrency($row['total']);
-            $line['Due'] = $this->formatCurrency($row['due']);
+            $line[ReportLanguage::text('total')] = $this->formatCurrency($row['total']);
+            $line[ReportLanguage::text('due')] = $this->formatCurrency($row['due']);
             $rows[] = $line;
         }
 
@@ -106,6 +107,7 @@ class LocalCashierReportController extends Controller
 
         $locations = DB::table('business_locations')
             ->where('business_id', $businessId)
+            ->where('is_active', 1)
             ->when($permitted !== 'all', function ($query) use ($permitted) {
                 $query->whereIn('id', (array) $permitted);
             })
@@ -162,9 +164,13 @@ class LocalCashierReportController extends Controller
 
             return $db->table('business_locations')
                 ->whereIn('id', $salesLocationIds)
+                ->when(Schema::connection($connection)->hasColumn('business_locations', 'is_active'), function ($query) {
+                    $query->where('is_active', 1);
+                })
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(function ($location) use ($label) {
+                    $location->id = $this->moduleLocationFilterId((int) $location->id, strtolower($label));
                     $location->name = trim((string) $location->name) . ' (' . $label . ')';
 
                     return $location;
@@ -172,6 +178,22 @@ class LocalCashierReportController extends Controller
         } catch (\Throwable $e) {
             return collect();
         }
+    }
+
+    private function moduleLocationFilterId(int $locationId, string $modulePrefix): int
+    {
+        // Negative IDs keep independently numbered module locations distinct from main locations.
+        return -($locationId * 2 + ($modulePrefix === 'service' ? 1 : 0));
+    }
+
+    private function moduleLocationIds(array $selectedIds, string $modulePrefix): array
+    {
+        $parity = $modulePrefix === 'service' ? 1 : 0;
+
+        return array_values(array_map(
+            fn ($id) => intdiv(-(int) $id, 2),
+            array_filter($selectedIds, fn ($id) => (int) $id < -1 && (-(int) $id % 2) === $parity)
+        ));
     }
 
     public function getCashiers(int $businessId, array $locationIds = [])
@@ -331,10 +353,12 @@ class LocalCashierReportController extends Controller
         }
 
         foreach ([
-            (string) config('accessory.database_connection', 'accessory'),
-            (string) config('service.database_connection', 'service'),
-        ] as $moduleConnection) {
-            foreach ($this->getModulePaymentMethodsWithAmount($moduleConnection, $filters) as $method) {
+            'accessory' => (string) config('accessory.database_connection', 'accessory'),
+            'service' => (string) config('service.database_connection', 'service'),
+        ] as $modulePrefix => $moduleConnection) {
+            $moduleFilters = $filters;
+            $moduleFilters['location_ids'] = $this->moduleLocationIds($filters['location_ids'], $modulePrefix);
+            foreach ($this->getModulePaymentMethodsWithAmount($moduleConnection, $moduleFilters) as $method) {
                 $methodsWithAmount[$method] = true;
             }
         }
@@ -1215,7 +1239,7 @@ class LocalCashierReportController extends Controller
                 : $soldQty;
             $counted['location'][$locationKey][$transactionKey] = true;
             $upsert($locationMap, $locationKey, [
-                'id' => (int) ($row['location_id'] ?? 0),
+                'id' => $this->moduleLocationFilterId((int) ($row['location_id'] ?? 0), $modulePrefix),
                 'name' => $locationName,
             ], $amount, $locationQty);
 
@@ -1280,6 +1304,11 @@ class LocalCashierReportController extends Controller
 
     private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, ?int $limit): array
     {
+        $filters['location_ids'] = $this->moduleLocationIds($filters['location_ids'], $modulePrefix);
+        if (empty($filters['location_ids'])) {
+            return ['rows' => [], 'total' => 0];
+        }
+
         if (! $this->hasRequiredReportTables($connection, ['transactions', 'transaction_sell_lines'])) {
             return ['rows' => [], 'total' => 0];
         }
@@ -2214,6 +2243,7 @@ class LocalCashierReportController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'location_ids' => 'nullable|array',
             'location_ids.*' => 'integer',
+            'location_filter_applied' => 'nullable|boolean',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'integer',
             'brand_ids' => 'nullable|array',
@@ -2229,8 +2259,11 @@ class LocalCashierReportController extends Controller
         $accessibleLocationIds = array_values(array_unique(array_map('intval', $accessibleLocationIds)));
         $defaultLocationIds = array_values(array_intersect(array_unique(array_map('intval', $defaultLocationIds)), $accessibleLocationIds));
         $requestedLocationIds = ! empty($validated['location_ids']) ? array_values(array_unique(array_map('intval', $validated['location_ids']))) : [];
-        $locationIds = ! empty($requestedLocationIds) ? array_values(array_intersect($requestedLocationIds, $accessibleLocationIds)) : $defaultLocationIds;
-        $locationIds = ! empty($locationIds) ? $locationIds : $accessibleLocationIds;
+        $hasLocationSelection = ! empty($requestedLocationIds) || ! empty($validated['location_filter_applied']);
+        $locationIds = $hasLocationSelection ? array_values(array_intersect($requestedLocationIds, $accessibleLocationIds)) : $defaultLocationIds;
+        if (! $hasLocationSelection && empty($locationIds)) {
+            $locationIds = $accessibleLocationIds;
+        }
 
         return [
             'start_date' => ! empty($validated['start_date']) ? Carbon::parse($validated['start_date'])->format('Y-m-d') : $today,

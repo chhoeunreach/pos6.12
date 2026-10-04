@@ -1,4 +1,8 @@
 @php
+    $currentReportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
+    $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $currentReportLang);
+@endphp
+@php
     $isAllSaleTable = $isAllSaleTable ?? false;
     $saleRowsForFilters = collect($rows ?? []);
     $allSaleLocations = $saleRowsForFilters->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
@@ -13,70 +17,41 @@
         }
         return $amount;
     };
-    $shortPaymentLabel = function ($method, $label) {
-        $method = (string) $method;
-        $label = trim((string) $label);
-        $map = [
-            'cash' => 'Cash',
-            'card' => 'Card',
-            'other' => 'Other',
-        ];
 
-        if (isset($map[$method])) {
-            return $map[$method];
-        }
-        if (stripos($label, 'wing') !== false || str_contains($label, 'វីង')) {
-            return 'Wing';
-        }
-        if (stripos($label, 'aba') !== false || str_contains($label, 'អេប៊ីអេ')) {
-            return 'ABA';
-        }
-        if (stripos($label, 'acleda') !== false || str_contains($label, 'អេស៊ីលីដា')) {
-            return 'Acleda';
-        }
-        if (stripos($label, 'true money') !== false || stripos($label, 'truemoney') !== false || str_contains($label, 'ទ្រូម៉ានី')) {
-            return 'True';
-        }
-        if (str_contains($label, 'កាត់អីវ៉ាន់')) {
-            return 'Cut';
-        }
-
-        return $label !== '' ? $label : $method;
-    };
 @endphp
 
 <div class="sale-table-filter-toggle">
     <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#{{ $tableId }}_filters" aria-expanded="false" aria-controls="{{ $tableId }}_filters">
-        <i class="fa fa-filter"></i> Filters
+        <i class="fa fa-filter"></i> {{ $t('filters') }}
     </button>
 </div>
 <div class="collapse" id="{{ $tableId }}_filters">
     <div class="row all-sale-table-filters">
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Location</label>
-                    <select class="form-control select2 all-sale-location-filter" data-table-id="{{ $tableId }}" multiple data-placeholder="All locations">
+                    <label>{{ $t('location') }}</label>
+                    <select class="form-control select2 all-sale-location-filter" data-table-id="{{ $tableId }}" multiple data-placeholder="{{ $t('all_locations') }}">
                         @foreach($allSaleLocations as $locationName)
                             <option value="{{ $locationName }}">{{ $locationName }}</option>
                         @endforeach
                     </select>
                     <div class="all-sale-filter-actions">
-                        <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="{{ $tableId }}">Select All</button>
-                        <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="{{ $tableId }}">Clear</button>
+                        <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="{{ $tableId }}">{{ $t('select_all') }}</button>
+                        <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="{{ $tableId }}">{{ $t('clear') }}</button>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6">
                 <div class="form-group">
-                    <label>Cashier</label>
-                    <select class="form-control select2 all-sale-cashier-filter" data-table-id="{{ $tableId }}" multiple data-placeholder="All cashiers">
+                    <label>{{ $t('cashier') }}</label>
+                    <select class="form-control select2 all-sale-cashier-filter" data-table-id="{{ $tableId }}" multiple data-placeholder="{{ $t('all_cashiers') }}">
                         @foreach($allSaleCashiers as $cashierName)
                             <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                         @endforeach
                     </select>
                     <div class="all-sale-filter-actions">
-                        <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="{{ $tableId }}">Select All</button>
-                        <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="{{ $tableId }}">Clear</button>
+                        <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="{{ $tableId }}">{{ $t('select_all') }}</button>
+                        <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="{{ $tableId }}">{{ $t('clear') }}</button>
                     </div>
                 </div>
             </div>
@@ -87,48 +62,48 @@
     <table class="table table-bordered table-striped ajax_view local-module-sales-detail-table" id="{{ $tableId }}" style="width:100%;">
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Invoice No</th>
-                <th>I-T</th>
+                <th>{{ $t('date') }}</th>
+                <th>{{ $t('invoice_no') }}</th>
+                <th>{{ $t('invoice_type') }}</th>
                 @unless($isAllSaleTable)
-                    <th class="sale-location-column all-sale-location-column">Location</th>
+                    <th class="sale-location-column all-sale-location-column">{{ $t('location') }}</th>
                 @endunless
-                <th>{{ $isAllSaleTable ? 'Cust.' : 'Customer' }}</th>
+                <th>{{ $isAllSaleTable ? $t('customer_short') : $t('customer') }}</th>
                 @if($isAllSaleTable)
-                    <th>Phone</th>
+                    <th>{{ $t('phone') }}</th>
                 @endif
                 @unless($isAllSaleTable)
-                    <th>Group</th>
-                    <th>Lot</th>
+                    <th>{{ $t('group') }}</th>
+                    <th>{{ $t('lot') }}</th>
                 @endunless
-                <th>SKU</th>
-                <th>{{ $isAllSaleTable ? 'Product' : 'Product Name' }}</th>
-                <th class="text-right">{{ $isAllSaleTable ? 'Qty' : 'Quantity' }}</th>
-                <th class="text-right">{{ $isAllSaleTable ? 'Price' : 'Unit Price' }}</th>
+                <th>{{ $t('sku') }}</th>
+                <th>{{ $isAllSaleTable ? $t('product') : $t('product_name') }}</th>
+                <th class="text-right">{{ $isAllSaleTable ? $t('qty') : $t('quantity') }}</th>
+                <th class="text-right">{{ $isAllSaleTable ? $t('price') : $t('unit_price') }}</th>
                 @if($isAllSaleTable)
-                    <th class="text-right">Total</th>
+                    <th class="text-right">{{ $t('total') }}</th>
                 @else
-                    <th class="text-right">Line Total</th>
-                    <th class="text-right">Discount</th>
+                    <th class="text-right">{{ $t('line_total') }}</th>
+                    <th class="text-right">{{ $t('discount') }}</th>
                 @endif
                 @if($isAllSaleTable)
                     @foreach($staticPaymentColumns as $column)
-                        <th class="text-right">{{ $column['label'] ?? '' }}</th>
+                        <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($column['key'] ?? ''), (string) ($column['label'] ?? '')) }}</th>
                     @endforeach
                 @else
                     @foreach($report['payment_columns'] as $method)
-                        <th class="text-right">{{ $isAllSaleTable ? $shortPaymentLabel($method, $report['payment_labels'][$method] ?? $method) : ($report['payment_labels'][$method] ?? $method) }}</th>
+                        <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment($method, (string) ($report['payment_labels'][$method] ?? $method)) }}</th>
                     @endforeach
                 @endif
-                <th class="text-right">{{ $isAllSaleTable ? 'Paid' : 'Total Paid' }}</th>
-                <th class="text-right">Due</th>
+                <th class="text-right">{{ $isAllSaleTable ? $t('paid') : $t('total_paid') }}</th>
+                <th class="text-right">{{ $t('due') }}</th>
                 @if($isAllSaleTable)
-                    <th class="all-sale-location-column">Location</th>
-                    <th>Group</th>
-                    <th class="all-sale-cashier-column">User/Cashier</th>
-                    <th>Sell note</th>
+                    <th class="all-sale-location-column">{{ $t('location') }}</th>
+                    <th>{{ $t('group') }}</th>
+                    <th class="all-sale-cashier-column">{{ $t('user_cashier') }}</th>
+                    <th>{{ $t('sell_note') }}</th>
                 @else
-                    <th class="all-sale-cashier-column">User/Cashier</th>
+                    <th class="all-sale-cashier-column">{{ $t('user_cashier') }}</th>
                 @endif
             </tr>
         </thead>
@@ -168,13 +143,13 @@
                                            href="#"
                                            data-href="{{ $viewUrl }}"
                                            data-container=".view_modal"
-                                           title="View">
-                                            <i class="fas fa-eye"></i> View
+                                           title="{{ $t('view') }}">
+                                            <i class="fas fa-eye"></i> {{ $t('view') }}
                                         </a>
                                     @endif
                                     @if($editUrl)
-                                        <a class="date-action-pill date-action-edit" href="{{ $editUrl }}" target="_blank" title="Edit">
-                                            <i class="fas fa-pen"></i> Edit
+                                        <a class="date-action-pill date-action-edit" href="{{ $editUrl }}" target="_blank" title="{{ $t('edit') }}">
+                                            <i class="fas fa-pen"></i> {{ $t('edit') }}
                                         </a>
                                     @endif
                                 </span>
@@ -189,7 +164,7 @@
                         <td>{{ $row['location_name'] }}</td>
                     @endunless
                     @if($isAllSaleTable)
-                        <td title="Location: {{ $row['location_name'] ?? 'N/A' }}&#10;Cashier: {{ $row['cashier_name'] ?? 'N/A' }}">{{ $row['customer_name'] ?? '-' }}</td>
+                        <td title="{{ $t('location') }}: {{ $row['location_name'] ?? 'N/A' }}&#10;{{ $t('cashier') }}: {{ $row['cashier_name'] ?? 'N/A' }}">{{ $row['customer_name'] ?? '-' }}</td>
                         <td>{{ $row['phone_number'] ?? '' }}</td>
                     @else
                         <td>{{ $row['customer_name'] ?? '-' }}</td>
@@ -197,7 +172,7 @@
                     @unless($isAllSaleTable)
                         <td>
                             <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : 'normal') }}">
-                                {{ $row['customer_group_name'] ?? 'លក់' }}
+                                {{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['customer_group_name'] ?? 'លក់')) }}
                             </span>
                         </td>
                         <td>{{ $row['lot_number'] ?? '-' }}</td>
@@ -227,7 +202,7 @@
                         <td>{{ $row['location_name'] ?? 'N/A' }}</td>
                         <td>
                             <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (($row['customer_group_name'] ?? '') === 'បង់ប្រាក់' ? 'loan-payment' : 'normal')) }}">
-                                {{ $row['customer_group_name'] ?? 'លក់' }}
+                                {{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['customer_group_name'] ?? 'លក់')) }}
                             </span>
                         </td>
                         <td>{{ $row['cashier_name'] ?? 'N/A' }}</td>
@@ -254,7 +229,7 @@
         @endphp
         <tfoot>
             <tr class="detail-total-row">
-                <th colspan="{{ $isAllSaleTable ? 7 : 9 }}" class="text-right">Total</th>
+                <th colspan="{{ $isAllSaleTable ? 7 : 9 }}" class="text-right">{{ $t('total') }}</th>
                 <th class="text-right">{{ rtrim(rtrim(number_format($saleRows->sum(fn ($row) => (float) ($row['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                 <th class="text-right">{{ $fmt($saleRows->sum(fn ($row) => (float) ($row['unit_price'] ?? 0))) }}</th>
                 @if($isAllSaleTable)

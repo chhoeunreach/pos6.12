@@ -10,6 +10,7 @@ class LocalCashierReportServiceProvider extends ServiceProvider
     {
         $this->registerConfig();
         $this->registerViews();
+        $this->loadTranslationsFrom(__DIR__ . '/../Resources/lang', 'localcashierreport');
     }
 
     public function register(): void

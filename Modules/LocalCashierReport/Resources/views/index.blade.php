@@ -1,131 +1,8 @@
 @extends('layouts.app')
 @php
-    $currentReportLang = in_array(request('report_lang'), ['en', 'km'], true) ? request('report_lang') : 'en';
-    $dashboardTranslations = [
-        'en' => [
-            'local_cashier_report' => 'Cashier Report',
-            'dashboard' => 'Dashboard',
-            'view_report' => 'View Report',
-            'business_location_report' => 'Business Location Report',
-            'print_dashboard' => 'Print Dashboard',
-            'date_range' => 'Date Range',
-            'business_location' => 'Business Location',
-            'cashier_user' => 'Cashier/User',
-            'payment_status' => 'Payment Status',
-            'qty_type' => 'Qty Type',
-            'all' => 'All',
-            'search' => 'Search',
-            'export_excel' => 'Export Excel',
-            'print' => 'Print',
-            'total_paid' => 'Total Paid',
-            'due' => 'Due',
-            'grand_total' => 'Grand Total',
-            'expenses' => 'Expenses',
-            'actual_income' => 'Actual Income',
-            'actual_total_income' => 'Actual Total Income (Paid - Expenses - Sell Return)',
-            'business_location_qty' => 'Business Location (Qty)',
-            'total_price' => 'Total Price',
-            'total' => 'Total',
-            'summary' => 'Summary',
-            'user_cashier' => 'User/Cashier',
-            'location' => 'Location',
-            'brand' => 'Brand',
-            'name' => 'Name',
-            'amount' => 'Amount',
-            'qty' => 'Qty',
-            'total_sale' => 'Total Sale',
-            'customer_payment' => 'Customer Payment',
-            'collection_payment' => 'Collection Payment',
-            'no_data' => 'No data found.',
-        ],
-        'km' => [
-            'local_cashier_report' => 'របាយការណ៍បេឡាករ',
-            'dashboard' => 'ផ្ទាំងគ្រប់គ្រង',
-            'view_report' => 'មើលរបាយការណ៍',
-            'business_location_report' => 'របាយការណ៍ទីតាំងអាជីវកម្ម',
-            'print_dashboard' => 'បោះពុម្ពផ្ទាំងគ្រប់គ្រង',
-            'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',
-            'business_location' => 'ទីតាំងអាជីវកម្ម',
-            'cashier_user' => 'អ្នកគិតលុយ/អ្នកប្រើប្រាស់',
-            'payment_status' => 'ស្ថានភាពទូទាត់',
-            'qty_type' => 'ប្រភេទបរិមាណ',
-            'all' => 'ទាំងអស់',
-            'search' => 'ស្វែងរក',
-            'export_excel' => 'នាំចេញ Excel',
-            'print' => 'បោះពុម្ព',
-            'total_paid' => 'សរុបបានទូទាត់',
-            'due' => 'នៅជំពាក់',
-            'grand_total' => 'សរុបរួម',
-            'expenses' => 'ចំណាយ',
-            'actual_income' => 'ចំណូលជាក់ស្តែង',
-            'actual_total_income' => 'ចំណូលសរុបជាក់ស្តែង (បានទូទាត់ - ចំណាយ - ទំនិញត្រឡប់)',
-            'business_location_qty' => 'ទីតាំងអាជីវកម្ម (បរិមាណ)',
-            'total_price' => 'តម្លៃសរុប',
-            'total' => 'សរុប',
-            'summary' => 'សេចក្តីសង្ខេប',
-            'user_cashier' => 'អ្នកប្រើប្រាស់/អ្នកគិតលុយ',
-            'location' => 'ទីតាំង',
-            'brand' => 'ម៉ាក',
-            'name' => 'ឈ្មោះ',
-            'amount' => 'ចំនួនទឹកប្រាក់',
-            'qty' => 'បរិមាណ',
-            'total_sale' => 'ការលក់សរុប',
-            'customer_payment' => 'ការទូទាត់របស់អតិថិជន',
-            'collection_payment' => 'ការប្រមូលប្រាក់',
-            'no_data' => 'មិនមានទិន្នន័យ។',
-        ],
-    ];
-    $t = fn ($key) => $dashboardTranslations[$currentReportLang][$key]
-        ?? $dashboardTranslations['en'][$key]
-        ?? $key;
-    $paymentLabel = function ($method) use ($report, $currentReportLang) {
-        $raw = (string) ($report['payment_labels'][$method] ?? $method);
-        $key = strtolower(trim((string) $method));
-        $rawLower = strtolower($raw);
-
-        if ($key === 'custom_pay_1' || strpos($rawLower, 'wing') !== false || strpos($raw, 'វីង') !== false) {
-            return $currentReportLang === 'km' ? 'វីង' : 'WING';
-        }
-        if ($key === 'custom_pay_2' || strpos($rawLower, 'aba') !== false || strpos($raw, 'អេប៊ីអេ') !== false) {
-            return $currentReportLang === 'km' ? 'អេប៊ីអេ' : 'ABA';
-        }
-        if ($key === 'custom_pay_3' || strpos($rawLower, 'acleda') !== false || strpos($raw, 'អេស៊ីលីដា') !== false) {
-            return $currentReportLang === 'km' ? 'អេស៊ីលីដា' : 'ACLEDA';
-        }
-        if ($key === 'custom_pay_4' || strpos($rawLower, 'true') !== false || strpos($raw, 'ទ្រូម៉ានី') !== false) {
-            return $currentReportLang === 'km' ? 'ទ្រូម៉ានី' : 'TRUE MONEY';
-        }
-        if ($key === 'custom_pay_5' || strpos($rawLower, 'emoney') !== false || strpos($rawLower, 'e-money') !== false || strpos($raw, 'អ៊ីម៉ានី') !== false) {
-            return $currentReportLang === 'km' ? 'អ៊ីម៉ានី' : 'E-MONEY';
-        }
-        if ($key === 'custom_pay_6' || strpos($raw, 'កាត់អីវ៉ាន់') !== false || strpos($rawLower, 'cut') !== false) {
-            return $currentReportLang === 'km' ? 'កាត់អីវ៉ាន់' : 'CUT';
-        }
-        if ($key === 'custom_pay_7' || strpos($raw, 'បង់ប្រចាំខែ') !== false || strpos($rawLower, 'monthly') !== false) {
-            return $currentReportLang === 'km' ? 'បង់ប្រចាំខែ' : 'MONTHLY';
-        }
-        if ($key === 'cash' || strpos($rawLower, 'cash') !== false || strpos($raw, 'សាច់ប្រាក់') !== false) {
-            return $currentReportLang === 'km' ? 'សាច់ប្រាក់' : 'CASH';
-        }
-        if ($key === 'card' || strpos($rawLower, 'card') !== false || strpos($raw, 'កាត') !== false) {
-            return $currentReportLang === 'km' ? 'កាត' : 'CARD';
-        }
-        if ($key === 'cheque' || strpos($rawLower, 'cheque') !== false || strpos($raw, 'សែក') !== false) {
-            return $currentReportLang === 'km' ? 'សែក' : 'CHEQUE';
-        }
-        if ($key === 'bank_transfer' || strpos($rawLower, 'bank') !== false || strpos($raw, 'ផ្ទេរប្រាក់') !== false) {
-            return $currentReportLang === 'km' ? 'ផ្ទេរប្រាក់' : 'BANK TRANSFER';
-        }
-        if ($key === 'other' || strpos($rawLower, 'other') !== false || strpos($raw, 'ផ្សេងៗ') !== false) {
-            return $currentReportLang === 'km' ? 'ផ្សេងៗ' : 'OTHER';
-        }
-
-        if (preg_match('/^([^\(]+)\s*\((.+)\)$/u', $raw, $matches)) {
-            return $currentReportLang === 'km' ? trim($matches[1]) : strtoupper(trim($matches[2]));
-        }
-
-        return $raw;
-    };
+    $currentReportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
+    $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $currentReportLang);
+    $paymentLabel = fn ($method) => \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) $method, (string) ($report['payment_labels'][$method] ?? $method));
 @endphp
 @section('title', $t('local_cashier_report'))
 
@@ -146,6 +23,7 @@
             'start_date' => $filters['start_date'],
             'end_date' => $filters['end_date'],
             'location_ids' => array_values(array_unique(array_map('intval', $filters['location_ids'] ?? []))),
+            'location_filter_applied' => 1,
             'user_ids' => array_values(array_unique(array_map('intval', $filters['user_ids'] ?? []))),
             'brand_ids' => array_values(array_unique(array_map('intval', $filters['brand_ids'] ?? []))),
             'payment_methods' => array_values(array_unique($filters['payment_methods'] ?? [])),
@@ -153,8 +31,9 @@
             'payment_status' => $filters['payment_status'] ?? '',
             'qty_type' => $filters['qty_type'] ?? 'invoice_count',
             'style_mode' => $filters['style_mode'] ?? 'classic_plain',
+            'report_lang' => $currentReportLang,
         ]);
-        $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain']);
+        $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain', 'report_lang' => $currentReportLang]);
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
         $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);
         $englishQuery = array_merge($baseQuery, ['report_lang' => 'en']);
@@ -188,10 +67,10 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-right">
                 <li class="{{ $currentReportLang === 'en' ? 'active' : '' }}">
-                    <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($englishQuery) }}">English</a>
+                    <a class="report-language-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($englishQuery) }}">{{ $t('english') }}</a>
                 </li>
                 <li class="{{ $currentReportLang === 'km' ? 'active' : '' }}">
-                    <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($khmerQuery) }}">ខ្មែរ</a>
+                    <a class="report-language-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($khmerQuery) }}">ខ្មែរ</a>
                 </li>
             </ul>
         </span>
@@ -237,11 +116,14 @@
         $moduleDashboardRows = $report['module_dashboard_rows'] ?? [];
     @endphp
     <div class="local-filter-wrap">
-        <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain']) }}" class="btn btn-sm local-filter-reset">
-            <i class="fa fa-refresh"></i> Reset
+        <a href="{{ route('local-cashier-report.index', ['style_mode' => 'classic_plain', 'report_lang' => $currentReportLang]) }}" class="btn btn-sm local-filter-reset">
+            <i class="fa fa-refresh"></i> {{ $t('reset') }}
         </a>
-    @component('components.filters', ['title' => __('report.filters')])
-        <form method="get" action="{{ route('local-cashier-report.index') }}" class="row">
+    @component('components.filters', ['title' => $t('filters')])
+        <form method="get" action="{{ route('local-cashier-report.index') }}" class="row" id="local_cashier_filter_form" autocomplete="off">
+            <input type="hidden" name="report_lang" value="{{ $currentReportLang }}">
+            <input type="hidden" name="style_mode" value="{{ $filters['style_mode'] }}">
+            <input type="hidden" name="location_filter_applied" value="1">
             <div class="col-md-3">
                 <div class="form-group">
                     <label>{{ $t('date_range') }}</label>
@@ -253,16 +135,11 @@
             <div class="col-md-3">
                 <div class="form-group">
                     <label>{{ $t('business_location') }}</label>
-                    <input type="text" id="location_preview" class="form-control" readonly
+                    <input type="text" id="location_preview" class="form-control" readonly autocomplete="off"
                            value="{{ $locations->whereIn('id', $filters['location_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#location_modal" style="margin-top:6px;">
-                        Select Locations
+                        {{ $t('select_locations') }}
                     </button>
-                    <select name="location_ids[]" id="location_ids_hidden" class="form-control" multiple style="display:none;">
-                        @foreach($locations as $location)
-                            <option value="{{ $location->id }}" @if(in_array($location->id, $filters['location_ids'])) selected @endif>{{ $location->name }}</option>
-                        @endforeach
-                    </select>
                 </div>
             </div>
             <div class="col-md-3">
@@ -271,7 +148,7 @@
                     <input type="text" id="cashier_preview" class="form-control" readonly
                            value="{{ $cashiers->whereIn('id', $filters['user_ids'])->pluck('name')->implode(', ') }}">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#cashier_modal" style="margin-top:6px;">
-                        Select Cashiers
+                        {{ $t('select_cashiers') }}
                     </button>
                     <select name="user_ids[]" id="user_ids_hidden" class="form-control" multiple style="display:none;">
                         @foreach($cashiers as $cashier)
@@ -286,7 +163,7 @@
                     <select name="payment_status" class="form-control">
                         <option value="">{{ $t('all') }}</option>
                         @foreach($paymentStatuses as $status)
-                            <option value="{{ $status }}" @if($filters['payment_status'] === $status) selected @endif>{{ ucfirst($status) }}</option>
+                            <option value="{{ $status }}" @if($filters['payment_status'] === $status) selected @endif>{{ $t($status) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -296,7 +173,7 @@
                     <label>{{ $t('qty_type') }}</label>
                     <select name="qty_type" class="form-control">
                         @foreach($qtyTypes as $key => $label)
-                            <option value="{{ $key }}" @if($filters['qty_type'] === $key) selected @endif>{{ $label }}</option>
+                            <option value="{{ $key }}" @if($filters['qty_type'] === $key) selected @endif>{{ $t($key) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -442,7 +319,7 @@
                     })->values() as $customerGroupRow)
                         <tr class="customer-group-breakdown-row {{ ($customerGroupRow['name'] ?? '') === 'រំលស់' ? 'installment-breakdown-row' : (($customerGroupRow['name'] ?? '') === 'អ៊ីអន' ? 'aeon-breakdown-row' : (in_array($customerGroupRow['name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment-breakdown-row' : 'normal-breakdown-row')) }}">
                             <td class="name-main customer-group-breakdown-name">
-                                <span class="customer-group-breakdown-label">{{ $customerGroupRow['name'] ?? 'លក់' }}</span>
+                                <span class="customer-group-breakdown-label">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($customerGroupRow['name'] ?? 'លក់')) }}</span>
                                 <span class="qty-badge">(Qty: {{ rtrim(rtrim(number_format((float) ($customerGroupRow['qty_total'] ?? 0), 2), '0'), '.') }})</span>
                             </td>
                             <td class="text-right">{{ $fmt($customerGroupRow['total'] ?? null) }}</td>
@@ -454,7 +331,7 @@
                     @endforeach
                 @empty
                     <tr>
-                        <td colspan="{{ 3 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                        <td colspan="{{ 3 + count($report['payment_columns']) }}" class="text-center">{{ $t('no_data') }}</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -535,7 +412,7 @@
                     @endphp
                     @if($lastDashboardCustomerGroup !== $dashboardCustomerGroup)
                         <tr class="dashboard-customer-group-separator {{ $dashboardCustomerGroup === 'រំលស់' ? 'installment-separator' : ($dashboardCustomerGroup === 'អ៊ីអន' ? 'aeon-separator' : ($dashboardCustomerGroup === 'Collection Payment' ? 'loan-payment-separator' : ($dashboardCustomerGroup === 'Customer Payment' ? 'customer-payment-separator' : 'normal-separator'))) }}">
-                            <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ $dashboardCustomerGroup }}</td>
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label($dashboardCustomerGroup) }}</td>
                         </tr>
                         @php $lastDashboardCustomerGroup = $dashboardCustomerGroup; @endphp
                     @endif
@@ -600,7 +477,7 @@
                 @empty
                     @if(empty($moduleDashboardRows))
                         <tr>
-                            <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">No data found.</td>
+                            <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">{{ $t('no_data') }}</td>
                         </tr>
                     @endif
                 @endforelse
@@ -669,12 +546,12 @@
 
     @if($filters['style_mode'] === 'classic')
         <hr>
-        <h4 class="section-title">Summary</h4>
+        <h4 class="section-title">{{ $t('summary') }}</h4>
         <div class="row">
             <div class="col-md-3">
-                <h4>User/Cashier</h4>
+                <h4>{{ $t('user_cashier') }}</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_user">
-                    <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                    <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_user'] as $r)
                             @php
@@ -692,7 +569,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th>Total</th>
+                            <th>{{ $t('total') }}</th>
                             <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.user.amount', 0)) }}</th>
                             <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.user.qty', 0), 2), '0'), '.') }}</th>
                         </tr>
@@ -700,9 +577,9 @@
                 </table>
             </div>
             <div class="col-md-3">
-                <h4>Location</h4>
+                <h4>{{ $t('location') }}</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_location">
-                    <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                    <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_location'] as $r)
                             @php
@@ -720,7 +597,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th>Total</th>
+                            <th>{{ $t('total') }}</th>
                             <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.location.amount', 0)) }}</th>
                             <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.location.qty', 0), 2), '0'), '.') }}</th>
                         </tr>
@@ -728,9 +605,9 @@
                 </table>
             </div>
             <div class="col-md-3">
-                <h4>Brand</h4>
+                <h4>{{ $t('brand') }}</h4>
                 <table class="table table-bordered table-condensed summary-table" id="sum_brand">
-                    <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                    <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                     <tbody>
                         @foreach($report['summary_brand'] as $r)
                             @php
@@ -740,7 +617,7 @@
                                 ]);
                             @endphp
                             <tr>
-                                <td>{{ $r['name'] }}</td>
+                                <td>{{ $r['name'] === 'No Brand' ? $t('no_brand') : $r['name'] }}</td>
                                 <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
                                 <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
                             </tr>
@@ -748,7 +625,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th>Total</th>
+                            <th>{{ $t('total') }}</th>
                             <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
                             <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
                         </tr>
@@ -761,44 +638,44 @@
     @if($filters['style_mode'] === 'classic_plain')
         <hr>
         <div class="summary-collapse-header">
-            <h4 class="section-title">Summary</h4>
+            <h4 class="section-title">{{ $t('summary') }}</h4>
             <button type="button" class="btn btn-default btn-sm summary-collapse-toggle" data-toggle="collapse" data-target="#summary_cards_section" aria-expanded="true" aria-controls="summary_cards_section">
-                <i class="fa fa-chevron-up"></i> Hide Summary
+                <i class="fa fa-chevron-up"></i> {{ $t('hide_summary') }}
             </button>
         </div>
         <div class="collapse in" id="summary_cards_section">
         <div class="summary-kpi-grid">
             <div class="summary-kpi-card">
-                <div class="kpi-label">Total Sale</div>
+                <div class="kpi-label">{{ $t('total_sale') }}</div>
                 <div class="kpi-value">{{ $fmt($report['grand_total'] ?? null) }}</div>
             </div>
             <div class="summary-kpi-card">
-                <div class="kpi-label">Actual Income</div>
+                <div class="kpi-label">{{ $t('actual_income') }}</div>
                 <div class="kpi-value">{{ $fmt($report['grand_actual_income'] ?? null) }}</div>
             </div>
             <div class="summary-kpi-card">
-                <div class="kpi-label">Customer Payment</div>
+                <div class="kpi-label">{{ $t('customer_payment') }}</div>
                 <div class="kpi-value">{{ $fmt($report['customer_due_payment_total'] ?? null) }}</div>
             </div>
             <div class="summary-kpi-card">
-                <div class="kpi-label">Collection Payment</div>
+                <div class="kpi-label">{{ $t('collection_payment') }}</div>
                 <div class="kpi-value">{{ $fmt($report['collection_payment_total'] ?? null) }}</div>
             </div>
             <div class="summary-kpi-card">
-                <div class="kpi-label">Expenses</div>
+                <div class="kpi-label">{{ $t('expenses') }}</div>
                 <div class="kpi-value">{{ $fmt($report['grand_expenses'] ?? null) }}</div>
             </div>
             <div class="summary-kpi-card">
-                <div class="kpi-label">Due</div>
+                <div class="kpi-label">{{ $t('due') }}</div>
                 <div class="kpi-value @if(($report['grand_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($report['grand_due'] ?? null) }}</div>
             </div>
         </div>
         <div class="row">
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>User/Cashier</h4>
+                    <h4>{{ $t('user_cashier') }}</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_user_plain">
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_user'] as $r)
                                 @php
@@ -816,7 +693,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th>Total</th>
+                                <th>{{ $t('total') }}</th>
                                 <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.user.amount', 0)) }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.user.qty', 0), 2), '0'), '.') }}</th>
                             </tr>
@@ -826,9 +703,9 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Location</h4>
+                    <h4>{{ $t('location') }}</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_location_plain">
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_location'] as $r)
                                 @php
@@ -846,7 +723,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th>Total</th>
+                                <th>{{ $t('total') }}</th>
                                 <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.location.amount', 0)) }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.location.qty', 0), 2), '0'), '.') }}</th>
                             </tr>
@@ -856,9 +733,9 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Customer Group</h4>
+                    <h4>{{ $t('customer_group') }}</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_customer_group_plain">
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_customer_group'] ?? [] as $r)
                                 @php
@@ -868,7 +745,7 @@
                                     ]);
                                 @endphp
                                 <tr>
-                                    <td><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $r['name'] }}</a></td>
+                                    <td><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) $r['name']) }}</a></td>
                                     <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
                                     <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($customerGroupDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
                                 </tr>
@@ -876,7 +753,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th>Total</th>
+                                <th>{{ $t('total') }}</th>
                                 <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.customer_group.amount', 0)) }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.customer_group.qty', 0), 2), '0'), '.') }}</th>
                             </tr>
@@ -886,9 +763,9 @@
             </div>
             <div class="col-md-3">
                 <div class="summary-panel">
-                    <h4>Brand</h4>
+                    <h4>{{ $t('brand') }}</h4>
                     <table class="table table-bordered table-condensed summary-table" id="sum_brand_plain">
-                        <thead><tr><th>Name</th><th class="text-right">Amount</th><th class="text-right">Qty</th></tr></thead>
+                        <thead><tr><th>{{ $t('name') }}</th><th class="text-right">{{ $t('amount') }}</th><th class="text-right">{{ $t('qty') }}</th></tr></thead>
                         <tbody>
                             @foreach($report['summary_brand'] as $r)
                                 @php
@@ -898,7 +775,7 @@
                                     ]);
                                 @endphp
                                 <tr>
-                                    <td>{{ $r['name'] }}</td>
+                                    <td>{{ $r['name'] === 'No Brand' ? $t('no_brand') : $r['name'] }}</td>
                                     <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($r['amount']) }}</a></td>
                                     <td class="text-right"><a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($brandDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ rtrim(rtrim(number_format($r['qty'], 2), '0'), '.') }}</a></td>
                                 </tr>
@@ -906,7 +783,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th>Total</th>
+                                <th>{{ $t('total') }}</th>
                                 <th class="text-right">{{ $fmt(data_get($report, 'summary_totals.brand.amount', 0)) }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format((float) data_get($report, 'summary_totals.brand.qty', 0), 2), '0'), '.') }}</th>
                             </tr>
@@ -924,7 +801,9 @@
             $dueCustomerRows = collect($report['due_customer_detail_rows'] ?? []);
             $accessorySaleRows = collect($report['accessory_sale_detail_rows'] ?? []);
             $serviceSaleRows = collect($report['service_sale_detail_rows'] ?? []);
-            $allSaleCollectionPaymentRows = $collectionPaymentRows->map(function ($row) {
+            $collectionPaymentLabel = $t('collection_payment');
+            $customerPaymentLabel = $t('customer_payment');
+            $allSaleCollectionPaymentRows = $collectionPaymentRows->map(function ($row) use ($collectionPaymentLabel) {
                 $amount = (float) ($row['amount'] ?? 0);
 
                 return [
@@ -937,7 +816,7 @@
                     'customer_name' => (string) ($row['customer_name'] ?? '-'),
                     'phone_number' => '',
                     'sku' => (string) ($row['loan_number'] ?? '-'),
-                    'product_name' => 'Collection Payment',
+                    'product_name' => $collectionPaymentLabel,
                     'quantity' => null,
                     'unit_price' => null,
                     'line_total' => null,
@@ -950,7 +829,7 @@
                     'sell_note_number' => '',
                 ];
             });
-            $allSaleCustomerPaymentRows = $customerPaymentRows->map(function ($row) {
+            $allSaleCustomerPaymentRows = $customerPaymentRows->map(function ($row) use ($customerPaymentLabel) {
                 $amount = (float) ($row['amount'] ?? 0);
 
                 return [
@@ -963,7 +842,7 @@
                     'customer_name' => (string) ($row['customer_name'] ?? '-'),
                     'phone_number' => (string) ($row['phone_number'] ?? ''),
                     'sku' => (string) ($row['receipt_no'] ?? '-'),
-                    'product_name' => 'Customer Payment',
+                    'product_name' => $customerPaymentLabel,
                     'quantity' => null,
                     'unit_price' => null,
                     'line_total' => null,
@@ -994,48 +873,48 @@
         @endphp
         @if($hasLimitedDetails->isNotEmpty())
             <div class="alert alert-warning">
-                Detail tables are limited to {{ number_format($detailLimit) }} rows per section for faster loading.
-                Use narrower filters or export/print for full detail.
+                {{ str_replace(':count', number_format($detailLimit), $t('detail_limit')) }}
+                {{ $t('detail_limit_hint') }}
             </div>
         @endif
         <div class="box box-primary">
             <div class="box-header">
                 <ul class="nav nav-tabs local-detail-tabs" role="tablist">
                     <li role="presentation" class="active">
-                        <a href="#all_sale_detail_tab" aria-controls="all_sale_detail_tab" role="tab" data-toggle="tab">All Sale</a>
+                        <a href="#all_sale_detail_tab" aria-controls="all_sale_detail_tab" role="tab" data-toggle="tab">{{ $t('all_sale') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">Product Sale</a>
+                        <a href="#cashier_sales_detail_tab" aria-controls="cashier_sales_detail_tab" role="tab" data-toggle="tab">{{ $t('product_sale') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#accessory_sales_detail_tab" aria-controls="accessory_sales_detail_tab" role="tab" data-toggle="tab">Accessory sales</a>
+                        <a href="#accessory_sales_detail_tab" aria-controls="accessory_sales_detail_tab" role="tab" data-toggle="tab">{{ $t('accessory_sales') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#service_sales_detail_tab" aria-controls="service_sales_detail_tab" role="tab" data-toggle="tab">Service sales</a>
+                        <a href="#service_sales_detail_tab" aria-controls="service_sales_detail_tab" role="tab" data-toggle="tab">{{ $t('service_sales') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">Expenses list</a>
+                        <a href="#cashier_expenses_detail_tab" aria-controls="cashier_expenses_detail_tab" role="tab" data-toggle="tab">{{ $t('expenses_list') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#customer_payments_detail_tab" aria-controls="customer_payments_detail_tab" role="tab" data-toggle="tab">Customer Payment</a>
+                        <a href="#customer_payments_detail_tab" aria-controls="customer_payments_detail_tab" role="tab" data-toggle="tab">{{ $t('customer_payment') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">Collection Payment</a>
+                        <a href="#collection_payments_detail_tab" aria-controls="collection_payments_detail_tab" role="tab" data-toggle="tab">{{ $t('collection_payment') }}</a>
                     </li>
                     <li role="presentation">
-                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">Customer Due</a>
+                        <a href="#customer_due_payments_detail_tab" aria-controls="customer_due_payments_detail_tab" role="tab" data-toggle="tab">{{ $t('customer_due') }}</a>
                     </li>
                 </ul>
                 <div class="table-meta">
-                    <span>{{ number_format($detailMeta['main_displayed'] ?? count($report['detail_rows'] ?? [])) }} / {{ number_format($detailMeta['main_total'] ?? count($report['detail_rows'] ?? [])) }} rows</span>
-                    <span>{{ count($report['summary_user'] ?? []) }} cashiers</span>
-                    <span>{{ number_format($allSaleRows->count()) }} all sales</span>
-                    <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} accessory sales</span>
-                    <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} service sales</span>
-                    <span>{{ number_format($detailMeta['collection_payment_displayed'] ?? $collectionPaymentRows->count()) }} / {{ number_format($detailMeta['collection_payment_total'] ?? $collectionPaymentRows->count()) }} collection payments</span>
-                    <span>{{ number_format($detailMeta['customer_due_payment_displayed'] ?? $customerPaymentRows->count()) }} / {{ number_format($detailMeta['customer_due_payment_total'] ?? $customerPaymentRows->count()) }} customer payments</span>
-                    <span>{{ number_format($detailMeta['due_customer_displayed'] ?? $dueCustomerRows->count()) }} / {{ number_format($detailMeta['due_customer_total'] ?? $dueCustomerRows->count()) }} customer due</span>
-                    <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} expenses</span>
+                    <span>{{ number_format($detailMeta['main_displayed'] ?? count($report['detail_rows'] ?? [])) }} / {{ number_format($detailMeta['main_total'] ?? count($report['detail_rows'] ?? [])) }} {{ $t('rows') }}</span>
+                    <span>{{ count($report['summary_user'] ?? []) }} {{ $t('cashiers') }}</span>
+                    <span>{{ number_format($allSaleRows->count()) }} {{ $t('all_sale') }}</span>
+                    <span>{{ number_format($detailMeta['accessory_displayed'] ?? $accessorySaleRows->count()) }} / {{ number_format($detailMeta['accessory_total'] ?? $accessorySaleRows->count()) }} {{ $t('accessory_sales') }}</span>
+                    <span>{{ number_format($detailMeta['service_displayed'] ?? $serviceSaleRows->count()) }} / {{ number_format($detailMeta['service_total'] ?? $serviceSaleRows->count()) }} {{ $t('service_sales') }}</span>
+                    <span>{{ number_format($detailMeta['collection_payment_displayed'] ?? $collectionPaymentRows->count()) }} / {{ number_format($detailMeta['collection_payment_total'] ?? $collectionPaymentRows->count()) }} {{ $t('collection_payment') }}</span>
+                    <span>{{ number_format($detailMeta['customer_due_payment_displayed'] ?? $customerPaymentRows->count()) }} / {{ number_format($detailMeta['customer_due_payment_total'] ?? $customerPaymentRows->count()) }} {{ $t('customer_payment') }}</span>
+                    <span>{{ number_format($detailMeta['due_customer_displayed'] ?? $dueCustomerRows->count()) }} / {{ number_format($detailMeta['due_customer_total'] ?? $dueCustomerRows->count()) }} {{ $t('customer_due') }}</span>
+                    <span>{{ number_format($detailMeta['expense_displayed'] ?? $expenseRows->count()) }} / {{ number_format($detailMeta['expense_total'] ?? $expenseRows->count()) }} {{ $t('expenses') }}</span>
                 </div>
             </div>
             <div class="box-body">
@@ -1058,36 +937,36 @@
                 @endphp
                 <div class="sale-table-filter-toggle">
                     <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_sales_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_sales_detail_table_filters">
-                        <i class="fa fa-filter"></i> Filters
+                        <i class="fa fa-filter"></i> {{ $t('filters') }}
                     </button>
                 </div>
                 <div class="collapse" id="local_cashier_sales_detail_table_filters">
                     <div class="row all-sale-table-filters">
                         <div class="col-md-3 col-sm-6">
                             <div class="form-group">
-                                <label>Location</label>
-                                <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="All locations">
+                                <label>{{ $t('location') }}</label>
+                                <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                     @foreach($cashierSaleLocations as $locationName)
                                         <option value="{{ $locationName }}">{{ $locationName }}</option>
                                     @endforeach
                                 </select>
                                 <div class="all-sale-filter-actions">
-                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">Select All</button>
-                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">Clear</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">{{ $t('select_all') }}</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_sales_detail_table">{{ $t('clear') }}</button>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <div class="form-group">
-                                <label>Cashier</label>
-                                <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="All cashiers">
+                                <label>{{ $t('cashier') }}</label>
+                                <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                     @foreach($cashierSaleCashiers as $cashierName)
                                         <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                     @endforeach
                                 </select>
                                 <div class="all-sale-filter-actions">
-                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">Select All</button>
-                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">Clear</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">{{ $t('select_all') }}</button>
+                                    <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_sales_detail_table">{{ $t('clear') }}</button>
                                 </div>
                             </div>
                         </div>
@@ -1097,26 +976,26 @@
                     <table class="table table-bordered table-striped ajax_view" id="local_cashier_sales_detail_table" style="width:100%;">
                         <thead>
                         <tr>
-                            <th>Action</th>
-                            <th>Date</th>
-                            <th>Invoice No</th>
-                            <th>I-T</th>
-                            <th class="all-sale-location-column">Location</th>
-                            <th>Customer</th>
-                            <th>Group</th>
-                            <th>Lot</th>
-                            <th>SKU</th>
-                            <th>Product Name</th>
-                            <th class="text-right">Quantity</th>
-                            <th class="text-right">Unit Price</th>
-                            <th class="text-right">Line Total</th>
-                            <th class="text-right">Discount</th>
-                            <th class="text-right">Total Paid</th>
+                            <th>{{ $t('action') }}</th>
+                            <th>{{ $t('date') }}</th>
+                            <th>{{ $t('invoice_no') }}</th>
+                            <th>{{ $t('invoice_type') }}</th>
+                            <th class="all-sale-location-column">{{ $t('location') }}</th>
+                            <th>{{ $t('customer') }}</th>
+                            <th>{{ $t('group') }}</th>
+                            <th>{{ $t('lot') }}</th>
+                            <th>{{ $t('sku') }}</th>
+                            <th>{{ $t('product_name') }}</th>
+                            <th class="text-right">{{ $t('quantity') }}</th>
+                            <th class="text-right">{{ $t('unit_price') }}</th>
+                            <th class="text-right">{{ $t('line_total') }}</th>
+                            <th class="text-right">{{ $t('discount') }}</th>
+                            <th class="text-right">{{ $t('total_paid') }}</th>
                             @foreach($report['payment_columns'] as $method)
                                 <th class="text-right">{{ $paymentLabel($method) }}</th>
                             @endforeach
-                            <th class="text-right">Due</th>
-                            <th class="all-sale-cashier-column">User/Cashier</th>
+                            <th class="text-right">{{ $t('due') }}</th>
+                            <th class="all-sale-cashier-column">{{ $t('user_cashier') }}</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -1124,8 +1003,8 @@
                             @if(($row['row_type'] ?? 'sale') === 'customer_group_separator')
                                 <tr class="customer-group-separator {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment-separator' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon-separator' : (in_array($row['customer_group_name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment-separator' : 'normal-separator')) }}">
                                     <td></td>
-                                    <td class="group-separator-label">{{ $row['customer_group_name'] ?? 'លក់' }}</td>
-                                    <td class="group-separator-note">{{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'Installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'AEON' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'Collection payment' : (($row['customer_group_name'] ?? '') === 'Customer Payment' ? 'Customer payment' : 'Sale'))) }}</td>
+                                    <td class="group-separator-label">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['customer_group_name'] ?? 'លក់')) }}</td>
+                                    <td class="group-separator-note">{{ $t(($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (($row['customer_group_name'] ?? '') === 'Collection Payment' ? 'collection_payment' : (($row['customer_group_name'] ?? '') === 'Customer Payment' ? 'customer_payment' : 'sale')))) }}</td>
                                     <td></td>
                                     <td></td>
                                     <td></td>
@@ -1154,18 +1033,18 @@
                                                href="#"
                                                data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
                                                data-container=".view_modal"
-                                               title="View">
+                                               title="{{ $t('view') }}">
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                         @endcanany
                                         @can('sell.update')
-                                            <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit POS">
+                                            <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="{{ $t('edit_pos') }}">
                                                 <i class="fas fa-pen"></i>
                                             </a>
                                         @endcan
                                         @cannot('sell.update')
                                             @can('direct_sell.update')
-                                                <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="Edit">
+                                                <a class="btn btn-xs btn-primary action-icon-btn action-edit" href="{{ action([\App\Http\Controllers\SellController::class, 'edit'], [$row['transaction_id']]) }}" target="_blank" title="{{ $t('edit') }}">
                                                     <i class="fas fa-pen"></i>
                                                 </a>
                                             @endcan
@@ -1179,7 +1058,7 @@
                                 <td>{{ $row['customer_name'] ?? '-' }}</td>
                                 <td>
                                     <span class="customer-group-pill {{ ($row['customer_group_name'] ?? '') === 'រំលស់' ? 'installment' : (($row['customer_group_name'] ?? '') === 'អ៊ីអន' ? 'aeon' : (in_array($row['customer_group_name'] ?? '', ['Collection Payment', 'Customer Payment']) ? 'loan-payment' : 'normal')) }}">
-                                        {{ $row['customer_group_name'] ?? 'លក់' }}
+                                        {{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['customer_group_name'] ?? 'លក់')) }}
                                     </span>
                                 </td>
                                 <td>{{ $row['lot_number'] ?? '-' }}</td>
@@ -1208,7 +1087,7 @@
                         @endphp
                         <tfoot>
                             <tr class="detail-total-row">
-                                <th colspan="10" class="text-right">Total</th>
+                                <th colspan="10" class="text-right">{{ $t('total') }}</th>
                                 <th class="text-right">{{ rtrim(rtrim(number_format($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['quantity'] ?? 0)), 2), '0'), '.') }}</th>
                                 <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['unit_price'] ?? 0))) }}</th>
                                 <th class="text-right">{{ $fmt($detailTotalRows->sum(fn ($detailRow) => (float) ($detailRow['line_total'] ?? 0))) }}</th>
@@ -1249,36 +1128,36 @@
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_collection_payment_table_filters" aria-expanded="false" aria-controls="local_cashier_collection_payment_table_filters">
-                                <i class="fa fa-filter"></i> Filters
+                                <i class="fa fa-filter"></i> {{ $t('filters') }}
                             </button>
                         </div>
                         <div class="collapse" id="local_cashier_collection_payment_table_filters">
                             <div class="row all-sale-table-filters">
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Location</label>
-                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_collection_payment_table" multiple data-placeholder="All locations">
+                                        <label>{{ $t('location') }}</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_collection_payment_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                             @foreach($collectionPaymentLocations as $locationName)
                                                 <option value="{{ $locationName }}">{{ $locationName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_collection_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_collection_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_collection_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_collection_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Cashier</label>
-                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table" multiple data-placeholder="All cashiers">
+                                        <label>{{ $t('cashier') }}</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                             @foreach($collectionPaymentCashiers as $cashierName)
                                                 <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_collection_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1288,17 +1167,17 @@
                             <table class="table table-bordered table-striped ajax_view" id="local_cashier_collection_payment_table" style="width:100%;">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Receipt No</th>
-                                        <th>Customer</th>
-                                        <th>Loan No</th>
-                                        <th class="all-sale-location-column">Location</th>
-                                        <th class="all-sale-cashier-column">Cashier</th>
-                                        <th>Method</th>
+                                        <th>{{ $t('date') }}</th>
+                                        <th>{{ $t('receipt_no') }}</th>
+                                        <th>{{ $t('customer') }}</th>
+                                        <th>{{ $t('loan_no') }}</th>
+                                        <th class="all-sale-location-column">{{ $t('location') }}</th>
+                                        <th class="all-sale-cashier-column">{{ $t('cashier') }}</th>
+                                        <th>{{ $t('method') }}</th>
                                         @foreach($report['payment_columns'] as $method)
                                             <th class="text-right">{{ $paymentLabel($method) }}</th>
                                         @endforeach
-                                        <th class="text-right">Amount Paid</th>
+                                        <th class="text-right">{{ $t('amount_paid') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1310,7 +1189,7 @@
                                             <td>{{ $row['loan_number'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['cashier_name'] }}</td>
-                                            <td>{{ $row['method_label'] }}</td>
+                                            <td>{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($row['method'] ?? ''), (string) $row['method_label']) }}</td>
                                             @foreach($report['payment_columns'] as $method)
                                                 <td class="text-right">{{ $fmt($row['payments'][$method] ?? null) }}</td>
                                             @endforeach
@@ -1320,7 +1199,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
-                                        <th colspan="7" class="text-right">Total</th>
+                                        <th colspan="7" class="text-right">{{ $t('total') }}</th>
                                         @foreach($report['payment_columns'] as $method)
                                             <th class="text-right">{{ $fmt($collectionPaymentRows->sum(fn ($row) => (float) data_get($row, 'payments.' . $method, 0))) }}</th>
                                         @endforeach
@@ -1337,36 +1216,36 @@
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_customer_payment_table_filters" aria-expanded="false" aria-controls="local_cashier_customer_payment_table_filters">
-                                <i class="fa fa-filter"></i> Filters
+                                <i class="fa fa-filter"></i> {{ $t('filters') }}
                             </button>
                         </div>
                         <div class="collapse" id="local_cashier_customer_payment_table_filters">
                             <div class="row all-sale-table-filters">
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Location</label>
-                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="All locations">
+                                        <label>{{ $t('location') }}</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                             @foreach($customerPaymentLocations as $locationName)
                                                 <option value="{{ $locationName }}">{{ $locationName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Cashier</label>
-                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="All cashiers">
+                                        <label>{{ $t('cashier') }}</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                             @foreach($customerPaymentCashiers as $cashierName)
                                                 <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1376,22 +1255,22 @@
                             <table class="table table-bordered table-striped ajax_view" id="local_cashier_customer_payment_table" style="width:100%;">
                                 <thead>
                                     <tr>
-                                        <th>Action</th>
-                                        <th>Payment Date</th>
-                                        <th>Receipt No</th>
-                                        <th>Invoice No</th>
-                                        <th>Invoice Date</th>
-                                        <th>Customer</th>
-                                        <th>Phone</th>
-                                        <th class="all-sale-location-column">Location</th>
-                                        <th class="all-sale-cashier-column">Cashier</th>
+                                        <th>{{ $t('action') }}</th>
+                                        <th>{{ $t('payment_date') }}</th>
+                                        <th>{{ $t('receipt_no') }}</th>
+                                        <th>{{ $t('invoice_no') }}</th>
+                                        <th>{{ $t('invoice_date') }}</th>
+                                        <th>{{ $t('customer') }}</th>
+                                        <th>{{ $t('phone') }}</th>
+                                        <th class="all-sale-location-column">{{ $t('location') }}</th>
+                                        <th class="all-sale-cashier-column">{{ $t('cashier') }}</th>
                                         @foreach($staticPaymentColumns as $column)
-                                            <th class="text-right">{{ $column['label'] ?? '' }}</th>
+                                            <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($column['key'] ?? ''), (string) ($column['label'] ?? '')) }}</th>
                                         @endforeach
-                                        <th class="text-right">Amount Paid</th>
-                                        <th class="text-right">Previous Due</th>
-                                        <th class="text-right">Remaining Due</th>
-                                        <th>Note</th>
+                                        <th class="text-right">{{ $t('amount_paid') }}</th>
+                                        <th class="text-right">{{ $t('previous_due') }}</th>
+                                        <th class="text-right">{{ $t('remaining_due') }}</th>
+                                        <th>{{ $t('note') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1403,7 +1282,7 @@
                                                        href="#"
                                                        data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
                                                        data-container=".view_modal"
-                                                       title="View Invoice">
+                                                       title="{{ $t('view_invoice') }}">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
                                                 @endcanany
@@ -1428,7 +1307,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
-                                        <th colspan="9" class="text-right">Total</th>
+                                        <th colspan="9" class="text-right">{{ $t('total') }}</th>
                                         @foreach($staticPaymentColumns as $column)
                                             <th class="text-right">{{ $fmt($customerPaymentRows->sum(fn ($row) => $staticPaymentAmount($row, $column))) }}</th>
                                         @endforeach
@@ -1448,36 +1327,36 @@
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_customer_due_payment_table_filters" aria-expanded="false" aria-controls="local_cashier_customer_due_payment_table_filters">
-                                <i class="fa fa-filter"></i> Filters
+                                <i class="fa fa-filter"></i> {{ $t('filters') }}
                             </button>
                         </div>
                         <div class="collapse" id="local_cashier_customer_due_payment_table_filters">
                             <div class="row all-sale-table-filters">
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Location</label>
-                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="All locations">
+                                        <label>{{ $t('location') }}</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                             @foreach($dueCustomerLocations as $locationName)
                                                 <option value="{{ $locationName }}">{{ $locationName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_customer_due_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Cashier</label>
-                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="All cashiers">
+                                        <label>{{ $t('cashier') }}</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                             @foreach($dueCustomerCashiers as $cashierName)
                                                 <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_customer_due_payment_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1487,20 +1366,20 @@
                             <table class="table table-bordered table-striped ajax_view" id="local_cashier_customer_due_payment_table" style="width:100%;">
                                 <thead>
                                     <tr>
-                                        <th>Action</th>
-                                        <th>Invoice Date</th>
-                                        <th>Invoice No</th>
-                                        <th>Customer</th>
-                                        <th>Phone</th>
-                                        <th class="all-sale-location-column">Location</th>
-                                        <th class="all-sale-cashier-column">Cashier</th>
-                                        <th>Payment Status</th>
-                                        <th class="text-right">Invoice Total</th>
-                                        <th class="text-right">Paid</th>
-                                        <th class="text-right">Remaining Due</th>
-                                        <th>Must Pay By</th>
-                                        <th>Reminder</th>
-                                        <th>Days</th>
+                                        <th>{{ $t('action') }}</th>
+                                        <th>{{ $t('invoice_date') }}</th>
+                                        <th>{{ $t('invoice_no') }}</th>
+                                        <th>{{ $t('customer') }}</th>
+                                        <th>{{ $t('phone') }}</th>
+                                        <th class="all-sale-location-column">{{ $t('location') }}</th>
+                                        <th class="all-sale-cashier-column">{{ $t('cashier') }}</th>
+                                        <th>{{ $t('payment_status') }}</th>
+                                        <th class="text-right">{{ $t('invoice_total') }}</th>
+                                        <th class="text-right">{{ $t('paid') }}</th>
+                                        <th class="text-right">{{ $t('remaining_due') }}</th>
+                                        <th>{{ $t('must_pay_by') }}</th>
+                                        <th>{{ $t('reminder') }}</th>
+                                        <th>{{ $t('days') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1512,14 +1391,14 @@
                                                        href="#"
                                                        data-href="{{ action([\App\Http\Controllers\SellController::class, 'show'], [$row['transaction_id']]) }}"
                                                        data-container=".view_modal"
-                                                       title="View Invoice">
+                                                       title="{{ $t('view_invoice') }}">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
                                                 @endcanany
                                                 @can('sell.payments')
                                                     <a class="btn btn-xs btn-success add_payment_modal action-icon-btn"
                                                        href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$row['transaction_id']]) }}"
-                                                       title="Pay off">
+                                                       title="{{ $t('pay_off') }}">
                                                         <i class="fas fa-money-bill-alt"></i>
                                                     </a>
                                                 @endcan
@@ -1530,14 +1409,14 @@
                                             <td>{{ $row['phone_number'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['cashier_name'] }}</td>
-                                            <td>{{ ucfirst($row['payment_status']) }}</td>
+                                            <td>{{ $t($row['payment_status']) }}</td>
                                             <td class="text-right">{{ $fmt($row['invoice_total']) }}</td>
                                             <td class="text-right">{{ $fmt($row['amount_paid']) }}</td>
                                             <td class="text-right @if(($row['remaining_due'] ?? 0) != 0) due-negative @endif">{{ $fmt($row['remaining_due']) }}</td>
                                             <td>{{ $row['pay_by_date'] }}</td>
                                             <td>
                                                 <span class="label {{ ($row['reminder_status'] ?? '') === 'Overdue' ? 'label-danger' : ((($row['reminder_status'] ?? '') === 'Due soon') ? 'label-warning' : 'label-info') }}">
-                                                    {{ $row['reminder_status'] }}
+                                                    {{ \Modules\LocalCashierReport\Support\ReportLanguage::label((string) ($row['reminder_status'])) }}
                                                 </span>
                                             </td>
                                             <td class="text-right @if(($row['days_remaining'] ?? 0) < 0) due-negative @endif">{{ $row['days_remaining'] }}</td>
@@ -1546,7 +1425,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="detail-total-row">
-                                        <th colspan="8" class="text-right">Total</th>
+                                        <th colspan="8" class="text-right">{{ $t('total') }}</th>
                                         <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['invoice_total'] ?? 0))) }}</th>
                                         <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['amount_paid'] ?? 0))) }}</th>
                                         <th class="text-right">{{ $fmt($dueCustomerRows->sum(fn ($row) => (float) ($row['remaining_due'] ?? 0))) }}</th>
@@ -1572,36 +1451,36 @@
                         @endphp
                         <div class="sale-table-filter-toggle">
                             <button type="button" class="btn btn-default btn-sm" data-toggle="collapse" data-target="#local_cashier_expenses_detail_table_filters" aria-expanded="false" aria-controls="local_cashier_expenses_detail_table_filters">
-                                <i class="fa fa-filter"></i> Filters
+                                <i class="fa fa-filter"></i> {{ $t('filters') }}
                             </button>
                         </div>
                         <div class="collapse" id="local_cashier_expenses_detail_table_filters">
                             <div class="row all-sale-table-filters">
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Location</label>
-                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All locations">
+                                        <label>{{ $t('location') }}</label>
+                                        <select class="form-control select2 all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="{{ $t('all_locations') }}">
                                             @foreach($expenseLocations as $locationName)
                                                 <option value="{{ $locationName }}">{{ $locationName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-location-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-3 col-sm-6">
                                     <div class="form-group">
-                                        <label>Cashier/User</label>
-                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="All cashiers">
+                                        <label>{{ $t('cashier_user') }}</label>
+                                        <select class="form-control select2 all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="{{ $t('all_cashiers') }}">
                                             @foreach($expenseCashiers as $cashierName)
                                                 <option value="{{ $cashierName }}">{{ $cashierName }}</option>
                                             @endforeach
                                         </select>
                                         <div class="all-sale-filter-actions">
-                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Select All</button>
-                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">Clear</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('select_all') }}</button>
+                                            <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-cashier-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('clear') }}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1611,21 +1490,21 @@
                             <table class="table table-bordered table-striped ajax_view" id="local_cashier_expenses_detail_table" style="width:100%;">
                                 <thead>
                                     <tr>
-                                        <th>Action</th>
-                                        <th>Date</th>
-                                        <th>Ref No</th>
-                                        <th class="all-sale-cashier-column">Cashier/User</th>
-                                        <th>Expense For</th>
-                                        <th class="all-sale-location-column">Location</th>
-                                        <th>Category</th>
-                                        <th>Payment Status</th>
+                                        <th>{{ $t('action') }}</th>
+                                        <th>{{ $t('date') }}</th>
+                                        <th>{{ $t('ref_no') }}</th>
+                                        <th class="all-sale-cashier-column">{{ $t('cashier_user') }}</th>
+                                        <th>{{ $t('expense_for') }}</th>
+                                        <th class="all-sale-location-column">{{ $t('location') }}</th>
+                                        <th>{{ $t('category') }}</th>
+                                        <th>{{ $t('payment_status') }}</th>
                                         @foreach($staticPaymentColumns as $column)
-                                            <th class="text-right">{{ $column['label'] ?? '' }}</th>
+                                            <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($column['key'] ?? ''), (string) ($column['label'] ?? '')) }}</th>
                                         @endforeach
-                                        <th class="text-right">Amount</th>
-                                        <th class="text-right">Paid</th>
-                                        <th class="text-right">Due</th>
-                                        <th>Note</th>
+                                        <th class="text-right">{{ $t('amount') }}</th>
+                                        <th class="text-right">{{ $t('paid') }}</th>
+                                        <th class="text-right">{{ $t('due') }}</th>
+                                        <th>{{ $t('note') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1636,7 +1515,7 @@
                                                     <a class="btn btn-xs btn-primary action-icon-btn action-edit"
                                                        href="{{ action([\App\Http\Controllers\ExpenseController::class, 'edit'], [$row['transaction_id']]) }}"
                                                        target="_blank"
-                                                       title="Edit Expense">
+                                                       title="{{ $t('edit_expense') }}">
                                                         <i class="fas fa-pen"></i>
                                                     </a>
                                                 @endcan
@@ -1647,7 +1526,7 @@
                                             <td>{{ $row['expense_for_name'] }}</td>
                                             <td>{{ $row['location_name'] }}</td>
                                             <td>{{ $row['category_name'] }}</td>
-                                            <td>{{ ucfirst($row['payment_status']) }}</td>
+                                            <td>{{ $t($row['payment_status']) }}</td>
                                             @foreach($staticPaymentColumns as $column)
                                                 <td class="text-right">{{ $fmt($staticPaymentAmount($row, $column)) }}</td>
                                             @endforeach
@@ -1666,7 +1545,7 @@
                                                 $expensePaymentStaticTotals[$column['key'] ?? ''] = $expenseRows->sum(fn ($row) => $staticPaymentAmount($row, $column));
                                             }
                                         @endphp
-                                        <th colspan="8" class="text-right">Total</th>
+                                        <th colspan="8" class="text-right">{{ $t('total') }}</th>
                                         @foreach($staticPaymentColumns as $column)
                                             <th class="text-right">{{ $fmt($expensePaymentStaticTotals[$column['key'] ?? ''] ?? 0) }}</th>
                                         @endforeach
@@ -1691,18 +1570,18 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="locationModalLabel">Select Business Locations</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="locationModalLabel">{{ $t('select_business_locations') }}</h4>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom:10px;">
-                    <button type="button" class="btn btn-xs btn-primary" id="select_all_locations">Select All</button>
-                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_locations">Deselect All</button>
+                    <button type="button" class="btn btn-xs btn-primary" id="select_all_locations">{{ $t('select_all') }}</button>
+                    <button type="button" class="btn btn-xs btn-default" id="deselect_all_locations">{{ $t('deselect_all') }}</button>
                 </div>
                 @foreach($locations as $location)
                     <div class="checkbox">
                         <label>
-                            <input type="checkbox" class="location-checkbox" value="{{ $location->id }}"
+                            <input type="checkbox" class="location-checkbox" name="location_ids[]" form="local_cashier_filter_form" autocomplete="off" value="{{ $location->id }}"
                                    @if(in_array($location->id, $filters['location_ids'])) checked @endif>
                             {{ $location->name }}
                         </label>
@@ -1710,8 +1589,8 @@
                 @endforeach
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="apply_locations">Apply</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-primary" id="apply_locations">{{ $t('apply') }}</button>
             </div>
         </div>
     </div>
@@ -1721,8 +1600,8 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="cashierModalLabel">Select Cashiers</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="cashierModalLabel">{{ $t('select_cashiers') }}</h4>
             </div>
             <div class="modal-body">
                 @foreach($cashiers as $cashier)
@@ -1736,8 +1615,8 @@
                 @endforeach
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="apply_cashiers">Apply</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-primary" id="apply_cashiers">{{ $t('apply') }}</button>
             </div>
         </div>
     </div>
@@ -1751,7 +1630,14 @@
 <script src="{{ asset('js/payment.js?v=' . $asset_v) }}"></script>
 <script>
     $(function () {
-        $('#local_cashier_report_app .select2').select2();
+        @include('localcashierreport::partials.table_language')
+        restoreAppliedLocations();
+        $(window).on('pageshow', function (event) {
+            if (event.originalEvent && event.originalEvent.persisted) {
+                restoreAppliedLocations();
+            }
+        });
+        $('#local_cashier_report_app .select2').select2({ language: reportSelect2Language });
         const $startDate = $('#start_date');
         const $endDate = $('#end_date');
         const $dr = $('#date_range_picker');
@@ -1759,7 +1645,8 @@
         const end = $endDate.val() ? moment($endDate.val(), 'YYYY-MM-DD') : moment();
 
         $dr.daterangepicker(
-            $.extend(true, {}, dateRangeSettings, {
+            $.extend(true, {}, $.extend({}, dateRangeSettings, { ranges: reportDateRanges }), reportDateSettings, {
+                ranges: reportDateRanges,
                 startDate: start,
                 endDate: end
             }),
@@ -1779,29 +1666,61 @@
             });
         });
 
-        $('#apply_locations').on('click', function () {
-            var selectedIds = [];
+        function syncLocationSelection() {
             var selectedNames = [];
-            $('.location-checkbox:checked').each(function () {
-                selectedIds.push($(this).val());
+            $('#location_modal .location-checkbox:checked').each(function () {
                 selectedNames.push($(this).closest('label').text().trim());
             });
 
-            $('#location_ids_hidden option').prop('selected', false);
-            selectedIds.forEach(function (id) {
-                $('#location_ids_hidden option[value="' + id + '"]').prop('selected', true);
-            });
-
             $('#location_preview').val(selectedNames.join(', '));
+        }
+
+        function restoreAppliedLocations() {
+            var appliedIds = @json(array_values($filters['location_ids']));
+            $('#location_modal .location-checkbox').each(function () {
+                this.checked = appliedIds.indexOf(Number(this.value)) !== -1;
+            });
+            syncLocationSelection();
+        }
+
+        $('#location_modal').on('change', '.location-checkbox', syncLocationSelection);
+        $('#local_cashier_filter_form').on('submit', syncLocationSelection);
+        $('#apply_locations').on('click', function () {
+            syncLocationSelection();
             $('#location_modal').modal('hide');
         });
 
         $('#select_all_locations').on('click', function () {
             $('.location-checkbox').prop('checked', true);
+            syncLocationSelection();
         });
 
         $('#deselect_all_locations').on('click', function () {
             $('.location-checkbox').prop('checked', false);
+            syncLocationSelection();
+        });
+
+        $('a[href]').filter(function () {
+            var path = new URL(this.href, window.location.href).pathname;
+            return path === @json(parse_url(route('local-cashier-report.print'), PHP_URL_PATH))
+                || path === @json(parse_url(route('local-cashier-report.export'), PHP_URL_PATH))
+                || $(this).is('.report-tab-btn, .report-language-link');
+        }).on('click', function () {
+            syncLocationSelection();
+            var target = new URL(this.href, window.location.href);
+            var fields = $('#local_cashier_filter_form').serializeArray();
+            fields = fields.filter(function (field) {
+                return !(['style_mode', 'report_lang'].indexOf(field.name) !== -1 && target.searchParams.has(field.name));
+            });
+            var fieldNames = fields.map(function (field) { return field.name.replace(/\[.*$/, ''); });
+            fieldNames.push('location_ids', 'user_ids');
+            Array.from(target.searchParams.keys()).forEach(function (key) {
+                if (fieldNames.indexOf(key.replace(/\[.*$/, '')) !== -1) {
+                    target.searchParams.delete(key);
+                }
+            });
+            fields.forEach(function (field) { target.searchParams.append(field.name, field.value); });
+            this.href = target.toString();
         });
 
         $('#apply_cashiers').on('click', function () {
@@ -1829,10 +1748,11 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 dom: 'Bfrtip',
-                buttons: ['pageLength', 'colvis', 'excel', 'print']
+                language: reportDataTableLanguage,
+                buttons: ['pageLength', { extend: 'colvis', text: @json($t('column_visibility')) }, { extend: 'excel', text: @json($t('export_excel')) }, { extend: 'print', text: @json($t('print')) }]
             });
         }
         function localCashierCopyCellFormatter(data, row, column, node) {
@@ -1876,7 +1796,7 @@
 
             var button = {
                 extend: 'copy',
-                text: 'Copy',
+                text: @json($t('copy')),
                 className: 'btn btn-sm btn-outline-primary',
                 exportOptions: localCashierCopyExportOptions(options.columns || ':visible')
             };
@@ -1911,28 +1831,22 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 columnDefs: [
                     { targets: 'never-visible', visible: false, searchable: true }
                 ],
                 buttons: [
-                    { extend: 'copy', text: 'Copy', className: 'btn btn-sm btn-outline-primary', exportOptions: localCashierCopyExportOptions(':visible') },
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'copy', text: @json($t('copy')), className: 'btn btn-sm btn-outline-primary', exportOptions: localCashierCopyExportOptions(':visible') },
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -1945,18 +1859,12 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 buttons: [
                     localCashierCopyButton({
                         withoutHeader: true,
@@ -1964,11 +1872,11 @@
                             return index !== 0 && $(node).is(':visible');
                         }
                     }),
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -1981,18 +1889,12 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 buttons: [
                     localCashierCopyButton({
                         withoutHeader: true,
@@ -2000,11 +1902,11 @@
                             return index !== 0 && $(node).is(':visible');
                         }
                     }),
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -2017,18 +1919,12 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 buttons: [
                     localCashierCopyButton({
                         withoutHeader: true,
@@ -2036,11 +1932,11 @@
                             return index !== 0 && $(node).is(':visible');
                         }
                     }),
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -2053,18 +1949,12 @@
                 info: true,
                 autoWidth: false,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                 pagingType: 'full_numbers',
                 scrollX: true,
                 responsive: false,
                 dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                language: {
-                    search: 'Search:',
-                    lengthMenu: 'Show _MENU_ entries',
-                    zeroRecords: 'No data available in table',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                    infoEmpty: 'Showing 0 to 0 of 0 entries'
-                },
+                language: reportDataTableLanguage,
                 buttons: [
                     localCashierCopyButton({
                         withoutHeader: true,
@@ -2072,11 +1962,11 @@
                             return $(node).is(':visible');
                         }
                     }),
-                    { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary' },
-                    { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary' }
+                    { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary' },
+                    { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary' }
                 ]
             });
         }
@@ -2100,28 +1990,22 @@
                     info: true,
                     autoWidth: false,
                     pageLength: 25,
-                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, @json($t('all'))]],
                     pagingType: 'full_numbers',
                     scrollX: ! isAllSaleDetailTable,
                     responsive: false,
                     dom: "<'row'<'col-sm-4'l><'col-sm-4 text-center'B><'col-sm-4'f>>rt<'row'<'col-sm-6'i><'col-sm-6'p>>",
-                    language: {
-                        search: 'Search:',
-                        lengthMenu: 'Show _MENU_ entries',
-                        zeroRecords: 'No data available in table',
-                        info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                        infoEmpty: 'Showing 0 to 0 of 0 entries'
-                    },
+                    language: reportDataTableLanguage,
                     columnDefs: [
                         { targets: 'never-visible', visible: false, searchable: true }
                     ],
                     buttons: [
                         moduleCopyButton,
-                        { extend: 'csv', text: 'Export CSV', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
-                        { extend: 'excel', text: 'Export Excel', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
-                        { extend: 'print', text: 'Print', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
-                        { extend: 'colvis', text: 'Column visibility', className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
-                        { extend: 'pdf', text: 'Export PDF', className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } }
+                        { extend: 'csv', text: @json($t('export_csv')), className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'excel', text: @json($t('export_excel')), className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'print', text: @json($t('print')), className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } },
+                        { extend: 'colvis', text: @json($t('column_visibility')), className: 'btn btn-sm btn-outline-primary', columns: ':not(.never-visible)' },
+                        { extend: 'pdf', text: @json($t('export_pdf')), className: 'btn btn-sm btn-outline-primary', exportOptions: { columns: ':visible' } }
                     ]
                 });
             });
@@ -2183,12 +2067,12 @@
         $(document).on('shown.bs.collapse hidden.bs.collapse', '.local-detail-tab-content .collapse', function () {
             var isOpen = $(this).hasClass('in');
             var $button = $('[data-toggle="collapse"][data-target="#' + this.id + '"]');
-            $button.html('<i class="fa fa-filter"></i> ' + (isOpen ? 'Hide filters' : 'Filters'));
+            $button.html('<i class="fa fa-filter"></i> ' + (isOpen ? @json($t('hide_filters')) : @json($t('filters'))));
         });
         $(document).on('shown.bs.collapse hidden.bs.collapse', '#classic_summary_section, #classic_plain_summary_section, #summary_cards_section', function () {
             var isOpen = $(this).hasClass('in');
             var $button = $('[data-toggle="collapse"][data-target="#' + this.id + '"]');
-            $button.html('<i class="fa fa-chevron-' + (isOpen ? 'up' : 'down') + '"></i> ' + (isOpen ? 'Hide Summary' : 'Show Summary'));
+            $button.html('<i class="fa fa-chevron-' + (isOpen ? 'up' : 'down') + '"></i> ' + (isOpen ? @json($t('hide_summary')) : @json($t('show_summary'))));
         });
         var dateActionCloseTimer = null;
         $(document)
