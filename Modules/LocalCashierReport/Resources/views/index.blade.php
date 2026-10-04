@@ -74,8 +74,30 @@
                 </li>
             </ul>
         </span>
+        <button type="button" class="btn btn-success" data-toggle="modal" data-target="#telegram_report_modal">
+            <i class="fa fa-copy" aria-hidden="true"></i> {{ $t('copy_telegram') }}
+        </button>
     </div>
 </section>
+
+<div class="modal fade no-print" id="telegram_report_modal" tabindex="-1" role="dialog" aria-labelledby="telegram_report_title">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="telegram_report_title">{{ $t('telegram_report') }}</h4>
+            </div>
+            <div class="modal-body">
+                <textarea id="telegram_report_text" class="form-control" rows="18" aria-label="{{ $t('telegram_report') }}" style="font-family: {{ $khmerFontFamily }}; resize:vertical;">{{ $telegramReport }}</textarea>
+                <p id="telegram_copy_status" role="status" aria-live="polite" style="margin:8px 0 0;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-success" id="copy_telegram_report"><i class="fa fa-copy" aria-hidden="true"></i> {{ $t('copy_telegram') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <section class="content no-print {{ in_array($filters['style_mode'], ['classic','classic_plain','business_location_report']) ? 'classic-theme' : 'sheet-theme' }}" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
     @php
@@ -1630,6 +1652,36 @@
 <script src="{{ asset('js/payment.js?v=' . $asset_v) }}"></script>
 <script>
     $(function () {
+        $('#copy_telegram_report').on('click', async function () {
+            var field = document.getElementById('telegram_report_text');
+            var button = this;
+            button.disabled = true;
+            var copied = false;
+            try {
+                if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(field.value);
+                        copied = true;
+                    } catch (error) {
+                        copied = false;
+                    }
+                }
+                if (!copied) {
+                    field.focus();
+                    field.select();
+                    field.setSelectionRange(0, field.value.length);
+                    copied = document.execCommand('copy');
+                }
+            } catch (error) {
+                copied = false;
+            } finally {
+                button.disabled = false;
+            }
+            $('#telegram_copy_status').text(copied ? @json($t('telegram_copied')) : @json($t('telegram_copy_failed')));
+        });
+        $('#telegram_report_modal').on('show.bs.modal', function () {
+            $('#telegram_copy_status').text('');
+        });
         @include('localcashierreport::partials.table_language')
         restoreAppliedLocations();
         $(window).on('pageshow', function (event) {

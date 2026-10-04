@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use Modules\LocalCashierReport\Support\ReportLanguage;
+use Modules\LocalCashierReport\Support\TelegramReport;
 
 class LocalCashierReportController extends Controller
 {
@@ -44,6 +45,13 @@ class LocalCashierReportController extends Controller
             'khmerFontFamily' => config('localcashierreport.khmer_font_family'),
             'staticPaymentColumns' => $this->getStaticPaymentColumns(),
             'report' => $report,
+            'telegramReport' => TelegramReport::build(
+                $report,
+                $filters,
+                (string) session('business.name', config('app.name')),
+                $locations->whereIn('id', $filters['location_ids'])->pluck('name')->all(),
+                $this->getStaticPaymentColumns()
+            ),
         ]);
     }
 

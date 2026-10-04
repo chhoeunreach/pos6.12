@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'copy_telegram' => 'ចម្លងសម្រាប់ Telegram',
+    'telegram_report' => 'របាយការណ៍ Telegram',
+    'telegram_copied' => 'បានចម្លងរបាយការណ៍',
+    'telegram_copy_failed' => 'មិនអាចចម្លងបាន។ សូមជ្រើសរើសអត្ថបទ ហើយចម្លងដោយខ្លួនឯង។',
     'local_cashier_report' => 'របាយការណ៍បេឡាករ',
     'business' => 'អាជីវកម្ម',
     'date_range' => 'ចន្លោះកាលបរិច្ឆេទ',

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'copy_telegram' => 'Copy for Telegram',
+    'telegram_report' => 'Telegram Report',
+    'telegram_copied' => 'Report copied',
+    'telegram_copy_failed' => 'Could not copy. Select the message and copy it manually.',
     'local_cashier_report' => 'Cashier Report',
     'business' => 'Business',
     'date_range' => 'Date Range',
