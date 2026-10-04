@@ -42,18 +42,18 @@ class LocalCashierReportLanguageTest extends TestCase
         $this->assertSame('Cashier Report', ReportLanguage::text('local_cashier_report'));
     }
 
-    public function test_khmer_user_language_is_used_without_a_report_override(): void
+    public function test_khmer_is_used_without_a_report_override(): void
     {
-        foreach (['km', 'kh'] as $locale) {
+        foreach (['en', 'km', 'kh'] as $locale) {
             $this->app['config']->set('app.locale', $locale);
             $this->assertSame('km', ReportLanguage::current());
             $this->assertSame('របាយការណ៍បេឡាករ', ReportLanguage::text('local_cashier_report'));
         }
     }
 
-    public function test_invalid_report_language_falls_back_to_user_language(): void
+    public function test_invalid_report_language_falls_back_to_khmer(): void
     {
-        $this->app['config']->set('app.locale', 'km');
+        $this->app['config']->set('app.locale', 'en');
         $this->app->instance('request', Request::create('/local-cashier-report?report_lang=invalid'));
         $this->assertSame('km', ReportLanguage::current());
     }
@@ -72,7 +72,8 @@ class LocalCashierReportLanguageTest extends TestCase
     {
         $this->assertSame('Sale', ReportLanguage::label('លក់', 'en'));
         $this->assertSame('Installment', ReportLanguage::label('រំលស់', 'en'));
-        $this->assertSame('ការទូទាត់របស់អតិថិជន', ReportLanguage::label('Customer Payment', 'km'));
+        $this->assertSame('សងប្រាក់រំលស់', ReportLanguage::label('Collection Payment', 'km'));
+        $this->assertSame('សងប្រាក់ខ្វះ', ReportLanguage::label('Customer Payment', 'km'));
         $this->assertSame('ហួសកំណត់', ReportLanguage::label('Overdue', 'km'));
         $this->assertSame('Wholesale Customers', ReportLanguage::label('Wholesale Customers', 'km'));
     }

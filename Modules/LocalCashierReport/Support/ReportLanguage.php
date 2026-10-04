@@ -11,7 +11,7 @@ class ReportLanguage
             return $requested;
         }
 
-        return in_array(app()->getLocale(), ['km', 'kh'], true) ? 'km' : 'en';
+        return 'km';
     }
 
     public static function text(string $key, ?string $language = null): string
