@@ -172,11 +172,6 @@
                     <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#cashier_modal" style="margin-top:6px;">
                         {{ $t('select_cashiers') }}
                     </button>
-                    <select name="user_ids[]" id="user_ids_hidden" class="form-control" multiple style="display:none;">
-                        @foreach($cashiers as $cashier)
-                            <option value="{{ $cashier->id }}" @if(in_array($cashier->id, $filters['user_ids'])) selected @endif>{{ $cashier->name }}</option>
-                        @endforeach
-                    </select>
                 </div>
             </div>
             <div class="col-md-2">
@@ -1629,7 +1624,7 @@
                 @foreach($cashiers as $cashier)
                     <div class="checkbox">
                         <label>
-                            <input type="checkbox" class="cashier-checkbox" value="{{ $cashier->id }}"
+                            <input type="checkbox" class="cashier-checkbox" name="user_ids[]" form="local_cashier_filter_form" autocomplete="off" value="{{ $cashier->id }}"
                                    @if(in_array($cashier->id, $filters['user_ids'])) checked @endif>
                             {{ $cashier->name }}
                         </label>
@@ -1684,9 +1679,11 @@
         });
         @include('localcashierreport::partials.table_language')
         restoreAppliedLocations();
+        restoreAppliedCashiers();
         $(window).on('pageshow', function (event) {
             if (event.originalEvent && event.originalEvent.persisted) {
                 restoreAppliedLocations();
+                restoreAppliedCashiers();
             }
         });
         $('#local_cashier_report_app .select2').select2({ language: reportSelect2Language });
@@ -1777,19 +1774,19 @@
         });
 
         function syncCashierSelection() {
-            var selectedIds = [];
             var selectedNames = [];
             $('#cashier_modal .cashier-checkbox:checked').each(function () {
-                selectedIds.push($(this).val());
                 selectedNames.push($(this).closest('label').text().trim());
             });
-
-            $('#user_ids_hidden option').prop('selected', false);
-            selectedIds.forEach(function (id) {
-                $('#user_ids_hidden option[value="' + id + '"]').prop('selected', true);
-            });
-
             $('#cashier_preview').val(selectedNames.join(', '));
+        }
+
+        function restoreAppliedCashiers() {
+            var appliedIds = @json(array_values(array_map('intval', $filters['user_ids'])));
+            $('#cashier_modal .cashier-checkbox').each(function () {
+                this.checked = appliedIds.indexOf(Number(this.value)) !== -1;
+            });
+            syncCashierSelection();
         }
 
         $('#cashier_modal').on('change', '.cashier-checkbox', syncCashierSelection);

@@ -227,7 +227,52 @@ class LocalCashierReportController extends Controller
             });
         }
 
-        return $query->get();
+        $cashiers = $query->get();
+        foreach (['accessory', 'service'] as $source) {
+            $moduleLocationIds = $this->moduleLocationIds($locationIds, $source);
+            $connection = (string) config($source . '.database_connection', $source);
+            if (empty($moduleLocationIds) || ! $this->hasRequiredReportTables($connection, ['users', 'transactions'])) {
+                continue;
+            }
+
+            $moduleCashiers = DB::connection($connection)->table('users as u')
+                ->where('u.business_id', 1)
+                ->whereExists(function ($sub) use ($moduleLocationIds) {
+                    $sub->selectRaw('1')->from('transactions as t')
+                        ->whereColumn('t.created_by', 'u.id')
+                        ->where('t.business_id', 1)
+                        ->where('t.type', 'sell')
+                        ->where('t.status', 'final')
+                        ->whereIn('t.location_id', $moduleLocationIds);
+                })
+                ->select('u.id', DB::raw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as name"))
+                ->get()
+                ->map(function ($cashier) use ($source) {
+                    $cashier->id = $this->moduleCashierFilterId((int) $cashier->id, $source);
+                    $cashier->name .= ' (' . ucfirst($source) . ')';
+
+                    return $cashier;
+                });
+            $cashiers = $cashiers->merge($moduleCashiers);
+        }
+
+        return $cashiers->sortBy('name')->values();
+    }
+
+    private function moduleCashierFilterId(int $userId, string $source): int
+    {
+        // Each database numbers its users independently, just like module locations.
+        return -($userId * 2 + ($source === 'service' ? 1 : 0));
+    }
+
+    private function moduleCashierIds(array $selectedIds, string $source): array
+    {
+        $parity = $source === 'service' ? 1 : 0;
+
+        return array_values(array_map(
+            fn ($id) => intdiv(-(int) $id, 2),
+            array_filter($selectedIds, fn ($id) => (int) $id < -1 && (-(int) $id % 2) === $parity)
+        ));
     }
 
     public function getReportData(array $filters): array
@@ -1189,7 +1234,7 @@ class LocalCashierReportController extends Controller
 
         $userMap = [];
         foreach ($userSummary as $row) {
-            $key = ((int) ($row['id'] ?? 0)) > 0 ? 'id:' . (int) $row['id'] : 'name:' . strtolower((string) ($row['name'] ?? 'N/A'));
+            $key = ((int) ($row['id'] ?? 0)) !== 0 ? 'id:' . (int) $row['id'] : 'name:' . strtolower((string) ($row['name'] ?? 'N/A'));
             $userMap[$key] = $row;
         }
 
@@ -1220,7 +1265,7 @@ class LocalCashierReportController extends Controller
             $amount = (float) ($row['line_total'] ?? 0);
             $soldQty = (float) ($row['quantity'] ?? 0);
 
-            $userKey = ((int) ($row['cashier_id'] ?? 0)) > 0 ? 'id:' . (int) $row['cashier_id'] : 'name:' . strtolower((string) ($row['cashier_name'] ?? 'N/A'));
+            $userKey = ((int) ($row['cashier_id'] ?? 0)) !== 0 ? 'id:' . (int) $row['cashier_id'] : 'name:' . strtolower((string) ($row['cashier_name'] ?? 'N/A'));
             $userQty = $qtyType === 'invoice_count'
                 ? (isset($counted['user'][$userKey][$transactionKey]) ? 0.0 : 1.0)
                 : $soldQty;
@@ -1312,6 +1357,12 @@ class LocalCashierReportController extends Controller
 
     private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, ?int $limit): array
     {
+        if (! empty($filters['user_ids'])) {
+            $filters['user_ids'] = $this->moduleCashierIds($filters['user_ids'], $modulePrefix);
+            if (empty($filters['user_ids'])) {
+                return ['rows' => [], 'total' => 0];
+            }
+        }
         $filters['location_ids'] = $this->moduleLocationIds($filters['location_ids'], $modulePrefix);
         if (empty($filters['location_ids'])) {
             return ['rows' => [], 'total' => 0];
@@ -1467,8 +1518,8 @@ class LocalCashierReportController extends Controller
                 'date' => Carbon::parse($line->transaction_date)->format('Y-m-d H:i'),
                 'invoice_no' => (string) ($line->invoice_no ?: ('#' . $txnId)),
                 'i_t' => $itText !== '' ? $itText : '-',
-                'cashier_id' => (int) $line->created_by,
-                'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A'),
+                'cashier_id' => $this->moduleCashierFilterId((int) $line->created_by, $modulePrefix),
+                'cashier_name' => (string) ($cashierMap[(int) $line->created_by] ?? 'N/A') . ' (' . ucfirst($modulePrefix) . ')',
                 'sell_note_number' => $this->numericText($sellNote),
                 'location_id' => (int) $line->location_id,
                 'location_name' => (string) ($locationMap[$line->location_id] ?? 'N/A'),
