@@ -967,9 +967,8 @@ class LocalCashierReportController extends Controller
             ->pluck('amount', 'location_id');
 
         $grandPaid = 0.0;
-        $grandExpenses = 0.0;
-        $grandSellReturn = 0.0;
-        $grandActualIncome = 0.0;
+        $grandExpenses = (float) $expenseQuery->sum();
+        $grandSellReturn = (float) $sellReturnQuery->sum();
         $paymentWithExpenses = $paymentSummaryMap;
         $actualIncomeByPayment = [];
 
@@ -983,13 +982,10 @@ class LocalCashierReportController extends Controller
             $row['actual_income'] = $actualIncome;
 
             $grandPaid += (float) $row['paid'];
-            $grandExpenses += $expenses;
-            $grandSellReturn += $sellReturn;
-            $grandActualIncome += $actualIncome;
         }
         unset($row);
         $grandPaid += $moduleSaleTotals['paid'];
-        $grandActualIncome += $moduleSaleTotals['paid'];
+        $grandActualIncome = $grandPaid - $grandExpenses - $grandSellReturn;
         foreach ($locationRows as &$row) {
             $locationId = (int) $row['location_id'];
             $expenses = (float) ($expenseByLocationQuery[$locationId] ?? 0);
