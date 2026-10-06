@@ -24,7 +24,7 @@ class LocalCashierTelegramReportTest extends TestCase
                 ['label' => 'Accessory', 'payments' => ['cash' => 3.5, 'custom_pay_2' => 9.5]],
                 ['label' => 'Service', 'payments' => ['custom_pay_2' => 100]],
             ],
-            'payment_with_expenses' => ['cash' => 125, 'custom_pay_2' => 210, 'expenses' => 52.5],
+            'payment_with_expenses' => ['cash' => 128.5, 'custom_pay_2' => 319.5, 'expenses' => 52.5],
             'expense_payment_summary' => ['cash' => 2.5, 'custom_pay_6' => 50],
             'expense_detail_rows' => [['note' => 'Delivery', 'amount' => 52.5]],
             'detail_meta' => ['expense_total' => 1001],
@@ -50,6 +50,28 @@ class LocalCashierTelegramReportTest extends TestCase
         $this->assertStringContainsString('ទី03 ខែ10 ឆ្នាំ2026 - ទី04 ខែ10 ឆ្នាំ2026', $text);
         $this->assertStringContainsString('លក់បាន 0វិក្កយបត្រ', $text);
         $this->assertStringContainsString('លុយ=$ 0 ធនាគារ=$ 0' . "\n" . 'សរុប=$ 0', $text);
+    }
+
+    public function test_filtered_module_sales_and_expenses_use_report_totals_without_pos_sales(): void
+    {
+        $text = $this->build([
+            'rows_by_location' => [],
+            'module_dashboard_rows' => [
+                ['label' => 'Accessory', 'payments' => ['cash' => 55]],
+                ['label' => 'Service', 'payments' => ['card' => 20]],
+            ],
+            'payment_with_expenses' => ['cash' => 55, 'card' => 20, 'expenses' => 19.5],
+            'expense_payment_summary' => ['cash' => 2, 'card' => 17.5],
+            'expense_detail_rows' => [['note' => 'Filtered expense', 'amount' => 19.5]],
+            'grand_expenses' => 19.5,
+        ]);
+
+        $this->assertStringContainsString('លក់បាន 0ដើម', $text);
+        $this->assertStringContainsString('1. Filtered expense=$ 19.5', $text);
+        $this->assertStringContainsString('លុយ=$ 55 ធនាគារ=$ 20' . "\n" . 'សរុប=$ 75', $text);
+        $this->assertStringContainsString('លុយ=$ 2 ធនាគារ=$ 17.5' . "\n" . 'សរុប=$ 19.5', $text);
+        $this->assertStringContainsString('លុយ=$ 53 ធនាគារ=$ 2.5' . "\n" . 'សរុប=$ 55.5', $text);
+        $this->assertStringNotContainsString('សរុប=$ 150', $text);
     }
 
     public function test_unmapped_payment_methods_remain_in_the_message_and_totals(): void

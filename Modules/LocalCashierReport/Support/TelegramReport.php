@@ -93,10 +93,6 @@ class TelegramReport
         $expensePayments = $report['expense_payment_summary'] ?? [];
         $incomePayments = $report['payment_with_expenses'] ?? [];
         unset($incomePayments['expenses']);
-        // Module payments are summarized separately from the main cashier totals.
-        foreach ($report['module_dashboard_rows'] ?? [] as $row) {
-            $addPayments($incomePayments, $row['payments'] ?? []);
-        }
         $remainingPayments = $incomePayments;
         foreach ($expensePayments as $method => $amount) {
             $remainingPayments[$method] = ($remainingPayments[$method] ?? 0) - (float) $amount;
