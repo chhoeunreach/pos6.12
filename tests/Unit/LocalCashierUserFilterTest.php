@@ -75,4 +75,34 @@ class LocalCashierUserFilterTest extends TestCase
         $this->assertSame(25.0, $byId[-14]['amount']);
         $this->assertSame(25.0, $byId[-15]['amount']);
     }
+
+    public function test_module_sales_totals_match_visible_module_rows(): void
+    {
+        $totals = $this->invoke('moduleSaleTotals', [
+            [
+                'row_type' => 'sale',
+                'transaction_id' => 1,
+                'line_total' => 55.0,
+                'paid' => 55.0,
+                'due' => 0.0,
+                'quantity' => 2.0,
+                'payments' => ['cash' => 55.0],
+            ],
+            [
+                'row_type' => 'sale',
+                'transaction_id' => 2,
+                'line_total' => 40.0,
+                'paid' => 20.0,
+                'due' => 20.0,
+                'quantity' => 3.0,
+                'payments' => ['card' => 20.0],
+            ],
+        ], ['cash', 'card']);
+
+        $this->assertSame(95.0, $totals['total']);
+        $this->assertSame(75.0, $totals['paid']);
+        $this->assertSame(20.0, $totals['due']);
+        $this->assertSame(55.0, $totals['payments']['cash']);
+        $this->assertSame(20.0, $totals['payments']['card']);
+    }
 }

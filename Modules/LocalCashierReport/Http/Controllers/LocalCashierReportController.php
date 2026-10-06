@@ -921,14 +921,24 @@ class LocalCashierReportController extends Controller
                 null
             )['rows']
             : $serviceSaleDetailResult['rows'];
+        $moduleSaleSummaryRows = collect($accessorySaleSummaryRows ?? [])->merge($serviceSaleSummaryRows ?? []);
         $this->mergeModuleSummaryRows(
-            collect($accessorySaleSummaryRows ?? [])->merge($serviceSaleSummaryRows ?? []),
+            $moduleSaleSummaryRows,
             $filters,
             $userSummary,
             $locationSummary,
             $customerGroupSummary,
             $brandSummary
         );
+        $moduleSaleTotals = $this->moduleSaleTotals($moduleSaleSummaryRows, $paymentColumns);
+        $grandTotal += $moduleSaleTotals['total'];
+        $grandDue += $moduleSaleTotals['due'];
+        foreach ($moduleSaleTotals['payments'] as $method => $amount) {
+            $paymentSummaryMap[$method] = ($paymentSummaryMap[$method] ?? 0) + (float) $amount;
+        }
+        foreach ($moduleSaleTotals['payment_qty'] as $method => $qty) {
+            $paymentQtySummaryMap[$method] = ($paymentQtySummaryMap[$method] ?? 0) + (float) $qty;
+        }
         $summaryTotals = $this->summaryTotals($userSummary, $locationSummary, $customerGroupSummary, $brandSummary, $paymentSummary);
 
         $sellReturnQuery = DB::table('transactions as t')
@@ -978,6 +988,8 @@ class LocalCashierReportController extends Controller
             $grandActualIncome += $actualIncome;
         }
         unset($row);
+        $grandPaid += $moduleSaleTotals['paid'];
+        $grandActualIncome += $moduleSaleTotals['paid'];
         foreach ($locationRows as &$row) {
             $locationId = (int) $row['location_id'];
             $expenses = (float) ($expenseByLocationQuery[$locationId] ?? 0);
@@ -1353,6 +1365,39 @@ class LocalCashierReportController extends Controller
                 'qty' => array_sum(array_map(fn ($r) => (float) ($r['qty'] ?? 0), $paymentSummary)),
             ],
         ];
+    }
+
+    private function moduleSaleTotals($moduleRows, array $paymentColumns): array
+    {
+        $totals = [
+            'total' => 0.0,
+            'paid' => 0.0,
+            'due' => 0.0,
+            'payments' => [],
+            'payment_qty' => [],
+        ];
+
+        foreach ($moduleRows as $row) {
+            if (($row['row_type'] ?? 'sale') !== 'sale') {
+                continue;
+            }
+
+            $totals['total'] += (float) ($row['line_total'] ?? 0);
+            $totals['paid'] += (float) ($row['paid'] ?? 0);
+            $totals['due'] += (float) ($row['due'] ?? 0);
+
+            foreach ($paymentColumns as $method) {
+                $amount = (float) data_get($row, 'payments.' . $method, 0);
+                if (abs($amount) < 0.00001) {
+                    continue;
+                }
+
+                $totals['payments'][$method] = ($totals['payments'][$method] ?? 0) + $amount;
+                $totals['payment_qty'][$method] = ($totals['payment_qty'][$method] ?? 0) + (float) ($row['quantity'] ?? 0);
+            }
+        }
+
+        return $totals;
     }
 
     private function getModuleSaleDetailRows(string $connection, string $modulePrefix, array $filters, array $paymentColumns, ?int $limit): array

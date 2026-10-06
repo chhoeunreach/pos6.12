@@ -413,7 +413,8 @@
                     })->values();
                     $dashboardDueTotal = $dashboardLocationGroupRows
                         ->reject(fn ($row) => in_array((int) ($row['sort'] ?? 0), [2, 3], true))
-                        ->sum(fn ($row) => (float) ($row['due'] ?? 0));
+                        ->sum(fn ($row) => (float) ($row['due'] ?? 0))
+                        + collect($moduleDashboardRows ?? [])->sum(fn ($row) => (float) ($row['due'] ?? 0));
                     $hasNormalDashboardGroup = $dashboardLocationGroupRows
                         ->contains(fn ($row) => (int) ($row['sort'] ?? 0) === 1);
                     $lastDashboardCustomerGroup = null;
