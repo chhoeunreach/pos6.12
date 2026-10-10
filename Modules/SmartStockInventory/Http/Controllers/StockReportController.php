@@ -34,6 +34,34 @@ class StockReportController extends Controller
         return '<span data-export-value="'.e($export_date).'">'.e($formatted_date).'</span>';
     }
 
+    protected function linkedPurchaseCosts()
+    {
+        // This report shows original sales; returns are reported separately.
+        return DB::table('transaction_sell_lines_purchase_lines as tspl')
+            ->leftJoin('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+            ->select(
+                'tspl.sell_line_id',
+                DB::raw('SUM(tspl.quantity * pl.purchase_price_inc_tax) as purchase_total'),
+                DB::raw('SUM(tspl.quantity) as purchase_qty'),
+                DB::raw('SUM(CASE WHEN pl.purchase_price_inc_tax IS NOT NULL THEN tspl.quantity ELSE 0 END) as costed_qty')
+            )
+            ->whereNotNull('tspl.sell_line_id')
+            ->where('tspl.quantity', '>', 0)
+            ->groupBy('tspl.sell_line_id');
+    }
+
+    protected function purchaseCostExpressions()
+    {
+        $price = "CASE
+            WHEN pc.purchase_qty = transaction_sell_lines.quantity AND pc.costed_qty = pc.purchase_qty
+                THEN pc.purchase_total / NULLIF(pc.purchase_qty, 0)
+            WHEN pc.sell_line_id IS NULL THEN lot_pl.purchase_price_inc_tax
+            ELSE NULL
+        END";
+
+        return [$price, 'transaction_sell_lines.quantity * ('.$price.')'];
+    }
+
     public function stockSellReport(Request $request)
     {
         if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
@@ -62,39 +90,11 @@ class StockReportController extends Controller
                 ->whereNull('parent_id')
                 ->groupBy('transaction_id');
 
-            $purchase_costs = DB::table('transaction_sell_lines_purchase_lines as tspl')
-                ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
-                ->select(
-                    'tspl.sell_line_id',
-                    DB::raw('SUM((tspl.quantity - COALESCE(tspl.qty_returned, 0)) * pl.purchase_price_inc_tax) as purchase_total'),
-                    DB::raw('SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)) as purchase_qty'),
-                    DB::raw("GROUP_CONCAT(DISTINCT NULLIF(pl.lot_number, '') ORDER BY pl.lot_number SEPARATOR ', ') as lots")
-                )
-                ->whereNotNull('tspl.sell_line_id')
-                ->groupBy('tspl.sell_line_id');
+            $purchase_costs = $this->linkedPurchaseCosts()
+                ->addSelect(DB::raw("GROUP_CONCAT(DISTINCT NULLIF(pl.lot_number, '') ORDER BY pl.lot_number SEPARATOR ', ') as lots"));
 
-            $fifo_purchase_price_sql = "COALESCE(
-                pc.purchase_total / NULLIF(pc.purchase_qty, 0),
-                lot_pl.purchase_price_inc_tax,
-                (
-                    SELECT pl_fifo.purchase_price_inc_tax
-                    FROM purchase_lines as pl_fifo
-                    INNER JOIN transactions as t_fifo ON pl_fifo.transaction_id = t_fifo.id
-                    WHERE pl_fifo.variation_id = transaction_sell_lines.variation_id
-                        AND t_fifo.business_id = t.business_id
-                        AND t_fifo.location_id = t.location_id
-                        AND t_fifo.status = 'received'
-                        AND t_fifo.type IN ('purchase', 'opening_stock')
-                        AND t_fifo.transaction_date <= t.transaction_date
-                    ORDER BY t_fifo.transaction_date ASC, pl_fifo.id ASC
-                    LIMIT 1
-                ),
-                v.dpp_inc_tax,
-                v.default_purchase_price,
-                0
-            )";
-            $fifo_purchase_total_sql = "COALESCE(pc.purchase_total, transaction_sell_lines.quantity * ({$fifo_purchase_price_sql}), 0)";
-            $line_sell_total_sql = '((transaction_sell_lines.quantity * transaction_sell_lines.unit_price_before_discount) - COALESCE(transaction_sell_lines.line_discount_amount, 0))';
+            [$purchase_price_sql, $purchase_total_sql] = $this->purchaseCostExpressions();
+            $line_sell_total_sql = '(transaction_sell_lines.quantity * transaction_sell_lines.unit_price_inc_tax)';
 
             $sells = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
                 ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
@@ -134,11 +134,11 @@ class StockReportController extends Controller
                     'v.sub_sku as sku',
                     DB::raw("COALESCE(pc.lots, NULLIF(lot_pl.lot_number, ''), '') as lots"),
                     'transaction_sell_lines.quantity',
-                    'transaction_sell_lines.unit_price_before_discount as price',
+                    'transaction_sell_lines.unit_price_inc_tax as price',
                     DB::raw($line_sell_total_sql.' as total'),
-                    DB::raw($fifo_purchase_price_sql.' as purchase_price'),
-                    DB::raw($fifo_purchase_total_sql.' as purchase_total'),
-                    DB::raw('('.$line_sell_total_sql.' - '.$fifo_purchase_total_sql.') as profit_loss'),
+                    DB::raw($purchase_price_sql.' as purchase_price'),
+                    DB::raw($purchase_total_sql.' as purchase_total'),
+                    DB::raw('('.$line_sell_total_sql.' - '.$purchase_total_sql.') as profit_loss'),
                     DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
                     DB::raw("COALESCE(NULLIF(TRIM(tcg.name), ''), NULLIF(TRIM(ccg.name), ''), 'លក់') as customer_group"),
                     DB::raw('COALESCE(tp.cash, 0) as cash'),
@@ -204,7 +204,8 @@ class StockReportController extends Controller
                 ->selectRaw('
                     COALESCE(SUM(quantity), 0) as quantity,
                     COALESCE(SUM(total), 0) as total,
-                    COALESCE(SUM(profit_loss), 0) as profit_loss,
+                    CASE WHEN COUNT(purchase_total) = COUNT(*) THEN COALESCE(SUM(purchase_total), 0) ELSE NULL END as purchase_total,
+                    CASE WHEN COUNT(profit_loss) = COUNT(*) THEN COALESCE(SUM(profit_loss), 0) ELSE NULL END as profit_loss,
                     COALESCE(SUM(cash), 0) as cash,
                     COALESCE(SUM(wing), 0) as wing,
                     COALESCE(SUM(aba), 0) as aba,
@@ -241,12 +242,27 @@ class StockReportController extends Controller
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->price.'">'.$row->price.'</span>';
                 })
                 ->editColumn('purchase_price', function ($row) {
+                    if ($row->purchase_price === null) {
+                        return '<span data-export-value="Unavailable">Unavailable</span>';
+                    }
+
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                })
+                ->editColumn('purchase_total', function ($row) {
+                    if ($row->purchase_total === null) {
+                        return '<span data-export-value="Unavailable">Unavailable</span>';
+                    }
+
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_total.'">'.$row->purchase_total.'</span>';
                 })
                 ->editColumn('total', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->total.'">'.$row->total.'</span>';
                 })
                 ->editColumn('profit_loss', function ($row) {
+                    if ($row->profit_loss === null) {
+                        return '<span data-export-value="Unavailable">Unavailable</span>';
+                    }
+
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->profit_loss.'">'.$row->profit_loss.'</span>';
                 })
                 ->editColumn('cash', function ($row) {
@@ -282,7 +298,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }

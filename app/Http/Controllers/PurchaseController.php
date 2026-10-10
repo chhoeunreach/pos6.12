@@ -771,6 +771,10 @@ class PurchaseController extends Controller
             DB::beginTransaction();
 
             //update transaction
+            $purchase_costs_before = $transaction->purchase_lines()
+                ->orderBy('id')
+                ->get(['id', 'variation_id', 'lot_number', 'purchase_price', 'purchase_price_inc_tax'])
+                ->toArray();
             $transaction->update($update_data);
 
             //Update transaction payment status
@@ -793,7 +797,15 @@ class PurchaseController extends Controller
                 $this->transactionUtil->updatePurchaseOrderStatus($purchase_order_ids);
             }
 
-            $this->transactionUtil->activityLog($transaction, 'edited', $transaction_before);
+            $purchase_costs_after = $transaction->purchase_lines()
+                ->orderBy('id')
+                ->get(['id', 'variation_id', 'lot_number', 'purchase_price', 'purchase_price_inc_tax'])
+                ->toArray();
+            $cost_properties = $purchase_costs_before !== $purchase_costs_after ? [
+                'old' => ['purchase_costs' => $purchase_costs_before],
+                'attributes' => ['purchase_costs' => $purchase_costs_after],
+            ] : [];
+            $this->transactionUtil->activityLog($transaction, 'edited', $transaction_before, $cost_properties);
 
             PurchaseCreatedOrModified::dispatch($transaction);
 

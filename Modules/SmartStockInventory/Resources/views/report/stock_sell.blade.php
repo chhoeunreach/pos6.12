@@ -31,8 +31,9 @@
                         <th>Lots</th>
                         <th>Product</th>
                         <th class="text-right">Qty</th>
-                        <th class="text-right">Purchase Price</th>
-                        <th class="text-right">Price</th>
+                        <th class="text-right">Purchase Cost (Incl. Tax)</th>
+                        <th class="text-right">Purchase Total</th>
+                        <th class="text-right">Selling Price (Incl. Tax)</th>
                         <th class="text-right">Total</th>
                         <th class="text-right">Profit/Loss</th>
                         <th class="text-right">Cash</th>
@@ -57,6 +58,7 @@
                         <th colspan="8" class="text-right">Total</th>
                         <th class="text-right"><span id="stock_sell_footer_quantity">0</span></th>
                         <th></th>
+                        <th class="text-right"><span id="stock_sell_footer_purchase_total">0</span></th>
                         <th></th>
                         <th class="text-right"><span id="stock_sell_footer_total">0</span></th>
                         <th class="text-right"><span id="stock_sell_footer_profit_loss">0</span></th>
@@ -108,6 +110,10 @@
         });
 
         function ssiFormatFooterMoney(value) {
+            if (value === null) {
+                return 'Unavailable';
+            }
+
             return __currency_trans_from_en(parseFloat(value || 0), true);
         }
 
@@ -119,6 +125,7 @@
             var totals = json && json.footer_totals ? json.footer_totals : {};
 
             $('#stock_sell_footer_quantity').html(ssiFormatFooterQty(totals.quantity));
+            $('#stock_sell_footer_purchase_total').html(ssiFormatFooterMoney(totals.purchase_total));
             $('#stock_sell_footer_total').html(ssiFormatFooterMoney(totals.total));
             $('#stock_sell_footer_profit_loss').html(ssiFormatFooterMoney(totals.profit_loss));
             $('#stock_sell_footer_cash').html(ssiFormatFooterMoney(totals.cash));
@@ -195,7 +202,8 @@
                 { data: 'product', name: 'p.name' },
                 { data: 'quantity', name: 'transaction_sell_lines.quantity', className: 'text-right' },
                 { data: 'purchase_price', name: 'purchase_price', searchable: false, className: 'text-right' },
-                { data: 'price', name: 'transaction_sell_lines.unit_price_before_discount', className: 'text-right' },
+                { data: 'purchase_total', name: 'purchase_total', searchable: false, className: 'text-right' },
+                { data: 'price', name: 'transaction_sell_lines.unit_price_inc_tax', className: 'text-right' },
                 { data: 'total', name: 'total', searchable: false, className: 'text-right' },
                 { data: 'profit_loss', name: 'profit_loss', searchable: false, className: 'text-right' },
                 { data: 'cash', name: 'cash', searchable: false, className: 'text-right' },

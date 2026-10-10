@@ -71,6 +71,25 @@
         <tr><td colspan="2">{{$update_note}}</td></tr>
     @endif
 @endif
+@if(!empty($attributes['purchase_costs']))
+    @php
+        $old_purchase_costs = collect($old['purchase_costs'] ?? [])->keyBy('id');
+    @endphp
+    @foreach($attributes['purchase_costs'] as $purchase_cost)
+        @php
+            $old_purchase_cost = $old_purchase_costs->get($purchase_cost['id']);
+        @endphp
+        @if($old_purchase_cost && $old_purchase_cost['purchase_price_inc_tax'] != $purchase_cost['purchase_price_inc_tax'])
+            <tr>
+                <th class="width-50">Purchase Cost (Incl. Tax)<br>{{ $purchase_cost['lot_number'] ?: 'Batch #'.$purchase_cost['id'] }}</th>
+                <td class="width-50 text-left">
+                    <span class="label bg-info">@format_currency($old_purchase_cost['purchase_price_inc_tax'])</span> --&gt;
+                    <span class="label bg-info">@format_currency($purchase_cost['purchase_price_inc_tax'])</span>
+                </td>
+            </tr>
+        @endif
+    @endforeach
+@endif
 @if(!empty($activity->getExtraProperty('from')) && !empty($activity->getExtraProperty('to')))
     <tr>
         <td colspan="2">
