@@ -55,7 +55,24 @@ class StockReportController extends Controller
         $price = "COALESCE(
             CASE WHEN lot_pl.variation_id = transaction_sell_lines.variation_id
                 THEN lot_pl.purchase_price_inc_tax END,
-            CASE WHEN pc.purchase_qty = transaction_sell_lines.quantity AND pc.costed_qty = pc.purchase_qty
+            (
+                SELECT matched_lot.purchase_price_inc_tax
+                FROM purchase_lines as matched_lot
+                INNER JOIN transactions as lot_t ON matched_lot.transaction_id = lot_t.id
+                WHERE lot_pl.variation_id = transaction_sell_lines.variation_id
+                    AND NULLIF(TRIM(lot_pl.lot_number), '') IS NOT NULL
+                    AND matched_lot.lot_number = lot_pl.lot_number
+                    AND matched_lot.variation_id = transaction_sell_lines.variation_id
+                    AND lot_t.business_id = t.business_id
+                    AND lot_t.location_id = t.location_id
+                    AND lot_t.status = 'received'
+                    AND lot_t.type IN ('purchase', 'opening_stock', 'production_purchase')
+                    AND matched_lot.purchase_price_inc_tax IS NOT NULL
+                ORDER BY lot_t.transaction_date DESC, matched_lot.id DESC
+                LIMIT 1
+            ),
+            CASE WHEN (lot_pl.id IS NULL OR lot_pl.variation_id <> transaction_sell_lines.variation_id)
+                    AND pc.purchase_qty = transaction_sell_lines.quantity AND pc.costed_qty = pc.purchase_qty
                 THEN pc.purchase_total / NULLIF(pc.purchase_qty, 0) END,
             (
                 SELECT sku_pl.purchase_price_inc_tax
@@ -74,7 +91,13 @@ class StockReportController extends Controller
             v.default_purchase_price
         )";
 
-        return [$price, 'transaction_sell_lines.quantity * ('.$price.')'];
+        $lots = "COALESCE(
+            CASE WHEN lot_pl.variation_id = transaction_sell_lines.variation_id THEN NULLIF(lot_pl.lot_number, '') END,
+            pc.lots,
+            ''
+        )";
+
+        return [$price, 'transaction_sell_lines.quantity * ('.$price.')', $lots];
     }
 
     public function stockSellReport(Request $request)
@@ -108,7 +131,7 @@ class StockReportController extends Controller
             $purchase_costs = $this->linkedPurchaseCosts()
                 ->addSelect(DB::raw("GROUP_CONCAT(DISTINCT NULLIF(pl.lot_number, '') ORDER BY pl.lot_number SEPARATOR ', ') as lots"));
 
-            [$purchase_price_sql, $purchase_total_sql] = $this->purchaseCostExpressions();
+            [$purchase_price_sql, $purchase_total_sql, $lots_sql] = $this->purchaseCostExpressions();
             $line_sell_total_sql = '(transaction_sell_lines.quantity * transaction_sell_lines.unit_price_inc_tax)';
 
             $sells = TransactionSellLine::join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
@@ -147,7 +170,7 @@ class StockReportController extends Controller
                     'bl.name as location',
                     'p.name as product',
                     'v.sub_sku as sku',
-                    DB::raw("COALESCE(pc.lots, NULLIF(lot_pl.lot_number, ''), '') as lots"),
+                    DB::raw($lots_sql.' as lots'),
                     'transaction_sell_lines.quantity',
                     'transaction_sell_lines.unit_price_inc_tax as price',
                     DB::raw($line_sell_total_sql.' as total'),

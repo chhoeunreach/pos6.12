@@ -26,6 +26,7 @@ class StockSellPurchaseCostTest extends TestCase
             $table->integer('id');
             $table->integer('transaction_id')->nullable();
             $table->integer('variation_id')->default(1);
+            $table->string('lot_number')->nullable();
             $table->double('purchase_price_inc_tax')->nullable();
         });
         Schema::create('transactions', function (Blueprint $table) {
@@ -57,8 +58,8 @@ class StockSellPurchaseCostTest extends TestCase
         });
 
         DB::table('purchase_lines')->insert([
-            ['id' => 1, 'transaction_id' => 1, 'purchase_price_inc_tax' => 100],
-            ['id' => 2, 'transaction_id' => 2, 'purchase_price_inc_tax' => 80],
+            ['id' => 1, 'transaction_id' => 1, 'lot_number' => 'LOT-1', 'purchase_price_inc_tax' => 100],
+            ['id' => 2, 'transaction_id' => 2, 'lot_number' => 'LOT-2', 'purchase_price_inc_tax' => 80],
         ]);
         DB::table('transactions')->insert([
             ['id' => 1, 'type' => 'purchase', 'transaction_date' => '2026-10-01'],
@@ -87,16 +88,18 @@ class StockSellPurchaseCostTest extends TestCase
         $queryMethod->setAccessible(true);
         $expressionsMethod = new \ReflectionMethod($controller, 'purchaseCostExpressions');
         $expressionsMethod->setAccessible(true);
-        [$price, $total] = $expressionsMethod->invoke($controller);
+        [$price, $total, $lots] = $expressionsMethod->invoke($controller);
+        $purchaseCosts = $queryMethod->invoke($controller)
+            ->addSelect(DB::raw('GROUP_CONCAT(DISTINCT pl.lot_number) as lots'));
 
         return DB::table('transaction_sell_lines')
             ->join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
             ->join('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
-            ->leftJoinSub($queryMethod->invoke($controller), 'pc', function ($join) {
+            ->leftJoinSub($purchaseCosts, 'pc', function ($join) {
                 $join->on('pc.sell_line_id', '=', 'transaction_sell_lines.id');
             })
             ->leftJoin('purchase_lines as lot_pl', 'transaction_sell_lines.lot_no_line_id', '=', 'lot_pl.id')
-            ->selectRaw($price.' as purchase_price, '.$total.' as purchase_total')
+            ->selectRaw($price.' as purchase_price, '.$total.' as purchase_total, '.$lots.' as lots')
             ->where('transaction_sell_lines.id', 1)
             ->first();
     }
@@ -145,6 +148,7 @@ class StockSellPurchaseCostTest extends TestCase
     {
         DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
         $this->assertEquals(300, $this->reportCost()->purchase_total);
+        $this->assertSame('LOT-1', $this->reportCost()->lots);
         DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 90]);
         $this->assertEquals(270, $this->reportCost()->purchase_total);
     }
@@ -186,6 +190,49 @@ class StockSellPurchaseCostTest extends TestCase
         $this->assertEquals(60, $this->reportCost()->purchase_price);
         DB::table('variations')->update(['default_purchase_price' => null]);
         $this->assertNull($this->reportCost()->purchase_price);
+    }
+
+    public function test_exact_lot_number_match_is_used_before_sku_when_selected_cost_is_missing()
+    {
+        DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
+        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => null]);
+        DB::table('purchase_lines')->insert([
+            'id' => 3, 'transaction_id' => 1, 'lot_number' => 'LOT-1', 'purchase_price_inc_tax' => 95,
+        ]);
+        $cost = $this->reportCost();
+        $this->assertSame('LOT-1', $cost->lots);
+        $this->assertEquals(95, $cost->purchase_price);
+        $this->assertEquals(285, $cost->purchase_total);
+        DB::table('purchase_lines')->where('id', 3)->update(['purchase_price_inc_tax' => 92]);
+        $this->assertEquals(276, $this->reportCost()->purchase_total);
+    }
+
+    public function test_failed_lot_lookup_uses_sku_instead_of_a_different_mapped_lot()
+    {
+        DB::table('purchase_lines')->insert([
+            'id' => 3, 'transaction_id' => 1, 'lot_number' => 'LOT-3', 'purchase_price_inc_tax' => null,
+        ]);
+        DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 3]);
+        $cost = $this->reportCost();
+        $this->assertSame('LOT-3', $cost->lots);
+        $this->assertEquals(80, $cost->purchase_price);
+    }
+
+    public function test_exact_lot_match_does_not_use_another_sku_business_or_location()
+    {
+        DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
+        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => null]);
+        DB::table('purchase_lines')->insert([
+            'id' => 3, 'transaction_id' => 2, 'variation_id' => 2, 'lot_number' => 'LOT-1', 'purchase_price_inc_tax' => 999,
+        ]);
+        foreach ([['business_id' => 2], ['location_id' => 2]] as $index => $attributes) {
+            $id = 20 + $index;
+            DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'transaction_date' => '2026-10-10']);
+            DB::table('purchase_lines')->insert([
+                'id' => $id, 'transaction_id' => $id, 'lot_number' => 'LOT-1', 'purchase_price_inc_tax' => 999,
+            ]);
+        }
+        $this->assertEquals(80, $this->reportCost()->purchase_price);
     }
 
     public function test_purchase_activity_displays_old_and_corrected_cost_including_zero()
