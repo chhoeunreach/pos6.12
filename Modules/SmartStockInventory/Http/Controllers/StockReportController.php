@@ -52,12 +52,27 @@ class StockReportController extends Controller
 
     protected function purchaseCostExpressions()
     {
-        $price = "CASE
-            WHEN pc.purchase_qty = transaction_sell_lines.quantity AND pc.costed_qty = pc.purchase_qty
-                THEN pc.purchase_total / NULLIF(pc.purchase_qty, 0)
-            WHEN pc.sell_line_id IS NULL THEN lot_pl.purchase_price_inc_tax
-            ELSE NULL
-        END";
+        $price = "COALESCE(
+            CASE WHEN lot_pl.variation_id = transaction_sell_lines.variation_id
+                THEN lot_pl.purchase_price_inc_tax END,
+            CASE WHEN pc.purchase_qty = transaction_sell_lines.quantity AND pc.costed_qty = pc.purchase_qty
+                THEN pc.purchase_total / NULLIF(pc.purchase_qty, 0) END,
+            (
+                SELECT sku_pl.purchase_price_inc_tax
+                FROM purchase_lines as sku_pl
+                INNER JOIN transactions as sku_t ON sku_pl.transaction_id = sku_t.id
+                WHERE sku_pl.variation_id = transaction_sell_lines.variation_id
+                    AND sku_t.business_id = t.business_id
+                    AND sku_t.location_id = t.location_id
+                    AND sku_t.status = 'received'
+                    AND sku_t.type IN ('purchase', 'opening_stock', 'production_purchase')
+                    AND sku_pl.purchase_price_inc_tax IS NOT NULL
+                ORDER BY sku_t.transaction_date DESC, sku_pl.id DESC
+                LIMIT 1
+            ),
+            v.dpp_inc_tax,
+            v.default_purchase_price
+        )";
 
         return [$price, 'transaction_sell_lines.quantity * ('.$price.')'];
     }

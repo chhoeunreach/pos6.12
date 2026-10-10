@@ -24,10 +24,28 @@ class StockSellPurchaseCostTest extends TestCase
 
         Schema::create('purchase_lines', function (Blueprint $table) {
             $table->integer('id');
+            $table->integer('transaction_id')->nullable();
+            $table->integer('variation_id')->default(1);
             $table->double('purchase_price_inc_tax')->nullable();
+        });
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->integer('id');
+            $table->integer('business_id')->default(1);
+            $table->integer('location_id')->default(1);
+            $table->string('type');
+            $table->string('status')->default('received');
+            $table->string('transaction_date');
+        });
+        Schema::create('variations', function (Blueprint $table) {
+            $table->integer('id');
+            $table->string('sub_sku');
+            $table->double('dpp_inc_tax')->nullable();
+            $table->double('default_purchase_price')->nullable();
         });
         Schema::create('transaction_sell_lines', function (Blueprint $table) {
             $table->integer('id');
+            $table->integer('transaction_id')->default(10);
+            $table->integer('variation_id')->default(1);
             $table->double('quantity');
             $table->integer('lot_no_line_id')->nullable();
         });
@@ -39,9 +57,15 @@ class StockSellPurchaseCostTest extends TestCase
         });
 
         DB::table('purchase_lines')->insert([
-            ['id' => 1, 'purchase_price_inc_tax' => 100],
-            ['id' => 2, 'purchase_price_inc_tax' => 80],
+            ['id' => 1, 'transaction_id' => 1, 'purchase_price_inc_tax' => 100],
+            ['id' => 2, 'transaction_id' => 2, 'purchase_price_inc_tax' => 80],
         ]);
+        DB::table('transactions')->insert([
+            ['id' => 1, 'type' => 'purchase', 'transaction_date' => '2026-10-01'],
+            ['id' => 2, 'type' => 'purchase', 'transaction_date' => '2026-10-02'],
+            ['id' => 10, 'type' => 'sell', 'transaction_date' => '2026-10-03'],
+        ]);
+        DB::table('variations')->insert(['id' => 1, 'sub_sku' => 'SKU-1', 'dpp_inc_tax' => 70, 'default_purchase_price' => 60]);
         DB::table('transaction_sell_lines')->insert(['id' => 1, 'quantity' => 3]);
         DB::table('transaction_sell_lines_purchase_lines')->insert([
             ['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 2],
@@ -66,6 +90,8 @@ class StockSellPurchaseCostTest extends TestCase
         [$price, $total] = $expressionsMethod->invoke($controller);
 
         return DB::table('transaction_sell_lines')
+            ->join('transactions as t', 'transaction_sell_lines.transaction_id', '=', 't.id')
+            ->join('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
             ->leftJoinSub($queryMethod->invoke($controller), 'pc', function ($join) {
                 $join->on('pc.sell_line_id', '=', 'transaction_sell_lines.id');
             })
@@ -105,36 +131,61 @@ class StockSellPurchaseCostTest extends TestCase
         $this->assertNotNull($cost->purchase_price);
     }
 
-    public function test_unlinked_sale_does_not_use_an_unrelated_purchase()
+    public function test_unlinked_sale_uses_latest_purchase_for_its_sku_and_updates_after_correction()
     {
         DB::table('transaction_sell_lines_purchase_lines')->delete();
         $cost = $this->reportCost();
-        $this->assertNull($cost->purchase_price);
-        $this->assertNull($cost->purchase_total);
+        $this->assertEquals(80, $cost->purchase_price);
+        $this->assertEquals(240, $cost->purchase_total);
+        DB::table('purchase_lines')->where('id', 2)->update(['purchase_price_inc_tax' => 85]);
+        $this->assertEquals(255, $this->reportCost()->purchase_total);
     }
 
-    public function test_explicit_lot_is_used_when_there_is_no_mapping()
+    public function test_explicit_lot_takes_priority_over_mapping_and_latest_sku_cost()
     {
-        DB::table('transaction_sell_lines_purchase_lines')->delete();
         DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
         $this->assertEquals(300, $this->reportCost()->purchase_total);
         DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 90]);
         $this->assertEquals(270, $this->reportCost()->purchase_total);
     }
 
-    public function test_partial_mapping_does_not_understate_cost_or_use_lot_fallback()
+    public function test_partial_mapping_uses_lot_then_sku_fallback()
     {
         DB::table('transaction_sell_lines_purchase_lines')->where('purchase_line_id', 2)->delete();
         DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
-        $this->assertNull($this->reportCost()->purchase_total);
+        $this->assertEquals(300, $this->reportCost()->purchase_total);
+        DB::table('transaction_sell_lines')->update(['lot_no_line_id' => null]);
+        $this->assertEquals(240, $this->reportCost()->purchase_total);
     }
 
-    public function test_deleted_or_missing_batch_cost_is_unavailable()
+    public function test_deleted_or_missing_batch_cost_falls_back_to_available_sku_cost()
     {
         DB::table('purchase_lines')->where('id', 2)->update(['purchase_price_inc_tax' => null]);
-        $this->assertNull($this->reportCost()->purchase_total);
+        $this->assertEquals(300, $this->reportCost()->purchase_total);
         DB::table('purchase_lines')->where('id', 2)->delete();
-        $this->assertNull($this->reportCost()->purchase_total);
+        $this->assertEquals(300, $this->reportCost()->purchase_total);
+    }
+
+    public function test_sku_fallback_does_not_use_another_business_location_variation_or_pending_purchase()
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        foreach ([['business_id' => 2], ['location_id' => 2], ['status' => 'pending'], ['type' => 'purchase_order']] as $index => $attributes) {
+            $id = 20 + $index;
+            DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'transaction_date' => '2026-10-10']);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'purchase_price_inc_tax' => 999]);
+        }
+        DB::table('purchase_lines')->insert(['id' => 30, 'transaction_id' => 2, 'variation_id' => 2, 'purchase_price_inc_tax' => 999]);
+        $this->assertEquals(80, $this->reportCost()->purchase_price);
+    }
+
+    public function test_sku_default_is_used_when_no_purchase_price_is_available()
+    {
+        DB::table('purchase_lines')->delete();
+        $this->assertEquals(70, $this->reportCost()->purchase_price);
+        DB::table('variations')->update(['dpp_inc_tax' => null]);
+        $this->assertEquals(60, $this->reportCost()->purchase_price);
+        DB::table('variations')->update(['default_purchase_price' => null]);
+        $this->assertNull($this->reportCost()->purchase_price);
     }
 
     public function test_purchase_activity_displays_old_and_corrected_cost_including_zero()
