@@ -175,6 +175,7 @@ class StockReportController extends Controller
                     'transaction_sell_lines.unit_price_inc_tax as price',
                     DB::raw($line_sell_total_sql.' as total'),
                     DB::raw($purchase_price_sql.' as purchase_price'),
+                    DB::raw('(transaction_sell_lines.unit_price_inc_tax - '.$purchase_price_sql.') as purchase_profit_loss'),
                     DB::raw($purchase_total_sql.' as purchase_total'),
                     DB::raw('('.$line_sell_total_sql.' - '.$purchase_total_sql.') as profit_loss'),
                     DB::raw("COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), ''), 'Walk-In Customer') as customer"),
@@ -286,6 +287,13 @@ class StockReportController extends Controller
 
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
                 })
+                ->editColumn('purchase_profit_loss', function ($row) {
+                    if ($row->purchase_profit_loss === null) {
+                        return '<span data-export-value="Unavailable">Unavailable</span>';
+                    }
+
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_profit_loss.'">'.$row->purchase_profit_loss.'</span>';
+                })
                 ->editColumn('purchase_total', function ($row) {
                     if ($row->purchase_total === null) {
                         return '<span data-export-value="Unavailable">Unavailable</span>';
@@ -336,7 +344,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_profit_loss', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }
