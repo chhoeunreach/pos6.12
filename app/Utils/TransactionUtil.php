@@ -5143,7 +5143,11 @@ class TransactionUtil extends Util
     public function getListPurchases($business_id)
     {
         $purchase_qty_subquery = DB::table('purchase_lines')
-            ->select('transaction_id', DB::raw('SUM(quantity) as total_qty'))
+            ->select(
+                'transaction_id',
+                DB::raw('SUM(quantity) as total_qty'),
+                DB::raw('SUM(quantity * purchase_price_inc_tax) as purchase_cost_inc_tax')
+            )
             ->groupBy('transaction_id');
 
         $purchases = Transaction::leftJoin('contacts', 'transactions.contact_id', '=', 'contacts.id')
@@ -5181,6 +5185,7 @@ class TransactionUtil extends Util
                         'transactions.status',
                         'transactions.payment_status',
                         'transactions.final_total',
+                        DB::raw('COALESCE(PLQ.purchase_cost_inc_tax, 0) as purchase_cost_inc_tax'),
                         DB::raw('COALESCE(PLQ.total_qty, 0) as total_qty'),
                         'BS.name as location_name',
                         'transactions.pay_term_number',

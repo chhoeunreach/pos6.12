@@ -8,6 +8,7 @@
             <th>@lang('purchase.supplier')</th>
             <th>@lang('purchase.purchase_status')</th>
             <th>@lang('purchase.payment_status')</th>
+            <th class="text-right">Purchase Cost (incl. Tax)</th>
             <th>@lang('purchase.grand_total')</th>
             <th>Total Qty</th>
             @php
@@ -32,6 +33,7 @@
             <td colspan="5"><strong>@lang('sale.total'):</strong></td>
             <td class="footer_status_count"></td>
             <td class="footer_payment_status_count"></td>
+            <td class="footer_purchase_cost_inc_tax"></td>
             <td class="footer_purchase_total"></td>
             <td class="footer_purchase_total_qty"></td>
             <td class="text-left"><small>@lang('report.purchase_due') - <span class="footer_total_due"></span><br>

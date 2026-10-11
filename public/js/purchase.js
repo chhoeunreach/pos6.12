@@ -848,6 +848,7 @@ $(document).ready(function() {
             { data: 'name', name: 'contacts.name' },
             { data: 'status', name: 'status' },
             { data: 'payment_status', name: 'payment_status' },
+            { data: 'purchase_cost_inc_tax', name: 'purchase_cost_inc_tax', searchable: false, className: 'text-right' },
             { data: 'final_total', name: 'final_total' },
             // `total_qty` is a computed select alias in the server-side query.
             // Mark it non-searchable to avoid SQL errors when DataTables applies global search filters.
@@ -866,11 +867,14 @@ $(document).ready(function() {
             __currency_convert_recursively($('#purchase_table'));
         },
         "footerCallback": function ( row, data, start, end, display ) {
+            var total_purchase_cost_inc_tax = 0;
             var total_purchase = 0;
             var total_purchase_qty = 0;
             var total_due = 0;
             var total_purchase_return_due = 0;
             for (var r in data){
+                total_purchase_cost_inc_tax += $(data[r].purchase_cost_inc_tax).data('orig-value') ?
+                parseFloat($(data[r].purchase_cost_inc_tax).data('orig-value')) : 0;
                 total_purchase += $(data[r].final_total).data('orig-value') ? 
                 parseFloat($(data[r].final_total).data('orig-value')) : 0;
                 total_purchase_qty += $(data[r].total_qty).data('orig-value') ?
@@ -883,6 +887,7 @@ $(document).ready(function() {
                 parseFloat(payment_due_obj.find('.purchase_return').data('orig-value')) : 0;
             }
 
+            $('.footer_purchase_cost_inc_tax').html(__currency_trans_from_en(total_purchase_cost_inc_tax));
             $('.footer_purchase_total').html(__currency_trans_from_en(total_purchase));
             $('.footer_purchase_total_qty').html(__number_f(total_purchase_qty, false) + ' Pc(s)');
             $('.footer_total_due').html(__currency_trans_from_en(total_due));
