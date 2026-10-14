@@ -567,6 +567,10 @@ class TransactionUtil extends Util
                     ->find($product['transaction_sell_lines_id']);
 
         $old_qty = $sell_line->quantity;
+        $updated_quantity = ($uf_data ? $this->num_uf($product['quantity']) : $product['quantity']) * $multiplier;
+        if ($updated_quantity < 0 || $updated_quantity < (float) $sell_line->quantity_returned) {
+            throw new PurchaseSellMismatch('The quantity sold cannot be negative or less than the quantity already returned.');
+        }
         $edit_ids[] = $product['transaction_sell_lines_id'];
         //Adjust quanity
         if ($status_before != 'draft') {
@@ -1312,6 +1316,7 @@ class TransactionUtil extends Util
 
             if ($is_lot_number_enabled == 1) {
                 $sell_line_relations[] = 'lot_details';
+                $sell_line_relations[] = 'sell_line_purchase_lines.purchase_line';
             }
 
             $lines = $transaction->sell_lines()->whereNull('parent_sell_line_id')->with($sell_line_relations)->get();
@@ -2101,7 +2106,7 @@ class TransactionUtil extends Util
                 'line_discount_type_uf' => $line->line_discount_type,
                 'sell_line_note_raw' => ! empty($line->sell_line_note) ? $line->sell_line_note : '',
                 'grade' => $line->grade ?? '',
-                'lot_number_raw' => ! empty($line->lot_details->lot_number) ? $line->lot_details->lot_number : '',
+                'lot_number_raw' => $is_lot_number_enabled ? $line->invoice_lots->pluck('lot_number')->filter()->unique()->implode(', ') : '',
             ];
 
             $temp = [];
@@ -2177,7 +2182,7 @@ class TransactionUtil extends Util
                 $line_array['sell_line_note'] = ! empty($line->sell_line_note) ? nl2br($line->sell_line_note) : '';
             }
             if ($is_lot_number_enabled == 1 && $il->show_lot == 1) {
-                $line_array['lot_number'] = ! empty($line->lot_details->lot_number) ? $line->lot_details->lot_number : null;
+                $line_array['lot_number'] = $line->invoice_lots->pluck('lot_number')->filter()->unique()->implode(', ') ?: null;
                 $line_array['lot_number_label'] = __('lang_v1.lot');
             }
 
@@ -3376,6 +3381,13 @@ class TransactionUtil extends Util
      */
     public function mapPurchaseSell($business, $transaction_lines, $mapping_type = 'purchase', $check_expiry = true, $purchase_line_id = null)
     {
+        return DB::transaction(function () use ($business, $transaction_lines, $mapping_type, $check_expiry, $purchase_line_id) {
+            return $this->mapPurchaseSellLocked($business, $transaction_lines, $mapping_type, $check_expiry, $purchase_line_id);
+        });
+    }
+
+    protected function mapPurchaseSellLocked($business, $transaction_lines, $mapping_type, $check_expiry, $purchase_line_id)
+    {
         if (empty($transaction_lines)) {
             return false;
         }
@@ -3399,15 +3411,36 @@ class TransactionUtil extends Util
         $qty_selling = null;
 
         $product_ids = collect($transaction_lines)->pluck('product_id')->unique()->filter()->all();
-        $products = ! empty($product_ids) ? Product::whereIn('id', $product_ids)->get()->keyBy('id') : collect();
+        $products = ! empty($product_ids) ? Product::whereIn('id', $product_ids)->with('unit')->get()->keyBy('id') : collect();
         foreach ($transaction_lines as $line) {
             //Check if stock is not enabled then no need to assign purchase & sell
             $product = $products->get($line->product_id);
             if (empty($product) || $product->enable_stock != 1) {
                 continue;
             }
+            if ((int) $product->business_id !== (int) $business['id']) {
+                throw new PurchaseSellMismatch('Stock product does not belong to this business.');
+            }
+            if ((float) $line->quantity <= 0) {
+                throw new PurchaseSellMismatch('Stock movement quantity must be greater than zero.');
+            }
+            if ($product->unit && ! $product->unit->allow_decimal
+                && abs((float) $line->quantity - round((float) $line->quantity)) > 0.0001) {
+                throw new PurchaseSellMismatch('This product requires a whole-unit quantity.');
+            }
 
             $qty_sum_query = $this->get_pl_quantity_sum_string('PL');
+            $requires_lot_stock = ! empty($line->lot_no_line_id) || ! empty($purchase_line_id);
+            if (! $requires_lot_stock) {
+                $requires_lot_stock = PurchaseLine::join('transactions as lot_tx', 'purchase_lines.transaction_id', '=', 'lot_tx.id')
+                    ->where('lot_tx.business_id', $business['id'])
+                    ->where('lot_tx.location_id', $business['location_id'])
+                    ->where('purchase_lines.product_id', $line->product_id)
+                    ->where('purchase_lines.variation_id', $line->variation_id)
+                    ->whereNotNull('purchase_lines.lot_number')
+                    ->where('purchase_lines.lot_number', '!=', '')
+                    ->exists();
+            }
 
             //Get purchase lines, only for products with enable stock.
             $query = Transaction::join('purchase_lines AS PL', 'transactions.id', '=', 'PL.transaction_id')
@@ -3447,9 +3480,10 @@ class TransactionUtil extends Util
                 $query = $query->orderBy('transaction_date', 'asc');
             }
 
-            $rows = $query->select(
+            $rows = $query->orderBy('PL.id')->lockForUpdate()->select(
                 'PL.id as purchase_lines_id',
                 DB::raw("(PL.quantity - ( $qty_sum_query )) AS quantity_available"),
+                DB::raw($this->lotQuantityAvailableSql('PL', (int) $line->id).' AS lot_quantity_available'),
                 'PL.quantity_sold as quantity_sold',
                 'PL.quantity_adjusted as quantity_adjusted',
                 'PL.quantity_returned as quantity_returned',
@@ -3458,10 +3492,17 @@ class TransactionUtil extends Util
                     )->get();
 
             $purchase_sell_map = [];
+            $purchase_adjustment_map = [];
 
             //Iterate over the rows, assign the purchase line to sell lines.
             $qty_selling = $line->quantity;
             foreach ($rows as $k => $row) {
+                if ($requires_lot_stock) {
+                    $row->quantity_available = min((float) $row->quantity_available, (float) $row->lot_quantity_available);
+                    if ($row->quantity_available <= 0) {
+                        continue;
+                    }
+                }
                 $qty_allocated = 0;
 
                 //Check if qty_available is more or equal
@@ -3523,9 +3564,12 @@ class TransactionUtil extends Util
                 }
             }
 
+            if (! is_null($qty_selling) && abs((float) $qty_selling) < 0.0000001) {
+                $qty_selling = 0;
+            }
             if (! ($qty_selling == 0 || is_null($qty_selling))) {
                 //If overselling not allowed through exception else create mapping with blank purchase_line_id
-                if (! $allow_overselling) {
+                if (! $allow_overselling || $requires_lot_stock) {
                     $variation = Variation::find($line->variation_id);
                     $mismatch_name = $product->name;
                     if (! empty($variation->sub_sku)) {
@@ -3533,6 +3577,9 @@ class TransactionUtil extends Util
                     }
                     if (! empty($qty_selling)) {
                         $mismatch_name .= ' '.'Quantity: '.abs($qty_selling);
+                    }
+                    if (! empty($line->lot_no_line_id)) {
+                        $mismatch_name .= ' Lot #'.$line->lot_no_line_id;
                     }
 
                     if ($mapping_type == 'purchase') {
@@ -3603,14 +3650,14 @@ class TransactionUtil extends Util
             $sell_purchases = Transaction::join('transaction_sell_lines AS SL', 'transactions.id', '=', 'SL.transaction_id')
                     ->join('transaction_sell_lines_purchase_lines as TSP', 'SL.id', '=', 'TSP.sell_line_id')
                     ->where('transactions.id', $transaction->id)
-                    ->select('TSP.purchase_line_id', 'TSP.quantity', 'TSP.id')
+                    ->select('TSP.purchase_line_id', 'TSP.quantity', 'TSP.qty_returned', 'TSP.id')
                     ->get()
                     ->toArray();
 
             //Included the deleted sell lines
             if (! empty($deleted_line_ids)) {
                 $deleted_sell_purchases = TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $deleted_line_ids)
-                            ->select('purchase_line_id', 'quantity', 'id')
+                            ->select('purchase_line_id', 'quantity', 'qty_returned', 'id')
                             ->get()
                             ->toArray();
 
@@ -3622,7 +3669,8 @@ class TransactionUtil extends Util
                 $purchase_line_quantities = [];
                 foreach ($sell_purchases as $row) {
                     $purchase_line_id = (int) $row['purchase_line_id'];
-                    $purchase_line_quantities[$purchase_line_id] = ($purchase_line_quantities[$purchase_line_id] ?? 0) + (float) $row['quantity'];
+                    $purchase_line_quantities[$purchase_line_id] = ($purchase_line_quantities[$purchase_line_id] ?? 0)
+                        + (float) $row['quantity'] - (float) $row['qty_returned'];
                     $sell_purchase_ids[] = $row['id'];
                 }
 
@@ -3641,7 +3689,8 @@ class TransactionUtil extends Util
             //Handle deleted line
             if (! empty($deleted_line_ids)) {
                 $deleted_sell_purchases = TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $deleted_line_ids)
-                            ->select('sell_line_id', 'quantity')
+                            ->select('sell_line_id', DB::raw('SUM(quantity) as quantity'))
+                            ->groupBy('sell_line_id')
                             ->get();
                 if (! empty($deleted_sell_purchases)) {
                     foreach ($deleted_sell_purchases as $value) {
@@ -3668,14 +3717,18 @@ class TransactionUtil extends Util
             $processed_sell_lines = [];
 
             foreach ($sell_purchases as $line) {
+                if (! empty($line->slpl_id) && ! empty($line->lot_no_line_id)
+                    && (int) $line->purchase_line_id !== (int) $line->lot_no_line_id) {
+                    throw new PurchaseSellMismatch('Stock allocation differs from the selected lot. Reconcile this invoice before editing it.');
+                }
                 if (empty($line->slpl_id)) {
                     $new_sell_lines[] = $line;
                 } else {
                     //Skip if already processed.
-                    if (in_array($line->slpl_id, $processed_sell_lines)) {
+                    if (in_array($line->id, $processed_sell_lines)) {
                         continue;
                     }
-                    $processed_sell_lines[] = $line->slpl_id;
+                    $processed_sell_lines[] = $line->id;
 
                     $total_sold_entry = TransactionSellLinesPurchaseLines::where('sell_line_id', $line->id)
                         ->select(DB::raw('SUM(quantity) AS quantity'))
@@ -3713,28 +3766,35 @@ class TransactionUtil extends Util
      */
     private function mapDecrementPurchaseQuantity($sell_line_id, $decrement_qty)
     {
-        $sell_purchase_line = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line_id)
-                                ->orderBy('id', 'desc')
-                                ->get();
+        $rows = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line_id)
+            ->orderBy('id', 'desc')->lockForUpdate()->get();
+        $total = (float) $rows->sum('quantity');
+        $outstanding = (float) $rows->sum(fn ($row) => (float) $row->quantity - (float) $row->qty_returned);
+        $fullRemoval = (float) $decrement_qty + 0.0000001 >= $total;
+        if (! $fullRemoval && (float) $decrement_qty > $outstanding + 0.0000001) {
+            throw new PurchaseSellMismatch('The quantity sold cannot be reduced below the quantity already returned.');
+        }
 
-        foreach ($sell_purchase_line as $row) {
-            if ($row->quantity > $decrement_qty) {
-                PurchaseLine::where('id', $row->purchase_line_id)
-                    ->decrement('quantity_sold', $decrement_qty);
-
-                $row->quantity = $row->quantity - $decrement_qty;
-                $row->save();
-                $decrement_qty = 0;
-            } else {
-                PurchaseLine::where('id', $row->purchase_line_id)
-                    ->decrement('quantity_sold', $decrement_qty);
-                $row->delete();
+        // Quantity edits remove outstanding sales first and preserve all existing returns.
+        foreach ($rows as $row) {
+            $change = min(max(0, (float) $row->quantity - (float) $row->qty_returned), (float) $decrement_qty);
+            if ($change > 0) {
+                PurchaseLine::where('id', $row->purchase_line_id)->decrement('quantity_sold', $change);
+                $row->quantity -= $change;
+                $decrement_qty -= $change;
+                if ($row->quantity <= 0.0000001) {
+                    $row->delete();
+                } else {
+                    $row->save();
+                }
             }
-
-            $decrement_qty = $decrement_qty - $row->quantity;
-            if ($decrement_qty <= 0) {
+            if ($decrement_qty <= 0.0000001) {
                 break;
             }
+        }
+        if ($fullRemoval) {
+            // Fully returned allocations carry no outstanding stock to restore.
+            TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line_id)->delete();
         }
     }
 
@@ -4275,31 +4335,39 @@ class TransactionUtil extends Util
         return $purchase_lines;
     }
 
-    public function lotQuantityAvailableSql(string $purchaseLineAlias): string
+    public function lotQuantitySoldSql(string $purchaseLineAlias, bool $includeTransfers = false, ?int $excludeSellLineId = null): string
     {
         $alias = $purchaseLineAlias;
-
-        $sold_qty_sql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
+        $excludeSql = $excludeSellLineId ? ' AND tsl_sold.id != '.(int) $excludeSellLineId : '';
+        $typesSql = $includeTransfers ? "'sell', 'sell_transfer'" : "'sell'";
+        $selected_qty_sql = "(SELECT COALESCE(SUM(tsl_sold.quantity - COALESCE(tsl_sold.quantity_returned, 0)), 0)
+            FROM transaction_sell_lines AS tsl_sold
+            INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
+            WHERE tsl_sold.lot_no_line_id = {$alias}.id
+                AND sale_tx.type IN ({$typesSql})
+                AND sale_tx.status = 'final'{$excludeSql})";
+        $allocated_qty_sql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
             FROM transaction_sell_lines_purchase_lines AS tspl
             INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
             INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
             WHERE tspl.purchase_line_id = {$alias}.id
-                AND tspl.sell_line_id IS NOT NULL
-                AND sale_tx.type != 'sell_transfer')";
+                AND COALESCE(tsl_sold.lot_no_line_id, 0) = 0
+                AND sale_tx.type IN ({$typesSql})
+                AND sale_tx.status = 'final'{$excludeSql})";
 
-        $transfer_out_sql = "(SELECT COALESCE(SUM(tsl_transfer.quantity - COALESCE(tsl_transfer.quantity_returned, 0)), 0)
-            FROM transaction_sell_lines AS tsl_transfer
-            INNER JOIN transactions AS transfer_tx ON tsl_transfer.transaction_id = transfer_tx.id
-            WHERE tsl_transfer.lot_no_line_id = {$alias}.id
-                AND transfer_tx.type = 'sell_transfer'
-                AND transfer_tx.status = 'final')";
+        return "({$selected_qty_sql} + {$allocated_qty_sql})";
+    }
+
+    public function lotQuantityAvailableSql(string $purchaseLineAlias, ?int $excludeSellLineId = null): string
+    {
+        $alias = $purchaseLineAlias;
+        $soldSql = $this->lotQuantitySoldSql($alias, true, $excludeSellLineId);
 
         return "(COALESCE({$alias}.quantity, 0)
             - COALESCE({$alias}.quantity_returned, 0)
             - COALESCE({$alias}.quantity_adjusted, 0)
             - COALESCE({$alias}.mfg_quantity_used, 0)
-            - {$sold_qty_sql}
-            - {$transfer_out_sql})";
+            - {$soldSql})";
     }
 
     /**
@@ -4411,66 +4479,63 @@ class TransactionUtil extends Util
      */
     public function updateQuantitySoldFromSellLine($sell_line, $new_quantity, $old_quantity, $uf_number = true)
     {
+        return DB::transaction(function () use ($sell_line, $new_quantity, $old_quantity, $uf_number) {
+            return $this->updateQuantitySoldFromSellLineLocked($sell_line, $new_quantity, $old_quantity, $uf_number);
+        });
+    }
+
+    protected function updateQuantitySoldFromSellLineLocked($sell_line, $new_quantity, $old_quantity, $uf_number)
+    {
         $new_quantity = $uf_number ? $this->num_uf($new_quantity) : $new_quantity;
         $old_quantity = $uf_number ? $this->num_uf($old_quantity) : $old_quantity;
+        if ($new_quantity < 0 || $new_quantity > $sell_line->quantity || $old_quantity < 0 || $old_quantity > $sell_line->quantity) {
+            throw new PurchaseSellMismatch('Return quantity must be between zero and the quantity sold.');
+        }
+        $product = Product::find($sell_line->product_id);
+        if ($product && ! $product->enable_stock) {
+            return;
+        }
         $qty_difference = $new_quantity - $old_quantity;
 
         if ($qty_difference != 0) {
-            $qty_left_to_update = $qty_difference;
-            $sell_line_purchase_lines = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line->id)->get();
+            $qty_left_to_update = abs($qty_difference);
+            $sell_line_purchase_lines = TransactionSellLinesPurchaseLines::where('sell_line_id', $sell_line->id)
+                ->orderBy('id')->lockForUpdate()->get();
 
-            //Return from each purchase line
+            // Move only the outstanding return delta on each original allocation.
             foreach ($sell_line_purchase_lines as $tslpl) {
-                //If differnce is +ve decrease quantity sold
-                if ($qty_difference > 0) {
-                    if ($tslpl->qty_returned < $tslpl->quantity) {
-                        //Quantity that can be returned from sell line purchase line
-                        $tspl_qty_left_to_return = $tslpl->quantity - $tslpl->qty_returned;
-
-                        $purchase_line = PurchaseLine::find($tslpl->purchase_line_id);
-                        if ($qty_left_to_update <= $tspl_qty_left_to_return) {
-                            if (! empty($purchase_line)) {
-                                $purchase_line->quantity_sold -= $qty_left_to_update;
-                                $purchase_line->save();
-                            }
-
-                            $tslpl->qty_returned += $qty_left_to_update;
-                            $tslpl->save();
-                            break;
-                        } else {
-                            if (! empty($purchase_line)) {
-                                $purchase_line->quantity_sold -= $tspl_qty_left_to_return;
-                                $purchase_line->save();
-                            }
-
-                            $tslpl->qty_returned += $tspl_qty_left_to_return;
-                            $tslpl->save();
-                            $qty_left_to_update -= $tspl_qty_left_to_return;
-                        }
-                    }
-                } //If differnce is -ve increase quantity sold
-                elseif ($qty_difference < 0) {
-                    $purchase_line = PurchaseLine::find($tslpl->purchase_line_id);
-
-                    if (! empty($purchase_line)) {
-                        $tspl_qty_to_return = $tslpl->qty_returned + $qty_left_to_update;
-                        if ($tspl_qty_to_return >= 0) {
-                            $purchase_line->quantity_sold -= $qty_left_to_update;
-                            $purchase_line->save();
-
-                            $tslpl->qty_returned += $qty_left_to_update;
-                            $tslpl->save();
-                            break;
-                        } else {
-                            $purchase_line->quantity_sold += $tslpl->quantity;
-                            $purchase_line->save();
-
-                            $tslpl->qty_returned = 0;
-                            $tslpl->save();
-                            $qty_left_to_update += $tslpl->quantity;
-                        }
-                    }
+                if (! empty($sell_line->lot_no_line_id) && (int) $tslpl->purchase_line_id !== (int) $sell_line->lot_no_line_id) {
+                    throw new PurchaseSellMismatch('Stock allocation differs from the selected lot. Reconcile this invoice before returning it.');
                 }
+                $available_delta = $qty_difference > 0
+                    ? (float) $tslpl->quantity - (float) $tslpl->qty_returned
+                    : (float) $tslpl->qty_returned;
+                $change = min($qty_left_to_update, $available_delta);
+                if ($change <= 0) {
+                    continue;
+                }
+                $purchase_line = PurchaseLine::lockForUpdate()->find($tslpl->purchase_line_id);
+                if ($purchase_line) {
+                    if ($qty_difference > 0 && (float) $purchase_line->quantity_sold + 0.0000001 < $change) {
+                        throw new PurchaseSellMismatch('Allocated stock balance is inconsistent. Reconcile this invoice before returning it.');
+                    }
+                    if ($qty_difference < 0 && $purchase_line->quantity_remaining + 0.0000001 < $change) {
+                        throw new PurchaseSellMismatch('Returned stock has already been consumed. The return cannot be reversed.');
+                    }
+                    $purchase_line->quantity_sold += $qty_difference > 0 ? -$change : $change;
+                    $purchase_line->save();
+                } elseif ((int) $tslpl->purchase_line_id !== 0) {
+                    throw new PurchaseSellMismatch('Allocated purchase lot is missing. Reconcile this invoice before returning it.');
+                }
+                $tslpl->qty_returned += $qty_difference > 0 ? $change : -$change;
+                $tslpl->save();
+                $qty_left_to_update -= $change;
+                if ($qty_left_to_update <= 0.0000001) {
+                    break;
+                }
+            }
+            if ($qty_left_to_update > 0.0000001) {
+                throw new PurchaseSellMismatch('Return quantity does not match the stock allocations. Reconcile this invoice before returning it.');
             }
         }
     }
@@ -6479,7 +6544,13 @@ class TransactionUtil extends Util
         $sell_lines = $sell->sell_lines->keyBy('id');
         $product_lines = [];
 
+        $submitted_return_line_ids = [];
+
         foreach ($input['products'] as $product_line) {
+            if (isset($submitted_return_line_ids[$product_line['sell_line_id']])) {
+                throw new PurchaseSellMismatch('A sale line cannot appear twice in the same return.');
+            }
+            $submitted_return_line_ids[$product_line['sell_line_id']] = true;
             $return_quantity = $uf_number ? $this->num_uf($product_line['quantity']) : $product_line['quantity'];
 
             if ($return_quantity <= 0) {
@@ -6641,8 +6712,13 @@ class TransactionUtil extends Util
                 });
         }
         $product_lines = [];
+        $submitted_return_line_ids = [];
 
         foreach ($input['products'] as $product_line) {
+            if (isset($submitted_return_line_ids[$product_line['sell_line_id']])) {
+                throw new PurchaseSellMismatch('A sale line cannot appear twice in the same return.');
+            }
+            $submitted_return_line_ids[$product_line['sell_line_id']] = true;
             $return_quantity = $uf_number ? $this->num_uf($product_line['quantity']) : $product_line['quantity'];
 
             $sell_line = $sell_lines->get($product_line['sell_line_id']);
@@ -6708,8 +6784,12 @@ class TransactionUtil extends Util
 
         $sell_return->update($sell_return_data);
 
+        $retained_return_line_ids = array_column($product_lines, 'sell_line_id');
         foreach ($old_return_lines as $return_line) {
             $parent_line_id = ! empty($return_line->parent_sell_line_id) ? $return_line->parent_sell_line_id : $return_line->id;
+            if (in_array($parent_line_id, $retained_return_line_ids)) {
+                continue;
+            }
             $return_quantity = $return_line->return_quantity_for_update ?? $return_line->quantity;
             $sell_line = $sell_lines->get($parent_line_id);
             if (empty($sell_line) || $return_quantity <= 0) {
@@ -6732,7 +6812,7 @@ class TransactionUtil extends Util
             $sell_line = $sell_lines->get($product_line['sell_line_id'])->fresh();
             $quantity = $product_line['base_return_quantity'];
             $quantity_before = $sell_line->quantity_returned;
-            $new_returned_quantity = $quantity_before + $quantity;
+            $new_returned_quantity = $quantity_before - $product_line['old_return_quantity'] + $quantity;
 
             TransactionSellLine::create([
                 'transaction_id' => $sell_return->id,

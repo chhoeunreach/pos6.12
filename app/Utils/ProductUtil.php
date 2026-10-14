@@ -354,6 +354,13 @@ class ProductUtil extends Util
      */
     public function updateProductQuantity($location_id, $product_id, $variation_id, $new_quantity, $old_quantity = 0, $number_format = null, $uf_data = true)
     {
+        return DB::transaction(function () use ($location_id, $product_id, $variation_id, $new_quantity, $old_quantity, $number_format, $uf_data) {
+            return $this->updateProductQuantityLocked($location_id, $product_id, $variation_id, $new_quantity, $old_quantity, $number_format, $uf_data);
+        });
+    }
+
+    protected function updateProductQuantityLocked($location_id, $product_id, $variation_id, $new_quantity, $old_quantity, $number_format, $uf_data)
+    {
         if ($uf_data) {
             $qty_difference = $this->num_uf($new_quantity, $number_format) - $this->num_uf($old_quantity, $number_format);
         } else {
@@ -366,14 +373,14 @@ class ProductUtil extends Util
         if ($product->enable_stock == 1 && $qty_difference != 0) {
             $variation = Variation::where('id', $variation_id)
                             ->where('product_id', $product_id)
-                            ->first();
+                            ->lockForUpdate()->firstOrFail();
 
             //Add quantity in VariationLocationDetails
             $variation_location_d = VariationLocationDetails::where('variation_id', $variation->id)
                           ->where('product_id', $product_id)
                           ->where('product_variation_id', $variation->product_variation_id)
                           ->where('location_id', $location_id)
-                          ->first();
+                          ->lockForUpdate()->first();
 
             if (empty($variation_location_d)) {
                 $variation_location_d = new VariationLocationDetails();
@@ -403,21 +410,28 @@ class ProductUtil extends Util
      */
     public function decreaseProductQuantity($product_id, $variation_id, $location_id, $new_quantity, $old_quantity = 0)
     {
+        return DB::transaction(function () use ($product_id, $variation_id, $location_id, $new_quantity, $old_quantity) {
+            return $this->decreaseProductQuantityLocked($product_id, $variation_id, $location_id, $new_quantity, $old_quantity);
+        });
+    }
+
+    protected function decreaseProductQuantityLocked($product_id, $variation_id, $location_id, $new_quantity, $old_quantity)
+    {
         $qty_difference = $new_quantity - $old_quantity;
 
         $product = Product::find($product_id);
 
         //Check if stock is enabled or not.
         if ($product->enable_stock == 1) {
+            $variation = Variation::where('id', $variation_id)->where('product_id', $product_id)->lockForUpdate()->firstOrFail();
             //Decrement Quantity in variations location table
             $details = VariationLocationDetails::where('variation_id', $variation_id)
                 ->where('product_id', $product_id)
                 ->where('location_id', $location_id)
-                ->first();
+                ->lockForUpdate()->first();
 
             //If location details not exists create new one
             if (empty($details)) {
-                $variation = Variation::find($variation_id);
                 $details = VariationLocationDetails::create([
                     'product_id' => $product_id,
                     'location_id' => $location_id,
@@ -1483,12 +1497,20 @@ class ProductUtil extends Util
      */
     public function adjustStockOverSelling($transaction)
     {
+        return DB::transaction(function () use ($transaction) {
+            return $this->adjustStockOverSellingLocked($transaction);
+        });
+    }
+
+    protected function adjustStockOverSellingLocked($transaction)
+    {
         if ($transaction->status != 'received') {
             return false;
         }
 
         foreach ($transaction->purchase_lines as $purchase_line) {
             if ($purchase_line->product->enable_stock == 1) {
+                $purchase_line = PurchaseLine::where('id', $purchase_line->id)->lockForUpdate()->firstOrFail();
 
         //Available quantity in the purchase line
                 $purchase_line_qty_avlbl = $purchase_line->quantity_remaining;
@@ -1502,11 +1524,21 @@ class ProductUtil extends Util
         TransactionSellLinesPurchaseLines::where('purchase_line_id', 0)
                 ->join('transaction_sell_lines as tsl', 'tsl.id', '=', 'transaction_sell_lines_purchase_lines.sell_line_id')
                 ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+                ->where('t.business_id', $transaction->business_id)
                 ->where('t.location_id', $transaction->location_id)
+                ->where('t.status', 'final')
+                ->whereIn('t.type', ['sell', 'sell_transfer'])
                 ->where('tsl.variation_id', $purchase_line->variation_id)
                 ->where('tsl.product_id', $purchase_line->product_id)
+                ->where(function ($query) use ($purchase_line) {
+                    $query->whereNull('tsl.lot_no_line_id')
+                        ->orWhere('tsl.lot_no_line_id', 0)
+                        ->orWhere('tsl.lot_no_line_id', $purchase_line->id);
+                })
 
                 ->select('transaction_sell_lines_purchase_lines.*')
+                ->orderBy('transaction_sell_lines_purchase_lines.id')
+                ->lockForUpdate()
                 ->get();
 
                 foreach ($sell_line_purchase_lines as $slpl) {
@@ -2855,29 +2887,7 @@ class ProductUtil extends Util
 
     protected function lotQuantityAvailableSql(string $purchaseLineAlias): string
     {
-        $alias = $purchaseLineAlias;
-
-        $sold_qty_sql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
-            FROM transaction_sell_lines_purchase_lines AS tspl
-            INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
-            INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
-            WHERE tspl.purchase_line_id = {$alias}.id
-                AND tspl.sell_line_id IS NOT NULL
-                AND sale_tx.type != 'sell_transfer')";
-
-        $transfer_out_sql = "(SELECT COALESCE(SUM(tsl_transfer.quantity - COALESCE(tsl_transfer.quantity_returned, 0)), 0)
-            FROM transaction_sell_lines AS tsl_transfer
-            INNER JOIN transactions AS transfer_tx ON tsl_transfer.transaction_id = transfer_tx.id
-            WHERE tsl_transfer.lot_no_line_id = {$alias}.id
-                AND transfer_tx.type = 'sell_transfer'
-                AND transfer_tx.status = 'final')";
-
-        return "(COALESCE({$alias}.quantity, 0)
-            - COALESCE({$alias}.quantity_returned, 0)
-            - COALESCE({$alias}.quantity_adjusted, 0)
-            - COALESCE({$alias}.mfg_quantity_used, 0)
-            - {$sold_qty_sql}
-            - {$transfer_out_sql})";
+        return app(TransactionUtil::class)->lotQuantityAvailableSql($purchaseLineAlias);
     }
   
 }

@@ -24,7 +24,7 @@
                 <small class="text-muted" style="white-space: nowrap;">@lang('report.current_stock'): <span class="qty_available_text">{{$product->formatted_qty_available}}</span> {{ $product->unit }}</small>
             @endif
             @if(!empty($product->lot_numbers))
-                <select class="form-control lot_number" name="products[{{$row_index}}][lot_no_line_id]">
+                <select class="form-control lot_number" name="products[{{$row_index}}][lot_no_line_id]" @if(!empty($product->retransfer_lot_number)) required @endif>
                     <option value="">@lang('lang_v1.lot_n_expiry')</option>
                     @foreach($product->lot_numbers as $lot_number)
                         @php
@@ -43,7 +43,7 @@
                                 }
                             }
                         @endphp
-                        <option value="{{$lot_number->purchase_line_id}}" data-qty_available="{{$lot_number->qty_available}}" data-msg-max="@lang('lang_v1.quantity_error_msg_in_lot', ['qty'=> $lot_number->qty_formated, 'unit' => $product->unit  ])" {{$selected}}>@if(!empty($lot_number->lot_number) && $lot_enabled == 1){{$lot_number->lot_number}} @endif @if($lot_enabled == 1 && $exp_enabled == 1) - @endif @if($exp_enabled == 1 && !empty($lot_number->exp_date)) @lang('product.exp_date'): {{@format_date($lot_number->exp_date)}} @endif {{$expiry_text}}</option>
+                        <option value="{{$lot_number->purchase_line_id}}" data-lot-number="{{$lot_number->lot_number}}" data-exp-date="{{$lot_number->exp_date}}" data-qty_available="{{$lot_number->qty_available}}" data-msg-max="@lang('lang_v1.quantity_error_msg_in_lot', ['qty'=> $lot_number->qty_formated, 'unit' => $product->unit  ])" {{$selected}}>@if(!empty($lot_number->lot_number) && $lot_enabled == 1){{$lot_number->lot_number}} @endif @if($lot_enabled == 1 && $exp_enabled == 1) - @endif @if($exp_enabled == 1 && !empty($lot_number->exp_date)) @lang('product.exp_date'): {{@format_date($lot_number->exp_date)}} @endif {{$expiry_text}}</option>
                     @endforeach
                 </select>
             @endif

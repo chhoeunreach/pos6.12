@@ -753,6 +753,9 @@ class SellController extends Controller
         }
 
         $sell = $query->firstOrFail();
+        if (request()->session()->get('business.enable_lot_number') == 1) {
+            $sell->loadMissing('sell_lines.sell_line_purchase_lines.purchase_line');
+        }
 
         $activities = Activity::forSubject($sell)
            ->with(['causer', 'subject'])

@@ -134,8 +134,21 @@ $(document).ready(function() {
                         __write_number($row.find('input.product_quantity'), display_qty);
                         $row.find('input.product_quantity').trigger('change');
 
-                        if (line.lot_no_line_id && $row.find('select.lot_number').length) {
-                            $row.find('select.lot_number').val(line.lot_no_line_id).trigger('change');
+                        var $lotSelect = $row.find('select.lot_number');
+                        if ($lotSelect.length && (line.lot_number || line.exp_date)) {
+                            var matchingLot = '';
+                            $lotSelect.find('option').each(function() {
+                                var $option = $(this);
+                                if (String($option.attr('data-lot-number') || '') === String(line.lot_number || '') &&
+                                    String($option.attr('data-exp-date') || '') === String(line.exp_date || '') &&
+                                    parseFloat($option.attr('data-qty_available') || 0) >= parseFloat(line.quantity || 0)) {
+                                    matchingLot = $option.val();
+                                    return false;
+                                }
+                            });
+                            $lotSelect.prop('required', true).val(matchingLot).trigger('change');
+                        } else if (line.lot_no_line_id && $lotSelect.length) {
+                            $lotSelect.val(line.lot_no_line_id).trigger('change');
                         }
 
                         add_next_line(i + 1);

@@ -56,13 +56,7 @@ class LotController extends BaseSmartStockController
             $stockStatus = $request->input('stock_status');
 
             $lotQtyAvailableSql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('pl');
-            $normalSoldSql = "(SELECT COALESCE(SUM(tspl.quantity - COALESCE(tspl.qty_returned, 0)), 0)
-                FROM transaction_sell_lines_purchase_lines AS tspl
-                INNER JOIN transaction_sell_lines AS tsl_sold ON tspl.sell_line_id = tsl_sold.id
-                INNER JOIN transactions AS sale_tx ON tsl_sold.transaction_id = sale_tx.id
-                WHERE tspl.purchase_line_id = pl.id
-                    AND tspl.sell_line_id IS NOT NULL
-                    AND sale_tx.type != 'sell_transfer')";
+            $normalSoldSql = app(\App\Utils\TransactionUtil::class)->lotQuantitySoldSql('pl');
 
             $selectBase = $query->select(
                 'products.name as product',
@@ -229,7 +223,8 @@ class LotController extends BaseSmartStockController
                 ->leftJoin('contacts as supplier', 't.contact_id', '=', 'supplier.id')
                 ->leftJoin('users as creator', 't.created_by', '=', 'creator.id')
                 ->where('t.business_id', $businessId)
-                ->where('t.type', '!=', 'purchase_transfer')
+                ->whereIn('t.type', ['purchase', 'opening_stock', 'production_purchase'])
+                ->where('t.status', 'received')
                 ->whereNotNull('pl.lot_number');
 
             $applyCommonFilters($purchaseMovements, 't');
@@ -256,20 +251,14 @@ class LotController extends BaseSmartStockController
                 DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
             ]);
 
-            $sellMovements = DB::table('transaction_sell_lines_purchase_lines as tspl')
-                ->join('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
-                ->join('transaction_sell_lines as tsl', 'tspl.sell_line_id', '=', 'tsl.id')
-                ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+            $sellMovements = $this->lotSaleLinesQuery($businessId)
                 ->join('products as p', 'pl.product_id', '=', 'p.id')
                 ->join('variations as v', 'pl.variation_id', '=', 'v.id')
                 ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
                 ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
                 ->leftJoin('contacts as customer', 't.contact_id', '=', 'customer.id')
                 ->leftJoin('users as creator', 't.created_by', '=', 'creator.id')
-                ->where('t.business_id', $businessId)
-                ->whereNotIn('t.type', ['sell_transfer', 'sell_return'])
-                ->whereNotNull('pl.lot_number')
-                ->whereNotNull('tspl.sell_line_id');
+                ->whereNotNull('pl.lot_number');
 
             $applyCommonFilters($sellMovements, 't');
 
@@ -289,7 +278,7 @@ class LotController extends BaseSmartStockController
                 DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
                 DB::raw("COALESCE(NULLIF(customer.supplier_business_name, ''), customer.name, '') as contact"),
                 DB::raw('0 as qty_in'),
-                DB::raw('COALESCE(tspl.quantity, 0) as qty_out'),
+                DB::raw('CASE WHEN COALESCE(tsl.lot_no_line_id, 0) > 0 THEN tsl.quantity ELSE COALESCE(tspl.quantity, 0) END as qty_out'),
                 DB::raw('u.short_name as unit'),
                 DB::raw("COALESCE(t.additional_notes, '') as notes"),
                 DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
@@ -333,9 +322,16 @@ class LotController extends BaseSmartStockController
                 DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
             ]);
 
-            $transferMovements = DB::table('transaction_sell_lines as tsl')
-                ->join('purchase_lines as pl', 'tsl.lot_no_line_id', '=', 'pl.id')
-                ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+            $transferQuantitySql = 'CASE WHEN COALESCE(tsl.lot_no_line_id, 0) > 0 THEN tsl.quantity ELSE COALESCE(tspl.quantity, 0) END';
+            $transferInSql = "CASE WHEN t_in.status = 'received' THEN ({$transferQuantitySql}) ELSE 0 END";
+            $transferOutSql = $transferQuantitySql;
+            $visibleLocations = ! empty($locationId) ? [(int) $locationId] : ($permittedLocations === 'all' ? null : $permittedLocations);
+            if ($visibleLocations !== null) {
+                $visibleIds = implode(',', array_map('intval', $visibleLocations ?: [0]));
+                $transferInSql = "CASE WHEN t_in.location_id IN ({$visibleIds}) THEN ({$transferInSql}) ELSE 0 END";
+                $transferOutSql = "CASE WHEN t.location_id IN ({$visibleIds}) THEN ({$transferOutSql}) ELSE 0 END";
+            }
+            $transferMovements = $this->lotMovementLinesQuery($businessId, ['sell_transfer'])
                 ->join('products as p', 'tsl.product_id', '=', 'p.id')
                 ->join('variations as v', 'tsl.variation_id', '=', 'v.id')
                 ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
@@ -344,16 +340,8 @@ class LotController extends BaseSmartStockController
                     $join->on('t_in.transfer_parent_id', '=', 't.id')
                         ->where('t_in.type', '=', 'purchase_transfer');
                 })
-                ->leftJoin('purchase_lines as pl_in', function ($join) {
-                    $join->on('pl_in.transaction_id', '=', 't_in.id')
-                        ->on('pl_in.variation_id', '=', 'tsl.variation_id')
-                        ->on('pl_in.lot_number', '=', 'pl.lot_number');
-                })
                 ->leftJoin('business_locations as bl_to', 't_in.location_id', '=', 'bl_to.id')
                 ->leftJoin('users as creator', 't.created_by', '=', 'creator.id')
-                ->where('t.business_id', $businessId)
-                ->where('t.type', 'sell_transfer')
-                ->whereNotNull('tsl.lot_no_line_id')
                 ->whereNotNull('pl.lot_number');
 
             $applyCommonFilters($transferMovements, 't', $transferLocationFilter);
@@ -373,8 +361,8 @@ class LotController extends BaseSmartStockController
                 DB::raw('pl.exp_date as exp_date'),
                 DB::raw("COALESCE(NULLIF(t.ref_no, ''), t.invoice_no, '') as ref_no"),
                 DB::raw("'' as contact"),
-                DB::raw('CASE WHEN pl_in.id IS NULL THEN COALESCE(tsl.quantity, 0) ELSE (COALESCE(pl_in.quantity, 0) - COALESCE(pl_in.quantity_returned, 0)) END as qty_in'),
-                DB::raw('COALESCE(tsl.quantity, 0) as qty_out'),
+                DB::raw($transferInSql.' as qty_in'),
+                DB::raw($transferOutSql.' as qty_out'),
                 DB::raw('u.short_name as unit'),
                 DB::raw("COALESCE(t.additional_notes, '') as notes"),
                 DB::raw("CONCAT(COALESCE(creator.surname, ''),' ',COALESCE(creator.first_name, ''),' ',COALESCE(creator.last_name,'')) as user_name"),
@@ -619,6 +607,26 @@ class LotController extends BaseSmartStockController
         }
 
         return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock'));
+    }
+
+    protected function lotSaleLinesQuery(int $businessId)
+    {
+        return $this->lotMovementLinesQuery($businessId, ['sell', 'production_sell']);
+    }
+
+    protected function lotMovementLinesQuery(int $businessId, array $types)
+    {
+        // An explicit invoice lot is authoritative; allocations can be reassigned later.
+        return DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 'tsl.transaction_id', '=', 't.id')
+            ->leftJoin('transaction_sell_lines_purchase_lines as tspl', function ($join) {
+                $join->on('tspl.sell_line_id', '=', 'tsl.id')
+                    ->whereRaw('COALESCE(tsl.lot_no_line_id, 0) = 0');
+            })
+            ->join('purchase_lines as pl', 'pl.id', '=', DB::raw('COALESCE(NULLIF(tsl.lot_no_line_id, 0), tspl.purchase_line_id)'))
+            ->where('t.business_id', $businessId)
+            ->whereIn('t.type', $types)
+            ->where('t.status', 'final');
     }
 
     private function resolveTransactionUrl(string $transactionType, int $transactionId): ?string

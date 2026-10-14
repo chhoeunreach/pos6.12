@@ -1,0 +1,167 @@
+{
+    "business_id": 1,
+    "invoice_filter": "08463",
+    "generated_at": "2026-10-14T12:29:10+07:00",
+    "checked_selected_sale_lines": 13,
+    "sale_line_issues": [
+        {
+            "transaction_id": 27097,
+            "invoice_no": "08463",
+            "ref_no": "",
+            "type": "sell",
+            "sell_line_id": 47768,
+            "location_id": 12,
+            "selected_purchase_line_id": 30742,
+            "selected_lot": "SCJJMFL25DY",
+            "quantity": 1,
+            "quantity_returned": 0,
+            "reasons": [
+                "Stock allocation differs from the invoice selected lot."
+            ],
+            "allocations": [
+                {
+                    "id": 48824,
+                    "sell_line_id": 47768,
+                    "purchase_line_id": 61932,
+                    "quantity": "1.0000",
+                    "qty_returned": "0.0000",
+                    "lot_number": "SF0W0C632JX "
+                }
+            ]
+        },
+        {
+            "transaction_id": 27097,
+            "invoice_no": "08463",
+            "ref_no": "",
+            "type": "sell",
+            "sell_line_id": 47774,
+            "location_id": 12,
+            "selected_purchase_line_id": 39447,
+            "selected_lot": "SDXPHYYKN2Y",
+            "quantity": 1,
+            "quantity_returned": 0,
+            "reasons": [
+                "Stock allocation differs from the invoice selected lot."
+            ],
+            "allocations": [
+                {
+                    "id": 48830,
+                    "sell_line_id": 47774,
+                    "purchase_line_id": 63451,
+                    "quantity": "1.0000",
+                    "qty_returned": "0.0000",
+                    "lot_number": "SGH7VW3TWPC"
+                }
+            ]
+        },
+        {
+            "transaction_id": 27097,
+            "invoice_no": "08463",
+            "ref_no": "",
+            "type": "sell",
+            "sell_line_id": 47776,
+            "location_id": 12,
+            "selected_purchase_line_id": 58982,
+            "selected_lot": "SYV677YM740",
+            "quantity": 1,
+            "quantity_returned": 0,
+            "reasons": [
+                "Stock allocation differs from the invoice selected lot."
+            ],
+            "allocations": [
+                {
+                    "id": 48832,
+                    "sell_line_id": 47776,
+                    "purchase_line_id": 65052,
+                    "quantity": "1.0000",
+                    "qty_returned": "0.0000",
+                    "lot_number": "SFMGMK9X911"
+                }
+            ]
+        },
+        {
+            "transaction_id": 27097,
+            "invoice_no": "08463",
+            "ref_no": "",
+            "type": "sell",
+            "sell_line_id": 47777,
+            "location_id": 12,
+            "selected_purchase_line_id": 61275,
+            "selected_lot": " ​SL7FKWRNQQR",
+            "quantity": 1,
+            "quantity_returned": 0,
+            "reasons": [
+                "Stock allocation differs from the invoice selected lot."
+            ],
+            "allocations": [
+                {
+                    "id": 48833,
+                    "sell_line_id": 47777,
+                    "purchase_line_id": 70848,
+                    "quantity": "1.0000",
+                    "qty_returned": "0.0000",
+                    "lot_number": "SFMGMK9X911"
+                }
+            ]
+        }
+    ],
+    "stock_issues": [
+        {
+            "id": 30742,
+            "lot_number": "SCJJMFL25DY",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "-1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 39447,
+            "lot_number": "SDXPHYYKN2Y",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "-1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 58982,
+            "lot_number": "SYV677YM740",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "-1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 61932,
+            "lot_number": "SF0W0C632JX ",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 63451,
+            "lot_number": "SGH7VW3TWPC",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 65052,
+            "lot_number": "SFMGMK9X911",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "1.0000",
+            "cached_available": "0.0000"
+        },
+        {
+            "id": 70848,
+            "lot_number": "SFMGMK9X911",
+            "location_id": 12,
+            "quantity_sold": "1.0000",
+            "expected_available": "1.0000",
+            "cached_available": "0.0000"
+        }
+    ],
+    "reconciliation_note": "Verify the physical serial and original transfer or invoice before repairing shortages. No records were changed."
+}

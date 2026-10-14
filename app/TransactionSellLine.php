@@ -60,6 +60,20 @@ class TransactionSellLine extends Model
         return $this->belongsTo(\App\PurchaseLine::class, 'lot_no_line_id');
     }
 
+    public function getInvoiceLotsAttribute()
+    {
+        if (! empty($this->lot_no_line_id)) {
+            return collect([$this->lot_details])->filter();
+        }
+
+        return $this->sell_line_purchase_lines
+            ->where('quantity', '>', 0)
+            ->pluck('purchase_line')
+            ->filter()
+            ->unique('id')
+            ->values();
+    }
+
     public function get_discount_amount()
     {
         $discount_amount = 0;

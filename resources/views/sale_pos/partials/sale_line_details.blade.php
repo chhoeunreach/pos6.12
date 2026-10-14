@@ -55,10 +55,16 @@
                 @endif
             </td>
             @if( session()->get('business.enable_lot_number') == 1 && empty($for_ledger))
-                <td>{{ $sell_line->lot_details->lot_number ?? '--' }}
-                    @if( session()->get('business.enable_product_expiry') == 1 && !empty($sell_line->lot_details->exp_date))
-                    ({{@format_date($sell_line->lot_details->exp_date)}})
-                    @endif
+                <td>
+                    @forelse($sell_line->invoice_lots as $invoice_lot)
+                        {{ $invoice_lot->lot_number ?? '--' }}
+                        @if(session()->get('business.enable_product_expiry') == 1 && !empty($invoice_lot->exp_date))
+                            ({{ @format_date($invoice_lot->exp_date) }})
+                        @endif
+                        @unless($loop->last)<br>@endunless
+                    @empty
+                        --
+                    @endforelse
                 </td>
             @endif
             @if($sell->type == 'sales_order')
