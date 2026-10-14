@@ -20,6 +20,14 @@ use App\VariationLocationDetails;
 
 class BusinessUtil extends Util
 {
+    public static function allowsOverselling(int $businessId): bool
+    {
+        $settings = Business::where('id', $businessId)->value('pos_settings');
+        $settings = is_array($settings) ? $settings : (json_decode((string) $settings, true) ?: []);
+
+        return filter_var($settings['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    }
+
     /**
      * Adds a default settings/resources for a new business
      *

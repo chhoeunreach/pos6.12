@@ -2,6 +2,7 @@
 @section('title', 'Retransfer')
 
 @section('content')
+@include('stock_transfer.partials.overselling_status')
 
     <!-- Content Header (Page header) -->
     <section class="content-header">
@@ -222,7 +223,7 @@
     </section>
 @stop
 @section('javascript')
-    <script src="{{ asset('js/stock_transfer.js?v=' . $asset_v) }}"></script>
+    <script src="{{ asset('js/stock_transfer.js?v=' . (file_exists(public_path('js/stock_transfer.js')) ? filemtime(public_path('js/stock_transfer.js')) : $asset_v)) }}"></script>
     <script type="text/javascript">
         __page_leave_confirmation('#stock_transfer_form');
     </script>

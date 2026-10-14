@@ -794,14 +794,15 @@ class StockAdjustmentController extends Controller
             $location_id = $request->input('location_id');
 
             $business_id = $request->session()->get('user.business_id');
-            $product = $this->productUtil->getDetailsFromVariation($variation_id, $business_id, $location_id);
+            $type = $request->input('type', 'stock_adjustment');
+            $allow_overselling = $type === 'stock_transfer' && \App\Utils\BusinessUtil::allowsOverselling((int) $business_id);
+            $product = $this->productUtil->getDetailsFromVariation($variation_id, $business_id, $location_id, ! $allow_overselling, $allow_overselling);
             $product->formatted_qty_available = $this->productUtil->num_f($product->qty_available);
-            $type = ! empty($request->input('type')) ? $request->input('type') : 'stock_adjustment';
 
             //Get lot number dropdown if enabled
             $lot_numbers = [];
             if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
-                $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($variation_id, $business_id, $location_id, true);
+                $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($variation_id, $business_id, $location_id, ! $allow_overselling, $allow_overselling);
                 foreach ($lot_number_obj as $lot_number) {
                     $lot_number->qty_formated = $this->productUtil->num_f($lot_number->qty_available);
                     $lot_numbers[] = $lot_number;

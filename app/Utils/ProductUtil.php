@@ -1527,13 +1527,15 @@ class ProductUtil extends Util
                 ->where('t.business_id', $transaction->business_id)
                 ->where('t.location_id', $transaction->location_id)
                 ->where('t.status', 'final')
-                ->whereIn('t.type', ['sell', 'sell_transfer'])
+                // Transfers must retain their original source and receiving serials.
+                ->where('t.type', 'sell')
                 ->where('tsl.variation_id', $purchase_line->variation_id)
                 ->where('tsl.product_id', $purchase_line->product_id)
                 ->where(function ($query) use ($purchase_line) {
-                    $query->whereNull('tsl.lot_no_line_id')
-                        ->orWhere('tsl.lot_no_line_id', 0)
-                        ->orWhere('tsl.lot_no_line_id', $purchase_line->id);
+                    $query->where('tsl.lot_no_line_id', $purchase_line->id);
+                    if (empty($purchase_line->lot_number)) {
+                        $query->orWhereNull('tsl.lot_no_line_id')->orWhere('tsl.lot_no_line_id', 0);
+                    }
                 })
 
                 ->select('transaction_sell_lines_purchase_lines.*')
@@ -1542,28 +1544,32 @@ class ProductUtil extends Util
                 ->get();
 
                 foreach ($sell_line_purchase_lines as $slpl) {
+                    $outstanding = (float) $slpl->quantity - (float) $slpl->qty_returned;
+                    if ($outstanding <= 0) {
+                        continue;
+                    }
                     if ($purchase_line_qty_avlbl > 0) {
-                        if ($slpl->quantity <= $purchase_line_qty_avlbl) {
-                            $purchase_line_qty_avlbl -= $slpl->quantity;
+                        if ($outstanding <= $purchase_line_qty_avlbl) {
+                            $purchase_line_qty_avlbl -= $outstanding;
                             $slpl->purchase_line_id = $purchase_line->id;
                             $slpl->save();
                             //update purchase line quantity sold
-                            $purchase_line->quantity_sold += $slpl->quantity;
+                            $purchase_line->quantity_sold += $outstanding;
                             $purchase_line->save();
                         } else {
-                            $diff = $slpl->quantity - $purchase_line_qty_avlbl;
-                            $slpl->purchase_line_id = $purchase_line->id;
-                            $slpl->quantity = $purchase_line_qty_avlbl;
+                            // Keep returned units on the original unallocated row.
+                            $slpl->quantity -= $purchase_line_qty_avlbl;
                             $slpl->save();
 
                             //update purchase line quantity sold
-                            $purchase_line->quantity_sold += $slpl->quantity;
+                            $purchase_line->quantity_sold += $purchase_line_qty_avlbl;
                             $purchase_line->save();
 
                             TransactionSellLinesPurchaseLines::create([
                                 'sell_line_id' => $slpl->sell_line_id,
-                                'purchase_line_id' => 0,
-                                'quantity' => $diff,
+                                'purchase_line_id' => $purchase_line->id,
+                                'quantity' => $purchase_line_qty_avlbl,
+                                'qty_returned' => 0,
                             ]);
                             break;
                         }

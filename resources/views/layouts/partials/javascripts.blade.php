@@ -102,7 +102,7 @@
 </script>
 
 <script src="{{ asset('js/functions.js?v=' . $asset_v) }}"></script>
-<script src="{{ asset('js/common.js?v=' . $asset_v) }}"></script>
+<script src="{{ asset('js/common.js?v=' . (file_exists(public_path('js/common.js')) ? filemtime(public_path('js/common.js')) : $asset_v)) }}"></script>
 <script src="{{ asset('js/app.js?v=' . $asset_v) }}"></script>
 <script src="{{ asset('js/help-tour.js?v=' . $asset_v) }}"></script>
 <script src="{{ asset('js/documents_and_note.js?v=' . $asset_v) }}"></script>
@@ -124,6 +124,7 @@
 @if (!empty($__system_settings['additional_js']))
     {!! $__system_settings['additional_js'] !!}
 @endif
+<script src="{{ asset('js/stock_error.js?v=' . (file_exists(public_path('js/stock_error.js')) ? filemtime(public_path('js/stock_error.js')) : $asset_v)) }}"></script>
 @yield('javascript')
 
 @if (Module::has('Essentials'))

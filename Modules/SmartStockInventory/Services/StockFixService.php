@@ -10,46 +10,36 @@ class StockFixService
 {
     public function recalculateProductStock(int $productId, int $variationId, int $locationId): array
     {
-        $currentQty = (float) DB::table('variation_location_details')->where('variation_id', $variationId)->where('product_id', $productId)->where('location_id', $locationId)->value('qty_available');
-        $purchased = (float) DB::table('purchase_lines')->join('transactions as t', 't.id', '=', 'purchase_lines.transaction_id')->where('t.type', 'purchase')->where('t.location_id', $locationId)->where('purchase_lines.variation_id', $variationId)->sum('purchase_lines.quantity');
-        $sold = (float) DB::table('transaction_sell_lines')->join('transactions as t', 't.id', '=', 'transaction_sell_lines.transaction_id')->where('t.type', 'sell')->where('t.status', 'final')->where('t.location_id', $locationId)->where('transaction_sell_lines.variation_id', $variationId)->sum('transaction_sell_lines.quantity');
-        $adjusted = (float) DB::table('stock_adjustment_lines')->join('transactions as t', 't.id', '=', 'stock_adjustment_lines.transaction_id')->where('t.type', 'stock_adjustment')->where('t.location_id', $locationId)->where('stock_adjustment_lines.variation_id', $variationId)->sum('stock_adjustment_lines.quantity');
-        $calculated = $purchased - $sold + $adjusted;
-        return compact('currentQty', 'purchased', 'sold', 'adjusted', 'calculated');
+        $businessId = (int) session('user.business_id');
+        abort_unless(DB::table('business_locations')->where('id', $locationId)->where('business_id', $businessId)->exists(), 404);
+        $details = app(\App\Utils\ProductUtil::class)->getVariationStockMisMatch($businessId, $variationId, $locationId)->first();
+        abort_unless($details && (int) $details->product_id === $productId && $details->enable_stock, 404);
+
+        return [
+            'currentQty' => (float) $details->stock,
+            'calculated' => (float) $details->total_stock_calculated,
+            'opening_stock' => (float) $details->total_opening_stock,
+            'purchased' => (float) $details->total_purchased,
+            'purchase_returns' => (float) $details->total_purchase_return + (float) $details->total_combined_purchase_return,
+            'sold' => (float) $details->total_sold,
+            'sell_returns' => (float) $details->total_sell_return,
+            'adjusted' => (float) $details->total_adjusted,
+            'transferred_in' => (float) $details->total_purchase_transfered,
+            'transferred_out' => (float) $details->total_sell_transfered,
+            'manufactured' => (float) $details->total_manufactured,
+            'production_used' => (float) $details->total_ingredients_used,
+        ];
     }
 
     public function detectMismatch(array $filters): array
     {
-        $query = DB::table('variation_location_details as vld')->join('variations as v', 'v.id', '=', 'vld.variation_id')->join('products as p', 'p.id', '=', 'v.product_id')->join('business_locations as bl', 'bl.id', '=', 'vld.location_id')
-            ->where('p.business_id', $filters['business_id'])->whereIn('vld.location_id', $filters['location_ids'])->where('vld.qty_available', '<', 0);
-
-        $purchaseRef = trim((string) ($filters['purchase_ref'] ?? ''));
-        $purchaseFrom = $filters['purchase_date_from'] ?? null;
-        $purchaseTo = $filters['purchase_date_to'] ?? null;
-
-        if ($purchaseRef !== '' || ! empty($purchaseFrom) || ! empty($purchaseTo)) {
-            $query->whereExists(function ($sub) use ($purchaseRef, $purchaseFrom, $purchaseTo) {
-                $sub->select(DB::raw(1))
-                    ->from('purchase_lines as pl')
-                    ->join('transactions as t', 't.id', '=', 'pl.transaction_id')
-                    ->whereColumn('pl.variation_id', 'vld.variation_id')
-                    ->whereColumn('t.location_id', 'vld.location_id')
-                    ->where('t.type', 'purchase')
-                    ->when($purchaseRef !== '', fn ($q) => $q->where('t.ref_no', 'like', "%{$purchaseRef}%"))
-                    ->when(! empty($purchaseFrom), fn ($q) => $q->whereDate('t.transaction_date', '>=', $purchaseFrom))
-                    ->when(! empty($purchaseTo), fn ($q) => $q->whereDate('t.transaction_date', '<=', $purchaseTo));
-            });
-        }
-
-        return $query
-            ->select('p.id as product_id', 'v.id as variation_id', 'vld.location_id', 'p.name as product', 'v.sub_sku as sku', 'bl.name as location', 'vld.qty_available as available_qty')->limit(500)->get()
-            ->map(fn ($n) => ['product_id' => (int) $n->product_id, 'variation_id' => (int) $n->variation_id, 'location_id' => (int) $n->location_id, 'product' => $n->product, 'sku' => $n->sku, 'location' => $n->location, 'problem' => 'Negative stock', 'severity' => 'critical', 'available_qty' => (float) $n->available_qty])->all();
+        return app(\App\Services\StockMismatchDetectorService::class)->detectQuantityMismatches($filters);
     }
 
     public function previewFix(int $productId, int $variationId, int $locationId, string $problem = 'negative_stock'): array
     {
         $snapshot = $this->recalculateProductStock($productId, $variationId, $locationId);
-        return ['problem' => $problem, 'current_system_qty' => $snapshot['currentQty'], 'correct_calculated_qty' => max(0, (float) $snapshot['calculated']), 'affected_transaction_ids' => $this->transactionIds($variationId, $locationId), 'risk_level' => ((float) $snapshot['currentQty'] < 0 ? 'high' : 'medium')];
+        return ['problem' => $problem, 'current_system_qty' => $snapshot['currentQty'], 'correct_calculated_qty' => (float) $snapshot['calculated'], 'affected_transaction_ids' => $this->transactionIds($variationId, $locationId), 'risk_level' => ((float) $snapshot['currentQty'] < 0 ? 'high' : 'medium')];
     }
 
     public function fixNegativeStock(int $productId, int $variationId, int $locationId, string $reason = 'auto_fix_negative_stock'): SmartStockFixLog { return $this->writeQtyFix('negative_stock', $productId, $variationId, $locationId, $reason); }
@@ -79,12 +69,15 @@ class StockFixService
 
     private function writeQtyFix(string $type, int $productId, int $variationId, int $locationId, string $reason): SmartStockFixLog
     {
-        $snapshot = $this->recalculateProductStock($productId, $variationId, $locationId);
-        $newQty = max(0, (float) $snapshot['calculated']);
-        DB::table('variation_location_details')->where('variation_id', $variationId)->where('product_id', $productId)->where('location_id', $locationId)->update(['qty_available' => $newQty]);
-        $log = SmartStockFixLog::create(['business_id' => session('user.business_id'), 'location_id' => $locationId, 'product_id' => $productId, 'variation_id' => $variationId, 'fix_type' => $type, 'problem_type' => $type, 'old_qty' => $snapshot['currentQty'], 'new_qty' => $newQty, 'reason' => $reason, 'risk_level' => ((float) $snapshot['currentQty'] < 0 ? 'high' : 'medium'), 'reference_type' => 'variation_location_details', 'reference_id' => $variationId, 'before_payload' => json_encode($snapshot), 'after_payload' => json_encode(['qty_available' => $newQty, 'calculated' => $snapshot['calculated']]), 'is_rollback' => 0, 'rollbackable' => 1, 'created_by' => auth()->id()]);
-        $this->audit('fix_' . $type, $locationId, 'variation', $variationId, ['qty_available' => $snapshot['currentQty']], ['qty_available' => $newQty], $reason);
-        return $log;
+        return DB::transaction(function () use ($type, $productId, $variationId, $locationId, $reason) {
+            DB::table('variation_location_details')->where('variation_id', $variationId)->where('product_id', $productId)->where('location_id', $locationId)->lockForUpdate()->get();
+            $snapshot = $this->recalculateProductStock($productId, $variationId, $locationId);
+            $newQty = (float) $snapshot['calculated'];
+            app(\App\Utils\ProductUtil::class)->fixVariationStockMisMatch((int) session('user.business_id'), $variationId, $locationId, $newQty);
+            $log = SmartStockFixLog::create(['business_id' => session('user.business_id'), 'location_id' => $locationId, 'product_id' => $productId, 'variation_id' => $variationId, 'fix_type' => $type, 'problem_type' => $type, 'old_qty' => $snapshot['currentQty'], 'new_qty' => $newQty, 'reason' => $reason, 'risk_level' => ((float) $snapshot['currentQty'] < 0 ? 'high' : 'medium'), 'reference_type' => 'variation_location_details', 'reference_id' => $variationId, 'before_payload' => json_encode($snapshot), 'after_payload' => json_encode(['qty_available' => $newQty, 'calculated' => $snapshot['calculated']]), 'is_rollback' => 0, 'rollbackable' => 1, 'created_by' => auth()->id()]);
+            $this->audit('fix_' . $type, $locationId, 'variation', $variationId, ['qty_available' => $snapshot['currentQty']], ['qty_available' => $newQty], $reason);
+            return $log;
+        });
     }
 
     private function logOnlyFix(string $type, int $productId, int $variationId, int $locationId, string $reason): SmartStockFixLog
@@ -98,7 +91,7 @@ class StockFixService
     private function transactionIds(int $variationId, int $locationId): array
     {
         return DB::table('transactions as t')->leftJoin('purchase_lines as pl', 'pl.transaction_id', '=', 't.id')->leftJoin('transaction_sell_lines as tsl', 'tsl.transaction_id', '=', 't.id')
-            ->where('t.location_id', $locationId)->where(function ($q) use ($variationId) { $q->where('pl.variation_id', $variationId)->orWhere('tsl.variation_id', $variationId); })->limit(100)->pluck('t.id')->unique()->map(fn ($id) => (int) $id)->values()->all();
+            ->where('t.business_id', (int) session('user.business_id'))->where('t.location_id', $locationId)->where(function ($q) use ($variationId) { $q->where('pl.variation_id', $variationId)->orWhere('tsl.variation_id', $variationId); })->limit(100)->pluck('t.id')->unique()->map(fn ($id) => (int) $id)->values()->all();
     }
 
     private function audit(string $actionType, ?int $locationId, ?string $refType, ?int $refId, $old, $new, ?string $reason): void

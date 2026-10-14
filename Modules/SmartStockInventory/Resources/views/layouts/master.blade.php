@@ -504,6 +504,12 @@
                     @if(session('status'))
                         <div class="alert alert-{{ session('status.success') ? 'success' : 'danger' }}">{{ session('status.msg') }}</div>
                     @endif
+                    @if(!session('status.success') && session('status.stock_error.kind') === 'related_allocation' && session('status.stock_error.url'))
+                    <div class="alert alert-danger" role="alert">
+                        <p>{{ session('status.msg') }}</p>
+                        <a class="btn btn-primary btn-sm" href="{{ session('status.stock_error.url') }}">Open blocked line #{{ session('status.stock_error.sell_line_id') }}</a>
+                    </div>
+                    @endif
                     @yield('module_content')
                 </section>
             </section>

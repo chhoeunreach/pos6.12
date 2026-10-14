@@ -1,3 +1,27 @@
+function stock_transfer_error_message(result) {
+    var detail = result && result.stock_error;
+    if (!detail) { return (result && result.msg) || 'Unable to complete this transfer.'; }
+    var identity = [detail.sku, detail.serial].filter(Boolean).join(' / ');
+    return (identity ? identity + ': ' : '') + (detail.reason || result.msg || 'Review this transfer’s source lot records.');
+}
+
+function stock_transfer_allows_overselling() {
+    return $('#stock_transfer_allow_overselling').val() === '1';
+}
+
+function show_stock_transfer_error(result, $target) {
+    var message = stock_transfer_error_message(result);
+    toastr.error(message);
+    if (!$target || !$target.length || !result.mismatch_url) { return; }
+    var target;
+    try { target = new URL(result.mismatch_url, window.location.href); } catch (error) { return; }
+    if (target.origin !== window.location.origin || !/^https?:$/.test(target.protocol)) { return; }
+    $target.find('.transfer-stock-error-link').remove();
+    $('<div>').addClass('alert alert-danger transfer-stock-error-link').attr('role', 'alert')
+        .append($('<p>').text(message), $('<a>').addClass('btn btn-primary btn-sm').attr('href', target.href)
+            .text('Open Mismatch Detector & Fix')).prependTo($target);
+}
+
 $(document).ready(function() {
     //Add products
     if ($('#search_product_for_srock_adjustment').length > 0) {
@@ -19,7 +43,8 @@ $(document).ready(function() {
                             location_id: $('#location_id').val(),
                             term: request.term,
                             search_fields: ['name', 'sku', 'sub_sku', 'product_keywords', 'product_custom_field1', 'lot'],
-                            group_by_purchase_line: 1
+                            group_by_purchase_line: 1,
+                            stock_transfer: 1
                         },
                         response
                     );
@@ -28,7 +53,7 @@ $(document).ready(function() {
                 response: function(event, ui) {
                     if (ui.content.length == 1) {
                         ui.item = ui.content[0];
-                        if (ui.item.qty_available > 0 && ui.item.enable_stock == 1) {
+                        if ((ui.item.qty_available > 0 || stock_transfer_allows_overselling()) && ui.item.enable_stock == 1) {
                             $(this)
                                 .data('ui-autocomplete')
                                 ._trigger('select', 'autocompleteselect', ui);
@@ -39,12 +64,12 @@ $(document).ready(function() {
                     }
                 },
                 focus: function(event, ui) {
-                    if (ui.item.qty_available <= 0) {
+                    if (ui.item.qty_available <= 0 && !stock_transfer_allows_overselling()) {
                         return false;
                     }
                 },
                 select: function(event, ui) {
-                    if (ui.item.qty_available > 0) {
+                    if (ui.item.qty_available > 0 || stock_transfer_allows_overselling()) {
                         $(this).val(null);
                         stock_transfer_product_row(ui.item.variation_id, function($row) {
                             if (ui.item.purchase_line_id && $row.find('select.lot_number').length) {
@@ -61,7 +86,7 @@ $(document).ready(function() {
                 },
             })
             .autocomplete('instance')._renderItem = function(ul, item) {
-            if (item.qty_available <= 0) {
+            if (item.qty_available <= 0 && !stock_transfer_allows_overselling()) {
                 var string = '<li class="ui-state-disabled">' + item.name;
                 if (item.type == 'variable') {
                     string += '-' + item.variation;
@@ -141,7 +166,7 @@ $(document).ready(function() {
                                 var $option = $(this);
                                 if (String($option.attr('data-lot-number') || '') === String(line.lot_number || '') &&
                                     String($option.attr('data-exp-date') || '') === String(line.exp_date || '') &&
-                                    parseFloat($option.attr('data-qty_available') || 0) >= parseFloat(line.quantity || 0)) {
+                                    (stock_transfer_allows_overselling() || parseFloat($option.attr('data-qty_available') || 0) >= parseFloat(line.quantity || 0))) {
                                     matchingLot = $option.val();
                                     return false;
                                 }
@@ -396,7 +421,7 @@ $(document).ready(function() {
                             toastr.success(result.msg);
                             stock_transfer_table.ajax.reload();
                         } else {
-                            toastr.error(result.msg);
+                            show_stock_transfer_error(result, $('.content').first());
                         }
                     },
                 });
@@ -659,7 +684,10 @@ $(document).on('change', 'select.sub_unit', function() {
         abs_digit: abs_digit,
     });
 
-    if (base_max_avlbl) {
+    if (qty_element.data('allow-overselling') === true) {
+        qty_element.removeAttr('data-rule-max-value data-msg-max-value').removeData('ruleMaxValue');
+        qty_element.rules('remove', 'max-value');
+    } else if (base_max_avlbl !== undefined && base_max_avlbl !== null) {
         var max_avlbl = parseFloat(base_max_avlbl) / multiplier;
         var formated_max_avlbl = __number_f(max_avlbl);
         var unit_name = selected_option.data('unit_name');
@@ -720,6 +748,7 @@ function get_stock_transfer_details(rowData) {
 
 $(document).on('click', 'a.stock_transfer_status', function(e) {
     e.preventDefault();
+    $('#update_stock_transfer_status_form .transfer-stock-error-link').remove();
     var href = $(this).data('href');
     var status = $(this).data('status');
     $('#update_stock_transfer_status_modal').modal('show');
@@ -747,7 +776,7 @@ $(document).on('submit', '#update_stock_transfer_status_form', function(e) {
                 toastr.success(result.msg);
                 stock_transfer_table.ajax.reload();
             } else {
-                toastr.error(result.msg);
+                show_stock_transfer_error(result, form.find('.modal-body'));
             }
             $('#update_stock_transfer_status_form')
             .find('button[type="submit"]')

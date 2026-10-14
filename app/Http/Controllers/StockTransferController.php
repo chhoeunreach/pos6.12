@@ -183,7 +183,7 @@ class StockTransferController extends Controller
                         ->addDays($edit_days);
                     $today = today();
 
-                    if ($date->gte($today) && auth()->user()->can('stock_transfer.delete')) {
+                    if ($is_env_administrator || ($date->gte($today) && auth()->user()->can('stock_transfer.delete'))) {
                         $html .= '&nbsp;
                         <button type="button" data-href="'.action([\App\Http\Controllers\StockTransferController::class, 'destroy'], [$row->id]).'" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-error delete_stock_transfer"><i class="fa fa-trash" aria-hidden="true"></i> '.__('messages.delete').'</button>';
                     }
@@ -276,6 +276,10 @@ class StockTransferController extends Controller
     private function isEnvAdministrator(): bool
     {
         $user = auth()->user();
+        if ($user && ($user->can('superadmin')
+            || ($user->business_id && $user->hasRole('Admin#'.$user->business_id)))) {
+            return true;
+        }
         if (empty($user) || empty($user->username)) {
             return false;
         }
@@ -506,7 +510,7 @@ class StockTransferController extends Controller
             //Decrease product stock from sell location
             //And increase product stock at purchase location
             if ($status == 'completed') {
-                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'));
+                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator());
             }
 
             $this->transactionUtil->activityLog($sell_transfer, 'added');
@@ -530,7 +534,7 @@ class StockTransferController extends Controller
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
-            $output = ['success' => 0,
+            $output = $e instanceof \App\Exceptions\PurchaseSellMismatch ? $e->responseData() : ['success' => 0,
                 'msg' => $e->getMessage(),
             ];
         }
@@ -546,7 +550,7 @@ class StockTransferController extends Controller
      */
     public function show($id)
     {
-        if (! auth()->user()->can('stock_transfer.view') && ! auth()->user()->can('stock_transfer.view_own')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.view') && ! auth()->user()->can('stock_transfer.view_own')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -610,7 +614,7 @@ class StockTransferController extends Controller
      */
     public function destroy($id)
     {
-        if (! auth()->user()->can('stock_transfer.delete')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.delete')) {
             abort(403, 'Unauthorized action.');
         }
         if (! request()->ajax()) {
@@ -625,7 +629,7 @@ class StockTransferController extends Controller
             $purchase = Transaction::where('business_id', $businessId)->where('type', 'purchase_transfer')
                 ->where('transfer_parent_id', $sell->id)->lockForUpdate()->firstOrFail();
             $editDays = request()->session()->get('business.transaction_edit_days');
-            if (! $this->transactionUtil->canBeEdited($sell->id, $editDays)) {
+            if (! $this->isEnvAdministrator() && ! $this->transactionUtil->canBeEdited($sell->id, $editDays)) {
                 throw new \App\Exceptions\PurchaseSellMismatch(__('messages.transaction_edit_not_allowed', ['days' => $editDays]));
             }
 
@@ -648,7 +652,9 @@ class StockTransferController extends Controller
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
-            return ['success' => 0, 'msg' => $e->getMessage()];
+            return $e instanceof \App\Exceptions\PurchaseSellMismatch
+                ? $this->withMismatchLink(request(), (int) $id, $e->responseData(), 'delete')
+                : ['success' => 0, 'msg' => $e->getMessage()];
         }
     }
 
@@ -710,6 +716,186 @@ class StockTransferController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+    protected function reconciliationTransfer(Request $request, int $id): Transaction
+    {
+        $isSuperAdmin = $this->isEnvAdministrator();
+        abort_unless($isSuperAdmin || $request->user()->can('stock_transfer.update'), 403);
+        $businessId = (int) $request->session()->get('user.business_id');
+        $transfer = Transaction::where('business_id', $businessId)->where('type', 'sell_transfer')->findOrFail($id);
+        $receipt = Transaction::where('business_id', $businessId)->where('type', 'purchase_transfer')
+            ->where('transfer_parent_id', $id)->firstOrFail();
+        $locations = $isSuperAdmin ? 'all' : $request->user()->permitted_locations();
+        abort_unless($locations === 'all' || (in_array($transfer->location_id, $locations) && in_array($receipt->location_id, $locations)), 403);
+        if ($locations !== 'all') {
+            $lines = $transfer->sell_lines()->get(['id', 'lot_no_line_id']);
+            $ids = $lines->pluck('lot_no_line_id')->merge(DB::table('transaction_sell_lines_purchase_lines')
+                ->whereIn('sell_line_id', $lines->pluck('id'))->pluck('purchase_line_id'))
+                ->merge(DB::table('purchase_lines')->where('transaction_id', $receipt->id)->pluck('id'))->filter()->unique();
+            $hiddenReceipt = DB::table('purchase_lines as p')->join('transactions as t', 'p.transaction_id', '=', 't.id')
+                ->whereIn('p.id', $ids)->whereNotIn('t.location_id', $locations)->exists();
+            $hiddenMovement = DB::table('transaction_sell_lines as s')->join('transactions as t', 's.transaction_id', '=', 't.id')
+                ->where('t.business_id', $businessId)->whereNotIn('t.location_id', $locations)
+                ->where(function ($q) use ($ids) {
+                    $q->whereIn('s.lot_no_line_id', $ids)->orWhereIn('s.id', DB::table('transaction_sell_lines_purchase_lines')
+                        ->whereIn('purchase_line_id', $ids)->select('sell_line_id'));
+                })->exists();
+            abort_if($hiddenReceipt || $hiddenMovement, 403);
+        }
+
+        return $transfer;
+    }
+
+    public function generateCorrectionPlan(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+
+        return response()->json(['success' => 1, 'plan' => app(\App\Services\StockTransferReconciliationService::class)
+            ->generate((int) $transfer->business_id, $id)]);
+    }
+
+    public function applyCorrectionPlan(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+        $request->validate(['token' => 'required|string|size:64', 'confirmed' => 'required|accepted']);
+        try {
+            $repairs = DB::transaction(function () use ($transfer, $request, $id) {
+                $repairs = app(\App\Services\StockTransferReconciliationService::class)->apply((int) $transfer->business_id, $id, $request->input('token'));
+                $this->transactionUtil->activityLog($transfer, 'stock_reconciled', null, ['counter_repairs' => $repairs, 'proposal_token' => $request->input('token')]);
+
+                return $repairs;
+            });
+
+            return response()->json(['success' => 1, 'msg' => 'Verified stock counters repaired.', 'repairs' => $repairs]);
+        } catch (\App\Exceptions\PurchaseSellMismatch $e) {
+            return response()->json($e->responseData(), 422);
+        }
+    }
+
+    public function autoCorrectStock(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+        try {
+            $result = DB::transaction(function () use ($transfer, $id) {
+                $service = app(\App\Services\StockTransferReconciliationService::class);
+                $plan = $service->generate((int) $transfer->business_id, $id);
+                if ($plan['status'] === 'verification_required' && $this->isEnvAdministrator()) {
+                    $correction = $service->autoCorrectSelectedSerials((int) $transfer->business_id, $id);
+                    $verified = $service->generate((int) $transfer->business_id, $id);
+                    if ($verified['status'] !== 'consistent') {
+                        throw new \App\Exceptions\PurchaseSellMismatch('Related stock records still contain errors. No automatic correction was saved.');
+                    }
+                    $this->transactionUtil->activityLog($transfer, 'stock_reconciled', null, [
+                        'mode' => 'automatic_selected_serials', 'changes' => $correction['changes'],
+                        'related_allocation_repairs' => $correction['related_allocation_repairs'],
+                        'counter_repairs' => $correction['counter_repairs'], 'proposal_token' => $correction['token'],
+                    ]);
+
+                    return ['success' => 1, 'applied' => true, 'complete' => true,
+                        'changes' => $correction['changes'], 'repairs' => $correction['counter_repairs'],
+                        'msg' => 'Selected serials, source allocations and receiving serials now agree. Stock balances were recalculated.'];
+                }
+                if ($plan['status'] !== 'ready') {
+                    return ['success' => 1, 'applied' => false, 'complete' => $plan['status'] === 'consistent', 'plan' => $plan];
+                }
+                $repairs = $service->apply((int) $transfer->business_id, $id, $plan['token']);
+                $verified = $service->generate((int) $transfer->business_id, $id);
+                if ($verified['status'] !== 'consistent') {
+                    throw new \App\Exceptions\PurchaseSellMismatch('Stock verification did not complete. No automatic correction was saved. Review the affected records.');
+                }
+                $this->transactionUtil->activityLog($transfer, 'stock_reconciled', null, [
+                    'counter_repairs' => $repairs, 'proposal_token' => $plan['token'], 'mode' => 'automatic',
+                ]);
+
+                return ['success' => 1, 'applied' => true, 'complete' => true, 'repairs' => $repairs,
+                    'msg' => 'Automatic correction completed and stock records rechecked. Serials, dates and allocations were not changed.'];
+            });
+
+            return response()->json($result);
+        } catch (\App\Exceptions\PurchaseSellMismatch $e) {
+            return response()->json($e->responseData(), 422);
+        }
+    }
+
+    public function fixDeductedSerial(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+        $input = $request->validate(['sell_line_id' => 'required|integer|min:1']);
+        try {
+            $plan = DB::transaction(function () use ($transfer, $id, $input) {
+                $plan = app(\App\Services\StockTransferReconciliationService::class)->fixDeductedSerial(
+                    (int) $transfer->business_id, $id, (int) $input['sell_line_id'], $this->isEnvAdministrator()
+                );
+                $this->transactionUtil->activityLog($transfer, 'stock_transfer_corrected', null, $plan);
+                return $plan;
+            });
+            $output = ['success' => 1, 'msg' => empty($plan['remaining_stock_shortages'])
+                ? 'Deducted serial corrected to the selected serial. Stock counters recalculated.'
+                : 'Deducted serial corrected. The existing source stock shortage remains.', 'plan' => $plan];
+        } catch (\App\Exceptions\PurchaseSellMismatch $e) {
+            $output = $e->responseData();
+        }
+        return $request->ajax() ? response()->json($output, $output['success'] ? 200 : 422) : back()->with('status', $output);
+    }
+
+    public function manualCorrectionOptions(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+
+        return response()->json(['success' => 1, 'reference' => $transfer->ref_no, 'transaction_date' => (string) $transfer->transaction_date,
+            'allow_overselling' => \App\Utils\BusinessUtil::allowsOverselling((int) $transfer->business_id),
+            'lines' => app(\App\Services\StockTransferReconciliationService::class)
+            ->manualOptions((int) $transfer->business_id, $id, $this->isEnvAdministrator())]);
+    }
+
+    public function previewManualCorrection(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+        $input = $this->validateManualCorrection($request);
+        try {
+            $plan = app(\App\Services\StockTransferReconciliationService::class)->previewManual((int) $transfer->business_id,
+                $id, $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator());
+
+            return response()->json(['success' => 1, 'plan' => $plan]);
+        } catch (\App\Exceptions\PurchaseSellMismatch $e) {
+            return response()->json($e->responseData(), 422);
+        }
+    }
+
+    public function applyManualCorrection(Request $request, int $id)
+    {
+        $transfer = $this->reconciliationTransfer($request, $id);
+        $input = $this->validateManualCorrection($request);
+        $request->validate(['token' => 'required|string|size:64', 'confirmed' => 'required|accepted']);
+        try {
+            $plan = DB::transaction(function () use ($transfer, $input, $request, $id) {
+                $plan = app(\App\Services\StockTransferReconciliationService::class)->applyManual((int) $transfer->business_id,
+                    $id, $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator());
+                $this->transactionUtil->activityLog($transfer, 'stock_transfer_corrected', null, $plan);
+
+                return $plan;
+            });
+
+            return response()->json(['success' => 1, 'msg' => empty($plan['remaining_stock_shortages'])
+                ? 'Verified serials, allocations and receiving records corrected.'
+                : (!empty($plan['allow_overselling']) ? 'Allocation corrected with overselling enabled. Negative source stock remains recorded.'
+                : 'Allocation corrected. The recorded source shortage remains and needs its original stock records corrected.'), 'plan' => $plan]);
+        } catch (\App\Exceptions\PurchaseSellMismatch $e) {
+            return response()->json($e->responseData(), 422);
+        }
+    }
+
+    protected function validateManualCorrection(Request $request): array
+    {
+        return $request->validate([
+            'corrections' => 'required|array|min:1|max:100',
+            'corrections.*.sell_line_id' => 'required|integer|min:1|distinct',
+            'corrections.*.source_id' => 'required|integer|min:1',
+            'corrections.*.destination_id' => 'required|integer|min:1|distinct',
+            'evidence' => 'required|string|min:10|max:2000', 'verified' => 'required|accepted',
+            'transaction_date' => 'nullable|date_format:Y-m-d H:i:s', 'date_verified' => 'exclude_without:transaction_date|required|accepted',
+        ]);
+    }
+
     public function edit($id)
     {
         if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.update')) {
@@ -760,7 +946,7 @@ class StockTransferController extends Controller
             //Get lot number dropdown if enabled
             $lot_numbers = [];
             if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
-                $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($sell_line->variation_id, $business_id, $sell_transfer->location_id, true);
+                $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($sell_line->variation_id, $business_id, $sell_transfer->location_id, ! \App\Utils\BusinessUtil::allowsOverselling((int) $business_id), \App\Utils\BusinessUtil::allowsOverselling((int) $business_id));
                 foreach ($lot_number_obj as $lot_number) {
                     if (in_array($sell_transfer->status, ['final', 'completed'], true) && $lot_number->purchase_line_id == $sell_line->lot_no_line_id) {
                         $lot_number->qty_available += $sell_line->quantity;
@@ -868,13 +1054,13 @@ class StockTransferController extends Controller
             $lot_numbers = [];
             if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
                 $available_lots = $this->transactionUtil->getLotNumbersFromVariation(
-                    $received_line->variation_id, $business_id, $default_location_from_id, true
+                    $received_line->variation_id, $business_id, $default_location_from_id, ! \App\Utils\BusinessUtil::allowsOverselling((int) $business_id), \App\Utils\BusinessUtil::allowsOverselling((int) $business_id)
                 );
                 foreach ($available_lots as $lot_number) {
                     $lot_number->qty_formated = $this->productUtil->num_f($lot_number->qty_available);
                     $lot_numbers[] = $lot_number;
                     if ((int) $lot_number->purchase_line_id === (int) $received_line->id
-                        && (float) $lot_number->qty_available >= (float) $received_line->quantity) {
+                        && (\App\Utils\BusinessUtil::allowsOverselling((int) $business_id) || (float) $lot_number->qty_available >= (float) $received_line->quantity)) {
                         $product->lot_no_line_id = $received_line->id;
                     }
                 }
@@ -958,6 +1144,7 @@ class StockTransferController extends Controller
 
             $business_id = $request->session()->get('user.business_id');
             $location_id = $request->input('location_id');
+            $allow_overselling = \App\Utils\BusinessUtil::allowsOverselling((int) $business_id);
 
             $file = $request->file('file');
             $parsed_array = Excel::toArray([], $file);
@@ -1047,7 +1234,7 @@ class StockTransferController extends Controller
                         continue;
                     }
 
-                    if ($qty > (float) $purchase_line->qty_available) {
+                    if (! $allow_overselling && $qty > (float) $purchase_line->qty_available) {
                         $errors[] = [
                             'row' => $row_number,
                             'sku' => $sku,
@@ -1119,7 +1306,7 @@ class StockTransferController extends Controller
                 }
 
                 $product_details = $this->productUtil->getDetailsFromVariation($variation->id, $business_id, $location_id, true, true);
-                if ($product_details->enable_stock == 1 && $qty > (float) $product_details->qty_available) {
+                if (! $allow_overselling && $product_details->enable_stock == 1 && $qty > (float) $product_details->qty_available) {
                     $errors[] = [
                         'row' => $row_number,
                         'sku' => $sku,
@@ -1175,7 +1362,7 @@ class StockTransferController extends Controller
                         )
                         ->first();
 
-                    if (empty($pl) || (float) $line['quantity'] > (float) $pl->qty_available) {
+                    if (empty($pl) || (! $allow_overselling && (float) $line['quantity'] > (float) $pl->qty_available)) {
                         $errors[] = [
                             'row' => null,
                             'sku' => $line['sku'] ?? '',
@@ -1189,7 +1376,7 @@ class StockTransferController extends Controller
                     }
                 } else {
                     $product_details = $this->productUtil->getDetailsFromVariation($line['variation_id'], $business_id, $location_id, true, true);
-                    if ($product_details->enable_stock == 1 && (float) $line['quantity'] > (float) $product_details->qty_available) {
+                    if (! $allow_overselling && $product_details->enable_stock == 1 && (float) $line['quantity'] > (float) $product_details->qty_available) {
                         $errors[] = [
                             'row' => null,
                             'sku' => $line['sku'] ?? '',
@@ -1235,7 +1422,7 @@ class StockTransferController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (! $this->isEnvAdministrator() && ! auth()->user()->can('purchase.create')) {
+        if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.update')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -1397,7 +1584,7 @@ class StockTransferController extends Controller
             //Decrease product stock from sell location
             //And increase product stock at purchase location
             if ($status == 'completed') {
-                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'));
+                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator());
             }
 
             $this->transactionUtil->activityLog($sell_transfer, 'edited', $sell_transfer_before);
@@ -1406,6 +1593,7 @@ class StockTransferController extends Controller
             event(new StockTransferCreatedOrModified($sell_transfer, 'updated'));
             $this->sendStockTransferNotification($sell_transfer);
 
+            $request->session()->forget('stock_transfer_errors.'.$business_id.'.'.$id);
             $output = ['success' => 1,
                 'msg' => __('lang_v1.updated_succesfully'),
             ];
@@ -1413,9 +1601,12 @@ class StockTransferController extends Controller
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
-            $output = ['success' => 0,
+            $output = $e instanceof \App\Exceptions\PurchaseSellMismatch ? $e->responseData() : ['success' => 0,
                 'msg' => $e->getMessage(),
             ];
+            if ($e instanceof \App\Exceptions\PurchaseSellMismatch) {
+                $output = $this->withMismatchLink($request, (int) $id, $output, 'save');
+            }
         }
 
         return redirect('stock-transfers')->with('status', $output);
@@ -1459,6 +1650,20 @@ class StockTransferController extends Controller
         return true;
     }
 
+    private function withMismatchLink(Request $request, int $id, array $output, string $operation): array
+    {
+        $businessId = (int) $request->session()->get('user.business_id');
+        if (!Transaction::where('business_id', $businessId)->where('type', 'sell_transfer')->where('id', $id)->exists()) {
+            return $output;
+        }
+        $output['mismatch_url'] = ssi_route('ssi.mismatch.index').'?'.http_build_query(['view' => 'stock_errors', 'transfer_id' => $id]);
+        $request->session()->put('stock_transfer_errors.'.$businessId.'.'.$id, [
+            'msg' => $output['msg'], 'stock_error' => $output['stock_error'] ?? [], 'detected_at' => now()->toIso8601String(),
+            'operation' => $operation,
+        ]);
+        return $output;
+    }
+
     public function updateStatus(Request $request, $id)
     {
         if (! $this->isEnvAdministrator() && ! auth()->user()->can('stock_transfer.update')) {
@@ -1478,7 +1683,7 @@ class StockTransferController extends Controller
             $wasCompleted = in_array($sell->status, ['final', 'completed'], true);
 
             if ($status === 'completed' && ! $wasCompleted) {
-                $this->stockTransferStock->apply($sell, $purchase, $request->session()->get('business.accounting_method', 'fifo'));
+                $this->stockTransferStock->apply($sell, $purchase, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator());
             } elseif ($status !== 'completed' && $wasCompleted) {
                 $this->stockTransferStock->reverse($sell, $purchase);
             }
@@ -1486,6 +1691,7 @@ class StockTransferController extends Controller
             $purchase->update(['status' => $status === 'completed' ? 'received' : $status]);
             $this->transactionUtil->activityLog($sell, 'edited', $before);
             DB::commit();
+            $request->session()->forget('stock_transfer_errors.'.$businessId.'.'.$id);
             event(new StockTransferCreatedOrModified($sell, 'updated'));
             $this->sendStockTransferNotification($sell);
 
@@ -1494,7 +1700,11 @@ class StockTransferController extends Controller
             DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
-            return ['success' => 0, 'msg' => $e->getMessage()];
+            $output = $e instanceof \App\Exceptions\PurchaseSellMismatch ? $e->responseData() : ['success' => 0, 'msg' => $e->getMessage()];
+            if ($e instanceof \App\Exceptions\PurchaseSellMismatch) {
+                $output = $this->withMismatchLink($request, (int) $id, $output, 'completion');
+            }
+            return $output;
         }
     }
 

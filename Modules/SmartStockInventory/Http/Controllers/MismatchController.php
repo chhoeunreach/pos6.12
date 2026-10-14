@@ -22,8 +22,26 @@ class MismatchController extends BaseSmartStockController
             'purchase_ref' => trim((string) $request->input('purchase_ref', '')),
             'purchase_date_from' => $request->input('purchase_date_from'),
             'purchase_date_to' => $request->input('purchase_date_to'),
+            'view' => in_array($request->input('view'), ['stock_errors', 'deducted_serial'], true) ? $request->input('view') : 'quantity',
+            'transfer_id' => (int) $request->input('transfer_id', 0),
+            'line_id' => (int) $request->input('line_id', 0),
         ];
-        $rows = $this->fixService->detectMismatch($filters);
+        if ($filters['line_id']) {
+            $filters['view'] = 'stock_errors';
+            $rows = array_values(array_filter(app(\App\Services\StockMismatchDetectorService::class)->detect($filters),
+                fn ($row) => (int) ($row['sell_line_id'] ?? 0) === $filters['line_id']));
+        } elseif ($filters['transfer_id']) {
+            $filters['view'] = 'stock_errors';
+            $lastFailure = $request->session()->get('stock_transfer_errors.'.$filters['business_id'].'.'.$filters['transfer_id']);
+            $rows = app(\App\Services\StockMismatchDetectorService::class)->detectTransferIssues($filters, $lastFailure);
+        } elseif ($filters['view'] === 'deducted_serial') {
+            $rows = array_values(array_filter(app(\App\Services\StockMismatchDetectorService::class)->detect($filters),
+                fn ($row) => !empty($row['deducted_serial_fix_url'])));
+        } elseif ($filters['view'] === 'stock_errors') {
+            $rows = app(\App\Services\StockMismatchDetectorService::class)->detect($filters);
+        } else {
+            $rows = $this->fixService->detectMismatch($filters);
+        }
 
         return view('smartstockinventory::mismatch.index', compact('rows', 'filters'));
     }
@@ -32,6 +50,7 @@ class MismatchController extends BaseSmartStockController
     {
         abort_unless($request->user()->can('stock_inventory.fix'), 403);
         $d = $request->validate(['product_id' => 'required|integer', 'variation_id' => 'required|integer', 'location_id' => 'required|integer', 'problem_type' => 'nullable|string|max:100']);
+        abort_unless(in_array((int) $d['location_id'], array_map('intval', $this->permittedLocationIds($this->businessId())), true), 403);
         return response()->json(['success' => 1, 'data' => $this->fixService->previewFix((int) $d['product_id'], (int) $d['variation_id'], (int) $d['location_id'], (string) ($d['problem_type'] ?? 'negative_stock'))]);
     }
 
@@ -39,11 +58,17 @@ class MismatchController extends BaseSmartStockController
     {
         abort_unless($request->user()->can('stock_inventory.fix'), 403);
         $d = $request->validate(['product_id' => 'required|integer', 'variation_id' => 'required|integer', 'location_id' => 'required|integer', 'problem_type' => 'required|string|max:100', 'reason' => 'required|string|max:500']);
+        abort_unless(in_array((int) $d['location_id'], array_map('intval', $this->permittedLocationIds($this->businessId())), true), 403);
         $map = ['negative_stock' => 'fixNegativeStock', 'mismatch_stock' => 'fixMismatchStock', 'duplicate_imei' => 'fixDuplicateIMEI', 'duplicate_lot' => 'fixDuplicateLot', 'wrong_location_stock' => 'fixWrongLocationStock', 'broken_purchase_sell_mapping' => 'fixBrokenPurchaseSellMapping', 'broken_stock_adjustment' => 'fixBrokenStockAdjustment', 'pending_transfer_issue' => 'fixPendingTransferIssue', 'orphan_sell_lines' => 'fixOrphanSellLines', 'rebuild_stock_by_location' => 'rebuildStockByLocation', 'recalculate_available_qty' => 'recalculateAvailableQty'];
         $method = $map[$d['problem_type']] ?? 'fixNegativeStock';
         $log = $this->fixService->{$method}((int) $d['product_id'], (int) $d['variation_id'], (int) $d['location_id'], $d['reason']);
-        $this->telegram->send('Auto fix completed', ['Fix Log ID' => $log->id, 'Type' => $log->fix_type]);
-        return back()->with('status', ['success' => 1, 'msg' => 'Fix completed']);
+        try {
+            $this->telegram->send('Auto fix completed', ['Fix Log ID' => $log->id, 'Type' => $log->fix_type]);
+        } catch (\Throwable $e) {
+            \Log::warning('Stock fix saved; notification failed.', ['fix_log_id' => $log->id]);
+        }
+        return back()->with('status', ['success' => 1, 'msg' => $d['problem_type'] === 'mismatch_stock'
+            ? 'Stock quantity corrected using Product Stock Details.' : 'Fix completed']);
     }
 
     public function rollback(Request $request)

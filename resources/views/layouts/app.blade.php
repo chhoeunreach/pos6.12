@@ -113,7 +113,10 @@
         @endif
         @if (session('status'))
             <input type="hidden" id="status_span" data-status="{{ session('status.success') }}"
-                data-msg="{{ session('status.msg') }}">
+                data-msg="{{ $request->segment(1) === 'stock-transfers' && session('status.stock_error') ? session('status.stock_error.reason', session('status.msg')) : session('status.msg') }}" data-stock-error="{{ $request->segment(1) === 'stock-transfers' ? '' : json_encode(session('status.stock_error')) }}">
+        @endif
+        @if ($request->segment(1) !== 'stock-transfers')
+            @include('stock_transfer.partials.stock_error_modal')
         @endif
         <main class="tw-flex tw-flex-col tw-flex-1 tw-h-full tw-min-w-0 tw-bg-gray-100">
             <div id="main_app_header">

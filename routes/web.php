@@ -442,6 +442,13 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('stock-transfers/import-template', [StockTransferController::class, 'downloadImportTemplate']);
     Route::post('stock-transfers/import-lines', [StockTransferController::class, 'importLines']);
     Route::post('stock-transfers/update-status/{id}', [StockTransferController::class, 'updateStatus']);
+    Route::post('stock-transfers/{id}/correction-plan', [StockTransferController::class, 'generateCorrectionPlan']);
+    Route::post('stock-transfers/{id}/auto-correct', [StockTransferController::class, 'autoCorrectStock']);
+    Route::post('stock-transfers/{id}/fix-deducted-serial', [StockTransferController::class, 'fixDeductedSerial']);
+    Route::post('stock-transfers/{id}/apply-correction-plan', [StockTransferController::class, 'applyCorrectionPlan']);
+    Route::post('stock-transfers/{id}/manual-correction-options', [StockTransferController::class, 'manualCorrectionOptions']);
+    Route::post('stock-transfers/{id}/preview-manual-correction', [StockTransferController::class, 'previewManualCorrection']);
+    Route::post('stock-transfers/{id}/apply-manual-correction', [StockTransferController::class, 'applyManualCorrection']);
     Route::resource('stock-transfers', StockTransferController::class);
 
     Route::get('/opening-stock/add/{product_id}', [OpeningStockController::class, 'add']);

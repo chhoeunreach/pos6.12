@@ -1297,6 +1297,8 @@ class ProductController extends Controller
                 && (int) request()->input('group_by_purchase_line', 0) === 1
             ) {
                 $lot_qty_available_sql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('purchase_lines');
+                $allow_transfer_overselling = (int) request()->input('stock_transfer', 0) === 1
+                    && \App\Utils\BusinessUtil::allowsOverselling((int) $business_id);
 
                 $lot_rows = \App\PurchaseLine::join('transactions as t', 'purchase_lines.transaction_id', '=', 't.id')
                     ->join('variations as v', 'purchase_lines.variation_id', '=', 'v.id')
@@ -1307,7 +1309,9 @@ class ProductController extends Controller
                     ->where('p.type', '!=', 'modifier')
                     ->whereNotNull('purchase_lines.lot_number')
                     ->where('purchase_lines.lot_number', 'like', '%' . $search_term . '%')
-                    ->whereRaw("$lot_qty_available_sql > 0")
+                    ->when(! $allow_transfer_overselling, fn ($query) => $query->whereRaw("$lot_qty_available_sql > 0"))
+                    ->when($allow_transfer_overselling, fn ($query) => $query->where('t.status', 'received')
+                        ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase']))
                     ->select([
                         'p.id as product_id',
                         'p.name',

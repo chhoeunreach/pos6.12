@@ -28,6 +28,8 @@ class LotController extends BaseSmartStockController
                 ->join('variations as v', 'products.id', '=', 'v.product_id')
                 ->join('purchase_lines as pl', 'v.id', '=', 'pl.variation_id')
                 ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+                ->where('t.status', 'received')
+                ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
                 ->whereNotNull('pl.lot_number');
 
             $permittedLocations = auth()->user()->permitted_locations();
@@ -180,13 +182,17 @@ class LotController extends BaseSmartStockController
 
         $businessId = $this->businessId();
 
+        $permittedLocations = auth()->user()->permitted_locations();
+        $locationId = $request->input('location_id');
+        [$currentStock, $stockLocationDisplay] = $this->lotStockSummary($businessId, $lot, $permittedLocations, $locationId);
+        $stockReview = $this->lotStockReview($businessId, $lot, $permittedLocations, $locationId);
+        $stockNeedsReview = $stockReview['balances']->isNotEmpty() || $stockReview['allocations']->isNotEmpty();
+
         if ($request->ajax()) {
-            $permittedLocations = auth()->user()->permitted_locations();
-            $locationId = $request->input('location_id');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $applyCommonFilters = function ($query, $tableAlias = 't', $locationFilter = null) use ($permittedLocations, $locationId, $startDate, $endDate, $lot) {
+            $applyCommonFilters = function ($query, $tableAlias = 't', $locationFilter = null) use ($permittedLocations, $locationId, $lot) {
                 if ($permittedLocations !== 'all') {
                     if (is_callable($locationFilter)) {
                         $locationFilter($query, $permittedLocations);
@@ -202,9 +208,6 @@ class LotController extends BaseSmartStockController
                     }
                 }
                 $query->where('pl.lot_number', $lot);
-                if (! empty($startDate) && ! empty($endDate)) {
-                    $query->whereRaw("DATE({$tableAlias}.transaction_date) BETWEEN ? AND ?", [$startDate, $endDate]);
-                }
             };
 
             $transferLocationFilter = function ($query, array $locationIds) {
@@ -407,20 +410,8 @@ class LotController extends BaseSmartStockController
             ]);
 
             $movementType = $request->input('movement_type');
-            $movementUnion = $purchaseMovements;
-
-            if (empty($movementType) || $movementType === 'all') {
-                $movementUnion->unionAll($transferMovements)
-                    ->unionAll($sellMovements)
-                    ->unionAll($sellReturnMovements)
-                    ->unionAll($adjustmentMovements);
-            } elseif ($movementType === 'sell') {
-                $movementUnion = $sellMovements->unionAll($sellReturnMovements);
-            } elseif ($movementType === 'transfer') {
-                $movementUnion = $transferMovements;
-            } elseif ($movementType === 'adjustment') {
-                $movementUnion = $adjustmentMovements;
-            }
+            $movementUnion = $purchaseMovements->unionAll($transferMovements)
+                ->unionAll($sellMovements)->unionAll($sellReturnMovements)->unionAll($adjustmentMovements);
 
             $movementRows = DB::query()
                 ->fromSub($movementUnion, 'lot_movements')
@@ -429,27 +420,7 @@ class LotController extends BaseSmartStockController
                 ->orderBy('transaction_id')
                 ->get();
 
-            $balance = 0;
-            $movementRows = $movementRows->map(function ($row) use (&$balance) {
-                $qtyIn = (float) ($row->qty_in ?? 0);
-                $qtyOut = (float) ($row->qty_out ?? 0);
-                $balance += $qtyIn - $qtyOut;
-                $row->balance_qty = $balance;
-
-                return $row;
-            })->sort(function ($a, $b) {
-                $dateCompare = (strtotime((string) $b->movement_date) ?: 0) <=> (strtotime((string) $a->movement_date) ?: 0);
-                if ($dateCompare !== 0) {
-                    return $dateCompare;
-                }
-
-                $sortCompare = ((int) ($b->movement_sort ?? 0)) <=> ((int) ($a->movement_sort ?? 0));
-                if ($sortCompare !== 0) {
-                    return $sortCompare;
-                }
-
-                return ((int) ($b->transaction_id ?? 0)) <=> ((int) ($a->transaction_id ?? 0));
-            })->values();
+            $movementRows = $this->prepareLotHistoryRows($movementRows, $movementType, $startDate, $endDate);
 
             return DataTables::of($movementRows)
                 ->addColumn('transaction_id', function ($row) {
@@ -520,6 +491,20 @@ class LotController extends BaseSmartStockController
 
                     return '<span class="display_currency balance_qty ' . $class . ' text-bold" data-is_quantity="true" data-currency_symbol=false data-orig-value="' . $balance . '">' . $balance . '</span>';
                 })
+                ->addColumn('quantity_change', function ($row) {
+                    $renderQuantity = function (float $quantity) {
+                        $class = $quantity > 0 ? 'text-success' : ($quantity < 0 ? 'text-danger' : 'text-muted');
+                        $prefix = $quantity > 0 ? '+' : '';
+
+                        return '<span class="' . $class . ' text-bold">' . $prefix
+                            . e($this->util->num_f($quantity, false, null, true)) . '</span>';
+                    };
+                    if ($row->movement_type === 'transfer' && (float) $row->qty_in > 0 && (float) $row->qty_out > 0) {
+                        return $renderQuantity(-(float) $row->qty_out) . ' / ' . $renderQuantity((float) $row->qty_in);
+                    }
+
+                    return $renderQuantity((float) $row->quantity_change);
+                })
                 ->addColumn('status', function ($row) {
                     if ($row->movement_type === 'sell') {
                         return '<span class="lot-status lot-status-sold">Sold</span>';
@@ -547,7 +532,10 @@ class LotController extends BaseSmartStockController
 
                     return $userName !== '' ? e($userName) : '--';
                 })
-                ->rawColumns(['qty_in', 'qty_out', 'balance_qty', 'status', 'ref_no'])
+                ->rawColumns(['qty_in', 'qty_out', 'balance_qty', 'quantity_change', 'status', 'ref_no'])
+                ->with(['current_stock' => $currentStock, 'stock_location_display' => $stockLocationDisplay,
+                    'stock_reconciliation_required' => $stockNeedsReview,
+                    'stock_review_html' => view('smartstockinventory::lot.partials.stock_review', compact('stockReview'))->render()])
                 ->make(true);
         }
 
@@ -561,6 +549,9 @@ class LotController extends BaseSmartStockController
             ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
             ->where('pl.lot_number', $lot)
             ->where('t.business_id', $businessId)
+            ->where('t.status', 'received')
+            ->when($permittedLocations !== 'all', fn ($q) => $q->whereIn('t.location_id', $permittedLocations))
+            ->when(! empty($locationId), fn ($q) => $q->where('t.location_id', $locationId))
             ->select(
                 'v.sub_sku as sku',
                 'p.name as product_name',
@@ -572,41 +563,108 @@ class LotController extends BaseSmartStockController
             )
             ->first();
 
-        $lotQtyAvailableSql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('pl');
-
-        $stockQty = DB::table('purchase_lines as pl')
-            ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
-            ->where('pl.lot_number', $lot)
-            ->where('t.business_id', $businessId)
-            ->select(DB::raw("COALESCE(SUM($lotQtyAvailableSql), 0) as current_stock"))
-            ->first();
-
-        $currentStock = (float) ($stockQty->current_stock ?? 0);
-
         if ($lotInfo) {
-            $stockLocations = DB::table('purchase_lines as pl')
-                ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
-                ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
-                ->where('pl.lot_number', $lot)
-                ->where('t.business_id', $businessId)
-                ->select('bl.name as location_name')
-                ->selectRaw("COALESCE(SUM($lotQtyAvailableSql), 0) as current_stock")
-                ->groupBy('t.location_id', 'bl.name')
-                ->havingRaw('current_stock > 0')
-                ->orderBy('bl.name')
-                ->get()
-                ->pluck('location_name')
-                ->filter()
-                ->values();
+            $lotInfo->location_name = $stockLocationDisplay;
+        }
 
-            if ($stockLocations->isNotEmpty()) {
-                $lotInfo->location_name = $stockLocations->implode(', ');
-            } else {
-                $lotInfo->location_name = null;
+        return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock', 'stockReview', 'stockNeedsReview'));
+    }
+
+    protected function lotStockReview(int $businessId, string $lot, $permittedLocations, $locationId = null): array
+    {
+        $util = app(\App\Utils\TransactionUtil::class);
+        $balances = DB::table('purchase_lines as pl')->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+            ->where('t.business_id', $businessId)->where('t.status', 'received')->where('pl.lot_number', $lot)
+            ->when($permittedLocations !== 'all', fn ($q) => $q->whereIn('t.location_id', $permittedLocations))
+            ->when(! empty($locationId), fn ($q) => $q->where('t.location_id', $locationId))
+            ->select('pl.id')->selectRaw($util->lotQuantityAvailableSql('pl').' as history_available')
+            ->selectRaw('(pl.quantity - pl.quantity_sold - pl.quantity_adjusted - pl.quantity_returned - pl.mfg_quantity_used) as recorded_available')
+            ->get()->filter(fn ($row) => abs((float) $row->history_available - (float) $row->recorded_available) > 0.0001)->values();
+        $allocations = DB::table('transaction_sell_lines_purchase_lines as m')
+            ->join('transaction_sell_lines as s', 'm.sell_line_id', '=', 's.id')
+            ->join('transactions as t', 's.transaction_id', '=', 't.id')
+            ->join('purchase_lines as allocated', 'm.purchase_line_id', '=', 'allocated.id')
+            ->join('transactions as receipt', 'allocated.transaction_id', '=', 'receipt.id')
+            ->join('purchase_lines as selected', 's.lot_no_line_id', '=', 'selected.id')
+            ->join('transactions as selected_receipt', 'selected.transaction_id', '=', 'selected_receipt.id')
+            ->where('t.business_id', $businessId)->where('receipt.business_id', $businessId)->where('selected_receipt.business_id', $businessId)
+            ->where('t.status', 'final')->whereIn('t.type', ['sell', 'sell_transfer'])
+            ->whereColumn('m.purchase_line_id', '!=', 's.lot_no_line_id')
+            ->whereRaw('m.quantity > COALESCE(m.qty_returned, 0)')
+            ->where(fn ($q) => $q->where('allocated.lot_number', $lot)->orWhere('selected.lot_number', $lot))
+            ->when($permittedLocations !== 'all', function ($q) use ($permittedLocations) {
+                $q->whereIn('t.location_id', $permittedLocations)->whereIn('receipt.location_id', $permittedLocations)
+                    ->whereIn('selected_receipt.location_id', $permittedLocations);
+            })
+            ->when(! empty($locationId), fn ($q) => $q->where('t.location_id', $locationId))
+            ->orderBy('t.transaction_date')->get(['t.id', 's.id as sell_line_id', 't.type', 't.ref_no', 't.invoice_no', 't.transaction_date',
+                'selected.lot_number as selected_serial', 'allocated.lot_number as allocated_serial',
+                'receipt.transaction_date as receipt_date', 'm.quantity', 'm.qty_returned']);
+        foreach ($allocations as $row) {
+            $row->reference = $row->ref_no ?: ($row->invoice_no ?: '#'.$row->id);
+            $row->review_url = null;
+            $row->correction_url = null;
+            $row->deducted_serial_fix_url = null;
+            if ($row->type === 'sell_transfer' && (auth()->user()->can('superadmin') || auth()->user()->can('stock_transfer.update'))) {
+                $row->review_url = ssi_url('/stock-transfers/'.$row->id.'/edit');
+                $row->correction_url = $row->review_url.'?correct_line='.$row->sell_line_id;
+                $row->deducted_serial_fix_url = action([\App\Http\Controllers\StockTransferController::class, 'fixDeductedSerial'], [$row->id]);
+            } elseif ($row->type === 'sell' && auth()->user()->can('sell.view')) {
+                $row->review_url = ssi_url('/sells/'.$row->id);
             }
         }
 
-        return view('smartstockinventory::lot.history', compact('business_locations', 'lot', 'lotInfo', 'currentStock'));
+        return compact('balances', 'allocations');
+    }
+
+    protected function lotStockSummary(int $businessId, string $lot, $permittedLocations, $locationId = null): array
+    {
+        $quantitySql = app(\App\Utils\TransactionUtil::class)->lotQuantityAvailableSql('pl');
+        $locations = DB::table('purchase_lines as pl')
+            ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+            ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+            ->where('t.business_id', $businessId)
+            ->where('t.status', 'received')
+            ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
+            ->where('pl.lot_number', $lot)
+            ->when($permittedLocations !== 'all', fn ($q) => $q->whereIn('t.location_id', $permittedLocations))
+            ->when(! empty($locationId), fn ($q) => $q->where('t.location_id', $locationId))
+            ->select('bl.name as location_name')
+            ->selectRaw("COALESCE(SUM($quantitySql), 0) as current_stock")
+            ->groupBy('t.location_id', 'bl.name')->orderBy('bl.name')->get();
+
+        return [
+            (float) $locations->sum('current_stock'),
+            $locations->filter(fn ($row) => (float) $row->current_stock > 0)
+                ->pluck('location_name')->filter()->implode(', '),
+        ];
+    }
+
+    protected function prepareLotHistoryRows($rows, ?string $movementType = null, ?string $startDate = null, ?string $endDate = null)
+    {
+        $balance = 0;
+        // Apply display filters after calculating the complete ledger for the visible locations.
+        $rows = $rows->map(function ($row) use (&$balance) {
+            $row->quantity_change = (float) ($row->qty_in ?? 0) - (float) ($row->qty_out ?? 0);
+            $balance += $row->quantity_change;
+            $row->balance_qty = $balance;
+
+            return $row;
+        });
+        $types = match ($movementType) {
+            'purchase' => ['purchase'],
+            'sell' => ['sell', 'sell_return'],
+            'transfer' => ['transfer'],
+            'adjustment' => ['adjustment'],
+            default => null,
+        };
+
+        return $rows->filter(function ($row) use ($types, $startDate, $endDate) {
+            $date = substr((string) $row->movement_date, 0, 10);
+
+            return ($types === null || in_array($row->movement_type, $types, true))
+                && (empty($startDate) || empty($endDate) || ($date >= $startDate && $date <= $endDate));
+        })->reverse()->values();
     }
 
     protected function lotSaleLinesQuery(int $businessId)

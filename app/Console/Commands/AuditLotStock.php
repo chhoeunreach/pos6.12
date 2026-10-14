@@ -29,6 +29,7 @@ class AuditLotStock extends Command
         $this->info('Selected sale lines checked: '.$report['checked_selected_sale_lines']);
         $this->line('Sale lines needing reconciliation: '.count($report['sale_line_issues']));
         $this->line('Lot balances needing reconciliation: '.count($report['stock_issues']));
+        $this->line('Transfer receiving serials needing reconciliation: '.count($report['transfer_issues']));
         $this->line('Report: '.$path);
         $this->line('No database records were changed.');
 

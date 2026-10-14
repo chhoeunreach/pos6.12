@@ -3412,6 +3412,8 @@ class TransactionUtil extends Util
 
         $product_ids = collect($transaction_lines)->pluck('product_id')->unique()->filter()->all();
         $products = ! empty($product_ids) ? Product::whereIn('id', $product_ids)->with('unit')->get()->keyBy('id') : collect();
+        $movementIds = collect($transaction_lines)->pluck('transaction_id')->filter()->unique();
+        $movements = Transaction::whereIn('id', $movementIds)->get(['id', 'type', 'transaction_date'])->keyBy('id');
         foreach ($transaction_lines as $line) {
             //Check if stock is not enabled then no need to assign purchase & sell
             $product = $products->get($line->product_id);
@@ -3429,6 +3431,9 @@ class TransactionUtil extends Util
                 throw new PurchaseSellMismatch('This product requires a whole-unit quantity.');
             }
 
+            $movement = $movements->get($line->transaction_id ?? null);
+            $transferOverselling = $allow_overselling && $mapping_type === 'purchase' && $movement && $movement->type === 'sell_transfer';
+            $selectedReceipt = ! empty($line->lot_no_line_id) ? $line->lot_no_line_id : $purchase_line_id;
             $qty_sum_query = $this->get_pl_quantity_sum_string('PL');
             $requires_lot_stock = ! empty($line->lot_no_line_id) || ! empty($purchase_line_id);
             if (! $requires_lot_stock) {
@@ -3449,9 +3454,15 @@ class TransactionUtil extends Util
                 ->whereIn('transactions.type', ['purchase', 'purchase_transfer',
                     'opening_stock', 'production_purchase', ])
                 ->where('transactions.status', 'received')
-                ->whereRaw("( $qty_sum_query ) < PL.quantity")
                 ->where('PL.product_id', $line->product_id)
                 ->where('PL.variation_id', $line->variation_id);
+
+            if (! ($transferOverselling && ! empty($selectedReceipt))) {
+                $query->whereRaw("( $qty_sum_query ) < PL.quantity");
+            }
+            if ($movement && $movement->type === 'sell_transfer') {
+                $query->where('transactions.transaction_date', '<=', $movement->transaction_date);
+            }
 
             //If product expiry is enabled then check for on expiry conditions
             if ($stop_selling_expired && empty($purchase_line_id)) {
@@ -3493,11 +3504,16 @@ class TransactionUtil extends Util
 
             $purchase_sell_map = [];
             $purchase_adjustment_map = [];
+            $selectedBookAvailable = empty($line->lot_no_line_id) ? null
+                : optional($rows->firstWhere('purchase_lines_id', $line->lot_no_line_id))->quantity_available;
 
             //Iterate over the rows, assign the purchase line to sell lines.
             $qty_selling = $line->quantity;
             foreach ($rows as $k => $row) {
-                if ($requires_lot_stock) {
+                if ($transferOverselling && ! empty($selectedReceipt) && (int) $row->purchase_lines_id === (int) $selectedReceipt) {
+                    // A valid selected receipt retains its serial identity even when its balance becomes negative.
+                    $row->quantity_available = (float) $line->quantity;
+                } elseif ($requires_lot_stock) {
                     $row->quantity_available = min((float) $row->quantity_available, (float) $row->lot_quantity_available);
                     if ($row->quantity_available <= 0) {
                         continue;
@@ -3569,7 +3585,8 @@ class TransactionUtil extends Util
             }
             if (! ($qty_selling == 0 || is_null($qty_selling))) {
                 //If overselling not allowed through exception else create mapping with blank purchase_line_id
-                if (! $allow_overselling || $requires_lot_stock) {
+                if (! $allow_overselling || ($requires_lot_stock && ! $transferOverselling)
+                    || ($transferOverselling && ! empty($selectedReceipt))) {
                     $variation = Variation::find($line->variation_id);
                     $mismatch_name = $product->name;
                     if (! empty($variation->sub_sku)) {
@@ -3605,8 +3622,14 @@ class TransactionUtil extends Util
 
                     $business_name = optional(Business::find($business['id']))->name;
                     $location_name = optional(BusinessLocation::find($business['location_id']))->name;
+                    $stockDetails = $this->selectedLotMismatchDetails($business, $line, $product, $variation, $selectedBookAvailable);
+                    if ($stockDetails) {
+                        $mismatch_error .= ' Serial: '.$stockDetails['serial'].'. Requested: '.$stockDetails['requested_quantity']
+                            .'; recorded available: '.$stockDetails['recorded_available']
+                            .'; history available: '.$stockDetails['history_available'].'. '.$stockDetails['reason'];
+                    }
                     \Log::emergency($mismatch_error.' Business: '.$business_name.' Location: '.$location_name);
-                    throw new PurchaseSellMismatch($mismatch_error);
+                    throw new PurchaseSellMismatch($mismatch_error, $stockDetails);
                 } else {
                     //Mapping with no purchase line
                     $purchase_sell_map[] = ['sell_line_id' => $line->id,
@@ -3626,6 +3649,81 @@ class TransactionUtil extends Util
                 TransactionSellLinesPurchaseLines::insert($purchase_sell_map);
             }
         }
+    }
+
+    protected function selectedLotMismatchDetails($business, $line, $product, $variation, $bookAvailable): array
+    {
+        if (empty($line->lot_no_line_id)) {
+            return [];
+        }
+        $lot = DB::table('purchase_lines as pl')->join('transactions as t', 'pl.transaction_id', '=', 't.id')
+            ->leftJoin('business_locations as bl', 't.location_id', '=', 'bl.id')
+            ->where('pl.id', $line->lot_no_line_id)->where('t.business_id', $business['id'])
+            ->select('pl.*', 't.status as receipt_status', 't.transaction_date as receipt_date', 't.location_id', 'bl.name as location_name')
+            ->selectRaw($this->lotQuantityAvailableSql('pl', (int) $line->id).' as history_available')->first();
+        if (! $lot) {
+            return [];
+        }
+        $available = $bookAvailable !== null ? (float) $bookAvailable : (float) $lot->quantity
+            - (float) $lot->quantity_sold - (float) $lot->quantity_adjusted
+            - (float) $lot->quantity_returned - (float) $lot->mfg_quantity_used;
+        $reason = 'The selected lot does not have enough available stock. Review its stock movements.';
+        if ($lot->receipt_status !== 'received') {
+            $reason = 'The incoming stock receipt is not completed.';
+        } elseif ((int) $lot->location_id !== (int) $business['location_id']) {
+            $reason = 'The selected lot belongs to another source location.';
+        } elseif (abs($available - (float) $lot->history_available) > 0.0000001) {
+            $reason = 'Recorded consumption differs from lot history. Reconcile the allocations before completing this movement.';
+        }
+        $movement = Transaction::find($line->transaction_id ?? null);
+        $futureReceipt = $movement && $movement->type === 'sell_transfer'
+            && \Carbon::parse($movement->transaction_date)->lt(\Carbon::parse($lot->receipt_date));
+        if ($futureReceipt) {
+            $reason = 'The transfer is dated before this lot arrived at the source location. Verify the receipt and transfer dates; do not allocate future stock.';
+        }
+
+        $netReceived = (float) $lot->quantity - (float) $lot->quantity_returned
+            - (float) $lot->quantity_adjusted - (float) $lot->mfg_quantity_used;
+        $systemAvailable = $lot->receipt_status === 'received'
+            && (int) $lot->location_id === (int) $business['location_id'] && !$futureReceipt
+            ? max(0.0, min($available, (float) $lot->history_available)) : 0.0;
+        $allocations = DB::table('transaction_sell_lines_purchase_lines as m')
+            ->join('transaction_sell_lines as s', 'm.sell_line_id', '=', 's.id')
+            ->join('transactions as t', 's.transaction_id', '=', 't.id')
+            ->leftJoin('purchase_lines as selected', 's.lot_no_line_id', '=', 'selected.id')
+            ->where('m.purchase_line_id', $lot->id)->where('t.business_id', $business['id'])
+            ->whereRaw('m.quantity > COALESCE(m.qty_returned, 0)')->orderBy('m.id')->limit(10)
+            ->get(['t.id', 't.type', 't.status', 't.ref_no', 't.invoice_no', 'm.quantity', 'm.qty_returned', 'selected.lot_number as selected_serial']);
+        $links = [];
+        if (auth()->user() && auth()->user()->can('stock_inventory.view') && ! empty($lot->lot_number)) {
+            $links[] = ['label' => 'Lot history: '.$lot->lot_number, 'url' => ssi_route('ssi.lot.history', $lot->lot_number)];
+        }
+        $related = [];
+        foreach ($allocations as $allocation) {
+            $reference = $allocation->ref_no ?: ($allocation->invoice_no ?: '#'.$allocation->id);
+            $related[] = $reference.' ('.$allocation->status.') selected serial: '.($allocation->selected_serial ?: 'Automatic allocation')
+                .'; allocated serial: '.$lot->lot_number.'; outstanding quantity: '.((float) $allocation->quantity - (float) $allocation->qty_returned);
+            if ($allocation->type === 'sell_transfer' && auth()->user() && auth()->user()->can('stock_transfer.update')) {
+                $links[] = ['label' => 'Review / edit transfer '.$reference, 'url' => ssi_url('/stock-transfers/'.$allocation->id.'/edit')];
+            } elseif ($allocation->type === 'sell' && auth()->user() && auth()->user()->can('sell.view')) {
+                $links[] = ['label' => 'View invoice '.$reference, 'url' => ssi_url('/sells/'.$allocation->id)];
+            }
+        }
+
+        return [
+            'product' => $product->name, 'sku' => $variation->sub_sku ?? '', 'serial' => $lot->lot_number,
+            'source_line_id' => (int) $line->id, 'variation_id' => (int) $line->variation_id, 'product_id' => (int) $line->product_id,
+            'purchase_line_id' => (int) $lot->id, 'location' => $lot->location_name ?: '#'.$lot->location_id,
+            'requested_quantity' => (float) $line->quantity, 'recorded_available' => $available,
+            'history_available' => (float) $lot->history_available, 'reason' => $reason,
+            'system_available' => $systemAvailable,
+            'calculation' => ['received' => (float) $lot->quantity, 'purchase_returns' => (float) $lot->quantity_returned,
+                'adjustments' => (float) $lot->quantity_adjusted, 'manufacturing_used' => (float) $lot->mfg_quantity_used,
+                'recorded_consumption' => $netReceived - $available,
+                'history_consumption' => $netReceived - (float) $lot->history_available,
+                'difference' => (float) $lot->history_available - $available],
+            'related_allocations' => $related, 'links' => $links,
+        ];
     }
 
     /**
@@ -4303,7 +4401,7 @@ class TransactionUtil extends Util
      * @param  int  $location_id
      * @return bool
      */
-    public function getLotNumbersFromVariation($variation_id, $business_id, $location_id, $exclude_empty_lot = false)
+    public function getLotNumbersFromVariation($variation_id, $business_id, $location_id, $exclude_empty_lot = false, bool $allow_negative_stock = false)
     {
         $qty_available_sql = $this->lotQuantityAvailableSql('purchase_lines');
 
@@ -4321,7 +4419,9 @@ class TransactionUtil extends Util
         if (session()->get('business.enable_product_expiry') == 0) {
             $query->whereNotNull('purchase_lines.lot_number');
         }
-        if ($exclude_empty_lot) {
+        if ($allow_negative_stock) {
+            $query->where('T.status', 'received')->whereIn('T.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase']);
+        } elseif ($exclude_empty_lot) {
             $query->whereRaw("$qty_available_sql > 0");
         } else {
             $query->whereRaw("$qty_available_sql >= 0");

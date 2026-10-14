@@ -124,10 +124,10 @@
                             <strong>{{ __('product.exp_date') }}:</strong> {{ $lotInfo->exp_date ? $lotInfo->exp_date : '--' }}
                         </div>
                         <div class="col-md-3">
-                            <strong>{{ __('sale.stock') }}:</strong> <span class="
-                                @if($currentStock > 0) text-green @else text-red @endif
-                            ">{{ number_format($currentStock) }} {{ $lotInfo->unit ?? '' }}</span>
-                            <span class="text-muted">({{ $lotInfo->location_name ?? '--' }})</span>
+                            <strong id="lot_history_stock_label" data-normal-label="{{ __('sale.stock') }}">{{ $stockNeedsReview ? 'History Quantity' : __('sale.stock') }}:</strong> <span id="lot_history_current_stock" class="
+                                @if($stockNeedsReview) text-warning @elseif($currentStock > 0) text-green @else text-red @endif
+                            "><span class="display_currency" data-is_quantity="true" data-currency_symbol="false" data-orig-value="{{ $currentStock }}">{{ $currentStock }}</span> {{ $lotInfo->unit ?? '' }}</span>
+                            <span class="text-muted" id="lot_history_stock_locations">({{ $lotInfo->location_name ?: '--' }})</span>
                         </div>
                     </div>
                 </div>
@@ -135,6 +135,10 @@
         </div>
     </div>
     @endif
+
+    <div id="lot_stock_review">
+        @include('smartstockinventory::lot.partials.stock_review', ['stockReview' => $stockReview])
+    </div>
 
     <div class="row">
         <div class="col-md-12">
@@ -196,7 +200,8 @@
                                     <th>Type</th>
                                     <th>Ref No.</th>
                                     <th>Location</th>
-                                    <th>Balance</th>
+                                    <th>{{ __('lang_v1.quantity_change') }}</th>
+                                    <th>{{ __('lang_v1.new_quantity') }}</th>
                                     <th>{{ __('sale.status') }}</th>
                                     <th>{{ __('report.user') }}</th>
                                 </tr>
@@ -228,6 +233,21 @@
             serverSide: true,
             ajax: {
                 url: '{{ ssi_route("ssi.lot.history", $lot) }}',
+                dataSrc: function(json) {
+                    $('#lot_stock_review').html(json.stock_review_html || '');
+                    var $stockLabel = $('#lot_history_stock_label');
+                    $stockLabel.text((json.stock_reconciliation_required ? 'History Quantity' : $stockLabel.attr('data-normal-label')) + ':');
+                    var $stock = $('#lot_history_current_stock');
+                    $stock.toggleClass('text-green', !json.stock_reconciliation_required && Number(json.current_stock) > 0)
+                        .toggleClass('text-red', !json.stock_reconciliation_required && Number(json.current_stock) <= 0)
+                        .toggleClass('text-warning', !!json.stock_reconciliation_required);
+                    $stock.find('.display_currency').attr('data-orig-value', json.current_stock)
+                        .data('orig-value', json.current_stock).text(json.current_stock);
+                    $('#lot_history_stock_locations').text('(' + (json.stock_location_display || '--') + ')');
+                    __currency_convert_recursively($stock);
+
+                    return json.data;
+                },
                 data: function(d) {
                     d.location_id = $('#location_id').val();
                     d.movement_type = $('#movement_type').val();
@@ -236,6 +256,9 @@
                 }
             },
             ordering: false,
+            drawCallback: function() {
+                __currency_convert_recursively($('#lot_history_report'));
+            },
             createdRow: function(row, data) {
                 if (data.movement_type_key) {
                     $(row).addClass('lot-row-' + data.movement_type_key);
@@ -249,6 +272,7 @@
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
                 { data: 'location_display', name: 'location_display' },
+                { data: 'quantity_change', name: 'quantity_change', searchable: false },
                 { data: 'balance_qty', name: 'balance_qty', searchable: false },
                 { data: 'status', name: 'status', searchable: false, orderable: false },
                 { data: 'user_name', name: 'user_name' },

@@ -2,6 +2,7 @@
 @section('title', __('lang_v1.edit_stock_transfer'))
 
 @section('content')
+@include('stock_transfer.partials.overselling_status')
 
 <!-- Content Header (Page header) -->
 <section class="content-header">
@@ -10,6 +11,7 @@
 
 <!-- Main content -->
 <section class="content no-print">
+    @include('stock_transfer.partials.stock_correction_actions')
 	{!! Form::open(['url' => action([\App\Http\Controllers\StockTransferController::class, 'update'], [$sell_transfer->id]), 'method' => 'put', 'id' => 'stock_transfer_form' ]) !!}
 
 		@component('components.widget', ['class' => 'box-solid'])
@@ -164,10 +166,12 @@
 		@endcomponent
 <!--box end-->
 	{!! Form::close() !!}
+    @include('stock_transfer.partials.correction_plan_modal')
 </section>
 @stop
 @section('javascript')
-	<script src="{{ asset('js/stock_transfer.js?v=' . $asset_v) }}"></script>
+    <script src="{{ asset('js/stock_reconciliation.js?v=' . (file_exists(public_path('js/stock_reconciliation.js')) ? filemtime(public_path('js/stock_reconciliation.js')) : $asset_v)) }}"></script>
+	<script src="{{ asset('js/stock_transfer.js?v=' . (file_exists(public_path('js/stock_transfer.js')) ? filemtime(public_path('js/stock_transfer.js')) : $asset_v)) }}"></script>
 	<script type="text/javascript">
 		__page_leave_confirmation('#stock_transfer_form');
 	</script>

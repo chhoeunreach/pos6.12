@@ -13,9 +13,19 @@ class PurchaseSellMismatch extends Exception
      * @param  array  $guards
      * @return void
      */
-    public function __construct($message)
+    public function __construct($message, protected array $stockDetails = [])
     {
         parent::__construct($message);
+    }
+
+    public function responseData(): array
+    {
+        $output = ['success' => 0, 'msg' => $this->getMessage()];
+        if ($this->stockDetails) {
+            $output['stock_error'] = $this->stockDetails;
+        }
+
+        return $output;
     }
 
     /**
@@ -26,9 +36,7 @@ class PurchaseSellMismatch extends Exception
      */
     public function render($request)
     {
-        $output = ['success' => 0,
-            'msg' => $this->getMessage(),
-        ];
+        $output = $this->responseData();
 
         if ($request->ajax()) {
             return $output;

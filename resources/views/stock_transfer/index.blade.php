@@ -2,6 +2,12 @@
 @section('title', __('lang_v1.stock_transfers'))
 
 @section('content')
+@if(session('status.mismatch_url'))
+<div class="alert alert-danger" role="alert" style="margin:16px">
+    <p>{{ session('status.stock_error.reason', session('status.msg')) }}</p>
+    <a class="btn btn-primary btn-sm" href="{{ session('status.mismatch_url') }}">Open Mismatch Detector &amp; Fix</a>
+</div>
+@endif
 
 <!-- Content Header (Page header) -->
 <section class="content-header no-print">
@@ -125,7 +131,7 @@
 <!-- /.content -->
 @stop
 @section('javascript')
-	<script src="{{ asset('js/stock_transfer.js?v=' . $asset_v) }}"></script>
+	<script src="{{ asset('js/stock_transfer.js?v=' . (file_exists(public_path('js/stock_transfer.js')) ? filemtime(public_path('js/stock_transfer.js')) : $asset_v)) }}"></script>
 @endsection
 
 @cannot('view_purchase_price')

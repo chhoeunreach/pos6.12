@@ -1,5 +1,6 @@
 <tr class="product_row">
     @php
+        $allow_overselling = \App\Utils\BusinessUtil::allowsOverselling((int) session('user.business_id'));
         $max_qty_rule = $product->qty_available;
         $formatted_max_quantity = $product->formatted_qty_available;
         $max_qty_msg = __('validation.custom-messages.quantity_not_available', ['qty'=> $formatted_max_quantity, 'unit' => $product->unit  ]);
@@ -104,9 +105,9 @@
             @endphp
         @endif
 
-        <input type="text" class="form-control product_quantity input_number input_quantity" value="{{@format_quantity($qty_ordered)}}" name="products[{{$row_index}}][quantity]" 
+        <input type="text" class="form-control product_quantity input_number input_quantity" data-allow-overselling="{{ $allow_overselling ? 'true' : 'false' }}" value="{{@format_quantity($qty_ordered)}}" name="products[{{$row_index}}][quantity]"
         @if($product->unit_allow_decimal == 1) data-decimal=1 @else data-rule-abs_digit="true" data-msg-abs_digit="@lang('lang_v1.decimal_value_not_allowed')" data-decimal=0 @endif
-        data-rule-required="true" data-msg-required="@lang('validation.custom-messages.this_field_is_required')" @if($product->enable_stock) data-rule-max-value="{{$max_qty_rule}}" data-msg-max-value="{{$max_qty_msg}}"
+        data-rule-required="true" data-msg-required="@lang('validation.custom-messages.this_field_is_required')" @if($product->enable_stock && !$allow_overselling) data-rule-max-value="{{$max_qty_rule}}" data-msg-max-value="{{$max_qty_msg}}" @endif @if($product->enable_stock)
         data-qty_available="{{$product->qty_available}}" 
         data-msg_max_default="@lang('validation.custom-messages.quantity_not_available', ['qty'=> $product->formatted_qty_available, 'unit' => $product->unit  ])" @endif >
         <input type="hidden" class="base_unit_multiplier" name="products[{{$row_index}}][base_unit_multiplier]" value="{{$multiplier}}">

@@ -644,6 +644,13 @@ $('table#stock_adjustment_product_table tbody').on('change', 'select.lot_number'
     var tr = $(this).closest('tr');
     var qty_element = tr.find('input.product_quantity');
     var qty_available_el = tr.find('.qty_available_text');
+    if (qty_element.data('allow-overselling') === true) {
+        qty_element.removeAttr('data-rule-max-value data-msg-max-value').removeData('ruleMaxValue');
+        qty_element.rules('remove', 'max-value');
+        qty_element.trigger('change');
+        return;
+    }
+
 
     var multiplier = 1;
     var unit_name = '';
