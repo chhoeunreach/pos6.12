@@ -3731,6 +3731,8 @@ class TransactionUtil extends Util
             'requested_quantity' => (float) $line->quantity, 'recorded_available' => $available,
             'history_available' => (float) $lot->history_available, 'reason' => $reason,
             'system_available' => $systemAvailable,
+            'business_id' => (int) $business['id'],
+            'overselling_enabled' => \App\Utils\BusinessUtil::allowsOverselling((int) $business['id']),
             'calculation' => ['received' => (float) $lot->quantity, 'purchase_returns' => (float) $lot->quantity_returned,
                 'adjustments' => (float) $lot->quantity_adjusted, 'manufacturing_used' => (float) $lot->mfg_quantity_used,
                 'recorded_consumption' => $netReceived - $available,

@@ -30,8 +30,8 @@ class AuthorityController extends BaseSmartStockController
 
     private function authorizeAuthority(Request $request): void
     {
-        $user = $request->user();
-        abort_unless($user->can('stock_inventory.authority') || $user->can('superadmin') || $this->isSuperAdminOrAdmin($user), 403);
+        $user = $request->user() ?? auth()->user();
+        abort_unless($user && ($user->can('stock_inventory.authority') || $user->can('superadmin') || $this->isSuperAdminOrAdmin($user)), 403);
         $locations = $this->permittedLocationIds($this->businessId());
         if (! $this->isSuperAdminOrAdmin($user)) {
             abort_if(DB::table('business_locations')->where('business_id', $this->businessId())

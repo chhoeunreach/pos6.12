@@ -131,6 +131,17 @@ test('POS reconciliation error identifies the effective overselling policy and b
     dom.window.close();
 });
 
+test('POS reconciliation modal titles the review according to the overselling policy', () => {
+    const {dom, $} = editor();
+    $('body').append(fs.readFileSync(path.join(root, 'resources/views/stock_transfer/partials/stock_error_modal.blade.php'), 'utf8'));
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_error.js'), 'utf8'));
+    dom.window.POSStockError.show({stock_error: {overselling_enabled: true, business_id: 1}});
+    assert.equal($('#stock_error_title').text(), 'Stock Records Review');
+    dom.window.POSStockError.show({stock_error: {overselling_enabled: false, business_id: 1}});
+    assert.equal($('#stock_error_title').text(), 'Stock Reconciliation Required');
+    dom.window.close();
+});
+
 test('authorized correction link opens only the requested line without approving stock changes', () => {
     const {dom, $, calls, row} = editor(null, false, '1');
     assert.equal(calls.length, 1);

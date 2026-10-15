@@ -8,6 +8,9 @@
             if (!detail || !$modal.length) {
                 return false;
             }
+            var overselling = detail.overselling_enabled === true || detail.overselling_enabled === 1
+                || detail.overselling_enabled === '1';
+            $('#stock_error_title').text(overselling ? 'Stock Records Review' : 'Stock Reconciliation Required');
             $('#stock_error_reason').text(detail.reason || result.msg || '');
             var $rows = $('#stock_error_details').empty();
             var fields = [

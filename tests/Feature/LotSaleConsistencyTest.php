@@ -1806,6 +1806,9 @@ class LotSaleConsistencyTest extends TestCase
         } catch (PurchaseSellMismatch $exception) {
             $this->assertSame($before, $this->stockCorrectionSnapshot());
             $this->assertEquals(0, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->count());
+            $detail = $exception->responseData()['stock_error'];
+            $this->assertTrue($detail['overselling_enabled']);
+            $this->assertEquals(1, $detail['business_id']);
         }
     }
 

@@ -320,7 +320,7 @@
         @endif
     </div>
 </div>
-@if($errors->any())<div class="alert alert-danger" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+@if(!empty($errors) && $errors->any())<div class="alert alert-danger" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 <div class="modal fade" id="authority_details_modal" tabindex="-1" role="dialog" aria-label="Authority issue details">
     <div class="modal-dialog modal-lg" role="document" style="width:95%;max-width:1400px"><div class="modal-content">
         <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button><h4 class="modal-title">Authority issue details</h4></div>
