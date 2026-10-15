@@ -1,3 +1,18 @@
+var stock_transfer_location_version = 0;
+
+function stock_transfer_select_lot($row, lot_id) {
+    var $select = $row.find('select.lot_number');
+    $select.val(lot_id);
+    if (!$select.length || String($select.val() || '') !== String(lot_id)) {
+        $row.remove();
+        update_table_total();
+        toastr.error('The selected lot is no longer available. Search for the lot again.');
+        return false;
+    }
+    $select.prop('required', true).trigger('change');
+    return true;
+}
+
 function stock_transfer_error_message(result) {
     var detail = result && result.stock_error;
     if (!detail) { return (result && result.msg) || 'Unable to complete this transfer.'; }
@@ -72,8 +87,8 @@ $(document).ready(function() {
                     if (ui.item.qty_available > 0 || stock_transfer_allows_overselling()) {
                         $(this).val(null);
                         stock_transfer_product_row(ui.item.variation_id, function($row) {
-                            if (ui.item.purchase_line_id && $row.find('select.lot_number').length) {
-                                $row.find('select.lot_number').val(ui.item.purchase_line_id).trigger('change');
+                            if ($row.length && ui.item.purchase_line_id) {
+                                stock_transfer_select_lot($row, ui.item.purchase_line_id);
                             }
                         });
                         // Keep focus for continuous scanning
@@ -112,6 +127,7 @@ $(document).ready(function() {
     }
 
     $('select#location_id').change(function() {
+        stock_transfer_location_version++;
         if ($(this).val()) {
             $('#search_product_for_srock_adjustment').removeAttr('disabled');
         } else {
@@ -561,8 +577,9 @@ $(document).ready(function() {
                             return;
                         }
 
-                        if (line.lot_no_line_id && $row.find('select.lot_number').length) {
-                            $row.find('select.lot_number').val(line.lot_no_line_id).trigger('change');
+                        if (line.lot_no_line_id && !stock_transfer_select_lot($row, line.lot_no_line_id)) {
+                            add_next(i + 1);
+                            return;
                         }
 
                         var multiplier = 1;
@@ -599,24 +616,32 @@ $(document).ready(function() {
 });
 
 function stock_transfer_product_row(variation_id, on_success) {
-    var row_index = parseInt($('#product_row_index').val());
+    var row_index = parseInt($('#product_row_index').val(), 10) || 0;
+    // Reserve names before sending: barcode scans can have several requests in flight.
+    $('#product_row_index').val(row_index + 1);
     var location_id = $('select#location_id').val();
+    var location_version = stock_transfer_location_version;
     $.ajax({
         method: 'POST',
         url: '/stock-adjustments/get_product_row',
         data: { row_index: row_index, variation_id: variation_id, location_id: location_id, type: 'stock_transfer' },
         dataType: 'html',
         success: function(result) {
+            if (location_version !== stock_transfer_location_version || location_id !== $('select#location_id').val()) {
+                return;
+            }
             var $row = $(result);
             $('table#stock_adjustment_product_table tbody').append($row);
             update_table_total();
-            $('#product_row_index').val(row_index + 1);
 
             if (typeof on_success === 'function') {
                 on_success($row);
             }
         },
         error: function() {
+            if (location_version !== stock_transfer_location_version || location_id !== $('select#location_id').val()) {
+                return;
+            }
             if (typeof toastr !== 'undefined') {
                 toastr.warning(LANG.no_products_found);
             }

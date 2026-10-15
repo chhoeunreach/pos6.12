@@ -6,6 +6,54 @@ const root = path.resolve(__dirname, '../..');
 const {JSDOM} = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jsdom'));
 const jquery = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jquery'));
 
+function productRow(index, lot) {
+    return `<tr class="product_row"><td>
+        <input name="products[${index}][variation_id]" value="2701">
+        <select class="lot_number" name="products[${index}][lot_no_line_id]">
+            <option value="${lot}" data-qty_available="5">Lot ${lot}</option>
+        </select><input class="product_quantity" name="products[${index}][quantity]" value="1">
+        <input class="product_line_total" value="1"></td></tr>`;
+}
+
+test('rapid lot scans reserve distinct form indexes even when responses arrive in reverse order', () => {
+    const {dom, $, requests} = transfer(false);
+    dom.window.stock_transfer_product_row(2701);
+    dom.window.stock_transfer_product_row(2701);
+    assert.deepEqual(requests.map(request => request.data.row_index), [0, 1]);
+    requests[1].success(productRow(1, 2));
+    requests[0].success(productRow(0, 1));
+    const fields = $('#stock_transfer_form').serializeArray();
+    assert.equal(fields.find(field => field.name === 'products[0][lot_no_line_id]').value, '1');
+    assert.equal(fields.find(field => field.name === 'products[1][lot_no_line_id]').value, '2');
+    assert.equal($('#product_row_index').val(), '2');
+    dom.window.close();
+});
+
+test('a row response from an old source location is discarded after switching away and back', () => {
+    const {dom, $, requests} = transfer(false);
+    let callbacks = 0;
+    dom.window.stock_transfer_product_row(2701, () => callbacks++);
+    $('#location_id').append('<option value="13">Other</option>').val('13').trigger('change');
+    $('#location_id').val('12').trigger('change');
+    requests[0].success(productRow(0, 1));
+    assert.equal($('#stock_adjustment_product_table tbody tr').length, 0);
+    assert.equal(callbacks, 0);
+    dom.window.close();
+});
+
+test('a scanned lot missing from the returned options cannot silently become a FIFO transfer', () => {
+    const {dom, $, requests, autocomplete} = transfer(false);
+    const errors = [];
+    dom.window.toastr = {error(message) { errors.push(message); }};
+    autocomplete.options.select.call($('#search_product_for_srock_adjustment')[0], {}, {
+        item: {qty_available: 1, variation_id: 2701, purchase_line_id: 99}
+    });
+    requests[0].success(productRow(0, 1));
+    assert.equal($('#stock_adjustment_product_table select[name]').length, 0);
+    assert.equal(errors.length, 1);
+    dom.window.close();
+});
+
 function transfer(enabled) {
     const dom = new JSDOM(`<input id="stock_transfer_allow_overselling" value="${enabled ? 1 : 0}">
         <input id="search_product_for_srock_adjustment"><input id="product_row_index" value="0">

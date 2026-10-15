@@ -2475,6 +2475,50 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame('received', $purchase->fresh()->status);
     }
 
+    public function test_transfer_deducts_selected_lot_even_when_an_earlier_lot_is_available(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        TransactionSellLine::find(1)->update(['lot_no_line_id' => 2]);
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $this->assertEquals([0, 1, 0], PurchaseLine::whereIn('id', [1, 2, 3])->orderBy('id')->pluck('quantity_sold')->all());
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertSame('OTHER-LOT', $purchase->purchase_lines()->first()->lot_number);
+        $this->assertEquals([2, 1], $this->transferBalances());
+    }
+
+    public function test_transfer_shortage_cannot_fall_back_to_a_different_lot(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        TransactionSellLine::find(1)->update(['lot_no_line_id' => 2, 'quantity' => 2]);
+        try {
+            $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+            $this->fail('A selected lot shortage must not consume other lots.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertEquals([0, 0, 0], PurchaseLine::orderBy('id')->pluck('quantity_sold')->all());
+            $this->assertEquals(0, DB::table('transaction_sell_lines_purchase_lines')->count());
+            $this->assertEquals([3, 0], $this->transferBalances());
+            $this->assertSame('pending', $sell->fresh()->status);
+            $this->assertEquals(0, $purchase->purchase_lines()->count());
+        }
+    }
+
+    public function test_changing_transfer_lot_restores_original_lot_and_deducts_new_lot_once(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $service = $this->app->make(StockTransferStockService::class);
+        $service->apply($sell, $purchase, 'fifo');
+        DB::transaction(function () use ($service, $sell, $purchase) {
+            $service->reverse($sell, $purchase);
+            TransactionSellLine::find(1)->update(['lot_no_line_id' => 2]);
+            $service->apply($sell, $purchase, 'fifo');
+        });
+        $this->assertEquals([0, 1, 0], PurchaseLine::whereIn('id', [1, 2, 3])->orderBy('id')->pluck('quantity_sold')->all());
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->count());
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertSame('OTHER-LOT', $purchase->purchase_lines()->first()->lot_number);
+        $this->assertEquals([2, 1], $this->transferBalances());
+    }
+
     public function test_reversing_completed_transfer_restores_both_locations_and_lot(): void
     {
         [$sell, $purchase] = $this->transferPair();
