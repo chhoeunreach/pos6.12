@@ -2778,7 +2778,8 @@ class ProductUtil extends Util
         //Get lot number dropdown if enabled
         $lot_numbers = [];
         if (session()->get('business.enable_lot_number') == 1 || session()->get('business.enable_product_expiry') == 1) {
-            $lot_number_obj = $transaction_util->getLotNumbersFromVariation($variation_id, $business_id, $location_id, true);
+            $allowLotOverselling = \App\Utils\BusinessUtil::allowsOverselling((int) $business_id);
+            $lot_number_obj = $transaction_util->getLotNumbersFromVariation($variation_id, $business_id, $location_id, !$allowLotOverselling, $allowLotOverselling);
             foreach ($lot_number_obj as $lot_number) {
                 $lot_number->qty_formated = $this->num_f($lot_number->qty_available);
                 $lot_numbers[] = $lot_number;

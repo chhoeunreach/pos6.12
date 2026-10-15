@@ -305,11 +305,11 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEquals(0, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
     }
 
-    private function mapLines($lines): void
+    private function mapLines($lines, bool $allowOverselling = true): void
     {
         $this->app->make(TransactionUtil::class)->mapPurchaseSell([
             'id' => 1, 'location_id' => 12, 'accounting_method' => 'fifo',
-            'pos_settings' => ['allow_overselling' => true],
+            'pos_settings' => ['allow_overselling' => $allowOverselling],
         ], $lines, 'purchase', false);
     }
 
@@ -427,6 +427,54 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
 
+    public function test_pos_edit_with_overselling_completes_on_selected_receipt_and_preserves_other_invoice_conflict(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity_sold' => 1]);
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'final', 'invoice_no' => '13897']);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => 2]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 1]);
+        $otherBefore = DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 2)->get()->toJson();
+        $business = $this->saleEditMappingBusiness();
+        $business['pos_settings']['allow_overselling'] = '1';
+        $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSell('final', Transaction::find(1), $business);
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->sum('quantity'));
+        $this->assertEquals(2, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(1, PurchaseLine::find(1)->quantity);
+        $this->assertSame($otherBefore, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 2)->get()->toJson());
+        $this->assertEquals(2, TransactionSellLine::find(2)->lot_no_line_id);
+        $this->assertNotEmpty($this->app->make(LotStockAuditService::class)->audit(1)['stock_issues']);
+    }
+
+    public function test_pos_overselling_allocates_entire_quantity_to_selected_receipt_with_zero_balance(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity' => 0]);
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['quantity' => 2]);
+        $this->mapLines([TransactionSellLine::find(1)]);
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->sum('quantity'));
+        $this->assertEquals(2, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(0, PurchaseLine::find(2)->quantity_sold);
+    }
+
+    public function test_pos_overselling_false_string_does_not_allow_negative_selected_stock(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity' => 0]);
+        $business = $this->saleEditMappingBusiness();
+        unset($business['repair_sale_lot_counters']);
+        $business['pos_settings']['allow_overselling'] = 'false';
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $this->app->make(TransactionUtil::class)->mapPurchaseSell($business, [TransactionSellLine::find(1)]);
+            $this->fail('The false string setting must not enable overselling.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertSame($before, $this->stockCorrectionSnapshot());
+        }
+    }
+
     public function test_pos_update_returns_actionable_stock_errors_and_hides_unexpected_exceptions(): void
     {
         $controller = (new \ReflectionClass(\App\Http\Controllers\SellPosController::class))->newInstanceWithoutConstructor();
@@ -455,7 +503,7 @@ class LotSaleConsistencyTest extends TestCase
         DB::table('transaction_sell_lines_purchase_lines')->delete();
         DB::table('transaction_sell_lines')->update(['quantity' => 2]);
         try {
-            $this->mapLines([TransactionSellLine::find(1)]);
+            $this->mapLines([TransactionSellLine::find(1)], false);
             $this->fail('Selected lot shortage must reject the sale.');
         } catch (PurchaseSellMismatch $exception) {
             $detail = $exception->responseData()['stock_error'];
@@ -472,7 +520,7 @@ class LotSaleConsistencyTest extends TestCase
         DB::table('transaction_sell_lines_purchase_lines')->delete();
         DB::table('transaction_sell_lines')->insert(['id' => 2, 'lot_no_line_id' => 1]);
         try {
-            $this->mapLines(TransactionSellLine::orderBy('id')->get());
+            $this->mapLines(TransactionSellLine::orderBy('id')->get(), false);
             $this->fail('Two sale lines cannot consume the same single unit.');
         } catch (PurchaseSellMismatch $exception) {
             $this->assertEquals(0, PurchaseLine::find(1)->quantity_sold);

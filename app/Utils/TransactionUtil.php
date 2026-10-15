@@ -3395,8 +3395,7 @@ class TransactionUtil extends Util
         if (! empty($business['pos_settings']) && ! is_array($business['pos_settings'])) {
             $business['pos_settings'] = json_decode($business['pos_settings'], true);
         }
-        $allow_overselling = ! empty($business['pos_settings']['allow_overselling']) ?
-                            true : false;
+        $allow_overselling = filter_var($business['pos_settings']['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         //Set flag to check for expired items during SELLING only.
         $stop_selling_expired = false;
@@ -3434,7 +3433,10 @@ class TransactionUtil extends Util
             $movement = $movements->get($line->transaction_id ?? null);
             $transferOverselling = $allow_overselling && $mapping_type === 'purchase' && $movement && $movement->type === 'sell_transfer';
             $selectedReceipt = ! empty($line->lot_no_line_id) ? $line->lot_no_line_id : $purchase_line_id;
-            if (!empty($business['repair_sale_lot_counters']) && $mapping_type === 'purchase' && $movement && $movement->type === 'sell'
+            $selectedLotOverselling = $allow_overselling && $mapping_type === 'purchase' && $movement
+                && in_array($movement->type, ['sell', 'sell_transfer'], true) && !empty($selectedReceipt);
+            // Overselling adds to the selected receipt's counter without rewriting disputed older allocations.
+            if (!$selectedLotOverselling && !empty($business['repair_sale_lot_counters']) && $mapping_type === 'purchase' && $movement && $movement->type === 'sell'
                 && !empty($line->lot_no_line_id)) {
                 $repair = app(\App\Services\SaleLotCounterReconciliationService::class)->repairForAllocation($business, $line);
                 if ($repair) {
@@ -3465,7 +3467,7 @@ class TransactionUtil extends Util
                 ->where('PL.product_id', $line->product_id)
                 ->where('PL.variation_id', $line->variation_id);
 
-            if (! ($transferOverselling && ! empty($selectedReceipt))) {
+            if (!$selectedLotOverselling) {
                 $query->whereRaw("( $qty_sum_query ) < PL.quantity");
             }
             if ($movement && $movement->type === 'sell_transfer') {
@@ -3518,7 +3520,7 @@ class TransactionUtil extends Util
             //Iterate over the rows, assign the purchase line to sell lines.
             $qty_selling = $line->quantity;
             foreach ($rows as $k => $row) {
-                if ($transferOverselling && ! empty($selectedReceipt) && (int) $row->purchase_lines_id === (int) $selectedReceipt) {
+                if ($selectedLotOverselling && (int) $row->purchase_lines_id === (int) $selectedReceipt) {
                     // A valid selected receipt retains its serial identity even when its balance becomes negative.
                     $row->quantity_available = (float) $line->quantity;
                 } elseif ($requires_lot_stock) {
@@ -3593,8 +3595,8 @@ class TransactionUtil extends Util
             }
             if (! ($qty_selling == 0 || is_null($qty_selling))) {
                 //If overselling not allowed through exception else create mapping with blank purchase_line_id
-                if (! $allow_overselling || ($requires_lot_stock && ! $transferOverselling)
-                    || ($transferOverselling && ! empty($selectedReceipt))) {
+                if (! $allow_overselling || ($requires_lot_stock && !$transferOverselling && !$selectedLotOverselling)
+                    || $selectedLotOverselling) {
                     $variation = Variation::find($line->variation_id);
                     $mismatch_name = $product->name;
                     if (! empty($variation->sub_sku)) {

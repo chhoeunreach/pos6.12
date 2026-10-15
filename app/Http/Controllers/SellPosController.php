@@ -1870,7 +1870,7 @@ class SellPosController extends Controller
                     //Add available lot numbers for dropdown to sell lines
                     $lot_numbers = [];
                     if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
-                        $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($value->variation_id, $business_id, $location_id);
+                        $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($value->variation_id, $business_id, $location_id, false, \App\Utils\BusinessUtil::allowsOverselling((int) $business_id));
                         foreach ($lot_number_obj as $lot_number) {
                             //If lot number is selected added ordered quantity to lot quantity available
                             if ($value->lot_no_line_id == $lot_number->purchase_line_id) {

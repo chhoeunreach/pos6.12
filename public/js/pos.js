@@ -623,6 +623,12 @@ $(document).ready(function() {
             unit_name = select.find(':selected').data('unit_name');
         }
         var allow_overselling = qty_element.data('allow-overselling');
+        if (allow_overselling === true || allow_overselling === 1 || allow_overselling === '1') {
+            qty_element.rules('remove', 'max-value');
+            qty_element.removeAttr('data-rule-max-value data-msg-max-value');
+            qty_element.trigger('change');
+            return;
+        }
         if ($(this).val() && !allow_overselling) {
             var lot_qty = $('option:selected', $(this)).data('qty_available');
             var max_err_msg = $('option:selected', $(this)).data('msg-max');
