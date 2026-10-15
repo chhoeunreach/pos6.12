@@ -466,6 +466,26 @@ class LotSaleConsistencyTest extends TestCase
         }
     }
 
+    public function test_saved_overselling_setting_overrides_stale_pos_edit_settings(): void
+    {
+        DB::table('business')->where('id', 1)->update(['pos_settings' => '{"allow_overselling":1}']);
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity' => 0]);
+        $business = $this->saleEditMappingBusiness();
+        $this->assertFalse($business['pos_settings']['allow_overselling']);
+        DB::beginTransaction();
+        try {
+            $this->assertNull($this->app->make(\App\Services\SaleLotCounterReconciliationService::class)
+                ->repairForAllocation($business, TransactionSellLine::find(1)));
+        } finally {
+            DB::rollBack();
+        }
+        $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSell('final', Transaction::find(1), $business);
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+        $this->assertEquals(1, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(0, PurchaseLine::find(1)->quantity);
+    }
+
     public function test_pos_overselling_allocates_entire_quantity_to_selected_receipt_with_zero_balance(): void
     {
         DB::table('transaction_sell_lines_purchase_lines')->delete();

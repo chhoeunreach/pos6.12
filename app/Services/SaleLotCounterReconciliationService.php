@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 /** Repairs a cached sold counter only when the original allocations prove its value. */
 class SaleLotCounterReconciliationService
 {
+    public const POLICY_VERSION = 'pos-overselling-20261015-2';
+
     public function repairForAllocation(array $business, $line): ?array
     {
         if (DB::transactionLevel() < 1) {
@@ -17,7 +19,8 @@ class SaleLotCounterReconciliationService
         }
         $settings = $business['pos_settings'] ?? [];
         $settings = is_array($settings) ? $settings : (json_decode((string) $settings, true) ?: []);
-        if (filter_var($settings['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        if (filter_var($settings['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || \App\Utils\BusinessUtil::allowsOverselling((int) $business['id'])) {
             // The allocator retains the selected receipt and records any shortage. Do not rewrite disputed history.
             return null;
         }
@@ -31,7 +34,7 @@ class SaleLotCounterReconciliationService
             ->where('p.id', $line->lot_no_line_id)->where('t.business_id', $business['id'])->where('t.location_id', $business['location_id'])
             ->where('t.status', 'received')->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
             ->where('p.product_id', $line->product_id)->where('p.variation_id', $line->variation_id)->lockForUpdate()
-            ->select('p.*')->selectRaw($util->lotQuantitySoldSql('p', true, (int) $line->id).' as other_history_sold')->first();
+            ->select('p.*', 't.business_id')->selectRaw($util->lotQuantitySoldSql('p', true, (int) $line->id).' as other_history_sold')->first();
         if (!$lot) {
             return null;
         }
@@ -121,6 +124,7 @@ class SaleLotCounterReconciliationService
     {
         $details = [
             'purchase_line_id' => (int) $lot->id, 'serial' => $lot->lot_number,
+            'business_id' => (int) $lot->business_id, 'overselling_enabled' => false, 'stock_policy_version' => self::POLICY_VERSION,
             'reason' => 'A related allocation is missing, inconsistent, or belongs to another business or location. The sold counter cannot be repaired automatically.',
         ];
         if ($saleLine && $mapping) {
@@ -136,6 +140,10 @@ class SaleLotCounterReconciliationService
             $details['reason'] = $reason;
             if (auth()->user()?->can('stock_inventory.authority')) {
                 $details['links'] = [['label' => 'Review stock corrections', 'url' => ssi_route('ssi.authority.index')]];
+            }
+            if (auth()->user()?->can('business_settings.access')) {
+                $details['links'][] = ['label' => 'Business settings: allow overselling',
+                    'url' => action([\App\Http\Controllers\BusinessController::class, 'getBusinessSettings'])];
             }
         }
 

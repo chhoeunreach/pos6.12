@@ -118,6 +118,19 @@ test('stock mismatch shows the system balance calculation without treating histo
     dom.window.close();
 });
 
+test('POS reconciliation error identifies the effective overselling policy and business', () => {
+    const {dom, $} = editor();
+    $('body').append(fs.readFileSync(path.join(root, 'resources/views/stock_transfer/partials/stock_error_modal.blade.php'), 'utf8'));
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_error.js'), 'utf8'));
+    dom.window.POSStockError.show({stock_error: {business_id: 1, overselling_enabled: false,
+        stock_policy_version: 'pos-overselling-20261015-2'}});
+    const value = label => $('#stock_error_details tr').filter(function() { return $(this).find('th').text() === label; }).find('td').text();
+    assert.equal(value('Allow overselling'), 'Disabled');
+    assert.equal(value('Business ID'), '1');
+    assert.equal(value('Stock validation version'), 'pos-overselling-20261015-2');
+    dom.window.close();
+});
+
 test('authorized correction link opens only the requested line without approving stock changes', () => {
     const {dom, $, calls, row} = editor(null, false, '1');
     assert.equal(calls.length, 1);

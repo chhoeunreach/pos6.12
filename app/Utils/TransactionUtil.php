@@ -3396,6 +3396,10 @@ class TransactionUtil extends Util
             $business['pos_settings'] = json_decode($business['pos_settings'], true);
         }
         $allow_overselling = filter_var($business['pos_settings']['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if (!empty($business['repair_sale_lot_counters'])) {
+            // POS edits must honor the saved setting even if a caller supplied older settings.
+            $allow_overselling = $allow_overselling || \App\Utils\BusinessUtil::allowsOverselling((int) $business['id']);
+        }
 
         //Set flag to check for expired items during SELLING only.
         $stop_selling_expired = false;

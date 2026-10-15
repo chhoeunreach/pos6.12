@@ -18,6 +18,15 @@
                 ['History Available Quantity', detail.history_available],
                 ['System Available Quantity', detail.system_available]
             ];
+            if (detail.overselling_enabled != null) {
+                fields.push(['Allow overselling', detail.overselling_enabled ? 'Enabled' : 'Disabled']);
+            }
+            if (detail.business_id != null) {
+                fields.push(['Business ID', detail.business_id]);
+            }
+            if (detail.stock_policy_version) {
+                fields.push(['Stock validation version', detail.stock_policy_version]);
+            }
             fields.forEach(function(field) {
                 $('<tr>').append($('<th>').text(field[0]), $('<td>').text(field[1] == null ? '--' : field[1])).appendTo($rows);
             });
