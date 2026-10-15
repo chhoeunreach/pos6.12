@@ -447,6 +447,25 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertNotEmpty($this->app->make(LotStockAuditService::class)->audit(1)['stock_issues']);
     }
 
+    public function test_sale_counter_service_itself_skips_reconciliation_when_overselling_is_enabled(): void
+    {
+        // A legacy caller may still invoke this service before allocating an oversold selected receipt.
+        // The fixture selects receipt #1 but deducts #2 and must remain untouched by reconciliation.
+        $service = $this->app->make(\App\Services\SaleLotCounterReconciliationService::class);
+        foreach ([['allow_overselling' => true], ['allow_overselling' => '1'], '{"allow_overselling":true}'] as $settings) {
+            $business = $this->saleEditMappingBusiness();
+            $business['pos_settings'] = $settings;
+            $before = $this->stockCorrectionSnapshot();
+            DB::beginTransaction();
+            try {
+                $this->assertNull($service->repairForAllocation($business, TransactionSellLine::find(1)));
+                $this->assertSame($before, $this->stockCorrectionSnapshot());
+            } finally {
+                DB::rollBack();
+            }
+        }
+    }
+
     public function test_pos_overselling_allocates_entire_quantity_to_selected_receipt_with_zero_balance(): void
     {
         DB::table('transaction_sell_lines_purchase_lines')->delete();

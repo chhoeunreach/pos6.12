@@ -15,6 +15,12 @@ class SaleLotCounterReconciliationService
         if (DB::transactionLevel() < 1) {
             throw new \LogicException('Sale counter reconciliation requires an active allocation transaction.');
         }
+        $settings = $business['pos_settings'] ?? [];
+        $settings = is_array($settings) ? $settings : (json_decode((string) $settings, true) ?: []);
+        if (filter_var($settings['allow_overselling'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            // The allocator retains the selected receipt and records any shortage. Do not rewrite disputed history.
+            return null;
+        }
         $util = app(TransactionUtil::class);
         $movement = Transaction::where('id', $line->transaction_id)->where('business_id', $business['id'])
             ->where('location_id', $business['location_id'])->where('type', 'sell')->where('status', 'final')->first();
