@@ -20,6 +20,8 @@
                 ['label' => 'Enterprise Reports', 'url' => $ssiRoute('ssi.enterprise.report.index'), 'active' => ['smart-stock-inventory/enterprise/reports']],
                 ['label' => 'Verification Report', 'url' => $ssiRoute('ssi.verification.index'), 'active' => ['smart-stock-inventory/verification']],
                 ['label' => 'Mismatch Detector', 'url' => $ssiRoute('ssi.mismatch.index'), 'active' => ['smart-stock-inventory/mismatch']],
+                ...((auth()->user()->can('stock_inventory.authority') || auth()->user()->can('superadmin') || stripos((string)(auth()->user()->roles->pluck('name')->implode(' ')), 'admin') !== false)
+                    ? [['label' => 'Authority', 'url' => $ssiRoute('ssi.authority.index'), 'active' => ['smart-stock-inventory/authority']]] : []),
                 ['label' => 'Movement History', 'url' => $ssiRoute('ssi.movement.index'), 'active' => ['smart-stock-inventory/movement']],
                 ['label' => 'IMEI Management', 'url' => $ssiRoute('ssi.imei.index'), 'active' => ['smart-stock-inventory/imei']],
                 ['label' => 'Lot Management', 'url' => $ssiRoute('ssi.lot.index'), 'active' => ['smart-stock-inventory/lot']],

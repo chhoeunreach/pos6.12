@@ -173,6 +173,8 @@ class StockMismatchDetectorService
                 'allocated_lots' => collect($issue['allocations'])->map(fn ($p) => ($p->lot_number ?: 'Unallocated').' (#'.$p->purchase_line_id.', qty '.$p->quantity.')')->implode('; '),
                 'reference' => ($issue['ref_no'] ?: $issue['invoice_no']).' · Line #'.$issue['sell_line_id'],
                 'sell_line_id' => $issue['sell_line_id'],
+                'authority_url' => $issue['type'] === 'sell_transfer'
+                    ? ssi_route('ssi.authority.index', ['transfer_id' => $issue['transaction_id']]) : null,
                 'deducted_serial_fix_url' => $issue['type'] === 'sell_transfer' && in_array('Stock allocation differs from the invoice selected lot.', $issue['reasons'], true)
                     ? action([\App\Http\Controllers\StockTransferController::class, 'fixDeductedSerial'], [$issue['transaction_id']]) : null,
                 'quantity' => $issue['quantity'], 'available_qty' => collect($issue['allocations'])->sum('quantity'),

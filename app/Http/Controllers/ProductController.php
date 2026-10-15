@@ -1305,13 +1305,14 @@ class ProductController extends Controller
                     ->join('products as p', 'v.product_id', '=', 'p.id')
                     ->leftJoin('units as U', 'p.unit_id', '=', 'U.id')
                     ->where('p.business_id', $business_id)
+                    ->where('t.business_id', $business_id)
                     ->where('t.location_id', $location_id)
+                    ->where('t.status', 'received')
+                    ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
                     ->where('p.type', '!=', 'modifier')
                     ->whereNotNull('purchase_lines.lot_number')
                     ->where('purchase_lines.lot_number', 'like', '%' . $search_term . '%')
                     ->when(! $allow_transfer_overselling, fn ($query) => $query->whereRaw("$lot_qty_available_sql > 0"))
-                    ->when($allow_transfer_overselling, fn ($query) => $query->where('t.status', 'received')
-                        ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase']))
                     ->select([
                         'p.id as product_id',
                         'p.name',
@@ -1348,6 +1349,15 @@ class ProductController extends Controller
                     return json_encode($lot_rows->unique('purchase_line_id')->values());
                 }
 
+                if ((int) request()->input('stock_transfer', 0) === 1) {
+                    // A grouped product result is not an explicit choice of source receipt.
+                    $result = collect($result)->map(function ($item) {
+                        unset($item->purchase_line_id, $item->lot_number);
+                        $item->is_lot_row = false;
+
+                        return $item;
+                    });
+                }
                 return json_encode($result);
             }
 

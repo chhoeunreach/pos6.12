@@ -1,0 +1,326 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {test} = require('node:test');
+const root = path.resolve(__dirname, '../..');
+const {JSDOM} = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jsdom'));
+const jquery = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jquery'));
+
+function form(batches, rows = 1) {
+    const dom = new JSDOM('<form id="authority_correction_form"></form>', {runScripts: 'outside-only'});
+    const $ = jquery(dom.window);
+    dom.window.$ = dom.window.jQuery = $;
+    for (let index = 0; index < rows; index++) {
+        const $row = $(`<div class="authority-line" data-quantity="1">
+            <input type="hidden" name="corrections[${index}][sell_line_id]" value="${index + 1}">
+            <select class="authority-source"><option value="">Source</option>
+                <option value="1" data-serial="A">A</option><option value="2" data-serial="B">B</option></select>
+            <select class="authority-destination"><option value="">Receiving</option></select>
+            <p class="authority-selection-help"></p></div>`).appendTo('#authority_correction_form');
+        for (const batch of batches) {
+            $('<option>').val(batch.id).text(batch.serial).attr({
+                'data-serial': batch.serial, 'data-quantity': batch.quantity ?? 1, 'data-used': batch.used ? '1' : '0'
+            }).appendTo($row.find('.authority-destination'));
+        }
+    }
+    const ready = [];
+    $.fn.ready = function (callback) { ready.push(callback); return this; };
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_authority.js'), 'utf8'));
+    ready.forEach(callback => callback.call(dom.window.document));
+    return {dom, $, row: index => $('.authority-line').eq(index || 0)};
+}
+
+test('source selection suggests only one receiving batch with matching serial and quantity', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'A', quantity: 2}]);
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.equal(row().find('option[value="11"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('ambiguous matching receipts require an explicit receiving-batch selection', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'A'}]);
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    assert.match(row().find('.authority-selection-help').text(), /Several receiving batches/);
+    dom.window.close();
+});
+
+test('different unused receiving serial can be explicitly selected for correction', () => {
+    const {dom, row} = form([{id: 10, serial: 'B'}]);
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    row().find('.authority-destination').val('10').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.match(row().find('.authority-selection-help').text(), /receiving serial will change to A/);
+    dom.window.close();
+});
+
+test('used batches keep their serial and remain available for deduction-only repair', () => {
+    const {dom, row} = form([{id: 10, serial: 'A', used: true}, {id: 11, serial: 'B', used: true}]);
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.equal(row().find('option[value="11"]').prop('disabled'), true);
+    row().find('.authority-source').val('2').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '11');
+    assert.equal(row().find('option[value="10"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('receiving batches already chosen on another line are not suggested again', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}], 2);
+    row(0).find('.authority-source').val('1').trigger('change');
+    row(1).find('.authority-source').val('1').trigger('change');
+    assert.equal(row(0).find('.authority-destination').val(), '10');
+    assert.equal(row(1).find('.authority-destination').val(), '');
+    assert.equal(row(1).find('option[value="10"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('clearing the source clears its previous matching receiving selection', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}]);
+    row().find('.authority-source').val('1').trigger('change').val('').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    dom.window.close();
+});
+
+test('preview submission requires both selections and skips untouched lines', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B'}], 2);
+    row(0).find('.authority-source').val('1').trigger('change');
+    let event = $.Event('submit');
+    $('#authority_correction_form').triggerHandler(event);
+    assert.equal(event.isDefaultPrevented(), true);
+    row(0).find('.authority-destination').val('10').trigger('change');
+    event = $.Event('submit');
+    $('#authority_correction_form').triggerHandler(event);
+    assert.equal(event.isDefaultPrevented(), false);
+    assert.equal(row(0).find('input').prop('disabled'), false);
+    assert.equal(row(1).find('input').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('opening a correction loads a modal and binds receipt selection on the loaded form', () => {
+    const {dom, $} = form([{id: 10, serial: 'A'}]);
+    const markup = $('#authority_correction_form').prop('outerHTML');
+    $('#authority_correction_form').remove();
+    $('body').append('<a class="open-authority-correction" href="/authority?transfer_id=7">Open correction form</a><div id="authority_correction_modal" class="modal"><div class="modal-content"></div></div>');
+    let shown = false;
+    $.fn.modal = function (action) { shown = action === 'show'; return this; };
+    $.ajax = options => {
+        assert.match(options.url, /transfer_id=7/);
+        assert.equal(options.data.modal, 1);
+        return $.Deferred().resolve('<div class="modal-body">' + markup + '</div>').promise();
+    };
+    // Re-run ready initialization now that the modal exists.
+    const ready = [];
+    $.fn.ready = function (callback) { ready.push(callback); return this; };
+    $(dom.window.document).off('click', '.open-authority-correction');
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_authority.js'), 'utf8'));
+    ready.forEach(callback => callback());
+    $('.open-authority-correction').trigger('click');
+    assert.equal(shown, true);
+    assert.equal($('#authority_correction_modal #authority_correction_form').length, 1);
+    $('.authority-source').val('1').trigger('change');
+    assert.equal($('.authority-destination').val(), '10');
+    dom.window.close();
+});
+
+test('new source fields are enabled only for a new receipt and its serial filters receiving matches', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'B', used: true}]);
+    row().find('.authority-source').append('<option value="new">New source</option>');
+    row().append('<div class="authority-new-source"><input class="authority-new-serial" value="A" required></div>');
+    row().attr('data-missing-receiving', '1');
+    row().find('.authority-destination').append('<option value="new">New receiving batch</option>');
+    row().find('.authority-source').val('new').trigger('change');
+    assert.equal(row().find('.authority-new-serial').prop('disabled'), false);
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.equal(row().find('option[value="11"]').prop('disabled'), true);
+    row().find('.authority-destination').val('new').trigger('change');
+    assert.match(row().find('.authority-selection-help').text(), /create the missing receiving batch for serial A/);
+    row().find('.authority-source').val('1').trigger('change');
+    $('#authority_correction_form').triggerHandler($.Event('submit'));
+    assert.equal(row().find('.authority-new-serial').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('new receiving is disabled when the received quantity is already complete', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}]);
+    row().attr('data-missing-receiving', '0');
+    row().find('.authority-destination').append('<option value="new">New receiving batch</option>');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination option[value="new"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('separate lines can request separate new receiving batches', () => {
+    const {dom, row} = form([], 2);
+    for (let i = 0; i < 2; i++) {
+        row(i).attr('data-missing-receiving', '2');
+        row(i).find('.authority-destination').append('<option value="new">New receiving batch</option>');
+        row(i).find('.authority-source').val('1').trigger('change');
+        row(i).find('.authority-destination').val('new').trigger('change');
+    }
+    assert.equal(row(0).find('.authority-destination').val(), 'new');
+    assert.equal(row(1).find('.authority-destination').val(), 'new');
+    dom.window.close();
+});
+
+test('blank serial receipts are selected by ID without matching unrelated blank batches automatically', () => {
+    const {dom, row} = form([{id: 10, serial: ''}, {id: 11, serial: ''}, {id: 12, serial: 'B'}]);
+    row().find('.authority-source option[value="1"]').attr('data-serial', '');
+    row().append('<div class="authority-existing-serial"><input class="authority-verified-serial"></div>');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    assert.equal(row().find('.authority-verified-serial').prop('disabled'), false);
+    assert.equal(row().find('option[value="12"]').prop('disabled'), true);
+    row().find('.authority-destination').val('10').trigger('change');
+    assert.match(row().find('.authority-selection-help').text(), /deduction will use the selected receipt ID/);
+    dom.window.close();
+});
+
+test('entering an existing receipt missing serial enables its matching receiving batch', () => {
+    const {dom, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: '', used: true}]);
+    row().find('.authority-source option[value="1"]').attr('data-serial', '');
+    row().append('<div class="authority-existing-serial"><input class="authority-verified-serial"></div>');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('option[value="10"]').prop('disabled'), true);
+    row().find('.authority-verified-serial').val('A').trigger('input');
+    assert.equal(row().find('option[value="10"]').prop('disabled'), false);
+    assert.equal(row().find('option[value="11"]').prop('disabled'), false);
+    row().find('.authority-source').val('2').trigger('change');
+    assert.equal(row().find('.authority-verified-serial').prop('disabled'), true);
+    assert.equal(row().find('.authority-verified-serial').val(), '');
+    dom.window.close();
+});
+
+test('later source receipt explains the date conflict without silently changing delivery', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    $('#authority_correction_form').attr('data-recorded-date', '2026-09-01 12:00:00').append('<input id="authority_date"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button>');
+    row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-09-02 15:23:00');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal($('#authority_date').val(), '');
+    assert.match($('.authority-date-guidance').text(), /Source receipt #1 arrived 2026-09-02 15:23:00/);
+    let event = $.Event('submit');
+    $('#authority_correction_form').triggerHandler(event);
+    assert.equal(event.isDefaultPrevented(), true);
+    $('.authority-use-earliest-date').trigger('click');
+    assert.equal($('#authority_date').val(), '2026-09-02 15:23:00');
+    event = $.Event('submit');
+    $('#authority_correction_form').triggerHandler(event);
+    assert.equal(event.isDefaultPrevented(), false);
+    dom.window.close();
+});
+
+test('delivery date guidance includes unchanged lines and newly entered receipt dates', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}], 2);
+    $('#authority_correction_form').attr('data-recorded-date', '2026-09-01 12:00:00').append('<input id="authority_date"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button>');
+    row(0).find('.authority-source').append('<option value="new">New receipt</option>');
+    row(0).append('<div class="authority-new-source"><input class="authority-new-source-date" value="2026-09-02 12:00:00"></div>');
+    row(1).attr('data-recorded-source-date', '2026-09-03 12:00:00');
+    row(0).find('.authority-source').val('new').trigger('change');
+    assert.match($('.authority-date-guidance').text(), /unchanged source receipt.*2026-09-03/);
+    assert.equal($('.authority-use-earliest-date').attr('data-date'), '2026-09-03 12:00:00');
+    dom.window.close();
+});
+
+test('auto-complete fills recorded receipts, notes and a labelled date proposal then verifies without applying', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr({action: '/authority/1/preview', 'data-recorded-date': '2026-09-01 12:00:00', 'data-reference': 'ST-1'});
+    $form.append('<textarea id="authority_evidence" name="evidence"></textarea><input id="authority_date" name="transaction_date"><input id="authority_date_basis" name="date_basis"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
+    row().attr({'data-line-id': '1', 'data-completion': JSON.stringify({source_id: 1, destination_id: 10})});
+    row().find('.authority-source').attr('name', 'corrections[1][source_id]');
+    row().find('.authority-destination').attr('name', 'corrections[1][destination_id]');
+    row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-09-02 15:23:00');
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(options.url, '/authority/1/preview');
+        assert.equal(options.type, 'POST');
+        assert.match(options.data, /date_basis=receipt_dates/);
+        assert.match(options.data, /source_id%5D=1/);
+        return $.Deferred().resolve({success: 1, html: '<p>Reviewed preview</p>'}).promise();
+    };
+    $('.authority-auto-complete').trigger('click');
+    assert.equal(row().find('.authority-source').val(), '1');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.equal($('#authority_date').val(), '2026-09-02 15:23:00');
+    assert.match($('#authority_evidence').val(), /Proposed delivery.*Actual delivery must be reviewed/);
+    assert.equal(requests, 1);
+    assert.match($('.authority-auto-status').text(), /Verification complete/);
+    dom.window.close();
+});
+
+test('auto-complete respects manual choices and notes and never verifies unresolved lines', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'B'}], 2);
+    $('#authority_correction_form').append('<textarea id="authority_evidence">Verified document DOC-77, keep my notes.</textarea><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
+    row(0).attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    row(0).find('.authority-source').val('2').trigger('change');
+    $.ajax = () => { throw new Error('Unresolved correction must not be sent.'); };
+    $('.authority-auto-complete').trigger('click');
+    assert.equal(row(0).find('.authority-source').val(), '2');
+    assert.equal(row(0).find('.authority-destination').val(), '11');
+    assert.equal($('#authority_evidence').val(), 'Verified document DOC-77, keep my notes.');
+    assert.match($('.authority-auto-status').text(), /1 line\(s\) still need/);
+    dom.window.close();
+});
+
+test('auto-complete reports server blockers inside the form', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    $('#authority_correction_form').append('<button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
+    row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    $.ajax = () => $.Deferred().reject({responseJSON: {msg: 'Receiving batch has dependent movements.'}}).promise();
+    $('.authority-auto-complete').trigger('click');
+    assert.equal($('.authority-auto-status').text(), 'Receiving batch has dependent movements.');
+    assert.equal($('.authority-auto-complete').prop('disabled'), false);
+    dom.window.close();
+});
+
+test('opening a populated modal auto-fills fields and verification replaces it with the apply preview', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').off().attr({action: '/authority/1/preview', 'data-recorded-date': '2026-09-01 12:00:00'});
+    $form.wrap('<div class="modal"><div class="modal-content"></div></div>');
+    $form.append('<textarea id="authority_evidence"></textarea><input id="authority_date"><input id="authority_date_basis"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
+    row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-08-31 12:00:00');
+    dom.window.authority_initialize_form();
+    assert.equal(row().find('.authority-source').val(), '1');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.match($('#authority_evidence').val(), /Authority record-based correction/);
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(options.url, '/authority/1/preview');
+        return $.Deferred().resolve({success: 1, html: '<form action="/authority/1/apply"><button>Apply authority correction</button></form>'}).promise();
+    };
+    $('.authority-auto-complete').trigger('click');
+    assert.equal($('.modal-content form[action="/authority/1/apply"]').length, 1);
+    assert.equal($('.modal-content #authority_correction_form').length, 0);
+    assert.equal(requests, 1);
+    dom.window.close();
+});
+
+test('Authority cards load category details, pagination and reference search in one modal', () => {
+    const {dom, $} = form([]);
+    $('body').append('<a class="authority-detail-link" href="/authority/details?category=missing_selected">Missing Selected Lots</a><div class="modal" id="authority_details_modal"><div class="modal-body"></div></div>');
+    const ready = [];
+    $.fn.ready = function (callback) { ready.push(callback); return this; };
+    $.fn.modal = function () { return this; };
+    $(dom.window.document).off('click', '.authority-detail-link, #authority_details_modal .pagination a');
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_authority.js'), 'utf8'));
+    ready.forEach(callback => callback());
+    const requests = [];
+    $.ajax = options => {
+        requests.push(options);
+        return $.Deferred().resolve('<h3>Missing Selected Lots</h3><div class="pagination"><a href="/authority/details?category=missing_selected&page=2">2</a></div><form class="authority-details-filter" action="/authority/details"><input name="category" value="missing_selected"><input name="reference" value="ST-77"></form>').promise();
+    };
+    $('.authority-detail-link').trigger('click');
+    assert.match($('#authority_details_modal').text(), /Missing Selected Lots/);
+    assert.match(requests[0].url, /category=missing_selected/);
+    $('#authority_details_modal .pagination a').trigger('click');
+    assert.match(requests[1].url, /page=2/);
+    $('#authority_details_modal form').trigger('submit');
+    assert.match(requests[2].data, /category=missing_selected/);
+    assert.match(requests[2].data, /reference=ST-77/);
+    assert.equal(requests.length, 3);
+    dom.window.close();
+});

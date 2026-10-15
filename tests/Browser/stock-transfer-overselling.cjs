@@ -46,11 +46,46 @@ test('a scanned lot missing from the returned options cannot silently become a F
     const errors = [];
     dom.window.toastr = {error(message) { errors.push(message); }};
     autocomplete.options.select.call($('#search_product_for_srock_adjustment')[0], {}, {
-        item: {qty_available: 1, variation_id: 2701, purchase_line_id: 99}
+        item: {qty_available: 1, variation_id: 2701, purchase_line_id: 99, is_lot_row: true}
     });
     requests[0].success(productRow(0, 1));
     assert.equal($('#stock_adjustment_product_table select[name]').length, 0);
     assert.equal(errors.length, 1);
+    dom.window.close();
+});
+
+test('ordinary product search ignores an incidental purchase-line ID and keeps the row', () => {
+    const {dom, $, requests, autocomplete} = transfer(false);
+    const errors = [];
+    dom.window.toastr = {error(message) { errors.push(message); }};
+    const item = {qty_available: 3, variation_id: 2701, purchase_line_id: 99, lot_number: 'EXHAUSTED-LOT'};
+    assert.equal(autocomplete._renderItem($('<ul>'), item).text().includes('EXHAUSTED-LOT'), false);
+    autocomplete.options.select.call($('#search_product_for_srock_adjustment')[0], {}, {item});
+    assert.equal(requests[0].data.purchase_line_id, null);
+    requests[0].success(productRow(0, 1));
+    assert.equal($('#stock_adjustment_product_table select[name]').length, 1);
+    assert.equal(errors.length, 0);
+    dom.window.close();
+});
+
+test('ordinary product search works when the product row has no lot selector', () => {
+    const {dom, $, requests, autocomplete} = transfer(false);
+    autocomplete.options.select.call($('#search_product_for_srock_adjustment')[0], {}, {
+        item: {qty_available: 3, variation_id: 2701, purchase_line_id: 99}
+    });
+    requests[0].success('<tr class="product_row added-product"><td><input class="product_line_total" value="1"></td></tr>');
+    assert.equal($('.added-product').length, 1);
+    dom.window.close();
+});
+
+test('an explicit lot search sends and preserves the chosen receipt', () => {
+    const {dom, $, requests, autocomplete} = transfer(false);
+    autocomplete.options.select.call($('#search_product_for_srock_adjustment')[0], {}, {
+        item: {qty_available: 3, variation_id: 2701, purchase_line_id: 99, is_lot_row: true}
+    });
+    assert.equal(requests[0].data.purchase_line_id, 99);
+    requests[0].success(productRow(0, 99));
+    assert.equal($('#stock_adjustment_product_table select[name]').val(), '99');
     dom.window.close();
 });
 

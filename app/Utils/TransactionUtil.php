@@ -3434,6 +3434,14 @@ class TransactionUtil extends Util
             $movement = $movements->get($line->transaction_id ?? null);
             $transferOverselling = $allow_overselling && $mapping_type === 'purchase' && $movement && $movement->type === 'sell_transfer';
             $selectedReceipt = ! empty($line->lot_no_line_id) ? $line->lot_no_line_id : $purchase_line_id;
+            if (!empty($business['repair_sale_lot_counters']) && $mapping_type === 'purchase' && $movement && $movement->type === 'sell'
+                && !empty($line->lot_no_line_id)) {
+                $repair = app(\App\Services\SaleLotCounterReconciliationService::class)->repairForAllocation($business, $line);
+                if ($repair) {
+                    $this->activityLog(Transaction::findOrFail($line->transaction_id), 'stock_reconciled', null,
+                        ['mode' => 'verified_sale_counter_before_allocation', 'counter_repairs' => [$repair]]);
+                }
+            }
             $qty_sum_query = $this->get_pl_quantity_sum_string('PL');
             $requires_lot_stock = ! empty($line->lot_no_line_id) || ! empty($purchase_line_id);
             if (! $requires_lot_stock) {
@@ -3937,6 +3945,13 @@ class TransactionUtil extends Util
      */
     public function adjustMappingPurchaseSellAfterEditingPurchase($before_status, $transaction, $delete_purchase_lines)
     {
+        return DB::transaction(function () use ($before_status, $transaction, $delete_purchase_lines) {
+            return $this->adjustMappingPurchaseSellAfterEditingPurchaseLocked($before_status, $transaction, $delete_purchase_lines);
+        });
+    }
+
+    protected function adjustMappingPurchaseSellAfterEditingPurchaseLocked($before_status, $transaction, $delete_purchase_lines)
+    {
         if ($before_status == 'received' && $transaction->status == 'received') {
             //Check if there is some irregularities between purchase & sell and make appropiate adjustment.
 
@@ -3989,7 +4004,31 @@ class TransactionUtil extends Util
 
         //Get detail of purchase lines deleted
         if (! empty($delete_purchase_lines)) {
-            $purchase_lines = $delete_purchase_lines->toArray() + $purchase_lines;
+            $purchase_lines = array_merge($delete_purchase_lines->toArray(), $purchase_lines);
+        }
+
+        // Reallocating these movements would discard their recorded serial identity.
+        // The caller's transaction must roll back the receipt edit instead.
+        $affectedIds = array_column($purchase_lines, 'id');
+        if ($affectedIds) {
+            $protectedMovement = DB::table('transaction_sell_lines as s')
+                ->join('transactions as t', 't.id', '=', 's.transaction_id')
+                ->leftJoin('transaction_sell_lines_purchase_lines as m', 'm.sell_line_id', '=', 's.id')
+                ->whereIn('t.type', ['sell', 'sell_transfer'])
+                ->where(function ($query) use ($affectedIds) {
+                    $query->whereIn('s.lot_no_line_id', $affectedIds)->orWhereIn('m.purchase_line_id', $affectedIds);
+                })
+                ->where(function ($query) {
+                    $query->where('s.lot_no_line_id', '>', 0)->orWhere('t.type', 'sell_transfer');
+                })
+                ->where(function ($query) {
+                    $query->where('t.status', 'final')->orWhereNotNull('m.id');
+                })
+                ->lockForUpdate()->first(['s.id']);
+            if ($protectedMovement) {
+                throw new PurchaseSellMismatch('This receipt is used by a selected serial or stock transfer (line #'
+                    .$protectedMovement->id.'). Reverse or reconcile that movement before reducing, deleting or unreceiving the receipt. Its deducted serial cannot be reassigned automatically.');
+            }
         }
 
         //All sell lines & Stock adjustment lines.
@@ -4413,18 +4452,16 @@ class TransactionUtil extends Util
         )
                                         ->where('T.business_id', $business_id)
                                         ->where('T.location_id', $location_id)
+                                        ->where('T.status', 'received')
+                                        ->whereIn('T.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
                                         ->where('purchase_lines.variation_id', $variation_id);
 
         //If expiry is disabled
         if (session()->get('business.enable_product_expiry') == 0) {
             $query->whereNotNull('purchase_lines.lot_number');
         }
-        if ($allow_negative_stock) {
-            $query->where('T.status', 'received')->whereIn('T.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase']);
-        } elseif ($exclude_empty_lot) {
-            $query->whereRaw("$qty_available_sql > 0");
-        } else {
-            $query->whereRaw("$qty_available_sql >= 0");
+        if (! $allow_negative_stock) {
+            $query->whereRaw($qty_available_sql.($exclude_empty_lot ? ' > 0' : ' >= 0'));
         }
 
         $purchase_lines = $query->select('purchase_lines.id as purchase_line_id', 'lot_number', 'purchase_lines.exp_date as exp_date', DB::raw("$qty_available_sql AS qty_available"))

@@ -98,7 +98,7 @@
                         <p class="manual-help">The recorded date is filled by default. Enable this only when delivery records confirm a different date.</p>
                     </div>
                     </div>
-                    <label class="manual-verification"><input type="checkbox" id="manual_stock_correction_verified" required> <span>I checked the physical serial and the supporting delivery records.</span></label>
+                    <label class="manual-verification"><input type="checkbox" id="manual_stock_correction_verified" required> <span>Use the selected source and receiving records for this correction.</span></label>
                     </div>
                 </form>
                 <div id="manual_stock_correction_preview" style="display:none">
@@ -126,6 +126,7 @@
             <div class="modal-footer">
                 <span id="manual_stock_correction_stage" class="pull-left text-muted" role="status">Awaiting Selection</span>
                 <button type="button" class="btn btn-default" id="download_manual_stock_correction" disabled title="Download verified correction preview"><i class="fa fa-download" aria-hidden="true"></i> Download Preview</button>
+                <button type="button" class="btn btn-info" id="auto_complete_manual_stock_correction"><i class="fa fa-magic" aria-hidden="true"></i> Auto-complete &amp; verify</button>
                 <button type="button" class="btn btn-default" id="preview_manual_stock_correction"><i class="fa fa-search" aria-hidden="true"></i> Preview correction</button>
                 <button type="button" class="btn btn-primary" id="apply_manual_stock_correction" disabled><i class="fa fa-check" aria-hidden="true"></i> Apply correction</button>
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>

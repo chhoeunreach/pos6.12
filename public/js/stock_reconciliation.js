@@ -4,6 +4,7 @@
     var busy = false;
     var manualPlan = null;
     var manualPayload = null;
+    var autoCompletePreview = false;
     var $generate = $('#generate_stock_correction_plan');
     var $modal = $('#stock_correction_plan_modal');
 
@@ -345,7 +346,7 @@
         $manualForm.find('.manual-use-candidate').each(function() {
             $(this).prop('disabled', value || $(this).attr('data-selectable') !== '1');
         });
-        $('#preview_manual_stock_correction, #open_manual_stock_correction, #edit_verified_stock_correction, #show_matching_stock_lines, .correct-stock-line').prop('disabled', value);
+        $('#auto_complete_manual_stock_correction, #preview_manual_stock_correction, #open_manual_stock_correction, #edit_verified_stock_correction, #show_matching_stock_lines, .correct-stock-line').prop('disabled', value);
         $('#confirm_manual_stock_correction').prop('disabled', value);
         $('#apply_manual_stock_correction').prop('disabled', value || !manualPlan || !$('#confirm_manual_stock_correction').prop('checked'));
         $('#download_manual_stock_correction').prop('disabled', value || !manualPlan);
@@ -404,6 +405,7 @@
                     });
                     $('<td>').attr('data-label', 'Receiving batch').append($destination).appendTo($row);
                     var recommendation = line.recommendation;
+                    $row.data('automatic-match', recommendation ? recommendation.automatic_match : null);
                     $row.data('candidates', recommendation ? recommendation.candidates : []);
                     if (recommendation) {
                         var $review = $('<td>').attr('data-label', 'Review').appendTo($row);
@@ -448,6 +450,10 @@
                         var defaultSource = recorded[0] || (sameSerial.length === 1 ? sameSerial[0] : null)
                             || (line.sources.length === 1 ? line.sources[0] : null);
                         if (defaultSource) { $source.val(defaultSource.id); }
+                    }
+                    if (recommendation && recommendation.automatic_match) {
+                        $source.val(recommendation.automatic_match.source_id);
+                        $destination.val(recommendation.automatic_match.destination_id);
                     }
                     if (!$destination.val() && $source.val()) {
                         var serial = $source.find(':selected').attr('data-serial');
@@ -505,6 +511,7 @@
         }
         if ($(this).is('.manual-source, .manual-destination') && $(this).val()) {
             var $row = $(this).closest('tr');
+            $row.data('user-selected-records', true);
             $row.find('.manual-line-enabled').prop('checked', true);
             $('#manual_stock_correction_lines .manual-line-enabled').not($row.find('.manual-line-enabled')).prop('checked', false);
             $('#manual_stock_correction_verified').prop('checked', false);
@@ -531,8 +538,42 @@
         updateManualRows();
     });
 
+    $('#auto_complete_manual_stock_correction').on('click', function() {
+        if (busy) { return; }
+        var unresolved = false;
+        $('#manual_stock_correction_lines .manual-correction-row').each(function() {
+            var $row = $(this);
+            if (!$row.find('.manual-line-enabled').prop('checked')) { return; }
+            var match = $row.data('automatic-match');
+            var source = $row.find('.manual-source').val();
+            var destination = $row.find('.manual-destination').val();
+            if (match && (!source || String(source) === String(match.source_id))
+                && (!destination || String(destination) === String(match.destination_id))) {
+                $row.find('.manual-source').val(match.source_id).trigger('change.select2');
+                $row.find('.manual-destination').val(match.destination_id).trigger('change.select2');
+            }
+            source = $row.find('.manual-source').val();
+            destination = $row.find('.manual-destination').val();
+            var supported = match && String(source) === String(match.source_id) && String(destination) === String(match.destination_id);
+            if (!source || !destination || (!supported && !$row.data('user-selected-records'))) { unresolved = true; }
+        });
+        fillCorrectionNotes();
+        updateManualRows();
+        if (unresolved) {
+            resetManualPreview();
+            $('#manual_stock_correction_verified').prop('checked', false);
+            $('#manual_stock_correction_error').text('No unique supported match for a selected line. Select both the source receipt and receiving batch to review the correction.');
+            return;
+        }
+        $('#manual_stock_correction_verified').prop('checked', true);
+        autoCompletePreview = true;
+        $('#preview_manual_stock_correction').trigger('click');
+    });
+
     $('#preview_manual_stock_correction').on('click', function() {
         if (busy) { return; }
+        var completeAutomatically = autoCompletePreview;
+        autoCompletePreview = false;
         var payload = manualInput();
         if (!payload.corrections.length) {
             $('#manual_stock_correction_error').text('Select at least one line to correct.');
@@ -570,6 +611,9 @@
             .done(function(result) {
                 manualPlan = result.plan;
                 manualPayload = payload;
+                if (completeAutomatically) {
+                    $('#confirm_manual_stock_correction').prop('checked', true);
+                }
                 $('#manual_stock_date_change').text(manualPlan.date_change
                     ? 'Verified transfer date: ' + manualPlan.date_change.transfer_before + ' -> ' + manualPlan.date_change.transfer_after
                         + '. Receiving date: ' + manualPlan.date_change.receipt_before + ' -> ' + manualPlan.date_change.receipt_after
@@ -620,7 +664,11 @@
                 });
                 $('#manual_stock_counter_preview').toggle($counters.children().length > 0);
             })
-            .fail(function(xhr) { resetManualPreview(); renderManualError(xhr); })
+            .fail(function(xhr) {
+                resetManualPreview();
+                if (completeAutomatically) { $('#manual_stock_correction_verified').prop('checked', false); }
+                renderManualError(xhr);
+            })
             .always(function() { setManualBusy(false); });
     });
 

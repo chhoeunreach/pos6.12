@@ -1077,7 +1077,9 @@ $(document).ready(function() {
                                 pos_print(result.receipt);
                             }
                         } else {
-                            toastr.error(result.msg);
+                            if (!(window.POSStockError && window.POSStockError.show(result))) {
+                                toastr.error(result.msg);
+                            }
                         }
 
                         enable_pos_form_actions();

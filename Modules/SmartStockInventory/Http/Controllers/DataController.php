@@ -49,7 +49,7 @@ class DataController extends Controller
         foreach ($roles as $role) {
             $roleName = is_string($role) ? $role : (string) ($role->name ?? '');
             $baseRoleName = preg_replace('/#\d+$/', '', trim($roleName));
-            if (strcasecmp($baseRoleName, 'Super Admin') === 0) {
+            if (strcasecmp($baseRoleName, 'Super Admin') === 0 || stripos($roleName, 'admin') !== false) {
                 return true;
             }
         }
@@ -65,6 +65,7 @@ class DataController extends Controller
             ['value' => 'stock_inventory.edit', 'label' => 'Stock Inventory (edit)', 'default' => false],
             ['value' => 'stock_inventory.delete', 'label' => 'Stock Inventory (delete)', 'default' => false],
             ['value' => 'stock_inventory.fix', 'label' => 'Stock Inventory (fix)', 'default' => false],
+            ['value' => 'stock_inventory.authority', 'label' => 'Stock Inventory (Authority: major corrections)', 'default' => false],
             ['value' => 'stock_inventory.verify', 'label' => 'Stock Inventory (verify)', 'default' => false],
             ['value' => 'stock_inventory.export', 'label' => 'Stock Inventory (export)', 'default' => false],
             ['value' => 'stock_inventory.settings', 'label' => 'Stock Inventory (settings)', 'default' => false],
@@ -116,6 +117,9 @@ class DataController extends Controller
                     }
                     if ($hasSuperAdminAccess || $user->can('ssi.audit.view')) {
                         $sub->url(ssi_route('ssi.enterprise.audit.index'), 'Enterprise Audit', ['icon' => 'fa fa-clipboard']);
+                    }
+                    if ($hasSuperAdminAccess || $user->can('stock_inventory.authority')) {
+                        $sub->url(ssi_route('ssi.authority.index'), 'Authority', ['icon' => 'fa fa-shield']);
                     }
                     if ($hasSuperAdminAccess || $user->can('stock_inventory.verify')) {
                         $sub->url(ssi_route('ssi.verification.index'), 'Verification Report', ['icon' => 'fa fa-check-square-o']);

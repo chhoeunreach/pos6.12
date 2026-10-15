@@ -7,6 +7,7 @@ use App\Exceptions\PurchaseSellMismatch;
 use App\PurchaseLine;
 use App\Services\LotStockAuditService;
 use App\Services\StockTransferStockService;
+use App\Services\StockTransferReconciliationService;
 use App\Transaction;
 use App\TransactionSellLine;
 use App\VariationLocationDetails;
@@ -310,6 +311,134 @@ class LotSaleConsistencyTest extends TestCase
             'id' => 1, 'location_id' => 12, 'accounting_method' => 'fifo',
             'pos_settings' => ['allow_overselling' => true],
         ], $lines, 'purchase', false);
+    }
+
+    private function saleEditMappingBusiness(): array
+    {
+        return ['id' => 1, 'location_id' => 12, 'accounting_method' => 'fifo',
+            'pos_settings' => ['allow_overselling' => false], 'repair_sale_lot_counters' => true];
+    }
+
+    public function test_pos_edit_repairs_a_verified_stale_lot_counter_and_restores_its_missing_mapping(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity_sold' => 1]);
+        $repairs = null;
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andReturnUsing(function ($sale, $action, $before, $details) use (&$repairs) {
+            $repairs = $details;
+        });
+        $this->app->instance(TransactionUtil::class, $util);
+        $util->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+        $this->assertEquals(1, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(1, PurchaseLine::find(1)->quantity);
+        $this->assertEquals(0, PurchaseLine::find(2)->quantity_sold);
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+        $this->assertEquals(1, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->sum('quantity'));
+        $this->assertSame('verified_sale_counter_before_allocation', $repairs['mode']);
+        $this->assertEquals(0, $repairs['counter_repairs'][0]['quantity_sold_after']);
+    }
+
+    public function test_pos_edit_counter_repair_preserves_existing_partial_allocation_when_quantity_increases(): void
+    {
+        PurchaseLine::find(1)->update(['quantity' => 2, 'quantity_sold' => 2]);
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['quantity' => 2]);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['purchase_line_id' => 1]);
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once();
+        $this->app->instance(TransactionUtil::class, $util);
+        $util->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+        $this->assertEquals(2, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->sum('quantity'));
+        $this->assertSame([1], DB::table('transaction_sell_lines_purchase_lines')->distinct()->pluck('purchase_line_id')->all());
+    }
+
+    public function test_pos_edit_never_repairs_a_counter_by_ignoring_a_competing_or_mismatched_sale(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity_sold' => 1]);
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'final']);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => 1]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 1]);
+        foreach ([1, 2] as $selected) {
+            DB::table('transaction_sell_lines')->where('id', 2)->update(['lot_no_line_id' => $selected]);
+            $before = $this->stockCorrectionSnapshot();
+            try {
+                $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+                $this->fail('Existing consumption must never be freed for a competing sale.');
+            } catch (PurchaseSellMismatch $exception) {
+                $this->assertSame($before, $this->stockCorrectionSnapshot());
+            }
+        }
+    }
+
+    public function test_pos_edit_rejects_an_increase_when_the_counter_understates_its_existing_allocation(): void
+    {
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['quantity' => 2]);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['purchase_line_id' => 1]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+            $this->fail('A stale low counter must not let an existing allocation be consumed twice.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('existing allocations', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_pos_edit_blocks_a_conflicting_allocation_even_when_the_recorded_counter_shows_stock(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'final']);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => 2]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 1]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+            $this->fail('A mismatched allocation must not be ignored just because the cache reports availability.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('unverified stock allocations', $exception->getMessage());
+            $detail = $exception->responseData()['stock_error'];
+            $this->assertSame('selected_receipt_mismatch', $detail['kind']);
+            $this->assertEquals(4, $detail['transaction_id']);
+            $this->assertEquals(2, $detail['sell_line_id']);
+            $this->assertEquals(2, $detail['selected_purchase_line_id']);
+            $this->assertEquals(1, $detail['deducted_purchase_line_id']);
+            $this->assertStringContainsString('selects receipt #2 but deducts receipt #1', $detail['reason']);
+            $this->assertSame([$detail['reason']], $detail['related_allocations']);
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_pos_edit_counter_repair_rolls_back_if_its_audit_log_fails(): void
+    {
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        PurchaseLine::find(1)->update(['quantity_sold' => 1]);
+        $before = $this->stockCorrectionSnapshot();
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andThrow(new \RuntimeException('Audit unavailable'));
+        $this->app->instance(TransactionUtil::class, $util);
+        try {
+            $util->adjustMappingPurchaseSell('final', Transaction::find(1), $this->saleEditMappingBusiness());
+            $this->fail('A repair must roll back if its audit cannot be written.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Audit unavailable', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_pos_update_returns_actionable_stock_errors_and_hides_unexpected_exceptions(): void
+    {
+        $controller = (new \ReflectionClass(\App\Http\Controllers\SellPosController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod($controller, 'posUpdateErrorResponse');
+        $method->setAccessible(true);
+        $detail = ['purchase_line_id' => 86748, 'serial' => 'G0NDM73Z0D41', 'recorded_available' => 0, 'history_available' => 1];
+        $result = $method->invoke($controller, new PurchaseSellMismatch('Recorded consumption differs from lot history.', $detail));
+        $this->assertEquals(0, $result['success']);
+        $this->assertSame($detail, $result['stock_error']);
+        $this->assertSame('Recorded consumption differs from lot history.', $result['msg']);
+        $result = $method->invoke($controller, new \RuntimeException('Sensitive SQL diagnostic'));
+        $this->assertStringNotContainsString('Sensitive SQL', $result['msg']);
     }
 
     public function test_selected_lot_is_deducted_and_displayed_on_invoice(): void
@@ -1811,6 +1940,904 @@ class LotSaleConsistencyTest extends TestCase
             [['sell_line_id' => 1, 'source_id' => 1, 'destination_id' => $destination->id]], $destination->id];
     }
 
+    public function test_verified_manual_correction_can_replace_a_deleted_selected_receipt(): void
+    {
+        [$service, $corrections] = $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        $corrections[0]['source_id'] = 3;
+        $before = $this->stockCorrectionSnapshot();
+        $evidence = 'Delivery document confirms the existing source receipt and physical serial.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertEquals(2, $plan['changes'][0]['selected_batch_before']);
+        $this->assertEquals(3, $plan['changes'][0]['selected_batch_after']);
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token']);
+        $this->assertEquals(3, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertEquals(3, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertEquals(0, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(1, PurchaseLine::find(3)->quantity_sold);
+        $this->assertNull(PurchaseLine::find(2));
+        $this->assertEquals([2, 1], $this->transferBalances());
+        $this->assertSame([], $this->app->make(LotStockAuditService::class)->audit(1)['sale_line_issues']);
+    }
+
+    public function test_verified_manual_correction_cannot_ignore_a_missing_deducted_receipt(): void
+    {
+        [$service, $corrections] = $this->manualCorrectionFixture();
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['lot_no_line_id' => 999]);
+        PurchaseLine::find(1)->delete();
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Delivery document and physical serial verified.');
+            $this->fail('Missing actual deductions cannot be discarded.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('missing or belongs to another business', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_verified_manual_correction_cannot_treat_another_business_selection_as_deleted(): void
+    {
+        [$service, $corrections] = $this->manualCorrectionFixture();
+        DB::table('transactions')->insert(['id' => 4, 'business_id' => 2, 'type' => 'purchase', 'status' => 'received']);
+        PurchaseLine::find(2)->update(['transaction_id' => 4]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Delivery document and physical serial verified.');
+            $this->fail('A foreign selected receipt must not be treated as deleted.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('another business', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    private function preparePurchaseRemappingSchema(): void
+    {
+        Schema::table('business', fn (Blueprint $table) => $table->string('accounting_method')->default('fifo'));
+        Schema::table('transaction_sell_lines_purchase_lines', fn (Blueprint $table) => $table->integer('stock_adjustment_line_id')->nullable());
+        Schema::create('stock_adjustment_lines', function (Blueprint $table) {
+            $table->increments('id');
+            $table->integer('product_id');
+            $table->integer('variation_id');
+        });
+    }
+
+    public function test_receipt_edits_cannot_reassign_transfer_or_selected_serial_deductions(): void
+    {
+        $this->preparePurchaseRemappingSchema();
+        [$sell, $purchase] = $this->transferPair();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        foreach (['selected_transfer', 'fifo_transfer', 'selected_sale'] as $kind) {
+            Transaction::find(1)->update(['type' => $kind === 'selected_sale' ? 'sell' : 'sell_transfer']);
+            TransactionSellLine::find(1)->update(['lot_no_line_id' => $kind === 'fifo_transfer' ? null : 1]);
+            foreach (['reduce', 'delete', 'pending'] as $operation) {
+                $before = $this->stockCorrectionSnapshot();
+                try {
+                    DB::transaction(function () use ($operation) {
+                        $receipt = Transaction::find(2);
+                        $deleted = collect();
+                        if ($operation === 'reduce') {
+                            PurchaseLine::find(1)->update(['quantity' => 0]);
+                        } elseif ($operation === 'delete') {
+                            $deleted = collect([PurchaseLine::find(1)]);
+                            PurchaseLine::find(1)->delete();
+                        } else {
+                            $receipt->update(['status' => 'pending']);
+                        }
+                        $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSellAfterEditingPurchase('received', $receipt, $deleted);
+                    });
+                    $this->fail('Receipt editing must not reassign a protected serial: '.$kind.' / '.$operation);
+                } catch (PurchaseSellMismatch $exception) {
+                    $this->assertStringContainsString('deducted serial cannot be reassigned', $exception->getMessage());
+                }
+                $this->assertSame($before, $this->stockCorrectionSnapshot());
+            }
+        }
+    }
+
+    public function test_unselected_sale_can_still_be_reallocated_after_receipt_quantity_reduction(): void
+    {
+        $this->preparePurchaseRemappingSchema();
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['purchase_line_id' => 1]);
+        DB::table('purchase_lines')->where('id', 1)->update(['quantity_sold' => 1, 'quantity' => 0]);
+        $this->app->make(TransactionUtil::class)->adjustMappingPurchaseSellAfterEditingPurchase('received', Transaction::find(2), null);
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertEquals(0, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals(1, PurchaseLine::find(2)->quantity_sold);
+    }
+
+    public function test_purchase_edit_cannot_rename_a_serial_already_selected_or_deducted(): void
+    {
+        $before = $this->stockCorrectionSnapshot();
+        foreach ([1, 2] as $batchId) {
+            try {
+                $this->app->make(ProductUtil::class)->createOrUpdatePurchaseLines(Transaction::find(2), [[
+                    'purchase_line_id' => $batchId, 'product_id' => 589, 'variation_id' => 2701,
+                    'quantity' => 1, 'lot_number' => 'RENAMED-SERIAL',
+                ]], null, false, 'received');
+                $this->fail('A referenced serial must not be renamed by a purchase edit.');
+            } catch (PurchaseSellMismatch $exception) {
+                $this->assertStringContainsString('verified serial correction', $exception->getMessage());
+            }
+            $this->assertSame($before, $this->stockCorrectionSnapshot());
+        }
+    }
+
+    public function test_purchase_price_edit_with_omitted_serial_field_preserves_serials_and_deductions(): void
+    {
+        Schema::table('purchase_lines', function (Blueprint $table) {
+            $table->double('pp_without_discount')->default(100);
+            $table->double('discount_percent')->default(0);
+            $table->integer('purchase_order_line_id')->nullable();
+            $table->integer('purchase_requisition_line_id')->nullable();
+        });
+        $lotsBefore = PurchaseLine::orderBy('id')->pluck('lot_number')->all();
+        $mappingsBefore = DB::table('transaction_sell_lines_purchase_lines')->get()->toJson();
+        $util = \Mockery::mock(ProductUtil::class)->makePartial();
+        $util->shouldReceive('updateProductStock')->andReturnNull();
+        $lines = [];
+        foreach ([1, 2, 3] as $id) {
+            $lines[] = ['purchase_line_id' => $id, 'product_id' => 589, 'variation_id' => 2701,
+                'quantity' => 1, 'pp_without_discount' => 90, 'discount_percent' => 0,
+                'purchase_price' => 90, 'purchase_price_inc_tax' => 90, 'item_tax' => 0];
+        }
+        $util->createOrUpdatePurchaseLines(Transaction::find(2), $lines, null, false, 'received');
+        $this->assertSame($lotsBefore, PurchaseLine::orderBy('id')->pluck('lot_number')->all());
+        $this->assertSame($mappingsBefore, DB::table('transaction_sell_lines_purchase_lines')->get()->toJson());
+        $this->assertEquals(90, PurchaseLine::find(1)->purchase_price);
+    }
+
+    private function authorityRequest(array $input): Request
+    {
+        $request = Request::create('/smart-stock-inventory/authority/1/preview', 'POST', $input);
+        $request->setLaravelSession($this->app['session.store']);
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+
+        return $request;
+    }
+
+    private function authorityController(): \Modules\SmartStockInventory\Http\Controllers\AuthorityController
+    {
+        $this->transferController();
+        auth()->user()->shouldReceive('permitted_locations')->with(1)->andReturn('all');
+
+        return $this->app->make(\Modules\SmartStockInventory\Http\Controllers\AuthorityController::class);
+    }
+
+    public function test_authority_routes_require_authority_permission_and_post_for_changes(): void
+    {
+        $middleware = new \Modules\SmartStockInventory\Http\Middleware\SmartStockAccessMiddleware();
+        $permission = new \ReflectionMethod($middleware, 'requiredPermissionForRoute');
+        $permission->setAccessible(true);
+        foreach (['index' => 'GET', 'preview' => 'POST', 'apply' => 'POST'] as $action => $method) {
+            $route = \Illuminate\Support\Facades\Route::getRoutes()->getByName('ssi.authority.'.$action);
+            $this->assertNotNull($route);
+            $this->assertContains($method, $route->methods());
+            $this->assertSame('stock_inventory.authority', $permission->invoke($middleware, 'ssi.authority.'.$action));
+        }
+    }
+
+    public function test_authority_form_loads_deleted_selection_and_existing_deductions_without_writes(): void
+    {
+        $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        $controller = $this->authorityController();
+        $before = $this->stockCorrectionSnapshot();
+        $view = $controller->index($this->authorityRequest(['transfer_id' => 1]));
+        $data = $view->getData();
+        $this->assertSame('smartstockinventory::authority.index', $view->name());
+        $this->assertSame(2, $data['lines'][0]['selected_purchase_line_id']);
+        $this->assertNull($data['lines'][0]['selected_serial']);
+        $this->assertEquals(1, $data['allocations']->get(1)->first()->purchase_line_id);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_form_and_preview_render_the_actions_and_escape_serials(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        Schema::create('system', function (Blueprint $table) {
+            $table->string('key');
+            $table->text('value')->nullable();
+        });
+        [, $corrections] = $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        auth()->user()->shouldReceive('checkPermissionTo')->andReturn(true);
+        PurchaseLine::find(1)->update(['lot_number' => '<script>serial</script>']);
+        $view = $controller->index($this->authorityRequest(['transfer_id' => 1]));
+        $html = $view->with('errors', new \Illuminate\Support\ViewErrorBag())
+            ->with('__is_pusher_enabled', false)->render();
+        $this->assertStringContainsString('Full authority corrections', $html);
+        $this->assertStringContainsString('id="authority_correction_modal"', $html);
+        $this->assertStringContainsString('open-authority-correction', $html);
+        $this->assertStringContainsString('corrections[1][source_id]', $html);
+        $this->assertStringContainsString('&lt;script&gt;serial&lt;/script&gt;', $html);
+        $this->assertStringNotContainsString('<script>serial</script>', $html);
+        $preview = $controller->preview($this->authorityRequest([
+            'corrections' => $corrections, 'evidence' => 'Authority correction from a verified delivery note.',
+        ]), 1);
+        $html = $preview->with('__is_pusher_enabled', false)->render();
+        $this->assertStringContainsString('Apply authority correction', $html);
+        $this->assertStringContainsString('name="token"', $html);
+        $this->assertStringNotContainsString('<script>serial</script>', $html);
+    }
+
+    public function test_authority_modal_prefills_unique_supported_records_without_writing_stock(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [, , $destinationId] = $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        PurchaseLine::find($destinationId)->update(['lot_number' => PurchaseLine::find(1)->lot_number]);
+        $controller = $this->authorityController();
+        $ambiguous = $controller->index($this->authorityRequest(['transfer_id' => 1, 'modal' => 1]));
+        $this->assertNull($ambiguous->getData()['lines'][0]['recommendation']['automatic_match']);
+        PurchaseLine::find(3)->delete();
+        $before = $this->stockCorrectionSnapshot();
+        $request = $this->authorityRequest(['transfer_id' => 1, 'modal' => 1]);
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $view = $controller->index($request);
+        $this->assertSame('smartstockinventory::authority.correction_form', $view->name());
+        $this->assertEquals(['source_id' => 1, 'destination_id' => $destinationId], $view->getData()['lines'][0]['recommendation']['automatic_match']);
+        $html = $view->render();
+        $document = new \DOMDocument();
+        @$document->loadHTML($html);
+        $xpath = new \DOMXPath($document);
+        $this->assertSame('1', $xpath->query('//select[@id="authority_source_1"]/option[@selected]')->item(0)->getAttribute('value'));
+        $this->assertSame((string) $destinationId, $xpath->query('//select[@id="authority_destination_1"]/option[@selected]')->item(0)->getAttribute('value'));
+        $this->assertStringNotContainsString('Full authority corrections', $html);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+
+        session()->flashInput(['corrections' => [['sell_line_id' => 1, 'source_id' => '', 'destination_id' => '']]]);
+        $html = $view->render();
+        @$document->loadHTML($html);
+        $this->assertSame(0, (new \DOMXPath($document))->query('//select/option[@selected]')->length);
+    }
+
+    public function test_authority_lists_blank_serial_receipts_and_repairs_by_batch_id_without_creating_stock(): void
+    {
+        [, $corrections, $destinationId] = $this->manualCorrectionFixture();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        PurchaseLine::find($destinationId)->update(['lot_number' => '']);
+        $controller = $this->authorityController();
+        $view = $controller->index($this->authorityRequest(['transfer_id' => 1, 'modal' => 1]));
+        $this->assertTrue($view->getData()['lines'][0]['sources']->contains('id', 1));
+        $this->assertNull($view->getData()['lines'][0]['recommendation']['automatic_match']);
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $input = ['corrections' => $corrections, 'evidence' => 'Confirmed no serial on this bulk product; receipt and batch IDs verified.'];
+        $preview = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $preview->name());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $saved = $this->app->make(StockTransferReconciliationService::class)->applyManual(1, 1, $corrections,
+            $input['evidence'], $preview->getData()['plan']['token'], null, true, true, true);
+        $this->assertEquals(1, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertNull(PurchaseLine::find(1)->lot_number);
+        $this->assertSame('', PurchaseLine::find($destinationId)->lot_number);
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertEmpty($saved['remaining_transfer_issues']);
+    }
+
+    public function test_authority_fills_existing_missing_serial_without_creating_receipts_or_stock(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        PurchaseLine::find($destinationId)->update(['lot_number' => null]);
+        $input['corrections'] = [['sell_line_id' => 1, 'source_id' => '1', 'destination_id' => (string) $destinationId, 'verified_serial' => 'VERIFIED-EXISTING']];
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $count = PurchaseLine::count();
+        $preview = $service->preview(1, 1, $input, 1);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertCount(1, $preview['filled_source_serials']);
+        $this->assertEmpty($preview['created_receipts']);
+        $saved = $service->apply(1, 1, $input, 1, $preview['token']);
+        $this->assertEquals($count, PurchaseLine::count());
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertSame('VERIFIED-EXISTING', PurchaseLine::find(1)->lot_number);
+        $this->assertSame('VERIFIED-EXISTING', PurchaseLine::find($destinationId)->lot_number);
+        $this->assertEmpty($saved['remaining_transfer_issues']);
+    }
+
+    public function test_authority_fills_blank_receiving_serial_used_by_a_sale_without_changing_quantities(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        PurchaseLine::find($destinationId)->update(['lot_number' => null, 'quantity_sold' => 1]);
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'final', 'location_id' => 13]);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => $destinationId]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => $destinationId]);
+        $input['corrections'] = [['sell_line_id' => 1, 'source_id' => '1', 'destination_id' => (string) $destinationId, 'verified_serial' => 'VERIFIED-SOLD']];
+        $balances = $this->transferBalances();
+        $plan = $service->preview(1, 1, $input, 1);
+        $service->apply(1, 1, $input, 1, $plan['token']);
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertSame('VERIFIED-SOLD', PurchaseLine::find($destinationId)->lot_number);
+        $this->assertEquals(1, PurchaseLine::find($destinationId)->quantity_sold);
+        $this->assertEquals($destinationId, TransactionSellLine::find(2)->lot_no_line_id);
+    }
+
+    public function test_authority_missing_serial_fill_cannot_rename_an_existing_known_serial(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        $input['corrections'] = [['sell_line_id' => 1, 'source_id' => '1', 'destination_id' => (string) $destinationId, 'verified_serial' => 'WRONG-REPLACEMENT']];
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->preview(1, 1, $input, 1);
+            $this->fail('The missing serial field must not rename an existing serial.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Only a missing source serial', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_can_create_missing_receipts_for_a_product_without_a_serial(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        unset($input['corrections'][0]['new_source']['serial']);
+        $plan = $service->preview(1, 1, $input, 1);
+        $saved = $service->apply(1, 1, $input, 1, $plan['token']);
+        $this->assertCount(2, $saved['created_receipts']);
+        foreach ($saved['created_receipts'] as $created) {
+            $this->assertNull(PurchaseLine::find($created['batch_id'])->lot_number);
+        }
+    }
+
+    public function test_authority_does_not_erase_a_known_receiving_serial_using_a_blank_source(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        $service = $this->app->make(StockTransferReconciliationService::class);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Verified actual receipt identity for this transfer.', null, true, true, true);
+            $this->fail('A known receiving serial must not be erased.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Enter the verified missing source serial', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_later_receipt_requires_an_explicit_verified_delivery_date(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        DB::table('transactions')->where('id', 2)->update(['transaction_date' => '2026-09-02 15:23:00']);
+        $controller = $this->authorityController();
+        $input = ['corrections' => $corrections, 'evidence' => 'Delivery document confirms actual delivery after the source receipt arrived.'];
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertStringContainsString('Source receipt #1 arrived 2026-09-02 15:23:00', session('status.msg'));
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $input['transaction_date'] = '2026-09-02 18:20:00';
+        $view = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $view->name());
+        $this->assertSame('2026-09-02 18:20:00', $view->getData()['plan']['date_change']['transfer_after']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_auto_completion_uses_selected_receipt_and_a_unique_receiving_batch(): void
+    {
+        [, , $destinationId] = $this->manualCorrectionFixture();
+        PurchaseLine::find($destinationId)->update(['lot_number' => null]);
+        $controller = $this->authorityController();
+        $view = $controller->index($this->authorityRequest(['transfer_id' => 1, 'modal' => 1]));
+        $this->assertSame(['source_id' => 2, 'destination_id' => $destinationId], $view->getData()['lines'][0]['completion']);
+        // Blank serials use the selected batch ID instead of a guessed serial match.
+        PurchaseLine::find(2)->update(['lot_number' => null]);
+        $view = $controller->index($this->authorityRequest(['transfer_id' => 1, 'modal' => 1]));
+        $this->assertSame(['source_id' => 2, 'destination_id' => $destinationId], $view->getData()['lines'][0]['completion']);
+    }
+
+    public function test_authority_auto_verification_returns_a_read_only_preview_inside_the_modal(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => 'Authority record-based correction from matching receipt records.']);
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $data = $response->getData(true);
+        $this->assertSame(1, $data['success']);
+        $this->assertStringContainsString('Apply authority correction', $data['html']);
+        $this->assertStringNotContainsString('<html', $data['html']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_auto_verification_returns_blockers_without_changing_records(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        DB::table('transactions')->where('id', 2)->update(['transaction_date' => '2026-09-02 15:23:00']);
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => 'Authority record-based correction from transfer documents.']);
+        $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('receipt_date_conflict', $response->getData(true)['stock_error']['kind']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_card_details_match_summary_categories_and_do_not_change_stock(): void
+    {
+        $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 2]);
+        DB::table('transactions')->insert(['id' => 99, 'business_id' => 2, 'type' => 'sell', 'status' => 'final']);
+        DB::table('transaction_sell_lines')->insert(['id' => 99, 'transaction_id' => 99, 'lot_no_line_id' => 999]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 99, 'purchase_line_id' => 999, 'quantity' => 3]);
+        $service = $this->app->make(\App\Services\StockAuthorityReconciliationService::class);
+        $summary = $service->auditMismatches(1);
+        $before = $this->stockCorrectionSnapshot();
+        foreach (['over_allocated' => 'over_allocated_count', 'missing_selected' => 'missing_selected_count',
+            'differing_allocations' => 'diff_allocation_count', 'all_line_issues' => 'total_sale_line_issues'] as $category => $countKey) {
+            $rows = $service->mismatchDetails(1, $category);
+            $this->assertEquals($summary[$countKey], $rows->total());
+            $this->assertSame([1], $rows->getCollection()->pluck('id')->all());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_card_detail_rows_hide_foreign_receipt_serials_and_filter_references(): void
+    {
+        $this->manualCorrectionFixture();
+        DB::table('transactions')->where('id', 1)->update(['ref_no' => 'ST-DETAIL-77']);
+        DB::table('transactions')->insert(['id' => 99, 'business_id' => 2, 'type' => 'purchase', 'status' => 'received']);
+        DB::table('purchase_lines')->insert(['id' => 99, 'transaction_id' => 99, 'lot_number' => 'OTHER-BUSINESS-PRIVATE-SERIAL']);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['purchase_line_id' => 99]);
+        $service = $this->app->make(\App\Services\StockAuthorityReconciliationService::class);
+        $rows = $service->mismatchDetails(1, 'differing_allocations', 'ST-DETAIL-77');
+        $this->assertSame(1, $rows->total());
+        $this->assertNull($rows->first()->allocations->first()->batch);
+        $this->assertSame(0, $service->mismatchDetails(1, 'differing_allocations', 'NO-SUCH-REFERENCE')->total());
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['category' => 'differing_allocations']);
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $view = $controller->details($request, $service);
+        $this->assertSame('smartstockinventory::authority.details_content', $view->name());
+        $html = $view->render();
+        $this->assertStringContainsString('ST-DETAIL-77', $html);
+        $this->assertStringContainsString('Open correction form', $html);
+        $this->assertStringNotContainsString('OTHER-BUSINESS-PRIVATE-SERIAL', $html);
+    }
+
+    public function test_authority_details_route_requires_authority_and_rejects_unknown_categories(): void
+    {
+        $route = \Illuminate\Support\Facades\Route::getRoutes()->getByName('ssi.authority.details');
+        $this->assertContains('GET', $route->methods());
+        $middleware = new \Modules\SmartStockInventory\Http\Middleware\SmartStockAccessMiddleware();
+        $permission = new \ReflectionMethod($middleware, 'requiredPermissionForRoute');
+        $permission->setAccessible(true);
+        $this->assertSame('stock_inventory.authority', $permission->invoke($middleware, 'ssi.authority.details'));
+        $controller = $this->authorityController();
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $controller->details($this->authorityRequest(['category' => 'unsupported']), $this->app->make(\App\Services\StockAuthorityReconciliationService::class));
+    }
+
+    private function authorityNewReceiptFixture(): array
+    {
+        [, , $destinationId] = $this->manualCorrectionFixture();
+        Schema::table('transactions', function (Blueprint $table) {
+            $table->integer('opening_stock_product_id')->nullable();
+            $table->string('payment_status')->nullable();
+        });
+        if (!Schema::hasColumn('transactions', 'created_by')) {
+            Schema::table('transactions', fn (Blueprint $table) => $table->integer('created_by')->nullable());
+        }
+        Schema::table('purchase_lines', function (Blueprint $table) {
+            $table->double('pp_without_discount')->default(0);
+        });
+        return [$this->app->make(\App\Services\AuthorityTransferReceiptService::class), $destinationId,
+            ['corrections' => [['sell_line_id' => 1, 'source_id' => 'new', 'destination_id' => 'new',
+                'new_source' => ['serial' => 'VERIFIED-NEW', 'quantity' => '1', 'date' => '2026-09-01 11:00:00', 'cost' => '90']]],
+                'evidence' => 'Original receipt DOC-100 confirms this missing source serial and delivery.']];
+    }
+
+    public function test_authority_new_receipts_preview_is_read_only_and_apply_creates_both_atomically(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $plan = $service->preview(1, 1, $input, 1);
+        $this->assertCount(2, $plan['created_receipts']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertSame($balances, $this->transferBalances());
+        // Model MySQL's auto-increment gaps after rolled-back preview IDs.
+        $other = Transaction::create(['type' => 'draft', 'business_id' => 2]);
+        // Other-business documents do not invalidate this business's correction.
+        $saved = $service->apply(1, 1, $input + ['transaction_date' => null], 1, $plan['token']);
+        $this->assertCount(2, $saved['created_receipts']);
+        $source = PurchaseLine::find($saved['created_receipts'][0]['batch_id']);
+        $destination = PurchaseLine::find($saved['created_receipts'][1]['batch_id']);
+        $this->assertSame('VERIFIED-NEW', $source->lot_number);
+        $this->assertEquals(1, $source->quantity_sold);
+        $this->assertEquals(90, $source->purchase_price);
+        $this->assertEquals(90, $source->transaction->final_total);
+        $this->assertSame('opening_stock', $source->transaction->type);
+        $this->assertSame('VERIFIED-NEW', $destination->lot_number);
+        $this->assertEquals($source->id, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertSame([(float) $balances[0] + 1, (float) $balances[1]], array_map('floatval', $this->transferBalances()));
+        $this->assertEquals($source->id, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+        $after = $this->stockCorrectionSnapshot();
+        try {
+            $service->apply(1, 1, $input, 1, $plan['token']);
+            $this->fail('An applied creation preview must not be reusable.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Preview the correction again', $exception->getMessage());
+        }
+        $this->assertSame($after, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_can_add_only_a_missing_receiving_batch_without_moving_quantity_twice(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        $input['corrections'][0]['source_id'] = '1';
+        unset($input['corrections'][0]['new_source']);
+        $balances = $this->transferBalances();
+        $plan = $service->preview(1, 1, $input, 1);
+        $saved = $service->apply(1, 1, $input, 1, $plan['token']);
+        $this->assertCount(1, $saved['created_receipts']);
+        $this->assertSame('receiving', $saved['created_receipts'][0]['kind']);
+        $this->assertSame($balances, $this->transferBalances());
+    }
+
+    public function test_authority_new_source_can_replace_a_deleted_actual_deduction_with_audited_details(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        $input['corrections'][0]['destination_id'] = (string) $destinationId;
+        PurchaseLine::find(1)->delete();
+        $before = $this->stockCorrectionSnapshot();
+        $plan = $service->preview(1, 1, $input, 1);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertCount(1, $plan['replaced_missing_allocations']);
+        $this->assertEquals(1, $plan['replaced_missing_allocations'][0]['mapping']->purchase_line_id);
+        $saved = $service->apply(1, 1, $input, 1, $plan['token']);
+        $this->assertCount(1, $saved['created_receipts']);
+        $this->assertCount(1, $saved['replaced_missing_allocations']);
+        $this->assertSame('VERIFIED-NEW', PurchaseLine::find($destinationId)->lot_number);
+        $this->assertEquals($saved['created_receipts'][0]['batch_id'], DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+    }
+
+    public function test_authority_new_source_never_erases_a_deduction_owned_by_another_business(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        $input['corrections'][0]['destination_id'] = (string) $destinationId;
+        DB::table('transactions')->where('id', 2)->update(['business_id' => 2]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->preview(1, 1, $input, 1);
+            $this->fail('A foreign deduction must remain blocked.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('another business', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_new_source_requires_complete_receipt_details(): void
+    {
+        $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        try {
+            $controller->preview($this->authorityRequest(['corrections' => [['sell_line_id' => 1, 'source_id' => 'new', 'destination_id' => 'new']],
+                'evidence' => 'Missing original receipt confirmed by document DOC-100.']), 1);
+            $this->fail('A new receipt needs its quantity, cost and actual date.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            foreach (['quantity', 'cost', 'date'] as $field) {
+                $this->assertArrayHasKey('corrections.0.new_source.'.$field, $exception->errors());
+            }
+        }
+    }
+
+    public function test_authority_new_receipt_preview_form_preserves_details_for_apply_and_audit(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        Schema::create('system', function (Blueprint $table) {
+            $table->string('key');
+            $table->text('value')->nullable();
+        });
+        [, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        $controller = $this->authorityController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        auth()->user()->shouldReceive('checkPermissionTo')->andReturn(true);
+        $preview = $controller->preview($this->authorityRequest($input), 1);
+        $html = $preview->with('__is_pusher_enabled', false)->render();
+        $this->assertStringContainsString('Missing records to create', $html);
+        $document = new \DOMDocument();
+        @$document->loadHTML($html);
+        $xpath = new \DOMXPath($document);
+        $fields = [];
+        foreach ($xpath->query('//form[contains(@action,"/authority/1/apply")]//input[@name]') as $field) {
+            $fields[] = urlencode($field->getAttribute('name')).'='.urlencode($field->getAttribute('value'));
+        }
+        parse_str(implode('&', $fields), $applyInput);
+        $this->assertEquals($input['corrections'], $applyInput['corrections']);
+        $logged = null;
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andReturnUsing(function ($transfer, $action, $before, $details) use (&$logged) {
+            $logged = $details;
+        });
+        $this->app->instance(TransactionUtil::class, $util);
+        $response = $controller->apply($this->authorityRequest($applyInput), 1);
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertEquals(1, session('status.success'));
+        $this->assertCount(2, $logged['created_receipts']);
+        $this->assertSame('authority', $logged['mode']);
+    }
+
+    public function test_authority_new_receipts_roll_back_if_the_audit_log_fails(): void
+    {
+        [, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        $controller = $this->authorityController();
+        $preview = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $preview->name());
+        $input['token'] = $preview->getData()['plan']['token'];
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andThrow(new \RuntimeException('Audit write failed'));
+        $this->app->instance(TransactionUtil::class, $util);
+        try {
+            $controller->apply($this->authorityRequest($input), 1);
+            $this->fail('Receipt creation must not commit without its audit log.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Audit write failed', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertSame($balances, $this->transferBalances());
+    }
+
+    public function test_authority_new_receiving_batch_cannot_duplicate_existing_received_quantity(): void
+    {
+        [$service, , $input] = $this->authorityNewReceiptFixture();
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        try {
+            $service->preview(1, 1, $input, 1);
+            $this->fail('A new receiving batch must not duplicate an existing received quantity.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('duplicate stock', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertSame($balances, $this->transferBalances());
+    }
+
+    public function test_authority_new_receipt_details_are_bound_to_preview_and_failed_apply_rolls_back(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        $plan = $service->preview(1, 1, $input, 1);
+        $input['corrections'][0]['new_source']['cost'] = '91';
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->apply(1, 1, $input, 1, $plan['token']);
+            $this->fail('A changed receipt requires a new preview.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Preview the correction again', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_new_receipts_require_actual_dates_and_do_not_duplicate_a_source(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        foreach ([['serial' => 'VERIFIED-NEW', 'date' => '2026-09-02 11:00:00'],
+            ['serial' => 'INVOICE-LOT', 'date' => '2026-09-01 12:00:00']] as $details) {
+            $input['corrections'][0]['new_source'] = array_merge($input['corrections'][0]['new_source'], $details);
+            $before = $this->stockCorrectionSnapshot();
+            try {
+                $service->preview(1, 1, $input, 1);
+                $this->fail('A later or duplicate source receipt must not be created.');
+            } catch (PurchaseSellMismatch $exception) {
+                $this->assertSame($before, $this->stockCorrectionSnapshot());
+            }
+        }
+    }
+
+    public function test_authority_preview_and_apply_correct_a_deleted_selection_and_log_authority(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        $controller = $this->authorityController();
+        $input = ['corrections' => $corrections, 'evidence' => 'Authority correction using the verified delivery record.'];
+        $before = $this->stockCorrectionSnapshot();
+        $view = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $view->name());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $token = $view->getData()['plan']['token'];
+        $logData = null;
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andReturnUsing(function ($transfer, $action, $before, $details) use (&$logData) {
+            $logData = $details;
+        });
+        $this->app->instance(TransactionUtil::class, $util);
+        $response = $controller->apply($this->authorityRequest($input + ['token' => $token]), 1);
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertEquals(1, session('status.success'));
+        $this->assertEquals(1, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertSame('authority', $logData['mode']);
+        $this->assertEquals(1, $logData['authorized_by']);
+        $after = $this->stockCorrectionSnapshot();
+        $controller->apply($this->authorityRequest($input + ['token' => $token]), 1);
+        $this->assertEquals(0, session('status.success'));
+        $this->assertSame($after, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_rejects_staff_without_major_correction_permission(): void
+    {
+        $user = \Mockery::mock(User::class)->makePartial();
+        $user->shouldReceive('can')->andReturn(false);
+        $user->shouldReceive('getRoleNames')->andReturn(collect());
+        $this->actingAs($user);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->app->make(\Modules\SmartStockInventory\Http\Controllers\AuthorityController::class)
+            ->index($this->authorityRequest([]));
+    }
+
+    public function test_authority_rejects_a_transfer_from_another_business(): void
+    {
+        $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        Transaction::find(1)->update(['business_id' => 2]);
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $controller->index($this->authorityRequest(['transfer_id' => 1]));
+    }
+
+    public function test_authority_does_not_expose_a_foreign_serial_from_a_broken_allocation(): void
+    {
+        $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        DB::table('transactions')->insert(['id' => 4, 'business_id' => 2, 'type' => 'purchase', 'status' => 'received']);
+        DB::table('purchase_lines')->insert(['id' => 5, 'transaction_id' => 4, 'lot_number' => 'OTHER-BUSINESS-SERIAL']);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['purchase_line_id' => 5]);
+        $data = $controller->index($this->authorityRequest(['transfer_id' => 1]))->getData();
+        $this->assertNull($data['allocations']->get(1)->first()->lot_number);
+        $this->assertFalse(collect($data['lines'][0]['sources'])->contains('id', 5));
+    }
+
+    public function test_authority_requires_access_to_dependent_locations(): void
+    {
+        $this->manualCorrectionFixture();
+        $this->transferController();
+        auth()->user()->shouldReceive('permitted_locations')->with(1)->andReturn([12]);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->app->make(\Modules\SmartStockInventory\Http\Controllers\AuthorityController::class)
+            ->index($this->authorityRequest(['transfer_id' => 1]));
+    }
+
+    public function test_authority_rolls_back_corrections_if_audit_logging_fails(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        $input = ['corrections' => $corrections, 'evidence' => 'Authority correction using the verified delivery record.'];
+        $token = $controller->preview($this->authorityRequest($input), 1)->getData()['plan']['token'];
+        $before = $this->stockCorrectionSnapshot();
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->andThrow(new \RuntimeException('Audit unavailable'));
+        $this->app->instance(TransactionUtil::class, $util);
+        try {
+            $controller->apply($this->authorityRequest($input + ['token' => $token]), 1);
+            $this->fail('Audit failure must roll back authority changes.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Audit unavailable', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    private function transferProductRowRequest(int $purchaseLineId): Request
+    {
+        session()->put('user.business_id', 1);
+        session()->put('business', ['enable_lot_number' => 0, 'enable_product_expiry' => 0]);
+        $request = Request::create('/stock-adjustments/get_product_row', 'POST', [
+            'row_index' => 4, 'variation_id' => 2701, 'location_id' => 12,
+            'type' => 'stock_transfer', 'purchase_line_id' => $purchaseLineId,
+        ]);
+        $request->setLaravelSession($this->app['session.store']);
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $this->app->instance('request', $request);
+
+        return $request;
+    }
+
+    private function transferProductRowController(): \App\Http\Controllers\StockAdjustmentController
+    {
+        $util = \Mockery::mock(ProductUtil::class)->makePartial();
+        $util->shouldReceive('getDetailsFromVariation')->andReturnUsing(fn () => (object) [
+            'qty_available' => 3, 'unit_id' => 1, 'id' => 589,
+        ]);
+        $util->shouldReceive('getSubUnits')->andReturn([]);
+
+        return new \App\Http\Controllers\StockAdjustmentController($util,
+            $this->app->make(TransactionUtil::class), $this->app->make(ModuleUtil::class));
+    }
+
+    public function test_explicit_transfer_lot_is_available_on_the_row_when_lot_settings_are_disabled(): void
+    {
+        $view = $this->transferProductRowController()->getProductRow($this->transferProductRowRequest(2));
+        $product = $view->getData()['product'];
+        $this->assertEquals(2, $product->lot_no_line_id);
+        $this->assertTrue(collect($product->lot_numbers)->contains('purchase_line_id', 2));
+        $this->assertSame('stock_transfer.partials.product_table_row', $view->name());
+    }
+
+    public function test_explicit_transfer_lot_cannot_use_exhausted_pending_missing_or_other_location_receipts(): void
+    {
+        DB::table('transactions')->insert([
+            ['id' => 3, 'type' => 'purchase', 'status' => 'received', 'location_id' => 13],
+            ['id' => 4, 'type' => 'purchase', 'status' => 'pending', 'location_id' => 12],
+        ]);
+        DB::table('purchase_lines')->insert([
+            ['id' => 4, 'transaction_id' => 3, 'lot_number' => 'OTHER-LOCATION'],
+            ['id' => 5, 'transaction_id' => 4, 'lot_number' => 'PENDING'],
+        ]);
+        $controller = $this->transferProductRowController();
+        foreach ([1, 4, 5, 999] as $id) {
+            $response = $controller->getProductRow($this->transferProductRowRequest($id));
+            $this->assertSame(422, $response->getStatusCode());
+        }
+    }
+
+    public function test_transfer_lot_search_only_returns_received_source_batches_without_overselling(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        Schema::table('variations', function (Blueprint $table) {
+            $table->double('sell_price_inc_tax')->default(100);
+            $table->string('product_keywords')->nullable();
+        });
+        DB::table('transactions')->insert([
+            ['id' => 3, 'type' => 'purchase', 'status' => 'pending', 'business_id' => 1, 'location_id' => 12],
+            ['id' => 4, 'type' => 'purchase_return', 'status' => 'received', 'business_id' => 1, 'location_id' => 12],
+            ['id' => 5, 'type' => 'purchase', 'status' => 'received', 'business_id' => 2, 'location_id' => 12],
+        ]);
+        DB::table('purchase_lines')->insert([
+            ['id' => 4, 'transaction_id' => 3, 'lot_number' => 'PENDING-LOT'],
+            ['id' => 5, 'transaction_id' => 4, 'lot_number' => 'RETURN-LOT'],
+            ['id' => 6, 'transaction_id' => 5, 'lot_number' => 'FOREIGN-LOT'],
+        ]);
+        $request = $this->transferProductRowRequest(2);
+        $request->merge(['term' => 'LOT', 'search_fields' => ['lot'], 'group_by_purchase_line' => 1, 'stock_transfer' => 1]);
+        $util = \Mockery::mock(ProductUtil::class)->makePartial();
+        $util->shouldReceive('filterProduct')->andReturn(collect(), collect([(object) [
+            'variation_id' => 2701, 'name' => 'Serial phone', 'purchase_line_id' => 999, 'lot_number' => 'INCIDENTAL-LOT',
+        ]]));
+        $controller = new \App\Http\Controllers\ProductController($util, $this->app->make(ModuleUtil::class));
+        $rows = json_decode($controller->getProducts(), true);
+        $this->assertEquals([3, 2], array_column($rows, 'purchase_line_id'));
+        $this->assertTrue($rows[0]['is_lot_row']);
+        $request->merge(['term' => 'Serial phone']);
+        $rows = json_decode($controller->getProducts(), true);
+        $this->assertFalse($rows[0]['is_lot_row']);
+        $this->assertArrayNotHasKey('purchase_line_id', $rows[0]);
+        $this->assertArrayNotHasKey('lot_number', $rows[0]);
+    }
+
+    public function test_product_filter_lot_matches_exclude_pending_receipts_for_like_and_exact_searches(): void
+    {
+        $this->prepareProductStockDetailsSchema();
+        Schema::table('products', fn (Blueprint $table) => $table->boolean('is_inactive')->default(false));
+        Schema::create('product_locations', function (Blueprint $table) {
+            $table->integer('product_id');
+            $table->integer('location_id');
+        });
+        DB::table('product_locations')->insert(['product_id' => 589, 'location_id' => 12]);
+        DB::table('business_locations')->insert(['id' => 12, 'name' => 'Source']);
+        DB::table('transactions')->insert(['id' => 3, 'type' => 'purchase', 'status' => 'pending']);
+        DB::table('purchase_lines')->insert(['id' => 4, 'transaction_id' => 3, 'lot_number' => 'PENDING-ONLY']);
+        foreach (['like', 'exact'] as $searchType) {
+            $util = $this->app->make(ProductUtil::class);
+            $this->assertCount(0, $util->filterProduct(1, 'PENDING-ONLY', 12, null, null, [], ['lot'], false, $searchType));
+            $this->assertCount(1, $util->filterProduct(1, 'OTHER-LOT', 12, null, null, [], ['lot'], false, $searchType));
+        }
+    }
+
     private function stockCorrectionSnapshot(): string
     {
         return json_encode([DB::table('purchase_lines')->orderBy('id')->get(),
@@ -2316,6 +3343,26 @@ class LotSaleConsistencyTest extends TestCase
         $recommendation = $service->manualOptions(1, 1)[0]['recommendation'];
         $this->assertFalse($recommendation['prefill']);
         $this->assertSame([], $recommendation['candidates']);
+    }
+
+    public function test_correction_auto_complete_matches_a_deleted_selection_to_one_receiving_serial(): void
+    {
+        [$service, , $destinationId] = $this->manualCorrectionFixture();
+        PurchaseLine::find(2)->delete();
+        TransactionSellLine::find(1)->update(['lot_no_line_id' => 999]);
+        PurchaseLine::find($destinationId)->update(['lot_number' => 'INVOICE-LOT']);
+        // Two source batches with the same serial remain ambiguous.
+        $this->assertNull($service->manualOptions(1, 1)[0]['recommendation']['automatic_match']);
+        PurchaseLine::find(3)->update(['lot_number' => 'OTHER-AVAILABLE']);
+        $match = $service->manualOptions(1, 1)[0]['recommendation']['automatic_match'];
+        $this->assertSame(['source_id' => 1, 'destination_id' => $destinationId], $match);
+    }
+
+    public function test_correction_auto_complete_never_changes_a_future_receipt_date(): void
+    {
+        [$service] = $this->manualCorrectionFixture();
+        Transaction::find(2)->update(['transaction_date' => '2026-09-02 12:00:00']);
+        $this->assertNull($service->manualOptions(1, 1)[0]['recommendation']['automatic_match']);
     }
 
     public function test_recommendation_does_not_assign_one_receiving_batch_to_two_lines(): void
@@ -3093,7 +4140,7 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEquals(0, $this->preparedHistoryRows('sell')->first()->balance_qty);
     }
 
-    public function test_lot_history_ajax_returns_quantity_columns_and_excludes_pending_stock(): void
+    private function prepareLotHistoryAjaxSchema(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
             $table->integer('created_by')->nullable();
@@ -3128,6 +4175,19 @@ class LotSaleConsistencyTest extends TestCase
         });
         DB::connection()->getPdo()->sqliteCreateFunction('CONCAT', fn (...$values) => implode('', $values));
         DB::connection()->getPdo()->sqliteCreateFunction('IF', fn ($condition, $yes, $no) => $condition ? $yes : $no);
+        // Keep generated test views separate from the application's cached views.
+        $viewPath = sys_get_temp_dir().'/pos-lot-history-'.getmypid();
+        if (!is_dir($viewPath)) {
+            mkdir($viewPath, 0700, true);
+        }
+        config(['view.compiled' => $viewPath]);
+        $this->app->forgetInstance('blade.compiler');
+        $this->app['view.engine.resolver']->forget('blade');
+    }
+
+    public function test_lot_history_ajax_returns_quantity_columns_and_excludes_pending_stock(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
         DB::table('purchase_lines')->where('id', 3)->delete();
         DB::table('transaction_sell_lines_purchase_lines')->delete();
         DB::table('transaction_sell_lines')->delete();
@@ -3151,5 +4211,111 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertStringContainsString('+1.00', strip_tags($response['data'][0]['quantity_change']));
         $this->assertStringContainsString('data-orig-value="1"', $response['data'][0]['qty_in']);
         $this->assertStringContainsString('data-orig-value="1"', $response['data'][0]['balance_qty']);
+    }
+
+    private function lotHistoryResponse(string $lot, ?int $location = null): array
+    {
+        $request = Request::create('/smart-stock-inventory/lot/history/'.$lot, 'GET', [
+            'draw' => 1, 'start' => 0, 'length' => 100, 'location_id' => $location,
+        ]);
+        $request->setLaravelSession($this->app['session.store']);
+        $request->setUserResolver(fn () => auth()->user());
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $this->app->instance('request', $request);
+
+        return $this->app->make(LotController::class)->history($request, $lot)->getData(true);
+    }
+
+    private function historyTransferFixture(): array
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [$sell, $purchase] = $this->transferPair();
+        // Remove the unrelated receipt with the same lot label.
+        PurchaseLine::find(3)->delete();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $this->transferController();
+        auth()->user()->shouldReceive('permitted_locations')->andReturn('all');
+        session()->put('business', ['date_format' => 'Y-m-d', 'time_format' => 24, 'quantity_precision' => 2]);
+        session()->put('currency', ['decimal_separator' => '.', 'thousand_separator' => ',']);
+
+        return [$sell, $purchase];
+    }
+
+    public function test_lot_history_transfer_in_and_out_match_actual_receipts_at_each_location(): void
+    {
+        $this->historyTransferFixture();
+        foreach ([12 => 0, 13 => 1] as $location => $expected) {
+            $response = $this->lotHistoryResponse('INVOICE-LOT', $location);
+            $this->assertArrayNotHasKey('error', $response);
+            $this->assertEquals($expected, $response['current_stock']);
+            $this->assertStringContainsString('data-orig-value="'.$expected.'"', $response['data'][0]['balance_qty']);
+            $transfer = collect($response['data'])->firstWhere('movement_type_key', 'transfer');
+            $this->assertStringContainsString('data-orig-value="1"', $transfer[$location === 12 ? 'qty_out' : 'qty_in']);
+            $this->assertStringContainsString($location === 12 ? '-1.00' : '+1.00', strip_tags($transfer['quantity_change']));
+        }
+        $response = $this->lotHistoryResponse('INVOICE-LOT');
+        $this->assertEquals(1, $response['current_stock']);
+        $this->assertStringContainsString('data-orig-value="1"', $response['data'][0]['balance_qty']);
+        $this->assertCount(2, collect($response['data'])->where('movement_type_key', 'transfer'));
+    }
+
+    public function test_lot_history_does_not_invent_incoming_stock_for_a_different_receiving_lot(): void
+    {
+        [, $purchase] = $this->historyTransferFixture();
+        $purchase->purchase_lines()->update(['lot_number' => 'ACTUAL-RECEIVED', 'quantity' => 2]);
+        $sourceLot = $this->lotHistoryResponse('INVOICE-LOT', 13);
+        $this->assertEquals(0, $sourceLot['current_stock']);
+        $this->assertCount(0, $sourceLot['data']);
+        $actualLot = $this->lotHistoryResponse('ACTUAL-RECEIVED', 13);
+        $this->assertEquals(2, $actualLot['current_stock']);
+        $this->assertCount(1, $actualLot['data']);
+        $this->assertStringContainsString('data-orig-value="2"', $actualLot['data'][0]['qty_in']);
+        $this->assertStringContainsString('data-orig-value="2"', $actualLot['data'][0]['balance_qty']);
+        $this->assertStringContainsString('+2.00', strip_tags($actualLot['data'][0]['quantity_change']));
+    }
+
+    public function test_lot_history_pending_transfer_receipt_adds_no_stock(): void
+    {
+        [, $purchase] = $this->historyTransferFixture();
+        $purchase->fresh()->update(['status' => 'pending']);
+        $destination = $this->lotHistoryResponse('INVOICE-LOT', 13);
+        $this->assertEquals(0, $destination['current_stock']);
+        $this->assertCount(0, $destination['data']);
+        $global = $this->lotHistoryResponse('INVOICE-LOT');
+        $this->assertEquals(0, $global['current_stock']);
+        $this->assertStringContainsString('data-orig-value="0"', $global['data'][0]['balance_qty']);
+    }
+
+    public function test_lot_history_returned_transfer_quantities_agree_with_lot_balances(): void
+    {
+        [, $purchase] = $this->historyTransferFixture();
+        PurchaseLine::find(1)->update(['quantity' => 3]);
+        TransactionSellLine::find(1)->update(['quantity' => 2, 'quantity_returned' => 1]);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['quantity' => 2, 'qty_returned' => 1]);
+        $purchase->purchase_lines()->update(['quantity' => 2, 'quantity_returned' => 1]);
+        foreach ([12 => 2, 13 => 1] as $location => $expected) {
+            $response = $this->lotHistoryResponse('INVOICE-LOT', $location);
+            $this->assertEquals($expected, $response['current_stock']);
+            $this->assertStringContainsString('data-orig-value="'.$expected.'"', $response['data'][0]['balance_qty']);
+        }
+    }
+
+    public function test_lot_picker_excludes_pending_and_non_receipt_transactions(): void
+    {
+        DB::table('transactions')->insert([
+            ['id' => 3, 'type' => 'purchase_transfer', 'status' => 'pending'],
+            ['id' => 4, 'type' => 'purchase_return', 'status' => 'received'],
+        ]);
+        DB::table('purchase_lines')->insert([
+            ['id' => 4, 'transaction_id' => 3, 'lot_number' => 'PENDING'],
+            ['id' => 5, 'transaction_id' => 4, 'lot_number' => 'RETURN'],
+        ]);
+        $util = $this->app->make(TransactionUtil::class);
+        foreach ([false, true] as $excludeEmpty) {
+            $ids = $util->getLotNumbersFromVariation(2701, 1, 12, $excludeEmpty)->pluck('purchase_line_id')->all();
+            $this->assertNotContains(4, $ids);
+            $this->assertNotContains(5, $ids);
+            $this->assertContains(2, $ids);
+        }
     }
 }

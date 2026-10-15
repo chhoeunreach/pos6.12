@@ -70,6 +70,38 @@ function editor(lineId = null, withDatePicker = false, linkedLine = null, change
     return {dom, $, calls, row, datePicker};
 }
 
+test('auto complete fills a supported missing selection and verifies a preview without saving stock', () => {
+    const {dom, $, calls, row} = editor(1, false, null, lines => {
+        lines[0].selected_serial = null;
+        lines[0].recommendation.automatic_match = {source_id: 2, destination_id: 9};
+    });
+    assert.equal(row(1).find('.manual-source').val(), '2');
+    assert.equal(row(1).find('.manual-destination').val(), '9');
+    $('#auto_complete_manual_stock_correction').trigger('click');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].options.url, '/preview');
+    assert.equal(calls[1].options.data.verified, 1);
+    assert.match(calls[1].options.data.evidence, /source batch #2.*receiving batch #9/);
+    assert.equal(calls[1].options.data.transaction_date, undefined);
+    calls[1].deferred.resolve({plan: {transfer_id: 1, token: 'a'.repeat(64), changes: [], counter_repairs: []}});
+    assert.equal($('#apply_manual_stock_correction').prop('disabled'), false);
+    assert.equal(calls.length, 2);
+    dom.window.close();
+});
+
+test('auto complete leaves unresolved selections blocked and never guesses a source', () => {
+    const {dom, $, calls, row} = editor(1, false, null, lines => {
+        lines[0].sources = [];
+        lines[0].recommendation.candidates = [];
+    });
+    $('#auto_complete_manual_stock_correction').trigger('click');
+    assert.equal(row(1).find('.manual-source').val(), '');
+    assert.equal(calls.length, 1);
+    assert.match($('#manual_stock_correction_error').text(), /select both/i);
+    assert.equal($('#apply_manual_stock_correction').prop('disabled'), true);
+    dom.window.close();
+});
+
 test('stock mismatch shows the system balance calculation without treating history as available stock', () => {
     const {dom, $} = editor();
     $('body').append(fs.readFileSync(path.join(root, 'resources/views/stock_transfer/partials/stock_error_modal.blade.php'), 'utf8'));

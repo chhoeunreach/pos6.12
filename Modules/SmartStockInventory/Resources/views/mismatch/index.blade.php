@@ -21,7 +21,17 @@
 </div>
 </div>
 <div class="box box-danger">
-<div class="box-header"><h3 class="box-title">Stock mismatches ({{ count($rows) }})</h3><p class="help-block">{{ $stock_error_mode ? 'Review stock, lot, serial and allocation errors. Fix applies the calculated quantity correction immediately. Correct record opens lot or serial records that need separate correction.' : 'Shows the same quantity mismatches as Product Stock Details for your permitted locations. Click Fix to apply the calculated stock quantity immediately.' }}</p></div>
+<div class="box-header">
+    <h3 class="box-title">Stock mismatches ({{ count($rows) }})</h3>
+    <div class="box-tools pull-right">
+        @if(auth()->user()->can('stock_inventory.authority') || auth()->user()->can('superadmin') || stripos((string)(auth()->user()->roles->pluck('name')->implode(' ')), 'admin') !== false)
+            <a href="{{ ssi_route('ssi.authority.index') }}" class="btn btn-warning btn-sm">
+                <i class="fa fa-shield"></i> Open Authority Mismatch Fix
+            </a>
+        @endif
+    </div>
+    <p class="help-block">{{ $stock_error_mode ? 'Review stock, lot, serial and allocation errors. Fix applies the calculated quantity correction immediately. Correct record opens lot or serial records that need separate correction.' : 'Shows the same quantity mismatches as Product Stock Details for your permitted locations. Click Fix to apply the calculated stock quantity immediately.' }}</p>
+</div>
 <div id="transfer_fix_result" role="status" aria-live="polite"></div>
 <div class="box-body table-responsive">
 <table class="table table-bordered table-striped datatable" id="ssi_mismatch_table">
@@ -39,6 +49,9 @@
     </form>
     @endcan
     <a class="btn btn-xs btn-default" href="{{ $row['url'] }}">Verified correction</a>
+    @if(auth()->user()->can('stock_inventory.authority') || auth()->user()->can('superadmin') || stripos((string)(auth()->user()->roles->pluck('name')->implode(' ')), 'admin') !== false)
+        <a class="btn btn-xs btn-default" href="{{ $row['authority_url'] ?? ssi_route('ssi.authority.index') }}">Authority</a>
+    @endif
 @elseif(!empty($row['completion_url']))
     @can('stock_transfer.update')
     <button type="button" class="btn btn-sm btn-primary retry-transfer-fix" data-url="{{ $row['completion_url'] }}">Complete transfer</button>

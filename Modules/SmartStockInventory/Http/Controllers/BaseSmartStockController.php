@@ -26,9 +26,45 @@ abstract class BaseSmartStockController extends Controller
         return [$start->startOfDay(), $end->endOfDay()];
     }
 
+    protected function currentUser()
+    {
+        return request()->user() ?? auth()->user();
+    }
+
+    protected function isSuperAdminOrAdmin($user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+        try {
+            if ($user->can('superadmin')) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            if (method_exists($user, 'getRoleNames')) {
+                foreach ($user->getRoleNames() as $roleName) {
+                    if (stripos((string) $roleName, 'admin') !== false) {
+                        return true;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return false;
+    }
+
     protected function permittedLocationIds(int $businessId): array
     {
-        $permitted = auth()->user()->permitted_locations($businessId);
+        $user = $this->currentUser();
+        if ($this->isSuperAdminOrAdmin($user)) {
+            return DB::table('business_locations')->where('business_id', $businessId)->pluck('id')->all();
+        }
+
+        $permitted = $user && method_exists($user, 'permitted_locations') ? $user->permitted_locations($businessId) : 'all';
         if ($permitted === 'all') {
             return DB::table('business_locations')->where('business_id', $businessId)->pluck('id')->all();
         }

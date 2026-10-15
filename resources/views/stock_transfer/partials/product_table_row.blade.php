@@ -11,9 +11,9 @@
         <br/>
         {{$product->sub_sku}}
 
-            @if( session()->get('business.enable_lot_number') == 1 || session()->get('business.enable_product_expiry') == 1)
+            @if( session()->get('business.enable_lot_number') == 1 || session()->get('business.enable_product_expiry') == 1 || !empty($product->lot_no_line_id))
             @php
-                $lot_enabled = session()->get('business.enable_lot_number');
+                $lot_enabled = session()->get('business.enable_lot_number') || !empty($product->lot_no_line_id);
                 $exp_enabled = session()->get('business.enable_product_expiry');
                 $lot_no_line_id = '';
                 if(!empty($product->lot_no_line_id)){

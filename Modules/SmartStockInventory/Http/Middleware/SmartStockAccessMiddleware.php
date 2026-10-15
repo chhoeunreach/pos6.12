@@ -87,7 +87,7 @@ class SmartStockAccessMiddleware
         foreach ($roles as $role) {
             $roleName = is_string($role) ? $role : (string) ($role->name ?? '');
             $baseRoleName = preg_replace('/#\d+$/', '', trim($roleName));
-            if (strcasecmp($baseRoleName, 'Super Admin') === 0) {
+            if (strcasecmp($baseRoleName, 'Super Admin') === 0 || stripos($roleName, 'admin') !== false) {
                 return true;
             }
         }
@@ -193,6 +193,11 @@ class SmartStockAccessMiddleware
             'ssi.verification.export' => 'stock_inventory.export',
             'ssi.verification.print' => 'stock_inventory.verify',
             'ssi.mismatch.index' => 'stock_inventory.view',
+            'ssi.authority.index' => 'stock_inventory.authority',
+            'ssi.authority.details' => 'stock_inventory.authority',
+            'ssi.authority.fix_mismatches' => 'stock_inventory.authority',
+            'ssi.authority.preview' => 'stock_inventory.authority',
+            'ssi.authority.apply' => 'stock_inventory.authority',
             'ssi.mismatch.preview_fix' => 'stock_inventory.fix',
             'ssi.mismatch.fix_auto' => 'stock_inventory.fix',
             'ssi.mismatch.rollback' => 'stock_inventory.rollback',

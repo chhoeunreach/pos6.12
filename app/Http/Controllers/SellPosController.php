@@ -2042,6 +2042,16 @@ class SellPosController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+    protected function posUpdateErrorResponse(\Exception $exception): array
+    {
+        if ($exception instanceof \App\Exceptions\PurchaseSellMismatch) {
+            return $exception->responseData();
+        }
+
+        return ['success' => 0, 'msg' => $exception instanceof \App\Exceptions\AdvanceBalanceNotAvailable
+            ? $exception->getMessage() : __('messages.something_went_wrong')];
+    }
+
     public function update(Request $request, $id)
     {
         if (!auth()->user()->can('sell.update') && !auth()->user()->can('direct_sell.access') &&
@@ -2374,6 +2384,7 @@ class SellPosController extends Controller
                         'location_id' => $input['location_id'],
                         'pos_settings' => $pos_settings,
                     ];
+                    $business['repair_sale_lot_counters'] = true;
                     $this->transactionUtil->adjustMappingPurchaseSell($status_before, $transaction, $business, $deleted_lines);
 
                     //Auto send notification
@@ -2453,10 +2464,8 @@ class SellPosController extends Controller
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
-            \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
-            $output = ['success' => 0,
-                'msg' => __('messages.something_went_wrong'),
-            ];
+            \Log::emergency('POS sale update failed', ['transaction_id' => (int) $id, 'business_id' => $business_id ?? null, 'exception' => $e]);
+            $output = $this->posUpdateErrorResponse($e);
         }
 
         if (!$is_direct_sale) {

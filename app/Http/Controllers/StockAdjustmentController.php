@@ -801,12 +801,19 @@ class StockAdjustmentController extends Controller
 
             //Get lot number dropdown if enabled
             $lot_numbers = [];
-            if (request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
+            $selected_lot_id = $type === 'stock_transfer' ? (int) $request->input('purchase_line_id', 0) : 0;
+            if ($selected_lot_id || request()->session()->get('business.enable_lot_number') == 1 || request()->session()->get('business.enable_product_expiry') == 1) {
                 $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($variation_id, $business_id, $location_id, ! $allow_overselling, $allow_overselling);
                 foreach ($lot_number_obj as $lot_number) {
                     $lot_number->qty_formated = $this->productUtil->num_f($lot_number->qty_available);
                     $lot_numbers[] = $lot_number;
                 }
+            }
+            if ($selected_lot_id) {
+                if (! collect($lot_numbers)->contains('purchase_line_id', $selected_lot_id)) {
+                    return response()->json(['msg' => 'The selected lot is no longer available at the source location. Search for the lot again.'], 422);
+                }
+                $product->lot_no_line_id = $selected_lot_id;
             }
             $product->lot_numbers = $lot_numbers;
 

@@ -1246,7 +1246,17 @@ class ProductUtil extends Util
             $old_qty = 0;
             //update existing purchase line
             if (isset($data['purchase_line_id'])) {
-                $purchase_line = PurchaseLine::findOrFail($data['purchase_line_id']);
+                $purchase_line = PurchaseLine::where('transaction_id', $transaction->id)
+                    ->lockForUpdate()->findOrFail($data['purchase_line_id']);
+                $newLot = array_key_exists('lot_number', $data)
+                    ? (! empty($data['lot_number']) ? (string) $data['lot_number'] : '')
+                    : (string) $purchase_line->lot_number;
+                if ((string) $purchase_line->lot_number !== $newLot
+                    && ($purchase_line->quantity_used > 0
+                        || TransactionSellLine::where('lot_no_line_id', $purchase_line->id)->exists()
+                        || TransactionSellLinesPurchaseLines::where('purchase_line_id', $purchase_line->id)->exists())) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('This lot or serial is already used or referenced by a stock movement. Use verified serial correction instead of renaming its receipt.');
+                }
                 $updated_purchase_line_ids[] = $purchase_line->id;
                 $old_qty = $purchase_line->quantity;
 
@@ -1270,7 +1280,9 @@ class ProductUtil extends Util
             $purchase_line->purchase_price_inc_tax = ($this->num_uf($data['purchase_price_inc_tax'], $currency_details) * $exchange_rate) / $multiplier;
             $purchase_line->item_tax = ($this->num_uf($data['item_tax'], $currency_details) * $exchange_rate) / $multiplier;
             $purchase_line->tax_id = ! empty($data['purchase_line_tax_id']) ? $data['purchase_line_tax_id'] : null;
-            $purchase_line->lot_number = ! empty($data['lot_number']) ? $data['lot_number'] : null;
+            if (array_key_exists('lot_number', $data)) {
+                $purchase_line->lot_number = ! empty($data['lot_number']) ? $data['lot_number'] : null;
+            }
             $purchase_line->mfg_date = ! empty($data['mfg_date']) ? $this->uf_date($data['mfg_date']) : null;
             $purchase_line->exp_date = ! empty($data['exp_date']) ? $this->uf_date($data['exp_date']) : null;
             $purchase_line->sub_unit_id = ! empty($data['sub_unit_id']) ? $data['sub_unit_id'] : null;
@@ -1708,7 +1720,7 @@ class ProductUtil extends Util
 
             //Search with like condition
             if ($search_type == 'like') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
+                $query->where(function ($query) use ($business_id, $search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', 'like', '%'.$search_term.'%');
                     }
@@ -1722,8 +1734,10 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere(function ($query) use ($search_term, $location_id, $lotQtyAvailableSql) {
+                        $query->orWhere(function ($query) use ($business_id, $search_term, $location_id, $lotQtyAvailableSql) {
                             $query->where('pl.lot_number', 'like', '%'.$search_term.'%')
+                                ->where('plt.business_id', $business_id)->where('plt.status', 'received')
+                                ->whereIn('plt.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
                                 ->whereRaw($lotQtyAvailableSql.' > 0');
 
                             if (! empty($location_id)) {
@@ -1753,7 +1767,7 @@ class ProductUtil extends Util
 
             //Search with exact condition
             if ($search_type == 'exact') {
-                $query->where(function ($query) use ($search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
+                $query->where(function ($query) use ($business_id, $search_term, $search_fields, $location_id, $hasProductKeywords, $lotQtyAvailableSql) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', $search_term);
                     }
@@ -1767,8 +1781,10 @@ class ProductUtil extends Util
                     }
 
                     if (in_array('lot', $search_fields)) {
-                        $query->orWhere(function ($query) use ($search_term, $location_id, $lotQtyAvailableSql) {
+                        $query->orWhere(function ($query) use ($business_id, $search_term, $location_id, $lotQtyAvailableSql) {
                             $query->where('pl.lot_number', $search_term)
+                                ->where('plt.business_id', $business_id)->where('plt.status', 'received')
+                                ->whereIn('plt.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
                                 ->whereRaw($lotQtyAvailableSql.' > 0');
 
                             if (! empty($location_id)) {

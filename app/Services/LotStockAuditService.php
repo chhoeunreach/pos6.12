@@ -165,11 +165,11 @@ class LotStockAuditService
         $issues = [];
         foreach ($sources as $id => $lines) {
             $received = $receipts->get($id, collect());
-            foreach ($lines->groupBy(fn ($line) => json_encode([$line->product_id, $line->variation_id, $line->lot_number])) as $serialLines) {
+            foreach ($lines->groupBy(fn ($line) => json_encode([$line->product_id, $line->variation_id, (string) $line->lot_number])) as $serialLines) {
                 $line = $serialLines->first();
                 $quantity = (float) $serialLines->sum('quantity');
                 $matching = $received->filter(fn ($row) => (int) $row->product_id === (int) $line->product_id
-                    && (int) $row->variation_id === (int) $line->variation_id && $row->lot_number === $line->lot_number);
+                    && (int) $row->variation_id === (int) $line->variation_id && (string) $row->lot_number === (string) $line->lot_number);
                 if (abs($quantity - (float) $matching->sum('quantity')) > 0.0001) {
                     $issues[] = [
                         'transaction_id' => (int) $id, 'ref_no' => $line->ref_no, 'selected_serial' => $line->lot_number,

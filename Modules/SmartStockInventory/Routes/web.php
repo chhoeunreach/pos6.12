@@ -57,6 +57,11 @@ Route::middleware([
     Route::post('/verification/recount/{session}', ['\Modules\SmartStockInventory\Http\Controllers\VerificationController', 'recount'])->name('ssi.verification.recount');
     Route::get('/verification/export', ['\Modules\SmartStockInventory\Http\Controllers\VerificationController', 'export'])->name('ssi.verification.export');
     Route::get('/verification/print', ['\Modules\SmartStockInventory\Http\Controllers\VerificationController', 'print'])->name('ssi.verification.print');
+    Route::get('/authority', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'index'])->name('ssi.authority.index');
+    Route::get('/authority/details', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'details'])->name('ssi.authority.details');
+    Route::post('/authority/fix-mismatches', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'fixMismatches'])->name('ssi.authority.fix_mismatches');
+    Route::post('/authority/{id}/preview', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'preview'])->whereNumber('id')->name('ssi.authority.preview');
+    Route::post('/authority/{id}/apply', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'apply'])->whereNumber('id')->name('ssi.authority.apply');
     Route::get('/mismatch', ['\Modules\SmartStockInventory\Http\Controllers\MismatchController', 'index'])->name('ssi.mismatch.index');
     Route::post('/mismatch/preview-fix', ['\Modules\SmartStockInventory\Http\Controllers\MismatchController', 'previewFix'])->name('ssi.mismatch.preview_fix');
     Route::post('/mismatch/fix-auto', ['\Modules\SmartStockInventory\Http\Controllers\MismatchController', 'fixAuto'])->name('ssi.mismatch.fix_auto');

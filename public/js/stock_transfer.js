@@ -87,10 +87,10 @@ $(document).ready(function() {
                     if (ui.item.qty_available > 0 || stock_transfer_allows_overselling()) {
                         $(this).val(null);
                         stock_transfer_product_row(ui.item.variation_id, function($row) {
-                            if ($row.length && ui.item.purchase_line_id) {
+                            if ($row.length && ui.item.is_lot_row && ui.item.purchase_line_id) {
                                 stock_transfer_select_lot($row, ui.item.purchase_line_id);
                             }
-                        });
+                        }, ui.item.is_lot_row ? ui.item.purchase_line_id : null);
                         // Keep focus for continuous scanning
                         setTimeout(function() {
                             $('#search_product_for_srock_adjustment').focus();
@@ -116,7 +116,7 @@ $(document).ready(function() {
                     string += '-' + item.variation;
                 }
                 string += ' (' + item.sub_sku + ') </div>';
-                if (item.lot_number) {
+                if (item.is_lot_row && item.lot_number) {
                     string += '<small class="text-muted">Lot: ' + item.lot_number + '</small>';
                 }
                 return $('<li>')
@@ -615,7 +615,7 @@ $(document).ready(function() {
     });
 });
 
-function stock_transfer_product_row(variation_id, on_success) {
+function stock_transfer_product_row(variation_id, on_success, purchase_line_id) {
     var row_index = parseInt($('#product_row_index').val(), 10) || 0;
     // Reserve names before sending: barcode scans can have several requests in flight.
     $('#product_row_index').val(row_index + 1);
@@ -624,7 +624,7 @@ function stock_transfer_product_row(variation_id, on_success) {
     $.ajax({
         method: 'POST',
         url: '/stock-adjustments/get_product_row',
-        data: { row_index: row_index, variation_id: variation_id, location_id: location_id, type: 'stock_transfer' },
+        data: { row_index: row_index, variation_id: variation_id, location_id: location_id, type: 'stock_transfer', purchase_line_id: purchase_line_id || null },
         dataType: 'html',
         success: function(result) {
             if (location_version !== stock_transfer_location_version || location_id !== $('select#location_id').val()) {
@@ -638,12 +638,12 @@ function stock_transfer_product_row(variation_id, on_success) {
                 on_success($row);
             }
         },
-        error: function() {
+        error: function(xhr) {
             if (location_version !== stock_transfer_location_version || location_id !== $('select#location_id').val()) {
                 return;
             }
             if (typeof toastr !== 'undefined') {
-                toastr.warning(LANG.no_products_found);
+                toastr.warning((xhr && xhr.responseJSON && xhr.responseJSON.msg) || LANG.no_products_found);
             }
             if (typeof on_success === 'function') {
                 on_success($());
