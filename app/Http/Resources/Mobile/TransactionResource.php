@@ -11,6 +11,7 @@ class TransactionResource extends JsonResource
         $data = [
             'id' => $this->id,
             'type' => $this->type,
+            'return_parent_id' => $this->return_parent_id,
             'status' => $this->status,
             'sub_status' => $this->sub_status,
             'invoice_no' => $this->invoice_no,

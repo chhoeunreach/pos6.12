@@ -279,20 +279,132 @@ class AuthorityController extends BaseSmartStockController
         return $result;
     }
 
-    public function fixMismatches(Request $request, \App\Services\StockAuthorityReconciliationService $service)
+    private function authorizeFullRepair(Request $request): void
     {
         $this->authorizeAuthority($request);
-        $request->validate(['reason' => 'nullable|string|max:500']);
-        $reason = $request->input('reason') ?: 'Stock Inventory Authority Full Mismatch Fix & Data Regeneration';
+        $user = $request->user() ?? auth()->user();
+        abort_unless($user && ($user->can('superadmin')
+            || ((int) $user->business_id === $this->businessId() && $this->util->is_admin($user, $this->businessId()))),
+            403, 'Full business repair requires a business administrator.');
+    }
 
-        $result = $service->reconcileAll($this->businessId(), $reason, $request->user()->id, $request->ip());
+    public function previewFullFix(Request $request, \App\Services\StockAuthorityReconciliationService $service)
+    {
+        $this->authorizeFullRepair($request);
+        $input = $request->validate(['reason' => 'required|string|min:10|max:500']);
+        try {
+            $plan = $service->previewAll($this->businessId(), $request->user()->id, $input['reason']);
+            $links = app(\App\Services\AuthorityFullRepairService::class)->unresolvedActionLinks($this->businessId(), $plan['unresolved'] ?? []);
 
-        return redirect(ssi_route('ssi.authority.index'))
-            ->with('status', [
-                'success' => 1,
-                'msg' => $result['message'],
-                'authority_result' => $result,
+            return view('smartstockinventory::authority.full_preview', compact('plan', 'links'));
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.index'))->with('status', $exception->responseData());
+        }
+    }
+
+    public function fixMismatches(Request $request, \App\Services\StockAuthorityReconciliationService $service)
+    {
+        $this->authorizeFullRepair($request);
+        $input = $request->validate(['reason' => 'required|string|min:10|max:500',
+            'token' => 'required|string|size:64', 'confirmed' => 'required|accepted']);
+        try {
+            $result = $service->reconcileAll($this->businessId(), $input['reason'], $request->user()->id,
+                $request->ip(), $input['token']);
+            return redirect(ssi_route('ssi.authority.index'))->with('status', [
+                'success' => 1, 'msg' => $result['message'],
             ]);
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.index'))->with('status', $exception->responseData());
+        }
+    }
+
+    public function previewForceFix(Request $request)
+    {
+        $this->authorizeFullRepair($request);
+        $input = $request->validate(['reason' => 'required|string|min:10|max:500']);
+        try {
+            $plan = app(\App\Services\AuthorityForceRepairService::class)->preview($this->businessId(), $request->user()->id, $input['reason']);
+            $links = app(\App\Services\AuthorityFullRepairService::class)
+                ->unresolvedActionLinks($this->businessId(), $plan['reconciliation']['unresolved'] ?? []);
+
+            return view('smartstockinventory::authority.force_preview', compact('plan', 'links'));
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.index'))->with('status', $exception->responseData());
+        }
+    }
+
+    public function applyForceFix(Request $request)
+    {
+        $this->authorizeFullRepair($request);
+        $input = $request->validate(['reason' => 'required|string|min:10|max:500',
+            'token' => 'required|string|size:64', 'confirmed' => 'required|accepted']);
+        try {
+            $result = app(\App\Services\AuthorityForceRepairService::class)->apply($this->businessId(), $request->user()->id,
+                $input['reason'], $input['token'], $request->ip());
+            return redirect(ssi_route('ssi.authority.index'))->with('status', [
+                'success' => 1, 'msg' => $result['message'],
+            ]);
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.index'))->with('status', $exception->responseData());
+        }
+    }
+
+    public function recovery(Request $request, int $id)
+    {
+        $this->authorizeFullRepair($request);
+        $transfer = $this->transfer($id);
+        $receipt = Transaction::where('business_id', $this->businessId())->where('type', 'purchase_transfer')
+            ->where('transfer_parent_id', $id)->firstOrFail();
+        $outgoing = DB::table('transaction_sell_lines as s')->join('variations as v', 'v.id', '=', 's.variation_id')
+            ->where('s.transaction_id', $id)->select('s.variation_id', 'v.sub_sku', DB::raw('SUM(s.quantity) as quantity'))
+            ->groupBy('s.variation_id', 'v.sub_sku')->get();
+        $incoming = DB::table('purchase_lines')->where('transaction_id', $receipt->id)
+            ->select('variation_id', DB::raw('SUM(quantity) as quantity'))->groupBy('variation_id')->get()->keyBy('variation_id');
+        return view('smartstockinventory::authority.recovery', compact('transfer', 'receipt', 'outgoing', 'incoming'));
+    }
+
+    public function previewRecovery(Request $request, int $id)
+    {
+        $this->authorizeFullRepair($request);
+        $transfer = $this->transfer($id);
+        $input = $request->validate(['backup' => 'required|file|max:204800', 'reason' => 'required|string|min:10|max:500',
+            'verified' => 'required|accepted']);
+        $receipt = Transaction::where('business_id', $this->businessId())->where('type', 'purchase_transfer')
+            ->where('transfer_parent_id', $id)->firstOrFail();
+        try {
+            $backup = app(\App\Services\AuthorityReceiptBackupReader::class)->read($request->file('backup')->getRealPath(), $id, $receipt->id);
+            $plan = app(\App\Services\AuthorityTransferRecoveryService::class)->preview($this->businessId(), $id, $request->user()->id, $input['reason'], $backup);
+            $payload = \Illuminate\Support\Facades\Crypt::encryptString(json_encode([
+                'business_id' => $this->businessId(), 'user_id' => $request->user()->id, 'transfer_id' => $id,
+                'reason' => $input['reason'], 'backup' => $backup,
+            ], JSON_THROW_ON_ERROR));
+            return view('smartstockinventory::authority.recovery_preview', compact('transfer', 'plan', 'payload'));
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.recovery', ['id' => $id]))->withInput($request->except('backup'))
+                ->with('status', $exception->responseData());
+        }
+    }
+
+    public function applyRecovery(Request $request, int $id)
+    {
+        $this->authorizeFullRepair($request);
+        $this->transfer($id);
+        $input = $request->validate(['payload' => 'required|string|max:8000000', 'token' => 'required|string|size:64',
+            'confirmed' => 'required|accepted']);
+        try {
+            $data = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($input['payload']), true, 512, JSON_THROW_ON_ERROR);
+            abort_unless((int) $data['business_id'] === $this->businessId() && (int) $data['transfer_id'] === $id
+                && (int) $data['user_id'] === (int) $request->user()->id, 403);
+            $result = app(\App\Services\AuthorityTransferRecoveryService::class)->apply($this->businessId(), $id,
+                $request->user()->id, $data['reason'], $data['backup'], $input['token'], $request->ip());
+            return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))
+                ->with('status', ['success' => 1, 'msg' => $result['message']]);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException | \JsonException $exception) {
+            return redirect(ssi_route('ssi.authority.recovery', ['id' => $id]))
+                ->with('status', ['success' => 0, 'msg' => 'The recovery preview is invalid. Upload the original backup and preview again.']);
+        } catch (PurchaseSellMismatch $exception) {
+            return redirect(ssi_route('ssi.authority.recovery', ['id' => $id]))->with('status', $exception->responseData());
+        }
     }
 
     private function correctionInput(Request $request): array
@@ -301,6 +413,10 @@ class AuthorityController extends BaseSmartStockController
         $request->merge(['corrections' => collect($request->input('corrections'))->filter(fn ($row) => is_array($row)
             && (! empty($row['source_id']) || ! empty($row['destination_id'])))->values()->all()]);
 
+        $request->validate(['change_transaction_date' => 'sometimes|boolean']);
+        if ($request->has('change_transaction_date') && !$request->boolean('change_transaction_date')) {
+            $request->merge(['transaction_date' => null, 'date_basis' => null]);
+        }
         $input = $request->validate([
             'corrections' => 'required|array|min:1|max:200',
             'corrections.*.sell_line_id' => 'required|integer|min:1|distinct',
@@ -313,7 +429,8 @@ class AuthorityController extends BaseSmartStockController
             'corrections.*.new_source.date' => 'required_if:corrections.*.source_id,new|nullable|date_format:Y-m-d H:i:s',
             'corrections.*.new_source.cost' => 'required_if:corrections.*.source_id,new|nullable|numeric|min:0|max:1000000000',
             'evidence' => 'required|string|min:10|max:2000',
-            'transaction_date' => 'nullable|date_format:Y-m-d H:i:s',
+            'change_transaction_date' => 'sometimes|boolean',
+            'transaction_date' => 'required_if:change_transaction_date,1|nullable|date_format:Y-m-d H:i:s',
             'date_basis' => 'nullable|in:receipt_dates,recorded_receiving_date',
         ]);
         $input['transaction_date'] = ($input['transaction_date'] ?? null) ?: null;

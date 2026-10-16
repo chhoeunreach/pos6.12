@@ -448,7 +448,7 @@ class StockTransferReconciliationService
                 || (float) $row->quantity_returned > 0 || (float) $row->mfg_quantity_used > 0)
             || DB::table('transaction_sell_lines')->whereIn('lot_no_line_id', $receivingBatches->pluck('id'))->exists()
             || DB::table('transaction_sell_lines_purchase_lines')->whereIn('purchase_line_id', $receivingBatches->pluck('id'))->exists())) {
-            throw new PurchaseSellMismatch('Transfer dates cannot change while receiving batches are used or referenced. Reconcile dependent movements first.',
+            throw new PurchaseSellMismatch('Transfer dates cannot change while receiving batches are used or referenced. Keep recorded dates for an allocation-only repair, or reconcile dependent movements before changing dates.',
                 $this->dateDependencyDetails($businessId, $transfer, $receivingBatches));
         }
         $lines = DB::table('transaction_sell_lines')->where('transaction_id', $transferId)->orderBy('id')->lockForUpdate()->get();
@@ -597,11 +597,22 @@ class StockTransferReconciliationService
             }
         }
         $relatedRepairs = ['changes' => [], 'source_ids' => [], 'preserved_source_ids' => [], 'blockers' => []];
+        $receivingReconcile = ['transfers' => [], 'updated' => 0, 'inserted' => 0, 'deleted' => 0];
         if ($repairRelatedAllocations) {
             $relatedRepairs = $this->repairRelatedSelectedAllocations($businessId, $related, $relatedMappings,
                 $changedLines->pluck('id')->all(), $beforeReport, $allowExistingShortageRepair, $allowBlankSerial);
             $sourceIds = $sourceIds->merge($relatedRepairs['source_ids'])->unique()->sort()->values();
             $ids = $ids->merge($relatedRepairs['source_ids'])->unique()->sort()->values();
+            // With overselling the related lines were re-pointed to their recorded selected serials
+            // above. Rebuild any transfer receiving that still does not corroborate those serials so
+            // the correction finishes automatically instead of deferring the mismatch to manual review.
+            if ($allowOverselling) {
+                $reconcileIds = collect($beforeReport['transfer_issues'])->pluck('transaction_id')
+                    ->map(fn ($value) => (int) $value)->unique()->values()->all();
+                if ($reconcileIds) {
+                    $receivingReconcile = app(\App\Services\AuthorityForceRepairService::class)->reconcileReceivingForTransfers($businessId, $reconcileIds);
+                }
+            }
         }
         $report = $this->audit->audit($businessId, null, null, $relatedTransactionIds);
         foreach ($report['sale_line_issues'] as $issue) {
@@ -701,6 +712,7 @@ class StockTransferReconciliationService
         return ['status' => 'ready', 'transfer_id' => $transferId, 'reference' => $transfer->ref_no,
             'token' => $fingerprint, 'evidence' => trim($evidence), 'changes' => $changes, 'counter_repairs' => $repairs,
             'date_change' => $dateRepair, 'related_allocation_repairs' => $relatedRepairs['changes'],
+            'receiving_repairs' => $receivingReconcile,
             'remaining_stock_shortages' => $remainingShortages, 'allow_overselling' => $allowOverselling,
             'remaining_line_issues' => array_values(array_filter($report['sale_line_issues'], fn ($issue) => (int) $issue['transaction_id'] === $transferId
                 && !$changedLines->contains('id', $issue['sell_line_id']))),
@@ -760,7 +772,10 @@ class StockTransferReconciliationService
                     && (int) ($issue['product_id'] ?? 0) === (int) $line->product_id
                     && (int) ($issue['variation_id'] ?? 0) === (int) $line->variation_id
                     && $issue['selected_serial'] === $source->lot_number;
-                if (collect($beforeReport['transfer_issues'])->contains($serialMismatch)) {
+                // With overselling enabled the administrator expects this correction to auto-calculate
+                // completely: re-point the line to its recorded selected serial and then rebuild the
+                // transfer receiving to corroborate it, instead of deferring to a manual correction.
+                if (! $allowOverselling && collect($beforeReport['transfer_issues'])->contains($serialMismatch)) {
                     $blockers[(int) $line->id] = 'The related transfer receiving serial or quantity does not match selected serial '.$source->lot_number.'. Open Verified correction for this related line.';
                     continue;
                 }
@@ -772,7 +787,7 @@ class StockTransferReconciliationService
                 }
                 // Lock the unchanged receiving records that support this correction.
                 DB::table('purchase_lines')->where('transaction_id', $receipt->id)->orderBy('id')->lockForUpdate()->get();
-                if (collect($this->audit->audit($businessId, null, (int) $line->transaction_id)['transfer_issues'])->contains($serialMismatch)) {
+                if (! $allowOverselling && collect($this->audit->audit($businessId, null, (int) $line->transaction_id)['transfer_issues'])->contains($serialMismatch)) {
                     $blockers[(int) $line->id] = 'The related transfer receiving serial or quantity changed during correction. Review this line again.';
                     continue;
                 }
@@ -931,7 +946,7 @@ class StockTransferReconciliationService
                 'sold' => (float) $row->quantity_sold, 'adjusted' => (float) $row->quantity_adjusted,
                 'returned' => (float) $row->quantity_returned, 'manufacturing_used' => (float) $row->mfg_quantity_used])->values()->all(),
             'links' => array_values($links), 'steps' => [
-                'Keep the recorded delivery date if it is accurate; uncheck Verified Delivery Date Correction and preview again.',
+                'Keep both recorded document dates for an allocation-only repair. Leave Change delivery date unchecked in Authority and preview again.',
                 'If the date is genuinely wrong, review the dependent documents below, newest first, against physical serials and delivery records.',
                 'Correct only erroneous references through their authorized document workflow. Do not delete or reverse valid movements to bypass this check.',
                 'After dependent records are reconciled, return here and generate a fresh preview with the evidenced delivery date.',

@@ -229,36 +229,29 @@ class StockController extends BaseController
 
             $lines = [];
             foreach ($input['products'] as $product) {
+                $this->assertStockProduct($product, $business_id);
                 $lines[] = new \App\StockAdjustmentLine([
                     'product_id' => $product['product_id'],
                     'variation_id' => $product['variation_id'],
                     'quantity' => $product['quantity'],
-                    'type' => $product['type'],
-                    'unit_cost' => $product['unit_cost'] ?? 0,
-                    'reason' => $product['reason'] ?? '',
+                    'unit_price' => $product['unit_cost'] ?? 0,
+                    'lot_no_line_id' => $product['lot_no_line_id'] ?? null,
                 ]);
 
-                if ($product['type'] == 'normal') {
-                    $this->productUtil->decreaseProductQuantity(
-                        $product['product_id'],
-                        $product['variation_id'],
-                        $input['location_id'],
-                        abs($product['quantity'])
-                    );
-                } else {
-                    $this->productUtil->updateProductQuantity(
-                        $input['location_id'],
-                        $product['product_id'],
-                        $product['variation_id'],
-                        abs($product['quantity']),
-                        0
-                    );
-                }
+                // Normal and abnormal both classify stock losses.
+                $this->productUtil->decreaseProductQuantity($product['product_id'], $product['variation_id'],
+                    $input['location_id'], $product['quantity']);
             }
 
             $adjustment->stock_adjustment_lines()->saveMany($lines);
+            $adjustment->update(['adjustment_type' => collect($input['products'])->contains('type', 'abnormal') ? 'abnormal' : 'normal']);
+            $this->transactionUtil->mapPurchaseSell([
+                'id' => $business_id, 'location_id' => $input['location_id'],
+                'accounting_method' => \App\Business::findOrFail($business_id)->accounting_method ?: 'fifo',
+                'pos_settings' => ['allow_overselling' => false],
+            ], $adjustment->stock_adjustment_lines, 'stock_adjustment');
 
-            \App\Events\StockAdjustmentCreatedOrModified::dispatch($adjustment);
+            \App\Events\StockAdjustmentCreatedOrModified::dispatch($adjustment, 'added');
 
             DB::commit();
 
@@ -266,9 +259,9 @@ class StockController extends BaseController
                 'id' => $adjustment->id,
                 'ref_no' => $adjustment->ref_no,
             ], 'Stock adjustment created successfully', 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Failed to create adjustment: ' . $e->getMessage(), 500);
+            return $this->error('Failed to create adjustment: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 
@@ -372,6 +365,13 @@ class StockController extends BaseController
         return $this->success($transfers);
     }
 
+    private function assertStockProduct(array $product, int $businessId): void
+    {
+        \App\Variation::where('product_id', $product['product_id'])->whereHas('product', function ($query) use ($businessId) {
+            $query->where('business_id', $businessId);
+        })->findOrFail($product['variation_id']);
+    }
+
     public function storeTransfer(StockTransferRequest $request)
     {
         $business_id = $this->getBusinessId();
@@ -418,23 +418,19 @@ class StockController extends BaseController
             ]);
 
             foreach ($input['products'] as $product) {
+                $this->assertStockProduct($product, $business_id);
                 $sell_line = new \App\TransactionSellLine([
                     'product_id' => $product['product_id'],
                     'variation_id' => $product['variation_id'],
                     'quantity' => $product['quantity'],
                     'unit_price' => $product['unit_cost'] ?? 0,
                     'unit_price_inc_tax' => $product['unit_cost'] ?? 0,
+                    'unit_price_before_discount' => $product['unit_cost'] ?? 0,
+                    'lot_no_line_id' => $product['lot_no_line_id'] ?? null,
+                    'item_tax' => 0,
                 ]);
                 $sell_transfer->sell_lines()->save($sell_line);
 
-                if (in_array($status, ['completed', 'final'])) {
-                    $this->productUtil->decreaseProductQuantity(
-                        $product['product_id'],
-                        $product['variation_id'],
-                        $input['location_id'],
-                        $product['quantity']
-                    );
-                }
             }
 
             $purchase_transfer = Transaction::create([
@@ -458,32 +454,30 @@ class StockController extends BaseController
                     'product_id' => $product['product_id'],
                     'variation_id' => $product['variation_id'],
                     'quantity' => $product['quantity'],
-                    'unit_cost' => $product['unit_cost'] ?? 0,
-                    'unit_cost_inc_tax' => $product['unit_cost'] ?? 0,
+                    'purchase_price' => $product['unit_cost'] ?? 0,
+                    'purchase_price_inc_tax' => $product['unit_cost'] ?? 0,
+                    'item_tax' => 0,
                 ]);
                 $purchase_transfer->purchase_lines()->save($purchase_line);
 
-                if (in_array($status, ['completed', 'final'])) {
-                    $this->productUtil->updateProductQuantity(
-                        $input['transfer_location_id'],
-                        $product['product_id'],
-                        $product['variation_id'],
-                        $product['quantity'],
-                        0
-                    );
-                }
             }
 
+            if (in_array($status, ['completed', 'final'], true)) {
+                app(\App\Services\StockTransferStockService::class)->apply($sell_transfer, $purchase_transfer,
+                    \App\Business::findOrFail($business_id)->accounting_method ?: 'fifo');
+            }
+            $this->transactionUtil->activityLog($sell_transfer, 'added');
             DB::commit();
+            \App\Events\StockTransferCreatedOrModified::dispatch($sell_transfer, 'added');
 
             return $this->success([
                 'sell_transfer_id' => $sell_transfer->id,
                 'purchase_transfer_id' => $purchase_transfer->id,
                 'ref_no' => $ref_no,
             ], 'Stock transfer created successfully', 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Failed to create transfer: ' . $e->getMessage(), 500);
+            return $this->error('Failed to create transfer: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 }

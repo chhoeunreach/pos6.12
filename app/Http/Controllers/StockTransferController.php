@@ -1210,15 +1210,15 @@ class StockTransferController extends Controller
                         ->where('T.location_id', $location_id)
                         ->whereNotNull('purchase_lines.lot_number')
                         ->where('purchase_lines.lot_number', $lot_number)
-                        ->whereRaw('(purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned) < purchase_lines.quantity')
+                        ->whereRaw('(purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned + purchase_lines.mfg_quantity_used) < purchase_lines.quantity')
                         ->select(
                             'purchase_lines.id as purchase_line_id',
                             'purchase_lines.product_id',
                             'purchase_lines.variation_id',
                             'purchase_lines.lot_number',
-                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned)) AS qty_available')
+                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned + purchase_lines.mfg_quantity_used)) AS qty_available')
                         )
-                        ->orderByDesc(DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned))'))
+                        ->orderByDesc(DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned + purchase_lines.mfg_quantity_used))'))
                         ->first();
 
                     if (empty($purchase_line)) {
@@ -1358,7 +1358,7 @@ class StockTransferController extends Controller
                         ->where('purchase_lines.id', $line['lot_no_line_id'])
                         ->select(
                             'purchase_lines.id as purchase_line_id',
-                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned)) AS qty_available')
+                            DB::raw('(purchase_lines.quantity - (purchase_lines.quantity_sold + purchase_lines.quantity_adjusted + purchase_lines.quantity_returned + purchase_lines.mfg_quantity_used)) AS qty_available')
                         )
                         ->first();
 
@@ -1466,6 +1466,9 @@ class StockTransferController extends Controller
 
             $products = $request->input('products');
             if ($sell_transfer_was_completed && $status === 'completed' && $this->transferStockUnchanged($sell_transfer, $products)) {
+                if (\Carbon::parse($input_data['transaction_date'])->ne(\Carbon::parse($sell_transfer->transaction_date))) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('Use Verified Delivery Date Correction to change a completed transfer date. Source receipts and destination movements must be checked first.');
+                }
                 $sell_transfer->update($input_data);
                 $input_data['status'] = 'received';
                 $purchase_transfer->update($input_data);

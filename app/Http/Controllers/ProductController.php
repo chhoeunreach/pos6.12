@@ -2513,14 +2513,7 @@ class ProductController extends Controller
             $stock_details = $this->productUtil->getVariationStockDetails($business_id, $id, request()->input('location_id'));
             $stock_history = $this->productUtil->getVariationStockHistory($business_id, $id, request()->input('location_id'));
 
-            //if mismach found update stock in variation location details
-            if (isset($stock_history[0]) && (float) $stock_details['current_stock'] != (float) $stock_history[0]['stock']) {
-                VariationLocationDetails::where('variation_id',
-                                            $id)
-                                    ->where('location_id', request()->input('location_id'))
-                                    ->update(['qty_available' => $stock_history[0]['stock']]);
-                $stock_details['current_stock'] = $stock_history[0]['stock'];
-            }
+            // Stock history is read-only. Balance corrections require a reviewed repair.
 
             return view('product.stock_history_details')
                 ->with(compact('stock_details', 'stock_history'));

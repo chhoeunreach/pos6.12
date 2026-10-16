@@ -84,7 +84,7 @@ class PurchaseController extends BaseController
             ])
             ->findOrFail($id);
 
-        return $this->success(new TransactionResource($purchase));
+        return $this->success(new TransactionResource($this->attachReturnLines($purchase)));
     }
 
     public function store(CreatePurchaseRequest $request)
@@ -135,7 +135,7 @@ class PurchaseController extends BaseController
 
             $transaction = Transaction::create($transaction_data);
 
-            $this->productUtil->createOrUpdatePurchaseLines($transaction, $input['products'], null, false);
+            $this->productUtil->createOrUpdatePurchaseLines($transaction, $input['products'], null, false, null, false);
 
             if (!empty($input['payments'])) {
                 $input['payments'] = $this->normalizePaymentLines($input['payments']);
@@ -156,9 +156,9 @@ class PurchaseController extends BaseController
                 'purchase_lines.variations',
                 'purchase_lines.line_tax',
             ])), 'Purchase created successfully', 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Failed to create purchase: ' . $e->getMessage(), 500);
+            return $this->error('Failed to create purchase: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 
@@ -169,17 +169,20 @@ class PurchaseController extends BaseController
 
         $input = $request->validated();
 
-        $transaction = Transaction::where('business_id', $business_id)
-            ->where('type', 'purchase')
-            ->with(['purchase_lines'])
-            ->findOrFail($id);
-
         if (!$this->checkLocationAccess($input['location_id'])) {
             return $this->unauthorized('Invalid location');
         }
 
         try {
             DB::beginTransaction();
+            $transaction = Transaction::where('business_id', $business_id)->where('type', 'purchase')
+                ->lockForUpdate()->findOrFail($id);
+            if (! $this->checkLocationAccess($transaction->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid original purchase location.');
+            }
+            if ((int) $transaction->location_id !== (int) $input['location_id']) {
+                throw new \App\Exceptions\PurchaseSellMismatch('A purchase location cannot be changed. Use a stock transfer to move received stock.');
+            }
 
             $input['contact_id'] = $input['contact_id'] ?? $input['supplier_id'];
             $input['transaction_date'] = $this->parseMobileDate($input['transaction_date'], true);
@@ -189,18 +192,7 @@ class PurchaseController extends BaseController
 
             $before_status = $transaction->status;
 
-            // Match incoming products with existing purchase lines
-            $existingLines = $transaction->purchase_lines->keyBy(function ($line) {
-                return $line->product_id . '-' . $line->variation_id . '-' . ($line->lot_number ?? '');
-            });
-
-            foreach ($input['products'] as &$product) {
-                $key = $product['product_id'] . '-' . $product['variation_id'] . '-' . ($product['lot_number'] ?? '');
-                if ($existingLines->has($key)) {
-                    $product['purchase_line_id'] = $existingLines[$key]->id;
-                }
-            }
-            unset($product);
+            $input['products'] = app(\App\Services\PurchaseLineMatcher::class)->match($transaction, $input['products']);
 
             $transaction_data = [
                 'location_id' => $input['location_id'],
@@ -220,15 +212,18 @@ class PurchaseController extends BaseController
                 'pay_term_type' => $input['pay_term_type'] ?? null,
             ];
 
+            \App\Services\PurchaseStockGuard::assertReceiptDate($transaction, $transaction_data['transaction_date']);
             $transaction->update($transaction_data);
 
-            $this->productUtil->createOrUpdatePurchaseLines(
+            $deletedLines = $this->productUtil->createOrUpdatePurchaseLines(
                 $transaction,
                 $input['products'],
                 null,
                 false,
-                $before_status
+                $before_status,
+                false
             );
+            $this->transactionUtil->adjustMappingPurchaseSellAfterEditingPurchase($before_status, $transaction, $deletedLines);
 
             // Delete existing payment lines and recreate if payments are sent
             if (!empty($input['payments'])) {
@@ -252,9 +247,9 @@ class PurchaseController extends BaseController
                 'purchase_lines.variations',
                 'purchase_lines.line_tax',
             ])), 'Purchase updated successfully');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Failed to update purchase: ' . $e->getMessage(), 500);
+            return $this->error('Failed to update purchase: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 
@@ -376,84 +371,89 @@ class PurchaseController extends BaseController
             return $this->success([
                 'payment_status' => $transaction->fresh()->payment_status,
             ], 'Payment added successfully');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Payment failed: ' . $e->getMessage(), 500);
+            return $this->error('Payment failed: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 
     public function purchaseReturn($id, Request $request)
     {
+        if (! auth()->user()->can('purchase.update')) {
+            return $this->unauthorized();
+        }
         $business_id = $this->getBusinessId();
-        $user_id = $this->getUserId();
-
-        $transaction = Transaction::where('business_id', $business_id)
-            ->where('type', 'purchase')
-            ->where('status', 'received')
-            ->findOrFail($id);
-
         $request->validate([
             'transaction_date' => 'required|date',
             'products' => 'required|array|min:1',
-            'products.*.purchase_line_id' => 'required|exists:purchase_lines,id',
-            'products.*.quantity' => 'required|numeric|min:0.001',
-            'products.*.unit_cost' => 'required|numeric|min:0',
+            'products.*.purchase_line_id' => 'required|integer|distinct',
+            'products.*.quantity' => 'required|numeric|min:0.0001',
         ]);
-
         try {
             DB::beginTransaction();
-
-            $input = $request->only(['transaction_date', 'products']);
-            $input['location_id'] = $transaction->location_id;
-            $input['contact_id'] = $transaction->contact_id;
-
-            $return_transaction = $this->createPurchaseReturn($input, $business_id, $user_id);
-
+            $purchase = Transaction::where('business_id', $business_id)->where('type', 'purchase')
+                ->where('status', 'received')->lockForUpdate()->findOrFail($id);
+            if (! $this->checkLocationAccess($purchase->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid purchase location.');
+            }
+            $lines = $purchase->purchase_lines()->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $quantities = $lines->pluck('quantity_returned', 'id')->all();
+            foreach ($request->input('products') as $product) {
+                $line = $lines->get($product['purchase_line_id']);
+                if (! $line) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('A return line does not belong to this purchase.');
+                }
+                // API quantities are base units and add to the cumulative supplier return.
+                $quantities[$line->id] += (float) $product['quantity'];
+            }
+            $total = app(\App\Services\PurchaseReturnStockService::class)->apply($purchase, $quantities);
+            $return = Transaction::where('business_id', $business_id)->where('type', 'purchase_return')
+                ->where('return_parent_id', $purchase->id)->lockForUpdate()->first();
+            $data = ['total_before_tax' => $total, 'tax_amount' => 0, 'final_total' => $total];
+            if ($return) {
+                // Preserve any existing document-level return tax.
+                $data['tax_amount'] = (float) $return->tax_amount;
+                $data['final_total'] += $data['tax_amount'];
+                $before = $return->replicate();
+                $return->update($data);
+                $this->transactionUtil->activityLog($return, 'edited', $before);
+            } else {
+                $count = $this->transactionUtil->setAndGetReferenceCount('purchase_return', $business_id);
+                $return = Transaction::create(array_merge($data, [
+                    'business_id' => $business_id, 'location_id' => $purchase->location_id,
+                    'type' => 'purchase_return', 'status' => 'final', 'contact_id' => $purchase->contact_id,
+                    'return_parent_id' => $purchase->id, 'created_by' => $this->getUserId(),
+                    'transaction_date' => $this->parseMobileDate($request->input('transaction_date'), true),
+                    'ref_no' => $this->transactionUtil->generateReferenceNumber('purchase_return', $count, $business_id),
+                ]));
+                $this->transactionUtil->activityLog($return, 'added');
+            }
+            $this->transactionUtil->updatePaymentStatus($return->id, $return->final_total);
             DB::commit();
 
-            return $this->success(new TransactionResource($return_transaction->load(['contact', 'location', 'purchase_lines.product'])), 'Purchase return processed successfully', 201);
-        } catch (\Exception $e) {
+            return $this->success(new TransactionResource($this->attachReturnLines($return->load(['contact', 'location']))), 'Purchase return processed successfully', 201);
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Return failed: ' . $e->getMessage(), 500);
+            return $this->error('Return failed: '.$e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 
-    protected function createPurchaseReturn($input, $business_id, $user_id)
+    private function attachReturnLines(Transaction $return): Transaction
     {
-        $return_data = [
-            'business_id' => $business_id,
-            'location_id' => $input['location_id'],
-            'type' => 'purchase_return',
-            'status' => 'received',
-            'contact_id' => $input['contact_id'],
-            'transaction_date' => $input['transaction_date'],
-            'total_before_tax' => 0,
-            'final_total' => 0,
-            'created_by' => $user_id,
-        ];
-
-        $return = Transaction::create($return_data);
-        $return_lines = [];
-
-        foreach ($input['products'] as $product) {
-            $purchase_line = PurchaseLine::find($product['purchase_line_id']);
-            $return_qty = min($product['quantity'], $purchase_line->quantity_remaining);
-
-            $return_lines[] = new PurchaseLine([
-                'product_id' => $purchase_line->product_id,
-                'variation_id' => $purchase_line->variation_id,
-                'quantity' => $return_qty,
-                'unit_cost_before_discount' => $product['unit_cost'],
-                'unit_cost' => $product['unit_cost'],
-                'unit_cost_inc_tax' => $product['unit_cost'],
-                'purchase_line_note' => 'Return',
-                'parent_purchase_line_id' => $purchase_line->id,
-            ]);
-
-            $this->transactionUtil->decreaseProductQuantityStock($purchase_line->variation_id, $return->location_id, $return_qty);
+        if ($return->type !== 'purchase_return' || empty($return->return_parent_id)) {
+            return $return;
         }
-
-        $return->purchase_lines()->saveMany($return_lines);
+        $purchase = Transaction::where('business_id', $return->business_id)->where('type', 'purchase')
+            ->find($return->return_parent_id);
+        if ($purchase) {
+            $lines = $purchase->purchase_lines()->where('quantity_returned', '>', 0)
+                ->with(['product', 'variations', 'line_tax'])->orderBy('id')->get();
+            foreach ($lines as $line) {
+                // Return details are a view of the original receipt, never additional incoming stock.
+                $line->quantity = $line->quantity_returned;
+            }
+            $return->setRelation('purchase_lines', $lines);
+        }
 
         return $return;
     }
@@ -463,8 +463,7 @@ class PurchaseController extends BaseController
         $business_id = $this->getBusinessId();
 
         $transaction = Transaction::where('business_id', $business_id)
-            ->whereIn('type', ['purchase', 'purchase_return'])
-            ->with(['purchase_lines'])
+            ->where('type', 'purchase')
             ->findOrFail($id);
 
         if ($this->transactionUtil->isReturnExist($id)) {
@@ -473,9 +472,21 @@ class PurchaseController extends BaseController
 
         try {
             DB::beginTransaction();
+            $transaction = Transaction::where('business_id', $business_id)->where('type', 'purchase')
+                ->lockForUpdate()->findOrFail($id);
+            if (! $this->checkLocationAccess($transaction->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid purchase location.');
+            }
+            if ($this->transactionUtil->isReturnExist($id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Cannot delete a purchase with returns.');
+            }
+            $transaction->setRelation('purchase_lines', $transaction->purchase_lines()->orderBy('id')->lockForUpdate()->get());
 
             $transaction_status = $transaction->status;
             $delete_purchase_lines = $transaction->purchase_lines;
+            foreach ($delete_purchase_lines as $line) {
+                \App\Services\PurchaseStockGuard::assertUnused($line);
+            }
 
             $this->transactionUtil->activityLog($transaction, 'purchase_deleted');
 
@@ -508,9 +519,9 @@ class PurchaseController extends BaseController
             DB::commit();
 
             return $this->success(null, 'Purchase deleted successfully');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Failed to delete purchase: ' . $e->getMessage(), 500);
+            return $this->error('Failed to delete purchase: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 }

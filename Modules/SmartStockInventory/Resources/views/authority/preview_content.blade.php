@@ -44,6 +44,16 @@
                 <li>Line #{{ $repair['sell_line_id'] }} → {{ $repair['serial'] }} (receipt #{{ $repair['selected_batch_id'] }}) · {{ $repair['quantity'] }}</li>
             @endforeach</ul>
         @endif
+        @if(!empty($plan['receiving_repairs']['updated']) || !empty($plan['receiving_repairs']['inserted']) || !empty($plan['receiving_repairs']['deleted']))
+            <h4>Related transfer receiving rebuilt</h4>
+            <p>The related transfer receiving records are rebuilt so their serials corroborate the selected receipts.</p>
+            <ul>@foreach($plan['receiving_repairs']['transfers'] ?? [] as $transferRepair)
+                @foreach($transferRepair['rows'] ?? [] as $row)
+                    <li>Receiving #{{ $row['id'] }} · {{ $transferRepair['reference'] ?? ('#'.($transferRepair['transfer_id'] ?? '')) }}: {{ ($row['before']['lot_number'] ?? '') !== '' ? $row['before']['lot_number'] : 'No serial' }} → {{ $row['action'] === 'deleted' ? 'Removed' : (($row['after']['lot_number'] ?? '') !== '' ? $row['after']['lot_number'] : 'No serial') }} · {{ $row['action'] }}</li>
+                @endforeach
+                @if(!empty($transferRepair['warnings']))<li>Warnings: {{ implode('; ', $transferRepair['warnings']) }}</li>@endif
+            @endforeach</ul>
+        @endif
         <h4>Lot counters</h4><ul>@foreach($plan['counter_repairs'] as $repair)
             <li>Receipt #{{ $repair['purchase_line_id'] }}: {{ $repair['quantity_sold_before'] }} → {{ $repair['quantity_sold_after'] }}</li>
         @endforeach</ul>
@@ -54,6 +64,7 @@
         <p><strong>Reason:</strong> {{ $input['evidence'] }}</p>
         <form method="post" action="{{ ssi_route('ssi.authority.apply', ['id' => $transfer->id]) }}">
             @csrf
+            @if(array_key_exists('change_transaction_date', $input))<input type="hidden" name="change_transaction_date" value="{{ $input['change_transaction_date'] ? 1 : 0 }}">@endif
             <input type="hidden" name="date_basis" value="{{ $input['date_basis'] ?? '' }}">
             <input type="hidden" name="token" value="{{ $plan['token'] }}">
             <input type="hidden" name="evidence" value="{{ $input['evidence'] }}">

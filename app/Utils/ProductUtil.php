@@ -1224,15 +1224,23 @@ class ProductUtil extends Util
      * @param  string  $before_status = null
      * @return array
      */
-    public function createOrUpdatePurchaseLines($transaction, $input_data, $currency_details, $enable_product_editing, $before_status = null)
+    public function createOrUpdatePurchaseLines($transaction, $input_data, $currency_details, $enable_product_editing, $before_status = null, $uf_data = true)
     {
+        $number = fn ($value, $format = null) => $uf_data ? $this->num_uf($value, $format) : (float) $value;
         $updated_purchase_lines = [];
+        $submittedIds = array_filter(array_column($input_data, 'purchase_line_id'));
+        if (count($submittedIds) !== count(array_unique($submittedIds))) {
+            throw new \App\Exceptions\PurchaseSellMismatch('A purchase line cannot appear twice in the same receipt.');
+        }
         $updated_purchase_line_ids = [0];
         $exchange_rate = ! empty($transaction->exchange_rate) ? $transaction->exchange_rate : 1;
 
         foreach ($input_data as $data) {
+            Variation::where('product_id', $data['product_id'])->whereHas('product', function ($query) use ($transaction) {
+                $query->where('business_id', $transaction->business_id);
+            })->findOrFail($data['variation_id']);
             $multiplier = 1;
-            if (isset($data['sub_unit_id']) && $data['sub_unit_id'] == $data['product_unit_id']) {
+            if (isset($data['sub_unit_id'], $data['product_unit_id']) && $data['sub_unit_id'] == $data['product_unit_id']) {
                 unset($data['sub_unit_id']);
             }
 
@@ -1240,14 +1248,24 @@ class ProductUtil extends Util
                 $unit = Unit::find($data['sub_unit_id']);
                 $multiplier = ! empty($unit->base_unit_multiplier) ? $unit->base_unit_multiplier : 1;
             }
-            $new_quantity = $this->num_uf($data['quantity']) * $multiplier;
+            $new_quantity = $number($data['quantity']) * $multiplier;
 
-            $new_quantity_f = $this->num_f($new_quantity);
+            if (! is_finite($new_quantity) || $new_quantity < 0) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Receipt quantities must be nonnegative.');
+            }
             $old_qty = 0;
             //update existing purchase line
             if (isset($data['purchase_line_id'])) {
                 $purchase_line = PurchaseLine::where('transaction_id', $transaction->id)
                     ->lockForUpdate()->findOrFail($data['purchase_line_id']);
+                if ((int) $purchase_line->product_id !== (int) $data['product_id']
+                    || (int) $purchase_line->variation_id !== (int) $data['variation_id']) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('An existing purchase line cannot change its product or variation.');
+                }
+                if ($new_quantity + 0.0000001 < (float) $purchase_line->quantity
+                    && $new_quantity + 0.0000001 < $purchase_line->quantity_used) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('Receipt quantity cannot be less than its consumed or returned stock.');
+                }
                 $newLot = array_key_exists('lot_number', $data)
                     ? (! empty($data['lot_number']) ? (string) $data['lot_number'] : '')
                     : (string) $purchase_line->lot_number;
@@ -1269,16 +1287,16 @@ class ProductUtil extends Util
 
                 //Increase quantity only if status is received
                 if ($transaction->status == 'received') {
-                    $this->updateProductQuantity($transaction->location_id, $data['product_id'], $data['variation_id'], $new_quantity_f, 0, $currency_details);
+                    $this->updateProductQuantity($transaction->location_id, $data['product_id'], $data['variation_id'], $new_quantity, 0, null, false);
                 }
             }
 
             $purchase_line->quantity = $new_quantity;
-            $purchase_line->pp_without_discount = ($this->num_uf($data['pp_without_discount'], $currency_details) * $exchange_rate) / $multiplier;
-            $purchase_line->discount_percent = $this->num_uf($data['discount_percent'], $currency_details);
-            $purchase_line->purchase_price = ($this->num_uf($data['purchase_price'], $currency_details) * $exchange_rate) / $multiplier;
-            $purchase_line->purchase_price_inc_tax = ($this->num_uf($data['purchase_price_inc_tax'], $currency_details) * $exchange_rate) / $multiplier;
-            $purchase_line->item_tax = ($this->num_uf($data['item_tax'], $currency_details) * $exchange_rate) / $multiplier;
+            $purchase_line->pp_without_discount = ($number($data['pp_without_discount'], $currency_details) * $exchange_rate) / $multiplier;
+            $purchase_line->discount_percent = $number($data['discount_percent'], $currency_details);
+            $purchase_line->purchase_price = ($number($data['purchase_price'], $currency_details) * $exchange_rate) / $multiplier;
+            $purchase_line->purchase_price_inc_tax = ($number($data['purchase_price_inc_tax'], $currency_details) * $exchange_rate) / $multiplier;
+            $purchase_line->item_tax = ($number($data['item_tax'], $currency_details) * $exchange_rate) / $multiplier;
             $purchase_line->tax_id = ! empty($data['purchase_line_tax_id']) ? $data['purchase_line_tax_id'] : null;
             if (array_key_exists('lot_number', $data)) {
                 $purchase_line->lot_number = ! empty($data['lot_number']) ? $data['lot_number'] : null;
@@ -1290,7 +1308,7 @@ class ProductUtil extends Util
             $purchase_line->purchase_requisition_line_id = ! empty($data['purchase_requisition_line_id']) && $transaction->type == 'purchase_order' ? $data['purchase_requisition_line_id'] : null;
 
             if (! empty($data['secondary_unit_quantity'])) {
-                $purchase_line->secondary_unit_quantity = $this->num_uf($data['secondary_unit_quantity']);
+                $purchase_line->secondary_unit_quantity = $number($data['secondary_unit_quantity']);
             }
 
             $updated_purchase_lines[] = $purchase_line;
@@ -1298,9 +1316,9 @@ class ProductUtil extends Util
             //Edit product price
             if ($enable_product_editing == 1 && ($transaction->type == 'purchase' || $transaction->type == 'production_purchase')) {
                 if (isset($data['default_sell_price'])) {
-                    $variation_data['sell_price_inc_tax'] = ($this->num_uf($data['default_sell_price'], $currency_details)) / $multiplier;
+                    $variation_data['sell_price_inc_tax'] = ($number($data['default_sell_price'], $currency_details)) / $multiplier;
                 }
-                $variation_data['pp_without_discount'] = ($this->num_uf($data['pp_without_discount'], $currency_details) * $exchange_rate) / $multiplier;
+                $variation_data['pp_without_discount'] = ($number($data['pp_without_discount'], $currency_details) * $exchange_rate) / $multiplier;
                 $variation_data['variation_id'] = $purchase_line->variation_id;
                 $variation_data['purchase_price'] = $purchase_line->purchase_price;
 
@@ -1322,10 +1340,11 @@ class ProductUtil extends Util
         if (! empty($updated_purchase_line_ids)) {
             $delete_purchase_lines = PurchaseLine::where('transaction_id', $transaction->id)
                     ->whereNotIn('id', $updated_purchase_line_ids)
-                    ->get();
+                    ->orderBy('id')->lockForUpdate()->get();
 
             if ($delete_purchase_lines->count()) {
                 foreach ($delete_purchase_lines as $delete_purchase_line) {
+                    \App\Services\PurchaseStockGuard::assertUnused($delete_purchase_line);
                     $delete_purchase_line_ids[] = $delete_purchase_line->id;
 
                     //decrease deleted only if previous status was received
@@ -1393,12 +1412,10 @@ class ProductUtil extends Util
      */
     public function updateProductStock($status_before, $transaction, $product_id, $variation_id, $new_quantity, $old_quantity, $currency_details)
     {
-        $new_quantity_f = $this->num_f($new_quantity);
-        $old_qty = $this->num_f($old_quantity);
         //Update quantity for existing products
         if ($status_before == 'received' && $transaction->status == 'received') {
             //if status received update existing quantity
-            $this->updateProductQuantity($transaction->location_id, $product_id, $variation_id, $new_quantity_f, $old_qty, $currency_details);
+            $this->updateProductQuantity($transaction->location_id, $product_id, $variation_id, $new_quantity, $old_quantity, null, false);
         } elseif ($status_before == 'received' && $transaction->status != 'received') {
             //decrease quantity only if status changed from received to not received
             $this->decreaseProductQuantity(
@@ -1408,7 +1425,7 @@ class ProductUtil extends Util
                 $old_quantity
             );
         } elseif ($status_before != 'received' && $transaction->status == 'received') {
-            $this->updateProductQuantity($transaction->location_id, $product_id, $variation_id, $new_quantity_f, 0, $currency_details);
+            $this->updateProductQuantity($transaction->location_id, $product_id, $variation_id, $new_quantity, 0, null, false);
         }
     }
 
@@ -2208,57 +2225,75 @@ class ProductUtil extends Util
 
     public function getVariationStockHistory($business_id, $variation_id, $location_id)
     {
-        $stock_history = Transaction::leftjoin('transaction_sell_lines as sl',
-            'sl.transaction_id', '=', 'transactions.id')
-                                ->leftjoin('purchase_lines as pl',
-                                    'pl.transaction_id', '=', 'transactions.id')
-                                ->leftjoin('stock_adjustment_lines as al',
-                                    'al.transaction_id', '=', 'transactions.id')
-                                ->leftjoin('transactions as return', 'transactions.return_parent_id', '=', 'return.id')
-                                ->leftjoin('transaction_sell_lines as rsl', function ($join) use ($variation_id) {
-                                    $join->on('rsl.transaction_id', '=', 'return.id')
-                                        ->where(function ($q) {
-                                            $q->whereNull('sl.id')
-                                                ->orWhere('sl.quantity', '<=', 0);
-                                        })
-                                        ->where('rsl.variation_id', '=', $variation_id)
-                                        ->whereRaw('(ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.total_before_tax) < 0.01 OR ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.final_total) < 0.01)');
-                                })
-                                ->leftjoin('purchase_lines as rpl',
-                                    'rpl.transaction_id', '=', 'return.id')
-                                ->leftjoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
-                                ->where('transactions.location_id', $location_id)
-                                ->where(function ($q) use ($variation_id) {
-                                    $q->where('sl.variation_id', $variation_id)
-                                        ->orWhere('pl.variation_id', $variation_id)
-                                        ->orWhere('al.variation_id', $variation_id)
-                                        ->orWhere('rpl.variation_id', $variation_id)
-                                        ->orWhere('rsl.variation_id', $variation_id);
-                                })
-                                ->whereIn('transactions.type', ['sell', 'purchase', 'stock_adjustment', 'opening_stock', 'sell_transfer', 'purchase_transfer', 'production_purchase', 'purchase_return', 'sell_return', 'production_sell'])
-                                ->select(
-                                    'transactions.id as transaction_id',
-                                    'transactions.type as transaction_type',
-                                    'sl.quantity as sell_line_quantity',
-                                    'pl.quantity as purchase_line_quantity',
-                                    'sl.quantity as sell_return',
-                                    'rsl.quantity_returned as legacy_sell_return',
-                                    'rpl.quantity_returned as purchase_return',
-                                    'al.quantity as stock_adjusted',
-                                    'pl.quantity_returned as combined_purchase_return',
-                                    'transactions.return_parent_id',
-                                    'transactions.transaction_date',
-                                    'transactions.status',
-                                    'transactions.invoice_no',
-                                    'transactions.ref_no',
-                                    'transactions.additional_notes',
-                                    'c.name as contact_name',
-                                    'c.supplier_business_name',
-                                    'pl.secondary_unit_quantity as purchase_secondary_unit_quantity',
-                                    'sl.secondary_unit_quantity as sell_secondary_unit_quantity'
-                                )
-                                ->orderBy('transactions.transaction_date', 'asc')
-                                ->get();
+        // Aggregate each line table before joining: a transfer can contain many
+        // lots of the same variation, and joining raw lines multiplies quantities.
+        $sell_lines = DB::table('transaction_sell_lines')
+            ->where('variation_id', $variation_id)
+            ->groupBy('transaction_id')
+            ->selectRaw('transaction_id, SUM(quantity) as quantity, SUM(secondary_unit_quantity) as secondary_unit_quantity');
+        $purchase_lines = DB::table('purchase_lines')
+            ->where('variation_id', $variation_id)
+            ->groupBy('transaction_id')
+            ->selectRaw('transaction_id, SUM(quantity) as quantity, SUM(quantity_returned) as quantity_returned, SUM(secondary_unit_quantity) as secondary_unit_quantity');
+        $adjustment_lines = DB::table('stock_adjustment_lines')
+            ->where('variation_id', $variation_id)
+            ->groupBy('transaction_id')
+            ->selectRaw('transaction_id, SUM(quantity) as quantity');
+
+        $legacy_return_lines = DB::table('transaction_sell_lines as rsl')
+            ->whereColumn('rsl.transaction_id', 'transactions.return_parent_id')
+            ->where('rsl.variation_id', $variation_id)
+            ->whereRaw('(ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.total_before_tax) < 0.01 OR ABS((rsl.quantity_returned * rsl.unit_price_inc_tax) - transactions.final_total) < 0.01)');
+
+        $stock_history = Transaction::query()
+            ->leftJoinSub($sell_lines, 'sl', 'sl.transaction_id', '=', 'transactions.id')
+            ->leftJoinSub($purchase_lines, 'pl', 'pl.transaction_id', '=', 'transactions.id')
+            ->leftJoinSub($adjustment_lines, 'al', 'al.transaction_id', '=', 'transactions.id')
+            ->leftJoinSub($purchase_lines, 'rpl', 'rpl.transaction_id', '=', 'transactions.return_parent_id')
+            ->leftJoin('transactions as transfer_parent', function ($join) {
+                $join->on('transfer_parent.id', '=', 'transactions.transfer_parent_id')
+                    ->on('transfer_parent.business_id', '=', 'transactions.business_id')
+                    ->where('transfer_parent.type', '=', 'sell_transfer');
+            })
+            ->leftJoinSub($sell_lines, 'transfer_sl', 'transfer_sl.transaction_id', '=', 'transfer_parent.id')
+            ->leftjoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+            ->where('transactions.business_id', $business_id)
+            ->where('transactions.location_id', $location_id)
+            ->where(function ($q) use ($legacy_return_lines) {
+                $q->whereNotNull('sl.transaction_id')
+                    ->orWhereNotNull('pl.transaction_id')
+                    ->orWhereNotNull('al.transaction_id')
+                    ->orWhereNotNull('transfer_sl.transaction_id')
+                    ->orWhereNotNull('rpl.transaction_id');
+                $q->getQuery()->addWhereExistsQuery((clone $legacy_return_lines)->selectRaw('1'), 'or');
+            })
+            ->whereIn('transactions.type', ['sell', 'purchase', 'stock_adjustment', 'opening_stock', 'sell_transfer', 'purchase_transfer', 'production_purchase', 'purchase_return', 'sell_return', 'production_sell'])
+            ->select(
+                'transactions.id as transaction_id',
+                'transactions.type as transaction_type',
+                'sl.quantity as sell_line_quantity',
+                'pl.quantity as purchase_line_quantity',
+                'transfer_sl.quantity as expected_transfer_quantity',
+                'transfer_parent.status as transfer_parent_status',
+                'sl.quantity as sell_return',
+                'rpl.quantity_returned as purchase_return',
+                'al.quantity as stock_adjusted',
+                'pl.quantity_returned as combined_purchase_return',
+                'transactions.return_parent_id',
+                'transactions.transaction_date',
+                'transactions.status',
+                'transactions.invoice_no',
+                'transactions.ref_no',
+                'transactions.additional_notes',
+                'c.name as contact_name',
+                'c.supplier_business_name',
+                'pl.secondary_unit_quantity as purchase_secondary_unit_quantity',
+                'sl.secondary_unit_quantity as sell_secondary_unit_quantity'
+            )
+            ->selectSub((clone $legacy_return_lines)->selectRaw('SUM(rsl.quantity_returned)'), 'legacy_sell_return')
+            ->orderBy('transactions.transaction_date', 'asc')
+            ->orderBy('transactions.id', 'asc')
+            ->get();
 
         $stock_history_array = [];
         $stock = 0;
@@ -2347,13 +2382,17 @@ class ProductUtil extends Util
                     continue;
                 }
 
-                $quantity_change = $stock_line->purchase_line_quantity;
+                $quantity_change = (float) ($stock_line->purchase_line_quantity ?? 0);
                 $stock += $quantity_change;
                 $stock_history_array[] = array_merge($temp_array, [
                     'quantity_change' => $quantity_change,
                     'stock' => $this->roundQuantity($stock),
                     'type' => 'purchase_transfer',
                     'type_label' => __('lang_v1.stock_transfers').' ('.__('lang_v1.in').')',
+                    'expected_quantity' => $stock_line->expected_transfer_quantity,
+                    'quantity_mismatch' => $stock_line->expected_transfer_quantity !== null
+                        && in_array($stock_line->transfer_parent_status, ['final', 'completed'], true)
+                        && abs((float) $quantity_change - (float) $stock_line->expected_transfer_quantity) > 0.0001,
                     'ref_no' => $stock_line->ref_no,
                     'stock_in_second_unit' => $this->roundQuantity($stock_in_second_unit),
                 ]);

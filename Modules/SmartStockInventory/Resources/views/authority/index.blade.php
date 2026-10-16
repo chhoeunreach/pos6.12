@@ -2,13 +2,19 @@
 @section('page_title', 'Authority')
 @section('hide_action_bar', '1')
 @section('module_content')
+@php $canFullRepair = auth()->user()->can('superadmin') || ((int) auth()->user()->business_id === (int) session('user.business_id') && app(\App\Utils\Util::class)->is_admin(auth()->user(), (int) session('user.business_id'))); @endphp
 <div class="box box-warning" style="border-top-color:#f39c12">
     <div class="box-header with-border">
-        <h3 class="box-title" style="color:#d35400;font-weight:bold"><i class="fa fa-wrench"></i> Stock Inventory Authority — Auto Mismatch Fix & Data Regeneration</h3>
+        <h3 class="box-title" style="color:#d35400;font-weight:bold"><i class="fa fa-wrench"></i> Stock Inventory Authority — Full Repair</h3>
         <div class="box-tools pull-right">
+            @if($canFullRepair)
             <button type="button" class="btn btn-warning btn-sm" data-toggle="modal" data-target="#modal_authority_mismatch_fix">
-                <i class="fa fa-refresh"></i> Run Full Mismatch Fix & Regenerate Data
+                <i class="fa fa-refresh"></i> Preview Full Business Repair
             </button>
+            <button type="button" class="btn btn-danger btn-sm" data-toggle="modal" data-target="#modal_authority_force_fix">
+                <i class="fa fa-bolt"></i> Force Repair (auto-fix missing)
+            </button>
+            @endif
         </div>
     </div>
     <div class="box-body" style="background:#fffcf5">
@@ -70,42 +76,79 @@
             </div>
         </div>
         <p style="margin:5px 0 0;font-size:13px;color:#7f8c8d">
-            <i class="fa fa-info-circle text-info"></i> Running <strong>Full Mismatch Fix & Regenerate Data</strong> automatically removes duplicate/ghost allocations (including Line #2328), realigns differing allocations to verified selected invoice lots, repairs missing selected batch IDs, and recalculates <code>purchase_lines.quantity_sold</code> and <code>variation_location_details.qty_available</code>.
+            <i class="fa fa-info-circle text-info"></i> Preview proposed allocation, receipt counter and location balance repairs across this business. Review the exact changes before applying. Records with conflicting serials, missing evidence or invalid dates remain available for individual correction.
         </p>
     </div>
 </div>
 
+@if($canFullRepair)
 <div class="modal fade" id="modal_authority_mismatch_fix" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
-        <form method="post" action="{{ ssi_route('ssi.authority.fix_mismatches') }}">
+        <form method="post" action="{{ ssi_route('ssi.authority.preview_full_fix') }}">
             @csrf
             <div class="modal-content">
                 <div class="modal-header bg-warning">
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
-                    <h4 class="modal-title"><i class="fa fa-shield"></i> Confirm Full Authority Mismatch Fix & Data Regeneration</h4>
+                    <h4 class="modal-title"><i class="fa fa-shield"></i> Preview Full Business Repair</h4>
                 </div>
                 <div class="modal-body">
-                    <p>This action will perform a complete audit and automated correction across business inventory records:</p>
+                    <p>Scan all locations in the current business and prepare a repair proposal. Generating this preview does not change stock.</p>
                     <ul>
-                        <li><strong>Remove duplicate/ghost allocations:</strong> Cleans extraneous mapping rows (such as Line #2328 in ST2026/0261) where allocated quantity exceeds sold quantity.</li>
-                        <li><strong>Repair missing selected lots:</strong> Updates invoice lines whose selected purchase line was missing or points to old IDs to match their physical allocation.</li>
-                        <li><strong>Realign stock allocations:</strong> Aligns FIFO allocations to match the user's selected invoice lots for both sales and transfers.</li>
-                        <li><strong>Recalculate stock balances:</strong> Recomputes <code>purchase_lines.quantity_sold</code> and synchronizes location available stock details.</li>
+                        <li>Validate recorded receipts, selections, allocation quantities, returns and transfer receiving batches.</li>
+                        <li>List exact allocation, counter and location balance changes.</li>
+                        <li>Leave unresolved records for individual correction. No receipt quantities, prices or delivery dates are invented.</li>
                     </ul>
                     <div class="form-group">
-                        <label for="authority_fix_reason">Reason / Audit Reference (Optional):</label>
-                        <input type="text" id="authority_fix_reason" name="reason" class="form-control" placeholder="Authority Mismatch Fix & Data Regeneration" value="Stock Inventory Authority Full Mismatch Fix & Data Regeneration">
+                        <label for="authority_fix_reason">Reason / Audit Reference:</label>
+                        <input type="text" id="authority_fix_reason" name="reason" class="form-control" required minlength="10" maxlength="500" placeholder="Explain the stock reconciliation and supporting audit records">
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning"><i class="fa fa-wrench"></i> Start Full Fix & Regenerate</button>
+                    <button type="submit" class="btn btn-warning"><i class="fa fa-wrench"></i> Generate Full Repair Preview</button>
                 </div>
             </div>
         </form>
     </div>
 </div>
 
+<div class="modal fade" id="modal_authority_force_fix" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <form method="post" action="{{ ssi_route('ssi.authority.force_preview') }}">
+            @csrf
+            <div class="modal-content">
+                <div class="modal-header bg-danger">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title"><i class="fa fa-bolt"></i> Preview Force Business Repair</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" style="margin-bottom:10px">
+                        <i class="fa fa-exclamation-triangle"></i>
+                        <strong>Force repair rewrites records</strong> that the reviewed repair refuses to touch — it rebuilds
+                        missing/incorrect transfer receiving serials automatically, then re-runs the reviewed engine. You will see
+                        every exact change and must confirm before anything is written.
+                    </div>
+                    <ul>
+                        <li>Reconcile completed transfer receiving serials, lot dates and quantities against what physically left.</li>
+                        <li>Preserve existing receiving row IDs; only insert missing lots and remove unused extras.</li>
+                        <li>Recompute allocations, receipt counters and location balances on the now-consistent ledger.</li>
+                        <li>Every applied change is written to the audit log with your user and reason.</li>
+                    </ul>
+                    <div class="form-group">
+                        <label for="authority_force_reason">Reason / Audit Reference:</label>
+                        <input type="text" id="authority_force_reason" name="reason" class="form-control" required minlength="10" maxlength="500" placeholder="Explain why the force repair is required and reference the supporting audit records">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="fa fa-bolt"></i> Generate Force Repair Preview</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@endif
 <div class="box box-default" style="border-top:3px solid #3c8dbc;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
     <div class="box-header with-border" style="background:#f9fafc">
         <h3 class="box-title" style="font-weight:600;font-size:16px"><i class="fa fa-filter text-primary"></i> Filter Stock Transfers</h3>
@@ -301,6 +344,9 @@
                                     <a class="btn btn-primary btn-sm open-authority-correction" href="{{ ssi_route('ssi.authority.index', ['transfer_id' => $item->id]) }}" title="Open Authority Correction">
                                         <i class="fa fa-wrench"></i> Correct Transfer
                                     </a>
+                                    @if($canFullRepair)
+                                    <a class="btn btn-warning btn-sm" style="margin-top:5px" href="{{ ssi_route('ssi.authority.recovery', ['id' => $item->id]) }}">Recover receiving lots</a>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

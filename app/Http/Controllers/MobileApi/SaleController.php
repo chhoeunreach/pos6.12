@@ -152,7 +152,7 @@ class SaleController extends BaseController
         $request->validate([
             'transaction_date' => 'required|date',
             'products' => 'required|array|min:1',
-            'products.*.sell_line_id' => 'required|exists:transaction_sell_lines,id',
+            'products.*.sell_line_id' => 'required|integer|distinct',
             'products.*.quantity' => 'required|numeric|min:0.001',
             'products.*.unit_price' => 'required|numeric|min:0',
         ]);
@@ -161,17 +161,35 @@ class SaleController extends BaseController
             DB::beginTransaction();
 
             $input = $request->only(['transaction_date', 'products']);
+            $transaction = Transaction::where('business_id', $business_id)->where('type', 'sell')
+                ->where('status', 'final')->lockForUpdate()->findOrFail($id);
+            if (! $this->checkLocationAccess($transaction->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid sale location.');
+            }
+            $saleLines = $transaction->sell_lines()->with('sub_unit')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            foreach ($input['products'] as &$product) {
+                $line = $saleLines->get($product['sell_line_id']);
+                if (! $line) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('A return line does not belong to this sale.');
+                }
+                $multiplier = (float) ($line->sub_unit->base_unit_multiplier ?? 1);
+                $product['quantity'] = (float) $product['quantity'] / $multiplier;
+                $product['unit_price_inc_tax'] = (float) $line->unit_price_inc_tax * $multiplier;
+            }
+            unset($product);
+            $input['transaction_id'] = $transaction->id;
+            $input['transaction_date'] = \Carbon\Carbon::parse($input['transaction_date'])->format('Y-m-d H:i:s');
             $input['location_id'] = $transaction->location_id;
             $input['contact_id'] = $transaction->contact_id;
 
-            $return_transaction = $this->transactionUtil->addSellReturn($input, $business_id, $user_id);
+            $return_transaction = $this->transactionUtil->addSellReturn($input, $business_id, $user_id, false);
 
             DB::commit();
 
             return $this->success(new TransactionResource($return_transaction->load(['contact', 'location', 'sell_lines.product'])), 'Return processed successfully', 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->error('Return failed: ' . $e->getMessage(), 500);
+            return $this->error('Return failed: ' . $e->getMessage(), $e instanceof \App\Exceptions\PurchaseSellMismatch ? 422 : 500);
         }
     }
 

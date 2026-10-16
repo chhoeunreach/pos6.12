@@ -58,8 +58,14 @@ Route::middleware([
     Route::get('/verification/export', ['\Modules\SmartStockInventory\Http\Controllers\VerificationController', 'export'])->name('ssi.verification.export');
     Route::get('/verification/print', ['\Modules\SmartStockInventory\Http\Controllers\VerificationController', 'print'])->name('ssi.verification.print');
     Route::get('/authority', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'index'])->name('ssi.authority.index');
+    Route::get('/authority/{id}/recovery', ['\\Modules\\SmartStockInventory\\Http\\Controllers\\AuthorityController', 'recovery'])->whereNumber('id')->name('ssi.authority.recovery');
+    Route::post('/authority/{id}/recovery/preview', ['\\Modules\\SmartStockInventory\\Http\\Controllers\\AuthorityController', 'previewRecovery'])->whereNumber('id')->name('ssi.authority.recovery_preview');
+    Route::post('/authority/{id}/recovery/apply', ['\\Modules\\SmartStockInventory\\Http\\Controllers\\AuthorityController', 'applyRecovery'])->whereNumber('id')->name('ssi.authority.recovery_apply');
     Route::get('/authority/details', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'details'])->name('ssi.authority.details');
+    Route::post('/authority/preview-full-fix', ['\\Modules\\SmartStockInventory\\Http\\Controllers\\AuthorityController', 'previewFullFix'])->name('ssi.authority.preview_full_fix');
     Route::post('/authority/fix-mismatches', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'fixMismatches'])->name('ssi.authority.fix_mismatches');
+    Route::post('/authority/force-preview', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'previewForceFix'])->name('ssi.authority.force_preview');
+    Route::post('/authority/force-apply', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'applyForceFix'])->name('ssi.authority.force_apply');
     Route::post('/authority/{id}/preview', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'preview'])->whereNumber('id')->name('ssi.authority.preview');
     Route::post('/authority/{id}/apply', ['\Modules\SmartStockInventory\Http\Controllers\AuthorityController', 'apply'])->whereNumber('id')->name('ssi.authority.apply');
     Route::get('/mismatch', ['\Modules\SmartStockInventory\Http\Controllers\MismatchController', 'index'])->name('ssi.mismatch.index');

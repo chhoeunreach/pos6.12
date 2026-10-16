@@ -46,7 +46,8 @@ class BaseController extends Controller
 
     protected function checkLocationAccess($location_id)
     {
-        return \App\User::can_access_this_location($location_id);
+        return \App\BusinessLocation::where('business_id', $this->getBusinessId())->where('id', $location_id)->exists()
+            && \App\User::can_access_this_location($location_id);
     }
 
     protected function getPermittedLocations()

@@ -74,9 +74,13 @@
             <div class="row">
                 <div class="col-sm-8 form-group"><label for="authority_evidence">Reason and supporting records</label>
                     <textarea id="authority_evidence" name="evidence" class="form-control" rows="3" minlength="10" maxlength="2000" required placeholder="Explain the correction and identify the delivery record or serial check used.">{{ old('evidence') }}</textarea></div>
-                <div class="col-sm-4 form-group"><label for="authority_date">Correct delivery date (optional)</label>
-                    <input id="authority_date" name="transaction_date" class="form-control" value="{{ old('transaction_date') }}" placeholder="YYYY-MM-DD HH:MM:SS">
-                    <p class="help-block">Recorded: {{ $transfer->transaction_date }}. Leave empty to keep it.</p>
+                <div class="col-sm-4 form-group">
+                    <input type="hidden" name="change_transaction_date" value="0">
+                    <div class="checkbox"><label><input type="checkbox" id="authority_change_date" name="change_transaction_date" value="1" {{ old('change_transaction_date') ? 'checked' : '' }}> Change delivery date</label></div>
+                    <label for="authority_date">Verified delivery date</label>
+                    <input id="authority_date" name="transaction_date" class="form-control" value="{{ old('change_transaction_date') ? old('transaction_date') : '' }}" placeholder="YYYY-MM-DD HH:MM:SS" {{ old('change_transaction_date') ? 'required' : 'disabled' }}>
+                    <p class="help-block">Recorded: {{ $transfer->transaction_date }}. Leave Change delivery date unchecked to preserve both document dates and repair allocations only.</p>
+                    <button type="button" class="btn btn-default btn-sm authority-keep-dates">Keep recorded dates</button>
                     <div class="authority-date-guidance" role="status" aria-live="polite"></div>
                     <button type="button" class="btn btn-default btn-sm authority-use-earliest-date" style="display:none">Fill earliest permitted date</button>
                     <p class="help-block">The earliest permitted date is a limit, not proof of delivery. Enter the actual delivery date confirmed by your records. Used receiving batches may require dependent movements to be reconciled first.</p></div>

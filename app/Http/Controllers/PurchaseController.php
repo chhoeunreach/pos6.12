@@ -696,14 +696,17 @@ class PurchaseController extends Controller
         }
 
         try {
-            $transaction = Transaction::findOrFail($id);
-
             //Validate document size
             $request->validate([
                 'document' => 'file|max:'.(config('constants.document_size_limit') / 1000),
             ]);
 
-            $transaction = Transaction::findOrFail($id);
+            DB::beginTransaction();
+            $business_id = $request->session()->get('user.business_id');
+            $transaction = Transaction::where('business_id', $business_id)->where('type', 'purchase')->lockForUpdate()->findOrFail($id);
+            if (! User::can_access_this_location($transaction->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid purchase location.');
+            }
             $before_status = $transaction->status;
             $business_id = request()->session()->get('user.business_id');
             $enable_product_editing = $request->session()->get('business.enable_editing_product_from_purchase');
@@ -772,13 +775,12 @@ class PurchaseController extends Controller
             $update_data['additional_expense_value_3'] = $request->input('additional_expense_value_3') != '' ? $this->productUtil->num_uf($request->input('additional_expense_value_3'), $currency_details) * $exchange_rate : 0;
             $update_data['additional_expense_value_4'] = $request->input('additional_expense_value_4') != '' ? $this->productUtil->num_uf($request->input('additional_expense_value_4'), $currency_details) * $exchange_rate : 0;
 
-            DB::beginTransaction();
-
             //update transaction
             $purchase_costs_before = $transaction->purchase_lines()
                 ->orderBy('id')
                 ->get(['id', 'variation_id', 'lot_number', 'purchase_price', 'purchase_price_inc_tax'])
                 ->toArray();
+            \App\Services\PurchaseStockGuard::assertReceiptDate($transaction, $update_data['transaction_date']);
             $transaction->update($update_data);
 
             //Update transaction payment status
@@ -858,10 +860,12 @@ class PurchaseController extends Controller
                     return $output;
                 }
 
+                DB::beginTransaction();
                 $transaction = Transaction::where('id', $id)
+                                ->where('type', 'purchase')->lockForUpdate()
                                 ->where('business_id', $business_id)
                                 ->with(['purchase_lines'])
-                                ->first();
+                                ->firstOrFail();
 
                 //Check if lot numbers from the purchase is selected in sale
                 if (request()->session()->get('business.enable_lot_number') == 1 && $this->transactionUtil->isLotUsed($transaction)) {
@@ -870,11 +874,14 @@ class PurchaseController extends Controller
                         'msg' => __('lang_v1.lot_numbers_are_used_in_sale'),
                     ];
 
+                    DB::rollBack();
                     return $output;
                 }
 
-                $delete_purchase_lines = $transaction->purchase_lines;
-                DB::beginTransaction();
+                if (! User::can_access_this_location($transaction->location_id) || $this->transactionUtil->isReturnExist($id)) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('This purchase cannot be deleted from the current location or has returns.');
+                }
+                $delete_purchase_lines = $transaction->purchase_lines()->orderBy('id')->lockForUpdate()->get();
 
                 $log_properities = [
                     'id' => $transaction->id,
@@ -882,6 +889,9 @@ class PurchaseController extends Controller
                 ];
                 $this->transactionUtil->activityLog($transaction, 'purchase_deleted', $log_properities);
 
+                foreach ($delete_purchase_lines as $line) {
+                    \App\Services\PurchaseStockGuard::assertUnused($line);
+                }
                 $transaction_status = $transaction->status;
                 if ($transaction_status != 'received') {
                     $transaction->delete();
@@ -1462,19 +1472,23 @@ class PurchaseController extends Controller
                 'msg' => __('messages.transaction_edit_not_allowed', ['days' => $edit_days]), ];
         }
 
+        $request->validate(['status' => 'required|in:received,pending,ordered']);
+
         try {
             $business_id = request()->session()->get('user.business_id');
 
+            DB::beginTransaction();
             $transaction = Transaction::where('business_id', $business_id)
                                 ->where('type', 'purchase')
-                                ->with(['purchase_lines'])
+                                ->with(['purchase_lines' => function ($query) { $query->orderBy('id')->lockForUpdate(); }])->lockForUpdate()
                                 ->findOrFail($request->input('purchase_id'));
 
+            if (! User::can_access_this_location($transaction->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid purchase location.');
+            }
             $before_status = $transaction->status;
 
             $update_data['status'] = $request->input('status');
-
-            DB::beginTransaction();
 
             //update transaction
             $transaction->update($update_data);

@@ -3960,6 +3960,9 @@ class TransactionUtil extends Util
 
     protected function adjustMappingPurchaseSellAfterEditingPurchaseLocked($before_status, $transaction, $delete_purchase_lines)
     {
+        if ($before_status === 'received' && $transaction->status !== 'received') {
+            \App\Services\PurchaseStockGuard::assertCanUnreceive($transaction);
+        }
         if ($before_status == 'received' && $transaction->status == 'received') {
             //Check if there is some irregularities between purchase & sell and make appropiate adjustment.
 
@@ -3978,10 +3981,10 @@ class TransactionUtil extends Util
                     )
                     ->groupBy('TSPL.purchase_line_id')
                     ->where('transactions.id', $transaction->id)
-                    ->havingRaw('SUM(TSPL.quantity) > MAX(PL.quantity)')
+                    ->havingRaw('SUM(TSPL.quantity - COALESCE(TSPL.qty_returned, 0)) > MAX(PL.quantity - PL.quantity_returned - PL.mfg_quantity_used)')
                     ->select(['TSPL.purchase_line_id AS id',
-                        DB::raw('SUM(TSPL.quantity) AS tspl_quantity'),
-                        DB::raw('MAX(PL.quantity) AS pl_quantity'),
+                        DB::raw('SUM(TSPL.quantity - COALESCE(TSPL.qty_returned, 0)) AS tspl_quantity'),
+                        DB::raw('MAX(PL.quantity - PL.quantity_returned - PL.mfg_quantity_used) AS pl_quantity'),
                     ])
                     ->get()
                     ->toArray();
@@ -4002,7 +4005,7 @@ class TransactionUtil extends Util
                     ->groupBy('TSPL.purchase_line_id')
                     ->where('transactions.id', $transaction->id)
                     ->select(['TSPL.purchase_line_id AS id',
-                        DB::raw('MAX(PL.quantity) AS pl_quantity'),
+                        DB::raw('MAX(PL.quantity - PL.quantity_returned - PL.mfg_quantity_used) AS pl_quantity'),
                     ])
                     ->get()
                     ->toArray();
@@ -4019,6 +4022,9 @@ class TransactionUtil extends Util
         // The caller's transaction must roll back the receipt edit instead.
         $affectedIds = array_column($purchase_lines, 'id');
         if ($affectedIds) {
+            if (TransactionSellLinesPurchaseLines::whereIn('purchase_line_id', $affectedIds)->where('qty_returned', '>', 0)->exists()) {
+                throw new PurchaseSellMismatch('This receipt contains returned sale allocations. Preserve its return history and reconcile it before removing or reallocating stock.');
+            }
             $protectedMovement = DB::table('transaction_sell_lines as s')
                 ->join('transactions as t', 't.id', '=', 's.transaction_id')
                 ->leftJoin('transaction_sell_lines_purchase_lines as m', 'm.sell_line_id', '=', 's.id')
@@ -6683,7 +6689,8 @@ class TransactionUtil extends Util
 
         //Get parent sale
         $sell = Transaction::where('business_id', $business_id)
-                        ->with(['sell_lines', 'sell_lines.sub_unit'])
+                        ->where('type', 'sell')->where('status', 'final')->lockForUpdate()
+                        ->with(['sell_lines' => function ($query) { $query->with('sub_unit')->orderBy('id')->lockForUpdate(); }])
                         ->findOrFail($input['transaction_id']);
 
         $sell_lines = $sell->sell_lines->keyBy('id');
@@ -6704,7 +6711,7 @@ class TransactionUtil extends Util
 
             $sell_line = $sell_lines->get($product_line['sell_line_id']);
             if (empty($sell_line)) {
-                continue;
+                throw new PurchaseSellMismatch('A return line does not belong to this sale.');
             }
 
             $multiplier = 1;

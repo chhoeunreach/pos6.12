@@ -21,6 +21,7 @@ class CreatePurchaseRequest extends FormRequest
             'status' => 'required|in:received,pending,ordered',
             'ref_no' => 'nullable|string',
             'products' => 'required|array|min:1',
+            'products.*.purchase_line_id' => 'nullable|integer|distinct',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.variation_id' => 'required|exists:variations,id',
             'products.*.quantity' => 'required|numeric|min:0.001',

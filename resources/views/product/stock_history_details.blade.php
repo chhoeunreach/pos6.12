@@ -100,7 +100,18 @@
 			<tbody>
 			@forelse($stock_history as $history)
 				<tr>
-					<td>{{$history['type_label']}}</td>
+					<td>{{$history['type_label']}}
+                        @if(!empty($history['quantity_mismatch']))
+                            <div class="text-danger small" role="alert">
+                                {{ __('Receiving lot quantity mismatch.') }}
+                                {{ __('Sent') }}:
+                                <span class="display_currency" data-is_quantity="true">{{ $history['expected_quantity'] }}</span>;
+                                {{ __('Received') }}:
+                                <span class="display_currency" data-is_quantity="true">{{ $history['quantity_change'] }}</span>.
+                                {{ __('Restore the verified receiving lots before repairing the balance.') }}
+                            </div>
+                        @endif
+                    </td>
 					@if($history['quantity_change'] > 0 )
 						<td class="text-success"> +<span class="display_currency" data-is_quantity="true" data-orig-value="{{$history['quantity_change']}}">{{$history['quantity_change']}}</span>
 						</td>

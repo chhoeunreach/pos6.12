@@ -3,45 +3,46 @@
 namespace App\Console\Commands;
 
 use App\Business;
+use App\Exceptions\PurchaseSellMismatch;
 use App\Services\StockAuthorityReconciliationService;
+use App\User;
+use App\Utils\Util;
 use Illuminate\Console\Command;
 
 class FixStockAuthorityMismatches extends Command
 {
-    protected $signature = 'stock:authority-fix-mismatches {business_id=1} {--reason= : Reason for authority fix}';
+    protected $signature = 'stock:authority-fix-mismatches {business_id}
+        {--user= : Business administrator or superadmin ID}
+        {--reason= : Repair reason, 10 to 500 characters}
+        {--apply : Apply an existing preview instead of generating one}
+        {--token= : Token from the reviewed preview}';
 
-    protected $description = 'Fix stock allocation mismatches and regenerate clean data for Stock Inventory Authority';
+    protected $description = 'Preview full Authority repairs; apply only a reviewed, unchanged proposal';
 
-    public function handle(StockAuthorityReconciliationService $service): int
+    public function handle(StockAuthorityReconciliationService $service, Util $util): int
     {
         $businessId = (int) $this->argument('business_id');
-        if ($businessId <= 0 || ! Business::where('id', $businessId)->exists()) {
-            $this->error('Select an existing business ID.');
+        $user = User::find((int) $this->option('user'));
+        if (! Business::where('id', $businessId)->exists() || ! $user
+            || ! ($user->can('superadmin') || ((int) $user->business_id === $businessId && $util->is_admin($user, $businessId)))) {
+            $this->error('Select an existing business and provide its administrator using --user.');
             return self::FAILURE;
         }
-
-        $this->info("Scanning and reconciling stock authority mismatches for Business #{$businessId}...");
-
-        $reason = $this->option('reason') ?: 'CLI Stock Inventory Authority Full Mismatch Fix';
-        $result = $service->reconcileAll($businessId, $reason, 1, '127.0.0.1');
-
-        $this->info($result['message']);
-        $this->table(
-            ['Metric', 'Before Fix', 'After Fix'],
-            [
-                ['Sale Line Issues', $result['before']['sale_line_issues'], $result['after']['sale_line_issues']],
-                ['Stock Issues', $result['before']['stock_issues'], $result['after']['stock_issues']],
-                ['Transfer Issues', $result['before']['transfer_issues'], $result['after']['transfer_issues']],
-            ]
-        );
-
-        $this->info("Over-allocated lines cleaned: " . $result['over_allocated_fixed']);
-        $this->info("Missing selected lots repaired: " . $result['missing_selected_fixed']);
-        $this->info("Allocations realigned to selected lots: " . $result['realigned_allocations_fixed']);
-        $this->info("Purchase lines quantity_sold recalculated: " . $result['purchase_lines_recalculated']);
-        $this->info("Variation location stock details recalculated: " . $result['variations_recalculated']);
-        $this->info("Line #2328 status: " . ($result['line_2328_clean'] ? "CLEAN" : "HAS ISSUES"));
-
-        return self::SUCCESS;
+        try {
+            $reason = (string) $this->option('reason');
+            if ($this->option('apply')) {
+                $result = $service->reconcileAll($businessId, $reason, $user->id, null, (string) $this->option('token'));
+                $this->info($result['message']);
+                $this->line('Audit log: #'.$result['audit_log_id']);
+            } else {
+                $plan = $service->previewAll($businessId, $user->id, $reason);
+                $this->line(json_encode($plan, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+                $this->info('Preview only. No stock records changed. Review the exact changes before using --apply --token.');
+            }
+            return self::SUCCESS;
+        } catch (PurchaseSellMismatch $exception) {
+            $this->error($exception->getMessage());
+            return self::FAILURE;
+        }
     }
 }

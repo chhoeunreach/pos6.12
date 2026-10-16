@@ -23,7 +23,8 @@ class StockTransferRequest extends FormRequest
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.variation_id' => 'required|exists:variations,id',
             'products.*.quantity' => 'required|numeric|min:0.001',
-            'products.*.unit_cost' => 'nullable|numeric',
+            'products.*.unit_cost' => 'nullable|numeric|min:0',
+            'products.*.lot_no_line_id' => 'nullable|integer|exists:purchase_lines,id',
             'additional_notes' => 'nullable|string',
             'shipping_charges' => 'nullable|numeric',
         ];

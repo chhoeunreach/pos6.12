@@ -3618,8 +3618,6 @@ class SellPosController extends Controller
                             $base_unit_multiplier = !empty($unit->base_unit_multiplier) ? $unit->base_unit_multiplier : $base_unit_multiplier;
                         }
 
-                        $combo_variations[$key]['product_id'] = $sell_line->product_id;
-                        $combo_variations[$key]['product_id'] = $sell_line->product_id;
                         $combo_variations[$key]['quantity'] = $value['quantity'] * $decrease_qty * $base_unit_multiplier;
                     }
                     $this->productUtil

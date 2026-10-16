@@ -1381,6 +1381,28 @@ class LotSaleConsistencyTest extends TestCase
         $this->app->make(TransactionUtil::class)->shouldNotHaveReceived('activityLog');
     }
 
+    public function test_overselling_correction_auto_reconciles_receiving_instead_of_blocking_related_line(): void
+    {
+        $controller = $this->relatedAllocationCorrectionFixture();
+        DB::table('business')->where('id', 1)->update(['pos_settings' => '{"allow_overselling":1}']);
+        DB::table('purchase_lines')->where('id', 6)->update(['lot_number' => 'UNVERIFIED-SERIAL']);
+        $request = $this->statusRequest('completed');
+        $request->setUserResolver(fn () => auth()->user());
+
+        $response = $controller->autoCorrectStock($request, 1);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($response->getData(true)['complete']);
+        $selectedLot = PurchaseLine::find(3)->lot_number;
+        $this->assertNotEmpty($selectedLot);
+        // The related line is re-pointed to its recorded selected receipt and the receiving record is
+        // rebuilt to corroborate that serial, so the correction completes instead of deferring.
+        $this->assertEquals(3, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 66356)->value('purchase_line_id'));
+        $this->assertSame($selectedLot, DB::table('purchase_lines')->where('id', 6)->value('lot_number'));
+        $this->assertNotSame('UNVERIFIED-SERIAL', DB::table('purchase_lines')->where('id', 6)->value('lot_number'));
+        $this->assertSame([], app(\App\Services\LotStockAuditService::class)->audit(1, null, 4)['sale_line_issues']);
+    }
+
     public function test_related_allocation_correction_rolls_back_if_selected_receipt_is_too_late(): void
     {
         $controller = $this->relatedAllocationCorrectionFixture();
@@ -1427,6 +1449,23 @@ class LotSaleConsistencyTest extends TestCase
         $this->app->make(TransactionUtil::class)->shouldHaveReceived('activityLog')->once()
             ->withArgs(fn ($transfer, $event, $before, $properties) => $event === 'stock_transfer_corrected'
                 && count($properties['related_allocation_repairs']) === 1);
+    }
+
+    public function test_overselling_manual_preview_discloses_receiving_repairs(): void
+    {
+        $controller = $this->relatedAllocationCorrectionFixture();
+        DB::table('business')->where('id', 1)->update(['pos_settings' => '{"allow_overselling":1}']);
+        DB::table('purchase_lines')->where('id', 6)->update(['lot_number' => 'UNVERIFIED-SERIAL']);
+        $request = $this->relatedManualCorrectionRequest();
+        $before = $this->stockCorrectionSnapshot();
+
+        $response = $controller->previewManualCorrection($request, 1);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $plan = $response->getData(true)['plan'];
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertGreaterThanOrEqual(1, $plan['receiving_repairs']['updated']);
+        $this->assertCount(1, $plan['related_allocation_repairs']);
     }
 
     public function test_admin_manual_apply_rejects_changed_related_receipt_after_preview(): void
@@ -2388,6 +2427,60 @@ class LotSaleConsistencyTest extends TestCase
             $this->assertStringContainsString('Enter the verified missing source serial', $exception->getMessage());
         }
         $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_allocation_only_correction_ignores_an_unrequested_date_change(): void
+    {
+        $this->usedReceivingBatchFixture();
+        DB::table('transactions')->where('id', 3)->update(['transaction_date' => '2026-09-02 13:00:00']);
+        $controller = $this->authorityController();
+        $input = $this->relatedManualCorrectionRequest()->all();
+        $input['change_transaction_date'] = 0;
+        $input['transaction_date'] = '2026-09-04 12:00:00';
+        $input['date_basis'] = 'receipt_dates';
+        $before = $this->stockCorrectionSnapshot();
+        $dates = DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all();
+        $view = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $view->name());
+        $data = $view->getData();
+        $this->assertNull($data['plan']['date_change']);
+        $this->assertNull($data['input']['transaction_date']);
+        $this->assertNull($data['input']['date_basis']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $input = $data['input']; $input['token'] = $data['plan']['token'];
+        $controller->apply($this->authorityRequest($input), 1);
+        $this->assertEquals(1, session('status.success'), session('status.msg'));
+        $this->assertSame($dates, DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all());
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->value('purchase_line_id'));
+    }
+
+    public function test_authority_explicit_date_change_still_blocks_used_receiving_lots(): void
+    {
+        $this->usedReceivingBatchFixture();
+        $controller = $this->authorityController();
+        $input = $this->relatedManualCorrectionRequest()->all();
+        $input['change_transaction_date'] = 1;
+        $input['transaction_date'] = '2026-09-04 12:00:00';
+        $request = $this->authorityRequest($input); $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Keep recorded dates', $response->getData(true)['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_explicit_date_change_requires_a_verified_date_value(): void
+    {
+        $this->usedReceivingBatchFixture();
+        $controller = $this->authorityController();
+        $input = $this->relatedManualCorrectionRequest()->all();
+        $input['change_transaction_date'] = 1; $input['transaction_date'] = '';
+        $before = $this->stockCorrectionSnapshot();
+        try { $controller->preview($this->authorityRequest($input), 1); $this->fail('An explicit date change requires its actual date.'); }
+        catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('transaction_date', $exception->errors());
+            $this->assertSame($before, $this->stockCorrectionSnapshot());
+        }
     }
 
     public function test_authority_later_receipt_requires_an_explicit_verified_delivery_date(): void
@@ -4062,6 +4155,21 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEquals([2, 1], $this->transferBalances());
         $this->assertEquals($received->id, $purchase->purchase_lines()->first()->id);
         $this->assertSame('Edited transfer', $sell->fresh()->additional_notes);
+    }
+
+    public function test_metadata_edit_cannot_backdate_transfer_before_source_receipt(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $controller = $this->transferController();
+        $request = $this->editRequest([$this->editProduct()]);
+        $request->merge(['transaction_date' => '2026-08-01 12:00:00']);
+        $controller->update($request, 1);
+        $this->assertEquals(0, session('status.success'));
+        $this->assertStringContainsString('Verified Delivery Date Correction', session('status.msg'));
+        $this->assertSame('2026-09-01 12:00:00', $sell->fresh()->transaction_date);
+        $this->assertSame('2026-09-01 12:00:00', $purchase->fresh()->transaction_date);
+        $this->assertEquals([2, 1], $this->transferBalances());
     }
 
     public function test_receipts_and_deductions_update_one_location_balance(): void

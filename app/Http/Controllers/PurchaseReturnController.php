@@ -237,42 +237,27 @@ class PurchaseReturnController extends Controller
         try {
             $business_id = request()->session()->get('user.business_id');
 
+            DB::beginTransaction();
             $purchase = Transaction::where('business_id', $business_id)
                         ->where('type', 'purchase')
-                        ->with(['purchase_lines', 'purchase_lines.sub_unit'])
+                        ->where('status', 'received')->lockForUpdate()
+                        ->with(['purchase_lines' => function ($query) { $query->with('sub_unit')->orderBy('id')->lockForUpdate(); }])
                         ->findOrFail($request->input('transaction_id'));
 
-            $return_quantities = $request->input('returns');
-            $return_total = 0;
-
-            DB::beginTransaction();
-
-            foreach ($purchase->purchase_lines as $purchase_line) {
-                $old_return_qty = $purchase_line->quantity_returned;
-
-                $return_quantity = ! empty($return_quantities[$purchase_line->id]) ? $this->productUtil->num_uf($return_quantities[$purchase_line->id]) : 0;
-
-                $multiplier = 1;
-                if (! empty($purchase_line->sub_unit->base_unit_multiplier)) {
-                    $multiplier = $purchase_line->sub_unit->base_unit_multiplier;
-                    $return_quantity = $return_quantity * $multiplier;
-                }
-
-                $purchase_line->quantity_returned = $return_quantity;
-                $purchase_line->save();
-                $return_total += $purchase_line->purchase_price_inc_tax * $purchase_line->quantity_returned;
-
-                //Decrease quantity in variation location details
-                if ($old_return_qty != $purchase_line->quantity_returned) {
-                    $this->productUtil->decreaseProductQuantity(
-                        $purchase_line->product_id,
-                        $purchase_line->variation_id,
-                        $purchase->location_id,
-                        $purchase_line->quantity_returned,
-                        $old_return_qty
-                    );
-                }
+            if (! \App\User::can_access_this_location($purchase->location_id)) {
+                throw new \App\Exceptions\PurchaseSellMismatch('Invalid purchase location.');
             }
+            $request->validate(['returns' => 'required|array']);
+            $quantities = [];
+            foreach ($request->input('returns') as $lineId => $quantity) {
+                $line = $purchase->purchase_lines->firstWhere('id', $lineId);
+                if (! $line) {
+                    throw new \App\Exceptions\PurchaseSellMismatch('A return line does not belong to this purchase.');
+                }
+                $quantities[$lineId] = $this->productUtil->num_uf($quantity ?: 0)
+                    * ($line->sub_unit->base_unit_multiplier ?? 1);
+            }
+            $return_total = app(\App\Services\PurchaseReturnStockService::class)->apply($purchase, $quantities);
             $return_total_inc_tax = $return_total + $request->input('tax_amount');
 
             $return_transaction_data = [
@@ -327,7 +312,7 @@ class PurchaseReturnController extends Controller
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
             $output = ['success' => 0,
-                'msg' => __('messages.something_went_wrong'),
+                'msg' => $e instanceof \App\Exceptions\PurchaseSellMismatch ? $e->getMessage() : __('messages.something_went_wrong'),
             ];
         }
 

@@ -64,9 +64,14 @@ function authority_date_value(value) {
     return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? value : '';
 }
 
+function authority_date_change_enabled($form) {
+    var $choice = $form.find('#authority_change_date');
+    return !$choice.length || $choice.prop('checked');
+}
+
 function authority_update_dates($form) {
     var recorded = authority_date_value($form.attr('data-recorded-date'));
-    var effective = authority_date_value($form.find('#authority_date').val()) || recorded;
+    var effective = (authority_date_change_enabled($form) ? authority_date_value($form.find('#authority_date').val()) : '') || recorded;
     var earliest = '';
     var conflicts = [];
     $form.find('.authority-line').each(function () {
@@ -84,7 +89,7 @@ function authority_update_dates($form) {
         message = conflicts.join('; ') + ', after delivery ' + effective + '. Select an earlier source receipt or enter the actual verified delivery date on or after ' + earliest + '.';
     }
     $form.find('.authority-date-guidance').toggleClass('text-danger', conflicts.length > 0).text(message);
-    $form.find('.authority-use-earliest-date').toggle(Boolean(earliest && effective && earliest > effective)).attr('data-date', earliest);
+    $form.find('.authority-use-earliest-date').toggle(Boolean(authority_date_change_enabled($form) && earliest && effective && earliest > effective)).attr('data-date', earliest);
     return conflicts.length === 0;
 }
 
@@ -119,22 +124,11 @@ function authority_complete_fields($form) {
         }
     });
     authority_update_dates($form);
+    // Completing receipt selections must never propose or submit a date change.
     var $date = $form.find('#authority_date');
-    var earliest = $form.find('.authority-use-earliest-date').attr('data-date') || '';
-    var recorded = authority_date_value($form.attr('data-recorded-date'));
-    var receiving = authority_date_value($form.attr('data-receiving-date'));
-    if ((!$date.val() || ($date.attr('data-proposed-date') && $date.val() === $date.attr('data-proposed-date'))) && recorded) {
-        if (earliest > recorded) {
-            var proposal = receiving && receiving >= earliest ? receiving : earliest;
-            $date.val(proposal).attr('data-proposed-date', proposal);
-            $form.find('#authority_date_basis').val(proposal === receiving ? 'recorded_receiving_date' : 'receipt_dates');
-        } else if (!receiving || receiving === recorded) {
-            $date.val(recorded).removeAttr('data-proposed-date');
-            $form.find('#authority_date_basis').val('');
-        } else {
-            $date.val('').removeAttr('data-proposed-date');
-            $form.find('#authority_date_basis').val('');
-        }
+    if (!authority_date_change_enabled($form)) {
+        $date.val('').removeAttr('data-proposed-date').prop('disabled', true);
+        $form.find('#authority_date_basis').val('');
     }
     authority_update_dates($form);
     if ($form.find('#authority_date_basis').val()) {
@@ -188,6 +182,7 @@ function authority_initialize_form() {
         if ($modal.length) { options.dropdownParent = $modal; }
         $form.find('.authority-receipt').select2(options);
     }
+    $form.find('#authority_date').prop('disabled', !authority_date_change_enabled($form)).prop('required', authority_date_change_enabled($form));
     $form.find('.authority-line').each(function () { authority_update_receiving($(this), false); });
     authority_complete_fields($form);
     $form.on('click', '.authority-auto-complete', function () { authority_verify_completion($form, $(this)); });
@@ -204,6 +199,18 @@ function authority_initialize_form() {
     });
     $form.on('input', '.authority-new-serial, .authority-verified-serial', function () {
         authority_update_receiving($(this).closest('.authority-line'), false);
+    });
+    $form.on('change', '#authority_change_date', function () {
+        var enabled = authority_date_change_enabled($form);
+        $form.find('#authority_date').prop('disabled', !enabled).prop('required', enabled);
+        if (!enabled) {
+            $form.find('#authority_date').val('').removeAttr('data-proposed-date');
+            $form.find('#authority_date_basis').val('');
+        }
+        authority_update_dates($form);
+    });
+    $form.on('click', '.authority-keep-dates', function () {
+        $form.find('#authority_change_date').prop('checked', false).trigger('change');
     });
     $form.on('input change', '#authority_date, .authority-new-source-date', function () {
         if ($(this).is('#authority_date') && $(this).val() !== $(this).attr('data-proposed-date')) { $form.find('#authority_date_basis').val(''); }
