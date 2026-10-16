@@ -11,6 +11,7 @@ class StockMismatchDetectorService
     /** Quantity mismatches displayed by Product Stock Details, one row per product/location. */
     public function detectQuantityMismatches(array $filters): array
     {
+        $this->raiseLimits();
         $businessId = (int) $filters['business_id'];
         $locations = DB::table('business_locations')->where('business_id', $businessId)
             ->whereIn('id', $filters['location_ids'])->pluck('name', 'id');
@@ -47,6 +48,7 @@ class StockMismatchDetectorService
 
     public function detectTransferIssues(array $filters, ?array $lastFailure = null): array
     {
+        $this->raiseLimits();
         $transfer = \App\Transaction::where('business_id', (int) $filters['business_id'])->where('type', 'sell_transfer')
             ->whereIn('location_id', $filters['location_ids'])->findOrFail((int) $filters['transfer_id']);
         $lines = DB::table('transaction_sell_lines as s')->join('products as p', 'p.id', '=', 's.product_id')
@@ -81,6 +83,7 @@ class StockMismatchDetectorService
 
     public function detect(array $filters): array
     {
+        $this->raiseLimits();
         $businessId = (int) $filters['business_id'];
         $locations = array_map('intval', $filters['location_ids']);
         if (!$locations) {
@@ -247,5 +250,35 @@ class StockMismatchDetectorService
         }
         unset($row);
         return $rows;
+    }
+
+    /** The full-business scan loads the whole ledger into memory, so grant bulk-operation headroom. */
+    private function raiseLimits(): void
+    {
+        @set_time_limit(0);
+        $limit = ini_get('memory_limit');
+        if ($limit === false || $limit === '') {
+            return;
+        }
+        $bytes = $this->memoryLimitInBytes((string) $limit);
+        if ($bytes !== -1 && $bytes < 1073741824) {
+            @ini_set('memory_limit', '1024M');
+        }
+    }
+
+    private function memoryLimitInBytes(string $limit): int
+    {
+        $limit = trim($limit);
+        if ($limit === '-1') {
+            return -1;
+        }
+        $value = (int) $limit;
+
+        return match (strtolower(substr($limit, -1))) {
+            'g' => $value * 1073741824,
+            'm' => $value * 1048576,
+            'k' => $value * 1024,
+            default => $value,
+        };
     }
 }
