@@ -7,8 +7,11 @@ use Illuminate\Support\Facades\DB;
 
 class LotStockAuditService
 {
+    use Concerns\RaisesBulkMemoryLimits;
+
     public function audit(int $businessId, ?string $invoice = null, ?int $transactionId = null, ?array $transactionIds = null): array
     {
+        $this->raiseLimits();
         $allocationTotals = DB::table('transaction_sell_lines_purchase_lines as m')
             ->select('m.sell_line_id')
             ->selectRaw('SUM(m.quantity) as allocated_quantity, SUM(COALESCE(m.qty_returned, 0)) as returned_quantity')

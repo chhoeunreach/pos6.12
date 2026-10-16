@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Schema;
 /** Builds a business-wide proposal without inventing receipts or changing recorded movements. */
 class AuthorityFullRepairService
 {
+    use Concerns\RaisesBulkMemoryLimits;
+
     private const VERSION = 'authority-full-preview-v1';
     private const EPSILON = 0.0001;
 
@@ -468,36 +470,6 @@ class AuthorityFullRepairService
             'unresolved' => array_values(array_map(fn ($key, $value) => $value + ['key' => $key],
                 array_keys($unresolved), array_values($unresolved))),
             'can_apply' => count($changes) + count($counters) + count($locations) > 0];
-    }
-
-    /** The full-business scan loads the whole ledger into memory, so grant bulk-operation headroom. */
-    private function raiseLimits(): void
-    {
-        @set_time_limit(0);
-        $limit = ini_get('memory_limit');
-        if ($limit === false || $limit === '') {
-            return;
-        }
-        $bytes = $this->memoryLimitInBytes((string) $limit);
-        if ($bytes !== -1 && $bytes < 1073741824) {
-            @ini_set('memory_limit', '1024M');
-        }
-    }
-
-    private function memoryLimitInBytes(string $limit): int
-    {
-        $limit = trim($limit);
-        if ($limit === '-1') {
-            return -1;
-        }
-        $value = (int) $limit;
-
-        return match (strtolower(substr($limit, -1))) {
-            'g' => $value * 1073741824,
-            'm' => $value * 1048576,
-            'k' => $value * 1024,
-            default => $value,
-        };
     }
 
     /**

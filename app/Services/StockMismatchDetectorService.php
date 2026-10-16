@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 /** Read-only stock diagnostics, restricted to the business and permitted locations. */
 class StockMismatchDetectorService
 {
+    use Concerns\RaisesBulkMemoryLimits;
+
     /** Quantity mismatches displayed by Product Stock Details, one row per product/location. */
     public function detectQuantityMismatches(array $filters): array
     {
@@ -250,35 +252,5 @@ class StockMismatchDetectorService
         }
         unset($row);
         return $rows;
-    }
-
-    /** The full-business scan loads the whole ledger into memory, so grant bulk-operation headroom. */
-    private function raiseLimits(): void
-    {
-        @set_time_limit(0);
-        $limit = ini_get('memory_limit');
-        if ($limit === false || $limit === '') {
-            return;
-        }
-        $bytes = $this->memoryLimitInBytes((string) $limit);
-        if ($bytes !== -1 && $bytes < 1073741824) {
-            @ini_set('memory_limit', '1024M');
-        }
-    }
-
-    private function memoryLimitInBytes(string $limit): int
-    {
-        $limit = trim($limit);
-        if ($limit === '-1') {
-            return -1;
-        }
-        $value = (int) $limit;
-
-        return match (strtolower(substr($limit, -1))) {
-            'g' => $value * 1073741824,
-            'm' => $value * 1048576,
-            'k' => $value * 1024,
-            default => $value,
-        };
     }
 }
