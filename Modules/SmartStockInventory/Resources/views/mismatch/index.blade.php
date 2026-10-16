@@ -30,7 +30,7 @@
             </a>
         @endif
     </div>
-    <p class="help-block">{{ $stock_error_mode ? 'Review stock, lot, serial and allocation errors. Fix applies the calculated quantity correction immediately. Correct record opens lot or serial records that need separate correction.' : 'Shows the same quantity mismatches as Product Stock Details for your permitted locations. Click Fix to apply the calculated stock quantity immediately.' }}</p>
+    <p class="help-block">{{ $stock_error_mode ? 'Review stock, lot, serial and allocation errors. Fix and Correct record both set the recorded stock to the calculated correct stock immediately; open Details to inspect the underlying receipt, lot or transfer.' : 'Shows the same quantity mismatches as Product Stock Details for your permitted locations. Click Fix to apply the calculated stock quantity immediately.' }}</p>
 </div>
 <div id="transfer_fix_result" role="status" aria-live="polite"></div>
 <div class="box-body table-responsive">
@@ -71,7 +71,18 @@
     @endcan
     <a class="btn btn-xs btn-default" href="{{ $row['url'] }}">Details</a>
 @else
-    <a class="btn btn-sm btn-primary" href="{{ $row['url'] }}">Correct record</a>
+    @can('stock_inventory.fix')
+    <form method="post" action="{{ ssi_route('ssi.mismatch.fix_auto') }}" class="direct-stock-fix" style="display:inline-block">
+        @csrf
+        <input type="hidden" name="product_id" value="{{ $row['product_id'] }}">
+        <input type="hidden" name="variation_id" value="{{ $row['variation_id'] }}">
+        <input type="hidden" name="location_id" value="{{ $row['location_id'] }}">
+        <input type="hidden" name="problem_type" value="mismatch_stock">
+        <input type="hidden" name="reason" value="Correct record: reconcile stock quantity using Product Stock Details">
+        <button type="submit" class="btn btn-sm btn-primary" title="Set recorded stock to the calculated correct stock"><i class="fa fa-wrench" aria-hidden="true"></i> Correct record</button>
+    </form>
+    @endcan
+    <a class="btn btn-xs btn-default" href="{{ $row['url'] }}">Details</a>
 @endif
 </td>
 <td>{{ $row['product'] }}</td><td>{{ $row['sku'] }}</td><td>{{ $row['location'] }}</td>
