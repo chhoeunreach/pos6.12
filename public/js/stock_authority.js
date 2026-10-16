@@ -13,6 +13,7 @@ function authority_update_receiving($row, suggestMatch) {
         if (this.value && this.value !== 'new') { occupied.push(this.value); }
     });
     var matches = [];
+    var occupiedMatch = false;
     $destination.find('option[value!=""]').each(function () {
         var $option = $(this);
         if (this.value === 'new') {
@@ -22,10 +23,12 @@ function authority_update_receiving($row, suggestMatch) {
         var optionSerial = $option.attr('data-serial') || '';
         var sameSerial = optionSerial === serial;
         var sameQuantity = Math.abs(Number($option.attr('data-quantity')) - quantity) < 0.0001;
-        var disabled = !sameQuantity || occupied.indexOf(this.value) !== -1 ||
+        var isOccupied = occupied.indexOf(this.value) !== -1;
+        var disabled = !sameQuantity || isOccupied ||
             (Boolean($source.val()) && ((!serial && Boolean(optionSerial)) || ($option.attr('data-used') === '1' && Boolean(optionSerial) && !sameSerial)));
         $option.prop('disabled', disabled);
         if (!disabled && $source.val() && sameSerial) { matches.push(this.value); }
+        if ($source.val() && sameSerial && sameQuantity && isOccupied) { occupiedMatch = true; }
     });
 
     var $selected = $destination.find(':selected');
@@ -34,6 +37,10 @@ function authority_update_receiving($row, suggestMatch) {
     }
     if (suggestMatch && !$destination.val() && matches.length === 1) {
         $destination.val(matches[0]);
+    }
+    if (suggestMatch && !$destination.val() && occupiedMatch) {
+        var $missingReceiving = $destination.find('option[value="new"]');
+        if ($missingReceiving.length && !$missingReceiving.prop('disabled')) { $destination.val('new'); }
     }
     $destination.trigger('change.select2');
 
