@@ -25,7 +25,7 @@ function authority_update_receiving($row, suggestMatch) {
         var disabled = !sameQuantity || occupied.indexOf(this.value) !== -1 ||
             (Boolean($source.val()) && ((!serial && Boolean(optionSerial)) || ($option.attr('data-used') === '1' && Boolean(optionSerial) && !sameSerial)));
         $option.prop('disabled', disabled);
-        if (!disabled && $source.val() && serial && sameSerial) { matches.push(this.value); }
+        if (!disabled && $source.val() && sameSerial) { matches.push(this.value); }
     });
 
     var $selected = $destination.find(':selected');
