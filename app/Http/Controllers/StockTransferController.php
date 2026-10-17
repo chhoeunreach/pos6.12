@@ -634,7 +634,7 @@ class StockTransferController extends Controller
             }
 
             $source_allocations = TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $sell->sell_lines()->pluck('id'))->get()->toArray();
-            $this->stockTransferStock->reverse($sell, $purchase);
+            $this->stockTransferStock->reverse($sell, $purchase, $this->isEnvAdministrator());
             $this->transactionUtil->activityLog($sell, 'deleted', null, [
                 'source_allocations' => $source_allocations,
                 'transfer_lines' => $sell->sell_lines()->get()->toArray(),
@@ -1479,9 +1479,9 @@ class StockTransferController extends Controller
                 return redirect('stock-transfers')->with('status', ['success' => 1, 'msg' => __('lang_v1.updated_succesfully')]);
             }
             if ($sell_transfer_was_completed) {
-                $this->stockTransferStock->reverse($sell_transfer, $purchase_transfer);
+                $this->stockTransferStock->reverse($sell_transfer, $purchase_transfer, $this->isEnvAdministrator());
             } else {
-                $this->stockTransferStock->assertDestinationUnused($purchase_transfer);
+                $this->stockTransferStock->assertDestinationUnused($purchase_transfer, $this->isEnvAdministrator());
                 if (TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $sell_transfer->sell_lines()->pluck('id'))->exists()) {
                     throw new \App\Exceptions\PurchaseSellMismatch('An incomplete transfer already has stock allocations. Reconcile it before editing it.');
                 }
@@ -1587,7 +1587,7 @@ class StockTransferController extends Controller
             //Decrease product stock from sell location
             //And increase product stock at purchase location
             if ($status == 'completed') {
-                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator());
+                $this->stockTransferStock->apply($sell_transfer, $purchase_transfer, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator(), $this->isEnvAdministrator());
             }
 
             $this->transactionUtil->activityLog($sell_transfer, 'edited', $sell_transfer_before);
@@ -1686,9 +1686,9 @@ class StockTransferController extends Controller
             $wasCompleted = in_array($sell->status, ['final', 'completed'], true);
 
             if ($status === 'completed' && ! $wasCompleted) {
-                $this->stockTransferStock->apply($sell, $purchase, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator());
+                $this->stockTransferStock->apply($sell, $purchase, $request->session()->get('business.accounting_method', 'fifo'), $this->isEnvAdministrator(), $this->isEnvAdministrator());
             } elseif ($status !== 'completed' && $wasCompleted) {
-                $this->stockTransferStock->reverse($sell, $purchase);
+                $this->stockTransferStock->reverse($sell, $purchase, $this->isEnvAdministrator());
             }
             $sell->update(['status' => $status === 'completed' ? 'final' : $status]);
             $purchase->update(['status' => $status === 'completed' ? 'received' : $status]);

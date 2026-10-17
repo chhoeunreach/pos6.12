@@ -20,16 +20,16 @@ class StockTransferStockService
     {
     }
 
-    public function apply(Transaction $sell, Transaction $purchase, string $accountingMethod, bool $repairVerifiedCounters = false): void
+    public function apply(Transaction $sell, Transaction $purchase, string $accountingMethod, bool $repairVerifiedCounters = false, bool $force = false): void
     {
-        DB::transaction(function () use ($sell, $purchase, $accountingMethod, $repairVerifiedCounters) {
+        DB::transaction(function () use ($sell, $purchase, $accountingMethod, $repairVerifiedCounters, $force) {
             [$sell, $purchase] = $this->lockPair($sell, $purchase);
             $allowOverselling = \App\Utils\BusinessUtil::allowsOverselling((int) $sell->business_id);
             $lines = $sell->sell_lines()->with('product')->orderBy('id')->get();
             if (TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $lines->pluck('id'))->exists()) {
                 throw new PurchaseSellMismatch('This transfer already has stock allocations. Reconcile it before completing it again.');
             }
-            $this->assertDestinationUnused($purchase);
+            $this->assertDestinationUnused($purchase, $force);
             if ($repairVerifiedCounters) {
                 $this->repairVerifiedSourceCounters($sell, $lines, $allowOverselling);
             }
@@ -145,11 +145,11 @@ class StockTransferStockService
         }
     }
 
-    public function reverse(Transaction $sell, Transaction $purchase): void
+    public function reverse(Transaction $sell, Transaction $purchase, bool $force = false): void
     {
-        DB::transaction(function () use ($sell, $purchase) {
+        DB::transaction(function () use ($sell, $purchase, $force) {
             [$sell, $purchase] = $this->lockPair($sell, $purchase);
-            $this->assertDestinationUnused($purchase);
+            $this->assertDestinationUnused($purchase, $force);
             if (! in_array($sell->status, ['final', 'completed'], true)) {
                 if (TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $sell->sell_lines()->pluck('id'))->exists()) {
                     throw new PurchaseSellMismatch('An incomplete transfer already has stock allocations. Reconcile it before changing or deleting it.');
@@ -192,8 +192,12 @@ class StockTransferStockService
         });
     }
 
-    public function assertDestinationUnused(Transaction $purchase): void
+    public function assertDestinationUnused(Transaction $purchase, bool $force = false): void
     {
+        if ($force) {
+            return;
+        }
+
         $sql = $this->transactionUtil->lotQuantityAvailableSql('purchase_lines');
         $lines = $purchase->purchase_lines()->lockForUpdate()
             ->select('purchase_lines.*')->selectRaw($sql.' as ledger_available')->get();

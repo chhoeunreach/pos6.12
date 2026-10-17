@@ -3813,6 +3813,21 @@ class LotSaleConsistencyTest extends TestCase
         }
     }
 
+    public function test_environment_administrator_can_force_reverse_a_consumed_destination_transfer(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $service = $this->app->make(StockTransferStockService::class);
+        $service->apply($sell, $purchase, 'fifo');
+        $purchase->purchase_lines()->first()->update(['quantity_adjusted' => 1]);
+
+        $service->reverse($sell, $purchase, true);
+
+        $this->assertEquals([3, 0], $this->transferBalances());
+        $this->assertSame('pending', $sell->fresh()->status);
+        $this->assertSame('pending', $purchase->fresh()->status);
+        $this->assertEquals(0, DB::table('transaction_sell_lines_purchase_lines')->count());
+    }
+
     public function test_bulk_transfer_preserves_multiple_serials_of_same_sku(): void
     {
         [$sell, $purchase] = $this->transferPair();
