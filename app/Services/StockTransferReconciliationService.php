@@ -400,23 +400,23 @@ class StockTransferReconciliationService
             'candidates' => $candidates];
     }
 
-    public function previewManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false): array
+    public function previewManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false): array
     {
         DB::beginTransaction();
         try {
-            return $this->correctManual($businessId, $transferId, $corrections, $evidence, null, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial);
+            return $this->correctManual($businessId, $transferId, $corrections, $evidence, null, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations);
         } finally {
             // The preview exercises the same checks and writes, but saves nothing.
             DB::rollBack();
         }
     }
 
-    public function applyManual(int $businessId, int $transferId, array $corrections, string $evidence, string $token, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false): array
+    public function applyManual(int $businessId, int $transferId, array $corrections, string $evidence, string $token, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false): array
     {
-        return DB::transaction(fn () => $this->correctManual($businessId, $transferId, $corrections, $evidence, $token, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial));
+        return DB::transaction(fn () => $this->correctManual($businessId, $transferId, $corrections, $evidence, $token, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations));
     }
 
-    private function correctManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $token = null, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowReferencedReceivingRepair = false, bool $allowBlankSerial = false): array
+    private function correctManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $token = null, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowReferencedReceivingRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false): array
     {
         $this->assertTransactionalTables();
         $allowOverselling = \App\Utils\BusinessUtil::allowsOverselling($businessId);
@@ -690,9 +690,26 @@ class StockTransferReconciliationService
                 ]);
             }
         }
-        if (DB::table('transaction_sell_lines_purchase_lines as m')->leftJoin('transaction_sell_lines as s', 'm.sell_line_id', '=', 's.id')
-            ->whereIn('m.purchase_line_id', $sourceIds)->whereNull('s.id')->exists()) {
-            throw new PurchaseSellMismatch('An orphaned source allocation must be reconciled first.');
+        if (! $allowOrphanedSourceAllocations) {
+            if (DB::table('transaction_sell_lines_purchase_lines as m')->leftJoin('transaction_sell_lines as s', 'm.sell_line_id', '=', 's.id')
+                ->whereIn('m.purchase_line_id', $sourceIds)->whereNull('s.id')->exists()) {
+                throw new PurchaseSellMismatch('An orphaned source allocation must be reconciled first.');
+            }
+        } else {
+            // Authority corrections bypass the block, but only truly dangling rows (no sell line and
+            // not an adjustment allocation) are removed; adjustment rows keep their legitimate link.
+            $dangling = DB::table('transaction_sell_lines_purchase_lines as m')->leftJoin('transaction_sell_lines as s', 'm.sell_line_id', '=', 's.id')
+                ->whereIn('m.purchase_line_id', $sourceIds)
+                ->whereNull('s.id')
+                ->whereNotNull('m.sell_line_id')
+                ->select('m.id');
+            if (\Illuminate\Support\Facades\Schema::hasColumn('transaction_sell_lines_purchase_lines', 'stock_adjustment_line_id')) {
+                $dangling->whereNull('m.stock_adjustment_line_id');
+            }
+            $danglingIds = $dangling->pluck('m.id');
+            if ($danglingIds->isNotEmpty()) {
+                DB::table('transaction_sell_lines_purchase_lines')->whereIn('id', $danglingIds)->delete();
+            }
         }
         $util = app(TransactionUtil::class);
         $counters = DB::table('purchase_lines as p')->whereIn('p.id', $sourceIds)->orderBy('p.id')->select('p.id', 'p.quantity_sold')

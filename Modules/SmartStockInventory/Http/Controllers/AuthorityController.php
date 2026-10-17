@@ -447,7 +447,7 @@ class AuthorityController extends BaseSmartStockController
             $plan = AuthorityTransferReceiptService::needsStaging($input)
                 ? app(AuthorityTransferReceiptService::class)->preview($this->businessId(), $id, $input, $request->user()->id)
                 : app(StockTransferReconciliationService::class)->previewManual($this->businessId(), $id,
-                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true);
+                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
 
             if ($request->expectsJson()) {
                 return response()->json(['success' => 1, 'html' => view('smartstockinventory::authority.preview_content', compact('transfer', 'input', 'plan'))->render()]);
@@ -474,7 +474,7 @@ class AuthorityController extends BaseSmartStockController
                 $plan = AuthorityTransferReceiptService::needsStaging($input)
                     ? app(AuthorityTransferReceiptService::class)->apply($this->businessId(), $id, $input, $request->user()->id, $request->input('token'))
                     : app(StockTransferReconciliationService::class)->applyManual($this->businessId(), $id,
-                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true);
+                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true, true);
                 app(TransactionUtil::class)->activityLog($transfer, 'stock_transfer_corrected', null,
                     array_merge($plan, ['mode' => 'authority', 'authorized_by' => $request->user()->id, 'date_basis' => $input['date_basis'] ?? null]));
             });

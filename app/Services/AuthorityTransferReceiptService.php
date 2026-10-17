@@ -25,7 +25,7 @@ class AuthorityTransferReceiptService
             $token = $this->fingerprint($businessId, $transferId, $input, $userId);
             [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
             $plan = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true);
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
 
             return array_merge($plan, ['token' => $token, 'created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
         } finally {
@@ -44,9 +44,9 @@ class AuthorityTransferReceiptService
             [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
             // Newly generated IDs can differ from preview IDs on MySQL. Verify the actual IDs in this transaction.
             $preview = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true);
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
             $plan = $this->reconciliation->applyManual($businessId, $transferId, $corrections,
-                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true);
+                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true, true);
 
             return array_merge($plan, ['created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
         });
