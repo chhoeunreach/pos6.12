@@ -31,6 +31,7 @@ class MobileApiTest extends TestCase
     protected $supplier;
     protected $product;
     protected $token;
+    protected static $cachedToken = null;
 
     protected function setUp(): void
     {
@@ -181,7 +182,20 @@ class MobileApiTest extends TestCase
             $pa->save();
         }
 
-        $this->token = $this->getAccessToken();
+        $this->token = static::$cachedToken ?: (static::$cachedToken = $this->getAccessToken());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->user = null;
+        $this->business = null;
+        $this->location = null;
+        $this->customer = null;
+        $this->supplier = null;
+        $this->product = null;
+        $this->token = null;
+
+        parent::tearDown();
     }
 
     protected function getAccessToken()
@@ -238,7 +252,8 @@ class MobileApiTest extends TestCase
 
     public function test_logout()
     {
-        $response = $this->postJson('/api/mobile/logout', [], $this->authHeaders());
+        $tempToken = $this->getAccessToken();
+        $response = $this->postJson('/api/mobile/logout', [], ['Authorization' => 'Bearer ' . $tempToken]);
 
         $response->assertStatus(200)
             ->assertJson(['success' => true]);

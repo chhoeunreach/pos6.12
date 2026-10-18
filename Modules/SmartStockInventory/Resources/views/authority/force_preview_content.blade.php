@@ -12,6 +12,7 @@
             Review every change below before applying.
         </div>
         <p>Business #{{ $plan['business_id'] }} — all locations. Reason: {{ $plan['reason'] }}</p>
+        <p><strong>Verification:</strong> {{ !empty($plan['is_fully_verified']) ? 'All checked stock records agree after the proposed repair.' : 'Incomplete — unresolved records remain after the proposed repair.' }}</p>
         <p>Proposed: <strong>{{ count($plan['transfer_repairs']) }}</strong> transfer receiving document(s) reconciled ·
             <strong>{{ $changed }}</strong> receiving row(s) changed ({{ $plan['deleted_rows'] }} removed) ·
             <strong>{{ count($reconciliation['allocation_repairs'] ?? []) }}</strong> allocation repairs ·
@@ -94,6 +95,21 @@
             </tbody>
         </table></div>
 
+        @if(!empty($plan['remaining_receiving_mismatches']))
+        <div class="alert alert-danger">
+            <strong>Receiving quantity mismatches remain after the proposed repair.</strong>
+            Applying the changes above will leave these stock-history warnings unresolved.
+        </div>
+        <div class="table-responsive"><table class="table table-bordered table-condensed">
+            <thead><tr><th>Outgoing invoice</th><th>Receiving invoice</th><th>SKU</th><th>Sent</th><th>Received</th></tr></thead>
+            <tbody>@foreach($plan['remaining_receiving_mismatches'] as $row)
+                <tr><td>{{ $row['source_reference'] ?: '#'.$row['transfer_id'] }}</td>
+                    <td>{{ $row['receiving_reference'] ?: '#'.$row['receipt_id'] }}</td><td>{{ $row['sku'] }}</td>
+                    <td>{{ $row['sent_quantity'] }}</td><td>{{ $row['received_quantity'] }}</td></tr>
+            @endforeach</tbody>
+        </table></div>
+        @endif
+
         <h4><i class="fa fa-exclamation-circle text-danger"></i> Still unresolved after force repair ({{ count($remaining) }})</h4>
         <p class="text-muted">These records cannot be fixed automatically and remain available on the Authority screen for individual manual correction.</p>
         <div class="table-responsive" style="max-height:400px;overflow:auto"><table class="table table-bordered table-condensed">
@@ -103,7 +119,7 @@
                     <td>@php $link = ($links ?? [])[$row['key'] ?? ''] ?? ''; @endphp
                         @if($link)<a class="btn btn-xs btn-warning" href="{{ $link }}"><i class="fa fa-wrench"></i> Correct</a>
                         @else<span class="text-muted">—</span>@endif</td></tr>
-            @empty<tr><td colspan="4">Everything is reconciled.</td></tr>@endforelse</tbody>
+            @empty<tr><td colspan="4">No unresolved allocation or receipt-counter records were reported.</td></tr>@endforelse</tbody>
         </table></div>
 
         @if(!empty($plan['can_apply']))

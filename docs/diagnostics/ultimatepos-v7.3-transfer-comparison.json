@@ -1,0 +1,183 @@
+{
+  "archive": "UltimatePOS-CodeBase-V7.3.zip",
+  "archive_sha256": "a9f98d08d036e64a26ecbf55af65d1af435233a9e2dbc3807fe828aded682da8",
+  "date": "2026-10-18",
+  "environment": "Isolated SQLite test fixtures; archived controller run with current model/utility harness; overselling hook disabled because fixtures contain no oversold movements. No live data modified.",
+  "tests": 6,
+  "assertions": 38,
+  "cases": {
+    "edit_multiple_serials": {
+      "old": {
+        "selected_source_serials": [
+          "SERIAL-A",
+          "SERIAL-B"
+        ],
+        "sent_rows": 2,
+        "sent_quantity": 2,
+        "received_rows": 1,
+        "received_quantity": 1,
+        "received_serials": [
+          "SERIAL-B"
+        ],
+        "original_receiving_ids": [
+          5,
+          6
+        ],
+        "surviving_receiving_ids": [
+          5
+        ],
+        "destination_balance": 2,
+        "issues": [
+          {
+            "transaction_id": 2,
+            "ref_no": "REF-TEST",
+            "selected_serial": "SERIAL-A",
+            "product_id": 1,
+            "variation_id": 1,
+            "source_quantity": 1,
+            "matching_received_quantity": 0,
+            "receiving_lines": [
+              {
+                "id": 3,
+                "transfer_parent_id": 2,
+                "product_id": 1,
+                "variation_id": 1,
+                "quantity": 1,
+                "lot_number": "SERIAL-B"
+              }
+            ],
+            "reason": "Selected source serial and received serial quantities differ."
+          }
+        ]
+      },
+      "current": {
+        "selected_source_serials": [
+          "SERIAL-A",
+          "SERIAL-B"
+        ],
+        "sent_rows": 2,
+        "sent_quantity": 2,
+        "received_rows": 2,
+        "received_quantity": 2,
+        "received_serials": [
+          "SERIAL-A",
+          "SERIAL-B"
+        ],
+        "original_receiving_ids": [
+          5,
+          6
+        ],
+        "surviving_receiving_ids": [
+          9,
+          10
+        ],
+        "destination_balance": 2,
+        "issues": []
+      }
+    },
+    "change_selected_serial": {
+      "old": {
+        "selected_source_serials": [
+          "SERIAL-A"
+        ],
+        "sent_rows": 1,
+        "sent_quantity": 1,
+        "received_rows": 1,
+        "received_quantity": 1,
+        "received_serials": [
+          "SERIAL-B"
+        ],
+        "original_receiving_ids": [
+          5
+        ],
+        "surviving_receiving_ids": [
+          5
+        ],
+        "destination_balance": 1,
+        "issues": [
+          {
+            "transaction_id": 2,
+            "ref_no": "REF-TEST",
+            "selected_serial": "SERIAL-A",
+            "product_id": 1,
+            "variation_id": 1,
+            "source_quantity": 1,
+            "matching_received_quantity": 0,
+            "receiving_lines": [
+              {
+                "id": 3,
+                "transfer_parent_id": 2,
+                "product_id": 1,
+                "variation_id": 1,
+                "quantity": 1,
+                "lot_number": "SERIAL-B"
+              }
+            ],
+            "reason": "Selected source serial and received serial quantities differ."
+          }
+        ]
+      },
+      "current": {
+        "selected_source_serials": [
+          "SERIAL-B"
+        ],
+        "sent_rows": 1,
+        "sent_quantity": 1,
+        "received_rows": 1,
+        "received_quantity": 1,
+        "received_serials": [
+          "SERIAL-B"
+        ],
+        "original_receiving_ids": [
+          5
+        ],
+        "surviving_receiving_ids": [
+          8
+        ],
+        "destination_balance": 1,
+        "issues": []
+      }
+    },
+    "fifo_without_explicit_serial": {
+      "old": {
+        "sent_quantity": 2,
+        "received_quantity": 2,
+        "received_serials": [
+          null
+        ],
+        "allocated_source_serial": "SERIAL-A",
+        "issues": [
+          {
+            "transaction_id": 2,
+            "ref_no": "ST-FIFO-COMPARE",
+            "selected_serial": "SERIAL-A",
+            "product_id": 1,
+            "variation_id": 1,
+            "source_quantity": 2,
+            "matching_received_quantity": 0,
+            "receiving_lines": [
+              {
+                "id": 3,
+                "transfer_parent_id": 2,
+                "product_id": 1,
+                "variation_id": 1,
+                "quantity": 2,
+                "lot_number": null
+              }
+            ],
+            "reason": "Selected source serial and received serial quantities differ."
+          }
+        ]
+      },
+      "current": {
+        "sent_quantity": 2,
+        "received_quantity": 2,
+        "received_serials": [
+          "SERIAL-A"
+        ],
+        "allocated_source_serial": "SERIAL-A",
+        "issues": []
+      }
+    }
+  }
+}

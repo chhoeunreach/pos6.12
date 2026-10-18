@@ -1372,6 +1372,166 @@ class StockWorkflowRegressionTest extends TestCase
         }
     }
 
+    public static function receivingQuantityExamples(): array
+    {
+        return [
+            '3498 partial receipt' => ['ST2026/3498-1', '10100595-21', false],
+            '0159 partial receipt' => ['ST2026/0159-1', '10100595-24', false],
+            '4375 partial receipt' => ['ST2026/4375-1', 'TEST-4375', false],
+            '3498 empty receipt' => ['ST2026/3498-1', '10100595-21', true],
+            '0159 empty receipt' => ['ST2026/0159-1', '10100595-24', true],
+            '4375 empty receipt' => ['ST2026/4375-1', 'TEST-4375', true],
+        ];
+    }
+
+    /** @dataProvider receivingQuantityExamples */
+    public function test_receiving_repair_restores_missing_lots_and_clears_history_warning(string $reference, string $sku, bool $empty): void
+    {
+        $this->prepareStockHistorySchema();
+        DB::table('variations')->where('id', 1)->update(['sub_sku' => $sku]);
+        $this->transfer(['ref_no' => $reference]);
+        $receipt = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        if ($empty) {
+            $receipt->purchase_lines()->delete();
+        } else {
+            $receipt->purchase_lines()->update(['quantity' => 1]);
+        }
+        $service = $this->forceAuthority();
+        $reason = 'Restore receiving lots from surviving transfer allocations.';
+        $plan = $service->preview(1, 1, $reason);
+        $this->assertEquals($empty ? 0 : 1, $receipt->purchase_lines()->sum('quantity'));
+        $result = $service->apply(1, 1, $reason, $plan['token']);
+        $this->assertTrue($result['is_fully_verified']);
+        $this->assertEmpty($result['remaining_receiving_mismatches']);
+        $audit = json_decode(DB::table('smart_stock_action_logs')->where('id', $result['audit_log_id'])->value('new_data'), true);
+        $this->assertTrue($audit['is_fully_verified']);
+        $this->assertEmpty($audit['remaining_receiving_mismatches']);
+
+        $this->assertEquals(2, $receipt->purchase_lines()->sum('quantity'));
+        $this->assertEquals(0, DB::table('purchase_lines')->where('transaction_id', 0)->count());
+        $history = collect($this->productUtil->getVariationStockHistory(1, 1, 2))->firstWhere('transaction_id', $receipt->id);
+        $this->assertFalse($history['quantity_mismatch']);
+        $this->assertEquals(2, $history['quantity_change']);
+        $this->assertEmpty($service->preview(1, 1, $reason)['transfer_repairs']);
+    }
+
+    public function test_receiving_repair_groups_the_same_lot_independently_of_source_cost(): void
+    {
+        PurchaseLine::find(1)->update(['quantity' => 1]);
+        $second = PurchaseLine::find(1)->replicate();
+        $second->purchase_price = 125;
+        $second->purchase_price_inc_tax = 125;
+        $second->save();
+        $this->transfer(['products' => [
+            ['product_id' => 1, 'variation_id' => 1, 'quantity' => 1, 'unit_cost' => 100, 'lot_no_line_id' => 1],
+            ['product_id' => 1, 'variation_id' => 1, 'quantity' => 1, 'unit_cost' => 125, 'lot_no_line_id' => $second->id],
+        ]]);
+        $receipt = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        $receipt->purchase_lines()->orderByDesc('id')->first()->delete();
+        $service = $this->forceAuthority();
+        DB::transaction(function () use ($service) {
+            $transferId = Transaction::where('type', 'sell_transfer')->value('id');
+            $result = $service->reconcileReceivingForTransfers(1, [$transferId]);
+            $this->assertEquals(0, $result['mismatched_after']);
+            $this->assertEquals(0, $service->reconcileReceivingForTransfers(1, [$transferId])['mismatched_before']);
+        });
+        $this->assertEquals(2, $receipt->purchase_lines()->sum('quantity'));
+    }
+
+    public function test_transfer_completion_rolls_back_if_source_allocations_are_incomplete(): void
+    {
+        $this->transactionUtil->shouldReceive('mapPurchaseSell')->once()->andReturn(false);
+        $response = $this->transfer();
+        $this->assertEquals(422, $response->getStatusCode());
+        $this->assertEquals(1, Transaction::count());
+        $this->assertEquals([10, 0], DB::table('variation_location_details')->orderBy('location_id')->pluck('qty_available')->all());
+    }
+
+    public function test_receiving_repair_preserves_multiple_referenced_rows_for_the_same_lot(): void
+    {
+        $this->transfer(['products' => [['quantity' => 4]]]);
+        $receipt = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        $first = $receipt->purchase_lines()->first();
+        $first->update(['quantity' => 1]);
+        $second = $first->replicate();
+        $second->quantity = 2;
+        $second->save();
+        $sale = Transaction::create(['business_id' => 1, 'location_id' => 2, 'type' => 'sell',
+            'status' => 'final', 'transaction_date' => '2026-09-03 12:00:00']);
+        foreach ([$first, $second] as $row) {
+            $line = $sale->sell_lines()->create(['product_id' => 1, 'variation_id' => 1,
+                'quantity' => 1, 'lot_no_line_id' => $row->id]);
+            DB::table('transaction_sell_lines_purchase_lines')->insert([
+                'sell_line_id' => $line->id, 'purchase_line_id' => $row->id, 'quantity' => 1,
+            ]);
+            $row->update(['quantity_sold' => 1]);
+        }
+        $service = $this->forceAuthority();
+        $reason = 'Restore receiving shortage while preserving later sale links.';
+        $plan = $service->preview(1, 1, $reason);
+        $service->apply(1, 1, $reason, $plan['token']);
+
+        $this->assertEquals(4, $receipt->purchase_lines()->sum('quantity'));
+        $this->assertEquals(2, $receipt->purchase_lines()->count());
+        $this->assertEquals([$first->id, $second->id], $sale->sell_lines()->orderBy('id')->pluck('lot_no_line_id')->all());
+        $this->assertEmpty($service->preview(1, 1, $reason)['transfer_repairs']);
+    }
+
+    public function test_transfer_completion_rolls_back_if_receiving_quantity_is_lost(): void
+    {
+        $this->productUtil->shouldReceive('adjustStockOverSelling')->once()->andReturnUsing(function ($purchase) {
+            $purchase->purchase_lines()->update(['quantity' => 1]);
+        });
+        $response = $this->transfer();
+        $this->assertEquals(422, $response->getStatusCode());
+        $this->assertEquals(1, Transaction::count());
+        $this->assertEquals(0, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals([10, 0], DB::table('variation_location_details')->orderBy('location_id')->pluck('qty_available')->all());
+    }
+
+    public function test_transfer_completion_rolls_back_if_receiving_serial_changes_with_equal_total_quantity(): void
+    {
+        $this->productUtil->shouldReceive('adjustStockOverSelling')->once()->andReturnUsing(function ($purchase) {
+            $purchase->purchase_lines()->update(['lot_number' => 'WRONG-SERIAL']);
+        });
+        $response = $this->transfer();
+        $this->assertEquals(422, $response->getStatusCode());
+        $this->assertEquals(1, Transaction::count());
+        $this->assertEquals(0, PurchaseLine::find(1)->quantity_sold);
+        $this->assertEquals([10, 0], DB::table('variation_location_details')->orderBy('location_id')->pluck('qty_available')->all());
+    }
+
+    public function test_force_repair_reports_exact_receiving_shortage_when_fifo_allocations_are_incomplete(): void
+    {
+        DB::table('variations')->where('id', 1)->update(['sub_sku' => '10100595-21']);
+        $this->transfer(['ref_no' => 'ST2026/3498-1']);
+        $transfer = Transaction::where('type', 'sell_transfer')->firstOrFail();
+        $receipt = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        $transfer->sell_lines()->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['quantity' => 1]);
+        $receipt->purchase_lines()->update(['quantity' => 1]);
+        $service = $this->forceAuthority();
+        $reason = 'Inspect unresolved receiving shortage without inventing source allocations.';
+        $plan = $service->preview(1, 1, $reason);
+
+        $this->assertCount(1, $plan['remaining_receiving_mismatches']);
+        $row = $plan['remaining_receiving_mismatches'][0];
+        $this->assertSame('ST2026/3498-1', $row['receiving_reference']);
+        $this->assertSame('10100595-21', $row['sku']);
+        $this->assertEquals(2, $row['sent_quantity']);
+        $this->assertEquals(1, $row['received_quantity']);
+        $this->assertEquals(1, $receipt->purchase_lines()->sum('quantity'));
+        $this->app['request']->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $html = view('smartstockinventory::authority.force_preview_content', compact('plan'))->render();
+        $this->assertStringContainsString('Receiving quantity mismatches remain', $html);
+        $this->assertStringContainsString('10100595-21', $html);
+        $this->assertStringNotContainsString('Everything is reconciled.', $html);
+
+        $result = $service->apply(1, 1, $reason, $plan['token']);
+        $this->assertStringContainsString('1 receiving quantity mismatch(es) remain', $result['message']);
+        $this->assertEquals(1, $receipt->purchase_lines()->sum('quantity'));
+    }
+
     public function test_force_repair_http_preview_renders_and_apply_requires_confirmation(): void
     {
         $this->corruptTransferReceivingSerial();
@@ -1387,6 +1547,203 @@ class StockWorkflowRegressionTest extends TestCase
         ]));
         $this->assertEquals(302, $response->getStatusCode());
         $this->assertEquals(1, DB::table('smart_stock_action_logs')->value('user_id'));
+    }
+
+    private function receivingCommandOptions(): array
+    {
+        $this->forceAuthority();
+        Schema::create('users', function (Blueprint $table) {
+            $table->increments('id'); $table->integer('business_id'); $table->string('username'); $table->softDeletes();
+        });
+        Schema::create('permissions', function (Blueprint $table) {
+            $table->increments('id'); $table->string('name'); $table->string('guard_name');
+        });
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        DB::table('users')->insert(['id' => 1, 'business_id' => 1, 'username' => 'cli-admin']);
+        config(['constants.administrator_usernames' => 'cli-admin']);
+        return ['business_id' => 1, '--user' => 1, '--repair-receiving' => true,
+            '--reason' => 'Restore receiving lots from verified source allocations.'];
+    }
+
+    private function commandPreviewToken(array $options): string
+    {
+        $this->assertEquals(0, \Illuminate\Support\Facades\Artisan::call('stock:authority-fix-mismatches', $options));
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        $plan = json_decode(substr($output, strpos($output, '{'), strrpos($output, '}') - strpos($output, '{') + 1), true, 512, JSON_THROW_ON_ERROR);
+        return $plan['token'];
+    }
+
+    public function test_receiving_repair_command_previews_then_applies_the_reviewed_quantity_repair(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $options = $this->receivingCommandOptions();
+        $token = $this->commandPreviewToken($options);
+        $this->assertEquals(1, $receipt->fresh()->quantity);
+        $this->assertEquals(0, DB::table('smart_stock_action_logs')->count());
+
+        $exit = \Illuminate\Support\Facades\Artisan::call('stock:authority-fix-mismatches', $options + ['--apply' => true, '--token' => $token]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        $this->assertEquals(0, $exit, $output);
+        $this->assertEquals(2, $receipt->fresh()->quantity);
+        $this->assertStringContainsString('Full verification passed.', $output);
+        $this->assertEquals(1, DB::table('smart_stock_action_logs')->where('user_id', 1)->count());
+    }
+
+    public function test_receiving_repair_command_returns_failure_when_verification_remains_incomplete(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        DB::table('transaction_sell_lines')->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['quantity' => 1]);
+        $options = $this->receivingCommandOptions();
+        $token = $this->commandPreviewToken($options);
+        $exit = \Illuminate\Support\Facades\Artisan::call('stock:authority-fix-mismatches', $options + ['--apply' => true, '--token' => $token]);
+
+        $this->assertEquals(1, $exit);
+        $this->assertEquals(1, $receipt->fresh()->quantity);
+        $this->assertStringContainsString('Repair is incomplete.', \Illuminate\Support\Facades\Artisan::output());
+    }
+
+    public function test_receiving_repair_command_rejects_a_stale_token_without_applying(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $options = $this->receivingCommandOptions();
+        $token = $this->commandPreviewToken($options);
+        PurchaseLine::find(1)->update(['quantity' => 11]);
+        $exit = \Illuminate\Support\Facades\Artisan::call('stock:authority-fix-mismatches', $options + ['--apply' => true, '--token' => $token]);
+
+        $this->assertEquals(1, $exit);
+        $this->assertEquals(1, $receipt->fresh()->quantity);
+        $this->assertEquals(0, DB::table('smart_stock_action_logs')->count());
+    }
+
+    public function test_receiving_repair_command_restores_seven_sent_six_received_and_reconciles_negative_balance(): void
+    {
+        DB::table('variations')->where('id', 1)->update(['sub_sku' => '10100969-14']);
+        DB::table('business_locations')->insert(['id' => 3, 'name' => 'Next destination']);
+        $this->assertEquals(201, $this->transfer(['ref_no' => 'ST2026/5422', 'products' => [['quantity' => 7]]])->getStatusCode());
+        $incoming = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        $receipt = $incoming->purchase_lines()->first();
+        $otherReceipts = [];
+        foreach (['ST2026/4896', 'ST2026/5246', 'ST2026/5352'] as $reference) {
+            $this->assertEquals(201, $this->transfer(['ref_no' => $reference, 'products' => [['quantity' => 1]]])->getStatusCode());
+            $otherReceipts[] = Transaction::where('type', 'purchase_transfer')->orderByDesc('id')->first()->purchase_lines()->first();
+        }
+        $this->assertEquals(201, $this->transfer(['location_id' => 2, 'transfer_location_id' => 3,
+            'ref_no' => 'ST2026/5470', 'transaction_date' => '2026-09-03 12:00:00',
+            'products' => [['quantity' => 7, 'lot_no_line_id' => $receipt->id]]])->getStatusCode());
+        foreach ($otherReceipts as $other) {
+            $sale = Transaction::create(['business_id' => 1, 'location_id' => 2, 'type' => 'sell',
+                'status' => 'final', 'transaction_date' => '2026-09-03 13:00:00']);
+            $line = $sale->sell_lines()->create(['product_id' => 1, 'variation_id' => 1,
+                'quantity' => 1, 'lot_no_line_id' => $other->id]);
+            DB::table('transaction_sell_lines_purchase_lines')->insert([
+                'sell_line_id' => $line->id, 'purchase_line_id' => $other->id, 'quantity' => 1,
+            ]);
+            $other->update(['quantity_sold' => 1]);
+        }
+        // Reproduce the damaged saved state from the screenshot after all later movements exist.
+        $receipt->update(['quantity' => 6]);
+        DB::table('variation_location_details')->where('location_id', 2)->update(['qty_available' => -1]);
+        $receiptId = $receipt->id;
+        $options = $this->receivingCommandOptions();
+        $token = $this->commandPreviewToken($options);
+        $this->assertEquals(6, $receipt->fresh()->quantity);
+        $exit = \Illuminate\Support\Facades\Artisan::call('stock:authority-fix-mismatches', $options + ['--apply' => true, '--token' => $token]);
+
+        $this->assertEquals(0, $exit, \Illuminate\Support\Facades\Artisan::output());
+        $this->assertEquals(7, $receipt->fresh()->quantity);
+        $this->assertEquals($receiptId, $incoming->purchase_lines()->first()->id);
+        $this->assertEquals(0, DB::table('variation_location_details')->where('location_id', 2)->value('qty_available'));
+        $this->assertEquals(7, DB::table('transaction_sell_lines_purchase_lines')->where('purchase_line_id', $receiptId)->sum('quantity'));
+        $this->assertEmpty($this->app->make(\App\Services\LotStockAuditService::class)->audit(1)['transfer_issues']);
+    }
+
+    public function test_force_repair_does_not_shrink_receiving_stock_to_match_incomplete_fifo_allocations(): void
+    {
+        $this->transfer();
+        $transfer = Transaction::where('type', 'sell_transfer')->firstOrFail();
+        $receipt = Transaction::where('type', 'purchase_transfer')->firstOrFail();
+        $transfer->sell_lines()->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->update(['quantity' => 1]);
+        $service = $this->forceAuthority();
+        $reason = 'Preserve receiving stock while incomplete source allocations require verification.';
+        $plan = $service->preview(1, 1, $reason);
+
+        $this->assertEmpty($plan['transfer_repairs']);
+        $this->assertFalse($plan['is_fully_verified']);
+        $result = $service->apply(1, 1, $reason, $plan['token']);
+        $this->assertEquals(2, $receipt->purchase_lines()->sum('quantity'));
+        $this->assertFalse($result['is_fully_verified']);
+        $this->assertNotEmpty($result['reconciliation']['unresolved']);
+    }
+
+    public function test_receiving_repair_with_an_empty_scope_does_not_repair_the_whole_business(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $service = $this->forceAuthority();
+        $result = DB::transaction(fn () => $service->reconcileReceivingForTransfers(1, []));
+
+        $this->assertEmpty($result['transfers']);
+        $this->assertEquals(1, $receipt->fresh()->quantity);
+    }
+
+    public function test_force_repair_rolls_back_receiving_changes_when_its_audit_log_fails(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $service = $this->forceAuthority();
+        $reason = 'Restore receiving quantity with mandatory transactional audit logging.';
+        $plan = $service->preview(1, 1, $reason);
+        DB::statement("CREATE TRIGGER fail_force_audit BEFORE INSERT ON smart_stock_action_logs WHEN NEW.action_type='authority_force_repair' BEGIN SELECT RAISE(ABORT, 'Audit unavailable'); END");
+        try {
+            $service->apply(1, 1, $reason, $plan['token']);
+            $this->fail('Failed audit logging must roll back the receipt correction.');
+        } catch (\Illuminate\Database\QueryException $exception) {
+            $this->assertEquals(1, $receipt->fresh()->quantity);
+            $this->assertEquals([8, 2], DB::table('variation_location_details')->orderBy('location_id')->pluck('qty_available')->all());
+            $this->assertEquals(0, DB::table('smart_stock_action_logs')->count());
+        }
+    }
+
+    public static function invalidReceivingRepairSources(): array
+    {
+        return [
+            'foreign product' => ['products', ['business_id' => 2]],
+            'foreign receipt' => ['transactions', ['business_id' => 2]],
+            'wrong location' => ['transactions', ['location_id' => 2]],
+            'unreceived source' => ['transactions', ['status' => 'pending']],
+            'future receipt' => ['transactions', ['transaction_date' => '2026-09-04 12:00:00']],
+            'wrong product' => ['purchase_lines', ['product_id' => 999]],
+            'wrong variation' => ['purchase_lines', ['variation_id' => 999]],
+        ];
+    }
+
+    /** @dataProvider invalidReceivingRepairSources */
+    public function test_force_repair_preserves_receiving_rows_when_source_evidence_is_invalid(string $table, array $changes): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1, 'lot_number' => 'KEEP-ORIGINAL-RECEIVING']);
+        DB::table($table)->where('id', 1)->update($changes);
+        $service = $this->forceAuthority();
+        $reason = 'Preserve original receiving rows until invalid source evidence is verified.';
+        $plan = $service->preview(1, 1, $reason);
+        $this->assertEmpty($plan['transfer_repairs']);
+        $this->assertFalse($plan['is_fully_verified']);
+        $result = $service->apply(1, 1, $reason, $plan['token']);
+
+        $this->assertEquals(1, $receipt->fresh()->quantity);
+        $this->assertSame('KEEP-ORIGINAL-RECEIVING', $receipt->fresh()->lot_number);
+        $this->assertFalse($result['is_fully_verified']);
     }
 
     public function test_unresolved_records_link_to_the_correction_form_only_for_transfer_documents(): void

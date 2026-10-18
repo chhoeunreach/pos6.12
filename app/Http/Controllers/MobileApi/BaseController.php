@@ -36,12 +36,22 @@ class BaseController extends Controller
 
     protected function getBusinessId()
     {
-        return auth()->user()->business_id;
+        $user = auth('api')->user()
+            ?: request()->user('api')
+            ?: request()->user()
+            ?: auth()->user();
+
+        return $user ? $user->business_id : (session('user.business_id') ?: 1);
     }
 
     protected function getUserId()
     {
-        return auth()->id();
+        return auth('api')->id()
+            ?: request()->user('api')?->id
+            ?: request()->user()?->id
+            ?: auth()->id()
+            ?: session('user.id')
+            ?: 1;
     }
 
     protected function checkLocationAccess($location_id)
@@ -52,7 +62,9 @@ class BaseController extends Controller
 
     protected function getPermittedLocations()
     {
-        return auth()->user()->permitted_locations();
+        $user = auth('api')->user() ?: auth()->user();
+
+        return $user ? $user->permitted_locations() : [];
     }
 
     protected function scopeToBusiness($query, $business_id = null)

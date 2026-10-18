@@ -219,10 +219,14 @@ class HrSellController extends Controller
                 ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
                 ->unique();
 
+            $sellerConcat = DB::connection('hr')->getDriverName() === 'sqlite'
+                ? "'seller:' || TRIM(sor.seller_name)"
+                : "CONCAT('seller:', TRIM(sor.seller_name))";
+
             $sellers = DB::connection('hr')
                 ->table('sell_out_reports as sor')
                 ->leftJoin('users as u', 'u.id', '=', 'sor.user_id')
-                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), CONCAT('seller:', TRIM(sor.seller_name))) as seller_key")
+                ->selectRaw("COALESCE(NULLIF(TRIM(u.username), ''), CAST(sor.user_id AS CHAR), {$sellerConcat}) as seller_key")
                 ->selectRaw("COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sor.seller_name), ''), 'Unknown') as seller_name")
                 ->selectRaw("NULLIF(TRIM(u.username), '') as username")
                 ->where(function ($q) {

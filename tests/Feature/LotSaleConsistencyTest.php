@@ -110,6 +110,7 @@ class LotSaleConsistencyTest extends TestCase
         Schema::create('transaction_sell_lines_purchase_lines', function (Blueprint $table) {
             $table->increments('id');
             $table->integer('sell_line_id');
+            $table->integer('stock_adjustment_line_id')->nullable();
             $table->integer('purchase_line_id');
             $table->double('quantity')->default(1);
             $table->double('qty_returned')->default(0);
@@ -2123,7 +2124,6 @@ class LotSaleConsistencyTest extends TestCase
     private function preparePurchaseRemappingSchema(): void
     {
         Schema::table('business', fn (Blueprint $table) => $table->string('accounting_method')->default('fifo'));
-        Schema::table('transaction_sell_lines_purchase_lines', fn (Blueprint $table) => $table->integer('stock_adjustment_line_id')->nullable());
         Schema::create('stock_adjustment_lines', function (Blueprint $table) {
             $table->increments('id');
             $table->integer('product_id');
@@ -3813,19 +3813,21 @@ class LotSaleConsistencyTest extends TestCase
         }
     }
 
-    public function test_environment_administrator_can_force_reverse_a_consumed_destination_transfer(): void
+    public function test_force_reverse_cannot_bypass_consumed_receiving_history(): void
     {
         [$sell, $purchase] = $this->transferPair();
         $service = $this->app->make(StockTransferStockService::class);
         $service->apply($sell, $purchase, 'fifo');
         $purchase->purchase_lines()->first()->update(['quantity_adjusted' => 1]);
 
-        $service->reverse($sell, $purchase, true);
-
-        $this->assertEquals([3, 0], $this->transferBalances());
-        $this->assertSame('pending', $sell->fresh()->status);
-        $this->assertSame('pending', $purchase->fresh()->status);
-        $this->assertEquals(0, DB::table('transaction_sell_lines_purchase_lines')->count());
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->reverse($sell, $purchase, true);
+            $this->fail('Force must not discard consumed receiving history.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertSame($before, $this->stockCorrectionSnapshot());
+            $this->assertSame('final', $sell->fresh()->status);
+        }
     }
 
     public function test_bulk_transfer_preserves_multiple_serials_of_same_sku(): void
@@ -4172,6 +4174,57 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame('Edited transfer', $sell->fresh()->additional_notes);
     }
 
+    public function test_edit_endpoint_preserves_both_receiving_serials_of_the_same_sku(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $second = TransactionSellLine::find(1)->replicate();
+        $second->lot_no_line_id = 2;
+        $second->save();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $beforeIds = $purchase->purchase_lines()->orderBy('id')->pluck('id')->all();
+        $controller = $this->transferController();
+        $controller->update($this->editRequest([$this->editProduct(), $this->editProduct(1, $second->id, 2)]), 1);
+
+        $this->assertEquals(1, session('status.success'), session('status.msg'));
+        $this->assertEquals($beforeIds, $purchase->purchase_lines()->orderBy('id')->pluck('id')->all());
+        $this->assertEquals(2, $sell->sell_lines()->sum('quantity'));
+        $this->assertEquals(2, $purchase->purchase_lines()->sum('quantity'));
+        $this->assertSame(['INVOICE-LOT', 'OTHER-LOT'], $purchase->purchase_lines()->orderBy('id')->pluck('lot_number')->all());
+        $this->assertEmpty($this->app->make(LotStockAuditService::class)->audit(1)['transfer_issues']);
+    }
+
+    public function test_edit_endpoint_updates_existing_source_selection_and_receiving_serial_together(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $controller = $this->transferController();
+        $controller->update($this->editRequest([$this->editProduct(1, 1, 2)]), 1);
+
+        $this->assertEquals(1, session('status.success'), session('status.msg'));
+        $this->assertEquals(2, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertSame('OTHER-LOT', $purchase->purchase_lines()->first()->lot_number);
+        $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
+        $this->assertEmpty($this->app->make(LotStockAuditService::class)->audit(1)['transfer_issues']);
+    }
+
+    public function test_administrator_stock_edit_preserves_receipts_referenced_by_later_sales(): void
+    {
+        [$sell, $purchase] = $this->transferPair();
+        $this->app->make(StockTransferStockService::class)->apply($sell, $purchase, 'fifo');
+        $received = $purchase->purchase_lines()->first();
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'draft', 'location_id' => 13]);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => $received->id]);
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        $controller = $this->transferController();
+        $before = $this->stockCorrectionSnapshot();
+        $controller->update($this->editRequest([$this->editProduct(1, 1, 2)]), 1);
+
+        $this->assertEquals(0, session('status.success'));
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertEquals($received->id, TransactionSellLine::find(2)->lot_no_line_id);
+        $this->assertSame('INVOICE-LOT', $received->fresh()->lot_number);
+    }
+
     public function test_metadata_edit_cannot_backdate_transfer_before_source_receipt(): void
     {
         [$sell, $purchase] = $this->transferPair();
@@ -4367,9 +4420,6 @@ class LotSaleConsistencyTest extends TestCase
         });
         Schema::table('units', function (Blueprint $table) {
             $table->string('short_name')->nullable();
-        });
-        Schema::table('transaction_sell_lines_purchase_lines', function (Blueprint $table) {
-            $table->integer('stock_adjustment_line_id')->nullable();
         });
         Schema::create('contacts', function (Blueprint $table) {
             $table->integer('id');

@@ -64,24 +64,29 @@ class AuthorityForceRepairService
             $reconciliation = $after['can_apply']
                 ? $this->full->apply($businessId, $userId, $reason, $after['token'], $ip)
                 : $after;
+            $result = $this->buildResult($businessId, $reason, $changes, $reconciliation, $token);
             $log = [
                 'user_id' => $userId, 'business_id' => $businessId, 'location_id' => null,
                 'action_type' => 'authority_force_repair', 'reference_type' => 'authority_force_preview',
                 'reference_id' => null, 'reason' => $reason,
                 'old_data' => json_encode(['transfer_receipt_repairs' => $changes['transfers'],
                     'source_reallocations' => count($changes['reallocations'] ?? [])], JSON_THROW_ON_ERROR),
-                'new_data' => json_encode(['remaining_unresolved' => count($reconciliation['unresolved'] ?? [])], JSON_THROW_ON_ERROR),
+                'new_data' => json_encode(['remaining_unresolved' => count($reconciliation['unresolved'] ?? []),
+                    'is_fully_verified' => $result['is_fully_verified'],
+                    'remaining_receiving_mismatches' => $result['remaining_receiving_mismatches']], JSON_THROW_ON_ERROR),
                 'created_at' => now(), 'updated_at' => now(),
             ];
             if (Schema::hasColumn('smart_stock_action_logs', 'ip_address')) {
                 $log['ip_address'] = $ip;
             }
             $logId = DB::table('smart_stock_action_logs')->insertGetId($log);
-            $result = $this->buildResult($businessId, $reason, $changes, $reconciliation, $token);
             $result['audit_log_id'] = $logId;
-            $result['message'] = count($changes['transfers']).' transfer receiving document(s) reconciled, '
+            $result['message'] = count($changes['transfers']).' transfer receiving document repair(s) applied, '
                 .count($changes['reallocations'] ?? []).' dated allocation(s) re-pointed; '
-                .count($reconciliation['unresolved'] ?? []).' record(s) still require review. Audit log #'.$logId.'.';
+                .count($result['remaining_receiving_mismatches']).' receiving quantity mismatch(es) remain; '
+                .count($reconciliation['unresolved'] ?? []).' record(s) still require review. '
+                .($result['is_fully_verified'] ? 'Full verification passed. ' : 'Full verification is incomplete. ')
+                .'Audit log #'.$logId.'.';
 
             return $result;
         }, 3);
@@ -90,6 +95,7 @@ class AuthorityForceRepairService
     private function buildResult(int $businessId, string $reason, array $changes, array $reconciliation, string $token): array
     {
         $changed = $changes['updated'] + $changes['inserted'] + $changes['deleted'];
+        $remaining = $this->receivingQuantityMismatches($businessId);
 
         return [
             'business_id' => $businessId, 'reason' => $reason, 'token' => $token,
@@ -97,8 +103,38 @@ class AuthorityForceRepairService
             'reallocations' => $changes['reallocations'] ?? [],
             'changed_rows' => $changed, 'deleted_rows' => $changes['deleted'],
             'reconciliation' => $reconciliation,
+            'remaining_receiving_mismatches' => $remaining,
+            'is_fully_verified' => ! $remaining && empty($reconciliation['unresolved']),
             'can_apply' => $changed > 0 || ! empty($reconciliation['can_apply']),
         ];
+    }
+
+    /** Compare documents directly so incomplete source allocations cannot hide a shortage. */
+    private function receivingQuantityMismatches(int $businessId): array
+    {
+        $sent = DB::table('transaction_sell_lines')->groupBy('transaction_id', 'product_id', 'variation_id')
+            ->selectRaw('transaction_id, product_id, variation_id, SUM(quantity) as quantity');
+        $received = DB::table('purchase_lines')->groupBy('transaction_id', 'product_id', 'variation_id')
+            ->selectRaw('transaction_id, product_id, variation_id, SUM(quantity) as quantity');
+
+        return DB::table('transactions as destination')
+            ->join('transactions as source', 'source.id', '=', 'destination.transfer_parent_id')
+            ->joinSub($sent, 'sent', 'sent.transaction_id', '=', 'source.id')
+            ->leftJoinSub($received, 'received', function ($join) {
+                $join->on('received.transaction_id', '=', 'destination.id')
+                    ->on('received.product_id', '=', 'sent.product_id')
+                    ->on('received.variation_id', '=', 'sent.variation_id');
+            })
+            ->join('variations as v', 'v.id', '=', 'sent.variation_id')
+            ->where('source.business_id', $businessId)->where('destination.business_id', $businessId)
+            ->where('source.type', 'sell_transfer')->where('source.status', 'final')
+            ->where('destination.type', 'purchase_transfer')->where('destination.status', 'received')
+            ->whereRaw('ABS(sent.quantity - COALESCE(received.quantity, 0)) > CAST(? AS DECIMAL(20, 8))', [self::EPSILON])
+            ->orderBy('destination.id')->orderBy('sent.variation_id')
+            ->get(['source.id as transfer_id', 'source.ref_no as source_reference', 'destination.id as receipt_id',
+                'destination.ref_no as receiving_reference', 'v.sub_sku as sku', 'sent.variation_id',
+                'sent.quantity as sent_quantity', DB::raw('COALESCE(received.quantity, 0) as received_quantity')])
+            ->map(fn ($row) => (array) $row)->all();
     }
 
     private function token(int $businessId, int $userId, string $reason, array $changes, string $beforeToken): string
@@ -170,7 +206,7 @@ class AuthorityForceRepairService
         $this->raiseLimits();
         $only = array_values(array_unique(array_map('intval', $transferIds)));
 
-        return $this->reconcileTransferReceiving($businessId, $only ?: null);
+        return $this->reconcileTransferReceiving($businessId, $only);
     }
 
     /**
@@ -198,8 +234,9 @@ class AuthorityForceRepairService
         $sources = DB::table('transactions')->where('business_id', $businessId)->where('type', 'sell_transfer')
             ->where('status', 'final')->whereIn('id', $destinations->keys())
             ->select('id', 'ref_no', 'location_id')->get()->keyBy('id');
-        $destinationIds = $destinations->values()->pluck('id')->all();
+        $destinationIds = $destinations->values()->flatMap(fn ($rows) => $rows->pluck('id'))->all();
         $transferKeys = $destinations->keys()->all();
+        $unverified = $this->unverifiedTransferIds($businessId, $sources->keys()->all());
 
         $transfers = []; $updated = 0; $inserted = 0; $deleted = 0; $mismatchedBefore = 0; $passes = 0;
         // A transfer's receiving document is frequently the source of a later transfer, so a single
@@ -213,6 +250,10 @@ class AuthorityForceRepairService
                 $movement = $sources->get($transferId);
                 $destination = $rows->first();
                 if (! $movement || (int) $destination->location_id === (int) $movement->location_id) {
+                    continue;
+                }
+                if (isset($unverified[$transferId])) {
+                    if ($pass === 1) { $mismatchedBefore++; }
                     continue;
                 }
                 $expectedGroups = $expected[$transferId] ?? [];
@@ -245,6 +286,10 @@ class AuthorityForceRepairService
         $finalExpected = $this->expectedBatches($businessId, $onlyTransferIds);
         $recheck = $this->actualBatches($businessId, $destinationIds, $transferKeys);
         foreach ($destinations as $transferId => $rows) {
+            if (isset($unverified[$transferId])) {
+                $mismatchedAfter++;
+                continue;
+            }
             if (! ($finalExpected[$transferId] ?? [])) {
                 continue;
             }
@@ -256,6 +301,54 @@ class AuthorityForceRepairService
 
         return ['transfers' => $transfers, 'updated' => $updated, 'inserted' => $inserted, 'deleted' => $deleted,
             'mismatched_before' => $mismatchedBefore, 'mismatched_after' => $mismatchedAfter, 'passes' => $passes];
+    }
+
+    /** A partial or invalid deduction is not evidence for rewriting the receiving document. */
+    private function unverifiedTransferIds(int $businessId, array $transferIds): array
+    {
+        if (! $transferIds) { return []; }
+        $rows = DB::table('transaction_sell_lines as s')
+            ->join('transactions as t', 't.id', '=', 's.transaction_id')
+            ->join('products as pr', 'pr.id', '=', 's.product_id')
+            ->leftJoin('transaction_sell_lines_purchase_lines as m', 'm.sell_line_id', '=', 's.id')
+            ->leftJoin('purchase_lines as p', 'p.id', '=', 'm.purchase_line_id')
+            ->leftJoin('transactions as receipt', 'receipt.id', '=', 'p.transaction_id')
+            ->whereIn('t.id', $transferIds)->where('t.business_id', $businessId)->where('pr.enable_stock', 1)
+            ->get(['s.id as line_id', 's.transaction_id', 's.product_id', 's.variation_id', 's.lot_no_line_id', 'pr.business_id as product_business_id',
+                's.quantity', 's.quantity_returned', 't.location_id', 't.transaction_date',
+                'm.id as mapping_id', 'm.quantity as mapped_quantity', 'm.qty_returned', 'm.purchase_line_id',
+                'm.stock_adjustment_line_id', 'p.product_id as source_product_id', 'p.variation_id as source_variation_id',
+                'receipt.business_id as source_business_id', 'receipt.location_id as source_location_id',
+                'receipt.status as source_status', 'receipt.type as source_type', 'receipt.transaction_date as receipt_date'])
+            ->groupBy('line_id');
+        $allowOverselling = \App\Utils\BusinessUtil::allowsOverselling($businessId);
+        $blocked = [];
+        foreach ($rows as $allocations) {
+            $line = $allocations->first();
+            $invalid = (int) $line->product_business_id !== $businessId || (float) $line->quantity <= 0
+                || abs((float) $allocations->sum('mapped_quantity') - (float) $line->quantity) > self::EPSILON
+                || abs((float) $allocations->sum('qty_returned') - (float) $line->quantity_returned) > self::EPSILON;
+            foreach ($allocations as $row) {
+                if (! $row->mapping_id || (float) $row->mapped_quantity <= 0 || (float) $row->qty_returned < 0
+                    || (float) $row->qty_returned > (float) $row->mapped_quantity || $row->stock_adjustment_line_id) {
+                    $invalid = true; break;
+                }
+                if ((int) $row->purchase_line_id === 0 && $allowOverselling && empty($row->lot_no_line_id)) {
+                    continue;
+                }
+                if ((int) $row->source_business_id !== $businessId || (int) $row->source_location_id !== (int) $row->location_id
+                    || (int) $row->source_product_id !== (int) $row->product_id
+                    || (int) $row->source_variation_id !== (int) $row->variation_id || $row->source_status !== 'received'
+                    || ! in_array($row->source_type, ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'], true)
+                    || $row->receipt_date > $row->transaction_date
+                    || (! empty($row->lot_no_line_id) && (int) $row->lot_no_line_id !== (int) $row->purchase_line_id)) {
+                    $invalid = true; break;
+                }
+            }
+            if ($invalid) { $blocked[(int) $line->transaction_id] = true; }
+        }
+
+        return $blocked;
     }
 
     /**
@@ -387,10 +480,11 @@ class AuthorityForceRepairService
             ->leftJoin('purchase_lines as p', 'p.id', '=', 'm.purchase_line_id')
             ->where('t.business_id', $businessId)->where('t.type', 'sell_transfer')->where('t.status', 'final')
             ->when($onlyTransferIds !== null, fn ($query) => $query->whereIn('t.id', $onlyTransferIds))
-            ->groupBy('t.id', 's.product_id', 's.variation_id', 'p.lot_number', 'p.mfg_date', 'p.exp_date',
-                'p.purchase_price', 'p.purchase_price_inc_tax')
+            ->groupBy('t.id', 's.product_id', 's.variation_id', 'p.lot_number', 'p.mfg_date', 'p.exp_date')
             ->selectRaw('t.id as transfer_id, s.product_id, s.variation_id, p.lot_number, p.mfg_date, p.exp_date, '
-                .'p.purchase_price, p.purchase_price_inc_tax, SUM(m.quantity) as qty')
+                .'SUM(m.quantity * COALESCE(p.purchase_price, 0)) / NULLIF(SUM(m.quantity), 0) as purchase_price, '
+                .'SUM(m.quantity * COALESCE(p.purchase_price_inc_tax, 0)) / NULLIF(SUM(m.quantity), 0) as purchase_price_inc_tax, '
+                .'SUM(m.quantity) as qty')
             ->get();
 
         $grouped = [];
@@ -469,7 +563,7 @@ class AuthorityForceRepairService
             $expected = $expectedGroups[$key] ?? [];
             $actualIds = array_values(array_filter($rows->keys()->all(),
                 fn ($id) => $this->groupKey($rows[$id]->product_id, $rows[$id]->variation_id) === $key));
-            $result = $this->reconcileGroup($businessId, $rows, $actualIds, $expected, $hasSecondary);
+            $result = $this->reconcileGroup($businessId, $destinationId, $rows, $actualIds, $expected, $hasSecondary);
             $output['updated'] += $result['updated'];
             $output['inserted'] += $result['inserted'];
             $output['deleted'] += $result['deleted'];
@@ -480,30 +574,49 @@ class AuthorityForceRepairService
         return $output;
     }
 
-    private function reconcileGroup(int $businessId, $rows, array $actualIds, array $expected, bool $hasSecondary): array
+    private function reconcileGroup(int $businessId, int $destinationId, $rows, array $actualIds, array $expected, bool $hasSecondary): array
     {
         $result = ['updated' => 0, 'inserted' => 0, 'deleted' => 0, 'rows' => [], 'warnings' => []];
         $matchedRows = [];
         $pending = $expected;
 
-        // A matching serial can still have the wrong quantity. Repair it before marking
-        // the batch handled, otherwise repeated repairs skip the same shortage forever.
-        foreach ($actualIds as $id) {
-            $row = $rows[$id];
-            foreach ($pending as $index => $entry) {
-                if ($entry['lot'] === $this->text($row->lot_number) && $entry['mfg'] === $this->text($row->mfg_date)
-                    && $entry['exp'] === $this->text($row->exp_date)) {
-                    $update = $this->rowUpdate($row, $entry);
-                    if ($update) {
-                        DB::table('purchase_lines')->where('id', $id)->update($update);
-                        $result['updated']++;
-                        $result['rows'][] = ['id' => (int) $id, 'action' => 'updated', 'before' => $this->rowValues($row), 'after' => $update];
-                    }
-                    $matchedRows[] = $id;
-                    unset($pending[$index]);
+        // Reconcile the total across every row of the same lot. Assigning the full
+        // batch quantity to just one row double-counts other rows used by later sales.
+        foreach ($pending as $index => $entry) {
+            $matchingIds = array_values(array_filter($actualIds, function ($id) use ($rows, $entry) {
+                $row = $rows[$id];
+                return $entry['lot'] === $this->text($row->lot_number)
+                    && $entry['mfg'] === $this->text($row->mfg_date)
+                    && $entry['exp'] === $this->text($row->exp_date);
+            }));
+            if (! $matchingIds) {
+                continue;
+            }
+            $difference = $entry['qty'] - array_sum(array_map(fn ($id) => (float) $rows[$id]->quantity, $matchingIds));
+            foreach ($matchingIds as $id) {
+                if (abs($difference) <= self::EPSILON) {
                     break;
                 }
+                $row = $rows[$id];
+                // Never shrink a receipt already consumed or referenced by another movement.
+                if ($difference < 0 && $this->rowIsConsumed($id, $row)) {
+                    continue;
+                }
+                $change = $difference > 0 ? $difference : -min((float) $row->quantity, -$difference);
+                $target = array_merge($entry, ['qty' => (float) $row->quantity + $change]);
+                $update = $this->rowUpdate($row, $target);
+                if ($update) {
+                    DB::table('purchase_lines')->where('id', $id)->update($update);
+                    $result['updated']++;
+                    $result['rows'][] = ['id' => (int) $id, 'action' => 'updated', 'before' => $this->rowValues($row), 'after' => $update];
+                }
+                $difference -= $change;
             }
+            if (abs($difference) > self::EPSILON) {
+                $result['warnings'][] = 'Receiving lot '.$entry['lot'].' cannot be reduced to its sent quantity because later movements reference it.';
+            }
+            $matchedRows = array_merge($matchedRows, $matchingIds);
+            unset($pending[$index]);
         }
         $pending = array_values($pending);
         $unmatchedRows = array_values(array_diff($actualIds, $matchedRows));
@@ -529,7 +642,7 @@ class AuthorityForceRepairService
 
         // Expected batches with no surviving row: insert them.
         foreach ($pending as $entry) {
-            $inserted = $this->insertBatch($businessId, $rows, $entry, $hasSecondary);
+            $inserted = $this->insertBatch($destinationId, $entry, $hasSecondary);
             $result['inserted']++;
             $result['rows'][] = ['id' => $inserted['id'], 'action' => 'inserted', 'before' => null, 'after' => $inserted['values']];
         }
@@ -571,18 +684,10 @@ class AuthorityForceRepairService
         return $update;
     }
 
-    private function insertBatch(int $businessId, $rows, array $entry, bool $hasSecondary): array
+    private function insertBatch(int $destinationId, array $entry, bool $hasSecondary): array
     {
-        $template = null;
-        foreach ($rows as $row) {
-            if ((int) $row->product_id === $entry['product_id'] && (int) $row->variation_id === $entry['variation_id']) {
-                $template = $row;
-                break;
-            }
-        }
-        $template ??= $rows->first();
         $values = [
-            'transaction_id' => (int) ($template->transaction_id ?? 0),
+            'transaction_id' => $destinationId,
             'product_id' => $entry['product_id'], 'variation_id' => $entry['variation_id'],
             'quantity' => round($entry['qty'], 4), 'lot_number' => $entry['lot'] === '' ? null : $entry['lot'],
             'mfg_date' => $entry['mfg'] === '' ? null : $entry['mfg'], 'exp_date' => $entry['exp'] === '' ? null : $entry['exp'],
@@ -602,7 +707,8 @@ class AuthorityForceRepairService
 
     private function rowIsConsumed(int $id, $row): bool
     {
-        if ((float) $row->quantity_sold > 0 || (float) $row->quantity_adjusted > 0 || (float) $row->mfg_quantity_used > 0) {
+        if ((float) $row->quantity_sold > 0 || (float) $row->quantity_returned > 0
+            || (float) $row->quantity_adjusted > 0 || (float) $row->mfg_quantity_used > 0) {
             return true;
         }
 

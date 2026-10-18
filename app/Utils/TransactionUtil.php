@@ -58,7 +58,8 @@ class TransactionUtil extends Util
             $pay_term_number = ! empty($contact) ? $contact->pay_term_number : null;
             $pay_term_type = ! empty($contact) ? $contact->pay_term_type : null;
         }
-        $transaction = Transaction::create([
+        $tx = new Transaction();
+        $tx->fill([
             'business_id' => $business_id,
             'location_id' => $input['location_id'],
             'type' => $sale_type,
@@ -144,8 +145,11 @@ class TransactionUtil extends Util
             'additional_expense_key_3' => ! empty($input['additional_expense_key_3']) ? $input['additional_expense_key_3'] : null,
             'additional_expense_key_4' => ! empty($input['additional_expense_key_4']) ? $input['additional_expense_key_4'] : null,
             'is_kitchen_order' => ! empty($input['is_kitchen_order']) ? 1 : 0,
-
         ]);
+        $tx->created_by = $user_id;
+        $tx->contact_id = $input['contact_id'];
+        $tx->save();
+        $transaction = $tx;
 
         return $transaction;
     }

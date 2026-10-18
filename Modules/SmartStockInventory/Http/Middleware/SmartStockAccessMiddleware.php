@@ -106,13 +106,20 @@ class SmartStockAccessMiddleware
             return false;
         }
 
-        $statusPath = module_path('Accessory', 'modules_statuses.json');
-        if (! is_file($statusPath)) {
+        try {
+            if (! app('modules')->has('Accessory')) {
+                return false;
+            }
+            $statusPath = module_path('Accessory', 'modules_statuses.json');
+            if (! is_file($statusPath)) {
+                return false;
+            }
+
+            $statuses = json_decode((string) file_get_contents($statusPath), true);
+            return ! empty($statuses['SmartStockInventory']);
+        } catch (\Throwable $e) {
             return false;
         }
-
-        $statuses = json_decode((string) file_get_contents($statusPath), true);
-        return ! empty($statuses['SmartStockInventory']);
     }
 
     private function baseRouteName(string $routeName): string

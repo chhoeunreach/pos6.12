@@ -291,6 +291,7 @@ $transaction = $this->transactionUtil->createSellTransaction($business_id, $inpu
             return $this->success(new TransactionResource($transaction), 'Sale created successfully', 201);
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Failed to create sale in MobileApi: ' . $e->getMessage(), ['exception' => $e]);
             return $this->error('Failed to create sale: ' . $e->getMessage(), 500);
         }
     }

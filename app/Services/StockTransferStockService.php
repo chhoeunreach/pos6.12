@@ -29,7 +29,7 @@ class StockTransferStockService
             if (TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $lines->pluck('id'))->exists()) {
                 throw new PurchaseSellMismatch('This transfer already has stock allocations. Reconcile it before completing it again.');
             }
-            $this->assertDestinationUnused($purchase, $force);
+            $this->assertDestinationUnused($purchase);
             if ($repairVerifiedCounters) {
                 $this->repairVerifiedSourceCounters($sell, $lines, $allowOverselling);
             }
@@ -47,6 +47,13 @@ class StockTransferStockService
                     throw new PurchaseSellMismatch('Transfer products must belong to this business and have positive quantities.');
                 }
                 $mappings = $line->sell_line_purchase_lines()->with('purchase_line')->get();
+                if ($line->product->enable_stock
+                    && ($mappings->isEmpty()
+                        || abs((float) $mappings->sum('quantity') - (float) $line->quantity) > 0.0001
+                        || $mappings->contains(fn ($mapping) => (float) $mapping->quantity <= 0
+                            || ((int) $mapping->purchase_line_id > 0 && ! $mapping->purchase_line)))) {
+                    throw new PurchaseSellMismatch('Transfer source allocations do not match the sent quantity. No stock was transferred.');
+                }
                 $batches = $line->product->enable_stock ? $mappings : collect([null]);
                 foreach ($batches as $mapping) {
                     $source = $mapping?->purchase_line;
@@ -68,6 +75,25 @@ class StockTransferStockService
                 }
             }
             $this->productUtil->adjustStockOverSelling($purchase->load('purchase_lines.product'));
+            // Check persisted rows after all stock hooks, before this transaction can commit.
+            $sent = $sell->sell_lines()->get()->groupBy(fn ($line) => $line->product_id.':'.$line->variation_id)
+                ->map(fn ($group) => (float) $group->sum('quantity'));
+            $receivingLines = $purchase->purchase_lines()->get();
+            $received = $receivingLines->groupBy(fn ($line) => $line->product_id.':'.$line->variation_id)
+                ->map(fn ($group) => (float) $group->sum('quantity'));
+            foreach ($sent->keys()->merge($received->keys())->unique() as $key) {
+                if (abs(($sent[$key] ?? 0) - ($received[$key] ?? 0)) > 0.0001) {
+                    throw new PurchaseSellMismatch('Receiving lot quantity does not match the sent quantity. The transfer was rolled back.');
+                }
+            }
+            $serialKey = fn ($line) => json_encode([(int) $line['product_id'], (int) $line['variation_id'], (string) ($line['lot_number'] ?? '')]);
+            $expectedSerials = collect($destinationLines)->groupBy($serialKey)->map(fn ($group) => (float) $group->sum('quantity'));
+            $receivedSerials = $receivingLines->groupBy($serialKey)->map(fn ($group) => (float) $group->sum('quantity'));
+            foreach ($expectedSerials->keys()->merge($receivedSerials->keys())->unique() as $key) {
+                if (abs(($expectedSerials[$key] ?? 0) - ($receivedSerials[$key] ?? 0)) > 0.0001) {
+                    throw new PurchaseSellMismatch('Receiving serial quantities do not match the allocated source serials. The transfer was rolled back.');
+                }
+            }
         });
     }
 
@@ -149,7 +175,7 @@ class StockTransferStockService
     {
         DB::transaction(function () use ($sell, $purchase, $force) {
             [$sell, $purchase] = $this->lockPair($sell, $purchase);
-            $this->assertDestinationUnused($purchase, $force);
+            $this->assertDestinationUnused($purchase);
             if (! in_array($sell->status, ['final', 'completed'], true)) {
                 if (TransactionSellLinesPurchaseLines::whereIn('sell_line_id', $sell->sell_lines()->pluck('id'))->exists()) {
                     throw new PurchaseSellMismatch('An incomplete transfer already has stock allocations. Reconcile it before changing or deleting it.');
@@ -194,10 +220,7 @@ class StockTransferStockService
 
     public function assertDestinationUnused(Transaction $purchase, bool $force = false): void
     {
-        if ($force) {
-            return;
-        }
-
+        // Keep the legacy argument for callers, but never bypass references to receiving history.
         $sql = $this->transactionUtil->lotQuantityAvailableSql('purchase_lines');
         $lines = $purchase->purchase_lines()->lockForUpdate()
             ->select('purchase_lines.*')->selectRaw($sql.' as ledger_available')->get();

@@ -54,8 +54,9 @@ class RepairTransferReceipts extends Command
      */
     public function handle()
     {
-        ini_set('max_execution_time', 0);
-        ini_set('memory_limit', '512M');
+        if (! app()->runningUnitTests()) {
+            ini_set('memory_limit', '512M');
+        }
 
         $apply = (bool) $this->option('apply');
 
@@ -376,6 +377,18 @@ class RepairTransferReceipts extends Command
             ['Transfer', 'Variation', 'Sent', 'Received', 'Excess', 'Reductions (line: from->to)', 'Location balance', 'Status'],
             $rows
         );
+
+        if (! empty($skipped)) {
+            $this->newLine();
+            $this->warn(count($skipped).' discrepancies skipped. This command only reduces unused excess receiving quantity.');
+            $this->line('--apply and --force do not repair MANUAL rows.');
+            $this->line('Preview receiving reconstruction from verified source allocations with Stock Authority:');
+            foreach (array_unique(array_column($skipped, 'business_id')) as $businessId) {
+                $this->line('php artisan stock:authority-fix-mismatches '.(int) $businessId.' --user=ADMIN_ID --repair-receiving --reason="Restore verified transfer receiving lots"');
+            }
+            $this->line('Replace ADMIN_ID with an authorized administrator user ID. Review this business-wide preview, then repeat the same command with --apply --token=TOP_LEVEL_TOKEN.');
+            $this->line('Already-used excess quantity remains unresolved unless the source and downstream records support a safe correction.');
+        }
     }
 
     /**
