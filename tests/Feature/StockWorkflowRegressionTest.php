@@ -1314,6 +1314,48 @@ class StockWorkflowRegressionTest extends TestCase
         $this->assertSame(count($first['transfer_repairs']), count($second['transfer_repairs']));
     }
 
+    public function test_force_repair_restores_quantity_when_receiving_serial_already_matches(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $service = $this->forceAuthority();
+        $reason = 'Restore receiving quantity from recorded outgoing allocations.';
+        $plan = $service->preview(1, 1, $reason);
+
+        $this->assertEquals(1, $receipt->fresh()->quantity, 'Preview must leave the receipt unchanged.');
+        $this->assertNotEmpty($plan['transfer_repairs']);
+        $this->assertEquals(1, $plan['changed_rows']);
+        $service->apply(1, 1, $reason, $plan['token']);
+
+        $this->assertEquals(2, $receipt->fresh()->quantity);
+        $this->assertSame('SERIAL-A', $receipt->fresh()->lot_number);
+        $this->assertEquals(2, DB::table('variation_location_details')->where('location_id', 2)->value('qty_available'));
+        $again = $service->preview(1, 1, $reason);
+        $this->assertEmpty($again['transfer_repairs']);
+        $this->assertEquals(0, $again['changed_rows']);
+    }
+
+    public function test_force_repair_updates_matching_lot_before_removing_surplus_receiving_row(): void
+    {
+        $this->transfer();
+        $receipt = Transaction::where('type', 'purchase_transfer')->first()->purchase_lines()->first();
+        $receipt->update(['quantity' => 1]);
+        $surplus = $receipt->replicate();
+        $surplus->lot_number = 'UNEXPECTED';
+        $surplus->save();
+        $service = $this->forceAuthority();
+        $reason = 'Reconcile receiving lots with recorded outgoing allocations.';
+        $plan = $service->preview(1, 1, $reason);
+        $this->assertEquals(2, $plan['changed_rows']);
+        $service->apply(1, 1, $reason, $plan['token']);
+
+        $this->assertEquals(2, $receipt->fresh()->quantity);
+        $this->assertNull($surplus->fresh());
+        $this->assertEquals(2, DB::table('purchase_lines')->where('transaction_id', $receipt->transaction_id)->sum('quantity'));
+        $this->assertEmpty($service->preview(1, 1, $reason)['transfer_repairs']);
+    }
+
     public function test_force_repair_rejects_a_stale_preview_without_writing(): void
     {
         $this->corruptTransferReceivingSerial();

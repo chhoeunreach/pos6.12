@@ -486,12 +486,19 @@ class AuthorityForceRepairService
         $matchedRows = [];
         $pending = $expected;
 
-        // First pass: keep rows whose serial already matches an expected batch exactly.
+        // A matching serial can still have the wrong quantity. Repair it before marking
+        // the batch handled, otherwise repeated repairs skip the same shortage forever.
         foreach ($actualIds as $id) {
             $row = $rows[$id];
             foreach ($pending as $index => $entry) {
                 if ($entry['lot'] === $this->text($row->lot_number) && $entry['mfg'] === $this->text($row->mfg_date)
                     && $entry['exp'] === $this->text($row->exp_date)) {
+                    $update = $this->rowUpdate($row, $entry);
+                    if ($update) {
+                        DB::table('purchase_lines')->where('id', $id)->update($update);
+                        $result['updated']++;
+                        $result['rows'][] = ['id' => (int) $id, 'action' => 'updated', 'before' => $this->rowValues($row), 'after' => $update];
+                    }
                     $matchedRows[] = $id;
                     unset($pending[$index]);
                     break;
