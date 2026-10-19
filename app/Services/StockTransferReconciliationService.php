@@ -43,6 +43,22 @@ class StockTransferReconciliationService
             $blocked[] = 'A stock allocation has no source movement. Review the orphaned allocation before rebuilding counters.';
         }
         $reviewItems = [];
+        // SKU totals must agree even when there is no serial or a permitted overselling allocation uses receipt ID 0.
+        $receivingLines = DB::table('purchase_lines')->where('transaction_id', $receipt->id)->orderBy('id')->get();
+        $skuKey = fn ($line) => $line->product_id.':'.$line->variation_id;
+        $sentQuantities = $lines->groupBy($skuKey)->map(fn ($group) => (float) $group->sum('quantity'));
+        $receivedQuantities = $receivingLines->groupBy($skuKey)->map(fn ($group) => (float) $group->sum('quantity'));
+        foreach ($sentQuantities->keys()->merge($receivedQuantities->keys())->unique() as $key) {
+            $sentQuantity = $sentQuantities->get($key, 0);
+            $receivedQuantity = $receivedQuantities->get($key, 0);
+            if (abs($sentQuantity - $receivedQuantity) > 0.0001) {
+                $reason = 'Product / SKU '.$key.': sent '.$sentQuantity.', received '.$receivedQuantity.'. Receiving quantities must match the completed transfer.';
+                $blocked[] = $reason;
+                $reviewItems['receiving-'.$key] = ['reference' => $transfer->ref_no ?: '#'.$transferId, 'line_id' => null,
+                    'date' => (string) $transfer->transaction_date, 'status' => 'Receipt quantity mismatch', 'reasons' => [$reason],
+                    'url' => action([\App\Http\Controllers\StockTransferController::class, 'edit'], [$transferId])];
+            }
+        }
         $addLineReview = function (int $lineId, string $reason) use (&$reviewItems, $relatedLines, $businessId) {
             $line = $relatedLines->firstWhere('id', $lineId);
             if (!$line || (int) $line->business_id !== $businessId) { return; }
@@ -128,7 +144,7 @@ class StockTransferReconciliationService
         ];
         // Include the reviewed evidence so a changed movement invalidates the proposal.
         $plan['token'] = hash_hmac('sha256', json_encode([$plan, $lines, $mappings, $lots, $relatedLines, $relatedMappings,
-            DB::table('purchase_lines')->where('transaction_id', $receipt->id)->orderBy('id')->get()], JSON_THROW_ON_ERROR), (string) config('app.key'));
+            $receivingLines], JSON_THROW_ON_ERROR), (string) config('app.key'));
 
         return $plan;
     }
@@ -158,16 +174,57 @@ class StockTransferReconciliationService
         });
     }
 
-    /** Rebuild allocations from the serials recorded on the transfer by an administrator. */
+    /** Repair recorded source selections, including receipt IDs without a serial. */
     public function autoCorrectSelectedSerials(int $businessId, int $transferId): array
     {
         return DB::transaction(function () use ($businessId, $transferId) {
+            $this->assertTransactionalTables();
             $transfer = Transaction::where('business_id', $businessId)->where('type', 'sell_transfer')
                 ->lockForUpdate()->findOrFail($transferId);
             $receipt = Transaction::where('business_id', $businessId)->where('type', 'purchase_transfer')
                 ->where('transfer_parent_id', $transferId)->lockForUpdate()->firstOrFail();
             $lines = $transfer->sell_lines()->with('product')->orderBy('id')->lockForUpdate()->get();
             $destinations = $receipt->purchase_lines()->orderBy('id')->lockForUpdate()->get();
+            $stockLines = $lines->filter(fn ($line) => $line->product->enable_stock);
+            $selected = DB::table('purchase_lines')->whereIn('id', $stockLines->pluck('lot_no_line_id')->filter())
+                ->lockForUpdate()->get()->keyBy('id');
+            $withoutSelectedSerial = $stockLines->isNotEmpty() && $stockLines->every(fn ($line) => empty($line->lot_no_line_id)
+                || ($selected->has($line->lot_no_line_id) && trim((string) $selected->get($line->lot_no_line_id)->lot_number) === ''));
+            if ($withoutSelectedSerial) {
+                $recordedSources = DB::table('transaction_sell_lines_purchase_lines as m')
+                    ->join('purchase_lines as p', 'p.id', '=', 'm.purchase_line_id')
+                    ->whereIn('m.sell_line_id', $stockLines->pluck('id'))
+                    ->lockForUpdate()->get(['p.product_id', 'p.variation_id', 'p.lot_number']);
+                foreach ($destinations as $destination) {
+                    if (trim((string) $destination->lot_number) !== '' && !$recordedSources->contains(fn ($source) =>
+                        (int) $source->product_id === (int) $destination->product_id
+                        && (int) $source->variation_id === (int) $destination->variation_id
+                        && (string) $source->lot_number === (string) $destination->lot_number)) {
+                        throw new PurchaseSellMismatch('A receiving batch has a known serial that does not match the recorded source receipts. Verify that serial before repairing this transfer.');
+                    }
+                }
+                // Use the original FIFO/receipt allocations, never a fabricated lot or a second stock movement.
+                $receivingRepair = app(AuthorityForceRepairService::class)->reconcileReceivingForTransfers($businessId, [$transferId]);
+                $checked = $this->generate($businessId, $transferId);
+                $counterRepairs = [];
+                if ($checked['status'] === 'ready') {
+                    $counterRepairs = $this->apply($businessId, $transferId, $checked['token']);
+                    $checked = $this->generate($businessId, $transferId);
+                }
+                if ($checked['status'] === 'consistent' && $receivingRepair['mismatched_after'] === 0) {
+                    return array_merge($checked, [
+                        'changes' => $receivingRepair['transfers'] ? $stockLines->map(fn ($line) => [
+                            'sell_line_id' => (int) $line->id, 'kind' => 'receiving_quantity',
+                        ])->values()->all() : [],
+                        'related_allocation_repairs' => [], 'counter_repairs' => $counterRepairs,
+                        'receiving_repairs' => $receivingRepair['transfers'],
+                    ]);
+                }
+                if ($stockLines->contains(fn ($line) => empty($line->lot_no_line_id))) {
+                    throw new PurchaseSellMismatch('The transfer has no selected lot. Its recorded source quantities must be complete before receiving can be repaired. '
+                        .($checked['blockers'][0] ?? 'Verify the source receipts and allocations.'));
+                }
+            }
             $corrections = [];
             $used = [];
             foreach ($lines as $line) {
@@ -177,14 +234,14 @@ class StockTransferReconciliationService
                 $source = DB::table('purchase_lines as p')->join('transactions as t', 'p.transaction_id', '=', 't.id')
                     ->where('t.business_id', $businessId)->where('t.location_id', $transfer->location_id)
                     ->where('p.id', $line->lot_no_line_id)->lockForUpdate()->first(['p.id', 'p.lot_number']);
-                if (! $source || empty($source->lot_number)) {
-                    throw new PurchaseSellMismatch('Line #'.$line->id.' has no valid selected serial. Choose its source receipt first.');
+                if (! $source) {
+                    throw new PurchaseSellMismatch('Line #'.$line->id.' has no valid selected receipt. Choose its source receipt first.');
                 }
                 $candidates = $destinations->filter(fn ($row) => ! in_array($row->id, $used, true)
                     && (int) $row->product_id === (int) $line->product_id
                     && (int) $row->variation_id === (int) $line->variation_id
                     && abs((float) $row->quantity - (float) $line->quantity) < 0.0001);
-                $matching = $candidates->where('lot_number', $source->lot_number);
+                $matching = $candidates->filter(fn ($row) => (string) $row->lot_number === (string) $source->lot_number);
                 $destination = $matching->count() === 1 ? $matching->first()
                     : ($candidates->count() === 1 ? $candidates->first() : null);
                 if (! $destination) {
@@ -195,7 +252,7 @@ class StockTransferReconciliationService
             }
 
             return $this->correctManual($businessId, $transferId, $corrections,
-                'Administrator Auto Correct: use the selected serials recorded on this transfer.', null, null, true);
+                'Administrator Auto Correct: use the source receipts recorded on this transfer.', null, null, true, false, false, true);
         });
     }
 
@@ -208,18 +265,24 @@ class StockTransferReconciliationService
                 ->where('transfer_parent_id', $transferId)->lockForUpdate()->firstOrFail();
             $source = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
                 ->where('p.id', $line->lot_no_line_id)->where('t.business_id', $businessId)->lockForUpdate()->first(['p.*']);
-            if (!$source || empty($source->lot_number)) {
-                throw new PurchaseSellMismatch('Choose the correct selected source serial before fixing its deduction.');
+            if (!$source) {
+                throw new PurchaseSellMismatch('Choose the correct source receipt before fixing its deduction.');
             }
             $destinations = $receipt->purchase_lines()->where('product_id', $line->product_id)->where('variation_id', $line->variation_id)
-                ->where('lot_number', $source->lot_number)->lockForUpdate()->get()
+                ->where(function ($query) use ($source) {
+                    if (trim((string) $source->lot_number) === '') {
+                        $query->whereNull('lot_number')->orWhere('lot_number', '');
+                    } else {
+                        $query->where('lot_number', $source->lot_number);
+                    }
+                })->lockForUpdate()->get()
                 ->filter(fn ($p) => abs((float) $p->quantity - (float) $line->quantity) < 0.0001);
             if ($destinations->count() !== 1) {
                 throw new PurchaseSellMismatch('Selected and receiving serials do not have a unique matching record. Use Verified Serial Correction to choose the correct records.');
             }
             return $this->correctManual($businessId, $transferId, [[
                 'sell_line_id' => $lineId, 'source_id' => (int) $source->id, 'destination_id' => (int) $destinations->first()->id,
-            ]], 'Deducted serial correction based on matching recorded selected and receiving serials.', null, null, $administratorRepair, $administratorRepair, $administratorRepair);
+            ]], 'Deduction correction based on matching recorded source and receiving receipts.', null, null, $administratorRepair, $administratorRepair, $administratorRepair, true);
         });
     }
 

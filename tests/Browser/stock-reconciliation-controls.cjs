@@ -89,6 +89,25 @@ test('auto complete fills a supported missing selection and verifies a preview w
     dom.window.close();
 });
 
+test('a transfer without lot numbers verifies receipt IDs and quantity without requiring a serial', () => {
+    const {dom, $, calls, row} = editor(1, false, null, lines => {
+        lines[0].selected_serial = null;
+        lines[0].sources[0].lot_number = null;
+        lines[0].destinations[0].lot_number = null;
+        lines[0].recommendation.candidates = [];
+    });
+    assert.equal(row(1).find('.manual-source').val(), '2');
+    assert.equal(row(1).find('.manual-destination').val(), '9');
+    assert.match(row(1).text(), /No serial/);
+    row(1).find('.manual-source').trigger('change');
+    row(1).find('.manual-destination').trigger('change');
+    $('#auto_complete_manual_stock_correction').trigger('click');
+    assert.equal(calls[1].options.url, '/preview');
+    assert.equal(calls[1].options.data.corrections[0].source_id, '2');
+    assert.equal(calls[1].options.data.corrections[0].destination_id, '9');
+    dom.window.close();
+});
+
 test('applying a verified correction refreshes only changed rows and preserves other unsaved edits', () => {
     const {dom, $, calls} = editor(1, false, null, lines => {
         lines[0].selected_serial = null;

@@ -70,7 +70,7 @@
                     <label id="manual_matching_lines_toggle" ><input type="checkbox" id="show_matching_stock_lines"> Show matching records</label>
                 </div>
                 <form id="manual_stock_correction_form">
-                    <div class="manual-section"><h5>1. Choose the records</h5><p class="manual-help">Defaults use this transfer’s recorded serials. Open Details to compare other receipts.</p>
+                    <div class="manual-section"><h5>1. Choose the records</h5><p class="manual-help">Defaults use this transfer’s recorded receipts. Products without lot numbers are verified by source receipt, SKU and quantity. Open Details to compare other receipts.</p>
                     <div>
                         <table class="table manual-records-table">
                             <colgroup><col style="width:20%"><col style="width:32%"><col style="width:30%"><col style="width:18%"></colgroup>

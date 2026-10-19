@@ -1320,6 +1320,113 @@ class LotSaleConsistencyTest extends TestCase
         $this->app->make(TransactionUtil::class)->shouldNotHaveReceived('activityLog');
     }
 
+    public static function noLotTransferSelections(): array
+    {
+        return ['FIFO without a selected lot' => [null], 'selected receipt without a lot number' => [1],
+            'FIFO with no receiving rows' => [null, true], 'permitted overselling without a receipt allocation' => [null, false, true]];
+    }
+
+    /** @dataProvider noLotTransferSelections */
+    public function test_auto_correction_repairs_no_lot_receiving_quantity_without_moving_stock_again(?int $selected, bool $missing = false, bool $oversold = false): void
+    {
+        $this->counterRepairTransfer();
+        $destination = Transaction::find(3)->purchase_lines()->first();
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['quantity' => 2, 'lot_no_line_id' => $selected]);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['quantity' => 2]);
+        PurchaseLine::find(1)->update(['quantity' => 2, 'quantity_sold' => 2, 'lot_number' => null]);
+        $destination->update(['lot_number' => null, 'quantity' => 1]);
+        if ($missing) {
+            Schema::table('purchase_lines', function (Blueprint $table) {
+                $table->double('pp_without_discount')->default(0);
+                $table->double('discount_percent')->default(0);
+            });
+            $destination->delete();
+        }
+        if ($oversold) {
+            DB::table('business')->where('id', 1)->update(['pos_settings' => '{"allow_overselling":1}']);
+            DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['purchase_line_id' => 0]);
+            PurchaseLine::find(1)->update(['quantity_sold' => 0]);
+        }
+        $balances = $this->transferBalances();
+        $mappings = DB::table('transaction_sell_lines_purchase_lines')->get()->toJson();
+        $controller = $this->transferController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        $request = $this->statusRequest('completed');
+        $request->setUserResolver(fn () => auth()->user());
+        $response = $controller->autoCorrectStock($request, 1);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $result = $response->getData(true);
+        $this->assertTrue($result['complete']);
+        $this->assertNotEmpty($result['receiving_repairs']);
+        $received = Transaction::find(3)->purchase_lines()->first();
+        $this->assertEquals(2, $received->quantity);
+        $this->assertNull($received->lot_number);
+        if (!$missing) { $this->assertEquals($destination->id, $received->id); }
+        $this->assertEquals($selected, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertEquals($balances, $this->transferBalances());
+        $this->assertSame($mappings, DB::table('transaction_sell_lines_purchase_lines')->get()->toJson());
+        $again = $controller->autoCorrectStock($request, 1)->getData(true);
+        $this->assertTrue($again['complete']);
+        $this->assertFalse($again['applied']);
+    }
+
+    public function test_no_lot_auto_correction_rejects_incomplete_fifo_allocations_without_changes(): void
+    {
+        $this->counterRepairTransfer();
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['quantity' => 2, 'lot_no_line_id' => null]);
+        PurchaseLine::find(1)->update(['quantity' => 2, 'quantity_sold' => 1, 'lot_number' => null]);
+        Transaction::find(3)->purchase_lines()->update(['lot_number' => null]);
+        $controller = $this->transferController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        $request = $this->statusRequest('completed');
+        $request->setUserResolver(fn () => auth()->user());
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->autoCorrectStock($request, 1);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('recorded source quantities must be complete', $response->getData(true)['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_no_lot_auto_correction_never_erases_a_known_receiving_serial(): void
+    {
+        $this->counterRepairTransfer();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        Transaction::find(3)->purchase_lines()->update(['lot_number' => 'KNOWN-RECEIVING']);
+        $controller = $this->transferController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        $request = $this->statusRequest('completed');
+        $request->setUserResolver(fn () => auth()->user());
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->autoCorrectStock($request, 1);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('known serial', $response->getData(true)['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_normal_transfer_correction_can_preview_and_apply_receipts_without_lot_numbers(): void
+    {
+        [, $corrections, $destinationId] = $this->manualCorrectionFixture();
+        PurchaseLine::find(1)->update(['lot_number' => null]);
+        PurchaseLine::find($destinationId)->update(['lot_number' => null]);
+        $controller = $this->transferController();
+        config(['constants.administrator_usernames' => 'cashier-test']);
+        $request = $this->relatedManualCorrectionRequest();
+        $request->merge(['corrections' => $corrections]);
+        $options = $controller->manualCorrectionOptions($request, 1)->getData(true);
+        $this->assertTrue(collect($options['lines'][0]['sources'])->contains('id', 1));
+        $balances = $this->transferBalances();
+        $before = $this->stockCorrectionSnapshot();
+        $preview = $controller->previewManualCorrection($request, 1);
+        $this->assertSame(200, $preview->getStatusCode(), $preview->getContent());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $request->merge(['token' => $preview->getData(true)['plan']['token'], 'confirmed' => 1]);
+        $response = $controller->applyManualCorrection($request, 1);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertNull(PurchaseLine::find($destinationId)->lot_number);
+        $this->assertEquals(1, TransactionSellLine::find(1)->lot_no_line_id);
+        $this->assertEquals($balances, $this->transferBalances());
+    }
+
     public function test_admin_auto_correction_aligns_selected_allocated_and_receiving_serials(): void
     {
         [, , $destinationId] = $this->manualCorrectionFixture();

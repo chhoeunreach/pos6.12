@@ -788,12 +788,14 @@ class StockTransferController extends Controller
                         'mode' => 'automatic_selected_serials', 'changes' => $correction['changes'],
                         'related_allocation_repairs' => $correction['related_allocation_repairs'],
                         'counter_repairs' => $correction['counter_repairs'], 'proposal_token' => $correction['token'],
+                        'receiving_repairs' => $correction['receiving_repairs'] ?? [],
                     ]);
 
                     return ['success' => 1, 'applied' => true, 'complete' => true,
                         'changes' => $correction['changes'], 'repairs' => $correction['counter_repairs'],
                         'related_allocation_repairs' => $correction['related_allocation_repairs'],
-                        'msg' => 'Selected serials, source allocations and receiving serials now agree. Stock balances were recalculated.'];
+                        'receiving_repairs' => $correction['receiving_repairs'] ?? [],
+                        'msg' => 'SKU quantities, source allocations and receiving records now agree. Stock counters were rechecked.'];
                 }
                 if ($plan['status'] !== 'ready') {
                     return ['success' => 1, 'applied' => false, 'complete' => $plan['status'] === 'consistent', 'plan' => $plan];
@@ -845,7 +847,7 @@ class StockTransferController extends Controller
         return response()->json(['success' => 1, 'reference' => $transfer->ref_no, 'transaction_date' => (string) $transfer->transaction_date,
             'allow_overselling' => \App\Utils\BusinessUtil::allowsOverselling((int) $transfer->business_id),
             'lines' => app(\App\Services\StockTransferReconciliationService::class)
-            ->manualOptions((int) $transfer->business_id, $id, $this->isEnvAdministrator())]);
+            ->manualOptions((int) $transfer->business_id, $id, $this->isEnvAdministrator(), true)]);
     }
 
     public function previewManualCorrection(Request $request, int $id)
@@ -854,7 +856,7 @@ class StockTransferController extends Controller
         $input = $this->validateManualCorrection($request);
         try {
             $plan = app(\App\Services\StockTransferReconciliationService::class)->previewManual((int) $transfer->business_id,
-                $id, $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator());
+                $id, $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator(), true);
 
             return response()->json(['success' => 1, 'plan' => $plan]);
         } catch (\App\Exceptions\PurchaseSellMismatch $e) {
@@ -870,7 +872,7 @@ class StockTransferController extends Controller
         try {
             $plan = DB::transaction(function () use ($transfer, $input, $request, $id) {
                 $plan = app(\App\Services\StockTransferReconciliationService::class)->applyManual((int) $transfer->business_id,
-                    $id, $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator());
+                    $id, $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, $this->isEnvAdministrator(), $this->isEnvAdministrator(), true);
                 $this->transactionUtil->activityLog($transfer, 'stock_transfer_corrected', null, $plan);
 
                 return $plan;
