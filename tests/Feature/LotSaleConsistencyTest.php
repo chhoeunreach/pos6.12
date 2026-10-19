@@ -2715,6 +2715,25 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
 
+    public function test_authority_preview_accepts_supporting_records_longer_than_2000_characters(): void
+    {
+        Schema::create('system', function (Blueprint $table) {
+            $table->string('key');
+            $table->text('value')->nullable();
+        });
+        [, $corrections] = $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        $evidence = str_repeat("Verified source receipt and receiving batch, quantity 1.\r\n", 100);
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => $evidence]);
+        $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(1, $response->getData(true)['success']);
+        $this->assertSame($evidence, $request->input('evidence'));
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_preview_reports_unexpected_errors_without_exposing_internal_details(): void
     {
         [, $corrections] = $this->manualCorrectionFixture();

@@ -176,8 +176,17 @@ function authority_complete_fields($form) {
     }
     var $evidence = $form.find('#authority_evidence');
     if (!$evidence.val() || $evidence.val() === $evidence.attr('data-generated-notes')) {
-        var notes = summary.join('\n').slice(0, 2000);
-        $evidence.val(notes).attr('data-generated-notes', notes);
+        // Browsers submit textarea newlines as CRLF, which counts as two characters
+        // on the server. Keep whole generated lines and room for the summary notice.
+        var limit = Number($evidence.attr('maxlength')) || 20000;
+        var notice = 'Additional row details are included in the correction preview.';
+        var notes = '';
+        summary.forEach(function (line) {
+            var candidate = notes ? notes + '\r\n' + line : line;
+            if (candidate.length + notice.length + 2 <= limit) { notes = candidate; }
+        });
+        if (notes.split('\r\n').length < summary.length) { notes += '\r\n' + notice; }
+        $evidence.val(notes).attr('data-generated-notes', $evidence.val());
     }
     $form.find('.authority-auto-status').text(unresolved
         ? 'Filled supported records. ' + unresolved + ' line(s) still need a source receipt or receiving batch. Select those records to complete verification.'

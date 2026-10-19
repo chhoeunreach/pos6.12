@@ -421,3 +421,26 @@ test('successful standalone preview renders review without applying a correction
     assert.match($('#review').text(), /Review changes/);
     dom.window.close();
 });
+
+test('generated evidence supports long transfers and respects the server limit with CRLF newlines', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    $('#authority_correction_form').append('<textarea id="authority_evidence" maxlength="20000"></textarea>');
+    for (let i = 1; i <= 80; i++) {
+        const $copy = row().clone().attr({'data-line-id': String(i), 'data-completion': JSON.stringify({source_id: 1})});
+        $copy.find('.authority-destination option[value="10"]').val(String(100 + i));
+        $copy.appendTo('#authority_correction_form');
+    }
+    dom.window.authority_complete_fields($('#authority_correction_form'));
+    const evidence = $('#authority_evidence').val();
+    assert.ok(evidence.length > 2000);
+    assert.match(evidence, /Line #80:/);
+    assert.ok(evidence.replace(/\r?\n/g, '\r\n').length <= 20000);
+    $('#authority_evidence').attr('maxlength', '2000');
+    // Generated notes are refreshed, while manually entered evidence is preserved.
+    $('#authority_evidence').attr('data-generated-notes', evidence);
+    dom.window.authority_complete_fields($('#authority_correction_form'));
+    const bounded = $('#authority_evidence').val().replace(/\r?\n/g, '\r\n');
+    assert.ok(bounded.length <= 2000);
+    assert.match(bounded, /Additional row details/);
+    dom.window.close();
+});

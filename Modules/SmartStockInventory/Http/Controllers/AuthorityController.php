@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class AuthorityController extends BaseSmartStockController
 {
+    public const EVIDENCE_MAX_LENGTH = 20000;
+
     public function details(Request $request, \App\Services\StockAuthorityReconciliationService $service)
     {
         $this->authorizeAuthority($request);
@@ -429,7 +431,7 @@ class AuthorityController extends BaseSmartStockController
             'corrections.*.new_source.quantity' => 'required_if:corrections.*.source_id,new|nullable|numeric|gt:0|max:1000000000',
             'corrections.*.new_source.date' => 'required_if:corrections.*.source_id,new|nullable|date_format:Y-m-d H:i:s',
             'corrections.*.new_source.cost' => 'required_if:corrections.*.source_id,new|nullable|numeric|min:0|max:1000000000',
-            'evidence' => 'required|string|min:10|max:2000',
+            'evidence' => 'required|string|min:10|max:'.self::EVIDENCE_MAX_LENGTH,
             'change_transaction_date' => 'sometimes|boolean',
             'transaction_date' => 'required_if:change_transaction_date,1|nullable|date_format:Y-m-d H:i:s',
             'date_basis' => 'nullable|in:receipt_dates,recorded_receiving_date',

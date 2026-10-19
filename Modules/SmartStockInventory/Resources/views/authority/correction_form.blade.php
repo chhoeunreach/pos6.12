@@ -75,7 +75,7 @@
             </table></div>
             <div class="row">
                 <div class="col-sm-8 form-group"><label for="authority_evidence">Reason and supporting records</label>
-                    <textarea id="authority_evidence" name="evidence" class="form-control" rows="3" minlength="10" maxlength="2000" required placeholder="Explain the correction and identify the delivery record or serial check used.">{{ old('evidence') }}</textarea></div>
+                    <textarea id="authority_evidence" name="evidence" class="form-control" rows="3" minlength="10" maxlength="{{ \Modules\SmartStockInventory\Http\Controllers\AuthorityController::EVIDENCE_MAX_LENGTH }}" required placeholder="Explain the correction and identify the delivery record or serial check used.">{{ old('evidence') }}</textarea></div>
                 <div class="col-sm-4 form-group">
                     <input type="hidden" name="change_transaction_date" value="0">
                     <div class="checkbox"><label><input type="checkbox" id="authority_change_date" name="change_transaction_date" value="1" {{ old('change_transaction_date') ? 'checked' : '' }}> Change delivery date</label></div>
