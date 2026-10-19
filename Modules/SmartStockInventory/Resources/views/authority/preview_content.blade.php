@@ -4,12 +4,27 @@
         @if(!empty($input['date_basis']))
             <div class="alert alert-info">The delivery date is proposed from {{ $input['date_basis'] === 'recorded_receiving_date' ? 'the recorded receiving date' : 'source receipt dates' }}. Review this proposed date against your delivery records before applying.</div>
         @endif
+        @if(!empty($plan['receipt_date_overrides']))
+            <div class="alert alert-warning"><strong>Source receipt date conflicts bypassed. Recorded delivery dates are preserved.</strong>
+                <ul>@foreach($plan['receipt_date_overrides'] as $exception)
+                    <li>Line #{{ $exception['sell_line_id'] }}: source receipt #{{ $exception['source_receipt_id'] }} dated {{ $exception['source_receipt_date'] }}, delivery {{ $exception['delivery_date'] }}.</li>
+                @endforeach</ul>
+                These date discrepancies remain visible in stock history and stock audits.
+            </div>
+        @endif
         <p>This preview has not changed stock. Apply below to save these corrections together.</p>
         @if(!empty($plan['created_receipts']))
             <h4>Missing records to create</h4>
             <p>New source records are recorded as opening stock corrections. Receiving records restore this completed transfer's missing batches without moving the transfer quantity a second time. New record IDs shown in preview may change when saved.</p>
             <ul>@foreach($plan['created_receipts'] as $created)
                 <li>Line #{{ $created['sell_line_id'] }}: new {{ $created['kind'] }} receipt · {{ $created['serial'] ?: 'No serial' }} · Quantity {{ $created['quantity'] }} · Location #{{ $created['location_id'] }} · {{ $created['date'] }}@if(isset($created['cost'])) · Unit cost {{ $created['cost'] }}@endif</li>
+            @endforeach</ul>
+        @endif
+        @if(!empty($plan['linked_receiving_serial_fills']))
+            <h4>Linked receiving lots to fill together</h4>
+            <p>These connected transfers have an unambiguous receiving batch with the same SKU and quantity. Only their missing serials will be filled; dates, quantities and deductions stay unchanged.</p>
+            <ul>@foreach($plan['linked_receiving_serial_fills'] as $fill)
+                <li>{{ $fill['reference'] ?: '#'.$fill['transaction_id'] }} · Batch #{{ $fill['batch_id'] }}: No serial → {{ $fill['after'] }} · Quantity {{ $fill['quantity'] }}.</li>
             @endforeach</ul>
         @endif
         @if(!empty($plan['filled_source_serials']))
@@ -65,6 +80,7 @@
         <form method="post" action="{{ ssi_route('ssi.authority.apply', ['id' => $transfer->id]) }}">
             @csrf
             @if(array_key_exists('change_transaction_date', $input))<input type="hidden" name="change_transaction_date" value="{{ $input['change_transaction_date'] ? 1 : 0 }}">@endif
+            <input type="hidden" name="allow_receipt_date_override" value="{{ !empty($input['allow_receipt_date_override']) ? 1 : 0 }}">
             <input type="hidden" name="date_basis" value="{{ $input['date_basis'] ?? '' }}">
             <input type="hidden" name="token" value="{{ $plan['token'] }}">
             <input type="hidden" name="evidence" value="{{ $input['evidence'] }}">

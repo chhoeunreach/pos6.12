@@ -27,7 +27,7 @@ class StockAuthorityReconciliationService
         if (!array_key_exists($category, self::DETAIL_CATEGORIES)) {
             throw new \InvalidArgumentException('Unknown Authority issue category.');
         }
-        $issues = collect($this->auditService->audit($businessId)['sale_line_issues'])->keyBy('sell_line_id');
+        $issues = collect($this->authorityAudit($businessId, $this->auditService->audit($businessId))['sale_line_issues'])->keyBy('sell_line_id');
         $reason = ['missing_selected' => 'Selected purchase lot is missing.',
             'differing_allocations' => 'Stock allocation differs from the invoice selected lot.'][$category] ?? null;
         $ids = $issues->filter(fn ($issue) => !$reason || in_array($reason, $issue['reasons'], true))->keys();
@@ -79,7 +79,7 @@ class StockAuthorityReconciliationService
 
     public function auditMismatches(int $businessId, ?array $audit = null): array
     {
-        $audit = $audit ?? $this->auditService->audit($businessId);
+        $audit = $this->authorityAudit($businessId, $audit ?? $this->auditService->audit($businessId));
         $issues = collect($audit['sale_line_issues']);
 
         $overAllocatedCount = $this->overAllocatedLines($businessId)->get()->count();
@@ -106,7 +106,7 @@ class StockAuthorityReconciliationService
 
     public function getTransferMismatchMap(int $businessId): array
     {
-        $audit = $this->auditService->audit($businessId);
+        $audit = $this->authorityAudit($businessId, $this->auditService->audit($businessId));
 
         $saleLineMismatchMap = [];
         foreach ($audit['sale_line_issues'] as $issue) {
@@ -137,7 +137,55 @@ class StockAuthorityReconciliationService
             'mismatch_map' => $allMismatchMap,
             'total_mismatches_count' => count($allMismatchMap),
             'audit' => $audit,
+            'accepted_date_exceptions' => $audit['accepted_date_exceptions'] ?? [],
         ];
+    }
+
+    /** Accepted date exceptions affect Authority's work queue; the stock audit stays unchanged. */
+    private function authorityAudit(int $businessId, array $audit): array
+    {
+        if (array_key_exists('accepted_date_exceptions', $audit)) {
+            return $audit;
+        }
+        $audit['accepted_date_exceptions'] = [];
+        $dateReasons = [
+            'Transfer is dated before the selected lot arrived at its source location.',
+            'Stock allocation uses a receipt dated after the transfer.',
+        ];
+        $transferIds = collect($audit['sale_line_issues'])->filter(fn ($issue) => $issue['type'] === 'sell_transfer'
+            && array_intersect($dateReasons, $issue['reasons']))->pluck('transaction_id')->unique();
+        if ($transferIds->isEmpty() || !Schema::hasTable('activity_log')) {
+            return $audit;
+        }
+        $latest = DB::table('activity_log')->where('business_id', $businessId)
+            ->where('subject_type', (new \App\Transaction)->getMorphClass())
+            ->where('description', 'stock_transfer_corrected')->whereIn('subject_id', $transferIds)
+            ->groupBy('subject_id')->selectRaw('MAX(id) as id');
+        $activities = DB::table('activity_log as a')->joinSub($latest, 'latest', 'latest.id', '=', 'a.id')
+            ->get(['a.subject_id', 'a.properties'])->keyBy('subject_id');
+        $unresolved = [];
+        foreach ($audit['sale_line_issues'] as $issue) {
+            $activity = $activities->get($issue['transaction_id']);
+            $properties = $activity ? json_decode($activity->properties, true) : [];
+            $exception = ($properties['mode'] ?? null) === 'authority' && !empty($properties['authorized_by'])
+                ? collect($properties['receipt_date_overrides'] ?? [])->firstWhere('sell_line_id', $issue['sell_line_id']) : null;
+            // The saved approval is valid only for the same receipt and the same two dates.
+            // Any other issue (quantity, lot, location, missing records) remains unresolved.
+            if ($issue['type'] === 'sell_transfer' && $exception
+                && (int) $exception['source_receipt_id'] === (int) $issue['selected_purchase_line_id']
+                && (string) $exception['source_receipt_date'] === (string) $issue['receipt_date']
+                && (string) $exception['delivery_date'] === (string) $issue['transaction_date']
+                && collect($issue['allocations'])->every(fn ($mapping) =>
+                    (int) $mapping->purchase_line_id === (int) $exception['source_receipt_id']
+                    && (string) $mapping->receipt_date === (string) $exception['source_receipt_date'])) {
+                $issue['reasons'] = array_values(array_diff($issue['reasons'], $dateReasons));
+                $audit['accepted_date_exceptions'][$issue['transaction_id']][] = $exception;
+            }
+            if ($issue['reasons']) { $unresolved[] = $issue; }
+        }
+        $audit['sale_line_issues'] = $unresolved;
+
+        return $audit;
     }
 
     public function previewAll(int $businessId, int $userId, string $reason): array

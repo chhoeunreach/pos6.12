@@ -47,10 +47,10 @@ test('ambiguous matching receipts require an explicit receiving-batch selection'
     dom.window.close();
 });
 
-test('different unused receiving serial can be explicitly selected for correction', () => {
+test('unique unused receiving batch is proposed with its serial change for review', () => {
     const {dom, row} = form([{id: 10, serial: 'B'}]);
     row().find('.authority-source').val('1').trigger('change');
-    assert.equal(row().find('.authority-destination').val(), '');
+    assert.equal(row().find('.authority-destination').val(), '10');
     row().find('.authority-destination').val('10').trigger('change');
     assert.equal(row().find('.authority-destination').val(), '10');
     assert.match(row().find('.authority-selection-help').text(), /receiving serial will change to A/);
@@ -482,5 +482,225 @@ test('successful opening check keeps selections and does not open the apply prev
     assert.equal($('#authority_correction_form').length, 1);
     assert.equal($('#apply').length, 0);
     assert.match($('.authority-auto-status').text(), /Initial check passed/);
+    dom.window.close();
+});
+
+test('authority date bypass allows preview while preserving recorded delivery', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('data-recorded-date', '2026-10-14 14:56:00');
+    $form.append('<input type="checkbox" id="authority_change_date"><input id="authority_date"><input type="checkbox" id="authority_receipt_date_override" name="allow_receipt_date_override" value="1" checked><div class="authority-date-guidance"></div>');
+    row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-10-14 16:27:00');
+    row().find('.authority-source').val('1').trigger('change');
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.match(options.data, /allow_receipt_date_override=1/);
+        return $.Deferred().promise();
+    };
+    $form.triggerHandler('submit');
+    assert.equal(requests, 1);
+    assert.equal($('#authority_date').val(), '');
+    assert.match($('.authority-date-guidance').text(), /bypass enabled/);
+    assert.equal($('.authority-date-guidance').hasClass('text-danger'), false);
+    dom.window.close();
+});
+
+test('disabling authority date bypass restores the receipt chronology check', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('data-recorded-date', '2026-10-14 14:56:00');
+    $form.append('<input type="checkbox" id="authority_change_date"><input id="authority_date"><input type="checkbox" id="authority_receipt_date_override" checked><div class="authority-date-guidance"></div>');
+    row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-10-14 16:27:00');
+    row().find('.authority-source').val('1').trigger('change');
+    $('#authority_receipt_date_override').prop('checked', false).trigger('change');
+    $.ajax = () => { throw new Error('Chronology conflict must block without override'); };
+    $form.triggerHandler('submit');
+    assert.equal($('.authority-date-guidance').hasClass('text-danger'), true);
+    dom.window.close();
+});
+
+test('authority receiving serial correction works for every row with the enabled default', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B', used: true}, {id: 11, serial: 'B', used: true}], 2);
+    for (let i = 0; i < 2; i++) {
+        row(i).append(`<input type="hidden" name="corrections[${i}][change_receiving_serial]" value="0"><input type="checkbox" class="authority-change-receiving-serial" name="corrections[${i}][change_receiving_serial]" value="1" checked>`);
+        row(i).find('.authority-source').val('1').trigger('change');
+        assert.equal(row(i).find('.authority-destination option[value="' + (10 + i) + '"]').prop('disabled'), false);
+        row(i).find('.authority-destination').val(String(10 + i)).trigger('change');
+        assert.match(row(i).find('.authority-selection-help').text(), /receiving serial will change to A/);
+    }
+    $.ajax = options => {
+        const params = new URLSearchParams(options.data);
+        assert.deepEqual(params.getAll('corrections[0][change_receiving_serial]'), ['0', '1']);
+        assert.deepEqual(params.getAll('corrections[1][change_receiving_serial]'), ['0', '1']);
+        return $.Deferred().promise();
+    };
+    $('#authority_correction_form').triggerHandler('submit');
+    dom.window.close();
+});
+
+test('receiving dependency errors highlight the affected row and explain the linked-record remedy', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().attr('data-line-id', '77').find('.authority-source').val('1').trigger('change');
+    $.ajax = () => $.Deferred().reject({status: 422, responseJSON: {msg: 'Line #77: receiving batch #10 supplies a connected transfer.',
+        stock_error: {kind: 'receiving_batch_dependencies', sell_line_id: 77}}}).promise();
+    $('#authority_correction_form').triggerHandler('submit');
+    assert.equal(row().hasClass('has-error'), true);
+    assert.match(row().find('.authority-selection-help').text(), /Line #77/);
+    assert.match($('.authority-preview-error').text(), /reconcile those linked records together/);
+    dom.window.close();
+});
+
+test('changing source retains the unique blank receiving batch proposed for serial fill', () => {
+    const {dom, $, row} = form([{id: 10, serial: '', used: true}]);
+    row().append('<input type="checkbox" class="authority-change-receiving-serial" checked>');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    row().find('.authority-source').val('2').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.match(row().find('.authority-selection-help').text(), /receiving serial will change to B/);
+    dom.window.close();
+});
+
+test('automatic receiving proposals reserve exact serial batches for other rows', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B', used: true}], 2);
+    for (let i = 0; i < 2; i++) {
+        row(i).attr({'data-receiving-group': '5:8', 'data-missing-receiving': '1',
+            'data-completion': JSON.stringify({source_id: i + 1, destination_id: 10})});
+        row(i).append('<input type="checkbox" class="authority-change-receiving-serial" checked>');
+        row(i).find('.authority-destination').append('<option value="new">New receiving</option>');
+    }
+    assert.equal(dom.window.authority_complete_fields($('#authority_correction_form')), true);
+    assert.equal(row(0).find('.authority-destination').val(), 'new');
+    assert.equal(row(1).find('.authority-destination').val(), '10');
+    dom.window.close();
+});
+
+test('multiple eligible receiving batches require a choice and edits clear stale errors', () => {
+    const {dom, $, row} = form([{id: 10, serial: '', used: true}, {id: 11, serial: '', used: true}]);
+    row().attr('data-line-id', '77').append('<input type="checkbox" class="authority-change-receiving-serial" checked>');
+    $('#authority_correction_form').append('<p class="authority-auto-status"></p>');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    dom.window.authority_check_on_open($('#authority_correction_form'));
+    assert.match($('.authority-preview-error').text(), /Several receiving batches have this SKU and quantity/);
+    row().find('.authority-destination').val('11').trigger('change');
+    assert.equal($('.authority-preview-error').css('display'), 'none');
+    assert.equal(row().hasClass('has-error'), false);
+    assert.match($('.authority-auto-status').text(), /Selections changed/);
+    dom.window.close();
+});
+
+test('Quick fix fills supported row selections and checks without applying stock changes', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    $form.append('<textarea id="authority_evidence" name="evidence">Keep my verified delivery notes.</textarea><p class="authority-auto-status"></p>');
+    row().attr({'data-line-id': '76626', 'data-completion': JSON.stringify({source_id: 1, destination_id: 10})});
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(options.url, '/authority/1/preview');
+        assert.equal(options.type, 'POST');
+        return $.Deferred().resolve({success: 1, html: '<button id="apply-stock">Apply</button>'}).promise();
+    };
+    row().find('.authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-source').val(), '1');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    assert.equal(requests, 1);
+    assert.equal($('#authority_correction_form').length, 1);
+    assert.equal($('#apply-stock').length, 0);
+    assert.equal($('#authority_evidence').val(), 'Keep my verified delivery notes.');
+    assert.match($('.authority-auto-status').text(), /Initial check passed/);
+    dom.window.close();
+});
+
+test('Quick fix on an ambiguous receiving error focuses the selector without guessing', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'A'}]);
+    row().attr('data-line-id', '76626').find('.authority-source').val('1').trigger('change');
+    $.ajax = () => { throw new Error('Ambiguous selection must not be sent'); };
+    dom.window.authority_check_on_open($('#authority_correction_form'));
+    assert.equal($('.authority-preview-error .authority-quick-fix').length, 1);
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-destination').val(), '');
+    assert.equal(dom.window.document.activeElement, row().find('.authority-destination')[0]);
+    assert.match($('.authority-preview-error').text(), /Several receiving batches/);
+    dom.window.close();
+});
+
+test('Quick fix selects a missing receiving batch only within the recorded quantity gap', () => {
+    const {dom, $, row} = form([]);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    row().attr('data-missing-receiving', '1').find('.authority-destination').append('<option value="new">Add missing receiving</option>');
+    row().find('.authority-source').val('1').trigger('change');
+    row().find('.authority-destination').val('').trigger('change');
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(options.url, '/authority/1/preview');
+        return $.Deferred().resolve({success: 1, html: 'Review missing batch'}).promise();
+    };
+    row().find('.authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-destination').val(), 'new');
+    assert.equal(requests, 1);
+    assert.equal($('#authority_correction_form').length, 1);
+    dom.window.close();
+});
+
+test('Quick fix exposes missing source receipt fields and requires actual date and cost', () => {
+    const {dom, $, row} = form([]);
+    row().attr('data-missing-receiving', '1');
+    row().find('.authority-source option[value="1"], .authority-source option[value="2"]').remove();
+    row().find('.authority-source').append('<option value="new">Add missing source</option>');
+    row().find('.authority-destination').append('<option value="new">Add missing receiving</option>');
+    row().append('<div class="authority-new-source"><input id="actual-source-date" class="authority-new-source-date" required><input id="actual-source-cost" type="number" required></div>');
+    $.ajax = () => { throw new Error('Missing actual receipt fields must not be submitted'); };
+    row().find('.authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-source').val(), 'new');
+    assert.equal($('#actual-source-date').val(), '');
+    assert.equal($('#actual-source-cost').val(), '');
+    assert.equal(dom.window.document.activeElement, $('#actual-source-date')[0]);
+    assert.match($('.authority-preview-error').text(), /required receipt details/);
+    dom.window.close();
+});
+
+test('Quick fix next row acts on one unresolved row and leaves unrelated choices alone', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}], 2);
+    $('#authority_correction_form').append('<p class="authority-auto-status"></p>');
+    row(0).attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    dom.window.authority_update_quick_fix_buttons($('#authority_correction_form'));
+    $.ajax = () => { throw new Error('Another unresolved row remains'); };
+    $('.authority-quick-fix-next').trigger('click');
+    assert.equal(row(0).find('.authority-source').val(), '1');
+    assert.equal(row(0).find('.authority-destination').val(), '10');
+    assert.equal(row(1).find('.authority-source').val(), '');
+    $('.authority-quick-fix-next').trigger('click');
+    assert.equal(dom.window.document.activeElement, row(1).find('.authority-source')[0]);
+    dom.window.close();
+});
+
+test('Quick fix retries a server error as verification while keeping the form open', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form');
+    row().find('.authority-source').val('1').trigger('change');
+    dom.window.authority_preview_error($form, {status: 500, responseJSON: {error_reference: 'incident-1'}});
+    let checks = 0;
+    $.ajax = () => {
+        checks++;
+        return $.Deferred().resolve({success: 1, html: '<button id="apply-stock">Apply</button>'}).promise();
+    };
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal(checks, 1);
+    assert.equal($('#authority_correction_form').length, 1);
+    assert.equal($('#apply-stock').length, 0);
+    dom.window.close();
+});
+
+test('receiving dependency errors identify the row from the batch ID for Quick fix', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().attr('data-line-id', '76626').find('.authority-source').val('1').trigger('change');
+    dom.window.authority_preview_error($('#authority_correction_form'), {status: 422, responseJSON: {
+        msg: 'The connected receiving lot needs repair.', stock_error: {kind: 'receiving_batch_dependencies', receiving_batch_id: 10}
+    }});
+    assert.equal(row().hasClass('has-error'), true);
+    assert.equal($('.authority-preview-error .authority-quick-fix').attr('data-line-id'), '76626');
+    assert.equal($('#authority_correction_form').data('authority-stock-error').sell_line_id, '76626');
     dom.window.close();
 });

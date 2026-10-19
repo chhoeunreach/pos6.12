@@ -25,7 +25,7 @@ class AuthorityTransferReceiptService
             $token = $this->fingerprint($businessId, $transferId, $input, $userId);
             [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
             $plan = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
 
             return array_merge($plan, ['token' => $token, 'created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
         } finally {
@@ -44,9 +44,9 @@ class AuthorityTransferReceiptService
             [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
             // Newly generated IDs can differ from preview IDs on MySQL. Verify the actual IDs in this transaction.
             $preview = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
             $plan = $this->reconciliation->applyManual($businessId, $transferId, $corrections,
-                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true, true);
+                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
 
             return array_merge($plan, ['created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
         });
@@ -63,7 +63,7 @@ class AuthorityTransferReceiptService
 
             return $choice;
         })->sortBy(fn ($row) => $row[0])->values()->all();
-        $choices = [$choices, trim($input['evidence']), $input['transaction_date'] ?? null];
+        $choices = [$choices, trim($input['evidence']), $input['transaction_date'] ?? null, !empty($input['allow_receipt_date_override'])];
         // Capture the affected products' history, including competing movements and transfer receipts.
         $variationIds = DB::table('transaction_sell_lines')->where('transaction_id', $transferId)->pluck('variation_id');
         $purchaseTransactionIds = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
@@ -149,7 +149,7 @@ class AuthorityTransferReceiptService
                 $serial = trim((string) ($details['serial'] ?? ''));
                 $serial = $serial === '' ? null : $serial;
                 if ((float) $details['quantity'] + 0.0001 < (float) $line->quantity
-                    || \Carbon::parse($details['date'])->gt(\Carbon::parse($effectiveDate))) {
+                    || (empty($input['allow_receipt_date_override']) && \Carbon::parse($details['date'])->gt(\Carbon::parse($effectiveDate)))) {
                     throw new PurchaseSellMismatch('Enter sufficient evidenced receipt quantity and its actual receipt date on or before delivery.');
                 }
                 $duplicate = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')

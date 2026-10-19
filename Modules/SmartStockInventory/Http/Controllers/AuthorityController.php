@@ -82,6 +82,7 @@ class AuthorityController extends BaseSmartStockController
         $receiptMismatchIds = $mismatchData['receipt_mismatch_ids'];
         $saleLineMismatchIds = $mismatchData['sale_line_mismatch_ids'];
         $mismatchMap = $mismatchData['mismatch_map'];
+        $acceptedDateExceptions = $mismatchData['accepted_date_exceptions'];
         $mismatchSummary = $reconciliationService->auditMismatches($this->businessId(), $mismatchData['audit']);
 
         $query = Transaction::from('transactions as t')
@@ -231,6 +232,7 @@ class AuthorityController extends BaseSmartStockController
             'products',
             'mismatchSummary',
             'mismatchMap',
+            'acceptedDateExceptions',
             'receiptMismatchIds',
             'saleLineMismatchIds',
             'locations',
@@ -264,9 +266,9 @@ class AuthorityController extends BaseSmartStockController
         $destination = $matching->count() === 1 ? $matching->first() : null;
         if (!$destination && $matching->isEmpty() && $destinations->count() === 1) {
             $candidate = $destinations->first();
-            if (!$candidate->used || trim((string) $candidate->lot_number) === '' || trim((string) $source->lot_number) === '') {
-                $destination = $candidate;
-            }
+            // Authority proposes the unique SKU/quantity batch; serial changes are reviewed
+            // in the preview and still require the row's change_receiving_serial option.
+            $destination = $candidate;
         }
         $result = ['source_id' => (int) $source->id];
         if ($destination) {
@@ -432,6 +434,7 @@ class AuthorityController extends BaseSmartStockController
             'corrections.*.new_source.date' => 'required_if:corrections.*.source_id,new|nullable|date_format:Y-m-d H:i:s',
             'corrections.*.new_source.cost' => 'required_if:corrections.*.source_id,new|nullable|numeric|min:0|max:1000000000',
             'evidence' => 'required|string|min:10|max:'.self::EVIDENCE_MAX_LENGTH,
+            'allow_receipt_date_override' => 'sometimes|boolean',
             'change_transaction_date' => 'sometimes|boolean',
             'transaction_date' => 'required_if:change_transaction_date,1|nullable|date_format:Y-m-d H:i:s',
             'date_basis' => 'nullable|in:receipt_dates,recorded_receiving_date',
@@ -450,7 +453,7 @@ class AuthorityController extends BaseSmartStockController
             $plan = AuthorityTransferReceiptService::needsStaging($input)
                 ? app(AuthorityTransferReceiptService::class)->preview($this->businessId(), $id, $input, $request->user()->id)
                 : app(StockTransferReconciliationService::class)->previewManual($this->businessId(), $id,
-                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true);
+                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
 
             if ($request->expectsJson()) {
                 return response()->json(['success' => 1, 'html' => view('smartstockinventory::authority.preview_content', compact('transfer', 'input', 'plan'))->render()]);
@@ -491,13 +494,13 @@ class AuthorityController extends BaseSmartStockController
                 $plan = AuthorityTransferReceiptService::needsStaging($input)
                     ? app(AuthorityTransferReceiptService::class)->apply($this->businessId(), $id, $input, $request->user()->id, $request->input('token'))
                     : app(StockTransferReconciliationService::class)->applyManual($this->businessId(), $id,
-                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true, true);
+                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
                 app(TransactionUtil::class)->activityLog($transfer, 'stock_transfer_corrected', null,
                     array_merge($plan, ['mode' => 'authority', 'authorized_by' => $request->user()->id, 'date_basis' => $input['date_basis'] ?? null]));
             });
 
             return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))
-                ->with('status', ['success' => 1, 'msg' => 'Authority correction applied. Source deductions, selected serials and receiving records were rechecked. Review any remaining stock shortages in Mismatch Detector.']);
+                ->with('status', ['success' => 1, 'msg' => 'Authority correction applied. Source deductions, selected serials and receiving records were rechecked. Accepted receipt-date exceptions are recorded in the audit; only unresolved mismatches remain in the default Authority list. Review remaining stock shortages in Mismatch Detector.']);
         } catch (PurchaseSellMismatch $exception) {
             return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))->withInput()
                 ->with('status', $exception->responseData());

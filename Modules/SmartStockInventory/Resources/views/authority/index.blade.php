@@ -311,7 +311,7 @@
                                 <td>
                                     @if(!$hasMismatch)
                                         <span class="label label-success" style="font-size:11px;padding:3px 8px">
-                                            <i class="fa fa-check"></i> Consistent
+                                            <i class="fa fa-check"></i> {{ !empty($acceptedDateExceptions[$item->id]) ? 'Corrected — accepted date exception' : 'Consistent' }}
                                         </span>
                                     @else
                                         @foreach($reasons as $reason)

@@ -1,3 +1,23 @@
+function authority_receiving_reserved_for_other_row($row, $option) {
+    var reserved = false;
+    $('#authority_correction_form .authority-line').not($row).each(function () {
+        var $other = $(this);
+        if ($other.attr('data-receiving-group') !== $row.attr('data-receiving-group') || $other.find('.authority-destination').val()
+            || Math.abs(Number($other.attr('data-quantity')) - Number($option.attr('data-quantity'))) > 0.0001) { return; }
+        var $source = $other.find('.authority-source');
+        var sourceId = $source.val();
+        if (!sourceId) {
+            try { sourceId = JSON.parse($other.attr('data-completion') || '{}').source_id; } catch (ignore) { return; }
+        }
+        if (!sourceId || sourceId === 'new') { return; }
+        var $sourceOption = $source.find('option').filter(function () { return this.value === String(sourceId); });
+        if (!$sourceOption.length) { return; }
+        var serial = ($sourceOption.attr('data-serial') || '').trim() || ($other.find('.authority-verified-serial').val() || '').trim();
+        if (serial === ($option.attr('data-serial') || '').trim()) { reserved = true; }
+    });
+    return reserved;
+}
+
 function authority_update_receiving($row, suggestMatch) {
     var $source = $row.find('.authority-source');
     var isNewSource = $source.val() === 'new';
@@ -46,9 +66,15 @@ function authority_update_receiving($row, suggestMatch) {
     if (suggestMatch && !$destination.val() && matches.length === 1) {
         $destination.val(matches[0]);
     }
-    var hasAvailableBatch = $destination.find('option').filter(function () {
-        return this.value && this.value !== 'new' && !this.disabled;
-    }).length > 0;
+    var $availableBatches = $destination.find('option').filter(function () {
+        return this.value && this.value !== 'new' && !this.disabled && !authority_receiving_reserved_for_other_row($row, $(this));
+    });
+    // A unique eligible batch can be proposed even when its missing/wrong serial needs repair.
+    // Exact serial matches take priority, including batches needed by other rows.
+    if (suggestMatch && $source.val() && !$destination.val() && matches.length === 0 && $availableBatches.length === 1) {
+        $destination.val($availableBatches.val());
+    }
+    var hasAvailableBatch = $availableBatches.length > 0;
     if (suggestMatch && $source.val() && !$destination.val() && (occupiedMatch || !hasAvailableBatch)) {
         var $missingReceiving = $destination.find('option[value="new"]');
         if ($missingReceiving.length && !$missingReceiving.prop('disabled')) { $destination.val('new'); }
@@ -106,13 +132,15 @@ function authority_update_dates($form) {
             conflicts.push(($source.val() ? 'Source receipt ' + ($source.val() === 'new' ? '(new)' : '#' + $source.val()) : 'An unchanged source receipt') + ' arrived ' + date);
         }
     });
+    var bypass = $form.find('#authority_receipt_date_override').prop('checked') && !authority_date_change_enabled($form);
     var message = earliest ? 'Earliest permitted delivery: ' + earliest + '.' : '';
     if (conflicts.length) {
         message = conflicts.join('; ') + ', after delivery ' + effective + '. Select an earlier source receipt or enter the actual verified delivery date on or after ' + earliest + '.';
     }
-    $form.find('.authority-date-guidance').toggleClass('text-danger', conflicts.length > 0).text(message);
+    if (conflicts.length && bypass) { message = conflicts.join('; ') + '. Authority date bypass enabled: recorded delivery dates will be preserved and exceptions recorded in the preview and audit.'; }
+    $form.find('.authority-date-guidance').toggleClass('text-danger', conflicts.length > 0 && !bypass).text(message);
     $form.find('.authority-use-earliest-date').toggle(Boolean(authority_date_change_enabled($form) && earliest && effective && earliest > effective)).attr('data-date', earliest);
-    return conflicts.length === 0;
+    return conflicts.length === 0 || Boolean(bypass);
 }
 
 function authority_complete_fields($form) {
@@ -133,7 +161,7 @@ function authority_complete_fields($form) {
         authority_update_receiving($row, false);
         if (!$destination.val() && String($source.val()) === String(completion.source_id) && completion.destination_id) {
             var $option = $destination.find('option').filter(function () { return this.value === String(completion.destination_id); });
-            if ($option.length && !$option.prop('disabled')) { $destination.val(String(completion.destination_id)); }
+            if ($option.length && !$option.prop('disabled') && !authority_receiving_reserved_for_other_row($row, $option)) { $destination.val(String(completion.destination_id)); }
         }
         if (!$destination.val() && $source.val()) { authority_update_receiving($row, true); }
         authority_update_receiving($row, false);
@@ -174,6 +202,27 @@ function authority_complete_fields($form) {
     if ($form.find('#authority_date_basis').val()) {
         summary.push('Proposed delivery ' + $date.val() + ' from existing receipt dates. Actual delivery must be reviewed against delivery records.');
     }
+    authority_refresh_generated_evidence($form, summary);
+    authority_update_quick_fix_buttons($form);
+    $form.find('.authority-auto-status').text(unresolved
+        ? 'Filled supported records. ' + unresolved + ' line(s) still need a source receipt or receiving batch. Select those records to complete verification.'
+        : 'Fields completed from existing records. Review proposed serial and date changes, then verify the correction.');
+    return unresolved === 0;
+}
+
+function authority_refresh_generated_evidence($form, summary) {
+    if (!summary) {
+        summary = ['Authority record-based correction for ' + ($form.attr('data-reference') || 'this transfer') + '.'];
+        $form.find('.authority-line').each(function () {
+            var $row = $(this), source = $row.find('.authority-source').val(), destination = $row.find('.authority-destination').val();
+            if (source && destination) {
+                summary.push('Line #' + ($row.attr('data-line-id') || '?') + ': source receipt ' + source +
+                    ', receiving batch ' + destination + ', quantity ' + $row.attr('data-quantity') + '.');
+                var serial = $row.find('.authority-verified-serial:not(:disabled)').val();
+                if (serial) { summary.push('Proposed missing serial ' + serial + ' from the receiving record; review before applying.'); }
+            }
+        });
+    }
     var $evidence = $form.find('#authority_evidence');
     if (!$evidence.val() || $evidence.val() === $evidence.attr('data-generated-notes')) {
         // Browsers submit textarea newlines as CRLF, which counts as two characters
@@ -188,10 +237,95 @@ function authority_complete_fields($form) {
         if (notes.split('\r\n').length < summary.length) { notes += '\r\n' + notice; }
         $evidence.val(notes).attr('data-generated-notes', $evidence.val());
     }
-    $form.find('.authority-auto-status').text(unresolved
-        ? 'Filled supported records. ' + unresolved + ' line(s) still need a source receipt or receiving batch. Select those records to complete verification.'
-        : 'Fields completed from existing records. Review proposed serial and date changes, then verify the correction.');
-    return unresolved === 0;
+}
+
+function authority_row_needs_fix($row) {
+    return !$row.find('.authority-source').val() || !$row.find('.authority-destination').val() ||
+        $row.hasClass('has-error') || $row.find(':input').filter(function () {
+            return !this.disabled && this.checkValidity && !this.checkValidity();
+        }).length > 0;
+}
+
+function authority_update_quick_fix_buttons($form) {
+    var unresolved = false;
+    $form.find('.authority-line').each(function () {
+        var $row = $(this), needsFix = authority_row_needs_fix($row);
+        var $button = $row.find('.authority-quick-fix');
+        if (!$button.length) {
+            $button = $('<button type="button" class="btn btn-warning btn-sm authority-quick-fix">Quick fix</button>')
+                .insertAfter($row.find('.authority-selection-help'));
+        }
+        $button.toggle(needsFix);
+        unresolved = unresolved || needsFix;
+    });
+    var $all = $form.find('.authority-quick-fix-next');
+    if (!$all.length) {
+        $all = $('<button type="button" class="btn btn-warning btn-sm authority-quick-fix authority-quick-fix-next">Quick fix next row</button>')
+            .insertAfter($form.find('.authority-auto-status'));
+    }
+    $all.toggle(unresolved);
+}
+
+function authority_focus_fix_control($control) {
+    $control.trigger('focus');
+    if ($control.is('select') && $.fn.select2 && $control.data('select2')) {
+        $control.select2('open');
+    } else if ($control.is('select') && $control[0] && $control[0].showPicker) {
+        try { $control[0].showPicker(); } catch (ignore) { /* Native focus still exposes the selector. */ }
+    }
+}
+
+function authority_quick_fix($form, $button) {
+    if ($form.data('authority-preview-busy')) { return; }
+    var $row = $button.closest('.authority-line');
+    var error = $form.data('authority-stock-error') || {};
+    var lineId = $button.attr('data-line-id') || error.sell_line_id;
+    if (!$row.length && lineId) {
+        $row = $form.find('.authority-line').filter(function () { return String($(this).attr('data-line-id')) === String(lineId); }).first();
+    }
+    if (!$row.length) {
+        $row = $form.find('.authority-line').filter(function () { return authority_row_needs_fix($(this)); }).first();
+    }
+    if (!$row.length) {
+        var $invalid = $form.find(':input').filter(function () { return !this.disabled && this.checkValidity && !this.checkValidity(); }).first();
+        if ($invalid.length) { authority_focus_fix_control($invalid); return; }
+        if ($form.find('.authority-date-guidance.text-danger').length) {
+            authority_focus_fix_control($form.find('#authority_date:enabled, #authority_receipt_date_override').first());
+            return;
+        }
+        authority_check_on_open($form);
+        return;
+    }
+    var $source = $row.find('.authority-source'), $destination = $row.find('.authority-destination');
+    var completion;
+    try { completion = JSON.parse($row.attr('data-completion') || '{}'); } catch (ignore) { completion = {}; }
+    if (!$source.val()) {
+        var $recorded = $source.find('option').filter(function () { return this.value === String(completion.source_id) && !this.disabled; });
+        var $sources = $source.find('option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; });
+        if ($recorded.length || $sources.length === 1) { $source.val(($recorded.length ? $recorded : $sources).val()).trigger('change'); }
+        else if (!$sources.length && $source.find('option[value="new"]:enabled').length) { $source.val('new').trigger('change'); }
+    }
+    if (error.kind === 'receiving_serial_confirmation' && String(error.sell_line_id) === String($row.attr('data-line-id'))) {
+        $row.find('.authority-change-receiving-serial').prop('checked', true).trigger('change');
+    }
+    if (String($source.val()) === String(completion.source_id) && completion.verified_serial && !$row.find('.authority-verified-serial').val()) {
+        $row.find('.authority-verified-serial').val(completion.verified_serial);
+    }
+    authority_update_receiving($row, false);
+    if ($source.val() && !$destination.val() && String($source.val()) === String(completion.source_id)) {
+        var $proposed = $destination.find('option').filter(function () { return this.value === String(completion.destination_id) && !this.disabled; });
+        if ($proposed.length && !authority_receiving_reserved_for_other_row($row, $proposed)) { $destination.val($proposed.val()); }
+    }
+    if ($source.val() && !$destination.val()) { authority_update_receiving($row, true); }
+    $row.removeClass('has-error').find('.authority-selection-help').removeClass('text-danger');
+    authority_refresh_generated_evidence($form);
+    authority_check_on_open($form);
+    authority_update_quick_fix_buttons($form);
+    // Incomplete or ambiguous records need a choice; never invent a receipt date or cost.
+    var $control = !$source.val() ? $source : (!$destination.val() ? $destination : $row.find(':input').filter(function () {
+        return !this.disabled && this.checkValidity && !this.checkValidity();
+    }).first());
+    if ($control.length) { authority_focus_fix_control($control); }
 }
 
 function authority_preview_error($form, xhr) {
@@ -201,10 +335,15 @@ function authority_preview_error($form, xhr) {
     }).join(' ') : '';
     var message = response.msg || errors || (xhr.status === 422 ? response.message : '') ||
         (xhr.status === 0 ? 'Unable to reach the server.' : 'The correction preview could not be completed.');
+    $form.data('authority-stock-error', response.stock_error || {});
     var kind = (response.stock_error || {}).kind;
     var guidance = 'Check the selected source receipt and receiving batch against the SKU, quantity and supporting records, then preview again.';
     if (kind === 'receipt_date_conflict') {
         guidance = 'Select a source receipt available on the recorded delivery date, or enable Change delivery date and enter the actual verified delivery date.';
+    } else if (kind === 'receiving_serial_confirmation') {
+        guidance = 'Enable Change receiving serial / lot on the highlighted row, confirm the selected source serial, then preview again. Authority forms enable this option by default.';
+    } else if (kind === 'receiving_batch_dependencies') {
+        guidance = 'This receiving serial is also used by connected stock movements. Keep its current serial by selecting the matching source receipt, or reconcile those linked records together before changing it.';
     } else if (kind === 'related_allocation' || kind === 'transfer_date_dependencies') {
         guidance = 'Review and reconcile the dependent movements named in the error before retrying this correction.';
     } else if (xhr.status === 419 || xhr.status === 401) {
@@ -217,10 +356,25 @@ function authority_preview_error($form, xhr) {
     } else if (errors) {
         guidance = 'Correct the fields listed above, then preview again.';
     }
+    var lineId = (response.stock_error || {}).sell_line_id;
+    if (!lineId && (response.stock_error || {}).receiving_batch_id) {
+        var batchId = response.stock_error.receiving_batch_id;
+        var $affected = $form.find('.authority-line').filter(function () {
+            return String($(this).find('.authority-destination').val()) === String(batchId);
+        }).first();
+        lineId = $affected.attr('data-line-id');
+        if (lineId) { $form.data('authority-stock-error').sell_line_id = lineId; }
+    }
+    if (lineId) {
+        $form.find('.authority-line').filter(function () { return String($(this).attr('data-line-id')) === String(lineId); })
+            .addClass('has-error').find('.authority-selection-help').addClass('text-danger').text(message);
+    }
     $form.find('.authority-auto-status').text(message);
     var $error = $form.find('.authority-preview-error');
     if (!$error.length) { $error = $('<div class="authority-preview-error alert alert-danger" role="alert" tabindex="-1"></div>').appendTo($form); }
-    $error.empty().append($('<p>').text(message), $('<p>').text(guidance), $('<p>').text('No correction was applied. Your entries are still available here.')).show().focus();
+    $error.empty().append($('<p>').text(message), $('<p>').text(guidance), $('<p>').text('No correction was applied. Your entries are still available here.'),
+        $('<button type="button" class="btn btn-warning authority-quick-fix">Quick fix</button>').attr('data-line-id', lineId || '')).show().focus();
+    authority_update_quick_fix_buttons($form);
 }
 
 function authority_request_preview($form, checkOnly) {
@@ -238,7 +392,7 @@ function authority_request_preview($form, checkOnly) {
         }
     });
     var payload = $.param($form.serializeArray().filter(function (field) { return !ignored[field.name]; }));
-    var $buttons = $form.find(':submit, .authority-auto-complete').filter(':enabled');
+    var $buttons = $form.find(':submit, .authority-auto-complete, .authority-quick-fix').filter(':enabled');
     $form.data('authority-preview-busy', true);
     $buttons.prop('disabled', true);
     $form.find('.authority-preview-error').hide();
@@ -278,7 +432,11 @@ function authority_check_on_open($form) {
         var $row = $(this);
         var message = '';
         if (!$row.find('.authority-source').val()) { message = 'Choose the verified source receipt.'; }
-        else if (!$row.find('.authority-destination').val()) { message = 'Choose the receiving batch, or confirm a missing receiving batch.'; }
+        else if (!$row.find('.authority-destination').val()) {
+            var candidates = $row.find('.authority-destination option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; }).length;
+            message = candidates > 1 ? 'Several receiving batches have this SKU and quantity. Select the batch confirmed by the receiving record.'
+                : 'Choose the receiving batch for the selected source receipt, or confirm a missing receiving batch if its quantity is absent.';
+        }
         else if ($row.find(':input').filter(function () { return !this.disabled && this.checkValidity && !this.checkValidity(); }).length) {
             message = 'Complete the required receipt details for this row.';
         }
@@ -313,6 +471,7 @@ function authority_initialize_form() {
     $form.find('.authority-line').each(function () { authority_update_receiving($(this), false); });
     authority_complete_fields($form);
     $form.on('click', '.authority-auto-complete', function () { authority_verify_completion($form, $(this)); });
+    $form.on('click', '.authority-quick-fix', function () { authority_quick_fix($form, $(this)); });
     $form.on('change', '.authority-source', function () {
         $(this).closest('.authority-line').find('.authority-verified-serial').val('');
         authority_update_receiving($(this).closest('.authority-line'), true);
@@ -333,11 +492,17 @@ function authority_initialize_form() {
     $form.on('change', '#authority_change_date', function () {
         var enabled = authority_date_change_enabled($form);
         $form.find('#authority_date').prop('disabled', !enabled).prop('required', enabled);
+        if (enabled) { $form.find('#authority_receipt_date_override').prop('checked', false); }
         if (!enabled) {
             $form.find('#authority_date').val('').removeAttr('data-proposed-date');
             $form.find('#authority_date_basis').val('');
         }
         authority_update_dates($form);
+    });
+    $form.on('change', '#authority_receipt_date_override', function () {
+        if ($(this).prop('checked')) { $form.find('#authority_change_date').prop('checked', false).trigger('change'); }
+        authority_update_dates($form);
+        $form.find('.authority-preview-error').hide();
     });
     $form.on('click', '.authority-keep-dates', function () {
         $form.find('#authority_change_date').prop('checked', false).trigger('change');
@@ -350,7 +515,14 @@ function authority_initialize_form() {
         $form.find('#authority_date').val($(this).attr('data-date')).trigger('change').focus();
     });
     $form.on('input change', ':input', function () {
+        $form.removeData('authority-stock-error');
         $(this).closest('.authority-line').removeClass('has-error').find('.authority-selection-help').removeClass('text-danger');
+        authority_update_quick_fix_buttons($form);
+        var $error = $form.find('.authority-preview-error');
+        if ($error.length && $error.css('display') !== 'none') {
+            $error.hide();
+            $form.find('.authority-auto-status').text('Selections changed. Preview again to check the updated records.');
+        }
     });
     $form.on('submit', function (event) {
         event.preventDefault();

@@ -12,6 +12,7 @@
         <div class="box-body">
             <p>Unique record-supported source receipts and receiving batches are selected automatically. Review these selections; choose the correct records for any unresolved line. Leave both empty to skip a line.</p>
             <button type="button" class="btn btn-success authority-auto-complete">Auto-complete and verify</button>
+            <p class="help-block">Use Quick fix beside an unresolved row to fill supported records or open the choice that needs review. Nothing is saved until you apply the preview.</p>
             <p class="authority-auto-status help-block" role="status" aria-live="polite">Supported records will be filled for you. Review proposed changes before applying.</p>
             <div class="table-responsive"><table class="table table-bordered">
                 <thead><tr><th>Product / line</th><th>Recorded selection and deduction</th><th>Correct source receipt</th><th>Receiving batch</th></tr></thead>
@@ -57,8 +58,9 @@
                             </div>
                         </td>
                         <td style="min-width:220px"><label class="sr-only" for="authority_destination_{{ $lineId }}">Receiving batch for line {{ $lineId }}</label>
-                            <div class="checkbox"><label><input type="checkbox" class="authority-change-receiving-serial" name="corrections[{{ $lineId }}][change_receiving_serial]" value="1" {{ !empty($previous['change_receiving_serial']) ? 'checked' : '' }}> Change receiving serial / lot</label></div>
-                            <p class="help-block">Choose the correct serial / lot under Source receipt, then select the receiving batch to update. Enable this option to correct a batch with later sales. Connected transfers must be corrected together.</p>
+                            <input type="hidden" name="corrections[{{ $lineId }}][change_receiving_serial]" value="0">
+                            <div class="checkbox"><label><input type="checkbox" class="authority-change-receiving-serial" name="corrections[{{ $lineId }}][change_receiving_serial]" value="1" {{ ($previous['change_receiving_serial'] ?? 1) ? 'checked' : '' }}> Change receiving serial / lot</label></div>
+                            <p class="help-block">Choose the correct serial / lot under Source receipt, then select the receiving batch to update. Enabled by default for Authority corrections, including batches with later sales. Review the serial change in the preview. Missing serials on unambiguous connected transfers are filled together and shown in the preview.</p>
                             <select id="authority_destination_{{ $lineId }}" class="form-control authority-receipt authority-destination" name="corrections[{{ $lineId }}][destination_id]">
                                 <option value="">Choose receiving batch</option>
                                 @foreach($line['destinations'] as $destination)<option value="{{ $destination->id }}" data-serial="{{ $destination->lot_number }}" data-quantity="{{ $destination->quantity }}" data-used="{{ $destination->used ? 1 : 0 }}" {{ (int) ($previous['destination_id'] ?? 0) === (int) $destination->id ? 'selected' : '' }}>{{ $destination->lot_number ?: 'No serial' }} · Batch #{{ $destination->id }} · Quantity {{ $destination->quantity }}{{ $destination->used ? ' · Has later usage' : '' }}</option>@endforeach
@@ -79,6 +81,9 @@
                 <div class="col-sm-4 form-group">
                     <input type="hidden" name="change_transaction_date" value="0">
                     <div class="checkbox"><label><input type="checkbox" id="authority_change_date" name="change_transaction_date" value="1" {{ old('change_transaction_date') ? 'checked' : '' }}> Change delivery date</label></div>
+                    <input type="hidden" name="allow_receipt_date_override" value="0">
+                    <div class="checkbox"><label><input type="checkbox" id="authority_receipt_date_override" name="allow_receipt_date_override" value="1" {{ old('allow_receipt_date_override', 1) && !old('change_transaction_date') ? 'checked' : '' }}> Bypass source receipt date conflict</label></div>
+                    <p class="help-block">Repair selected allocations while keeping recorded delivery dates. Later source receipt dates will be listed in the preview and saved in the correction audit.</p>
                     <label for="authority_date">Verified delivery date</label>
                     <input id="authority_date" name="transaction_date" class="form-control" value="{{ old('change_transaction_date') ? old('transaction_date') : '' }}" placeholder="YYYY-MM-DD HH:MM:SS" {{ old('change_transaction_date') ? 'required' : 'disabled' }}>
                     <p class="help-block">Recorded: {{ $transfer->transaction_date }}. Leave Change delivery date unchecked to preserve both document dates and repair allocations only.</p>
