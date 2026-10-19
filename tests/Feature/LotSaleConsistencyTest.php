@@ -765,6 +765,33 @@ class LotSaleConsistencyTest extends TestCase
         });
     }
 
+    public function test_default_ultimatepos_stock_totals_use_recorded_receiving_sku_quantities(): void
+    {
+        $this->prepareProductStockDetailsSchema();
+        DB::table('products')->update(['unit_id' => 1]);
+        Schema::table('products', fn (Blueprint $table) => $table->integer('secondary_unit_id')->nullable());
+        DB::connection()->getPdo()->sqliteCreateFunction('IF', fn ($condition, $yes, $no) => $condition ? $yes : $no);
+        DB::table('transactions')->insert([
+            ['id' => 20, 'type' => 'sell_transfer', 'status' => 'final', 'location_id' => 13, 'transfer_parent_id' => null],
+            ['id' => 21, 'type' => 'purchase_transfer', 'status' => 'received', 'location_id' => 12, 'transfer_parent_id' => 20],
+        ]);
+        DB::table('transaction_sell_lines')->insert(['id' => 20, 'transaction_id' => 20, 'quantity' => 10]);
+        $util = app(ProductUtil::class);
+        foreach ([1, 0, 12] as $received) {
+            DB::table('purchase_lines')->where('transaction_id', 21)->delete();
+            if ($received) {
+                DB::table('purchase_lines')->insert(['transaction_id' => 21, 'quantity' => $received, 'lot_number' => 'RECEIVING-LOT']);
+            }
+            $before = $this->stockCorrectionSnapshot();
+            $details = $util->getVariationStockDetails(1, 2701, 12);
+            $totals = $util->getVariationStockMisMatch(1, 2701, 12)->first();
+            $this->assertEquals($received, $details['total_purchase_transfer']);
+            $this->assertEquals($received, $totals->total_purchase_transfered);
+            $this->assertEquals(2 + $received, $totals->total_stock_calculated);
+            $this->assertSame($before, $this->stockCorrectionSnapshot());
+        }
+    }
+
     public function test_detector_quantity_fix_calculation_matches_product_stock_details_with_transfers_and_returns(): void
     {
         $this->prepareProductStockDetailsSchema();
@@ -4181,6 +4208,40 @@ class LotSaleConsistencyTest extends TestCase
         }
 
         return $product;
+    }
+
+    public function test_edit_row_refresh_loads_only_requested_lines_without_changing_stock(): void
+    {
+        $directives = $this->app['blade.compiler']->getCustomDirectives();
+        $this->prepareLotHistoryAjaxSchema();
+        foreach ($directives as $name => $callback) {
+            $this->app['blade.compiler']->directive($name, $callback);
+        }
+        $this->app['blade.compiler']->compile(resource_path('views/stock_transfer/partials/product_table_row.blade.php'));
+        session()->put('currency', ['decimal_separator' => '.', 'thousand_separator' => ',']);
+        $this->manualCorrectionFixture();
+        $second = TransactionSellLine::find(1)->replicate();
+        $second->variation_id = 999;
+        $second->save();
+        $products = \Mockery::mock(ProductUtil::class)->makePartial();
+        $products->shouldReceive('getDetailsFromVariation')->once()->with(2701, 1, 12, true, true)
+            ->andReturn((object) ['qty_available' => 3, 'unit_id' => 1, 'product_id' => 589, 'variation_id' => 2701,
+                'product_name' => 'Requested phone', 'sub_sku' => 'PHONE-1', 'enable_stock' => 1,
+                'unit' => 'Pc(s)', 'unit_allow_decimal' => 0]);
+        $products->shouldReceive('getSubUnits')->andReturn([]);
+        $this->app->instance(ProductUtil::class, $products);
+        $controller = $this->transferController();
+        $request = Request::create('/stock-transfers/1/edit', 'GET', ['refresh_line_ids' => [1]]);
+        $request->setLaravelSession($this->app['session.store']);
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $this->app->instance('request', $request);
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->edit(1);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('data-stock-transfer-line-id="1"', $response->getContent());
+        $this->assertStringNotContainsString('data-stock-transfer-line-id="'.$second->id.'"', $response->getContent());
+        $this->assertStringNotContainsString('stock_transfer_form', $response->getContent());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
 
     public function test_edit_endpoint_updates_completed_quantity_and_destination_stock(): void

@@ -8,6 +8,49 @@
     var $generate = $('#generate_stock_correction_plan');
     var $modal = $('#stock_correction_plan_modal');
 
+    function refreshCorrectedRows(result) {
+        var changes = (result.changes || []).concat(result.related_allocation_repairs || []);
+        var ids = changes.map(function(change) { return String(change.sell_line_id); });
+        var $rows = $('[data-stock-transfer-line-id]').filter(function() {
+            return ids.indexOf($(this).attr('data-stock-transfer-line-id')) !== -1;
+        });
+        var $status = $('#auto_stock_correction_result').prop('hidden', false)
+            .removeClass('text-danger').addClass('text-success').text(result.msg || 'Correction saved and verified.');
+        if (!$rows.length) { return; }
+        var url = $generate.attr('data-refresh-url');
+        if (!url) {
+            $status.removeClass('text-success').addClass('text-danger').text('Correction saved. Reopen the document to see the updated rows.');
+            return;
+        }
+        $.ajax({method: 'GET', url: url, data: {refresh_line_ids: ids}, dataType: 'html', cache: false}).done(function(html) {
+            // Keep scripts inert and preserve edits in every unaffected row and header field.
+            var $fresh = $('<div>').append($.parseHTML(html, document, false));
+            var missing = false;
+            $rows.each(function() {
+                var $old = $(this);
+                var id = $old.attr('data-stock-transfer-line-id');
+                var $replacement = $fresh.find('[data-stock-transfer-line-id]').filter(function() {
+                    return $(this).attr('data-stock-transfer-line-id') === id;
+                }).first();
+                if (!$replacement.length) { missing = true; return; }
+                var name = $old.find('[name]').first().attr('name') || '';
+                var prefix = name.match(/^products\[\d+\]/);
+                if (prefix) {
+                    $replacement.find('[name]').each(function() {
+                        $(this).attr('name', $(this).attr('name').replace(/^products\[\d+\]/, prefix[0]));
+                    });
+                }
+                $old.replaceWith($replacement);
+                if (typeof __currency_convert_recursively === 'function') { __currency_convert_recursively($replacement); }
+            });
+            if (missing) {
+                $status.removeClass('text-success').addClass('text-danger').text('Correction saved. Some updated rows could not be refreshed; reopen the document to verify them.');
+            }
+        }).fail(function() {
+            $status.removeClass('text-success').addClass('text-danger').text('Correction saved, but the updated rows could not be loaded. Reopen the document to verify them.');
+        });
+    }
+
     function errorMessage(xhr) {
         var result = xhr.responseJSON || {};
         if (xhr.status === 419) { return 'Your session expired. Reload the page and try again.'; }
@@ -122,7 +165,7 @@
                 $result.empty();
                 if (result.complete) {
                     $result.removeClass('text-danger').addClass('text-success').text(result.msg || 'Stock records are consistent. No correction is needed.');
-                    if (result.applied) { window.location.reload(); }
+                    if (result.applied) { refreshCorrectedRows(result); }
                 } else {
                     $result.removeClass('text-success').addClass('text-danger');
                     $('<strong>').text('Automatic correction needs verified records. No stock was changed.').appendTo($result);
@@ -172,7 +215,7 @@
         $.ajax({method: 'POST', url: $generate.attr('data-apply-url'), dataType: 'json', data: {
             _token: $('meta[name="csrf-token"]').attr('content'), token: plan.token, confirmed: 1
         }})
-            .done(function() { window.location.reload(); })
+            .done(function(result) { plan = null; $modal.modal('hide'); refreshCorrectedRows(result); })
             .fail(function(xhr) {
                 $('#stock_correction_plan_error').text(errorMessage(xhr));
                 plan.status = 'stale';
@@ -681,7 +724,12 @@
         var payload = $.extend({}, manualPayload, {token: manualPlan.token, confirmed: 1});
         setManualBusy(true, 'Applying Correction');
         $.ajax({method: 'POST', url: $generate.attr('data-manual-apply-url'), dataType: 'json', data: payload})
-            .done(function() { window.location.reload(); })
+            .done(function(result) {
+                var saved = result.plan || {};
+                refreshCorrectedRows($.extend({}, saved, {msg: result.msg}));
+                resetManualPreview();
+                $('#manual_stock_correction_modal').modal('hide');
+            })
             .fail(function(xhr) { resetManualPreview(); renderManualError(xhr); })
             .always(function() { setManualBusy(false); });
     });

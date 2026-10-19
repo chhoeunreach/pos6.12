@@ -89,6 +89,49 @@ test('auto complete fills a supported missing selection and verifies a preview w
     dom.window.close();
 });
 
+test('applying a verified correction refreshes only changed rows and preserves other unsaved edits', () => {
+    const {dom, $, calls} = editor(1, false, null, lines => {
+        lines[0].selected_serial = null;
+        lines[0].recommendation.automatic_match = {source_id: 2, destination_id: 9};
+    });
+    $('#generate_stock_correction_plan').attr('data-refresh-url', '/stock-transfers/1/edit');
+    $('body').append('<input id="additional_notes" value="Unsaved notes"><table><tbody>' +
+        '<tr data-stock-transfer-line-id="1"><td><input name="products[8][lot_no_line_id]" value="old"></td></tr>' +
+        '<tr data-stock-transfer-line-id="2"><td><input name="products[9][quantity]" value="7"></td></tr></tbody></table>');
+    const unchanged = $('[data-stock-transfer-line-id="2"]')[0];
+    $('#auto_complete_manual_stock_correction').trigger('click');
+    calls[1].deferred.resolve({plan: {transfer_id: 1, token: 'a'.repeat(64), changes: [], counter_repairs: []}});
+    $('#apply_manual_stock_correction').trigger('click');
+    assert.equal(calls[2].options.url, '/apply');
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[2].options.data.corrections)).map(row => row.sell_line_id), ['1']);
+    calls[2].deferred.resolve({success: 1, msg: 'Correction saved.', plan: {changes: [{sell_line_id: 1}]}});
+    assert.equal(calls[3].options.method, 'GET');
+    assert.equal(calls[3].options.url, '/stock-transfers/1/edit');
+    assert.deepEqual(Array.from(calls[3].options.data.refresh_line_ids), ['1']);
+    calls[3].deferred.resolve('<table><tr data-stock-transfer-line-id="1"><td><input name="products[0][lot_no_line_id]" value="new"></td></tr>' +
+        '<tr data-stock-transfer-line-id="2"><td>Replace me incorrectly</td></tr></table><script>window.unwantedScript = true;</script>');
+    assert.equal($('[data-stock-transfer-line-id="1"] input').val(), 'new');
+    assert.equal($('[data-stock-transfer-line-id="1"] input').attr('name'), 'products[8][lot_no_line_id]');
+    assert.equal($('[data-stock-transfer-line-id="2"]')[0], unchanged);
+    assert.equal($('[data-stock-transfer-line-id="2"] input').val(), '7');
+    assert.equal($('#additional_notes').val(), 'Unsaved notes');
+    assert.equal(dom.window.unwantedScript, undefined);
+    assert.equal($('#apply_manual_stock_correction').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('a failed row refresh reports that saving succeeded and keeps the current document', () => {
+    const {dom, $, calls} = editor(1);
+    $('#generate_stock_correction_plan').attr('data-refresh-url', '/stock-transfers/1/edit');
+    $('body').append('<table><tr data-stock-transfer-line-id="1"><td>Old serial</td></tr></table>');
+    $('#auto_correct_stock').trigger('click');
+    calls[1].deferred.resolve({complete: true, applied: true, changes: [{sell_line_id: 1}]});
+    calls[2].deferred.reject({status: 500});
+    assert.match($('#auto_stock_correction_result').text(), /Correction saved, but the updated rows could not be loaded/);
+    assert.match($('[data-stock-transfer-line-id="1"]').text(), /Old serial/);
+    dom.window.close();
+});
+
 test('auto complete leaves unresolved selections blocked and never guesses a source', () => {
     const {dom, $, calls, row} = editor(1, false, null, lines => {
         lines[0].sources = [];

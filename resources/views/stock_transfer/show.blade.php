@@ -81,7 +81,7 @@
 				          $total = 0.00;
 				        @endphp
 				        @foreach($sell_transfer->sell_lines as $sell_lines)
-				          <tr>
+				          <tr data-stock-transfer-line-id="{{ $sell_lines->id }}">
 				            <td>{{ $loop->iteration }}</td>
 				            <td>
 				              {{ $sell_lines->product->name }}

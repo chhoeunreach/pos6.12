@@ -5,6 +5,7 @@
             <i class="fa fa-check-circle" aria-hidden="true"></i> Auto Correct
         </button>
         <button type="button" class="btn btn-default" id="generate_stock_correction_plan"
+            data-refresh-url="{{ action([\App\Http\Controllers\StockTransferController::class, request()->route() && request()->route()->getActionMethod() === 'edit' ? 'edit' : 'show'], [$sell_transfer->id]) }}"
             data-url="{{ action([\App\Http\Controllers\StockTransferController::class, 'generateCorrectionPlan'], [$sell_transfer->id]) }}"
             data-options-url="{{ action([\App\Http\Controllers\StockTransferController::class, 'manualCorrectionOptions'], [$sell_transfer->id]) }}"
             data-preview-url="{{ action([\App\Http\Controllers\StockTransferController::class, 'previewManualCorrection'], [$sell_transfer->id]) }}"

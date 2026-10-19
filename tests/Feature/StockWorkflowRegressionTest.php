@@ -213,6 +213,26 @@ class StockWorkflowRegressionTest extends TestCase
         $this->assertEquals(-1, $outgoing[0]['stock']);
     }
 
+    public function test_stock_history_counts_sku_quantities_independently_of_lot_labels_and_sale_selection(): void
+    {
+        $this->prepareStockHistorySchema();
+        DB::table('purchase_lines')->insert([
+            ['transaction_id' => 1, 'variation_id' => 1, 'quantity' => 3, 'lot_number' => 'SERIAL-A'],
+            ['transaction_id' => 1, 'variation_id' => 1, 'quantity' => 2, 'lot_number' => null],
+            ['transaction_id' => 1, 'variation_id' => 2, 'quantity' => 90, 'lot_number' => 'OTHER-SKU'],
+        ]);
+        $sale = $this->sale(4);
+        $history = $this->productUtil->getVariationStockHistory(1, 1, 1);
+        $this->assertEquals(15, $history[1]['quantity_change']);
+        $this->assertEquals(-4, $history[0]['quantity_change']);
+        $this->assertEquals(11, $history[0]['stock']);
+
+        // Serial corrections identify the units; they do not add a quantity movement.
+        DB::table('purchase_lines')->where('variation_id', 1)->update(['lot_number' => 'RENAMED-LOT']);
+        DB::table('transaction_sell_lines')->where('id', $sale->id)->update(['lot_no_line_id' => null]);
+        $this->assertSame($history, $this->productUtil->getVariationStockHistory(1, 1, 1));
+    }
+
     public function test_stock_history_flags_missing_transfer_lots_without_inventing_received_quantity(): void
     {
         $this->prepareStockHistorySchema();

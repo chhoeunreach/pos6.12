@@ -1,4 +1,4 @@
-<tr class="product_row">
+<tr class="product_row" @if(!empty($product->transaction_sell_lines_id)) data-stock-transfer-line-id="{{ $product->transaction_sell_lines_id }}" @endif>
     @php
         $allow_overselling = \App\Utils\BusinessUtil::allowsOverselling((int) session('user.business_id'));
         $max_qty_rule = $product->qty_available;

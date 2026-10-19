@@ -792,6 +792,7 @@ class StockTransferController extends Controller
 
                     return ['success' => 1, 'applied' => true, 'complete' => true,
                         'changes' => $correction['changes'], 'repairs' => $correction['counter_repairs'],
+                        'related_allocation_repairs' => $correction['related_allocation_repairs'],
                         'msg' => 'Selected serials, source allocations and receiving serials now agree. Stock balances were recalculated.'];
                 }
                 if ($plan['status'] !== 'ready') {
@@ -904,7 +905,14 @@ class StockTransferController extends Controller
 
         $business_id = request()->session()->get('user.business_id');
 
-        $business_locations = BusinessLocation::forDropdown($business_id);
+        $refresh_line_ids = null;
+        if (request()->ajax() && request()->has('refresh_line_ids')) {
+            $refresh = request()->validate(['refresh_line_ids' => 'required|array|min:1|max:200',
+                'refresh_line_ids.*' => 'required|integer|min:1|distinct']);
+            $refresh_line_ids = array_map('intval', $refresh['refresh_line_ids']);
+        }
+
+        $business_locations = $refresh_line_ids === null ? BusinessLocation::forDropdown($business_id) : [];
 
         $statuses = $this->stockTransferStatuses();
 
@@ -921,6 +929,9 @@ class StockTransferController extends Controller
 
         $products = [];
         foreach ($sell_transfer->sell_lines as $sell_line) {
+            if ($refresh_line_ids !== null && !in_array((int) $sell_line->id, $refresh_line_ids, true)) {
+                continue;
+            }
             $product = $this->productUtil->getDetailsFromVariation(
                 $sell_line->variation_id,
                 $business_id,
@@ -981,6 +992,17 @@ class StockTransferController extends Controller
             $product->lot_numbers = $lot_numbers;
 
             $products[] = $product;
+        }
+
+        if ($refresh_line_ids !== null) {
+            $rows = '';
+            foreach ($products as $row_index => $product) {
+                $rows .= view('stock_transfer.partials.product_table_row', [
+                    'product' => $product, 'row_index' => $row_index, 'sub_units' => $product->unit_details ?? [],
+                ])->render();
+            }
+
+            return response('<table><tbody>'.$rows.'</tbody></table>');
         }
 
         $hr_staff = $this->getHrTechnicianStaff();
