@@ -2938,6 +2938,27 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame('authority', $logged['mode']);
     }
 
+    public function test_authority_receipt_preview_token_checks_history_beyond_the_first_batch(): void
+    {
+        [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->delete();
+        DB::table('transactions')->insert(['id' => 99, 'type' => 'sell', 'status' => 'draft']);
+        for ($index = 0; $index < 501; $index++) {
+            $lastId = DB::table('transaction_sell_lines')->insertGetId(['transaction_id' => 99, 'quantity' => 1]);
+        }
+        $preview = $service->preview(1, 1, $input, 1);
+        $this->assertSame($preview['token'], $service->preview(1, 1, $input, 1)['token']);
+        DB::table('transaction_sell_lines')->where('id', $lastId)->update(['unit_price' => 999]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->apply(1, 1, $input, 1, $preview['token']);
+            $this->fail('A changed history row after the first batch must invalidate the preview.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Stock records or new receipt details changed', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_new_receipts_roll_back_if_the_audit_log_fails(): void
     {
         [, $destinationId, $input] = $this->authorityNewReceiptFixture();

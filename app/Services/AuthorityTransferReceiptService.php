@@ -72,18 +72,30 @@ class AuthorityTransferReceiptService
             ->where('t.business_id', $businessId)->whereIn('s.variation_id', $variationIds)->pluck('t.id');
         $receiptIds = DB::table('transactions')->where('business_id', $businessId)->where('transfer_parent_id', $transferId)->pluck('id');
         $ids = $purchaseTransactionIds->merge($saleTransactionIds)->merge($receiptIds)->push($transferId)->unique();
-        $transactions = DB::table('transactions')->where('business_id', $businessId)->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
-        $transactionIds = $transactions->pluck('id');
-        $purchases = DB::table('purchase_lines')->whereIn('transaction_id', $transactionIds)->orderBy('id')->lockForUpdate()->get();
-        $sales = DB::table('transaction_sell_lines')->whereIn('transaction_id', $transactionIds)->orderBy('id')->lockForUpdate()->get();
-        $mappings = DB::table('transaction_sell_lines_purchase_lines')->whereIn('sell_line_id', $sales->pluck('id'))
-            ->orderBy('id')->lockForUpdate()->get();
+        $transactions = DB::table('transactions')->where('business_id', $businessId)->whereIn('id', $ids);
+        $transactionIds = (clone $transactions)->select('id');
+        $purchases = DB::table('purchase_lines')->whereIn('transaction_id', clone $transactionIds);
+        $sales = DB::table('transaction_sell_lines')->whereIn('transaction_id', clone $transactionIds);
+        $mappings = DB::table('transaction_sell_lines_purchase_lines')->whereIn('sell_line_id', (clone $sales)->select('id'));
         $locations = DB::table('business_locations')->where('business_id', $businessId)->pluck('id');
-        $balances = DB::table('variation_location_details')->whereIn('location_id', $locations)->whereIn('variation_id', $variationIds)
-            ->orderBy('id')->lockForUpdate()->get();
+        $balances = DB::table('variation_location_details')->whereIn('location_id', $locations)->whereIn('variation_id', $variationIds);
 
-        return hash_hmac('sha256', json_encode([$businessId, $transferId, $userId, $choices, $transactions, $purchases,
-            $sales, $mappings, $balances, \App\Utils\BusinessUtil::allowsOverselling($businessId)], JSON_THROW_ON_ERROR), (string) config('app.key'));
+        // Retain every row and lock used by the verification token without holding the whole
+        // SKU history plus its JSON representation in memory during the preview.
+        $hash = hash_init('sha256', HASH_HMAC, (string) config('app.key'));
+        hash_update($hash, json_encode(['authority-receipt-v2', $businessId, $transferId, $userId, $choices,
+            \App\Utils\BusinessUtil::allowsOverselling($businessId)], JSON_THROW_ON_ERROR));
+        foreach (['transactions' => $transactions, 'purchases' => $purchases, 'sales' => $sales,
+            'mappings' => $mappings, 'balances' => $balances] as $label => $query) {
+            hash_update($hash, "\n".$label."\n");
+            $query->orderBy('id')->lockForUpdate()->chunkById(500, function ($rows) use ($hash) {
+                foreach ($rows as $row) {
+                    hash_update($hash, json_encode($row, JSON_THROW_ON_ERROR)."\n");
+                }
+            });
+        }
+
+        return hash_final($hash);
     }
 
     private function createMissing(int $businessId, int $transferId, array $input, int $userId): array
