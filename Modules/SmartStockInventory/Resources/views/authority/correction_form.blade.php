@@ -22,7 +22,7 @@
                         $serials = $line['destinations']->pluck('lot_number')->filter()->unique();
                         $suggestedSerial = $line['selected_serial'] ?: ($serials->count() === 1 ? $serials->first() : '');
                     @endphp
-                    <tr class="authority-line" data-line-id="{{ $lineId }}" data-completion="{{ json_encode($line['completion'] ?? []) }}" data-quantity="{{ $line['quantity'] }}" data-recorded-source-date="{{ $line['recorded_source_date'] }}" data-missing-receiving="{{ $line['missing_receiving_quantity'] }}">
+                    <tr class="authority-line" data-line-id="{{ $lineId }}" data-receiving-group="{{ $products->get($lineId)->product_id }}:{{ $products->get($lineId)->variation_id }}" data-completion="{{ json_encode($line['completion'] ?? []) }}" data-quantity="{{ $line['quantity'] }}" data-recorded-source-date="{{ $line['recorded_source_date'] }}" data-missing-receiving="{{ $line['missing_receiving_quantity'] }}">
                         <td>{{ $products->get($lineId)->name ?? '' }}<br>{{ $products->get($lineId)->sub_sku ?? '' }}<br>Line #{{ $lineId }} · Quantity {{ $line['quantity'] }}
                             <input type="hidden" name="corrections[{{ $lineId }}][sell_line_id]" value="{{ $lineId }}"></td>
                         <td>Selected: {{ $line['selected_serial'] ?: ($line['sources']->contains('id', $line['selected_purchase_line_id']) ? 'No serial' : 'Missing or unselected') }} @if($line['selected_purchase_line_id'])(#{{ $line['selected_purchase_line_id'] }})@endif
@@ -57,6 +57,8 @@
                             </div>
                         </td>
                         <td style="min-width:220px"><label class="sr-only" for="authority_destination_{{ $lineId }}">Receiving batch for line {{ $lineId }}</label>
+                            <div class="checkbox"><label><input type="checkbox" class="authority-change-receiving-serial" name="corrections[{{ $lineId }}][change_receiving_serial]" value="1" {{ !empty($previous['change_receiving_serial']) ? 'checked' : '' }}> Change receiving serial / lot</label></div>
+                            <p class="help-block">Choose the correct serial / lot under Source receipt, then select the receiving batch to update. Enable this option to correct a batch with later sales. Connected transfers must be corrected together.</p>
                             <select id="authority_destination_{{ $lineId }}" class="form-control authority-receipt authority-destination" name="corrections[{{ $lineId }}][destination_id]">
                                 <option value="">Choose receiving batch</option>
                                 @foreach($line['destinations'] as $destination)<option value="{{ $destination->id }}" data-serial="{{ $destination->lot_number }}" data-quantity="{{ $destination->quantity }}" data-used="{{ $destination->used ? 1 : 0 }}" {{ (int) ($previous['destination_id'] ?? 0) === (int) $destination->id ? 'selected' : '' }}>{{ $destination->lot_number ?: 'No serial' }} · Batch #{{ $destination->id }} · Quantity {{ $destination->quantity }}{{ $destination->used ? ' · Has later usage' : '' }}</option>@endforeach
@@ -64,7 +66,7 @@
                             </select>
                             <p class="help-block">Missing received quantity: {{ $line['missing_receiving_quantity'] }}. A new batch uses the selected source serial and this line's quantity. Existing receiving quantities must be corrected using their existing batch.</p>
                             @if($line['missing_receiving_quantity'] + 0.0001 >= $line['quantity'])
-                                <p class="text-info">Recommended: add the missing receiving batch after confirming the source receipt.</p>
+                                <p class="text-info authority-missing-receiving-help">A receiving quantity is missing for this product. Confirm which line needs a new batch; preserve existing receiving batches.</p>
                             @endif
                             <p class="help-block authority-selection-help" role="status">Select the source receipt to see matching receiving batches.</p>
                         </td>
@@ -85,7 +87,7 @@
                     <button type="button" class="btn btn-default btn-sm authority-use-earliest-date" style="display:none">Fill earliest permitted date</button>
                     <p class="help-block">The earliest permitted date is a limit, not proof of delivery. Enter the actual delivery date confirmed by your records. Used receiving batches may require dependent movements to be reconciled first.</p></div>
             </div>
-            <p class="help-block">The preview includes dependent allocation repairs and any new receipts. New records are saved only when you apply the correction. Used receiving batches retain their serial and delivery dates. Select existing records whenever available.</p>
+            <p class="help-block">The preview includes serial / lot changes, dependent allocation repairs and any new receipts. Records are saved only when you apply the correction. Delivery dates remain unchanged unless you explicitly change them. Select existing records whenever available.</p>
             <button class="btn btn-primary" {{ count($lines) ? '' : 'disabled' }}>Preview authority correction</button>
         </div>
     </div>

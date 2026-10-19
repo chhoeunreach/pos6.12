@@ -423,6 +423,7 @@ class AuthorityController extends BaseSmartStockController
             'corrections.*.source_id' => ['required', 'regex:/^(new|[1-9][0-9]*)$/'],
             'corrections.*.destination_id' => ['required', 'regex:/^(new|[1-9][0-9]*)$/'],
             'corrections.*.verified_serial' => 'nullable|string|max:191',
+            'corrections.*.change_receiving_serial' => 'sometimes|boolean',
             'corrections.*.new_source' => 'nullable|array:serial,quantity,date,cost',
             'corrections.*.new_source.serial' => 'nullable|string|max:191',
             'corrections.*.new_source.quantity' => 'required_if:corrections.*.source_id,new|nullable|numeric|gt:0|max:1000000000',

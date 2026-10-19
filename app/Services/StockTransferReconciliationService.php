@@ -426,6 +426,7 @@ class StockTransferReconciliationService
         $corrections = collect($corrections)->map(fn ($row) => [
             'sell_line_id' => (int) ($row['sell_line_id'] ?? 0), 'source_id' => (int) ($row['source_id'] ?? 0),
             'destination_id' => (int) ($row['destination_id'] ?? 0),
+            'change_receiving_serial' => !empty($row['change_receiving_serial']),
         ])->sortBy('sell_line_id')->values();
         if ($corrections->unique('sell_line_id')->count() !== $corrections->count()
             || $corrections->unique('destination_id')->count() !== $corrections->count()) {
@@ -571,13 +572,29 @@ class StockTransferReconciliationService
                     })->exists();
             }
             $canRepairReferencedReceiving = $repairRelatedAllocations || $allowReferencedReceivingRepair;
+            $changeReceivingSerial = $repairRelatedAllocations && $allowBlankSerial && $correction['change_receiving_serial'] && !$dateChange;
+            if ($receivingUsed && $changeReceivingSerial && (string) $destination->lot_number !== (string) $source->lot_number) {
+                $unsupportedUsage = (float) $destination->quantity_adjusted > 0 || (float) $destination->quantity_returned > 0
+                    || (float) $destination->mfg_quantity_used > 0
+                    || DB::table('transaction_sell_lines as s')->join('transactions as t', 't.id', '=', 's.transaction_id')
+                        ->where(function ($query) use ($destination) {
+                            $query->where('s.lot_no_line_id', $destination->id)->orWhereIn('s.id', DB::table('transaction_sell_lines_purchase_lines')
+                                ->where('purchase_line_id', $destination->id)->select('sell_line_id'));
+                        })->where(function ($query) use ($businessId) {
+                            $query->where('t.business_id', '!=', $businessId)->orWhere('t.type', '!=', 'sell')
+                                ->orWhere('t.status', '!=', 'final')->orWhere('s.quantity_returned', '>', 0);
+                        })->exists();
+                if ($unsupportedUsage) {
+                    throw new PurchaseSellMismatch('This receiving serial / lot supplies a connected transfer, return, adjustment or production movement. Reconcile those records together before changing this serial / lot.');
+                }
+            }
             $preserveReceiving = $receivingUsed && $canRepairReferencedReceiving && ! $dateChange
-                && ((string) $destination->lot_number === (string) $source->lot_number || $fillMissingReceivingSerial);
+                && ((string) $destination->lot_number === (string) $source->lot_number || $fillMissingReceivingSerial || $changeReceivingSerial);
             $receivingMfgDate = $preserveReceiving ? $destination->mfg_date : $source->mfg_date;
             $receivingExpDate = $preserveReceiving ? $destination->exp_date : $source->exp_date;
             $receivingChanges = (string) $destination->lot_number !== (string) $source->lot_number
                 || $destination->mfg_date !== $receivingMfgDate || $destination->exp_date !== $receivingExpDate;
-            if ($receivingUsed && (! $canRepairReferencedReceiving || ($receivingChanges && !$fillMissingReceivingSerial) || $dateChange)) {
+            if ($receivingUsed && (! $canRepairReferencedReceiving || ($receivingChanges && !$fillMissingReceivingSerial && !$changeReceivingSerial) || $dateChange)) {
                 throw new PurchaseSellMismatch('The receiving batch is used or referenced by a later movement. Keep its serial, batch details and delivery dates unchanged to preview an administrator allocation repair.');
             }
             $changes[] = ['sell_line_id' => (int) $line->id, 'selected_batch_before' => (int) $line->lot_no_line_id,
@@ -585,7 +602,8 @@ class StockTransferReconciliationService
                 'receiving_batch_id' => (int) $destination->id, 'receiving_serial_before' => $destination->lot_number,
                 'receiving_serial_after' => $source->lot_number, 'quantity' => (float) $line->quantity,
                 'receiving_mfg_date_before' => $destination->mfg_date, 'receiving_mfg_date_after' => $receivingMfgDate,
-                'receiving_exp_date_before' => $destination->exp_date, 'receiving_exp_date_after' => $receivingExpDate, 'receiving_batch_preserved' => $preserveReceiving,
+                'receiving_exp_date_before' => $destination->exp_date, 'receiving_exp_date_after' => $receivingExpDate,
+                'receiving_batch_preserved' => $preserveReceiving && !$receivingChanges,
                 'allocations_before' => $mappings->where('sell_line_id', $line->id)->values()->all()];
             DB::table('transaction_sell_lines')->where('id', $line->id)->update(['lot_no_line_id' => $source->id, 'updated_at' => now()]);
             DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', $line->id)->delete();

@@ -2387,6 +2387,56 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEquals($destinationId, TransactionSellLine::find(2)->lot_no_line_id);
     }
 
+    public function test_authority_explicit_receiving_serial_change_preserves_sales_and_requires_preview(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [, $destinationId] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->update(['lot_number' => 'WRONG-SERIAL', 'quantity_sold' => 1]);
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell', 'status' => 'final', 'location_id' => 13]);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => $destinationId]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => $destinationId]);
+        $controller = $this->authorityController();
+        $input = ['corrections' => [['sell_line_id' => 1, 'source_id' => '1', 'destination_id' => (string) $destinationId,
+            'change_receiving_serial' => 1]], 'change_transaction_date' => 0,
+            'evidence' => 'Verified source and physical serial against original receiving records.'];
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $view = $controller->preview($this->authorityRequest($input), 1);
+        $this->assertSame('smartstockinventory::authority.preview', $view->name());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->app['request']->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $this->assertStringContainsString('[change_receiving_serial]', view('smartstockinventory::authority.preview_content', $view->getData())->render());
+        $plan = $view->getData()['plan'];
+        $this->assertSame('WRONG-SERIAL', $plan['changes'][0]['receiving_serial_before']);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, $plan['changes'][0]['receiving_serial_after']);
+        $input['token'] = $plan['token'];
+        $input['confirmed'] = 1;
+        $controller->apply($this->authorityRequest($input), 1);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find($destinationId)->lot_number);
+        $this->assertEquals(1, PurchaseLine::find($destinationId)->quantity_sold);
+        $this->assertEquals($destinationId, TransactionSellLine::find(2)->lot_no_line_id);
+        $this->assertSame($balances, $this->transferBalances());
+    }
+
+    public function test_authority_receiving_serial_change_blocks_connected_transfers(): void
+    {
+        [, $destinationId] = $this->authorityNewReceiptFixture();
+        PurchaseLine::find($destinationId)->update(['lot_number' => 'WRONG-SERIAL', 'quantity_sold' => 1]);
+        DB::table('transactions')->insert(['id' => 4, 'type' => 'sell_transfer', 'status' => 'final', 'location_id' => 13]);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 4, 'lot_no_line_id' => $destinationId]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => $destinationId]);
+        $service = app(StockTransferReconciliationService::class);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, [['sell_line_id' => 1, 'source_id' => 1, 'destination_id' => $destinationId,
+                'change_receiving_serial' => true]], 'Verified physical receiving serial for correction.', null, true, true, true, true);
+            $this->fail('Connected transfer serials must be reconciled together.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('connected transfer', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_missing_serial_fill_cannot_rename_an_existing_known_serial(): void
     {
         [$service, $destinationId, $input] = $this->authorityNewReceiptFixture();

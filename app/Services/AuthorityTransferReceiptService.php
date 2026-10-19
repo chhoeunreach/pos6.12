@@ -55,7 +55,7 @@ class AuthorityTransferReceiptService
     private function fingerprint(int $businessId, int $transferId, array $input, int $userId): string
     {
         $choices = collect($input['corrections'])->map(function ($row) {
-            $choice = [(int) $row['sell_line_id'], (string) $row['source_id'], (string) $row['destination_id'], trim((string) ($row['verified_serial'] ?? ''))];
+            $choice = [(int) $row['sell_line_id'], (string) $row['source_id'], (string) $row['destination_id'], trim((string) ($row['verified_serial'] ?? '')), !empty($row['change_receiving_serial'])];
             if ($row['source_id'] === 'new') {
                 $choice[] = [trim((string) ($row['new_source']['serial'] ?? '')), (float) $row['new_source']['quantity'],
                     $row['new_source']['date'], (float) $row['new_source']['cost']];
@@ -208,7 +208,8 @@ class AuthorityTransferReceiptService
                     'transaction_id' => (int) $receipt->id, 'serial' => $source->lot_number, 'quantity' => (float) $line->quantity,
                     'date' => (string) $effectiveDate, 'location_id' => (int) $receipt->location_id];
             }
-            $corrections[] = ['sell_line_id' => $line->id, 'source_id' => $correction['source_id'], 'destination_id' => $correction['destination_id']];
+            $corrections[] = ['sell_line_id' => $line->id, 'source_id' => $correction['source_id'], 'destination_id' => $correction['destination_id'],
+                'change_receiving_serial' => !empty($correction['change_receiving_serial'])];
         }
 
         return [$corrections, $created, $replaced, $serialChanges];

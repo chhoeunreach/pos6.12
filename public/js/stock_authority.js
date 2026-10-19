@@ -7,8 +7,16 @@ function authority_update_receiving($row, suggestMatch) {
     var serial = isNewSource ? ($row.find('.authority-new-serial').val() || '').trim()
         : (fillMissingSerial ? ($row.find('.authority-verified-serial').val() || '').trim() : ($source.find(':selected').attr('data-serial') || ''));
     var $destination = $row.find('.authority-destination');
+    var changeSerial = $row.find('.authority-change-receiving-serial').prop('checked');
     var quantity = Number($row.attr('data-quantity'));
     var occupied = [];
+    var reservedMissing = 0;
+    $('#authority_correction_form .authority-line').not($row).each(function () {
+        var $other = $(this);
+        if ($other.attr('data-receiving-group') === $row.attr('data-receiving-group') && $other.find('.authority-destination').val() === 'new') {
+            reservedMissing += Number($other.attr('data-quantity'));
+        }
+    });
     $('#authority_correction_form .authority-line').not($row).find('.authority-destination').each(function () {
         if (this.value && this.value !== 'new') { occupied.push(this.value); }
     });
@@ -17,7 +25,7 @@ function authority_update_receiving($row, suggestMatch) {
     $destination.find('option[value!=""]').each(function () {
         var $option = $(this);
         if (this.value === 'new') {
-            $option.prop('disabled', !(Number($row.attr('data-missing-receiving')) + 0.0001 >= quantity));
+            $option.prop('disabled', !(Number($row.attr('data-missing-receiving')) - reservedMissing + 0.0001 >= quantity));
             return;
         }
         var optionSerial = $option.attr('data-serial') || '';
@@ -25,7 +33,7 @@ function authority_update_receiving($row, suggestMatch) {
         var sameQuantity = Math.abs(Number($option.attr('data-quantity')) - quantity) < 0.0001;
         var isOccupied = occupied.indexOf(this.value) !== -1;
         var disabled = !sameQuantity || isOccupied ||
-            (Boolean($source.val()) && ((!serial && Boolean(optionSerial)) || ($option.attr('data-used') === '1' && Boolean(optionSerial) && !sameSerial)));
+            (Boolean($source.val()) && ((!serial && Boolean(optionSerial)) || (!changeSerial && $option.attr('data-used') === '1' && Boolean(optionSerial) && !sameSerial)));
         $option.prop('disabled', disabled);
         if (!disabled && $source.val() && sameSerial) { matches.push(this.value); }
         if ($source.val() && sameSerial && sameQuantity && isOccupied) { occupiedMatch = true; }
@@ -38,11 +46,16 @@ function authority_update_receiving($row, suggestMatch) {
     if (suggestMatch && !$destination.val() && matches.length === 1) {
         $destination.val(matches[0]);
     }
-    if (suggestMatch && !$destination.val() && occupiedMatch) {
+    var hasAvailableBatch = $destination.find('option').filter(function () {
+        return this.value && this.value !== 'new' && !this.disabled;
+    }).length > 0;
+    if (suggestMatch && $source.val() && !$destination.val() && (occupiedMatch || !hasAvailableBatch)) {
         var $missingReceiving = $destination.find('option[value="new"]');
         if ($missingReceiving.length && !$missingReceiving.prop('disabled')) { $destination.val('new'); }
     }
     $destination.trigger('change.select2');
+    $row.find('.authority-missing-receiving-help').toggle(!$destination.val() && Boolean($source.val()) &&
+        $destination.find('option[value="new"]').length > 0 && !$destination.find('option[value="new"]').prop('disabled'));
 
     var message;
     if (!$source.val()) {
@@ -55,12 +68,14 @@ function authority_update_receiving($row, suggestMatch) {
         message = !serial && !receivingSerial
             ? 'No serial: deduction will use the selected receipt ID and receiving batch ID. Quantities must match.'
             : receivingSerial === serial
-            ? 'Source and receiving serials match. Preview to review the deduction correction.'
-            : 'The receiving serial will change to ' + serial + '. Preview to review this correction.';
+            ? 'Serials match. Preview will validate source stock and dependent movements before this deduction can be corrected.'
+            : 'The receiving serial will change to ' + serial + '. Preview will validate later usage before applying this serial / lot correction.';
     } else {
         message = matches.length > 1
             ? 'Several receiving batches match. Select the batch confirmed by your delivery record.'
-            : 'Select the receiving batch to correct. Quantities must match; used batches must keep their serial.';
+            : (changeSerial
+                ? 'Select the receiving batch to update to the source serial / lot. Quantities must match; preview will check later usage.'
+                : 'Select the receiving batch to correct. Enable Change receiving serial / lot to correct a different serial on a used batch.');
     }
     $row.find('.authority-selection-help').text(message);
 }
@@ -128,6 +143,24 @@ function authority_complete_fields($form) {
                 ', receiving batch ' + $destination.val() + ', quantity ' + $row.attr('data-quantity') + '.');
             var filledSerial = $row.find('.authority-verified-serial:not(:disabled)').val();
             if (filledSerial) { summary.push('Proposed missing serial ' + filledSerial + ' from the receiving record; review before applying.'); }
+        }
+    });
+    // Claim existing batches first, then fill only gaps with no available existing batch.
+    // A batch used by a different serial must not prevent completion of a missing receipt.
+    $form.find('.authority-line').each(function () {
+        var $row = $(this);
+        var $destination = $row.find('.authority-destination');
+        authority_update_receiving($row, false);
+        if ($row.find('.authority-source').val() && !$destination.val() &&
+            !$destination.find('option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; }).length) {
+            var $new = $destination.find('option[value="new"]');
+            if ($new.length && !$new.prop('disabled')) {
+                $destination.val('new');
+                authority_update_receiving($row, false);
+                unresolved--;
+                summary.push('Line #' + ($row.attr('data-line-id') || '?') + ': source receipt ' + $row.find('.authority-source').val() +
+                    ', receiving batch new, quantity ' + $row.attr('data-quantity') + '.');
+            }
         }
     });
     authority_update_dates($form);
@@ -203,6 +236,9 @@ function authority_initialize_form() {
     });
     $form.on('change', '.authority-destination', function () {
         $form.find('.authority-line').each(function () { authority_update_receiving($(this), false); });
+    });
+    $form.on('change', '.authority-change-receiving-serial', function () {
+        authority_update_receiving($(this).closest('.authority-line'), false);
     });
     $form.on('input', '.authority-new-serial, .authority-verified-serial', function () {
         authority_update_receiving($(this).closest('.authority-line'), false);

@@ -70,6 +70,9 @@
             <input type="hidden" name="evidence" value="{{ $input['evidence'] }}">
             <input type="hidden" name="transaction_date" value="{{ $input['transaction_date'] ?? '' }}">
             @foreach($input['corrections'] as $index => $correction)
+                @if(!empty($correction['change_receiving_serial']))
+                    <input type="hidden" name="corrections[{{ $index }}][change_receiving_serial]" value="1">
+                @endif
                 @foreach(['sell_line_id', 'source_id', 'destination_id'] as $field)
                     <input type="hidden" name="corrections[{{ $index }}][{{ $field }}]" value="{{ $correction[$field] }}">
                 @endforeach

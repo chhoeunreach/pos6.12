@@ -67,6 +67,20 @@ test('used batches keep their serial and remain available for deduction-only rep
     dom.window.close();
 });
 
+test('explicit serial correction enables a used batch for a different verified source serial', () => {
+    const {dom, row} = form([{id: 10, serial: 'B', used: true}]);
+    row().append('<input type="checkbox" class="authority-change-receiving-serial" name="change_receiving_serial" value="1">');
+    row().find('.authority-source').val('1').trigger('change');
+    assert.equal(row().find('.authority-destination option[value="10"]').prop('disabled'), true);
+    row().find('.authority-change-receiving-serial').prop('checked', true).trigger('change');
+    assert.equal(row().find('.authority-destination option[value="10"]').prop('disabled'), false);
+    row().find('.authority-destination').val('10').trigger('change');
+    assert.match(row().find('.authority-selection-help').text(), /receiving serial will change to A/);
+    row().find('.authority-change-receiving-serial').prop('checked', false).trigger('change');
+    assert.equal(row().find('.authority-destination').val(), '');
+    dom.window.close();
+});
+
 test('receiving batches already chosen on another line are not suggested again', () => {
     const {dom, row} = form([{id: 10, serial: 'A'}], 2);
     row(0).find('.authority-source').val('1').trigger('change');
@@ -149,6 +163,52 @@ test('new receiving is disabled when the received quantity is already complete',
     row().find('.authority-destination').append('<option value="new">New receiving batch</option>');
     row().find('.authority-source').val('1').trigger('change');
     assert.equal(row().find('.authority-destination option[value="new"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('completion fills a missing receiving batch when the only existing batch belongs to another used serial', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A', used: true}], 2);
+    for (let i = 0; i < 2; i++) {
+        row(i).attr({'data-receiving-group': '5:8', 'data-missing-receiving': '1', 'data-line-id': String(i + 1),
+            'data-completion': JSON.stringify({source_id: i + 1})});
+        row(i).find('.authority-destination').append('<option value="new">New receiving batch</option>');
+        row(i).append('<p class="authority-missing-receiving-help"></p>');
+    }
+    $('#authority_correction_form').append('<textarea id="authority_evidence"></textarea>');
+    assert.equal(dom.window.authority_complete_fields($('#authority_correction_form')), true);
+    assert.equal(row(0).find('.authority-destination').val(), '10');
+    assert.equal(row(1).find('.authority-destination').val(), 'new');
+    assert.equal(row(0).find('.authority-missing-receiving-help').css('display'), 'none');
+    assert.match(row(0).find('.authority-selection-help').text(), /Preview will validate source stock and dependent movements/);
+    assert.match($('#authority_evidence').val(), /Line #2: source receipt 2, receiving batch new/);
+    const event = $.Event('submit');
+    $('#authority_correction_form').triggerHandler(event);
+    assert.equal(event.isDefaultPrevented(), false);
+    dom.window.close();
+});
+
+test('completion never creates more receiving batches than the shared product quantity gap', () => {
+    const {dom, $, row} = form([], 2);
+    for (let i = 0; i < 2; i++) {
+        row(i).attr({'data-receiving-group': '5:8', 'data-missing-receiving': '1',
+            'data-completion': JSON.stringify({source_id: i + 1})});
+        row(i).find('.authority-destination').append('<option value="new">New receiving batch</option>');
+    }
+    assert.equal(dom.window.authority_complete_fields($('#authority_correction_form')), false);
+    assert.equal(row(0).find('.authority-destination').val(), 'new');
+    assert.equal(row(1).find('.authority-destination').val(), '');
+    assert.equal(row(1).find('.authority-destination option[value="new"]').prop('disabled'), true);
+    dom.window.close();
+});
+
+test('changing the source selects a supported missing batch when existing used serials cannot be changed', () => {
+    const {dom, row} = form([{id: 10, serial: 'A', used: true}]);
+    row().attr('data-missing-receiving', '1');
+    row().find('.authority-destination').append('<option value="new">New receiving batch</option>');
+    row().find('.authority-source').val('2').trigger('change');
+    assert.equal(row().find('.authority-destination').val(), 'new');
+    assert.equal(row().find('.authority-destination option[value="10"]').prop('disabled'), true);
+    assert.match(row().find('.authority-selection-help').text(), /create the missing receiving batch for serial B/);
     dom.window.close();
 });
 
