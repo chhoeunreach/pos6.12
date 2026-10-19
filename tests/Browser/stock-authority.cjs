@@ -444,3 +444,43 @@ test('generated evidence supports long transfers and respects the server limit w
     assert.match(bounded, /Additional row details/);
     dom.window.close();
 });
+
+test('opening authority correction checks server errors and keeps the form editable', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    const $form = $('#authority_correction_form').off().attr('data-check-on-open', '1');
+    let checks = 0;
+    $.ajax = () => {
+        checks++;
+        return $.Deferred().reject({status: 422, responseJSON: {msg: 'Source quantity is insufficient.'}}).promise();
+    };
+    dom.window.authority_initialize_form();
+    assert.equal(checks, 1);
+    assert.match($('.authority-preview-error').text(), /Source quantity is insufficient/);
+    assert.equal(row().find('.authority-source').prop('disabled'), false);
+    assert.equal($('#authority_correction_form').length, 1);
+    dom.window.close();
+});
+
+test('opening authority correction highlights missing row selections immediately', () => {
+    const {dom, $, row} = form([]);
+    row().attr('data-line-id', '77');
+    $('#authority_correction_form').off().attr('data-check-on-open', '1');
+    $.ajax = () => { throw new Error('Incomplete records must not be previewed'); };
+    dom.window.authority_initialize_form();
+    assert.equal(row().hasClass('has-error'), true);
+    assert.match($('.authority-preview-error').text(), /Line #77: Choose the verified source receipt/);
+    dom.window.close();
+});
+
+test('successful opening check keeps selections and does not open the apply preview', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
+    $('#authority_correction_form').off().attr('data-check-on-open', '1').append('<p class="authority-auto-status"></p>');
+    $.ajax = () => $.Deferred().resolve({success: 1, html: '<button id="apply">Apply</button>'}).promise();
+    dom.window.authority_initialize_form();
+    assert.equal($('#authority_correction_form').length, 1);
+    assert.equal($('#apply').length, 0);
+    assert.match($('.authority-auto-status').text(), /Initial check passed/);
+    dom.window.close();
+});

@@ -4,7 +4,7 @@
 </div>
 <div class="modal-body">
 @php $oldCorrections = collect(old('corrections', []))->keyBy('sell_line_id'); @endphp
-<form id="authority_correction_form" method="post" data-recorded-date="{{ $transfer->transaction_date }}" data-reference="{{ $transfer->ref_no ?: '#'.$transfer->id }}" data-receiving-date="{{ \App\Transaction::where('business_id', $transfer->business_id)->where('type', 'purchase_transfer')->where('transfer_parent_id', $transfer->id)->value('transaction_date') }}" action="{{ ssi_route('ssi.authority.preview', ['id' => $transfer->id]) }}">
+<form id="authority_correction_form" data-check-on-open="1" method="post" data-recorded-date="{{ $transfer->transaction_date }}" data-reference="{{ $transfer->ref_no ?: '#'.$transfer->id }}" data-receiving-date="{{ \App\Transaction::where('business_id', $transfer->business_id)->where('type', 'purchase_transfer')->where('transfer_parent_id', $transfer->id)->value('transaction_date') }}" action="{{ ssi_route('ssi.authority.preview', ['id' => $transfer->id]) }}">
     @csrf
     <input type="hidden" name="date_basis" id="authority_date_basis" value="{{ old('date_basis') }}">
     <div class="box box-primary">
