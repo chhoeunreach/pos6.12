@@ -31,6 +31,59 @@ function form(batches, rows = 1) {
     return {dom, $, row: index => $('.authority-line').eq(index || 0)};
 }
 
+test('embedded full repair applies once and reports changed rows without navigating', () => {
+    const {dom, $} = form([]);
+    $('#authority_correction_form').remove();
+    $('<div id="authority_correction_modal" data-stock-transfer-editor="1"><form class="authority-apply-form" action="/authority/1/apply"><input name="token" value="preview-token"><button type="submit">Apply</button></form></div>').appendTo('body');
+    const deferred = $.Deferred(); let requests = 0, saved = null;
+    $.ajax = options => { requests++; assert.match(options.data, /token=preview-token/); return deferred.promise(); };
+    $(dom.window.document).on('stock-authority:applied', (event, result) => { saved = result; });
+    $('.authority-apply-form').trigger('submit').trigger('submit');
+    assert.equal(requests, 1);
+    deferred.resolve({success: 1, msg: 'Saved', plan: {changes: [{sell_line_id: 77}]}});
+    assert.equal(saved.plan.changes[0].sell_line_id, 77);
+    assert.equal($('.authority-apply-form :submit').prop('disabled'), false);
+    dom.window.close();
+});
+
+test('embedded full repair preserves its preview inputs when apply fails', () => {
+    const {dom, $} = form([]);
+    $('#authority_correction_form').remove();
+    $('<div id="authority_correction_modal" data-stock-transfer-editor="1"><form class="authority-apply-form" action="/apply"><input name="token" value="retained-token"><button type="submit">Apply</button></form></div>').appendTo('body');
+    $.ajax = () => $.Deferred().reject({status: 422, responseJSON: {msg: 'Records changed. Preview again.'}}).promise();
+    $('.authority-apply-form').trigger('submit');
+    assert.equal($('.authority-apply-form input[name="token"]').val(), 'retained-token');
+    assert.match($('.authority-preview-error').text(), /Records changed/);
+    assert.equal($('.authority-apply-form :submit').prop('disabled'), false);
+    dom.window.close();
+});
+
+test('returning from an embedded preview restores selected records and custom notes', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('action', '/preview');
+    $form.wrap('<div id="authority_correction_modal" class="modal" data-stock-transfer-editor="1"><div class="modal-content"></div></div>');
+    row().find('.authority-source').val('1').trigger('change');
+    $form.append('<textarea id="authority_evidence" name="evidence">Verified original delivery record.</textarea>');
+    $.ajax = () => $.Deferred().resolve({success: 1, html: '<form class="authority-apply-form"><a class="authority-return-to-records" href="/authority">Back to records</a></form>'}).promise();
+    dom.window.authority_request_preview($form, false);
+    assert.equal($('#authority_correction_form').length, 0);
+    $('.authority-return-to-records').trigger('click');
+    assert.equal($('#authority_correction_form').length, 1);
+    assert.equal($('#authority_evidence').val(), 'Verified original delivery record.');
+    assert.equal(row().find('.authority-source').val(), '1');
+    assert.equal(row().find('.authority-destination').val(), '10');
+    dom.window.close();
+});
+
+test('a disconnected Apply never claims that no correction was saved', () => {
+    const {dom, $} = form([]);
+    const $form = $('#authority_correction_form');
+    dom.window.authority_preview_error($form, {status: 0}, true);
+    assert.match($('.authority-preview-error').text(), /could not be confirmed/);
+    assert.doesNotMatch($('.authority-preview-error').text(), /No correction was applied/);
+    dom.window.close();
+});
+
 test('source selection suggests only one receiving batch with matching serial and quantity', () => {
     const {dom, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'A', quantity: 2}]);
     row().find('.authority-source').val('1').trigger('change');
@@ -612,6 +665,60 @@ test('Quick fix fills supported row selections and checks without applying stock
     dom.window.close();
 });
 
+test('Quick fix replaces a conflicting receiving choice with the unique server-verified alternative', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B'}, {id: 11, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    row().attr('data-line-id', '77').find('.authority-source').val('1').trigger('change');
+    row().find('.authority-destination').val('10').trigger('change');
+    let requests = 0;
+    $.ajax = () => { requests++; return $.Deferred().resolve({success: 1, html: 'Review correction'}).promise(); };
+    dom.window.authority_preview_error($form, {status: 422, responseJSON: {
+        msg: 'Serial B: sent 1; received 0.', stock_error: {kind: 'receiving_balance_conflict', sell_line_id: 77,
+            receiving_batch_id: 10, candidate_receiving_batch_ids: [11]}
+    }});
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-destination').val(), '11');
+    assert.equal(requests, 1);
+    assert.equal($('#authority_correction_form').length, 1);
+    dom.window.close();
+});
+
+test('Quick fix clears an unsafe receiving choice without guessing when alternatives are ambiguous', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B'}, {id: 11, serial: 'A'}, {id: 12, serial: 'A'}]);
+    const $form = $('#authority_correction_form');
+    row().attr('data-line-id', '77').find('.authority-source').val('1').trigger('change');
+    row().find('.authority-destination').val('10').trigger('change');
+    $.ajax = () => { throw new Error('Ambiguous receiving choice must not be sent'); };
+    dom.window.authority_preview_error($form, {status: 422, responseJSON: {
+        msg: 'The selected batch would take another row\'s stock.', stock_error: {kind: 'receiving_balance_conflict',
+            sell_line_id: 77, receiving_batch_id: 10, candidate_receiving_batch_ids: [11, 12]}
+    }});
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal(row().find('.authority-destination').val(), '');
+    assert.match(row().find('.authority-selection-help').text(), /Several receiving batches/);
+    assert.equal(dom.window.document.activeElement, row().find('.authority-destination')[0]);
+    dom.window.close();
+});
+
+test('Quick fix never claims a verified alternative already selected by another row', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'B'}, {id: 11, serial: 'A'}], 2);
+    const $form = $('#authority_correction_form');
+    row(0).attr('data-line-id', '77').find('.authority-source').val('1').trigger('change');
+    row(1).find('.authority-source').val('1').trigger('change');
+    row(1).find('.authority-destination').val('11').trigger('change');
+    row(0).find('.authority-destination').val('10').trigger('change');
+    $.ajax = () => { throw new Error('Occupied batch must not be selected'); };
+    dom.window.authority_preview_error($form, {status: 422, responseJSON: {
+        msg: 'Receiving balance conflict.', stock_error: {kind: 'receiving_balance_conflict', sell_line_id: 77,
+            receiving_batch_id: 10, candidate_receiving_batch_ids: [11]}
+    }});
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal(row(0).find('.authority-destination').val(), '');
+    assert.equal(row(1).find('.authority-destination').val(), '11');
+    assert.match(row(0).find('.authority-selection-help').text(), /review the source receipt/);
+    dom.window.close();
+});
+
 test('Quick fix on an ambiguous receiving error focuses the selector without guessing', () => {
     const {dom, $, row} = form([{id: 10, serial: 'A'}, {id: 11, serial: 'A'}]);
     row().attr('data-line-id', '76626').find('.authority-source').val('1').trigger('change');
@@ -702,5 +809,59 @@ test('receiving dependency errors identify the row from the batch ID for Quick f
     assert.equal(row().hasClass('has-error'), true);
     assert.equal($('.authority-preview-error .authority-quick-fix').attr('data-line-id'), '76626');
     assert.equal($('#authority_correction_form').data('authority-stock-error').sell_line_id, '76626');
+    dom.window.close();
+});
+
+test('Quick fix offers explicit linked receiving choices and rechecks the selected pairing without applying', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    row().attr('data-line-id', '76626').find('.authority-source').val('1').trigger('change');
+    const error = {kind: 'receiving_pairing_required', receiving_batch_id: 10, linked_sell_line_id: 79605,
+        linked_reference: 'ST2026/6576', source_serial: 'A', candidates: [{id: 92565, serial: null, quantity: 1}, {id: 92577, serial: null, quantity: 1}]};
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(new URLSearchParams(options.data).get('linked_receiving_pairs[79605]'), '92565');
+        return $.Deferred().resolve({success: 1, html: '<button id="apply-stock">Apply</button>'}).promise();
+    };
+    dom.window.authority_preview_error($form, {status: 422, responseJSON: {msg: 'Confirm a linked receiving lot.', stock_error: error}});
+    assert.equal($('.authority-linked-pair-choice').length, 2);
+    assert.equal(requests, 0);
+    assert.match($('.authority-linked-pair-options').text(), /ST2026\/6576/);
+    $('.authority-preview-error .authority-quick-fix').trigger('click');
+    assert.equal($('.authority-linked-pair-choice').length, 2);
+    $('.authority-linked-pair-choice[data-batch-id="92565"]').trigger('click');
+    assert.equal(requests, 1);
+    assert.equal($('#authority_correction_form').length, 1);
+    assert.equal($('#apply-stock').length, 0);
+    assert.equal($form.find('input[name="linked_receiving_pairs[79605]"]').val(), '92565');
+    row().find('.authority-source').val('2').trigger('change');
+    assert.equal($form.find('input[name="linked_receiving_pairs[79605]"]').length, 0);
+    dom.window.close();
+});
+
+test('Quick fix splits an existing combined receiving quantity across all matching serial rows', () => {
+    const {dom, $, row} = form([{id: 10, serial: '', quantity: 2}], 2);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    for (let i = 0; i < 2; i++) {
+        row(i).attr('data-receiving-group', '5:8');
+        row(i).find('.authority-destination').attr('name', `corrections[${i}][destination_id]`)
+            .append('<option value="split:10" data-split="1" data-quantity="2">Split combined batch</option>');
+        row(i).find('.authority-source').val(String(i + 1)).trigger('change');
+    }
+    let checks = 0;
+    $.ajax = options => {
+        checks++;
+        const params = new URLSearchParams(options.data);
+        assert.equal(params.get('corrections[0][destination_id]'), 'split:10');
+        assert.equal(params.get('corrections[1][destination_id]'), 'split:10');
+        return $.Deferred().resolve({success: 1, html: 'Review existing receiving split'}).promise();
+    };
+    row(0).find('.authority-quick-fix').trigger('click');
+    assert.equal(checks, 1);
+    assert.equal(row(0).find('.authority-destination').val(), 'split:10');
+    assert.equal(row(1).find('.authority-destination').val(), 'split:10');
+    assert.match(row(1).find('.authority-selection-help').text(), /Total received stock will stay unchanged/);
+    assert.equal($('#authority_correction_form').length, 1);
     dom.window.close();
 });

@@ -14,7 +14,7 @@ class AuthorityTransferReceiptService
 
     public static function needsStaging(array $input): bool
     {
-        return collect($input['corrections'])->contains(fn ($row) => $row['source_id'] === 'new' || $row['destination_id'] === 'new' || trim((string) ($row['verified_serial'] ?? '')) !== '');
+        return collect($input['corrections'])->contains(fn ($row) => $row['source_id'] === 'new' || $row['destination_id'] === 'new' || str_starts_with((string) $row['destination_id'], 'split:') || trim((string) ($row['verified_serial'] ?? '')) !== '');
     }
 
     public function preview(int $businessId, int $transferId, array $input, int $userId): array
@@ -23,11 +23,11 @@ class AuthorityTransferReceiptService
         DB::beginTransaction();
         try {
             $token = $this->fingerprint($businessId, $transferId, $input, $userId);
-            [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
+            [$corrections, $created, $replaced, $serialChanges, $splits] = $this->createMissing($businessId, $transferId, $input, $userId);
             $plan = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']), $input['linked_receiving_pairs'] ?? []);
 
-            return array_merge($plan, ['token' => $token, 'created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
+            return array_merge($plan, ['token' => $token, 'created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges, 'split_receiving_batches' => $splits]);
         } finally {
             DB::rollBack();
         }
@@ -41,14 +41,14 @@ class AuthorityTransferReceiptService
             if (!hash_equals($this->fingerprint($businessId, $transferId, $input, $userId), $token)) {
                 throw new PurchaseSellMismatch('Stock records or new receipt details changed. Preview the correction again.');
             }
-            [$corrections, $created, $replaced, $serialChanges] = $this->createMissing($businessId, $transferId, $input, $userId);
+            [$corrections, $created, $replaced, $serialChanges, $splits] = $this->createMissing($businessId, $transferId, $input, $userId);
             // Newly generated IDs can differ from preview IDs on MySQL. Verify the actual IDs in this transaction.
             $preview = $this->reconciliation->previewManual($businessId, $transferId, $corrections,
-                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
+                $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']), $input['linked_receiving_pairs'] ?? []);
             $plan = $this->reconciliation->applyManual($businessId, $transferId, $corrections,
-                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
+                $input['evidence'], $preview['token'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']), $input['linked_receiving_pairs'] ?? []);
 
-            return array_merge($plan, ['created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges]);
+            return array_merge($plan, ['created_receipts' => $created, 'replaced_missing_allocations' => $replaced, 'filled_source_serials' => $serialChanges, 'split_receiving_batches' => $splits]);
         });
     }
 
@@ -63,7 +63,9 @@ class AuthorityTransferReceiptService
 
             return $choice;
         })->sortBy(fn ($row) => $row[0])->values()->all();
-        $choices = [$choices, trim($input['evidence']), $input['transaction_date'] ?? null, !empty($input['allow_receipt_date_override'])];
+        $pairs = array_map('intval', $input['linked_receiving_pairs'] ?? []);
+        ksort($pairs);
+        $choices = [$choices, trim($input['evidence']), $input['transaction_date'] ?? null, !empty($input['allow_receipt_date_override']), $pairs];
         // Capture the affected products' history, including competing movements and transfer receipts.
         $variationIds = DB::table('transaction_sell_lines')->where('transaction_id', $transferId)->pluck('variation_id');
         $purchaseTransactionIds = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
@@ -98,6 +100,47 @@ class AuthorityTransferReceiptService
         return hash_final($hash);
     }
 
+    /** Split an unused combined receipt into the reviewed transfer quantities; no stock movement. */
+    private function splitReceivingBatches(Transaction $transfer, Transaction $receipt, array $corrections): array
+    {
+        $destinations = [];
+        $splits = [];
+        $groups = collect($corrections)->filter(fn ($row) => str_starts_with((string) $row['destination_id'], 'split:'))
+            ->groupBy('destination_id')->sortKeys();
+        foreach ($groups as $choice => $rows) {
+            $batchId = (int) substr($choice, 6);
+            $batch = $receipt->purchase_lines()->where('id', $batchId)->lockForUpdate()->first();
+            if (!$batch || trim((string) $batch->lot_number) !== ''
+                || (float) $batch->quantity_sold != 0 || (float) $batch->quantity_adjusted != 0
+                || (float) $batch->quantity_returned != 0 || (float) $batch->mfg_quantity_used != 0
+                || DB::table('transaction_sell_lines')->where('lot_no_line_id', $batchId)->lockForUpdate()->exists()
+                || DB::table('transaction_sell_lines_purchase_lines')->where('purchase_line_id', $batchId)->lockForUpdate()->exists()) {
+                throw new PurchaseSellMismatch('Combined receiving batch #'.$batchId.' must be unused, unreferenced and have no serial before it can be split.');
+            }
+            $lineIds = $rows->pluck('sell_line_id');
+            $lines = $transfer->sell_lines()->whereIn('id', $lineIds)->orderBy('id')->lockForUpdate()->get();
+            if ($rows->count() < 2 || $lineIds->unique()->count() !== $rows->count() || $lines->count() !== $rows->count()
+                || $lines->contains(fn ($line) => (int) $line->product_id !== (int) $batch->product_id
+                    || (int) $line->variation_id !== (int) $batch->variation_id || (float) $line->quantity <= 0 || (float) $line->quantity_returned > 0)
+                || abs((float) $lines->sum('quantity') - (float) $batch->quantity) > 0.0001) {
+                throw new PurchaseSellMismatch('Select all lines belonging to combined receiving batch #'.$batchId
+                    .'. Their SKU and total quantity must match its existing received quantity of '.$batch->quantity.'.');
+            }
+            $before = (float) $batch->quantity;
+            $parts = [];
+            foreach ($lines->values() as $index => $line) {
+                $part = $index === 0 ? $batch : $batch->replicate();
+                $part->quantity = $line->quantity;
+                $part->save();
+                $destinations[(int) $line->id] = (int) $part->id;
+                $parts[] = ['sell_line_id' => (int) $line->id, 'batch_id' => (int) $part->id, 'quantity' => (float) $part->quantity];
+            }
+            $splits[] = ['original_batch_id' => $batchId, 'quantity_before' => $before, 'parts' => $parts];
+        }
+
+        return [$destinations, $splits];
+    }
+
     private function createMissing(int $businessId, int $transferId, array $input, int $userId): array
     {
         $transfer = Transaction::where('business_id', $businessId)->where('type', 'sell_transfer')->lockForUpdate()->findOrFail($transferId);
@@ -111,11 +154,15 @@ class AuthorityTransferReceiptService
         $replaced = [];
         $serialChanges = [];
         $corrections = [];
+        [$splitDestinations, $splits] = $this->splitReceivingBatches($transfer, $receipt, $input['corrections']);
         foreach ($input['corrections'] as $correction) {
             $line = $transfer->sell_lines()->where('id', $correction['sell_line_id'])->lockForUpdate()->firstOrFail();
             $product = DB::table('products')->where('id', $line->product_id)->where('business_id', $businessId)->first();
             if (!$product || !$product->enable_stock || (float) $line->quantity <= 0 || (float) $line->quantity_returned > 0) {
                 throw new PurchaseSellMismatch('Only positive stock-managed lines without returns can receive missing records.');
+            }
+            if (str_starts_with((string) $correction['destination_id'], 'split:')) {
+                $correction['destination_id'] = $splitDestinations[(int) $line->id];
             }
             $verifiedSerial = trim((string) ($correction['verified_serial'] ?? ''));
             if ($correction['source_id'] !== 'new' && $verifiedSerial !== '') {
@@ -224,6 +271,6 @@ class AuthorityTransferReceiptService
                 'change_receiving_serial' => !empty($correction['change_receiving_serial'])];
         }
 
-        return [$corrections, $created, $replaced, $serialChanges];
+        return [$corrections, $created, $replaced, $serialChanges, $splits];
     }
 }

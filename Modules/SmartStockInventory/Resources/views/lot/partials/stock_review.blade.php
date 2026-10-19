@@ -25,7 +25,9 @@
                                 <td>{{ $row->receipt_date }}</td>
                                 <td>{{ $row->quantity - $row->qty_returned }}</td>
                                 <td>
-                                    @if (!empty($row->deducted_serial_fix_url))
+                                    @if (!empty($row->full_repair_url))
+                                        <a class="btn btn-primary btn-sm" href="{{ $row->full_repair_url }}">Full repair</a>
+                                    @elseif (!empty($row->deducted_serial_fix_url))
                                         <form method="post" action="{{ $row->deducted_serial_fix_url }}" style="display:inline-block">
                                             @csrf
                                             <input type="hidden" name="sell_line_id" value="{{ $row->sell_line_id }}">

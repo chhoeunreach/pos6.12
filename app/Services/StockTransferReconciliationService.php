@@ -463,23 +463,23 @@ class StockTransferReconciliationService
             'candidates' => $candidates];
     }
 
-    public function previewManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false): array
+    public function previewManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false, array $linkedReceivingPairs = []): array
     {
         DB::beginTransaction();
         try {
-            return $this->correctManual($businessId, $transferId, $corrections, $evidence, null, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations, $allowReceiptDateOverride);
+            return $this->correctManual($businessId, $transferId, $corrections, $evidence, null, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations, $allowReceiptDateOverride, $linkedReceivingPairs);
         } finally {
             // The preview exercises the same checks and writes, but saves nothing.
             DB::rollBack();
         }
     }
 
-    public function applyManual(int $businessId, int $transferId, array $corrections, string $evidence, string $token, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false): array
+    public function applyManual(int $businessId, int $transferId, array $corrections, string $evidence, string $token, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false, array $linkedReceivingPairs = []): array
     {
-        return DB::transaction(fn () => $this->correctManual($businessId, $transferId, $corrections, $evidence, $token, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations, $allowReceiptDateOverride));
+        return DB::transaction(fn () => $this->correctManual($businessId, $transferId, $corrections, $evidence, $token, $verifiedDate, $repairRelatedAllocations, $allowExistingShortageRepair, false, $allowBlankSerial, $allowOrphanedSourceAllocations, $allowReceiptDateOverride, $linkedReceivingPairs));
     }
 
-    private function correctManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $token = null, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowReferencedReceivingRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false): array
+    private function correctManual(int $businessId, int $transferId, array $corrections, string $evidence, ?string $token = null, ?string $verifiedDate = null, bool $repairRelatedAllocations = false, bool $allowExistingShortageRepair = false, bool $allowReferencedReceivingRepair = false, bool $allowBlankSerial = false, bool $allowOrphanedSourceAllocations = false, bool $allowReceiptDateOverride = false, array $linkedReceivingPairs = []): array
     {
         $this->assertTransactionalTables();
         $allowOverselling = \App\Utils\BusinessUtil::allowsOverselling($businessId);
@@ -565,6 +565,8 @@ class StockTransferReconciliationService
                 ->orderBy('p.id')->lockForUpdate()
                 ->get(['p.*', 't.status as receipt_status', 't.location_id', 't.transaction_date as receipt_date']);
         }
+        $linkedReceivingPairs = array_map('intval', $linkedReceivingPairs);
+        ksort($linkedReceivingPairs);
         $serialChains = [];
         $linkedSerialTargets = [];
         if ($repairRelatedAllocations && $allowBlankSerial && !$dateChange) {
@@ -575,8 +577,8 @@ class StockTransferReconciliationService
                     && ((int) $line->lot_no_line_id === (int) $destination->id
                         || $relatedMappings->where('sell_line_id', $line->id)->contains('purchase_line_id', $destination->id)));
                 if (!$source || !$destination || !$correction['change_receiving_serial'] || !$connectedTransfer
-                    || trim((string) $destination->lot_number) !== '' || trim((string) $source->lot_number) === '') { continue; }
-                $chain = app(AuthorityReceivingSerialChainService::class)->plan($businessId, (int) $destination->id, (string) $source->lot_number);
+                    || (string) $destination->lot_number === (string) $source->lot_number || trim((string) $source->lot_number) === '') { continue; }
+                $chain = app(AuthorityReceivingSerialChainService::class)->plan($businessId, (int) $destination->id, (string) $source->lot_number, $linkedReceivingPairs);
                 foreach ($chain['changes'] as $change) {
                     if (isset($linkedSerialTargets[$change['batch_id']]) && $linkedSerialTargets[$change['batch_id']] !== $change['after']) {
                         throw new PurchaseSellMismatch('Two corrections propose different serials for the same linked receiving batch. Preview the upstream correction separately.');
@@ -589,11 +591,14 @@ class StockTransferReconciliationService
         $fingerprint = hash_hmac('sha256', json_encode([$businessId, $transferId, $transfer->status, $transfer->transaction_date,
             $transfer->location_id, $receipt->id, $receipt->status, $receipt->transaction_date, $receipt->location_id,
             $corrections, trim($evidence), $effectiveDate, $lines, $mappings, $batches, $related, $relatedMappings, $receivingBatches,
-            $repairRelatedAllocations, $allowExistingShortageRepair, $allowReferencedReceivingRepair, $allowOverselling, $relatedEvidence, $allowBlankSerial, $allowReceiptDateOverride, $serialChains], JSON_THROW_ON_ERROR), (string) config('app.key'));
+            $repairRelatedAllocations, $allowExistingShortageRepair, $allowReferencedReceivingRepair, $allowOverselling, $relatedEvidence, $allowBlankSerial, $allowReceiptDateOverride, $serialChains, $linkedReceivingPairs], JSON_THROW_ON_ERROR), (string) config('app.key'));
         if ($token !== null && !hash_equals($fingerprint, $token)) {
             throw new PurchaseSellMismatch('Stock records or correction choices changed. Preview the correction again.');
         }
         $relatedTransactionIds = $related->pluck('transaction_id')->push($transferId)->unique()->all();
+        foreach ($serialChains as $chain) {
+            $relatedTransactionIds = array_values(array_unique(array_merge($relatedTransactionIds, $chain['transaction_ids'])));
+        }
         $beforeReport = $this->audit->audit($businessId, null, null, $relatedTransactionIds);
         if ($dateChange && \Carbon::parse($effectiveDate)->lt(\Carbon::parse($transfer->transaction_date))) {
             $unchangedLines = $lines->whereNotIn('id', $changedLines->pluck('id'));
@@ -725,6 +730,7 @@ class StockTransferReconciliationService
             }
         }
         $linkedSerialFills = [];
+        $chainAllocationRepairs = [];
         foreach ($serialChains as $chain) {
             $relatedTransactionIds = array_values(array_unique(array_merge($relatedTransactionIds, $chain['transaction_ids'])));
             foreach ($chain['changes'] as $change) {
@@ -733,11 +739,23 @@ class StockTransferReconciliationService
                 $linkedSerialFills[$change['batch_id']] = $change;
             }
         }
+        foreach ($serialChains as $chain) {
+            foreach ($chain['allocation_repairs'] as $repair) { $chainAllocationRepairs[$repair['sell_line_id']] = $repair; }
+        }
+        foreach ($chainAllocationRepairs as $repair) {
+            DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', $repair['sell_line_id'])->delete();
+            DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => $repair['sell_line_id'],
+                'purchase_line_id' => $repair['selected_batch_id'], 'quantity' => $repair['quantity'], 'qty_returned' => 0,
+                'created_at' => now(), 'updated_at' => now()]);
+            $sourceIds = $sourceIds->merge($repair['old_source_ids'])->push($repair['selected_batch_id'])->unique()->sort()->values();
+            $ids = $ids->merge($sourceIds)->unique()->sort()->values();
+        }
         $relatedRepairs = ['changes' => [], 'source_ids' => [], 'preserved_source_ids' => [], 'blockers' => []];
         $receivingReconcile = ['transfers' => [], 'updated' => 0, 'inserted' => 0, 'deleted' => 0];
         if ($repairRelatedAllocations) {
             $relatedRepairs = $this->repairRelatedSelectedAllocations($businessId, $related, $relatedMappings,
-                $changedLines->pluck('id')->all(), $beforeReport, $allowExistingShortageRepair, $allowBlankSerial);
+                array_merge($changedLines->pluck('id')->all(), array_keys($chainAllocationRepairs)), $beforeReport, $allowExistingShortageRepair, $allowBlankSerial);
+            $relatedRepairs['changes'] = array_merge($relatedRepairs['changes'], array_values($chainAllocationRepairs));
             $sourceIds = $sourceIds->merge($relatedRepairs['source_ids'])->unique()->sort()->values();
             $ids = $ids->merge($relatedRepairs['source_ids'])->unique()->sort()->values();
             // With overselling the related lines were re-pointed to their recorded selected serials
@@ -746,6 +764,14 @@ class StockTransferReconciliationService
             if ($allowOverselling) {
                 $reconcileIds = collect($beforeReport['transfer_issues'])->pluck('transaction_id')
                     ->map(fn ($value) => (int) $value)->unique()->values()->all();
+                // A broad dependent repair must not relabel the receipts explicitly selected
+                // by this correction, or undo the serial chain just reviewed above.
+                $protectedBatchIds = $corrections->pluck('source_id')->merge($corrections->pluck('destination_id'))
+                    ->merge(array_keys($linkedSerialTargets))->unique();
+                $protectedTransferIds = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
+                    ->where('t.business_id', $businessId)->where('t.type', 'purchase_transfer')
+                    ->whereIn('p.id', $protectedBatchIds)->pluck('t.transfer_parent_id');
+                $reconcileIds = array_values(array_diff($reconcileIds, $protectedTransferIds->all()));
                 if ($reconcileIds) {
                     $receivingReconcile = app(\App\Services\AuthorityForceRepairService::class)->reconcileReceivingForTransfers($businessId, $reconcileIds);
                 }
@@ -782,7 +808,12 @@ class StockTransferReconciliationService
             $beforeDifference = $beforeIssue ? $beforeIssue['source_quantity'] - $beforeIssue['matching_received_quantity'] : 0;
             $afterDifference = $issue['source_quantity'] - $issue['matching_received_quantity'];
             if (abs($afterDifference) > abs($beforeDifference) + 0.0001 || $beforeDifference * $afterDifference < -0.0001) {
-                throw new PurchaseSellMismatch('This correction would worsen another line\'s receiving serial balance. Select the receiving batch belonging to this line.');
+                $details = $this->receivingBalanceConflictDetails($transferId, $receipt->id, $issue, $beforeReport['transfer_issues'], $changes, $receivingBatches);
+                throw new PurchaseSellMismatch('This correction would worsen another line\'s receiving serial balance. '
+                    .'Serial '.($issue['selected_serial'] ?: '(no serial)').': sent '.number_format($issue['source_quantity'], 2)
+                    .'; received '.number_format($issue['matching_received_quantity'], 2).'. '
+                    .($details['sell_line_id'] ? 'Review receiving batch #'.$details['receiving_batch_id'].' on line #'.$details['sell_line_id'].'. '
+                        : '').'Select the receiving batch belonging to this line.', $details);
             }
         }
         $unchangedSources = collect($changes)->filter(fn ($change) => $change['selected_batch_before'] === $change['selected_batch_after']
@@ -874,6 +905,7 @@ class StockTransferReconciliationService
             'token' => $fingerprint, 'evidence' => trim($evidence), 'receipt_date_overrides' => $dateExceptions, 'changes' => $changes, 'counter_repairs' => $repairs,
             'date_change' => $dateRepair, 'related_allocation_repairs' => $relatedRepairs['changes'],
             'linked_receiving_serial_fills' => array_values($linkedSerialFills),
+            'linked_receiving_pairs' => $linkedReceivingPairs,
             'receiving_repairs' => $receivingReconcile,
             'remaining_stock_shortages' => $remainingShortages, 'allow_overselling' => $allowOverselling,
             'remaining_line_issues' => array_values(array_filter($report['sale_line_issues'], fn ($issue) => (int) $issue['transaction_id'] === $transferId
@@ -881,6 +913,53 @@ class StockTransferReconciliationService
             'remaining_transfer_issues' => array_values(array_filter($report['transfer_issues'], fn ($issue) => (int) $issue['transaction_id'] === $transferId)),
             'unchanged' => $dateChange ? ['product_quantities', 'location_quantities', 'prices', 'payments']
                 : ['transfer_dates', 'product_quantities', 'location_quantities', 'prices', 'payments']];
+    }
+
+    /** Offer another batch only when the resulting serial totals pass the same balance check. */
+    private function receivingBalanceConflictDetails(int $transferId, int $receiptId, array $issue, array $beforeIssues, array $changes, $originalReceipts): array
+    {
+        $skuReceipts = $originalReceipts->filter(fn ($row) => (int) $row->product_id === (int) $issue['product_id']
+            && (int) $row->variation_id === (int) $issue['variation_id']);
+        $skuChanges = collect($changes)->filter(fn ($change) => $skuReceipts->contains('id', $change['receiving_batch_id']));
+        $change = $skuChanges->first(fn ($row) => (string) $row['receiving_serial_before'] === (string) $issue['selected_serial']
+            && (string) $row['receiving_serial_after'] !== (string) $issue['selected_serial']) ?? $skuChanges->first();
+        $details = ['kind' => 'receiving_balance_conflict', 'sell_line_id' => $change['sell_line_id'] ?? null,
+            'receiving_batch_id' => $change['receiving_batch_id'] ?? null, 'selected_serial' => $issue['selected_serial'],
+            'source_quantity' => (float) $issue['source_quantity'], 'received_quantity' => (float) $issue['matching_received_quantity'],
+            'candidate_receiving_batch_ids' => []];
+        if (!$change) { return $details; }
+        $sent = DB::table('transaction_sell_lines as s')->leftJoin('purchase_lines as p', 'p.id', '=', 's.lot_no_line_id')
+            ->where('s.transaction_id', $transferId)->where('s.product_id', $issue['product_id'])->where('s.variation_id', $issue['variation_id'])
+            ->where('s.lot_no_line_id', '>', 0)->get(['s.quantity', 'p.lot_number']);
+        $automatic = DB::table('transaction_sell_lines as s')->join('transaction_sell_lines_purchase_lines as m', 'm.sell_line_id', '=', 's.id')
+            ->join('purchase_lines as p', 'p.id', '=', 'm.purchase_line_id')->where('s.transaction_id', $transferId)
+            ->where('s.product_id', $issue['product_id'])->where('s.variation_id', $issue['variation_id'])
+            ->where(fn ($q) => $q->whereNull('s.lot_no_line_id')->orWhere('s.lot_no_line_id', 0))->get(['m.quantity', 'p.lot_number']);
+        $sent = $sent->concat($automatic)->groupBy(fn ($row) => (string) $row->lot_number);
+        $currentReceipts = DB::table('purchase_lines')->where('transaction_id', $receiptId)
+            ->where('product_id', $issue['product_id'])->where('variation_id', $issue['variation_id'])->get();
+        $occupied = collect($changes)->where('sell_line_id', '!=', $change['sell_line_id'])->pluck('receiving_batch_id');
+        foreach ($skuReceipts as $candidate) {
+            if ((int) $candidate->id === (int) $change['receiving_batch_id'] || $occupied->contains($candidate->id)
+                || abs((float) $candidate->quantity - (float) $change['quantity']) > 0.0001) { continue; }
+            $valid = true;
+            foreach ($sent as $serial => $lines) {
+                $quantity = (float) $lines->sum('quantity');
+                $received = (float) $currentReceipts->sum(function ($row) use ($change, $candidate, $serial) {
+                    $lot = (int) $row->id === (int) $change['receiving_batch_id'] ? $change['receiving_serial_before'] : $row->lot_number;
+                    if ((int) $row->id === (int) $candidate->id) { $lot = $change['receiving_serial_after']; }
+                    return (string) $lot === (string) $serial ? (float) $row->quantity : 0;
+                });
+                $before = collect($beforeIssues)->first(fn ($old) => (int) $old['transaction_id'] === $transferId
+                    && (int) $old['product_id'] === (int) $issue['product_id'] && (int) $old['variation_id'] === (int) $issue['variation_id']
+                    && (string) $old['selected_serial'] === (string) $serial);
+                $beforeDifference = $before ? $before['source_quantity'] - $before['matching_received_quantity'] : 0;
+                $afterDifference = $quantity - $received;
+                if (abs($afterDifference) > abs($beforeDifference) + 0.0001 || $beforeDifference * $afterDifference < -0.0001) { $valid = false; break; }
+            }
+            if ($valid) { $details['candidate_receiving_batch_ids'][] = (int) $candidate->id; }
+        }
+        return $details;
     }
 
     /** Repair only related mappings whose recorded selection and receiving serial already agree. */

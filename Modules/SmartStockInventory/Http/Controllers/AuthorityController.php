@@ -425,7 +425,7 @@ class AuthorityController extends BaseSmartStockController
             'corrections' => 'required|array|min:1|max:200',
             'corrections.*.sell_line_id' => 'required|integer|min:1|distinct',
             'corrections.*.source_id' => ['required', 'regex:/^(new|[1-9][0-9]*)$/'],
-            'corrections.*.destination_id' => ['required', 'regex:/^(new|[1-9][0-9]*)$/'],
+            'corrections.*.destination_id' => ['required', 'regex:/^(new|[1-9][0-9]*|split:[1-9][0-9]*)$/'],
             'corrections.*.verified_serial' => 'nullable|string|max:191',
             'corrections.*.change_receiving_serial' => 'sometimes|boolean',
             'corrections.*.new_source' => 'nullable|array:serial,quantity,date,cost',
@@ -435,10 +435,23 @@ class AuthorityController extends BaseSmartStockController
             'corrections.*.new_source.cost' => 'required_if:corrections.*.source_id,new|nullable|numeric|min:0|max:1000000000',
             'evidence' => 'required|string|min:10|max:'.self::EVIDENCE_MAX_LENGTH,
             'allow_receipt_date_override' => 'sometimes|boolean',
+            'linked_receiving_pairs' => 'sometimes|array|max:200',
+            'linked_receiving_pairs.*' => 'required|integer|min:1|distinct',
             'change_transaction_date' => 'sometimes|boolean',
             'transaction_date' => 'required_if:change_transaction_date,1|nullable|date_format:Y-m-d H:i:s',
             'date_basis' => 'nullable|in:receipt_dates,recorded_receiving_date',
         ]);
+        $receivingPairs = [];
+        foreach (($input['linked_receiving_pairs'] ?? []) as $linkedLineId => $linkedBatchId) {
+            if (!ctype_digit((string) $linkedLineId) || (int) $linkedLineId < 1 || isset($receivingPairs[(int) $linkedLineId])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['linked_receiving_pairs' => 'Select a valid linked transfer line for each receiving batch.']);
+            }
+            $receivingPairs[(int) $linkedLineId] = (int) $linkedBatchId;
+        }
+        if (isset($input['linked_receiving_pairs'])) {
+            ksort($receivingPairs);
+            $input['linked_receiving_pairs'] = $receivingPairs;
+        }
         $input['transaction_date'] = ($input['transaction_date'] ?? null) ?: null;
 
         return $input;
@@ -453,7 +466,7 @@ class AuthorityController extends BaseSmartStockController
             $plan = AuthorityTransferReceiptService::needsStaging($input)
                 ? app(AuthorityTransferReceiptService::class)->preview($this->businessId(), $id, $input, $request->user()->id)
                 : app(StockTransferReconciliationService::class)->previewManual($this->businessId(), $id,
-                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
+                    $input['corrections'], $input['evidence'], $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']), $input['linked_receiving_pairs'] ?? []);
 
             if ($request->expectsJson()) {
                 return response()->json(['success' => 1, 'html' => view('smartstockinventory::authority.preview_content', compact('transfer', 'input', 'plan'))->render()]);
@@ -490,20 +503,34 @@ class AuthorityController extends BaseSmartStockController
         $input = $this->correctionInput($request);
         $request->validate(['token' => 'required|string|size:64']);
         try {
-            DB::transaction(function () use ($request, $id, $transfer, $input) {
+            $plan = DB::transaction(function () use ($request, $id, $transfer, $input) {
                 $plan = AuthorityTransferReceiptService::needsStaging($input)
                     ? app(AuthorityTransferReceiptService::class)->apply($this->businessId(), $id, $input, $request->user()->id, $request->input('token'))
                     : app(StockTransferReconciliationService::class)->applyManual($this->businessId(), $id,
-                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']));
+                        $input['corrections'], $input['evidence'], $request->input('token'), $input['transaction_date'] ?? null, true, true, true, true, !empty($input['allow_receipt_date_override']), $input['linked_receiving_pairs'] ?? []);
                 app(TransactionUtil::class)->activityLog($transfer, 'stock_transfer_corrected', null,
                     array_merge($plan, ['mode' => 'authority', 'authorized_by' => $request->user()->id, 'date_basis' => $input['date_basis'] ?? null]));
+                return $plan;
             });
 
+            if ($request->expectsJson()) {
+                return response()->json(['success' => 1, 'msg' => 'Correction applied. Source deductions, serials and linked receiving records were rechecked.', 'plan' => $plan]);
+            }
             return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))
                 ->with('status', ['success' => 1, 'msg' => 'Authority correction applied. Source deductions, selected serials and receiving records were rechecked. Accepted receipt-date exceptions are recorded in the audit; only unresolved mismatches remain in the default Authority list. Review remaining stock shortages in Mismatch Detector.']);
         } catch (PurchaseSellMismatch $exception) {
+            if ($request->expectsJson()) { return response()->json($exception->responseData(), 422); }
             return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))->withInput()
                 ->with('status', $exception->responseData());
+        } catch (\Throwable $exception) {
+            $reference = (string) \Illuminate\Support\Str::uuid();
+            \Illuminate\Support\Facades\Log::error('Authority correction apply failed', [
+                'error_reference' => $reference, 'business_id' => $this->businessId(), 'transfer_id' => $id, 'exception' => $exception,
+            ]);
+            $error = ['success' => 0, 'msg' => 'The correction could not be applied. Preview again before retrying. Reference: '.$reference,
+                'error_reference' => $reference];
+            if ($request->expectsJson()) { return response()->json($error, 500); }
+            return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))->withInput()->with('status', $error);
         }
     }
 }

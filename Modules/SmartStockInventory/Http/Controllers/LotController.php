@@ -632,10 +632,15 @@ class LotController extends BaseSmartStockController
             $row->review_url = null;
             $row->correction_url = null;
             $row->deducted_serial_fix_url = null;
+            $row->full_repair_url = null;
             if ($row->type === 'sell_transfer' && (auth()->user()->can('superadmin') || auth()->user()->can('stock_transfer.update'))) {
                 $row->review_url = ssi_url('/stock-transfers/'.$row->id.'/edit');
                 $row->correction_url = $row->review_url.'?correct_line='.$row->sell_line_id;
                 $row->deducted_serial_fix_url = action([\App\Http\Controllers\StockTransferController::class, 'fixDeductedSerial'], [$row->id]);
+                if (auth()->user()->can('stock_inventory.authority') || auth()->user()->can('superadmin')
+                    || app(\App\Utils\BusinessUtil::class)->is_admin(auth()->user(), $businessId)) {
+                    $row->full_repair_url = ssi_route('ssi.authority.index', ['transfer_id' => $row->id]);
+                }
             } elseif ($row->type === 'sell' && auth()->user()->can('sell.view')) {
                 $row->review_url = ssi_url('/sells/'.$row->id);
             }

@@ -8,6 +8,11 @@
     var $generate = $('#generate_stock_correction_plan');
     var $modal = $('#stock_correction_plan_modal');
 
+    $(document).on('stock-authority:applied', function(event, result) {
+        refreshCorrectedRows($.extend({}, result.plan || {}, {msg: result.msg}));
+        $('#authority_correction_modal').modal('hide');
+    });
+
     function refreshCorrectedRows(result) {
         var changes = (result.changes || []).concat(result.related_allocation_repairs || []);
         var ids = changes.map(function(change) { return String(change.sell_line_id); });
@@ -403,6 +408,21 @@
         setManualBusy(true);
         $.ajax({method: 'POST', url: $generate.attr('data-options-url'), dataType: 'json', data: {_token: $('meta[name="csrf-token"]').attr('content')}})
             .done(function(result) {
+                if (result.full_repair_url && $('#authority_correction_modal[data-stock-transfer-editor]').length) {
+                    var repairUrl;
+                    try { repairUrl = new URL(result.full_repair_url, window.location.href); } catch (ignore) { repairUrl = null; }
+                    if (!repairUrl || repairUrl.origin !== window.location.origin || !/^https?:$/.test(repairUrl.protocol)) {
+                        $('#stock_correction_plan_error').text('Unable to open the full repair. Reload the transfer and try again.');
+                        return;
+                    }
+                    var openRepair = function() {
+                        var $link = $('<a class="open-authority-correction" hidden></a>').attr('href', repairUrl.href).appendTo(document.body);
+                        $link.trigger('click').remove();
+                    };
+                    if ($modal.hasClass('in')) { $modal.one('hidden.bs.modal', openRepair).modal('hide'); }
+                    else { openRepair(); }
+                    return;
+                }
                 if (requestedLineId) {
                     result.lines = result.lines.filter(function(line) { return String(line.sell_line_id) === requestedLineId; });
                     if (!result.lines.length) {

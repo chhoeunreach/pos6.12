@@ -13,6 +13,15 @@
             </div>
         @endif
         <p>This preview has not changed stock. Apply below to save these corrections together.</p>
+        @if(!empty($plan['split_receiving_batches']))
+            <h4>Combined receiving batches to split</h4>
+            <p>Only the existing received quantity is divided between these serials. No extra stock is added. New batch IDs may change when applied.</p>
+            <ul>@foreach($plan['split_receiving_batches'] as $split)
+                <li>Batch #{{ $split['original_batch_id'] }} · {{ $split['quantity_before'] }} received:
+                    @foreach($split['parts'] as $part) line #{{ $part['sell_line_id'] }} → batch #{{ $part['batch_id'] }} · quantity {{ $part['quantity'] }}@if(!$loop->last); @endif @endforeach
+                </li>
+            @endforeach</ul>
+        @endif
         @if(!empty($plan['created_receipts']))
             <h4>Missing records to create</h4>
             <p>New source records are recorded as opening stock corrections. Receiving records restore this completed transfer's missing batches without moving the transfer quantity a second time. New record IDs shown in preview may change when saved.</p>
@@ -21,10 +30,14 @@
             @endforeach</ul>
         @endif
         @if(!empty($plan['linked_receiving_serial_fills']))
-            <h4>Linked receiving lots to fill together</h4>
-            <p>These connected transfers have an unambiguous receiving batch with the same SKU and quantity. Only their missing serials will be filled; dates, quantities and deductions stay unchanged.</p>
+            <h4>Linked receiving lots to update together</h4>
+            <p>These connected transfers have an unambiguous receiving batch with the same SKU and quantity. Review each serial change and the linked documents that will display it.</p>
             <ul>@foreach($plan['linked_receiving_serial_fills'] as $fill)
-                <li>{{ $fill['reference'] ?: '#'.$fill['transaction_id'] }} · Batch #{{ $fill['batch_id'] }}: No serial → {{ $fill['after'] }} · Quantity {{ $fill['quantity'] }}.</li>
+                <li>{{ $fill['reference'] ?: '#'.$fill['transaction_id'] }} · Batch #{{ $fill['batch_id'] }}: {{ $fill['before'] ?: 'No serial' }} → {{ $fill['after'] }} · Quantity {{ $fill['quantity'] }}.
+                    @foreach($fill['documents'] ?? [] as $document)
+                        <span>{{ $document['type'] }} {{ $document['reference'] ?: '#'.$document['id'] }}.</span>
+                    @endforeach
+                </li>
             @endforeach</ul>
         @endif
         @if(!empty($plan['filled_source_serials']))
@@ -56,7 +69,7 @@
         @if($plan['date_change'])<p>Delivery date: {{ $plan['date_change']['transfer_before'] }} → {{ $plan['date_change']['transfer_after'] }}</p>@endif
         @if(count($plan['related_allocation_repairs']))
             <h4>Dependent deduction repairs</h4><ul>@foreach($plan['related_allocation_repairs'] as $repair)
-                <li>Line #{{ $repair['sell_line_id'] }} → {{ $repair['serial'] }} (receipt #{{ $repair['selected_batch_id'] }}) · {{ $repair['quantity'] }}</li>
+                <li>@if(!empty($repair['reference'])){{ $repair['reference'] }} · @endif Line #{{ $repair['sell_line_id'] }} → {{ $repair['serial'] }} (receipt #{{ $repair['selected_batch_id'] }}) · {{ $repair['quantity'] }}</li>
             @endforeach</ul>
         @endif
         @if(!empty($plan['receiving_repairs']['updated']) || !empty($plan['receiving_repairs']['inserted']) || !empty($plan['receiving_repairs']['deleted']))
@@ -76,13 +89,22 @@
         @if(count($plan['remaining_line_issues']) || count($plan['remaining_transfer_issues']))
             <div class="alert alert-warning">Other transfer issues remain. Review them in Mismatch Detector after applying this correction.</div>
         @endif
+        @if(!empty($input['linked_receiving_pairs']))
+            <p><strong>Verified linked receiving choices:</strong></p>
+            <ul>@foreach($input['linked_receiving_pairs'] as $linkedLineId => $linkedBatchId)
+                <li>Linked transfer line #{{ $linkedLineId }} → receiving batch #{{ $linkedBatchId }}.</li>
+            @endforeach</ul>
+        @endif
         <p><strong>Reason:</strong> {{ $input['evidence'] }}</p>
-        <form method="post" action="{{ ssi_route('ssi.authority.apply', ['id' => $transfer->id]) }}">
+        <form class="authority-apply-form" method="post" action="{{ ssi_route('ssi.authority.apply', ['id' => $transfer->id]) }}">
             @csrf
             @if(array_key_exists('change_transaction_date', $input))<input type="hidden" name="change_transaction_date" value="{{ $input['change_transaction_date'] ? 1 : 0 }}">@endif
             <input type="hidden" name="allow_receipt_date_override" value="{{ !empty($input['allow_receipt_date_override']) ? 1 : 0 }}">
             <input type="hidden" name="date_basis" value="{{ $input['date_basis'] ?? '' }}">
             <input type="hidden" name="token" value="{{ $plan['token'] }}">
+            @foreach(($input['linked_receiving_pairs'] ?? []) as $linkedLineId => $linkedBatchId)
+                <input type="hidden" name="linked_receiving_pairs[{{ $linkedLineId }}]" value="{{ $linkedBatchId }}">
+            @endforeach
             <input type="hidden" name="evidence" value="{{ $input['evidence'] }}">
             <input type="hidden" name="transaction_date" value="{{ $input['transaction_date'] ?? '' }}">
             @foreach($input['corrections'] as $index => $correction)
@@ -102,7 +124,7 @@
                 @endif
             @endforeach
             <button class="btn btn-primary">Apply authority correction</button>
-            <a class="btn btn-default" href="{{ ssi_route('ssi.authority.index', ['transfer_id' => $transfer->id]) }}">Back to records</a>
+            <a class="btn btn-default authority-return-to-records" href="{{ ssi_route('ssi.authority.index', ['transfer_id' => $transfer->id]) }}">Back to records</a>
         </form>
     </div>
 </div>

@@ -836,8 +836,21 @@ class StockTransferController extends Controller
                 : 'Deducted serial corrected. The existing source stock shortage remains.', 'plan' => $plan];
         } catch (\App\Exceptions\PurchaseSellMismatch $e) {
             $output = $e->responseData();
+            $repairUrl = $this->fullTransferRepairUrl($request, $transfer);
+            if ($repairUrl) {
+                $output['full_repair_url'] = $repairUrl;
+                if (!$request->ajax()) { return redirect($repairUrl)->with('status', $output); }
+            }
         }
         return $request->ajax() ? response()->json($output, $output['success'] ? 200 : 422) : back()->with('status', $output);
+    }
+
+    private function fullTransferRepairUrl(Request $request, Transaction $transfer): ?string
+    {
+        $user = $request->user() ?? auth()->user();
+        $allowed = $user && ($user->can('stock_inventory.authority') || $user->can('superadmin')
+            || app(\App\Utils\BusinessUtil::class)->is_admin($user, (int) $transfer->business_id));
+        return $allowed ? ssi_route('ssi.authority.index', ['transfer_id' => $transfer->id]) : null;
     }
 
     public function manualCorrectionOptions(Request $request, int $id)
@@ -845,6 +858,7 @@ class StockTransferController extends Controller
         $transfer = $this->reconciliationTransfer($request, $id);
 
         return response()->json(['success' => 1, 'reference' => $transfer->ref_no, 'transaction_date' => (string) $transfer->transaction_date,
+            'full_repair_url' => $this->fullTransferRepairUrl($request, $transfer),
             'allow_overselling' => \App\Utils\BusinessUtil::allowsOverselling((int) $transfer->business_id),
             'lines' => app(\App\Services\StockTransferReconciliationService::class)
             ->manualOptions((int) $transfer->business_id, $id, $this->isEnvAdministrator(), true)]);

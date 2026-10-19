@@ -18,6 +18,15 @@ function authority_receiving_reserved_for_other_row($row, $option) {
     return reserved;
 }
 
+function authority_combined_receiving_rows($form, $row, value) {
+    return $form.find('.authority-line').filter(function () {
+        var $candidate = $(this), destination = $candidate.find('.authority-destination').val();
+        return $candidate.attr('data-receiving-group') === $row.attr('data-receiving-group')
+            && $candidate.find('.authority-source').val() && (!destination || destination === value)
+            && $candidate.find('.authority-destination option').filter(function () { return this.value === value; }).length;
+    });
+}
+
 function authority_update_receiving($row, suggestMatch) {
     var $source = $row.find('.authority-source');
     var isNewSource = $source.val() === 'new';
@@ -48,6 +57,12 @@ function authority_update_receiving($row, suggestMatch) {
             $option.prop('disabled', !(Number($row.attr('data-missing-receiving')) - reservedMissing + 0.0001 >= quantity));
             return;
         }
+        if ($option.attr('data-split') === '1') {
+            var total = 0;
+            authority_combined_receiving_rows($row.closest('form'), $row, this.value).each(function () { total += Number($(this).attr('data-quantity')); });
+            $option.prop('disabled', !total || Math.abs(total - Number($option.attr('data-quantity'))) > 0.0001);
+            return;
+        }
         var optionSerial = $option.attr('data-serial') || '';
         var sameSerial = optionSerial === serial;
         var sameQuantity = Math.abs(Number($option.attr('data-quantity')) - quantity) < 0.0001;
@@ -60,14 +75,14 @@ function authority_update_receiving($row, suggestMatch) {
     });
 
     var $selected = $destination.find(':selected');
-    if ($selected.prop('disabled') || (suggestMatch && $selected.val() && $selected.val() !== 'new' && $selected.attr('data-serial') !== serial)) {
+    if ($selected.prop('disabled') || (suggestMatch && $selected.val() && $selected.val() !== 'new' && $selected.attr('data-split') !== '1' && $selected.attr('data-serial') !== serial)) {
         $destination.val('');
     }
     if (suggestMatch && !$destination.val() && matches.length === 1) {
         $destination.val(matches[0]);
     }
     var $availableBatches = $destination.find('option').filter(function () {
-        return this.value && this.value !== 'new' && !this.disabled && !authority_receiving_reserved_for_other_row($row, $(this));
+        return this.value && this.value !== 'new' && $(this).attr('data-split') !== '1' && !this.disabled && !authority_receiving_reserved_for_other_row($row, $(this));
     });
     // A unique eligible batch can be proposed even when its missing/wrong serial needs repair.
     // Exact serial matches take priority, including batches needed by other rows.
@@ -86,6 +101,8 @@ function authority_update_receiving($row, suggestMatch) {
     var message;
     if (!$source.val()) {
         message = 'Choose the correct source receipt first.';
+    } else if ($destination.find(':selected').attr('data-split') === '1') {
+        message = 'Preview will split this unused combined receiving batch across the selected lines. Total received stock will stay unchanged.';
     } else if ($destination.val() === 'new') {
         message = 'Preview will create the missing receiving batch for ' + (serial ? 'serial ' + serial : 'this receipt without a serial') +
             ', quantity ' + quantity + '. No second transfer quantity movement will be posted.';
@@ -180,7 +197,7 @@ function authority_complete_fields($form) {
         var $destination = $row.find('.authority-destination');
         authority_update_receiving($row, false);
         if ($row.find('.authority-source').val() && !$destination.val() &&
-            !$destination.find('option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; }).length) {
+            !$destination.find('option').filter(function () { return this.value && this.value !== 'new' && $(this).attr('data-split') !== '1' && !this.disabled; }).length) {
             var $new = $destination.find('option[value="new"]');
             if ($new.length && !$new.prop('disabled')) {
                 $destination.val('new');
@@ -275,10 +292,36 @@ function authority_focus_fix_control($control) {
     }
 }
 
+function authority_show_receiving_pair_choices($form, error) {
+    var $error = $form.find('.authority-preview-error');
+    $form.find('.authority-linked-pair-options').remove();
+    var $panel = $('<div class="authority-linked-pair-options" role="group" tabindex="-1"></div>')
+        .attr('aria-label', 'Verified receiving batch choices').appendTo($error);
+    $('<p>').text('Choose the receiving batch in ' + error.linked_reference + ' for serial ' + error.source_serial +
+        '. Confirm the batch from your receiving records. Other unknown serials will stay blank.').appendTo($panel);
+    (error.candidates || []).forEach(function (candidate) {
+        $('<button type="button" class="btn btn-primary btn-sm authority-linked-pair-choice" style="margin:4px"></button>')
+            .text('Use batch #' + candidate.id + ' · ' + (candidate.serial || 'No serial') + ' · Quantity ' + candidate.quantity)
+            .attr({'data-linked-line-id': error.linked_sell_line_id, 'data-batch-id': candidate.id,
+                'data-root-batch-id': error.receiving_batch_id}).appendTo($panel);
+    });
+    $panel.trigger('focus');
+}
+
+function authority_clear_receiving_pair_choices($form, $row) {
+    var root = $row.data('authority-linked-root');
+    if (!root) { return; }
+    $form.find('input.authority-linked-pair').filter(function () {
+        return String($(this).attr('data-root-batch-id')) === String(root);
+    }).remove();
+    $row.removeData('authority-linked-root');
+}
+
 function authority_quick_fix($form, $button) {
     if ($form.data('authority-preview-busy')) { return; }
     var $row = $button.closest('.authority-line');
     var error = $form.data('authority-stock-error') || {};
+    if (error.kind === 'receiving_pairing_required') { authority_show_receiving_pair_choices($form, error); return; }
     var lineId = $button.attr('data-line-id') || error.sell_line_id;
     if (!$row.length && lineId) {
         $row = $form.find('.authority-line').filter(function () { return String($(this).attr('data-line-id')) === String(lineId); }).first();
@@ -297,11 +340,32 @@ function authority_quick_fix($form, $button) {
         return;
     }
     var $source = $row.find('.authority-source'), $destination = $row.find('.authority-destination');
+    if (error.kind === 'receiving_balance_conflict' && String(error.sell_line_id) === String($row.attr('data-line-id'))) {
+        var candidates = (error.candidate_receiving_batch_ids || []).map(String);
+        authority_update_receiving($row, false);
+        var $safe = $destination.find('option').filter(function () {
+            return candidates.indexOf(this.value) !== -1 && !this.disabled && !authority_receiving_reserved_for_other_row($row, $(this));
+        });
+        authority_clear_receiving_pair_choices($form, $row);
+        $destination.val($safe.length === 1 ? $safe.val() : '').trigger('change');
+        authority_refresh_generated_evidence($form);
+        if ($safe.length === 1) {
+            authority_check_on_open($form);
+        } else {
+            var message = $safe.length > 1 ? 'Several receiving batches preserve the other rows. Choose the batch confirmed by your records.'
+                : 'The previous batch belongs to another serial balance. Choose this line\'s receiving batch, or review the source receipt.';
+            $row.addClass('has-error').find('.authority-selection-help').addClass('text-danger').text(message);
+            $form.find('.authority-auto-status').text(message);
+            authority_focus_fix_control($destination);
+        }
+        authority_update_quick_fix_buttons($form);
+        return;
+    }
     var completion;
     try { completion = JSON.parse($row.attr('data-completion') || '{}'); } catch (ignore) { completion = {}; }
     if (!$source.val()) {
         var $recorded = $source.find('option').filter(function () { return this.value === String(completion.source_id) && !this.disabled; });
-        var $sources = $source.find('option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; });
+        var $sources = $source.find('option').filter(function () { return this.value && this.value !== 'new' && $(this).attr('data-split') !== '1' && !this.disabled; });
         if ($recorded.length || $sources.length === 1) { $source.val(($recorded.length ? $recorded : $sources).val()).trigger('change'); }
         else if (!$sources.length && $source.find('option[value="new"]:enabled').length) { $source.val('new').trigger('change'); }
     }
@@ -317,6 +381,16 @@ function authority_quick_fix($form, $button) {
         if ($proposed.length && !authority_receiving_reserved_for_other_row($row, $proposed)) { $destination.val($proposed.val()); }
     }
     if ($source.val() && !$destination.val()) { authority_update_receiving($row, true); }
+    if ($source.val() && !$destination.val()) {
+        var $splits = $destination.find('option[data-split="1"]:enabled');
+        if ($splits.length === 1) {
+            var splitValue = $splits.val();
+            authority_combined_receiving_rows($form, $row, splitValue).each(function () {
+                $(this).find('.authority-destination').val(splitValue).trigger('change');
+                $(this).removeClass('has-error').find('.authority-selection-help').removeClass('text-danger');
+            });
+        }
+    }
     $row.removeClass('has-error').find('.authority-selection-help').removeClass('text-danger');
     authority_refresh_generated_evidence($form);
     authority_check_on_open($form);
@@ -328,7 +402,7 @@ function authority_quick_fix($form, $button) {
     if ($control.length) { authority_focus_fix_control($control); }
 }
 
-function authority_preview_error($form, xhr) {
+function authority_preview_error($form, xhr, applying) {
     var response = xhr.responseJSON || {};
     var errors = response.errors ? Object.keys(response.errors).map(function (key) {
         return [].concat(response.errors[key]).join(' ');
@@ -338,7 +412,11 @@ function authority_preview_error($form, xhr) {
     $form.data('authority-stock-error', response.stock_error || {});
     var kind = (response.stock_error || {}).kind;
     var guidance = 'Check the selected source receipt and receiving batch against the SKU, quantity and supporting records, then preview again.';
-    if (kind === 'receipt_date_conflict') {
+    if (kind === 'receiving_pairing_required') {
+        guidance = 'Use Quick fix to confirm the receiving batch for the known source serial, then recheck the linked transfer.';
+    } else if (kind === 'receiving_balance_conflict') {
+        guidance = 'Use Quick fix on the highlighted row to select a receiving batch that preserves the other rows. If several batches qualify, choose the one confirmed by your records.';
+    } else if (kind === 'receipt_date_conflict') {
         guidance = 'Select a source receipt available on the recorded delivery date, or enable Change delivery date and enter the actual verified delivery date.';
     } else if (kind === 'receiving_serial_confirmation') {
         guidance = 'Enable Change receiving serial / lot on the highlighted row, confirm the selected source serial, then preview again. Authority forms enable this option by default.';
@@ -356,6 +434,11 @@ function authority_preview_error($form, xhr) {
     } else if (errors) {
         guidance = 'Correct the fields listed above, then preview again.';
     }
+    var uncertainApply = applying && (xhr.status === 0 || xhr.status >= 500);
+    if (applying) {
+        guidance = uncertainApply ? 'The result of Apply could not be confirmed. Verify the current transfer records before trying again.'
+            : 'Return to your selections, review the reported error and generate a fresh preview.';
+    }
     var lineId = (response.stock_error || {}).sell_line_id;
     if (!lineId && (response.stock_error || {}).receiving_batch_id) {
         var batchId = response.stock_error.receiving_batch_id;
@@ -372,9 +455,12 @@ function authority_preview_error($form, xhr) {
     $form.find('.authority-auto-status').text(message);
     var $error = $form.find('.authority-preview-error');
     if (!$error.length) { $error = $('<div class="authority-preview-error alert alert-danger" role="alert" tabindex="-1"></div>').appendTo($form); }
-    $error.empty().append($('<p>').text(message), $('<p>').text(guidance), $('<p>').text('No correction was applied. Your entries are still available here.'),
-        $('<button type="button" class="btn btn-warning authority-quick-fix">Quick fix</button>').attr('data-line-id', lineId || '')).show().focus();
+    $error.empty().append($('<p>').text(message), $('<p>').text(guidance), $('<p>').text(uncertainApply
+        ? 'Your preview entries are still available here.' : 'No correction was applied. Your entries are still available here.'),
+        applying ? $('<button type="button" class="btn btn-default authority-return-to-records">Back to records</button>')
+            : $('<button type="button" class="btn btn-warning authority-quick-fix">Quick fix</button>').attr('data-line-id', lineId || '')).show().focus();
     authority_update_quick_fix_buttons($form);
+    if (kind === 'receiving_pairing_required') { authority_show_receiving_pair_choices($form, response.stock_error); }
 }
 
 function authority_request_preview($form, checkOnly) {
@@ -409,6 +495,9 @@ function authority_request_preview($form, checkOnly) {
         }
         var $content = $form.closest('.modal').find('.modal-content');
         if ($content.length) {
+            if ($form.closest('.modal').is('[data-stock-transfer-editor]')) {
+                $form.closest('.modal').data('authority-editor-form', $form.detach());
+            }
             $content.html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button><h4 class="modal-title">Verified Authority correction — review changes</h4></div><div class="modal-body"></div>');
             $content.find('.modal-body').html(result.html);
         } else {
@@ -433,8 +522,10 @@ function authority_check_on_open($form) {
         var message = '';
         if (!$row.find('.authority-source').val()) { message = 'Choose the verified source receipt.'; }
         else if (!$row.find('.authority-destination').val()) {
-            var candidates = $row.find('.authority-destination option').filter(function () { return this.value && this.value !== 'new' && !this.disabled; }).length;
-            message = candidates > 1 ? 'Several receiving batches have this SKU and quantity. Select the batch confirmed by the receiving record.'
+            var candidates = $row.find('.authority-destination option').filter(function () { return this.value && this.value !== 'new' && $(this).attr('data-split') !== '1' && !this.disabled; }).length;
+            message = $row.find('.authority-destination option[data-split="1"]:enabled').length
+                ? 'The received quantity is stored in a combined batch. Use Quick fix to split its existing quantity across the serials.'
+                : candidates > 1 ? 'Several receiving batches have this SKU and quantity. Select the batch confirmed by the receiving record.'
                 : 'Choose the receiving batch for the selected source receipt, or confirm a missing receiving batch if its quantity is absent.';
         }
         else if ($row.find(':input').filter(function () { return !this.disabled && this.checkValidity && !this.checkValidity(); }).length) {
@@ -472,7 +563,22 @@ function authority_initialize_form() {
     authority_complete_fields($form);
     $form.on('click', '.authority-auto-complete', function () { authority_verify_completion($form, $(this)); });
     $form.on('click', '.authority-quick-fix', function () { authority_quick_fix($form, $(this)); });
+    $form.on('click', '.authority-linked-pair-choice', function () {
+        if ($form.data('authority-preview-busy')) { return; }
+        var $button = $(this), lineId = $button.attr('data-linked-line-id'), batchId = $button.attr('data-batch-id');
+        if (!/^[1-9][0-9]*$/.test(lineId) || !/^[1-9][0-9]*$/.test(batchId)) { return; }
+        var name = 'linked_receiving_pairs[' + lineId + ']';
+        var $input = $form.find('input.authority-linked-pair').filter(function () { return this.name === name; });
+        if (!$input.length) { $input = $('<input type="hidden" class="authority-linked-pair">').attr('name', name).appendTo($form); }
+        $input.val(batchId).attr('data-root-batch-id', $button.attr('data-root-batch-id'));
+        $form.find('.authority-line').filter(function () {
+            return String($(this).find('.authority-destination').val()) === String($button.attr('data-root-batch-id'));
+        }).data('authority-linked-root', $button.attr('data-root-batch-id'));
+        $form.find('.authority-linked-pair-options').remove();
+        authority_check_on_open($form);
+    });
     $form.on('change', '.authority-source', function () {
+        authority_clear_receiving_pair_choices($form, $(this).closest('.authority-line'));
         $(this).closest('.authority-line').find('.authority-verified-serial').val('');
         authority_update_receiving($(this).closest('.authority-line'), true);
         $form.find('.authority-line').not($(this).closest('.authority-line')).each(function () {
@@ -481,12 +587,15 @@ function authority_initialize_form() {
         authority_update_dates($form);
     });
     $form.on('change', '.authority-destination', function () {
+        var $row = $(this).closest('.authority-line');
+        if (String($row.data('authority-linked-root')) !== String($(this).val())) { authority_clear_receiving_pair_choices($form, $row); }
         $form.find('.authority-line').each(function () { authority_update_receiving($(this), false); });
     });
     $form.on('change', '.authority-change-receiving-serial', function () {
         authority_update_receiving($(this).closest('.authority-line'), false);
     });
     $form.on('input', '.authority-new-serial, .authority-verified-serial', function () {
+        authority_clear_receiving_pair_choices($form, $(this).closest('.authority-line'));
         authority_update_receiving($(this).closest('.authority-line'), false);
     });
     $form.on('change', '#authority_change_date', function () {
@@ -543,6 +652,41 @@ function authority_initialize_form() {
 }
 
 $(function () {
+    $(document).on('click', '#authority_correction_modal[data-stock-transfer-editor] .authority-return-to-records', function (event) {
+        var $modal = $(this).closest('.modal'), $saved = $modal.data('authority-editor-form');
+        if (!$saved || !$saved.length) { return; }
+        event.preventDefault();
+        if ($modal.find('.authority-apply-form').data('authority-apply-busy')) { return; }
+        $modal.removeData('authority-editor-form');
+        $modal.find('.modal-content').html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button><h4 class="modal-title">Full transfer repair — review records</h4></div><div class="modal-body"></div>');
+        $modal.find('.modal-body').append($saved);
+        $saved.find('.authority-preview-error').hide();
+        $saved.find('.authority-auto-status').text('Your selections and notes were retained. Review the records, then preview again.');
+    });
+    $(document).on('submit', '#authority_correction_modal[data-stock-transfer-editor] .authority-apply-form', function (event) {
+        event.preventDefault();
+        var $form = $(this);
+        if ($form.data('authority-apply-busy')) { return; }
+        var payload = $form.serialize();
+        var $buttons = $form.find(':submit:enabled');
+        $form.data('authority-apply-busy', true);
+        $buttons.prop('disabled', true);
+        $form.find('.authority-preview-error').hide();
+        $.ajax({url: $form.attr('action'), type: 'POST', data: payload, dataType: 'json', headers: {Accept: 'application/json'}})
+            .done(function (result) {
+                if (!result.success || !result.plan) {
+                    authority_preview_error($form, {status: 422, responseJSON: result}, true);
+                    return;
+                }
+                var $modal = $form.closest('.modal'), $saved = $modal.data('authority-editor-form');
+                if ($saved) { $saved.remove(); $modal.removeData('authority-editor-form'); }
+                $(document).trigger('stock-authority:applied', [result]);
+            }).fail(function (xhr) { authority_preview_error($form, xhr, true); })
+            .always(function () {
+                $form.removeData('authority-apply-busy');
+                $buttons.prop('disabled', false);
+            });
+    });
     var $details = $('#authority_details_modal');
     var detailsVersion = 0;
     function loadAuthorityDetails(url, data) {
@@ -573,6 +717,8 @@ $(function () {
         if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) { return; }
         event.preventDefault();
         var version = ++loadVersion;
+        var $saved = $modal.data('authority-editor-form');
+        if ($saved) { $saved.remove(); $modal.removeData('authority-editor-form'); }
         $modal.find('.modal-content').html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button><h4 class="modal-title">Authority correction</h4></div><div class="modal-body" role="status">Loading correction records…</div>');
         $modal.modal('show');
         $.ajax({url: this.href, data: {modal: 1}, dataType: 'html'}).done(function (html) {

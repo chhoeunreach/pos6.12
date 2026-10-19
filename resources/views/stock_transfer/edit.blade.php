@@ -170,6 +170,7 @@
 </section>
 @stop
 @section('javascript')
+    <script src="{{ asset('js/stock_authority.js?v=' . filemtime(public_path('js/stock_authority.js'))) }}"></script>
     <script src="{{ asset('js/stock_reconciliation.js?v=' . (file_exists(public_path('js/stock_reconciliation.js')) ? filemtime(public_path('js/stock_reconciliation.js')) : $asset_v)) }}"></script>
 	<script src="{{ asset('js/stock_transfer.js?v=' . (file_exists(public_path('js/stock_transfer.js')) ? filemtime(public_path('js/stock_transfer.js')) : $asset_v)) }}"></script>
 	<script type="text/javascript">

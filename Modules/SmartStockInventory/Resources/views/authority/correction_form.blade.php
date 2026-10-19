@@ -64,6 +64,11 @@
                             <select id="authority_destination_{{ $lineId }}" class="form-control authority-receipt authority-destination" name="corrections[{{ $lineId }}][destination_id]">
                                 <option value="">Choose receiving batch</option>
                                 @foreach($line['destinations'] as $destination)<option value="{{ $destination->id }}" data-serial="{{ $destination->lot_number }}" data-quantity="{{ $destination->quantity }}" data-used="{{ $destination->used ? 1 : 0 }}" {{ (int) ($previous['destination_id'] ?? 0) === (int) $destination->id ? 'selected' : '' }}>{{ $destination->lot_number ?: 'No serial' }} · Batch #{{ $destination->id }} · Quantity {{ $destination->quantity }}{{ $destination->used ? ' · Has later usage' : '' }}</option>@endforeach
+                                @foreach($line['destinations'] as $combined)
+                                    @if(!$combined->used && trim((string) $combined->lot_number) === '' && (float) $combined->quantity > (float) $line['quantity'] + 0.0001)
+                                        <option value="split:{{ $combined->id }}" data-split="1" data-quantity="{{ $combined->quantity }}" {{ ($previous['destination_id'] ?? '') === ('split:'.$combined->id) ? 'selected' : '' }}>Split existing batch #{{ $combined->id }} · {{ $combined->quantity }} received into this line's quantity {{ $line['quantity'] }}</option>
+                                    @endif
+                                @endforeach
                                 <option value="new" {{ ($previous['destination_id'] ?? '') === 'new' ? 'selected' : '' }} {{ $line['missing_receiving_quantity'] + 0.0001 < $line['quantity'] ? 'disabled' : '' }}>+ Add missing receiving batch</option>
                             </select>
                             <p class="help-block">Missing received quantity: {{ $line['missing_receiving_quantity'] }}. A new batch uses the selected source serial and this line's quantity. Existing receiving quantities must be corrected using their existing batch.</p>

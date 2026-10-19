@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const {JSDOM} = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jsdom'));
 const jquery = require(path.join(root, 'storage/app/stock-ui-tests/node_modules/jquery'));
 
-function editor(lineId = null, withDatePicker = false, linkedLine = null, changeLines = null) {
+function editor(lineId = null, withDatePicker = false, linkedLine = null, changeLines = null, fullRepairUrl = null) {
     const manual = fs.readFileSync(path.join(root, 'resources/views/stock_transfer/partials/manual_correction_modal.blade.php'), 'utf8');
     const plan = fs.readFileSync(path.join(root, 'resources/views/stock_transfer/partials/correction_plan_modal.blade.php'), 'utf8');
     const dom = new JSDOM(`<meta name="csrf-token" content="test-token"><button id="generate_stock_correction_plan"
@@ -18,7 +18,7 @@ function editor(lineId = null, withDatePicker = false, linkedLine = null, change
         <button class="correct-stock-line" data-line-id="1">Correct This Line</button>
         <button class="correct-stock-line" data-line-id="2">Correct This Line</button>${manual}${plan}`, {url: 'http://localhost' + (linkedLine ? '?correct_line=' + linkedLine : ''), runScripts: 'outside-only'});
     const $ = jquery(dom.window);
-    dom.window.jQuery = $;
+    dom.window.$ = dom.window.jQuery = $;
     dom.window.toastr = {error: () => {}};
     const datePicker = {shows: 0, selected: null, options: null, minimum: null,
         show() { this.shows++; }, hide() {}, clear() { this.selected = null; }, date() { return this.selected; }, minDate(value) { this.minimum = value; }};
@@ -41,6 +41,10 @@ function editor(lineId = null, withDatePicker = false, linkedLine = null, change
         calls.push({options, deferred});
         return deferred.promise();
     };
+    if (fullRepairUrl) {
+        $.fn.ready = function(callback) { callback(); return this; };
+        dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_authority.js'), 'utf8'));
+    }
     dom.window.eval(fs.readFileSync(path.join(root, 'public/js/stock_reconciliation.js'), 'utf8'));
     const candidate = {source_id: 2, source_serial: 'VERIFIED-PHONE', destination_id: 9,
         support: ['Recorded allocation'], issues: ['Delivery date requires verification.'], selectable: true};
@@ -65,10 +69,44 @@ function editor(lineId = null, withDatePicker = false, linkedLine = null, change
         (lineId === null ? $('#edit_verified_stock_correction') : $(`.correct-stock-line[data-line-id="${lineId}"]`)).trigger('click');
     }
     if (changeLines) { changeLines(lines); }
-    calls[0].deferred.resolve({reference: 'ST-TEST', transaction_date: '2026-10-01 12:00:00', lines});
+    calls[0].deferred.resolve({reference: 'ST-TEST', transaction_date: '2026-10-01 12:00:00', lines, full_repair_url: fullRepairUrl});
     const row = id => $(`.manual-correction-row[data-line-id="${id}"]`);
     return {dom, $, calls, row, datePicker};
 }
+
+test('Verified Serial Correction opens the shared full repair workflow for authorized users', () => {
+    const {dom, $, calls} = editor(1, false, null, null, '/smart-stock-inventory/authority?transfer_id=1');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].options.url, 'http://localhost/smart-stock-inventory/authority?transfer_id=1');
+    assert.equal(calls[1].options.data.modal, 1);
+    assert.equal($('#authority_correction_modal').hasClass('in'), true);
+    assert.equal($('#manual_stock_correction_modal').hasClass('in'), false);
+    calls[1].deferred.resolve('<div class="modal-header">Full repair</div><div class="modal-body"><form id="authority_correction_form"><p class="authority-auto-status"></p><textarea id="authority_evidence"></textarea></form></div>');
+    assert.equal($('#authority_correction_modal #authority_correction_form').length, 1);
+    assert.equal(calls.length, 2);
+    dom.window.close();
+});
+
+test('full repair never opens a different origin supplied in an options response', () => {
+    const {dom, $, calls} = editor(1, false, null, null, 'https://example.invalid/repair');
+    assert.equal(calls.length, 1);
+    assert.match($('#stock_correction_plan_error').text(), /Unable to open/);
+    dom.window.close();
+});
+
+test('full repair completion refreshes changed editor rows and preserves unrelated unsaved input', () => {
+    const {dom, $, calls} = editor(1);
+    $('#generate_stock_correction_plan').attr('data-refresh-url', '/refresh');
+    $('<table><tbody><tr data-stock-transfer-line-id="1"><td><input name="products[7][lot]" value="old"></td></tr><tr data-stock-transfer-line-id="2"><td><input name="products[8][lot]" value="unsaved"></td></tr></tbody></table>').appendTo('body');
+    $(dom.window.document).trigger('stock-authority:applied', [{success: 1, msg: 'Full repair saved.', plan: {changes: [{sell_line_id: 1}]}}]);
+    assert.equal(calls[1].options.url, '/refresh');
+    assert.deepEqual(Array.from(calls[1].options.data.refresh_line_ids), ['1']);
+    calls[1].deferred.resolve('<table><tbody><tr data-stock-transfer-line-id="1"><td><input name="products[0][lot]" value="corrected"></td></tr></tbody></table>');
+    assert.equal($('[data-stock-transfer-line-id="1"] input').val(), 'corrected');
+    assert.equal($('[data-stock-transfer-line-id="1"] input').attr('name'), 'products[7][lot]');
+    assert.equal($('[data-stock-transfer-line-id="2"] input').val(), 'unsaved');
+    dom.window.close();
+});
 
 test('auto complete fills a supported missing selection and verifies a preview without saving stock', () => {
     const {dom, $, calls, row} = editor(1, false, null, lines => {

@@ -54,6 +54,11 @@
         #manual_stock_correction_modal .modal-footer .btn { flex: 1 1 auto; }
     }
 </style>
+<div class="modal fade" id="authority_correction_modal" data-stock-transfer-editor="1" tabindex="-1" role="dialog" aria-label="Full transfer repair">
+    <div class="modal-dialog modal-lg" role="document" style="width:95%;max-width:1400px">
+        <div class="modal-content"></div>
+    </div>
+</div>
 <div class="modal fade" id="manual_stock_correction_modal" tabindex="-1" role="dialog" aria-labelledby="manual_stock_correction_title">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">

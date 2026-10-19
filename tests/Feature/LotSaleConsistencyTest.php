@@ -1016,6 +1016,8 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertStringContainsString('not confirmed available stock', $html);
         $this->assertStringContainsString('Correct This Line', $html);
         $this->assertStringContainsString('?correct_line=1', $html);
+        $this->assertStringContainsString('Full repair', $html);
+        $this->assertStringContainsString('authority?transfer_id=1', $html);
         $this->assertCount(0, $method->invoke($controller, 1, 'OTHER-LOT', [13])['allocations']);
         $this->assertCount(0, $method->invoke($controller, 1, 'OTHER-LOT', 'all', 13)['balances']);
         $this->assertCount(0, $method->invoke($controller, 2, 'OTHER-LOT', 'all')['allocations']);
@@ -2713,7 +2715,7 @@ class LotSaleConsistencyTest extends TestCase
         $response = $controller->preview($request, 1);
         $this->assertSame(200, $response->getStatusCode());
         $html = $response->getData(true)['html'];
-        $this->assertStringContainsString('Linked receiving lots to fill together', $html);
+        $this->assertStringContainsString('Linked receiving lots to update together', $html);
         $this->assertStringContainsString('ST-LINKED', $html);
         $this->assertStringContainsString('Batch #10', $html);
         $this->assertSame($before, $this->stockCorrectionSnapshot());
@@ -2765,6 +2767,76 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEmpty($this->app->make(LotStockAuditService::class)->audit(1, null, 4)['transfer_issues']);
     }
 
+    public function test_authority_known_serial_chain_preserves_sibling_when_one_receiving_batch_already_matches_target(): void
+    {
+        [$service, $corrections, $destinationId] = $this->authorityRepeatedSkuLinkedTransferFixture();
+        PurchaseLine::whereIn('id', [$destinationId, 12, 11, 2])->update(['lot_number' => 'SHARED-OLD']);
+        PurchaseLine::find(10)->update(['lot_number' => PurchaseLine::find(1)->lot_number]);
+        $before = $this->stockCorrectionSnapshot();
+        $evidence = 'Verified target receipt and preserved other source sharing the old serial.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+        $this->assertSame('SHARED-OLD', PurchaseLine::find(11)->lot_number);
+        $this->assertSame('SHARED-OLD', PurchaseLine::find(12)->lot_number);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find($destinationId)->lot_number);
+    }
+
+    public function test_authority_embedded_apply_returns_changed_rows_and_audits_linked_repairs(): void
+    {
+        [$service, $corrections, $destinationId] = $this->authorityKnownSerialReturnedSaleFixture();
+        $evidence = 'Verified source serial and all connected invoices and return records.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => $evidence, 'token' => $plan['token']]);
+        $request->headers->set('Accept', 'application/json');
+        $response = $controller->apply($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $data = $response->getData(true);
+        $this->assertSame(1, $data['success']);
+        $this->assertSame(1, $data['plan']['changes'][0]['sell_line_id']);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find($destinationId)->lot_number);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find(10)->lot_number);
+        app(TransactionUtil::class)->shouldHaveReceived('activityLog')->once()
+            ->withArgs(fn ($transfer, $event, $before, $properties) => $event === 'stock_transfer_corrected'
+                && $properties['mode'] === 'authority' && count($properties['linked_receiving_serial_fills']) === 1);
+    }
+
+    public function test_authority_embedded_apply_returns_actionable_stale_preview_error_without_saving(): void
+    {
+        [$service, $corrections] = $this->authorityBlankLinkedTransferFixture();
+        $evidence = 'Verified source and connected receiving records for this transfer.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        PurchaseLine::find(10)->update(['purchase_price' => 123]);
+        $before = $this->stockCorrectionSnapshot();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => $evidence, 'token' => $plan['token']]);
+        $request->headers->set('Accept', 'application/json');
+        $response = $this->authorityController()->apply($request, 1);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Preview the correction again', $response->getData(true)['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_embedded_apply_rolls_back_when_audit_storage_fails(): void
+    {
+        [$service, $corrections] = $this->authorityBlankLinkedTransferFixture();
+        $evidence = 'Verified source receipt and connected receiving records for full repair.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $controller = $this->authorityController();
+        $util = \Mockery::mock(TransactionUtil::class)->makePartial();
+        $util->shouldReceive('activityLog')->once()->andThrow(new \RuntimeException('Private database audit failure'));
+        $this->app->instance(TransactionUtil::class, $util);
+        $before = $this->stockCorrectionSnapshot();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => $evidence, 'token' => $plan['token']]);
+        $request->headers->set('Accept', 'application/json');
+        $response = $controller->apply($request, 1);
+        $this->assertSame(500, $response->getStatusCode());
+        $data = $response->getData(true);
+        $this->assertNotEmpty($data['error_reference']);
+        $this->assertStringNotContainsString('Private database', $data['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_linked_serial_fill_does_not_guess_between_repeated_blank_receiving_lots(): void
     {
         [$service, $corrections] = $this->authorityRepeatedSkuLinkedTransferFixture();
@@ -2775,6 +2847,268 @@ class LotSaleConsistencyTest extends TestCase
             $this->fail('Two blank receiving lots with equal quantities require verified pairing.');
         } catch (PurchaseSellMismatch $exception) {
             $this->assertStringContainsString('no unique pairing', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    private function authorityUnknownSiblingLinkedTransferFixture(): array
+    {
+        [$service, $corrections, $destinationId] = $this->authorityRepeatedSkuLinkedTransferFixture();
+        foreach ([2, 11, 12] as $id) { PurchaseLine::find($id)->update(['lot_number' => null]); }
+
+        return [$service, $corrections, $destinationId];
+    }
+
+    public function test_authority_unknown_sibling_offers_verified_receiving_choices_and_preserves_unknown_serials(): void
+    {
+        [$service, $corrections, $destinationId] = $this->authorityUnknownSiblingLinkedTransferFixture();
+        $evidence = 'Verified receiving record identifies the selected batch for the known source serial.';
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+            $this->fail('Two blank receiving rows require a verified pairing.');
+        } catch (PurchaseSellMismatch $exception) {
+            $details = $exception->responseData()['stock_error'];
+            $this->assertSame('receiving_pairing_required', $details['kind']);
+            $this->assertSame(2, $details['linked_sell_line_id']);
+            $this->assertSame([10, 11], array_column($details['candidates'], 'id'));
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $pairs = [2 => 10];
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true, false, $pairs);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $result = $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true, false, $pairs);
+        $this->assertSame($pairs, $result['linked_receiving_pairs']);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find($destinationId)->lot_number);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find(10)->lot_number);
+        foreach ([2, 11, 12] as $id) { $this->assertNull(PurchaseLine::find($id)->lot_number); }
+        $this->assertEmpty($this->app->make(LotStockAuditService::class)->audit(1, null, 4)['transfer_issues']);
+    }
+
+    public function test_authority_verified_receiving_pair_is_bound_to_preview_token_and_transfer(): void
+    {
+        [$service, $corrections] = $this->authorityUnknownSiblingLinkedTransferFixture();
+        $evidence = 'Verified receiving batch pairing supported by original receiving records.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true, false, [2 => 10]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true, false, [2 => 11]);
+            $this->fail('Changed receiving pairing requires a fresh preview.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Preview the correction again', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        try {
+            $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true, false, [2 => 1]);
+            $this->fail('A source receipt cannot be substituted for the linked receiving batch.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('does not match its transfer', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_staged_controller_preserves_verified_linked_pairs_for_apply(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [, $corrections] = $this->authorityUnknownSiblingLinkedTransferFixture();
+        Schema::create('system', function (Blueprint $table) { $table->string('key'); $table->text('value')->nullable(); });
+        $corrections[0]['verified_serial'] = PurchaseLine::find(1)->lot_number;
+        $input = ['corrections' => $corrections, 'linked_receiving_pairs' => [2 => '10'],
+            'evidence' => 'Verified serial and explicit batch pairing from original receiving documents.'];
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest($input);
+        $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getData(true)['html'];
+        $this->assertStringContainsString('name="linked_receiving_pairs[2]" value="10"', $html);
+        $this->assertStringContainsString('Verified linked receiving choices', $html);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $stage = $this->app->make(\App\Services\AuthorityTransferReceiptService::class);
+        $plan = $stage->preview(1, 1, $input, 1);
+        $result = $stage->apply(1, 1, $input, 1, $plan['token']);
+        $this->assertSame([2 => 10], $result['linked_receiving_pairs']);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find(10)->lot_number);
+        $this->assertNull(PurchaseLine::find(11)->lot_number);
+    }
+
+    private function authorityCombinedReceivingFixture(): array
+    {
+        [, , $destinationId] = $this->manualCorrectionFixture();
+        $batch = PurchaseLine::find($destinationId);
+        $batch->update(['quantity' => 2, 'lot_number' => null, 'purchase_price' => 321.25, 'purchase_price_inc_tax' => 321.25]);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 1,
+            'product_id' => $batch->product_id, 'variation_id' => $batch->variation_id, 'quantity' => 1, 'lot_no_line_id' => 2]);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 1)->update(['purchase_line_id' => 0]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 0, 'quantity' => 1]);
+        $input = ['corrections' => [
+            ['sell_line_id' => 1, 'source_id' => '1', 'destination_id' => 'split:'.$destinationId, 'change_receiving_serial' => 1],
+            ['sell_line_id' => 2, 'source_id' => '2', 'destination_id' => 'split:'.$destinationId, 'change_receiving_serial' => 1],
+        ], 'evidence' => 'Two verified source serials account for the existing combined receiving quantity.'];
+
+        return [$this->app->make(\App\Services\AuthorityTransferReceiptService::class), $input, $destinationId];
+    }
+
+    public function test_authority_splits_unused_combined_receiving_into_serials_without_adding_stock(): void
+    {
+        [$service, $input, $destinationId] = $this->authorityCombinedReceivingFixture();
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $dates = DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all();
+        $count = PurchaseLine::count();
+        $plan = $service->preview(1, 1, $input, 1);
+        $this->assertTrue(\App\Services\AuthorityTransferReceiptService::needsStaging($input));
+        $this->assertCount(1, $plan['split_receiving_batches']);
+        $this->assertSame(2.0, $plan['split_receiving_batches'][0]['quantity_before']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertEmpty($plan['created_receipts']);
+        $result = $service->apply(1, 1, $input, 1, $plan['token']);
+        $receiving = PurchaseLine::where('transaction_id', 3)->orderBy('id')->get();
+        $this->assertCount(2, $receiving);
+        $this->assertEquals(2, $receiving->sum('quantity'));
+        $this->assertEquals($count + 1, PurchaseLine::count());
+        $this->assertEquals([1, 1], $receiving->pluck('quantity')->all());
+        $this->assertEquals([321.25, 321.25], $receiving->pluck('purchase_price')->all());
+        $this->assertEquals([PurchaseLine::find(1)->lot_number, PurchaseLine::find(2)->lot_number], $receiving->pluck('lot_number')->all());
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertSame($dates, DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all());
+        $this->assertEmpty($result['remaining_transfer_issues']);
+        $this->assertSame($destinationId, $receiving->first()->id);
+    }
+
+    public function test_authority_combined_receiving_split_rejects_partial_groups_and_referenced_batches(): void
+    {
+        [$service, $input, $destinationId] = $this->authorityCombinedReceivingFixture();
+        $partial = $input; array_pop($partial['corrections']);
+        $before = $this->stockCorrectionSnapshot();
+        try { $service->preview(1, 1, $partial, 1); $this->fail('The full combined quantity must be accounted for.'); }
+        catch (PurchaseSellMismatch $exception) { $this->assertStringContainsString('Select all lines', $exception->getMessage()); }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        DB::table('transactions')->insert(['id' => 4, 'business_id' => 1, 'type' => 'sell', 'status' => 'draft', 'location_id' => 13]);
+        DB::table('transaction_sell_lines')->insert(['id' => 3, 'transaction_id' => 4, 'lot_no_line_id' => $destinationId]);
+        $before = $this->stockCorrectionSnapshot();
+        try { $service->preview(1, 1, $input, 1); $this->fail('A referenced receiving batch must not be divided.'); }
+        catch (PurchaseSellMismatch $exception) { $this->assertStringContainsString('unused, unreferenced', $exception->getMessage()); }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_combined_receiving_split_controller_preserves_split_choices_for_apply(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [, $input, $destinationId] = $this->authorityCombinedReceivingFixture();
+        Schema::create('system', function (Blueprint $table) { $table->string('key'); $table->text('value')->nullable(); });
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest($input); $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getData(true)['html'];
+        $this->assertStringContainsString('Combined receiving batches to split', $html);
+        $this->assertStringContainsString('value="split:'.$destinationId.'"', $html);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    private function authorityLinkedWrongSaleAllocationFixture(): array
+    {
+        [$service, $corrections, $destinationId] = $this->authorityBlankLinkedTransferFixture();
+        $child = PurchaseLine::find(10);
+        $child->update(['quantity_sold' => 1]);
+        DB::table('transactions')->insert([
+            ['id' => 6, 'business_id' => 1, 'type' => 'opening_stock', 'status' => 'received', 'location_id' => 12,
+                'transaction_date' => '2026-08-01 12:00:00', 'invoice_no' => null],
+            ['id' => 7, 'business_id' => 1, 'type' => 'sell', 'status' => 'final', 'location_id' => 12,
+                'transaction_date' => '2026-09-02 12:00:00', 'invoice_no' => 'INV-LINKED'],
+        ]);
+        DB::table('purchase_lines')->insert(['id' => 11, 'transaction_id' => 6, 'product_id' => $child->product_id,
+            'variation_id' => $child->variation_id, 'lot_number' => 'INVOICE-LOT', 'quantity' => 1, 'quantity_sold' => 0]);
+        DB::table('transaction_sell_lines')->insert(['id' => 3, 'transaction_id' => 7, 'lot_no_line_id' => 11,
+            'product_id' => $child->product_id, 'variation_id' => $child->variation_id, 'quantity' => 1]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 3, 'purchase_line_id' => 10, 'quantity' => 1]);
+
+        return [$service, $corrections, $destinationId];
+    }
+
+    public function test_authority_repairs_wrong_invoice_allocation_in_a_linked_receiving_chain(): void
+    {
+        [$service, $corrections, $destinationId] = $this->authorityLinkedWrongSaleAllocationFixture();
+        $before = $this->stockCorrectionSnapshot();
+        $invoice = DB::table('transaction_sell_lines')->where('id', 3)->get()->toJson();
+        $dates = DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all();
+        $balances = $this->transferBalances();
+        $evidence = 'Authority verifies the transfer serial and restores the linked invoice deduction to its recorded receipt.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $repair = collect($plan['related_allocation_repairs'])->firstWhere('sell_line_id', 3);
+        $this->assertSame(11, $repair['selected_batch_id']);
+        $this->assertSame('INV-LINKED', $repair['reference']);
+        $this->assertSame('INVOICE-LOT', $repair['serial']);
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+        $this->assertEquals(11, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 3)->value('purchase_line_id'));
+        $this->assertEquals(0, PurchaseLine::find(10)->quantity_sold);
+        $this->assertEquals(1, PurchaseLine::find(11)->quantity_sold);
+        $this->assertSame('INVOICE-LOT', PurchaseLine::find(11)->lot_number);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find(10)->lot_number);
+        $this->assertSame($invoice, DB::table('transaction_sell_lines')->where('id', 3)->get()->toJson());
+        $this->assertSame($dates, DB::table('transactions')->orderBy('id')->pluck('transaction_date', 'id')->all());
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertEmpty($this->app->make(LotStockAuditService::class)->audit(1, null, null, [1, 4, 7])['sale_line_issues']);
+    }
+
+    public function test_authority_linked_invoice_repair_is_visible_in_controller_preview(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        [, $corrections] = $this->authorityLinkedWrongSaleAllocationFixture();
+        Schema::create('system', function (Blueprint $table) { $table->string('key'); $table->text('value')->nullable(); });
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['corrections' => $corrections,
+            'evidence' => 'Verify the linked invoice deduction against its selected receipt.']);
+        $request->headers->set('Accept', 'application/json');
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getData(true)['html'];
+        $this->assertStringContainsString('INV-LINKED', $html);
+        $this->assertStringContainsString('receipt #11', $html);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_linked_invoice_repair_rejects_foreign_or_partial_allocations(): void
+    {
+        [$service, $corrections] = $this->authorityLinkedWrongSaleAllocationFixture();
+        DB::table('transactions')->where('id', 6)->update(['business_id' => 2]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Verified linked invoice and transfer allocation records.', null, true, true, true, true);
+            $this->fail('A foreign invoice receipt must not be used.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('invalid selected receipt', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        DB::table('transactions')->where('id', 6)->update(['business_id' => 1]);
+        DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 3)->update(['quantity' => 0.5]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Verified linked invoice and transfer allocation records.', null, true, true, true, true);
+            $this->fail('A partial invoice deduction requires separate verification.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('conflicting allocation', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_linked_invoice_selected_receipt_is_bound_to_preview_token(): void
+    {
+        [$service, $corrections] = $this->authorityLinkedWrongSaleAllocationFixture();
+        $evidence = 'Verified original invoice source and connected transfer records.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        PurchaseLine::find(11)->update(['purchase_price' => 77]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+            $this->fail('The changed invoice source receipt requires a fresh preview.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Preview the correction again', $exception->getMessage());
         }
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
@@ -2821,6 +3155,98 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
 
+    private function authorityKnownSerialReturnedSaleFixture(): array
+    {
+        [$service, $corrections, $destinationId] = $this->authorityBlankLinkedTransferFixture();
+        PurchaseLine::whereIn('id', [$destinationId, 10])->update(['lot_number' => 'RECORDED-OLD', 'quantity_sold' => 1]);
+        DB::table('transactions')->insert([
+            ['id' => 6, 'business_id' => 1, 'type' => 'sell', 'status' => 'final', 'location_id' => 12,
+                'transaction_date' => '2026-09-04 12:00:00', 'invoice_no' => 'INV-RETURNED', 'return_parent_id' => null],
+            ['id' => 7, 'business_id' => 1, 'type' => 'sell_return', 'status' => 'final', 'location_id' => 12,
+                'transaction_date' => '2026-09-05 12:00:00', 'invoice_no' => 'CN-VERIFIED', 'return_parent_id' => 6],
+            ['id' => 8, 'business_id' => 1, 'type' => 'sell', 'status' => 'final', 'location_id' => 12,
+                'transaction_date' => '2026-09-06 12:00:00', 'invoice_no' => 'INV-FINAL', 'return_parent_id' => null],
+        ]);
+        DB::table('transaction_sell_lines')->insert([
+            ['id' => 3, 'transaction_id' => 6, 'lot_no_line_id' => 10, 'quantity' => 1, 'quantity_returned' => 1],
+            ['id' => 4, 'transaction_id' => 7, 'lot_no_line_id' => 10, 'quantity' => 1, 'quantity_returned' => 0],
+            ['id' => 5, 'transaction_id' => 8, 'lot_no_line_id' => 10, 'quantity' => 1, 'quantity_returned' => 0],
+        ]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert([
+            ['sell_line_id' => 3, 'purchase_line_id' => 10, 'quantity' => 1, 'qty_returned' => 1],
+            ['sell_line_id' => 5, 'purchase_line_id' => 10, 'quantity' => 1, 'qty_returned' => 0],
+        ]);
+        return [$service, $corrections, $destinationId];
+    }
+
+    public function test_authority_corrects_known_serial_chain_with_verified_sale_return(): void
+    {
+        [$service, $corrections, $destinationId] = $this->authorityKnownSerialReturnedSaleFixture();
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $documents = DB::table('transaction_sell_lines')->where('id', '>', 1)->orderBy('id')->get()->toJson();
+        $allocations = DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', '>', 1)->orderBy('id')->get()->toJson();
+        $evidence = 'Verified source serial for connected receiving records, returned invoice and final sale.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertSame('RECORDED-OLD', $plan['linked_receiving_serial_fills'][0]['before']);
+        $this->assertSame(['INV-RETURNED', 'CN-VERIFIED', 'INV-FINAL'], array_column($plan['linked_receiving_serial_fills'][0]['documents'], 'reference'));
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+        foreach ([$destinationId, 10] as $id) {
+            $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find($id)->lot_number);
+            $this->assertEquals(1, PurchaseLine::find($id)->quantity_sold);
+        }
+        $this->assertSame($balances, $this->transferBalances());
+        $this->assertSame($documents, DB::table('transaction_sell_lines')->where('id', '>', 1)->orderBy('id')->get()->toJson());
+        $this->assertSame($allocations, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', '>', 1)->orderBy('id')->get()->toJson());
+    }
+
+    public function test_authority_known_serial_chain_rejects_conflicting_return_records(): void
+    {
+        [$service, $corrections] = $this->authorityKnownSerialReturnedSaleFixture();
+        DB::table('transactions')->where('id', 7)->update(['return_parent_id' => 8]);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->previewManual(1, 1, $corrections, 'Verified serial across linked transfers and returned invoice.', null, true, true, true, true);
+            $this->fail('Conflicting return must block the whole correction.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('different returned quantities', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_authority_known_serial_chain_preview_lists_affected_invoices_and_return(): void
+    {
+        $this->prepareLotHistoryAjaxSchema();
+        Schema::create('system', function (Blueprint $table) { $table->string('key'); $table->text('value')->nullable(); });
+        [, $corrections] = $this->authorityKnownSerialReturnedSaleFixture();
+        $view = $this->authorityController()->preview($this->authorityRequest([
+            'corrections' => $corrections, 'change_transaction_date' => 0,
+            'evidence' => 'Verified source serial throughout connected receiving and return records.',
+        ]), 1);
+        $html = view('smartstockinventory::authority.preview_content', $view->getData())->render();
+        foreach (['RECORDED-OLD', 'INV-RETURNED', 'CN-VERIFIED', 'INV-FINAL', 'Linked receiving lots to update together'] as $text) {
+            $this->assertStringContainsString($text, $html);
+        }
+        $this->assertSame('RECORDED-OLD', PurchaseLine::find(10)->lot_number);
+    }
+
+    public function test_authority_known_serial_chain_binds_return_to_preview_token(): void
+    {
+        [$service, $corrections] = $this->authorityKnownSerialReturnedSaleFixture();
+        $evidence = 'Verified serial across linked transfers and returned invoice.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        DB::table('transactions')->where('id', 7)->update(['invoice_no' => 'CHANGED-CN']);
+        $before = $this->stockCorrectionSnapshot();
+        try {
+            $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+            $this->fail('Changed return must require a fresh preview.');
+        } catch (PurchaseSellMismatch $exception) {
+            $this->assertStringContainsString('Preview the correction again', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_receiving_serial_change_blocks_connected_transfers(): void
     {
         [, $destinationId] = $this->authorityNewReceiptFixture();
@@ -2835,7 +3261,7 @@ class LotSaleConsistencyTest extends TestCase
                 'change_receiving_serial' => true]], 'Verified physical receiving serial for correction.', null, true, true, true, true);
             $this->fail('Connected transfer serials must be reconciled together.');
         } catch (PurchaseSellMismatch $exception) {
-            $this->assertStringContainsString('connected transfer', $exception->getMessage());
+            $this->assertStringContainsString('incomplete or unequal receiving records', $exception->getMessage());
         }
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
@@ -3953,7 +4379,26 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertEquals(2, DB::table('transaction_sell_lines_purchase_lines')->value('purchase_line_id'));
         app(TransactionUtil::class)->shouldHaveReceived('activityLog')->once()
             ->withArgs(fn ($transfer, $event, $before, $plan) => $event === 'stock_transfer_corrected'
-                && str_contains($plan['evidence'], 'matching recorded selected and receiving serials'));
+                && $plan['transfer_id'] === 1 && trim($plan['evidence']) !== ''
+                && count($plan['changes']) === 1 && $plan['changes'][0]['selected_batch_after'] === 2
+                && $plan['changes'][0]['receiving_batch_id'] === 4);
+    }
+
+    public function test_fix_deducted_serial_opens_full_repair_for_unmatched_receiving_serial_without_saving(): void
+    {
+        $this->manualCorrectionFixture();
+        PurchaseLine::find(4)->update(['lot_number' => 'NO-MATCHING-RECEIPT']);
+        $controller = $this->transferController();
+        $request = $this->statusRequest('completed');
+        $request->headers->remove('X-Requested-With');
+        $request->setUserResolver(fn () => auth()->user());
+        $request->merge(['sell_line_id' => 1]);
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->fixDeductedSerial($request, 1);
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertStringContainsString('authority?transfer_id=1', $response->getTargetUrl());
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        app(TransactionUtil::class)->shouldNotHaveReceived('activityLog');
     }
 
     public function test_manual_preview_rolls_back_and_apply_corrects_all_three_records_and_counters(): void
@@ -4285,8 +4730,65 @@ class LotSaleConsistencyTest extends TestCase
             $this->fail('A line cannot take another line\'s receiving stock.');
         } catch (PurchaseSellMismatch $e) {
             $this->assertStringContainsString('worsen another line', $e->getMessage());
+            $details = $e->responseData()['stock_error'];
+            $this->assertSame('receiving_balance_conflict', $details['kind']);
+            $this->assertSame(1, $details['sell_line_id']);
+            $this->assertSame(6, $details['receiving_batch_id']);
+            $this->assertSame([4], $details['candidate_receiving_batch_ids']);
+            $this->assertStringContainsString('OTHER-VALID: sent 1.00; received 0.00', $e->getMessage());
         }
         $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
+    public function test_manual_receiving_balance_quick_fix_candidate_passes_preview_and_apply(): void
+    {
+        [$service, $corrections] = $this->manualCorrectionFixture();
+        DB::table('purchase_lines')->insert(['id' => 5, 'lot_number' => 'OTHER-VALID', 'quantity_sold' => 1]);
+        DB::table('purchase_lines')->insert(['id' => 6, 'transaction_id' => 3, 'lot_number' => 'OTHER-VALID']);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'lot_no_line_id' => 5]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 5]);
+        $corrections[0]['destination_id'] = 6;
+        try {
+            $service->previewManual(1, 1, $corrections, 'Verified physical receipt for this transfer row.');
+            $this->fail('The other line must be protected.');
+        } catch (PurchaseSellMismatch $exception) {
+            $corrections[0]['destination_id'] = $exception->responseData()['stock_error']['candidate_receiving_batch_ids'][0];
+        }
+        $evidence = 'Verified physical receipt for this transfer row.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence);
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token']);
+        $this->assertSame('OTHER-VALID', PurchaseLine::find(6)->lot_number);
+        $this->assertEquals(5, TransactionSellLine::find(2)->lot_no_line_id);
+        $this->assertSame(PurchaseLine::find(1)->lot_number, PurchaseLine::find(4)->lot_number);
+    }
+
+    public function test_authority_dependent_receiving_repair_preserves_explicitly_selected_source_serial(): void
+    {
+        [$service, $corrections] = $this->manualCorrectionFixture();
+        DB::table('business')->where('id', 1)->update(['pos_settings' => json_encode(['allow_overselling' => true])]);
+        DB::table('transactions')->insert([
+            ['id' => 6, 'business_id' => 1, 'type' => 'sell_transfer', 'status' => 'final', 'location_id' => 14,
+                'transaction_date' => '2026-08-20 12:00:00'],
+            ['id' => 7, 'business_id' => 1, 'type' => 'purchase', 'status' => 'received', 'location_id' => 14,
+                'transaction_date' => '2026-08-01 12:00:00'],
+        ]);
+        DB::table('transactions')->where('id', 2)->update(['type' => 'purchase_transfer', 'transfer_parent_id' => 6,
+            'transaction_date' => '2026-08-20 12:00:00']);
+        DB::table('purchase_lines')->insert(['id' => 5, 'transaction_id' => 7, 'lot_number' => 'UPSTREAM-OLD']);
+        DB::table('transaction_sell_lines')->insert(['id' => 2, 'transaction_id' => 6, 'lot_no_line_id' => 5]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 2, 'purchase_line_id' => 2]);
+        $sourceSerial = PurchaseLine::find(1)->lot_number;
+        $before = $this->stockCorrectionSnapshot();
+        $balances = $this->transferBalances();
+        $evidence = 'Verified selected source receipt and serial for this completed transfer.';
+        $plan = $service->previewManual(1, 1, $corrections, $evidence, null, true, true, true, true);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+        $this->assertEmpty($plan['remaining_transfer_issues']);
+        $service->applyManual(1, 1, $corrections, $evidence, $plan['token'], null, true, true, true, true);
+        $this->assertSame($sourceSerial, PurchaseLine::find(1)->lot_number);
+        $this->assertSame($sourceSerial, PurchaseLine::find(4)->lot_number);
+        $this->assertEquals(5, DB::table('transaction_sell_lines_purchase_lines')->where('sell_line_id', 2)->value('purchase_line_id'));
+        $this->assertSame($balances, $this->transferBalances());
     }
 
     public function test_manual_one_line_date_correction_cannot_invalidate_unchanged_source_receipts(): void
