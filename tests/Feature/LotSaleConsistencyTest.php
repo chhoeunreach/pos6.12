@@ -2715,6 +2715,29 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertSame($before, $this->stockCorrectionSnapshot());
     }
 
+    public function test_authority_preview_reports_unexpected_errors_without_exposing_internal_details(): void
+    {
+        [, $corrections] = $this->manualCorrectionFixture();
+        $controller = $this->authorityController();
+        $request = $this->authorityRequest(['corrections' => $corrections, 'evidence' => 'Verified transfer supporting records.']);
+        $request->headers->set('Accept', 'application/json');
+        $service = \Mockery::mock(\App\Services\StockTransferReconciliationService::class);
+        $service->shouldReceive('previewManual')->once()->andThrow(new \RuntimeException('SQL SECRET internal details'));
+        $this->app->instance(\App\Services\StockTransferReconciliationService::class, $service);
+        \Illuminate\Support\Facades\Log::shouldReceive('error')->once()->with('Authority correction preview failed', \Mockery::on(function ($context) {
+            return $context['transfer_id'] === 1 && !empty($context['error_reference']) && $context['exception'] instanceof \RuntimeException;
+        }));
+        $before = $this->stockCorrectionSnapshot();
+        $response = $controller->preview($request, 1);
+        $data = $response->getData(true);
+        $this->assertSame(500, $response->getStatusCode());
+        $this->assertSame(0, $data['success']);
+        $this->assertNotEmpty($data['error_reference']);
+        $this->assertStringNotContainsString('SQL SECRET', json_encode($data));
+        $this->assertStringContainsString('No correction was applied', $data['msg']);
+        $this->assertSame($before, $this->stockCorrectionSnapshot());
+    }
+
     public function test_authority_auto_verification_returns_blockers_without_changing_records(): void
     {
         [, $corrections] = $this->manualCorrectionFixture();

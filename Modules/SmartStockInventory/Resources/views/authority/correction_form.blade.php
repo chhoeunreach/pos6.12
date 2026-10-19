@@ -88,6 +88,7 @@
                     <p class="help-block">The earliest permitted date is a limit, not proof of delivery. Enter the actual delivery date confirmed by your records. Used receiving batches may require dependent movements to be reconciled first.</p></div>
             </div>
             <p class="help-block">The preview includes serial / lot changes, dependent allocation repairs and any new receipts. Records are saved only when you apply the correction. Delivery dates remain unchanged unless you explicitly change them. Select existing records whenever available.</p>
+            <div class="authority-preview-error alert alert-danger" role="alert" tabindex="-1" style="display:none"></div>
             <button class="btn btn-primary" {{ count($lines) ? '' : 'disabled' }}>Preview authority correction</button>
         </div>
     </div>

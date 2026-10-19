@@ -461,6 +461,20 @@ class AuthorityController extends BaseSmartStockController
             }
             return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))->withInput()
                 ->with('status', $exception->responseData());
+        } catch (\Throwable $exception) {
+            $reference = (string) \Illuminate\Support\Str::uuid();
+            \Illuminate\Support\Facades\Log::error('Authority correction preview failed', [
+                'error_reference' => $reference, 'business_id' => $this->businessId(),
+                'transfer_id' => $id, 'transfer_reference' => $transfer->ref_no, 'exception' => $exception,
+            ]);
+            $error = ['success' => 0,
+                'msg' => 'The correction preview could not be completed. No correction was applied. Retry the preview; if it fails again, ask the administrator to check the server log. Reference: '.$reference,
+                'error_reference' => $reference];
+            if ($request->expectsJson()) {
+                return response()->json($error, 500);
+            }
+            return redirect(ssi_route('ssi.authority.index', ['transfer_id' => $id]))->withInput()
+                ->with('status', $error);
         }
     }
 

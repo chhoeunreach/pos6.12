@@ -185,19 +185,59 @@ function authority_complete_fields($form) {
     return unresolved === 0;
 }
 
-function authority_verify_completion($form, $button) {
-    if (!authority_complete_fields($form) || !authority_update_dates($form)) { return; }
+function authority_preview_error($form, xhr) {
+    var response = xhr.responseJSON || {};
+    var errors = response.errors ? Object.keys(response.errors).map(function (key) {
+        return [].concat(response.errors[key]).join(' ');
+    }).join(' ') : '';
+    var message = response.msg || errors || (xhr.status === 422 ? response.message : '') ||
+        (xhr.status === 0 ? 'Unable to reach the server.' : 'The correction preview could not be completed.');
+    var kind = (response.stock_error || {}).kind;
+    var guidance = 'Check the selected source receipt and receiving batch against the SKU, quantity and supporting records, then preview again.';
+    if (kind === 'receipt_date_conflict') {
+        guidance = 'Select a source receipt available on the recorded delivery date, or enable Change delivery date and enter the actual verified delivery date.';
+    } else if (kind === 'related_allocation' || kind === 'transfer_date_dependencies') {
+        guidance = 'Review and reconcile the dependent movements named in the error before retrying this correction.';
+    } else if (xhr.status === 419 || xhr.status === 401) {
+        guidance = 'Your session may have expired. Sign in again in another tab, then retry. If the session token has expired, copy your entries before refreshing this page.';
+    } else if (xhr.status === 403) {
+        guidance = 'Ask an administrator to check your stock authority permission and access to the transfer locations.';
+    } else if (xhr.status === 0 || xhr.status >= 500) {
+        guidance = 'Retry the preview. If it fails again, ask the administrator to check the server log' +
+            (response.error_reference ? ' using reference ' + response.error_reference : ' for this transfer') + '.';
+    } else if (errors) {
+        guidance = 'Correct the fields listed above, then preview again.';
+    }
+    $form.find('.authority-auto-status').text(message);
+    var $error = $form.find('.authority-preview-error');
+    if (!$error.length) { $error = $('<div class="authority-preview-error alert alert-danger" role="alert" tabindex="-1"></div>').appendTo($form); }
+    $error.empty().append($('<p>').text(message), $('<p>').text(guidance), $('<p>').text('No correction was applied. Your entries are still available here.')).show().focus();
+}
+
+function authority_request_preview($form) {
+    if ($form.data('authority-preview-busy')) { return; }
     if ($form[0] && $form[0].reportValidity && !$form[0].reportValidity()) {
         $form.find('.authority-auto-status').text('Complete the required receipt details before verification.');
         return;
     }
-    $button.prop('disabled', true);
+    // Skip untouched rows without disabling their controls: failures must remain editable.
+    var ignored = {};
+    $form.find('.authority-line').each(function () {
+        var $row = $(this);
+        if (!$row.find('.authority-source').val()) {
+            $row.find(':input[name]').each(function () { ignored[this.name] = true; });
+        }
+    });
+    var payload = $.param($form.serializeArray().filter(function (field) { return !ignored[field.name]; }));
+    var $buttons = $form.find(':submit, .authority-auto-complete').filter(':enabled');
+    $form.data('authority-preview-busy', true);
+    $buttons.prop('disabled', true);
+    $form.find('.authority-preview-error').hide();
     $form.find('.authority-auto-status').text('Checking source quantities, receiving batches, delivery dates and dependent movements…');
-    var payload = $form.serialize();
     $.ajax({url: $form.attr('action'), type: 'POST', data: payload, dataType: 'json', headers: {Accept: 'application/json'}}).done(function (result) {
         if (!$.contains(document, $form[0])) { return; }
         if (!result.success || !result.html) {
-            $form.find('.authority-auto-status').text(result.msg || 'The correction could not be verified.');
+            authority_preview_error($form, {status: 422, responseJSON: result});
             return;
         }
         var $content = $form.closest('.modal').find('.modal-content');
@@ -205,13 +245,18 @@ function authority_verify_completion($form, $button) {
             $content.html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button><h4 class="modal-title">Verified Authority correction — review changes</h4></div><div class="modal-body"></div>');
             $content.find('.modal-body').html(result.html);
         } else {
-            $form.find('.authority-auto-status').text('Verification complete. Review the preview before applying.');
+            $form.replaceWith(result.html);
         }
     }).fail(function (xhr) {
-        var response = xhr.responseJSON || {};
-        var errors = response.errors ? Object.keys(response.errors).map(function (key) { return response.errors[key].join(' '); }).join(' ') : '';
-        $form.find('.authority-auto-status').text(response.msg || errors || response.message || 'Verification failed. Try again.');
-    }).always(function () { $button.prop('disabled', false); });
+        if ($.contains(document, $form[0])) { authority_preview_error($form, xhr); }
+    }).always(function () {
+        $form.removeData('authority-preview-busy');
+        $buttons.prop('disabled', false);
+    });
+}
+
+function authority_verify_completion($form) {
+    if (authority_complete_fields($form) && authority_update_dates($form)) { authority_request_preview($form); }
 }
 
 function authority_initialize_form() {
@@ -263,6 +308,7 @@ function authority_initialize_form() {
         $form.find('#authority_date').val($(this).attr('data-date')).trigger('change').focus();
     });
     $form.on('submit', function (event) {
+        event.preventDefault();
         var valid = authority_update_dates($form);
         $form.find('.authority-line').each(function () {
             var $row = $(this);
@@ -274,13 +320,7 @@ function authority_initialize_form() {
             }
         });
         if (!valid) { event.preventDefault(); $form.find('.authority-date-guidance.text-danger').length && $form.find('#authority_date').focus(); return; }
-        $form.find('.authority-line').each(function () {
-            var $row = $(this);
-            var chosen = Boolean($row.find('.authority-source').val());
-            $row.find('input, select').prop('disabled', !chosen);
-            $row.find('.authority-new-source input').prop('disabled', !chosen || $row.find('.authority-source').val() !== 'new');
-            $row.find('.authority-existing-serial input').prop('disabled', !chosen || $row.find('.authority-existing-serial').css('display') === 'none');
-        });
+        authority_request_preview($form);
     });
 }
 

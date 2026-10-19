@@ -10,6 +10,7 @@ function form(batches, rows = 1) {
     const dom = new JSDOM('<form id="authority_correction_form"></form>', {runScripts: 'outside-only'});
     const $ = jquery(dom.window);
     dom.window.$ = dom.window.jQuery = $;
+    $.ajax = () => $.Deferred().promise();
     for (let index = 0; index < rows; index++) {
         const $row = $(`<div class="authority-line" data-quantity="1">
             <input type="hidden" name="corrections[${index}][sell_line_id]" value="${index + 1}">
@@ -107,9 +108,9 @@ test('preview submission requires both selections and skips untouched lines', ()
     row(0).find('.authority-destination').val('10').trigger('change');
     event = $.Event('submit');
     $('#authority_correction_form').triggerHandler(event);
-    assert.equal(event.isDefaultPrevented(), false);
+    assert.equal(event.isDefaultPrevented(), true);
     assert.equal(row(0).find('input').prop('disabled'), false);
-    assert.equal(row(1).find('input').prop('disabled'), true);
+    assert.equal(row(1).find('input').prop('disabled'), false);
     dom.window.close();
 });
 
@@ -183,7 +184,7 @@ test('completion fills a missing receiving batch when the only existing batch be
     assert.match($('#authority_evidence').val(), /Line #2: source receipt 2, receiving batch new/);
     const event = $.Event('submit');
     $('#authority_correction_form').triggerHandler(event);
-    assert.equal(event.isDefaultPrevented(), false);
+    assert.equal(event.isDefaultPrevented(), true);
     dom.window.close();
 });
 
@@ -267,7 +268,7 @@ test('later source receipt explains the date conflict without silently changing 
     assert.equal($('#authority_date').val(), '2026-09-02 15:23:00');
     event = $.Event('submit');
     $('#authority_correction_form').triggerHandler(event);
-    assert.equal(event.isDefaultPrevented(), false);
+    assert.equal(event.isDefaultPrevented(), true);
     dom.window.close();
 });
 
@@ -283,30 +284,17 @@ test('delivery date guidance includes unchanged lines and newly entered receipt 
     dom.window.close();
 });
 
-test('auto-complete fills recorded receipts, notes and a labelled date proposal then verifies without applying', () => {
+test('auto-complete keeps delivery dates unchanged and requires review of a later receipt', () => {
     const {dom, $, row} = form([{id: 10, serial: 'A'}]);
-    const $form = $('#authority_correction_form').attr({action: '/authority/1/preview', 'data-recorded-date': '2026-09-01 12:00:00', 'data-reference': 'ST-1'});
-    $form.append('<textarea id="authority_evidence" name="evidence"></textarea><input id="authority_date" name="transaction_date"><input id="authority_date_basis" name="date_basis"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
-    row().attr({'data-line-id': '1', 'data-completion': JSON.stringify({source_id: 1, destination_id: 10})});
-    row().find('.authority-source').attr('name', 'corrections[1][source_id]');
-    row().find('.authority-destination').attr('name', 'corrections[1][destination_id]');
+    const $form = $('#authority_correction_form').attr({'data-recorded-date': '2026-09-01 12:00:00'});
+    $form.append('<textarea id="authority_evidence"></textarea><input type="checkbox" id="authority_change_date"><input id="authority_date"><div class="authority-date-guidance"></div><button type="button" class="authority-auto-complete"></button>');
+    row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
     row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-09-02 15:23:00');
-    let requests = 0;
-    $.ajax = options => {
-        requests++;
-        assert.equal(options.url, '/authority/1/preview');
-        assert.equal(options.type, 'POST');
-        assert.match(options.data, /date_basis=receipt_dates/);
-        assert.match(options.data, /source_id%5D=1/);
-        return $.Deferred().resolve({success: 1, html: '<p>Reviewed preview</p>'}).promise();
-    };
+    $.ajax = () => { throw new Error('Unverified date must not be submitted'); };
     $('.authority-auto-complete').trigger('click');
-    assert.equal(row().find('.authority-source').val(), '1');
-    assert.equal(row().find('.authority-destination').val(), '10');
-    assert.equal($('#authority_date').val(), '2026-09-02 15:23:00');
-    assert.match($('#authority_evidence').val(), /Proposed delivery.*Actual delivery must be reviewed/);
-    assert.equal(requests, 1);
-    assert.match($('.authority-auto-status').text(), /Verification complete/);
+    assert.equal($('#authority_date').val(), '');
+    assert.equal($('#authority_change_date').prop('checked'), false);
+    assert.match($('.authority-date-guidance').text(), /Source receipt #1/);
     dom.window.close();
 });
 
@@ -339,7 +327,7 @@ test('opening a populated modal auto-fills fields and verification replaces it w
     const {dom, $, row} = form([{id: 10, serial: 'A'}]);
     const $form = $('#authority_correction_form').off().attr({action: '/authority/1/preview', 'data-recorded-date': '2026-09-01 12:00:00'});
     $form.wrap('<div class="modal"><div class="modal-content"></div></div>');
-    $form.append('<textarea id="authority_evidence"></textarea><input id="authority_date"><input id="authority_date_basis"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
+    $form.append('<textarea id="authority_evidence"></textarea><input type="checkbox" id="authority_change_date"><input id="authority_date"><input id="authority_date_basis"><div class="authority-date-guidance"></div><button type="button" class="authority-use-earliest-date"></button><button type="button" class="authority-auto-complete"></button><p class="authority-auto-status"></p>');
     row().attr('data-completion', JSON.stringify({source_id: 1, destination_id: 10}));
     row().find('.authority-source option[value="1"]').attr('data-receipt-date', '2026-08-31 12:00:00');
     dom.window.authority_initialize_form();
@@ -382,5 +370,54 @@ test('Authority cards load category details, pagination and reference search in 
     assert.match(requests[2].data, /category=missing_selected/);
     assert.match(requests[2].data, /reference=ST-77/);
     assert.equal(requests.length, 3);
+    dom.window.close();
+});
+
+test('preview errors preserve editable rows, omit untouched rows and allow retry', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}], 2);
+    const $form = $('#authority_correction_form').attr('action', '/authority/1/preview');
+    $form.append('<textarea name="evidence">Verified document</textarea><button type="submit">Preview</button>');
+    row(0).find('.authority-source').val('1').trigger('change');
+    let requests = 0;
+    $.ajax = options => {
+        requests++;
+        assert.equal(options.headers.Accept, 'application/json');
+        assert.match(options.data, /corrections%5B0%5D/);
+        assert.doesNotMatch(options.data, /corrections%5B1%5D/);
+        return $.Deferred().reject({status: 500, responseJSON: {message: 'SQL SECRET', error_reference: 'incident-123'}}).promise();
+    };
+    $form.triggerHandler('submit');
+    assert.match($('.authority-preview-error').text(), /incident-123/);
+    assert.doesNotMatch($('.authority-preview-error').text(), /SQL SECRET/);
+    assert.equal(row(0).find('.authority-source').val(), '1');
+    assert.equal(row(1).find('input').prop('disabled'), false);
+    assert.equal($form.find(':submit').prop('disabled'), false);
+    $form.triggerHandler('submit');
+    assert.equal(requests, 2);
+    dom.window.close();
+});
+
+test('validation and receipt date errors show corrective guidance as text', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().find('.authority-source').val('1').trigger('change');
+    $.ajax = () => $.Deferred().reject({status: 422, responseJSON: {
+        msg: '<b>Receipt date conflict</b>', stock_error: {kind: 'receipt_date_conflict'}
+    }}).promise();
+    $('#authority_correction_form').triggerHandler('submit');
+    assert.match($('.authority-preview-error').text(), /actual verified delivery date/);
+    assert.equal($('.authority-preview-error b').length, 0);
+    $.ajax = () => $.Deferred().reject({status: 422, responseJSON: {errors: {evidence: ['Provide supporting records.']}}}).promise();
+    $('#authority_correction_form').triggerHandler('submit');
+    assert.match($('.authority-preview-error').text(), /Provide supporting records/);
+    dom.window.close();
+});
+
+test('successful standalone preview renders review without applying a correction', () => {
+    const {dom, $, row} = form([{id: 10, serial: 'A'}]);
+    row().find('.authority-source').val('1').trigger('change');
+    $.ajax = () => $.Deferred().resolve({success: 1, html: '<div id="review">Review changes before applying</div>'}).promise();
+    $('#authority_correction_form').triggerHandler('submit');
+    assert.equal($('#authority_correction_form').length, 0);
+    assert.match($('#review').text(), /Review changes/);
     dom.window.close();
 });
