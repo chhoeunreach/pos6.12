@@ -676,6 +676,12 @@ class AdminSidebarMenu
 
                         if (auth()->user()->can('purchase_n_sell_report.view')) {
                             $sub->url(
+                                action([\App\Http\Controllers\TelecomSsdReportController::class, 'index']),
+                                __('report.telecom_ssd_report'),
+                                ['icon' => 'fa fa-mobile', 'active' => request()->segment(2) == 'telecom-ssd-report']
+                            );
+
+                            $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'itemsReport']),
                                 __('lang_v1.items_report'),
                                 ['icon' => 'fa fa-list-alt', 'active' => request()->segment(2) == 'items-report']

@@ -22,6 +22,10 @@ class StoreProductRequest extends FormRequest
         };
 
         return [
+            'model_number' => 'nullable|string|max:255',
+            'qa_number' => 'nullable|string|max:255',
+            'country_of_manufacture' => 'nullable|string|max:255',
+            'network_connectivity' => 'nullable|string|max:255',
             'name' => 'required|string|max:255',
             'sku' => ['nullable', 'string', 'max:255', $uniqueSku()],
             'type' => 'required|in:single,variable,combo',

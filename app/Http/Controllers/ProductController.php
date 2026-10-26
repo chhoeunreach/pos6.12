@@ -140,6 +140,11 @@ class ProductController extends Controller
                 'brands.name as brand',
                 'tax_rates.name as tax',
                 'products.sku',
+                'products.model_number',
+                'products.qa_number',
+                'products.country_of_manufacture',
+                'products.network_connectivity',
+
                 'products.image',
                 'products.enable_stock',
                 'products.is_inactive',
@@ -472,6 +477,13 @@ class ProductController extends Controller
         if (! auth()->user()->can('product.create')) {
             abort(403, 'Unauthorized action.');
         }
+        $request->validate([
+            'model_number' => 'nullable|string|max:255',
+            'qa_number' => 'nullable|string|max:255',
+            'country_of_manufacture' => 'nullable|string|max:255',
+            'network_connectivity' => 'nullable|string|max:255',
+        ]);
+
         try {
             $business_id = $request->session()->get('user.business_id');
             $form_fields = ['name', 'brand_id', 'unit_id', 'category_id', 'tax', 'type', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20',];
@@ -482,6 +494,9 @@ class ProductController extends Controller
             }
 
             $product_details = $request->only($form_fields);
+            $product_details = array_merge($product_details, $request->only([
+                'model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity',
+            ]));
             $product_details['business_id'] = $business_id;
             $product_details['created_by'] = $request->session()->get('user.id');
 
@@ -704,6 +719,13 @@ class ProductController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $request->validate([
+            'model_number' => 'nullable|string|max:255',
+            'qa_number' => 'nullable|string|max:255',
+            'country_of_manufacture' => 'nullable|string|max:255',
+            'network_connectivity' => 'nullable|string|max:255',
+        ]);
+
         try {
             $business_id = $request->session()->get('user.business_id');
             $product_details = $request->only(['name', 'brand_id', 'unit_id', 'category_id', 'tax', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20',]);
@@ -720,6 +742,10 @@ class ProductController extends Controller
                 foreach ($module_form_fields as $column) {
                     $product->$column = $request->input($column);
                 }
+            }
+
+            foreach ($request->only(['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity']) as $field => $value) {
+                $product->$field = $value;
             }
 
             $product->name = $product_details['name'];
@@ -1653,6 +1679,13 @@ class ProductController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $request->validate([
+            'model_number' => 'nullable|string|max:255',
+            'qa_number' => 'nullable|string|max:255',
+            'country_of_manufacture' => 'nullable|string|max:255',
+            'network_connectivity' => 'nullable|string|max:255',
+        ]);
+
         $business_id = $request->session()->get('user.business_id');
 
         // check for products quota
@@ -1675,6 +1708,7 @@ class ProductController extends Controller
                 }
             }
             $product_details = $request->only($form_fields);
+            $product_details = array_merge($product_details, $request->only(['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity']));
 
             $product_details['type'] = empty($product_details['type']) ? 'single' : $product_details['type'];
             $product_details['business_id'] = $business_id;
@@ -2306,6 +2340,13 @@ class ProductController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $request->validate([
+            'products.*.model_number' => 'nullable|string|max:255',
+            'products.*.qa_number' => 'nullable|string|max:255',
+            'products.*.country_of_manufacture' => 'nullable|string|max:255',
+            'products.*.network_connectivity' => 'nullable|string|max:255',
+        ]);
+
         try {
             $products = $request->input('products');
             $business_id = $request->session()->get('user.business_id');
@@ -2318,6 +2359,8 @@ class ProductController extends Controller
                     'brand_id' => $product_data['brand_id'],
                     'tax' => $product_data['tax'],
                 ];
+
+                $update_data = array_merge($update_data, \Illuminate\Support\Arr::only($product_data, ['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity']));
 
                 //Update product
                 $product = Product::where('business_id', $business_id)

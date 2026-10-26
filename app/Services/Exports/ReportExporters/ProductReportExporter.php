@@ -10,7 +10,7 @@ class ProductReportExporter implements EnterpriseExporter
 {
     public function headings(): array
     {
-        return ['ID', 'Name', 'SKU', 'Type', 'Brand', 'Category', 'Unit', 'Manage Stock', 'Active'];
+        return ['ID', 'Name', 'SKU', 'Type', 'Brand', 'Category', 'Unit', 'Manage Stock', 'Active', 'Model No.', 'QA No.', 'Made In', 'Connectivity'];
     }
 
     public function query(int $businessId, array $filters): Builder
@@ -20,13 +20,13 @@ class ProductReportExporter implements EnterpriseExporter
             ->leftJoin('categories as c', 'p.category_id', '=', 'c.id')
             ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
             ->where('p.business_id', $businessId)
-            ->select('p.id', 'p.name', 'p.sku', 'p.type', 'b.name as brand', 'c.name as category', 'u.short_name as unit', 'p.enable_stock', 'p.is_inactive')
+            ->select('p.id', 'p.name', 'p.sku', 'p.type', 'b.name as brand', 'c.name as category', 'u.short_name as unit', 'p.enable_stock', 'p.is_inactive', 'p.model_number', 'p.qa_number', 'p.country_of_manufacture', 'p.network_connectivity')
             ->orderBy('p.id');
     }
 
     public function map($row): array
     {
-        return [$row->id, $row->name, $row->sku, $row->type, $row->brand, $row->category, $row->unit, $row->enable_stock ? 'Yes' : 'No', $row->is_inactive ? 'No' : 'Yes'];
+        return [$row->id, $row->name, $row->sku, $row->type, $row->brand, $row->category, $row->unit, $row->enable_stock ? 'Yes' : 'No', $row->is_inactive ? 'No' : 'Yes', $row->model_number, $row->qa_number, $row->country_of_manufacture, $row->network_connectivity];
     }
 
     public function chunkColumn(): string

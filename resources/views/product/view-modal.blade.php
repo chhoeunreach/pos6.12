@@ -10,6 +10,10 @@
 	      			<div class="col-sm-4 invoice-col">
 	      				<b>@lang('product.sku'):</b>
 						{{$product->sku }}<br>
+                        @foreach(['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity'] as $field)
+                            <b>{{ __('product.' . $field) }}:</b>
+                            {{ $product->$field ?? '--' }}<br>
+                        @endforeach
 						<b>@lang('product.brand'): </b>
 						{{$product->brand->name ?? '--' }}<br>
 						<b>@lang('product.unit'): </b>

@@ -45,6 +45,8 @@
         </div>
 
         <div class="clearfix"></div>
+        @include('product.partials.identification_fields', ['identification_product' => $duplicate_product ?? null])
+        <div class="clearfix"></div>
         <div class="col-sm-4">
             <div class="form-group">
                 {!! Form::label('unit_id', __('product.unit') . ':*') !!}

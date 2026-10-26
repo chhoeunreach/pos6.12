@@ -48,6 +48,8 @@
             </div>
 
             <div class="clearfix"></div>
+            @include('product.partials.identification_fields', ['identification_product' => $product ?? null])
+            <div class="clearfix"></div>
             
             <div class="col-sm-4">
               <div class="form-group">

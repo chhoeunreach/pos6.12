@@ -41,19 +41,18 @@
         <tr class="purchase_entry_row" @if(!empty($purchase_line->purchase_order_line) && !empty($common_settings['enable_purchase_order'])) data-purchase_order_id="{{$purchase_line->purchase_order_line->transaction_id}}" @endif  @if(!empty($purchase_line->purchase_requisition_line) && !empty($common_settings['enable_purchase_requisition'])) data-purchase_requisition_id="{{$purchase_line->purchase_requisition_line->transaction_id}}" @endif>
             <td><span class="sr_number"></span></td>
             <td>
+                @component('purchase.partials.product_heading', [
+                    'identification_product' => $purchase_line->product,
+                    'identification_purchase_line' => $purchase_line,
+                    'identification_row_index' => $loop->index,
+                    'identification_lot_number' => $purchase_line->lot_number,
+                    'is_purchase_order' => $is_purchase_order ?? false,
+                ])
                 {{ $purchase_line->product->name }} ({{$purchase_line->variations->sub_sku}})
                 @if( $purchase_line->product->type == 'variable') 
                     <br/>(<b>{{ $purchase_line->variations->product_variation->name}}</b> : {{ $purchase_line->variations->name}})
                 @endif
-                @if(empty($is_purchase_order) && session('business.enable_lot_number'))
-                    <div class="mt-5">
-                        <small class="text-muted">@lang('lang_v1.lot_number')</small>
-                        {!! Form::text('purchases[' . $loop->index . '][lot_number]', $purchase_line->lot_number, ['class' => 'form-control input-sm purchase_lot_number', 'placeholder' => __('lang_v1.lot_number')]); !!}
-                        <button type="button" class="btn btn-xs btn-primary add_purchase_lot_row mt-5">
-                            <i class="fa fa-plus"></i> Row
-                        </button>
-                    </div>
-                @endif
+                @endcomponent
             </td>
 
             <td>
@@ -253,6 +252,17 @@
                 <i class="fa fa-times remove_purchase_entry_row text-danger" title="Remove" style="cursor:pointer;"></i>
             </td>
         </tr>
+        @if(empty($is_purchase_order))
+            <tr class="purchase-product-details-row">
+                <td colspan="{{ 13 + (session('business.enable_product_expiry') ? 1 : 0) }}">
+                    @include('purchase.partials.product_identification', [
+                        'identification_product' => $purchase_line->product,
+                        'identification_purchase_line' => $purchase_line,
+                        'identification_row_index' => $loop->index,
+                    ])
+                </td>
+            </tr>
+        @endif
         <?php $row_count = $loop->index + 1 ; ?>
     @endforeach
         </tbody>

@@ -403,6 +403,26 @@
                         name: 'products.sku'
                     },
                     {
+                        data: 'model_number',
+                        name: 'products.model_number',
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'qa_number',
+                        name: 'products.qa_number',
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'country_of_manufacture',
+                        name: 'products.country_of_manufacture',
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'network_connectivity',
+                        name: 'products.network_connectivity',
+                        defaultContent: ''
+                    },
+                    {
                         data: 'product_custom_field1',
                         name: 'products.product_custom_field1',
                         visible: $('#cf_1').text().length > 0

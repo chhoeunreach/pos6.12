@@ -302,6 +302,13 @@ class PurchaseController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $request->validate([
+            'purchases.*.model_number' => 'nullable|string|max:255',
+            'purchases.*.qa_number' => 'nullable|string|max:255',
+            'purchases.*.country_of_manufacture' => 'nullable|string|max:255',
+            'purchases.*.network_connectivity' => 'nullable|string|max:255',
+        ]);
+
         try {
             $business_id = $request->session()->get('user.business_id');
 
@@ -481,6 +488,13 @@ class PurchaseController extends Controller
                 }
             }
         }
+
+        \Illuminate\Support\Facades\Validator::make(['purchases' => $purchases], [
+            'purchases.*.model_number' => 'nullable|string|max:255',
+            'purchases.*.qa_number' => 'nullable|string|max:255',
+            'purchases.*.country_of_manufacture' => 'nullable|string|max:255',
+            'purchases.*.network_connectivity' => 'nullable|string|max:255',
+        ])->validate();
 
         return $purchases;
     }
@@ -694,6 +708,13 @@ class PurchaseController extends Controller
         if (! auth()->user()->can('purchase.update')) {
             abort(403, 'Unauthorized action.');
         }
+
+        $request->validate([
+            'purchases.*.model_number' => 'nullable|string|max:255',
+            'purchases.*.qa_number' => 'nullable|string|max:255',
+            'purchases.*.country_of_manufacture' => 'nullable|string|max:255',
+            'purchases.*.network_connectivity' => 'nullable|string|max:255',
+        ]);
 
         try {
             //Validate document size

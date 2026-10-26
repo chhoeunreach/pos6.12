@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'telecom_ssd_report' => 'Telecom SSD Report',
+    'telecom_ssd_basis' => 'Received purchases. Quantity is after returns; prices include tax. Client Name shows the supplier. Remark shows purchase notes.',
 
     /*
     |--------------------------------------------------------------------------

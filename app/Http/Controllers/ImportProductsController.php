@@ -178,6 +178,8 @@ class ImportProductsController extends Controller
 
                     $product_array['product_description'] = isset($value[30]) ? $value[30] : null;
 
+                    $product_array = array_merge($product_array, $this->identificationFieldsFromImportRow($value, $row_no));
+
                     //Custom fields
                     if (isset($value[31])) {
                         // Product keyword is stored in product_custom_field1.
@@ -736,6 +738,20 @@ class ImportProductsController extends Controller
         }
 
         return redirect('import-products')->with('status', $output);
+    }
+
+    private function identificationFieldsFromImportRow(array $value, int $row_no): array
+    {
+        $fields = [];
+        foreach ([38 => 'model_number', 39 => 'qa_number', 40 => 'country_of_manufacture', 41 => 'network_connectivity'] as $column => $field) {
+            $field_value = isset($value[$column]) ? trim((string) $value[$column]) : null;
+            if ($field_value !== null && mb_strlen($field_value) > 255) {
+                throw new \InvalidArgumentException(__('product.' . $field) . " exceeds 255 characters in row no. $row_no");
+            }
+            $fields[$field] = $field_value === '' ? null : $field_value;
+        }
+
+        return $fields;
     }
 
     private function calculateVariationPrices($dpp_exc_tax, $dpp_inc_tax, $selling_price, $tax_amount, $tax_type, $margin)

@@ -19,6 +19,15 @@
 	<tr>
 	<tr>
 		<td colspan="6">
+            <div class="row">
+                @foreach(['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity'] as $field)
+                    <div class="col-sm-3 form-group">
+                        @php $input_name = 'products[' . $product->id . '][' . $field . ']'; @endphp
+                        {!! Form::label('product_' . $product->id . '_' . $field, __('product.' . $field)) !!}
+                        {!! Form::text($input_name, old('products.' . $product->id . '.' . $field, $product->$field), ['id' => 'product_' . $product->id . '_' . $field, 'class' => 'form-control input-sm', 'maxlength' => 255]) !!}
+                    </div>
+                @endforeach
+            </div>
 			<table class="table">
 				<thead>
 					<tr>

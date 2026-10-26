@@ -18,6 +18,10 @@ class UpdateProductRequest extends FormRequest
         $product_id = $this->route('id');
 
         return [
+            'model_number' => 'nullable|string|max:255',
+            'qa_number' => 'nullable|string|max:255',
+            'country_of_manufacture' => 'nullable|string|max:255',
+            'network_connectivity' => 'nullable|string|max:255',
             'name' => 'sometimes|required|string|max:255',
             'sku' => [
                 'nullable',

@@ -277,6 +277,13 @@
                         </td>
                     </tr>
 
+                    @foreach([39 => 'model_number', 40 => 'qa_number', 41 => 'country_of_manufacture', 42 => 'network_connectivity'] as $column => $field)
+                    <tr>
+                        <td>{{ $column }}</td>
+                        <td>{{ __('product.' . $field) }} <small class="text-muted">(@lang('lang_v1.optional'))</small></td>
+                        <td>{{ __('product.' . $field) }} (max. 255 characters)</td>
+                    </tr>
+                    @endforeach
                 </table>
             @endcomponent
         </div>

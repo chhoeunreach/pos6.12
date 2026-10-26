@@ -59,7 +59,7 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, WithCustom
 
     public function headings(): array
     {
-        return ['NAME', 'BRAND', 'UNIT', 'CATEGORY', 'SUB-CATEGORY', 'SKU (Leave blank to auto generate sku)', 'BARCODE TYPE', 'MANAGE STOCK (1=yes 0=No)', 'ALERT QUANTITY', 'EXPIRES IN', 'EXPIRY PERIOD UNIT (months/days)', 'APPLICABLE TAX', 'Selling Price Tax Type (inclusive or exclusive)', 'PRODUCT TYPE (single or variable)', 'VARIATION NAME (Keep blank if product type is single)', 'VARIATION VALUES (| seperated values & blank if product type if single)', 'VARIATION SKUs (| seperated values & blank if product type if single)', 'PURCHASE PRICE (Including tax)', 'PURCHASE PRICE (Excluding tax)', 'PROFIT MARGIN', 'SELLING PRICE', 'OPENING STOCK', 'OPENING STOCK LOCATION', 'EXPIRY DATE', 'ENABLE IMEI OR SERIAL NUMBER(1=yes 0=No)', 'WEIGHT', 'RACK', 'ROW', 'POSITION', 'IMAGE', 'PRODUCT DESCRIPTION', 'PRODUCT KEYWORD', 'CUSTOM FIELD 2', 'CUSTOM FIELD 3', 'CUSTOM FIELD 4', 'NOT FOR SELLING(1=yes 0=No)', 'PRODUCT LOCATIONS', 'PRODUCT KEYWORDS'];
+        return ['NAME', 'BRAND', 'UNIT', 'CATEGORY', 'SUB-CATEGORY', 'SKU (Leave blank to auto generate sku)', 'BARCODE TYPE', 'MANAGE STOCK (1=yes 0=No)', 'ALERT QUANTITY', 'EXPIRES IN', 'EXPIRY PERIOD UNIT (months/days)', 'APPLICABLE TAX', 'Selling Price Tax Type (inclusive or exclusive)', 'PRODUCT TYPE (single or variable)', 'VARIATION NAME (Keep blank if product type is single)', 'VARIATION VALUES (| seperated values & blank if product type if single)', 'VARIATION SKUs (| seperated values & blank if product type if single)', 'PURCHASE PRICE (Including tax)', 'PURCHASE PRICE (Excluding tax)', 'PROFIT MARGIN', 'SELLING PRICE', 'OPENING STOCK', 'OPENING STOCK LOCATION', 'EXPIRY DATE', 'ENABLE IMEI OR SERIAL NUMBER(1=yes 0=No)', 'WEIGHT', 'RACK', 'ROW', 'POSITION', 'IMAGE', 'PRODUCT DESCRIPTION', 'PRODUCT KEYWORD', 'CUSTOM FIELD 2', 'CUSTOM FIELD 3', 'CUSTOM FIELD 4', 'NOT FOR SELLING(1=yes 0=No)', 'PRODUCT LOCATIONS', 'PRODUCT KEYWORDS', 'Model No.', 'QA No.', 'Made In', 'Connectivity'];
     }
 
     public function map($product): array
@@ -131,6 +131,11 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, WithCustom
             $product->not_for_selling,
             $locations,
             $product_keywords,
+            $product->model_number,
+            $product->qa_number,
+            $product->country_of_manufacture,
+            $product->network_connectivity,
+
         ];
     }
 

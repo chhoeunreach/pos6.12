@@ -1,6 +1,16 @@
 <?php
 
 return [
+    'product_details' => 'Product details',
+    'add_lot_row' => 'Add lot row',
+    'model_number_full' => 'Model Number',
+    'reference_sku_number' => 'Reference SKU Number',
+    'country_of_manufacture_full' => 'Country of Manufacture',
+    'network_connectivity_full' => 'Network & Connectivity',
+    'model_number' => 'Model No.',
+    'qa_number' => 'QA No.',
+    'country_of_manufacture' => 'Made In',
+    'network_connectivity' => 'Connectivity',
 
     /*
     |--------------------------------------------------------------------------

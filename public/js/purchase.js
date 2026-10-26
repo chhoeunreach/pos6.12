@@ -1,3 +1,12 @@
+function purchase_row_group(row) {
+    return row.add(row.next('.purchase-product-details-row'));
+}
+
+function purchase_row_end(row) {
+    var details = row.next('.purchase-product-details-row');
+    return details.length ? details : row;
+}
+
 $(document).ready(function() {
     if ($('input#iraqi_selling_price_adjustment').length > 0) {
         iraqi_selling_price_adjustment = true;
@@ -257,8 +266,8 @@ $(document).ready(function() {
         }).then(value => {
             if (value) {
                 var row = $(this).closest('tr');
-                row.next('.purchase-add-below-row').remove();
-                row.remove();
+                purchase_row_end(row).next('.purchase-add-below-row').remove();
+                purchase_row_group(row).remove();
                 update_table_total();
                 update_grand_total();
                 update_table_sr_number();
@@ -269,7 +278,7 @@ $(document).ready(function() {
 
     $(document).on('click', '.add_purchase_product_below', function() {
         var row = $(this).closest('tr.purchase_entry_row');
-        var existing = row.next('.purchase-add-below-row');
+        var existing = purchase_row_end(row).next('.purchase-add-below-row');
 
         $('#purchase_entry_table tbody .purchase-add-below-row').not(existing).remove();
 
@@ -290,8 +299,8 @@ $(document).ready(function() {
                 '</td>' +
             '</tr>';
 
-        row.after(search_row);
-        var input = row.next('.purchase-add-below-row').find('.purchase_add_below_search');
+        purchase_row_end(row).after(search_row);
+        var input = purchase_row_end(row).next('.purchase-add-below-row').find('.purchase_add_below_search');
         init_purchase_add_below_search(input, row);
         input.focus();
     });
@@ -390,12 +399,13 @@ $(document).ready(function() {
 
             $.each(rows, function(index, row) {
                 if (!has_multiple_lots) {
-                    row.show();
+                    purchase_row_group(row).show();
                     return;
                 }
 
                 if (index === 0) {
-                    row.addClass('purchase-lot-parent-row').show();
+                    row.addClass('purchase-lot-parent-row');
+                    purchase_row_group(row).show();
                     row.find('.sr_number').after(
                         ' <button type="button" class="btn btn-xs btn-default toggle_purchase_lot_group" ' +
                             'data-purchase-lot-group="' + group_key + '" title="Expand/collapse lots">' +
@@ -405,9 +415,9 @@ $(document).ready(function() {
                 } else {
                     row.addClass('purchase-lot-child-row');
                     if (is_collapsed) {
-                        row.hide();
+                        purchase_row_group(row).hide();
                     } else {
-                        row.show();
+                        purchase_row_group(row).show();
                     }
                 }
             });
@@ -418,6 +428,8 @@ $(document).ready(function() {
 
     function add_purchase_lot_row(row) {
         var new_row = row.clone(false, false);
+        var new_details = row.next('.purchase-product-details-row').clone(false, false);
+        var new_group = new_row.add(new_details);
         var row_count = parseInt($('#row_count').val(), 10) || $('table#purchase_entry_table tbody tr.purchase_entry_row').length;
 
         new_row.find('input[name$="[purchase_line_id]"]').remove();
@@ -430,13 +442,14 @@ $(document).ready(function() {
             .show()
             .find('option')
             .removeAttr('data-select2-id');
-        new_row.find(':input[name^="purchases["]').each(function() {
+        new_group.find(':input[name^="purchases["]').each(function() {
             this.name = this.name.replace(/^purchases\[[^\]]+\]/, 'purchases[' + row_count + ']');
         });
         new_row.find('.purchase_lot_number').val('');
         __write_number(new_row.find('input.purchase_quantity'), 1, true);
 
-        row.after(update_purchase_entry_row_values(new_row));
+        purchase_row_end(row).after(update_purchase_entry_row_values(new_row));
+        new_row.after(new_details);
         if ($.fn.select2) {
             new_row.find('select.select2').select2();
         }
@@ -1069,17 +1082,19 @@ function append_purchase_lines(data, row_count, trigger_change = false, insert_a
         .find('.purchase_quantity')
         .each(function() {
             row = $(this).closest('tr');
+            var details_row = row.next('.purchase-product-details-row');
             row = update_purchase_entry_row_values(row);
             row.addClass('purchase_entry_row');
             var insert_target = anchor_row.length ? anchor_row : get_purchase_group_insert_target(row);
 
             if (insert_target.length) {
-                insert_target.next('.purchase-add-below-row').remove();
-                insert_target.after(row);
+                purchase_row_end(insert_target).next('.purchase-add-below-row').remove();
+                purchase_row_end(insert_target).after(row);
                 anchor_row = row;
             } else {
                 $('#purchase_entry_table tbody').append(row);
             }
+            row.after(details_row);
             last_inserted_row = row;
             update_row_price_for_exchange_rate(row);
 
@@ -1391,7 +1406,7 @@ function compact_purchase_lines_for_submit($form, done) {
         for (; index < end; index++) {
             var row = rows[index];
             var line = {};
-            $(row).find(':input[name^="purchases["]').each(function() {
+            purchase_row_group($(row)).find(':input[name^="purchases["]').each(function() {
                 var match = this.name.match(/^purchases\[[^\]]+\]\[([^\]]+)\]$/);
                 if (!match) {
                     return;
@@ -1602,7 +1617,7 @@ $(document).on('change', '#supplier_id', function(){
                 $('#purchase_order_ids').select2('destroy').empty().select2({data: data});
                 $('#purchase_entry_table tbody').find('tr').each( function(){
                     if (typeof($(this).data('purchase_order_id')) !== 'undefined') {
-                        $(this).remove();
+                        purchase_row_group($(this)).remove();
                     }
                 });
             },
@@ -1629,7 +1644,7 @@ $("#purchase_order_ids").on("select2:unselect", function (e) {
     $('#purchase_entry_table tbody').find('tr').each( function(){
         if (typeof($(this).data('purchase_order_id')) !== 'undefined' 
             && $(this).data('purchase_order_id') == purchase_order_id) {
-            $(this).remove();
+            purchase_row_group($(this)).remove();
         }
     });
 });
@@ -1757,7 +1772,7 @@ function get_purchase_requisitions() {
                     $('#purchase_requisition_ids').select2('destroy').empty().select2({data: data});
                     $('#purchase_entry_table tbody').find('tr').each( function(){
                         if (typeof($(this).data('purchase_requisition_id')) !== 'undefined') {
-                            $(this).remove();
+                            purchase_row_group($(this)).remove();
                         }
                     });
                 },
@@ -1784,7 +1799,7 @@ $("#purchase_requisition_ids").on("select2:unselect", function (e) {
     $('#purchase_entry_table tbody').find('tr').each( function(){
         if (typeof($(this).data('purchase_requisition_id')) !== 'undefined' 
             && $(this).data('purchase_requisition_id') == purchase_requisition_id) {
-            $(this).remove();
+            purchase_row_group($(this)).remove();
         }
     });
 });

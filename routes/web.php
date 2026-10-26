@@ -311,6 +311,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/labels/preview', [LabelsController::class, 'preview']);
 
     //Reports...
+    Route::get('/reports/telecom-ssd-report', [\App\Http\Controllers\TelecomSsdReportController::class, 'index'])->name('reports.telecom-ssd');
     Route::get('/reports/gst-purchase-report', [ReportController::class, 'gstPurchaseReport']);
     Route::get('/reports/gst-sales-report', [ReportController::class, 'gstSalesReport']);
     Route::get('/reports/get-stock-by-sell-price', [ReportController::class, 'getStockBySellingPrice']);

@@ -1,6 +1,10 @@
 @extends('layouts.app')
 @section('title', __('purchase.edit_purchase'))
 
+@section('css')
+    <link rel="stylesheet" href="{{ asset('css/purchase-identification.css?v=' . $asset_v) }}">
+@endsection
+
 @section('content')
 
 @php

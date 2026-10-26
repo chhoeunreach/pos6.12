@@ -47,6 +47,10 @@ class ImportProductsTemplateExport implements FromArray
             'NOT FOR SELLING(1=yes 0=No)',
             'PRODUCT LOCATIONS',
             'PRODUCT KEYWORDS',
+            'Model No.',
+            'QA No.',
+            'Made In',
+            'Connectivity',
         ]];
     }
 }

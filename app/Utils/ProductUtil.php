@@ -1301,6 +1301,11 @@ class ProductUtil extends Util
             if (array_key_exists('lot_number', $data)) {
                 $purchase_line->lot_number = ! empty($data['lot_number']) ? $data['lot_number'] : null;
             }
+            foreach (['model_number', 'qa_number', 'country_of_manufacture', 'network_connectivity'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $purchase_line->$field = trim((string) ($data[$field] ?? ''));
+                }
+            }
             $purchase_line->mfg_date = ! empty($data['mfg_date']) ? $this->uf_date($data['mfg_date']) : null;
             $purchase_line->exp_date = ! empty($data['exp_date']) ? $this->uf_date($data['exp_date']) : null;
             $purchase_line->sub_unit_id = ! empty($data['sub_unit_id']) ? $data['sub_unit_id'] : null;

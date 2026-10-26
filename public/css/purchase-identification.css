@@ -1,0 +1,64 @@
+.purchase-product-identification {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    margin-top: 0;
+    text-align: left;
+}
+.purchase-product-main-row { display: flex; align-items: flex-start; gap: 16px; }
+.purchase-product-heading { flex: 1 1 auto; min-width: 160px; }
+.purchase-lot-control { flex: 0 0 150px; }
+.purchase-identification-label {
+    display: block;
+    min-width: 0;
+    margin: 0 0 5px;
+    font-weight: normal;
+}
+.purchase-product-details { width: 100%; min-width: 0; }
+.purchase-details-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    color: #475569;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 12px;
+    list-style: none;
+}
+.purchase-details-toggle::-webkit-details-marker { display: none; }
+.purchase-details-toggle::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+}
+.purchase-product-details[open] > .purchase-details-toggle::after { transform: rotate(225deg); }
+.purchase-details-toggle:hover { background: #f1f5f9; }
+.purchase-details-toggle:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+.purchase-details-fields {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(180px, 1fr));
+    align-items: end;
+    overflow-x: auto;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #fff;
+}
+.purchase-detail-label { display: block; margin-bottom: 5px; color: #64748b; font-size: 11px; white-space: nowrap; }
+.purchase-details-fields .form-control { border-color: #cbd5e1; border-radius: 4px; box-shadow: none; }
+.purchase-details-fields .form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+
+.purchase-product-details-row > td { padding: 10px 12px !important; text-align: left; background: #f8fafc; }
+.purchase-product-details { display: flow-root; }
+.purchase-product-details > .purchase-details-toggle { float: left; width: 145px; margin-right: 16px; }
+.purchase-product-details > .purchase-details-fields { margin: 0 0 0 161px; padding: 0; border: 0; background: transparent; }

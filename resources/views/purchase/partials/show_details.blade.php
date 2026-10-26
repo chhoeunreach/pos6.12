@@ -178,6 +178,16 @@
               <td>{{ $loop->iteration }}</td>
               <td>
                 {{ $purchase_line->product->name }}
+                @if($purchase->type != 'purchase_order')
+                    <dl class="text-left" style="margin: 6px 0 0; font-size: 12px;">
+                        @foreach(['model_number' => 'model_number_full', 'qa_number' => 'reference_sku_number', 'country_of_manufacture' => 'country_of_manufacture_full', 'network_connectivity' => 'network_connectivity_full'] as $field => $label)
+                            @if(filled($purchase_line->$field))
+                                <dt style="font-weight: normal;">{{ __('product.' . $label) }}</dt>
+                                <dd>{{ $purchase_line->$field }}</dd>
+                            @endif
+                        @endforeach
+                    </dl>
+                @endif
                  @if( $purchase_line->product->type == 'variable')
                   - {{ $purchase_line->variations->product_variation->name}}
                   - {{ $purchase_line->variations->name}}
