@@ -29,7 +29,7 @@
     @include('layouts.partials.css')
     @include('layouts.partials.extracss')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap" as="style">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap" as="style">
 
     @if (file_exists($moduleCssPath))
         <style data-lm-css-version="{{ $asset_v }}">{!! file_get_contents($moduleCssPath) !!}</style>

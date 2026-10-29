@@ -29,6 +29,12 @@
 @endif
 
 <style>
+    .wiz-deposit-edit-form .lm-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .wiz-deposit-edit-form .lm-field { min-width: 0; }
+    .wiz-deposit-edit-form .lm-label { display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+    .wiz-deposit-edit-form .lm-control { width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .wiz-deposit-edit-form .lm-remove-method { border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 10px; background: #fff; }
+    .wiz-deposit-method-total { margin-top: 10px; font-size: 12px; }
     *, *::before, *::after { box-sizing: border-box; }
 
     .lm-pro-edit-wrap {
@@ -1221,14 +1227,6 @@
                                                             <input type="date" name="paid_date" class="lm-wiz-input" value="{{ $dpDate }}" required>
                                                         </div>
                                                         <div class="wiz-deposit-field">
-                                                            <label>{{ $lmText('Method', 'វិធីសាស្ត្រ') }}</label>
-                                                            <select name="method" class="lm-wiz-input">
-                                                                @foreach($paymentTypes as $pKey => $pLabel)
-                                                                    <option value="{{ $pKey }}" {{ $dpMethod === $pKey || $dpMethod === $pLabel ? 'selected' : '' }}>{{ $pLabel }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                        </div>
-                                                        <div class="wiz-deposit-field">
                                                             <label>{{ $lmText('Status', 'ស្ថានភាព') }}</label>
                                                             <select name="status" class="lm-wiz-input">
                                                                 @foreach(['confirmed'=>$lmText('Confirmed','បានបញ្ជាក់'),'paid'=>$lmText('Paid','បានបង់'),'pending'=>$lmText('Pending','រង់ចាំ'),'failed'=>$lmText('Failed','បរាជ័យ'),'cancelled'=>$lmText('Cancelled','បានលុបចោល')] as $sk => $sl)
@@ -1237,6 +1235,30 @@
                                                             </select>
                                                         </div>
                                                     </div>
+                                                    <input type="hidden" name="payment_type" value="{{ $dp->payment_type ?? 'loan' }}">
+                                                    <input type="hidden" name="reference_number" value="{{ $dp->reference_number ?? '' }}">
+                                                    <input type="hidden" name="note" value="{{ $dpNote }}">
+                                                    @php
+                                                        $dpMethodRows = ($dp->details ?? collect())->map(fn ($detail) => [
+                                                            'id' => $detail->id,
+                                                            'method' => $detail->method ?? $detail->payment_method_snapshot ?? 'cash',
+                                                            'amount' => $detail->amount_base ?? $detail->amount ?? 0,
+                                                            'reference_number' => $detail->reference_number ?? $detail->transaction_no ?? '',
+                                                        ])->all();
+                                                        if (empty($dpMethodRows)) {
+                                                            $dpMethodRows = [['method' => $dpMethod, 'amount' => $dpAmount, 'reference_number' => $dp->reference_number ?? '']];
+                                                        }
+                                                    @endphp
+                                                    <div class="wiz-deposit-methods" data-next-index="{{ count($dpMethodRows) }}">
+                                                        @foreach($dpMethodRows as $index => $methodRow)
+                                                            @include('loanmanagement::payments.partials.method_row', ['methods' => $paymentTypes, 'loanCurrency' => $loanRow->currency ?? 'USD'])
+                                                        @endforeach
+                                                    </div>
+                                                    <template class="wiz-deposit-method-template">
+                                                        @include('loanmanagement::payments.partials.method_row', ['index' => '__INDEX__', 'methodRow' => ['method' => $defaultPaymentMethod ?: 'cash', 'amount' => '', 'reference_number' => ''], 'methods' => $paymentTypes, 'loanCurrency' => $loanRow->currency ?? 'USD'])
+                                                    </template>
+                                                    <button type="button" class="btn btn-sm btn-default wiz-deposit-add-method"><i class="fa fa-plus"></i> {{ $lmText('Add Payment Method', 'បន្ថែមវិធីទូទាត់') }}</button>
+                                                    <p class="wiz-deposit-method-total" aria-live="polite" data-label="{{ $lmText('Payment methods total', 'សរុបវិធីទូទាត់') }}" data-currency="{{ $loanRow->currency ?? 'USD' }}" data-mismatch="{{ $lmText('Payment method amounts must equal the total amount paid.', 'ទឹកប្រាក់តាមវិធីទូទាត់ត្រូវស្មើនឹងទឹកប្រាក់បង់សរុប។') }}"></p>
                                                     <div class="wiz-deposit-form-actions">
                                                         <button type="button" class="btn btn-sm btn-primary wiz-deposit-update-btn">{{ $lmText('Update Deposit', 'កែប្រែប្រាក់កក់') }}</button>
                                                         <button type="button" class="btn btn-sm btn-danger wiz-deposit-remove" data-payment-id="{{ $dp->id }}" data-return-to="{{ $dpEditReturnUrl }}">{{ $lmText('Remove', 'លុបចេញ') }}</button>
@@ -1466,6 +1488,7 @@
 @endsection
 
 @section('loan_js')
+<script src="{{ asset('js/loan-deposit-payments.js') }}?v={{ filemtime(public_path('js/loan-deposit-payments.js')) }}"></script>
 <script>
 (function ($) {
     var wizUrls = {
@@ -2335,6 +2358,7 @@
         var $form = $btn.closest('.wiz-deposit-edit-form');
         var $row = $form.closest('.wiz-deposit-row');
         var paymentId = $row.data('id');
+        if (!window.LoanDepositPayments.validate($form[0])) return;
         $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
         var payload = $form.find(':input').serializeArray();
         payload.push({ name: '_token', value: '{{ csrf_token() }}' });
@@ -2349,7 +2373,9 @@
                 setTimeout(function () { window.location.reload(); }, 800);
             },
             error: function (xhr) {
-                var msg = (xhr.responseJSON && xhr.responseJSON.message) || '{{ $lmText('Failed to update deposit.', 'មិនអាចកែប្រែប្រាក់កក់បានទេ។') }}';
+                var errors = xhr.responseJSON && xhr.responseJSON.errors;
+                var firstError = errors && errors[Object.keys(errors)[0]];
+                var msg = (firstError && firstError[0]) || (xhr.responseJSON && xhr.responseJSON.message) || '{{ $lmText('Failed to update deposit.', 'មិនអាចកែប្រែប្រាក់កក់បានទេ។') }}';
                 if (window.toastr) toastr.error(msg); else alert(msg);
             },
             complete: function () {
@@ -2359,6 +2385,7 @@
     });
 
     $(function () {
+        window.LoanDepositPayments.init(document);
         wizEditRecalcTotals();
         wizInitAddressSelects();
     });

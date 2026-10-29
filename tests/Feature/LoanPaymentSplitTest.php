@@ -32,6 +32,7 @@ class LoanPaymentSplitTest extends TestCase
             $t->date('paid_date')->nullable();
             $t->integer('schedule_id')->nullable();
             $t->double('total_paid_base');
+            $t->string('payment_type')->default('monthly');
             $t->string('payment_method_snapshot')->nullable();
             $t->string('status')->default('confirmed');
         });
@@ -100,6 +101,28 @@ class LoanPaymentSplitTest extends TestCase
         $this->assertCount(3, $this->controller->edit(1)->getData()['details']);
         $this->save([2 => ['id' => 2, 'method' => 'aba', 'amount' => 100]]);
         $this->assertSame([2], $db->table('loan_payment_details')->pluck('id')->all());
+        $this->assertEquals(100, $db->table('loan_payment_schedules')->value('balance_amount'));
+    }
+
+    public function test_deposit_split_keeps_deposit_type_without_linking_an_installment(): void
+    {
+        $db = DB::connection('loan_split_test');
+        $db->table('loan_payments')->where('id', 1)->update(['payment_type' => 'loan', 'schedule_id' => null]);
+        $request = Request::create('/loan-management/payments/1', 'PUT', [
+            'paid_date' => '2026-10-29', 'amount' => 100, 'payment_type' => 'loan',
+            'payment_details' => [
+                ['id' => 1, 'method' => 'cash', 'amount' => 25],
+                ['id' => 2, 'method' => 'aba', 'amount' => 50, 'reference_number' => 'DEPOSIT-ABA'],
+                ['method' => 'other', 'amount' => 25],
+            ],
+        ]);
+        $request->headers->set('Accept', 'application/json');
+        $this->assertTrue($this->controller->update($request, 1)->getData()->success);
+        $payment = $db->table('loan_payments')->find(1);
+        $this->assertSame('loan', $payment->payment_type);
+        $this->assertNull($payment->schedule_id);
+        $this->assertCount(3, $db->table('loan_payment_details')->get());
+        $this->assertSame('DEPOSIT-ABA', $db->table('loan_payment_details')->find(2)->reference_number);
         $this->assertEquals(100, $db->table('loan_payment_schedules')->value('balance_amount'));
     }
 

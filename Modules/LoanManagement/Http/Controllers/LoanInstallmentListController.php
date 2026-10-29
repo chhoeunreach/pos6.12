@@ -1262,10 +1262,8 @@ class LoanInstallmentListController extends Controller
                     $product = '-';
                 }
 
-                $price = $r->item_price ?? 0;
                 $html = '<div class="lm-loan-product-wrap">';
                 $html .= '<div class="lm-loan-product-cell" title="'.e($product).'"><i class="fa fa-cube"></i> '.e($product).'</div>';
-                $html .= '<small class="lm-loan-product-price"><i class="fa fa-tag"></i> <span class="display_currency" data-currency_symbol="true">'.e($price).'</span></small>';
                 $imei = trim((string) ($r->imei_snapshot ?? ''));
                 if ($imei !== '') {
                     $html .= '<small class="lm-loan-product-imei"><i class="fa fa-barcode"></i> '.e($imei).'</small>';
@@ -1390,8 +1388,21 @@ class LoanInstallmentListController extends Controller
                 return $actions;
             })
             ->rawColumns(['status', 'item_price', 'down_payment', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount', 'source_invoice_no', 'customer_name_snapshot', 'product_name_snapshot', 'installment_terms', 'next_due_date', 'repayment_progress', 'action'])
+            ->withQuery('totals', fn ($query) => $this->installmentListTotals($query))
             ->with('status_counts', $this->getLoanStatusCounts())
             ->make(true);
+    }
+
+    protected function installmentListTotals(\Illuminate\Database\Query\Builder $query): array
+    {
+        // DataTables passes its filtered query after pagination has been applied.
+        $filtered = $query->cloneWithout(['orders', 'limit', 'offset'])->cloneWithoutBindings(['order']);
+        $columns = ['item_price', 'down_payment', 'principal_amount', 'total_amount', 'paid_amount', 'balance_amount'];
+        $sums = array_map(fn ($column) => 'COALESCE(SUM('.$column.'), 0) as '.$column, $columns);
+        $totals = $query->getConnection()->query()->fromSub($filtered, 'filtered_loans')
+            ->selectRaw(implode(', ', $sums))->first();
+
+        return array_map('floatval', (array) $totals);
     }
 
     protected function cleanLoanDateFilter($value): ?string
@@ -5446,6 +5457,13 @@ class LoanInstallmentListController extends Controller
                 ->orderByDesc('id');
             $this->excludeDeletedLoanRows($depQuery, 'loan_payments');
             $depositPayments = $depQuery->get();
+            $depositDetails = $this->loanTableExists('loan_payment_details')
+                ? DB::connection('mysql_loan')->table('loan_payment_details')
+                    ->whereIn('payment_id', $depositPayments->pluck('id'))->orderBy('id')->get()->groupBy('payment_id')
+                : collect();
+            foreach ($depositPayments as $depositPayment) {
+                $depositPayment->details = $depositDetails->get($depositPayment->id, collect());
+            }
         }
 
         $loanItems = collect();

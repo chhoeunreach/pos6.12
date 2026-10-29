@@ -7,6 +7,8 @@
 @endsection
 
 @section('content_body')
+    @include('loanmanagement::layouts.partials.workspace_tabs', ['workspace' => 'users'])
+
 <div class="pos-admin-page">
     <div class="pos-page-head">
         <div class="pos-page-title">

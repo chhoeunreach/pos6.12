@@ -785,6 +785,8 @@
 @endsection
 
 @section('content_body')
+@include('loanmanagement::layouts.partials.workspace_tabs', ['workspace' => 'summary'])
+
 <div class="yls-wrap">
 
     {{-- Content Header --}}

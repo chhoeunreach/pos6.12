@@ -192,11 +192,11 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
 .lm-sidebar {
     width: var(--lm-sidebar-width);
     flex: 0 0 var(--lm-sidebar-width);
-    display: flex;
-    flex-direction: column;
     height: 100vh;
     max-height: 100vh;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     background: var(--lm-sidebar);
     color: var(--lm-sidebar-text);
     position: relative;
@@ -314,23 +314,27 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
 .lm-sidebar-mini-action { display: none; }
 
 /* Menu */
-.lm-menu {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    padding: 0 0 8px;
-}
+.lm-menu { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 0 0 8px; }
 .lm-menu::-webkit-scrollbar { width: 5px; }
 .lm-menu::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
-.lm-menu::-webkit-scrollbar-track { background: transparent; }
 .lm-menu-section { margin: 0 0 4px; }
 .lm-menu-section-title {
     display: flex; align-items: center; gap: 8px;
     margin: 10px 6px 4px; color: var(--lm-muted);
-    font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    width: calc(100% - 12px); padding: 4px 0; border: 0; background: transparent; cursor: pointer;
+    font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; text-align: left;
 }
+.lm-menu-section-title i { order: 1; transition: transform .15s ease; }
+.lm-menu-section.is-collapsed > .lm-menu-section-title i { transform: rotate(-90deg); }
+.lm-menu-section.is-collapsed > .lm-menu-link,
+.lm-menu-section.is-collapsed > .lm-menu-group { display: none; }
+body.lm-sidebar-collapsed .lm-menu-section.is-collapsed > .lm-menu-link { display: flex; }
+.lm-workspace-tabs { display: flex; gap: 4px; overflow-x: auto; margin: 0 0 16px; border-bottom: 1px solid var(--lm-border-light); }
+.lm-workspace-tabs a { flex: 0 0 auto; padding: 9px 12px; min-height: 38px; color: var(--lm-text-secondary); border-bottom: 2px solid transparent; text-decoration: none; font-size: 13px; font-weight: 600; }
+.lm-workspace-tabs a:hover { color: #047857; }
+.lm-workspace-tabs a.active { color: #047857; border-bottom-color: #059669; }
+.lm-menu-section-title:focus-visible,
+.lm-workspace-tabs a:focus-visible { outline: 2px solid #059669; outline-offset: 2px; }
 .lm-menu-section-title::after {
     content: ''; height: 1px; flex: 1 1 auto; background: var(--lm-border-light);
 }
@@ -339,12 +343,38 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
 .lm-submenu-link {
     display: flex; align-items: center; gap: 10px;
     position: relative; min-height: 36px;
-    color: var(--lm-text-secondary); padding: 6px 10px;
+    color: var(--lm-text-secondary); padding: 6px 12px;
     border-radius: var(--lm-radius-sm); text-decoration: none;
     line-height: 1.25; margin: 1px 0; font-size: 13px; font-weight: 500;
     border: 1px solid transparent;
+    box-sizing: border-box;
     transition: all var(--lm-transition-fast);
     will-change: transform, background;
+}
+.lm-sidebar-backdrop {
+    display: none;
+    border: 0;
+    padding: 0;
+}
+
+.lm-menu-link::before,
+.lm-submenu-link::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3.5px;
+    border-radius: 0 4px 4px 0;
+    background: var(--lm-primary);
+    opacity: 0;
+    transform: scaleY(0.4);
+    transition: opacity var(--lm-transition-fast), transform var(--lm-transition-fast);
+}
+.lm-menu-link.active::before,
+.lm-submenu-link.active::before {
+    opacity: 1;
+    transform: scaleY(1);
 }
 .lm-menu-link:hover,
 .lm-submenu-link:hover {
@@ -359,11 +389,22 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
     color: var(--lm-primary);
     background: linear-gradient(90deg, var(--lm-primary-50) 0%, rgba(99,102,241,.04) 100%);
     border-color: var(--lm-primary-200);
-    box-shadow: inset 3px 0 0 var(--lm-primary);
+    box-shadow: none;
     font-weight: 600;
 }
 .lm-menu-toggle { width: 100%; border: 0; background: transparent; text-align: left; }
-.lm-menu-icon { flex: 0 0 20px; width: 20px; color: var(--lm-primary); text-align: center; font-size: 14px; }
+.lm-menu-icon {
+    flex: 0 0 20px;
+    width: 20px;
+    min-width: 20px;
+    color: var(--lm-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1;
+}
 
 .lm-menu-link.tone-green .lm-menu-icon { color: #10b981; }
 .lm-menu-link.tone-red .lm-menu-icon { color: #ef4444; }
@@ -372,6 +413,10 @@ body.loan-management-page .fa-warning:before { content: "\f071"; }
 .lm-menu-link.tone-orange .lm-menu-icon { color: #f97316; }
 .lm-menu-link.tone-slate .lm-menu-icon { color: #64748b; }
 .lm-menu-link.tone-blue .lm-menu-icon { color: #6366f1; }
+.lm-menu-link.active .lm-menu-icon,
+.lm-submenu-link.active .lm-menu-icon {
+    color: var(--lm-primary) !important;
+}
 
 .lm-menu-label {
     flex: 1 1 auto; min-width: 0; overflow: hidden;

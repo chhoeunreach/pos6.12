@@ -321,6 +321,8 @@
 @endsection
 
 @section('content_body')
+    @include('loanmanagement::layouts.partials.workspace_tabs', ['workspace' => 'users'])
+
 <div class="lm-users-content">
 
     {{-- Content Header (Page header) --}}

@@ -34,6 +34,9 @@
         ['label' => $lmText('Customers', 'អតិថិជន'), 'icon' => 'fa fa-users', 'tone' => 'info', 'url' => route('loan-management.customers.index')],
         ['label' => $lmText('Reports', 'របាយការណ៍'), 'icon' => 'fa fa-line-chart', 'tone' => 'neutral', 'url' => route('loan-management.reports.index')],
     ];
+    if (\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.create|loan_management.create')) {
+        array_unshift($dashboardActions, ['label' => $lmText('New Installment', 'បង្កើតរំលស់ថ្មី'), 'icon' => 'fa fa-plus-circle', 'tone' => 'primary', 'url' => route('loan-management.loans.create')]);
+    }
     $dashboardSummary = [
         ['label' => $lmText('Today Collection', 'ប្រមូលថ្ងៃនេះ'), 'value' => number_format($dashboardTodayCollection, 2), 'icon' => 'fa fa-money', 'tone' => 'green'],
         ['label' => $lmText('Monthly Income', 'ចំណូលប្រចាំខែ'), 'value' => number_format($dashboardMonthlyIncome, 2), 'icon' => 'fa fa-bar-chart', 'tone' => 'blue'],
@@ -45,9 +48,9 @@
 <div class="lm-dashboard">
     <section class="lm-dashboard-command">
         <div class="lm-dashboard-command__main">
-            <span class="lm-dashboard-command__eyebrow"><i class="fa fa-tachometer"></i> {{ $lmText('Loan Management', 'ការគ្រប់គ្រងរំលស់') }}</span>
-            <h2 class="lm-dashboard-command__title">{{ $lmText('Dashboard', 'ផ្ទាំងគ្រប់គ្រង') }}</h2>
-            <p class="lm-dashboard-command__subtitle">{{ $lmText('Monitor collections, customer follow-up, overdue risk, and daily payment activity from one clear workspace.', 'តាមដានការប្រមូលប្រាក់ ការតាមដានអតិថិជន ហានិភ័យហួសកំណត់ និងសកម្មភាពបង់ប្រាក់ប្រចាំថ្ងៃក្នុងផ្ទាំងតែមួយ។') }}</p>
+            <span class="lm-dashboard-command__eyebrow"><i class="fa fa-tachometer"></i> {{ $lmText('Loan Operations Workspace', 'ផ្ទាំងប្រតិបត្តិការរំលស់') }}</span>
+            <h2 class="lm-dashboard-command__title"><i class="fa fa-tachometer" style="color:var(--lm-primary, #6366f1); margin-right:8px;"></i> {{ $lmText('Dashboard Overview', 'ទិដ្ឋភាពទូទៅនៃផ្ទាំងគ្រប់គ្រង') }}</h2>
+            <p class="lm-dashboard-command__subtitle">{{ $lmText('Unified mission control for collections, customer follow-up, overdue portfolio risk, and daily transactions.', 'មជ្ឈមណ្ឌលគ្រប់គ្រងការប្រមូលប្រាក់ ការតាមដានអតិថិជន ហានិភ័យហួសកំណត់ និងប្រតិបត្តិការប្រចាំថ្ងៃ។') }}</p>
             <div class="lm-dashboard-command__chips">
                 <span class="lm-dashboard-chip lm-dashboard-chip--{{ $dashboardHealthTone }}"><i class="fa fa-heartbeat"></i> {{ $dashboardHealthLabel }}</span>
                 <span class="lm-dashboard-chip"><i class="fa fa-calendar"></i> {{ now()->format('M d, Y') }}</span>

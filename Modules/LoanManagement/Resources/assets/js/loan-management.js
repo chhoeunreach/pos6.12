@@ -95,6 +95,36 @@
             }
         });
 
+        var sectionStorageKey = 'loan-sidebar-collapsed-sections';
+        var collapsedSections = {};
+        try {
+            collapsedSections = JSON.parse(localStorage.getItem(sectionStorageKey) || '{}') || {};
+        } catch (e) {}
+
+        function updateSectionState(section, collapsed) {
+            section.classList.toggle('is-collapsed', collapsed);
+            var heading = section.querySelector('.lm-menu-section-title');
+            if (heading) heading.setAttribute('aria-expanded', String(!collapsed));
+        }
+
+        document.querySelectorAll('.lm-menu-section[data-section]').forEach(function (section) {
+            if (section.querySelector('[aria-current="page"]')) {
+                delete collapsedSections[section.dataset.section];
+            }
+            updateSectionState(section, !!collapsedSections[section.dataset.section]);
+        });
+
+        document.addEventListener('click', function (event) {
+            var heading = event.target.closest ? event.target.closest('.lm-menu-section-title') : null;
+            if (!heading) return;
+            var section = heading.closest('.lm-menu-section');
+            if (!section) return;
+            var collapsed = !section.classList.contains('is-collapsed');
+            collapsedSections[section.dataset.section] = collapsed;
+            updateSectionState(section, collapsed);
+            try { localStorage.setItem(sectionStorageKey, JSON.stringify(collapsedSections)); } catch (e) {}
+        });
+
         var sidebarSearch = document.getElementById('lmSidebarSearch');
         if (sidebarSearch) {
             var searchTimer = null;
@@ -104,6 +134,7 @@
                 var sections = document.querySelectorAll('.lm-menu-section');
 
                 sections.forEach(function (section) {
+                    updateSectionState(section, !term && !!collapsedSections[section.dataset.section]);
                     var hasVisibleItem = false;
                     var entries = Array.prototype.filter.call(section.children, function (child) {
                         return child.classList && (child.classList.contains('lm-menu-link') || child.classList.contains('lm-menu-group'));

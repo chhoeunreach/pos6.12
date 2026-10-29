@@ -1039,6 +1039,8 @@
 @endsection
 
 @section('content_body')
+@include('loanmanagement::layouts.partials.workspace_tabs', ['workspace' => 'summary'])
+
 <div class="ir-page">
 
     {{-- Official Print Header (Visible during Print) --}}
