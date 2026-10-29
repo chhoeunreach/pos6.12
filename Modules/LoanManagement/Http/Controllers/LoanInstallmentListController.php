@@ -1371,7 +1371,7 @@ class LoanInstallmentListController extends Controller
                 $actions = '<div class="btn-group btn-group-xs lm-loan-action-menu">';
                 $actions .= '<button type="button" class="btn btn-xs btn-primary btn-flat js-loan-action-toggle" aria-expanded="false" title="Actions"><i class="fa fa-ellipsis-v"></i> <span class="hidden-xs">Action</span> <span class="caret"></span></button>';
                 $actions .= '<ul class="dropdown-menu lm-loan-action-dropdown" role="menu" style="display:none;">';
-                $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id, false).'"><i class="fa fa-eye"></i> View</a></li>';
+                $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id, false).'" class="js-loan-frame-modal" data-title="Installment Detail"><i class="fa fa-eye"></i> View</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
                 $actions .= '<li><a href="'.route('loan-management.loans.contract', $r->id, false).'" target="_blank" rel="noopener"><i class="fa fa-file-text-o"></i> Contract</a></li>';
@@ -1389,7 +1389,7 @@ class LoanInstallmentListController extends Controller
                     $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.blacklist', $r->customer_id, false).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-blacklist-customer text-red"><i class="fa fa-user-times"></i> Add to Blacklist</a></li>';
                 }
                 if ($canEdit) {
-                    $actions .= '<li><a href="'.route('loan-management.loans.edit', $r->id, false).'"><i class="fa fa-pencil"></i> Edit</a></li>';
+                    $actions .= '<li><a href="'.route('loan-management.loans.edit', $r->id, false).'" class="js-loan-frame-modal" data-title="Edit Installment"><i class="fa fa-pencil"></i> Edit</a></li>';
                 }
                 if ($canDelete && in_array(strtolower((string) $r->status), ['draft', 'pending'])) {
                     $actions .= '<li><a href="#" class="btn-delete-loan text-red" data-url="'.route('loan-management.loans.destroy', $r->id, false).'"><i class="fa fa-trash"></i> Delete</a></li>';

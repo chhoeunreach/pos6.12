@@ -200,10 +200,9 @@
                         return;
                     }
 
-                    var modalUrl = url;
-                    if (modalUrl.indexOf('_lm_modal=1') === -1) {
-                        modalUrl += (modalUrl.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
-                    }
+                    var targetUrl = new URL(url, window.location.href);
+                    targetUrl.searchParams.set('_lm_modal', '1');
+                    var modalUrl = targetUrl.toString();
 
                     var html = '' +
                         '<div class="modal-dialog modal-xl lm-dashboard-iframe-modal" role="document">' +
@@ -220,7 +219,13 @@
                             '</div>' +
                         '</div>';
 
-                    $('.view_modal').html(html).modal('show');
+                    $('.view_modal').off('hidden.bs.modal.loanFrame').on('hidden.bs.modal.loanFrame', function (event) {
+                        if (event.target !== this || !$(this).find('.lm-dashboard-iframe-modal iframe').length) return;
+                        $(this).empty();
+                        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#loan_list_table')) {
+                            $('#loan_list_table').DataTable().ajax.reload(null, false);
+                        }
+                    }).html(html).modal('show');
                 }
 
                 function showExistingLoanWarning(body, message, loanUrl) {
@@ -453,9 +458,10 @@
                     }, 250);
                 }
 
-                $(document).on('click', '.js-open-existing-loan-detail', function(event){
+                $(document).on('click', '.js-open-existing-loan-detail, .js-loan-frame-modal', function(event){
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
-                    openLoanDetailFrameModal($(this).data('loan-url'), 'Installment Detail');
+                    openLoanDetailFrameModal($(this).data('loan-url') || $(this).attr('href'), $(this).data('title') || 'Installment Detail');
                 });
 
                 window.loanManagementOpenAutoInstallment = openAutoInstallment;

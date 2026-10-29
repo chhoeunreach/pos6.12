@@ -109,4 +109,62 @@ class LoanCustomerDetailTest extends LoanModuleFeatureTestCase
         $this->assertStringNotContainsString('href="'.route('loan-management.customers.edit', 1).'"', $html);
         $this->assertStringContainsString('—', $html);
     }
+    private function modalRequest(string $path): \Illuminate\Http\Request
+    {
+        $request = \Illuminate\Http\Request::create($path, 'GET', ['_customer_modal' => 1]);
+        $request->setLaravelSession(session()->driver());
+        $this->app->instance('request', $request);
+        return $request;
+    }
+
+    public function test_modal_detail_is_a_fragment_with_an_in_modal_edit_action(): void
+    {
+        $this->modalRequest('/loan-management/customers/1');
+        $view = app(LoanCustomerController::class)->show(1);
+        $this->assertSame('loanmanagement::customers.modal_detail', $view->getName());
+        $html = $view->render();
+        $this->assertStringContainsString('data-customer-modal-view="detail"', $html);
+        $this->assertStringContainsString('js-customer-modal', $html);
+        $this->assertStringContainsString('data-dismiss="modal"', $html);
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $html);
+        $this->assertStringNotContainsString('lcd-breadcrumb', $html);
+    }
+
+    public function test_modal_edit_contains_upload_csrf_and_identity_guards_with_one_notes_field(): void
+    {
+        $this->modalRequest('/loan-management/customers/1/edit');
+        $view = app(LoanCustomerController::class)->edit(1);
+        $this->assertSame('loanmanagement::customers.modal_edit', $view->getName());
+        $html = $view->render();
+        foreach (['id="loanCustomerModalForm"', 'multipart/form-data', 'name="_token"', 'name="_method" value="PUT"', 'name="expected_customer_id" value="1"', 'name="expected_customer_code" value="CUST-001"', 'name="customer_photo"'] as $required) {
+            $this->assertStringContainsString($required, $html);
+        }
+        $this->assertSame(1, substr_count($html, 'name="note"'));
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $html);
+    }
+
+    public function test_modal_save_returns_json_and_preserves_existing_customer_guard(): void
+    {
+        $request = \Modules\LoanManagement\Http\Requests\UpdateLoanCustomerRequest::create('/loan-management/customers/1', 'POST', [
+            'name' => 'Updated Customer', 'phone' => '099999999', 'note' => 'Edited in modal', 'expected_customer_id' => 1, 'expected_customer_code' => 'CUST-001',
+        ]);
+        $request->headers->set('Accept', 'application/json');
+        $request->setContainer($this->app);
+        $request->setValidator($this->app['validator']->make($request->all(), $request->rules()));
+        $this->app->instance('request', $request);
+        $response = app(LoanCustomerController::class)->update($request, 1);
+        $this->assertTrue($response->getData(true)['success']);
+        $this->assertSame(route('loan-management.customers.show', 1), $response->getData(true)['detail_url']);
+        $saved = DB::connection('mysql_loan')->table('loan_customers')->find(1);
+        $this->assertSame('Updated Customer', $saved->name);
+        $this->assertSame('Edited in modal', $saved->note);
+        $request->merge(['expected_customer_id' => 99]);
+        try {
+            app(LoanCustomerController::class)->update($request, 1);
+            $this->fail('Expected mismatched customer guard');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+    }
+
 }

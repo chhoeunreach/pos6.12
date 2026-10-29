@@ -14,6 +14,8 @@
 @endphp
 
 @section('loan_css')
+<link rel="stylesheet" href="{{ asset('css/loan-customer-detail.css') }}?v=20261029">
+<link rel="stylesheet" href="{{ asset('css/loan-customer-modal.css') }}?v=20261029">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap.min.css">
 <style>
     /* =========================================================
@@ -410,11 +412,11 @@
     /* Customer action dropdown */
     .lm-customer-actions-toggle {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        min-height: 34px; padding: 7px 12px; border: 1px solid #cbd5e1;
-        border-radius: 7px; background: #fff; color: #334155; font-size: 12px; font-weight: 600;
+        width: 34px; min-height: 34px; padding: 7px; border: 1px solid #cbd5e1;
+        border-radius: 6px; background: var(--lm-primary, #2563eb); border-color: var(--lm-primary, #2563eb); color: #fff; font-size: 12px; font-weight: 600;
     }
     .lm-customer-actions-toggle:hover, .lm-customer-actions-toggle[aria-expanded="true"] {
-        color: #2563eb; border-color: #93c5fd; background: #eff6ff;
+        color: #fff; border-color: var(--lm-primary-dark, #1d4ed8); background: var(--lm-primary-dark, #1d4ed8);
     }
     .lm-customer-actions-menu {
         position: fixed; z-index: 1100; min-width: 210px; max-width: calc(100vw - 16px);
@@ -678,13 +680,13 @@
                                 </td>
                                 <td style="text-align: center;">
                                     <div class="lm-customer-actions">
-                                        <button type="button" class="lm-customer-actions-toggle" id="customerActionsButton-{{ $c->id }}" aria-haspopup="menu" aria-expanded="false" aria-controls="customerActions-{{ $c->id }}" aria-label="{{ $lmText('Actions for', 'សកម្មភាពសម្រាប់') }} {{ $displayName }}">
-                                            {{ $lmText('Actions', 'សកម្មភាព') }} <i class="fa fa-angle-down" aria-hidden="true"></i>
+                                        <button type="button" class="btn btn-xs btn-primary btn-flat lm-customer-actions-toggle" id="customerActionsButton-{{ $c->id }}" aria-haspopup="menu" aria-expanded="false" aria-controls="customerActions-{{ $c->id }}" aria-label="{{ $lmText('Actions for', 'សកម្មភាពសម្រាប់') }} {{ $displayName }}">
+                                            <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
                                         </button>
                                         <div class="lm-customer-actions-menu" id="customerActions-{{ $c->id }}" role="menu" aria-labelledby="customerActionsButton-{{ $c->id }}" hidden>
-                                            <a role="menuitem" href="{{ route('loan-management.customers.show', $c->id) }}"><i class="fa fa-eye" aria-hidden="true"></i> {{ $lmText('View Customer Detail', 'មើលព័ត៌មានអតិថិជន') }}</a>
+                                            <a role="menuitem" class="js-customer-modal" data-title="{{ $lmText('Customer Detail', 'ព័ត៌មានអតិថិជន') }}" href="{{ route('loan-management.customers.show', $c->id) }}"><i class="fa fa-eye" aria-hidden="true"></i> {{ $lmText('View Customer Detail', 'មើលព័ត៌មានអតិថិជន') }}</a>
                                             @if(auth()->user()->can('loan_management.customers.edit') || auth()->user()->can('loan_management.edit'))
-                                                <a role="menuitem" href="{{ route('loan-management.customers.edit', $c->id) }}"><i class="fa fa-edit" aria-hidden="true"></i> {{ $lmText('Edit Customer', 'កែប្រែព័ត៌មាន') }}</a>
+                                                <a role="menuitem" class="js-customer-modal" data-title="{{ $lmText('Edit Customer', 'កែប្រែអតិថិជន') }}" href="{{ route('loan-management.customers.edit', $c->id) }}"><i class="fa fa-edit" aria-hidden="true"></i> {{ $lmText('Edit Customer', 'កែប្រែព័ត៌មាន') }}</a>
                                             @endif
                                             @if(auth()->user()->can('loan_management.customers.delete') || auth()->user()->can('loan_management.delete'))
                                                 <form method="POST" action="{{ route('loan-management.customers.destroy', $c->id) }}" onsubmit="return confirm('{{ $lmText('Are you sure you want to delete this customer record?', 'តើអ្នកប្រាកដជាចង់លុបអតិថិជននេះមែនទេ?') }}');">
@@ -709,7 +711,7 @@
                                             </div>
                                         @endif
                                         <div class="lm-cust-names">
-                                            <a href="{{ route('loan-management.customers.show', $c->id) }}" class="lm-cust-primary">
+                                            <a href="{{ route('loan-management.customers.show', $c->id) }}" class="lm-cust-primary js-customer-modal" data-title="{{ $lmText('Customer Detail', 'ព័ត៌មានអតិថិជន') }}">
                                                 {{ $displayName }}
                                             </a>
                                             @if($khmerName && $latinName && $khmerName !== $latinName)
@@ -835,6 +837,15 @@
 @endsection
 
 @section('loan_js')
+<div class="modal fade" id="loanCustomerModal" tabindex="-1" role="dialog" aria-labelledby="loanCustomerModalTitle">
+    <div class="modal-dialog lm-customer-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $lmText('Close', 'បិទ') }}"><span aria-hidden="true">&times;</span></button><h4 class="modal-title" id="loanCustomerModalTitle">{{ $lmText('Customer Detail', 'ព័ត៌មានអតិថិជន') }}</h4></div>
+            <div class="modal-body" id="loanCustomerModalBody"></div>
+        </div>
+    </div>
+</div>
+<script src="{{ asset('js/loan-customer-modal.js') }}?v=20261029"></script>
 <script src="{{ asset('js/loan-customer-actions.js') }}?v=20261029"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap.min.js"></script>

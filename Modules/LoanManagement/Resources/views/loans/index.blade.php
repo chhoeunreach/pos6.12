@@ -2166,6 +2166,8 @@ $(document).ready(function(){
         }
     });
 
+    $(document).on('click', '.lm-loan-action-dropdown a', closeLoanActionMenu);
+
     $(window).on('resize', closeLoanActionMenu);
     $(document).on('scroll', '.dataTables_scrollBody', closeLoanActionMenu);
 

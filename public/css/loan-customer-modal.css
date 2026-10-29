@@ -1,0 +1,29 @@
+#loanCustomerModal .lm-customer-modal-dialog { width: calc(100% - 40px); max-width: 1250px; margin: 24px auto; }
+#loanCustomerModal .modal-content { border: 0; border-radius: 14px; overflow: hidden; box-shadow: 0 20px 60px #0f172a33; }
+#loanCustomerModal .modal-header { padding: 18px 24px; border-bottom: 1px solid #e2e8f0; background: #fff; }
+#loanCustomerModal .modal-title { color: #0f172a; font-weight: 700; font-size: 17px; }
+#loanCustomerModal .modal-body { max-height: calc(100vh - 125px); overflow-y: auto; padding: 20px; background: #f8fafc; }
+#loanCustomerModal .lcd-page { padding-bottom: 0; }
+#loanCustomerModal .lcm-loading { padding: 64px 20px; text-align: center; color: #64748b; }
+#loanCustomerModal .lcm-edit-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+#loanCustomerModal .lcm-edit-heading span { color: #64748b; font-size: 12px; }
+#loanCustomerModal .lcm-edit-heading h3 { margin: 6px 0; color: #0f172a; font-size: 23px; line-height: 1.6; }
+#loanCustomerModal .lcm-edit-heading p { margin: 0; color: #64748b; font-size: 12px; }
+#loanCustomerModalForm { padding: 20px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+#loanCustomerModalForm .nav-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+#loanCustomerModalForm .nav-tabs > li { float: none; }
+#loanCustomerModalForm .nav-tabs > li > a { font-size: 12px; padding: 10px 12px; }
+#loanCustomerModalForm label { color: #475569; font-size: 12px; font-weight: 600; }
+#loanCustomerModalForm .form-control { border-radius: 6px; border-color: #cbd5e1; }
+#loanCustomerModalForm .form-group { margin-bottom: 20px; }
+#loanCustomerModalForm .lcm-form-actions { position: sticky; bottom: -20px; padding: 16px 0; display: flex; justify-content: flex-end; gap: 10px; background: #fff; border-top: 1px solid #e2e8f0; z-index: 2; }
+#loanCustomerModal .lcm-errors[hidden] { display: none; }
+#loanCustomerModal .lcm-field-error { color: #b91c1c; font-size: 12px; margin-top: 5px; }
+#loanCustomerModal [aria-invalid="true"] { border-color: #dc2626; }
+@media(max-width: 640px) {
+    #loanCustomerModal .lm-customer-modal-dialog { width: calc(100% - 12px); margin: 6px auto; }
+    #loanCustomerModal .modal-header { padding: 16px; }
+    #loanCustomerModal .modal-body { max-height: calc(100vh - 85px); padding: 12px; }
+    #loanCustomerModalForm { padding: 14px; }
+    #loanCustomerModalForm .lcm-form-actions { bottom: -12px; }
+}

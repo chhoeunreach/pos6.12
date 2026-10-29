@@ -216,7 +216,7 @@ class LoanCustomerController extends Controller
             ? DB::connection($this->connection)->table('loan_customer_location_latest')->where('customer_id', $customer)->first()
             : null;
         $relatedData = $this->getCustomerRelatedData($customer);
-        return view('loanmanagement::customers.show', array_merge([
+        return view(request()->boolean('_customer_modal') ? 'loanmanagement::customers.modal_detail' : 'loanmanagement::customers.show', array_merge([
             'customerRow' => $customerRow,
             'customerPhotoUrl' => $customerPhotoUrl,
             'latestLocation' => $latestLocation,
@@ -233,7 +233,7 @@ class LoanCustomerController extends Controller
             : null;
         $relatedData = $this->getCustomerRelatedData($customer);
 
-        return view('loanmanagement::customers.edit', array_merge([
+        return view(request()->boolean('_customer_modal') ? 'loanmanagement::customers.modal_edit' : 'loanmanagement::customers.edit', array_merge([
             'customerRow' => $customerRow,
             'customerPhotoUrl' => $customerPhotoUrl,
             'latestLocation' => $latestLocation,
@@ -265,6 +265,9 @@ class LoanCustomerController extends Controller
             $data['password'] = $request->input('password');
         }
         $this->customerService->update($customer, $data);
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Customer updated successfully.', 'detail_url' => route('loan-management.customers.show', $customer)]);
+        }
         return redirect()->route('loan-management.customers.edit', $customer)->with('status', ['success' => 1, 'msg' => 'Loan customer updated successfully.']);
     }
 
