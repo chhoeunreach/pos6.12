@@ -237,6 +237,7 @@ class LoanChatService
             $row->setRelation('messages', $messages);
             if ($countTotal) {
                 $row->setAttribute('messages_total_count', (int) $row->messages()->count());
+                $row->syncOriginalAttribute('messages_total_count');
             }
             $row->setAttribute('message_pagination', [
                 'limit' => $limit,
@@ -244,6 +245,8 @@ class LoanChatService
                 'oldest_message_id' => $messages->first()?->id ? (int) $messages->first()->id : null,
                 'newest_message_id' => $messages->last()?->id ? (int) $messages->last()->id : null,
             ]);
+            // Response metadata must not be written when markSeen saves this thread.
+            $row->syncOriginalAttribute('message_pagination');
         }
         return $row;
     }
@@ -1157,7 +1160,13 @@ class LoanChatService
             }
         }
 
-        $message = DB::connection('mysql_loan')->transaction(function () use ($thread, $senderType, $senderId, $data) {
+        $created = false;
+        $message = DB::connection('mysql_loan')->transaction(function () use ($thread, $senderType, $senderId, $data, &$created) {
+            $thread = LoanChatThread::query()->whereKey($thread->id)->lockForUpdate()->firstOrFail();
+            if (! empty($data['local_uuid']) && self::hasMessageColumn('local_uuid')) {
+                $existing = $this->findExistingLocalMessage($thread, $senderType, $senderId, $data['local_uuid']);
+                if ($existing) return $existing;
+            }
             $payload = [
                 'thread_id' => $thread->id,
                 'sender_type' => $senderType,
@@ -1195,6 +1204,7 @@ class LoanChatService
             }
 
             $msg = LoanChatMessage::query()->create($payload);
+            $created = true;
 
             $thread->status = in_array($thread->status, ['closed'], true) ? 'open' : $thread->status;
             if ($senderType === 'customer' && self::hasThreadColumn('last_seen_customer_at')) {
@@ -1216,8 +1226,10 @@ class LoanChatService
             return $msg;
         });
 
-        $this->broadcastMessage($message);
-        $this->notifyParticipants($message);
+        if ($created) {
+            $this->broadcastMessage($message);
+            $this->notifyParticipants($message);
+        }
         return $message;
     }
 

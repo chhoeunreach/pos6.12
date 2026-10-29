@@ -1,0 +1,36 @@
+<?php
+use Illuminate\Support\Facades\Route;
+use Modules\LoanManagement\Http\Controllers\LoanQuotationController;
+use Modules\LoanManagement\Http\Controllers\LoanInstallmentListController;
+use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
+use Modules\LoanManagement\Http\Controllers\DashboardController;
+use Modules\LoanManagement\Http\Controllers\SettingsController;
+
+Route::get('/quotations', [LoanQuotationController::class, 'index'])->middleware('loan.permission:loan_management.loans.view|loan_management.view')->name('loan-management.quotations.index');
+Route::get('/quotations/create', [LoanQuotationController::class, 'create'])->middleware('loan.permission:loan_management.loans.create|loan_management.create')->name('loan-management.quotations.create');
+Route::post('/quotations', [LoanQuotationController::class, 'store'])->middleware('loan.permission:loan_management.loans.create|loan_management.create')->name('loan-management.quotations.store');
+Route::post('/quotations/preview-schedule', [LoanQuotationController::class, 'previewSchedule'])->middleware('loan.permission:loan_management.loans.create|loan_management.create|loan_management.loans.edit|loan_management.edit')->name('loan-management.quotations.preview-schedule');
+Route::get('/quotations/{quotation}/edit', [LoanQuotationController::class, 'edit'])->middleware('loan.permission:loan_management.loans.edit|loan_management.edit')->name('loan-management.quotations.edit');
+Route::put('/quotations/{quotation}', [LoanQuotationController::class, 'update'])->middleware('loan.permission:loan_management.loans.edit|loan_management.edit')->name('loan-management.quotations.update');
+Route::get('/quotations/{quotation}', [LoanQuotationController::class, 'show'])->middleware('loan.permission:loan_management.loans.view|loan_management.view')->name('loan-management.quotations.show');
+Route::get('/quotations/{quotation}/print', [LoanQuotationController::class, 'print'])->middleware('loan.permission:loan_management.loans.view|loan_management.view')->name('loan-management.quotations.print');
+Route::post('/quotations/{quotation}/convert', [LoanQuotationController::class, 'convertToLoan'])->middleware('loan.permission:loan_management.loans.create|loan_management.create')->name('loan-management.quotations.convert');
+Route::post('/quotations/{quotation}/duplicate', [LoanQuotationController::class, 'duplicate'])->middleware('loan.permission:loan_management.loans.create|loan_management.create')->name('loan-management.quotations.duplicate');
+Route::post('/quotations/{quotation}/status', [LoanQuotationController::class, 'changeStatus'])->middleware('loan.permission:loan_management.loans.edit|loan_management.edit')->name('loan-management.quotations.status');
+Route::delete('/quotations/{quotation}', [LoanQuotationController::class, 'destroy'])->middleware('loan.permission:loan_management.loans.delete|loan_management.delete')->name('loan-management.quotations.destroy');
+Route::get('/loans/{loan}/contract', [LoanInstallmentListController::class, 'contract'])->middleware('loan.permission:loan_management.loans.view|loan_management.view')->name('loan-management.loans.contract');
+Route::get('/loans/{loan}/settlement', [LoanInstallmentListController::class, 'settlementModal'])->middleware('loan.permission:loan_management.approve|loan_management.loans.approve')->name('loan-management.loans.settlement.modal');
+Route::post('/loans/{loan}/settlement', [LoanInstallmentListController::class, 'processSettlement'])->middleware('loan.permission:loan_management.approve|loan_management.loans.approve')->name('loan-management.loans.settlement.process');
+Route::get('/loans/{loan}/reschedule', [LoanInstallmentListController::class, 'rescheduleModal'])->middleware('loan.permission:loan_management.approve|loan_management.loans.approve')->name('loan-management.loans.reschedule.modal');
+Route::post('/loans/{loan}/reschedule', [LoanInstallmentListController::class, 'processReschedule'])->middleware('loan.permission:loan_management.approve|loan_management.loans.approve')->name('loan-management.loans.reschedule.process');
+Route::get('/loans/{loan}/ptp', [LoanInstallmentListController::class, 'ptpModal'])->middleware('loan.permission:loan_management.collection.view|loan_management.view')->name('loan-management.loans.ptp.modal');
+Route::post('/loans/{loan}/ptp', [LoanInstallmentListController::class, 'logPtp'])->middleware('loan.permission:loan_management.collection.view|loan_management.view')->name('loan-management.loans.ptp.store');
+Route::get('/payments/{payment}/receipt', [LoanPaymentController::class, 'receipt'])->middleware('loan.permission:loan_management.payments.view|loan_management.payment|loan_management.view')->name('loan-management.payments.receipt');
+Route::get('/settings/business/stamp', [SettingsController::class, 'businessStamp'])->middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->name('loan-management.settings.business.stamp');
+Route::get('/settings/social', fn () => redirect()->to(route('loan-management.settings.business') . '#tab-social'))->middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->name('loan-management.settings.social');
+Route::get('/settings/telegram', fn () => redirect()->to(route('loan-management.settings.business') . '#tab-notifications'))->middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->name('loan-management.settings.telegram');
+Route::get('/settings/currencies', fn () => redirect()->route('loan-management.settings.payment-methods'))->middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->name('loan-management.settings.currencies');
+Route::get('/guarantors', [DashboardController::class, 'guarantorsIndex'])->middleware('loan.permission:loan_management.loans.view|loan_management.view')->name('loan-management.guarantors.index');
+Route::get('/reports/portfolio-at-risk', [DashboardController::class, 'portfolioAtRiskReport'])->middleware('loan.permission:loan_management.reports.view|loan_management.view')->name('loan-management.reports.portfolio-at-risk');
+Route::get('/reports/par', [DashboardController::class, 'portfolioAtRiskReport'])->middleware('loan.permission:loan_management.reports.view|loan_management.view')->name('loan-management.reports.par');
+Route::get('/reports/cbc-export', [DashboardController::class, 'cbcExport'])->middleware('loan.permission:loan_management.reports.view|loan_management.view')->name('loan-management.reports.cbc-export');

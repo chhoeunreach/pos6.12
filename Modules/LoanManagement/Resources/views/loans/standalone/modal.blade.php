@@ -692,6 +692,25 @@
             transition: all 0.15s;
         }
         .mob-doc-add:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+        .mob-doc-badge {
+            position: absolute; left: 2px; bottom: 2px; padding: 0 3px; border-radius: 3px;
+            font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: .2px;
+        }
+        .mob-doc-badge.original { background: rgba(236, 253, 245, .95); color: #047857; }
+        .mob-doc-badge.cropped { background: rgba(239, 246, 255, .95); color: #1d4ed8; }
+        .mob-doc-tools {
+            position: absolute; left: 0; right: 0; bottom: 0; display: none;
+            background: rgba(15, 23, 42, .88); padding: 2px; gap: 2px; justify-content: center;
+        }
+        .mob-doc-thumb:hover .mob-doc-tools { display: flex; }
+        @media (hover: none) { .mob-doc-tools { display: flex; } }
+        .mob-doc-tools button {
+            flex: 1; border: 0; border-radius: 3px; background: rgba(255, 255, 255, .16); color: #fff;
+            font-size: 7px; font-weight: 800; padding: 2px 1px; cursor: pointer;
+        }
+        .mob-doc-tools button:hover { background: rgba(255, 255, 255, .34); }
+        .mob-doc-tools button[disabled] { opacity: .4; cursor: not-allowed; }
+        .mob-doc-note { font-size: 10px; color: #64748b; margin-top: 6px; }
 
         /* Schedule Table (Compact) */
         .mob-schedule-wrap {
@@ -1138,6 +1157,7 @@
                                 </label>
                             </div>
                             <input type="file" id="mobDocInput" accept="image/*,.pdf,.txt,.csv,.doc,.docx" multiple style="display:none;" onchange="mobHandleDocs(this)">
+                            <p class="mob-doc-note">{{ $lmText('Files are uploaded exactly as selected. Hover a photo to crop it, or keep the original file.', 'ឯកសារត្រូវបានផ្ទុកដូចដគលបានជ្រើសរើស។ ចង្អិនរូបភាព ឬរក្សាឯកសារដើម្បីឡើងវិញ។') }}</p>
 
                             <div style="margin-top: 12px;">
                                 <label class="lm-label">{{ $lmText('Telegram Summary Note', 'កំណត់ចំណាំផ្ញើទៅ Telegram') }}</label>
@@ -1444,6 +1464,8 @@
         </div>
     </div>
 </div>
+
+@include('loanmanagement::partials.multi_doc_upload')
 
 <script>
 // ==================== JAVASCRIPT CONTROLLERS ====================
@@ -2441,38 +2463,115 @@ function mobCreateProductCropper(canvas, image, initialCrop) {
 }
 
 // ==================== DOCUMENTS & CLIPBOARD ====================
-function mobHandleDocs(input) {
-    var files = Array.from(input.files || []);
-    if (!files.length) return;
-    var grid = document.getElementById('mobDocGrid');
-    var addBtn = grid.querySelector('.mob-doc-add');
-    files.forEach(function(file) {
-        var thumb = document.createElement('div');
-        thumb.className = 'mob-doc-thumb';
-        thumb.innerHTML = '<div style="color:#2563eb;"><i class="fa fa-spinner fa-spin"></i></div>';
-        grid.insertBefore(thumb, addBtn);
+var MOB_DOC_MAX_FILES = 12;
+var MOB_DOC_MAX_BYTES = 10 * 1024 * 1024;
 
-        if (file.type && file.type.indexOf('image/') === 0) {
-            mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
-                var idx = mobDocFiles.length;
-                mobDocFiles.push({ dataUri: dataUri, name: file.name, type: 'image' });
-                thumb.innerHTML = '<img src="' + dataUri + '">' +
-                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
-            });
-        } else {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var idx = mobDocFiles.length;
-                mobDocFiles.push({ dataUri: e.target.result, name: file.name, type: 'file' });
-                thumb.innerHTML = '<div class="mob-doc-icon"><i class="fa fa-file-text-o"></i><span>' + file.name.substring(0, 10) + '</span></div>' +
-                    '<button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
-            };
-            reader.readAsDataURL(file);
-        }
+function mobDocGrid() {
+    return document.getElementById('mobDocGrid');
+}
+function mobDocRender(item) {
+    var grid = mobDocGrid();
+    if (!grid) return;
+    var addBtn = grid.querySelector('.mob-doc-add');
+    var thumb = document.createElement('div');
+    thumb.className = 'mob-doc-thumb';
+    thumb.setAttribute('data-doc-index', item.index);
+
+    var isImage = item.file && item.file.type && item.file.type.indexOf('image/') === 0;
+    var preview = isImage
+        ? '<img src="' + item.dataUri + '" alt="' + item.name.replace(/"/g, '') + '">'
+        : '<div class="mob-doc-icon"><i class="fa fa-file-text-o"></i><span>' + item.name.substring(0, 10).replace(/</g, '') + '</span></div>';
+
+    thumb.innerHTML = preview +
+        '<button type="button" class="mob-doc-remove" title="Remove"><i class="fa fa-times"></i></button>' +
+        '<span class="mob-doc-badge ' + (item.cropped ? 'cropped' : 'original') + '">' + (item.cropped ? 'Cropped' : 'Original') + '</span>' +
+        '<div class="mob-doc-tools">' +
+        (isImage ? '<button type="button" data-doc-act="crop">Crop</button>' : '') +
+        '<button type="button" data-doc-act="keep"' + (item.cropped ? '' : ' disabled') + '>Keep original</button>' +
+        '</div>';
+
+    thumb.querySelector('.mob-doc-remove').addEventListener('click', function () { mobRemoveDoc(item.index); });
+    var cropBtn = thumb.querySelector('[data-doc-act="crop"]');
+    if (cropBtn) cropBtn.addEventListener('click', function () { mobCropDoc(item.index); });
+    var keepBtn = thumb.querySelector('[data-doc-act="keep"]');
+    if (keepBtn) keepBtn.addEventListener('click', function () { mobKeepOriginalDoc(item.index); });
+
+    grid.insertBefore(thumb, addBtn);
+}
+function mobDocRefresh() {
+    var grid = mobDocGrid();
+    if (!grid) return;
+    Array.prototype.slice.call(grid.querySelectorAll('[data-doc-index]')).forEach(function (node) { node.remove(); });
+    mobDocFiles.forEach(function (item, index) {
+        if (!item) return;
+        item.index = index;
+        mobDocRender(item);
     });
+}
+function mobDocAddFile(file, dataUri) {
+    if (mobDocFiles.filter(Boolean).length >= MOB_DOC_MAX_FILES) {
+        alert('You can attach up to ' + MOB_DOC_MAX_FILES + ' files.');
+        return;
+    }
+    if (file.size > MOB_DOC_MAX_BYTES) {
+        alert('"' + file.name + '" is larger than 10 MB and was skipped.');
+        return;
+    }
+    var item = {
+        dataUri: dataUri,
+        name: file.name,
+        type: file.type && file.type.indexOf('image/') === 0 ? 'image' : 'file',
+        originalDataUri: dataUri,
+        cropped: false,
+        file: file,
+        index: mobDocFiles.length
+    };
+    mobDocFiles.push(item);
+    mobDocRender(item);
+}
+function mobDocReadFile(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) { mobDocAddFile(file, e.target.result); };
+    reader.onerror = function () { alert('"' + file.name + '" could not be read.'); };
+    reader.readAsDataURL(file);
+}
+function mobHandleDocs(input) {
+    Array.prototype.slice.call(input.files || []).forEach(mobDocReadFile);
     input.value = '';
 }
-function mobRemoveDoc(btn, idx) { mobDocFiles[idx] = null; btn.closest('.mob-doc-thumb').remove(); }
+function mobRemoveDoc(idx) {
+    mobDocFiles[idx] = null;
+    mobDocRefresh();
+}
+function mobKeepOriginalDoc(idx) {
+    var item = mobDocFiles[idx];
+    if (!item) return;
+    item.dataUri = item.originalDataUri;
+    item.cropped = false;
+    mobDocRefresh();
+}
+function mobCropDoc(idx) {
+    var item = mobDocFiles[idx];
+    if (!item || !item.file || !window.MDUpload) return;
+    window.MDUpload.openCropper(item.file, {
+        title: 'Crop: ' + item.name,
+        onCropped: function (blob, croppedFile) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                item.dataUri = e.target.result;
+                item.cropped = true;
+                if (croppedFile) item.file = croppedFile;
+                mobDocRefresh();
+            };
+            reader.readAsDataURL(blob);
+        },
+        onKeepOriginal: function () { mobKeepOriginalDoc(idx); }
+    });
+}
+function mobResetDocs() {
+    mobDocFiles = [];
+    mobDocRefresh();
+}
 
 document.addEventListener('paste', function(e) {
     var items = e.clipboardData && e.clipboardData.items;
@@ -2482,17 +2581,7 @@ document.addEventListener('paste', function(e) {
         if (items[i].type && items[i].type.indexOf('image/') === 0) {
             var file = items[i].getAsFile();
             if (file) {
-                mobCompressImage(file, 1200, 800, 0.65).then(function(dataUri) {
-                    var grid = document.getElementById('mobDocGrid');
-                    if (!grid) return;
-                    var addBtn = grid.querySelector('.mob-doc-add');
-                    var thumb = document.createElement('div');
-                    thumb.className = 'mob-doc-thumb';
-                    var idx = mobDocFiles.length;
-                    mobDocFiles.push({ dataUri: dataUri, name: 'paste-' + Date.now() + '.png', type: 'image' });
-                    thumb.innerHTML = '<img src="' + dataUri + '"><button type="button" class="mob-doc-remove" onclick="mobRemoveDoc(this, ' + idx + ')"><i class="fa fa-times"></i></button>';
-                    grid.insertBefore(thumb, addBtn);
-                });
+                mobDocReadFile(file);
                 handled = true;
             }
         }
@@ -2570,7 +2659,7 @@ function mobSubmit(action) {
     var fd = new FormData(form);
     if (mobIdCardData) fd.append('id_card_image', mobIdCardData);
     if (mobCustomerProfileData) fd.append('customer_profile_image', mobCustomerProfileData);
-    mobDocFiles.forEach(function(d) { if (d) fd.append('documents[]', d.dataUri); });
+    mobDocFiles.forEach(function(d) { if (d) { fd.append('documents[]', d.dataUri); fd.append('document_names[]', d.name); } });
     fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
 
     var urls = { storeLoan: "{{ route('loan-management.loans.store-standalone') }}", loanViewBase: "{{ url('/loan-management/loans') }}" };
@@ -2584,6 +2673,7 @@ function mobSubmit(action) {
         contentType: false,
         success: function(res) {
             if (window.toastr) toastr.success(res.message || 'Installment Agreement Created Successfully');
+            mobResetDocs();
             jQuery('#standaloneLoanModal').modal('hide');
             if (res?.data?.loan_id) {
                 var loanUrl = urls.loanViewBase + '/' + res.data.loan_id + '/view?_lm_modal=1';

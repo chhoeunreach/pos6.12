@@ -38,10 +38,10 @@ Route::middleware(['web'])
 Route::middleware(['web'])->group(function () {
     Route::get('/', [PublicAppController::class, 'home'])->name('loan-management.public.home');
     Route::get('/register', [PublicAppController::class, 'register'])->name('loan-management.public.register');
-    Route::post('/register', [PublicAppController::class, 'storeRegistration'])->name('loan-management.public.register.store');
+    Route::post('/register', [PublicAppController::class, 'storeRegistration'])->middleware('throttle:6,1')->name('loan-management.public.register.store');
     Route::get('/customer/login', [PublicAppController::class, 'customerLogin'])->name('loan-management.public.customer-login');
     Route::get('/loan-management/customer/login', fn () => redirect()->route('loan-management.public.customer-login'));
-    Route::post('/customer/login', [PublicAppController::class, 'customerLoginStore'])->name('loan-management.public.customer-login.store');
+    Route::post('/customer/login', [PublicAppController::class, 'customerLoginStore'])->middleware('throttle:6,1')->name('loan-management.public.customer-login.store');
     Route::match(['get', 'post'], '/customer/logout', [PublicAppController::class, 'customerLogout'])->name('loan-management.public.customer-logout');
     Route::match(['get', 'post'], '/logout', [\App\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout');
 
@@ -55,6 +55,7 @@ Route::middleware(['web'])->group(function () {
 Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin', 'loan.user.sync', 'loan.activity'])
     ->prefix('loan-management')
     ->group(function () {
+        require __DIR__.'/features.php';
         Route::middleware('loan.permission:loan_management.dashboard.view|loan_management.view')->group(function () {
             Route::get('/', fn () => redirect()->route('loan-management.dashboard'))->name('loan-management.dashboard.home');
             Route::get('/dashboard', [LoanDashboardController::class, 'index'])->name('loan-management.dashboard');
@@ -327,6 +328,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         });
         Route::middleware('loan.permission:loan_management.import.view')->group(function () {
             Route::post('/tools/import', [LoanImportExportController::class, 'import'])->name('loan-management.import.upload');
+            Route::post('/tools/import/store', [LoanImportExportController::class, 'import'])->name('loan-management.import.store');
             Route::post('/tools/import/start', [LoanImportExportController::class, 'startImport'])->name('loan-management.import.start');
             Route::post('/tools/import/process', [LoanImportExportController::class, 'processImport'])->name('loan-management.import.process');
         });
@@ -359,3 +361,16 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         });
         Route::post('/blacklist', [LoanCustomerController::class, 'blacklistStore'])->middleware('loan.permission:loan_management.blacklist.view|loan_management.edit')->name('loan-management.blacklist.store');
     });
+
+Route::middleware('web')->group(function () {
+    Route::get('/loan-management/settings/business/public-stamp', [SettingsController::class, 'businessPublicStamp'])->name('loan-management.settings.business.public-stamp');
+    Route::get('/loan-management/cms/home-image', [PublicAppController::class, 'homeImage'])->name('loan-management.public.home-image');
+    Route::match(['get', 'post'], '/loan-management/public/language', [SettingsController::class, 'switchLanguage'])->name('loan-management.public.language.switch');
+});
+
+Route::middleware(['web', 'auth', 'loan.user.sync'])->prefix('loan-management/payway')->group(function () {
+    Route::post('/create', [\Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController::class, 'create'])->name('loan-management.payway.create');
+    Route::post('/check-status', [\Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController::class, 'checkStatus'])->name('loan-management.payway.check-status');
+    Route::get('/{ref}', [\Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController::class, 'checkout'])->name('loan-management.payway.checkout');
+    Route::post('/{ref}/simulate', [\Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController::class, 'simulateSuccess'])->name('loan-management.payway.simulate');
+});

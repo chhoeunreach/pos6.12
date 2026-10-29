@@ -27,7 +27,7 @@ class InstallLoanManagementCommand extends Command
             $this->info('Running migrations on mysql_loan...');
             Artisan::call('migrate', [
                 '--database' => 'mysql_loan',
-                '--path' => realpath(__DIR__.'/../database/migrations'),
+                '--path' => realpath(__DIR__.'/../Database/migrations'),
                 '--realpath' => true,
                 '--force' => true,
             ]);

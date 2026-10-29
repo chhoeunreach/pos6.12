@@ -46,6 +46,13 @@ class LoanCreateController extends Controller
         $defaultCollectorId = auth()->id();
 
         $recentLoans = $this->recentLoans();
+        $prefillQuotation = null;
+        $quotationId = (int) request('quotation_id', 0);
+        if ($quotationId > 0 && Schema::connection('mysql_loan')->hasTable('loan_quotations')) {
+            $quotation = \Modules\LoanManagement\Entities\LoanQuotation::with('items')->findOrFail($quotationId);
+            abort_if($quotation->status === 'converted' || $quotation->converted_loan_id, 409, 'This quotation has already been converted.');
+            $prefillQuotation = $quotation->toArray();
+        }
 
         return view('loanmanagement::loans.standalone.create', compact(
             'locations',
@@ -55,7 +62,8 @@ class LoanCreateController extends Controller
             'loanLocations',
             'defaultLocationId',
             'defaultCollectorId',
-            'recentLoans'
+            'recentLoans',
+            'prefillQuotation'
         ));
     }
 

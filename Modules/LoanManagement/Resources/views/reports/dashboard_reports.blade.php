@@ -227,7 +227,9 @@
         text-transform: uppercase;
         letter-spacing: 0.3px;
     }
-    .lm-loan-list-filter-toggle-label .fa {
+    .lm-loan-list-filter-toggle-label::before {
+        content: "\f0b0";
+        font-family: FontAwesome;
         color: #2563eb;
         font-size: 13px;
     }
@@ -643,6 +645,7 @@
     }
     @media print {
         @page {
+            size: A4 landscape;
             margin: 8mm;
         }
         .lm-sidebar,
@@ -677,13 +680,13 @@
                     <!-- Standard Filter for Detailed Report -->
                     <div class="lm-loan-list-filter" id="loanFilterPanel">
                         <div class="lm-loan-list-filter-toggle">
-                            <span class="lm-loan-list-filter-toggle-label"><i class="fa fa-filter"></i> {{ $t('Filters', 'តម្រង') }}</span>
+                            <span class="lm-loan-list-filter-toggle-label">{{ $t('Filters', 'តម្រង') }}</span>
                             <span class="lm-loan-list-filter-toggle-actions">
                                 <a href="{{ route('loan-management.reports.dashboard') }}" class="lm-loan-list-reset">
                                     <i class="fa fa-refresh"></i> {{ $t('Reset', 'កំណត់ឡើងវិញ') }}
                                 </a>
                                 <button type="button" class="btn btn-success btn-xs" onclick="window.loanExportRecentActivityExcel()">
-                                    <i class="fa fa-file-excel"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
+                                    <i class="fa fa-file-excel-o"></i> {{ $t('Export Excel', 'នាំចេញ Excel') }}
                                 </button>
                                 <button type="button" class="btn btn-default btn-xs" onclick="window.loanPrintRecentActivity()">
                                     <i class="fa fa-print"></i> {{ $t('Print', 'បោះពុម្ព') }}
@@ -712,10 +715,6 @@
                                             <option value="{{ $id }}" {{ (string) ($recentActivityFilters['location_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
                                         @endforeach
                                     </select>
-                                </div>
-                                <div class="lm-loan-list-field search-field">
-                                    <label for="recent_search">{{ $t('Search', 'ស្វែងរក') }}</label>
-                                    <input type="text" name="recent_search" id="recent_search" class="form-control" value="{{ $recentActivityFilters['search'] ?? '' }}" placeholder="{{ $t('Customer, phone, or loan #', 'អតិថិជន ទូរស័ព្ទ ឬលេខកម្ចី') }}">
                                 </div>
                                 <div class="lm-loan-list-field lm-loan-list-field-actions">
                                     <button type="submit" class="btn btn-primary btn-block">
@@ -989,8 +988,6 @@
                     setRange(s, e);
                 });
 
-                setRange(currentStartDate, currentEndDate);
-
                 $range.on('apply.daterangepicker', function (event, picker) {
                     setRange(picker.startDate, picker.endDate);
                 });
@@ -1004,13 +1001,9 @@
                 $range.prop('readonly', false).on('change', function () {
                     var raw = String(jQuery(this).val() || '').trim();
                     var parts = raw.split(/\s+-\s+|\s+~\s+/);
-                    if (parts.length === 2 && hasMoment) {
-                        var s = moment(parts[0], loanDateFormat, true);
-                        var e = moment(parts[1], loanDateFormat, true);
-                        if (s.isValid() && e.isValid()) {
-                            $from.val(s.format('YYYY-MM-DD'));
-                            $to.val(e.format('YYYY-MM-DD'));
-                        }
+                    if (parts.length === 2) {
+                        $from.val(parts[0]);
+                        $to.val(parts[1]);
                     }
                 });
             }
@@ -1030,21 +1023,6 @@
                 width: '100%'
             }).on('change', function () {
                 jQuery('#loanRecentActivityFilterForm').submit();
-            });
-        }
-
-        if (window.jQuery) {
-            jQuery('#loanRecentActivityFilterForm').off('submit.loanRecentActivityFilters').on('submit.loanRecentActivityFilters', function () {
-                var raw = String(jQuery('#loanRecentActivityDateRange').val() || '').trim();
-                var parts = raw.split(/\s+-\s+|\s+~\s+/);
-                if (parts.length === 2 && window.moment) {
-                    var start = moment(parts[0], loanDateFormat, true);
-                    var end = moment(parts[1], loanDateFormat, true);
-                    if (start.isValid() && end.isValid()) {
-                        jQuery('#recent_date_from').val(start.format('YYYY-MM-DD'));
-                        jQuery('#recent_date_to').val(end.format('YYYY-MM-DD'));
-                    }
-                }
             });
         }
 
@@ -1324,7 +1302,7 @@
         var html = '<!doctype html><html><head><meta charset="UTF-8"><title>' + loanRecentActivityEsc(@json($recentActivityReportTitle)) + '</title>';
         html += '<style>';
         html += '@import url("https://fonts.googleapis.com/css2?family=Moul&family=Inter:wght@400;600;700;800&display=swap");';
-        html += '@page{margin:7mm;}';
+        html += '@page{size:A4 landscape;margin:7mm;}';
         html += '*{box-sizing:border-box;}';
         html += 'body{font-family:"Inter","Noto Sans Khmer","Khmer OS Siemreap",Arial,sans-serif;color:#000;background:#fff;font-size:10px;margin:0;padding:0;}';
         html += '.report-title{margin:0 0 12px;padding:9px 12px;border:1px solid #8fa1ba;border-bottom:4px solid #111827;background:#d9e8fa;color:#0000ff;text-align:center;font-family:"Khmer OS Muol Light","Khmer OS Muol","Khmer OS Moul","Moul","Noto Sans Khmer",serif;font-size:25px;font-weight:400;line-height:1.35;}';

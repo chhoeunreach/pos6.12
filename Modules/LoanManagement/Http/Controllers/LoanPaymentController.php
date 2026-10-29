@@ -844,4 +844,51 @@ class LoanPaymentController extends Controller
 
         return $fallback;
     }
+
+
+    public function receipt(Request $request, int $payment)
+    {
+        $row = $this->paymentRow($payment);
+        abort_if(! $row, 404);
+
+        $loan = DB::connection($this->connection)->table('loans')->where('id', $row->loan_id)->first();
+        $schedule = null;
+        if (! empty($row->schedule_id) && Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
+            $schedule = DB::connection($this->connection)->table('loan_payment_schedules')->where('id', $row->schedule_id)->first();
+        }
+
+        $customer = null;
+        if (! empty($loan->customer_id) && Schema::connection($this->connection)->hasTable('loan_customers')) {
+            $customer = DB::connection($this->connection)->table('loan_customers')->where('id', $loan->customer_id)->first();
+        }
+
+        $location = null;
+        if (! empty($loan->business_location_id) && Schema::connection($this->connection)->hasTable('loan_business_locations')) {
+            $location = DB::connection($this->connection)->table('loan_business_locations')->where('id', $loan->business_location_id)->first();
+        }
+
+        $nextSchedule = null;
+        if (Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
+            $nextSchedule = DB::connection($this->connection)->table('loan_payment_schedules')
+                ->where('loan_id', $row->loan_id)
+                ->whereNotIn('status', ['paid'])
+                ->where('amount_balance', '>', 0)
+                ->whereNull('deleted_at')
+                ->orderBy('due_date')
+                ->first();
+        }
+
+        $format = $request->input('format', 'thermal');
+
+        return view('loanmanagement::payments.print_receipt', [
+            'payment' => $row,
+            'loan' => $loan,
+            'schedule' => $schedule,
+            'customer' => $customer,
+            'location' => $location,
+            'nextSchedule' => $nextSchedule,
+            'format' => $format,
+            'isKhmer' => session('user.language', config('app.locale')) === 'km',
+        ]);
+    }
 }

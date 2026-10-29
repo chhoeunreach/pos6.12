@@ -1939,6 +1939,39 @@
     }
 
     addItemRow();
+
+    @if(!empty($prefillQuotation))
+        (function () {
+            var q = @json($prefillQuotation);
+            $('#customer_id_input').val(q.customer_id || '');
+            $('#customer_name_input, #customer_english_name_input, #customer_khmer_name_input').val(q.customer_name_snapshot || '');
+            $('#customer_phone_input').val(q.customer_phone_snapshot || '');
+            $('#customer_address_input').val(q.customer_address_snapshot || '');
+            $('#payment_amount_input').val(Number(q.down_payment || 0).toFixed(2));
+            $('#interest_rate_input').val(q.interest_rate);
+            $('#duration_months_input').val(q.duration_months);
+            $('#interest_type_select').val(q.interest_type === 'declining_balance' ? 'reducing_balance' : 'flat');
+            $('#payment_frequency_select').val(q.payment_frequency);
+            $('#first_due_date_input').val(q.first_due_date ? q.first_due_date.slice(0, 10) : '');
+            if (q.business_location_id) $('[name="business_location_id"]').val(q.business_location_id).trigger('change');
+            $('[name="note"]').val(q.note || '');
+            if (q.items && q.items.length) {
+                $('#itemsTable tbody').empty();
+                q.items.forEach(function (item) {
+                    addItemRow();
+                    var row = $('#itemsTable tbody tr:last');
+                    row.find('.item-name').val(item.product_name_snapshot || '');
+                    row.find('.item-sku').val(item.sku_snapshot || '');
+                    row.find('.item-imei').val(item.serial_number_snapshot || '');
+                    row.find('.item-qty').val(item.quantity || 1);
+                    row.find('.item-price').val(item.unit_price || 0);
+                });
+                recalcItemTotals();
+            }
+            $('#principal_amount_input').val(Number(q.loan_amount || 0).toFixed(2));
+        })();
+    @endif
+
     recalcSummary();
 })(jQuery);
 </script>

@@ -733,5 +733,6 @@
             }
         })();
     </script>
+    @include('loanmanagement::layouts.partials.alert_dialog')
 </body>
 </html>

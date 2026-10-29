@@ -281,6 +281,13 @@
         </div>
 
         <div class="lm-pay-show-header-right">
+            <a href="{{ route('loan-management.payments.receipt', ['payment' => $payment->id, 'format' => 'thermal']) }}" target="_blank" class="lm-btn-nav" title="POS 80mm Thermal Receipt">
+                <i class="fa fa-print"></i> {{ $lmText('Receipt (80mm)', 'បង្កាន់ដៃ 80mm') }}
+            </a>
+            <a href="{{ route('loan-management.payments.receipt', ['payment' => $payment->id, 'format' => 'a4']) }}" target="_blank" class="lm-btn-nav" title="A4 Document Receipt">
+                <i class="fa fa-file-text-o"></i> {{ $lmText('A4 Voucher', 'ទម្រង់ A4') }}
+            </a>
+
             @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.payment|loan_management.payments.create|loan_management.edit'))
                 <a href="{{ route('loan-management.payments.edit', ['payment' => $payment->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}" class="lm-btn-nav lm-btn-nav-primary">
                     <i class="fa fa-edit"></i> {{ $lmText('Edit Payment', 'កែប្រែការបង់') }}

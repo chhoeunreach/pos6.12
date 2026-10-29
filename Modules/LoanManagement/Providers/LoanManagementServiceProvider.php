@@ -33,6 +33,8 @@ class LoanManagementServiceProvider extends ServiceProvider
             $this->commands([
                 InstallLoanManagementCommand::class,
                 SystemCheckCommand::class,
+                \Modules\LoanManagement\Console\UpgradeLoanFeaturesCommand::class,
+                \Modules\LoanManagement\Console\AccrueLoanPenaltiesCommand::class,
                 RunCollectionAutomationCommand::class,
                 TestChatSchemaCommand::class,
                 UninstallLoanManagementCommand::class,

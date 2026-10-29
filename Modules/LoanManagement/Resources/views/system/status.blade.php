@@ -154,7 +154,7 @@
 </style>
 @endsection
 
-@section('content')
+@section('content_body')
 <div class="sys-health-wrapper">
     <div class="sys-health-header">
         <div>

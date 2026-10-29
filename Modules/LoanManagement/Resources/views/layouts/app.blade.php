@@ -1465,6 +1465,7 @@
 
         })(jQuery);
     </script>
+    @include('loanmanagement::layouts.partials.alert_dialog')
     @yield('loan_js')
 
     @unless($isLoanEmbeddedModal)

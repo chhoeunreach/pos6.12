@@ -401,7 +401,7 @@ class CreateStandaloneLoanService
                 'customer_group_name_snapshot' => $this->resolveCustomerGroupName($data),
                 'business_location_id' => $locationId,
                 'location_name_snapshot' => $this->resolveLocationName($data),
-                'loan_date' => $data['loan_date'],
+                'loan_date' => $data['loan_date'] ?? now()->toDateString(),
                 'principal_amount' => $data['principal_amount'],
                 'interest_amount' => $scheduleInterestTotal,
                 'total_amount' => $scheduleAmountTotal > 0 ? $scheduleAmountTotal : (float) $data['principal_amount'],
@@ -414,11 +414,12 @@ class CreateStandaloneLoanService
                 'duration_months' => $durationMonths,
                 'installment_count' => $durationMonths,
                 'payment_frequency' => $loanMeta['payment_frequency'],
-                'first_due_date' => $data['first_due_date'],
+                'first_due_date' => $data['first_due_date'] ?? null,
                 'currency' => $data['currency'] ?? 'USD',
                 'exchange_rate' => $data['exchange_rate'] ?? 1,
                 'penalty_type' => $data['penalty_type'] ?? null,
                 'penalty_amount' => $data['penalty_amount'] ?? 0,
+                'daily_penalty_rate' => $data['daily_penalty_rate'] ?? null,
                 'assigned_to' => $data['assigned_collector_id'] ?? null,
                 'collector_id' => $data['assigned_collector_id'] ?? null,
                 'source_type' => 'manual',
@@ -844,7 +845,20 @@ class CreateStandaloneLoanService
         $fileId = null;
 
         if ($profileImage instanceof \Illuminate\Http\UploadedFile) {
-            $fileId = $this->storeUploadedCustomerFile($profileImage, $customerId, 'customer_photo', $profileImage->getClientOriginalName());
+            $path = $profileImage->store('loan-customers/'.$customerId, 'public');
+            $fileId = (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId($this->filterColumns('loan_files', [
+                'fileable_type' => \Modules\LoanManagement\Entities\LoanCustomer::class,
+                'fileable_id' => $customerId,
+                'category' => 'customer_photo',
+                'disk' => 'public',
+                'path' => $path,
+                'original_name' => $profileImage->getClientOriginalName(),
+                'mime_type' => $profileImage->getClientMimeType(),
+                'size_bytes' => $profileImage->getSize(),
+                'uploaded_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
         } elseif (is_string($profileImage) && trim($profileImage) !== '') {
             $fileId = $this->storeDataUriFile(trim($profileImage), $customerId, 'customer_photo', 'customer-profile-'.$loanId.'.jpg');
         }
@@ -873,24 +887,11 @@ class CreateStandaloneLoanService
             }
         }
 
-        $idCardImage = $data['id_card_image'] ?? null;
-        if ($idCardImage instanceof \Illuminate\Http\UploadedFile) {
-            $fileId = $this->storeUploadedCustomerFile($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.'.$this->extensionFromMimeType($idCardImage->getClientMimeType()));
-        } elseif (is_string($idCardImage) && trim($idCardImage) !== '') {
+        $idCardImage = (string) ($data['id_card_image'] ?? '');
+        if ($idCardImage !== '') {
             $fileId = $this->storeDataUriFile($idCardImage, $customerId, 'id_front', 'id-card-front-'.$loanId.'.jpg');
-        } else {
-            $fileId = null;
-        }
-
-        if ($fileId) {
             if ($fileId && Schema::connection('mysql_loan')->hasColumn('loan_customers', 'id_front_file_id')) {
                 DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update([
-                    'id_front_file_id' => $fileId,
-                    'updated_at' => now(),
-                ]);
-            }
-            if ($fileId && Schema::connection('mysql_loan')->hasColumn('loans', 'id_front_file_id')) {
-                DB::connection('mysql_loan')->table('loans')->where('id', $loanId)->update([
                     'id_front_file_id' => $fileId,
                     'updated_at' => now(),
                 ]);
@@ -912,15 +913,10 @@ class CreateStandaloneLoanService
             }
         }
 
+        $documentNames = (array) ($data['document_names'] ?? []);
+
         foreach ((array) ($data['documents'] ?? []) as $index => $document) {
-            if ($document instanceof \Illuminate\Http\UploadedFile) {
-                $this->storeUploadedCustomerFile(
-                    $document,
-                    $customerId,
-                    'document',
-                    'customer-document-'.$loanId.'-'.($index + 1).'.'.$this->extensionFromMimeType($document->getClientMimeType())
-                );
-            } elseif (is_string($document) && trim($document) !== '' && ! $this->isUnusableMobileUrl($document)) {
+            if (is_string($document) && $document !== '') {
                 $ext = 'jpg';
                 if (preg_match('/^data:([^;]+);/', $document, $m)) {
                     $mt = $m[1];
@@ -930,9 +926,13 @@ class CreateStandaloneLoanService
                         $ext = 'png';
                     } elseif (str_contains($mt, 'text')) {
                         $ext = 'txt';
+                    } elseif (str_contains($mt, 'webp')) {
+                        $ext = 'webp';
                     }
                 }
-                $this->storeDataUriFile($document, $customerId, 'document', 'customer-document-'.$loanId.'-'.($index + 1).'.'.$ext);
+
+                $originalName = $this->safeDocumentName($documentNames[$index] ?? null, $ext);
+                $this->storeDataUriFile($document, $customerId, 'document', $originalName ?: 'customer-document-'.$loanId.'-'.($index + 1).'.'.$ext);
             }
         }
 
@@ -958,11 +958,6 @@ class CreateStandaloneLoanService
 
     protected function storeDataUriFile(string $dataUri, int $customerId, string $category, string $originalName): ?int
     {
-        $dataUri = trim($dataUri);
-        if ($dataUri === '' || $this->isUnusableMobileUrl($dataUri)) {
-            return null;
-        }
-
         if (preg_match('/^data:([^;]+);base64,/', $dataUri, $match)) {
             $mimeType = $match[1];
             $dataUri = substr($dataUri, strpos($dataUri, ',') + 1);
@@ -2186,5 +2181,28 @@ class CreateStandaloneLoanService
         }
 
         return null;
+    }
+
+
+    protected function safeDocumentName($name, string $fallbackExtension): ?string
+    {
+        if (! is_string($name)) {
+            return null;
+        }
+
+        $base = basename(str_replace('\\', '/', trim($name)));
+        $base = preg_replace('/[\x00-\x1F\x7F"*\/:<>?\\\\|]+/', '', $base) ?? '';
+        $base = ltrim(trim($base), '.');
+        if ($base === '') {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($base, PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'txt', 'csv', 'doc', 'docx'];
+        if ($extension === '' || ! in_array($extension, $allowed, true)) {
+            $base = pathinfo($base, PATHINFO_FILENAME).'.'.$fallbackExtension;
+        }
+
+        return mb_substr($base, 0, 255);
     }
 }

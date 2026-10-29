@@ -15,6 +15,7 @@ use Yajra\DataTables\Facades\DataTables;
 
 class LoanInstallmentListController extends Controller
 {
+    use AuthorizesLoanFinancialActions;
     protected static array $loanTableExistsCache = [];
     protected static array $loanColumnCache = [];
 
@@ -1373,6 +1374,16 @@ class LoanInstallmentListController extends Controller
                 $actions .= '<li><a href="'.route('loan-management.loans.view', $r->id, false).'"><i class="fa fa-eye"></i> View</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.payment.create', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-money"></i> Collect Payment</a></li>';
                 $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.print-modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-print"></i> Print</a></li>';
+                $actions .= '<li><a href="'.route('loan-management.loans.contract', $r->id, false).'" target="_blank" rel="noopener"><i class="fa fa-file-text-o"></i> Contract</a></li>';
+                if (in_array(strtolower((string) $r->status), ['active', 'overdue', 'defaulted', 'disbursed'], true)) {
+                    if (\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.approve|loan_management.loans.approve')) {
+                        $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.settlement.modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-handshake-o"></i> Early Payoff</a></li>';
+                        $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.reschedule.modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-refresh"></i> Restructure</a></li>';
+                    }
+                    if (\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.collection.view|loan_management.view')) {
+                        $actions .= '<li><a href="#" data-href="'.route('loan-management.loans.ptp.modal', $r->id, false).'" data-container=".view_modal" class="btn-modal"><i class="fa fa-calendar-check-o"></i> Promise to Pay</a></li>';
+                    }
+                }
                 $actions .= '<li><a href="#" data-url="'.route('loan-management.loans.payment.copy-info', $r->id, false).'" class="js-copy-loan-payment-info"><i class="fa fa-copy"></i> Copy</a></li>';
                 if (! empty($r->customer_id) && $canEdit) {
                     $actions .= '<li><a href="#" data-url="'.route('loan-management.customers.blacklist', $r->customer_id, false).'" data-customer="'.e($r->customer_name_snapshot ?? 'Customer').'" class="js-loan-blacklist-customer text-red"><i class="fa fa-user-times"></i> Add to Blacklist</a></li>';
@@ -6130,5 +6141,474 @@ class LoanInstallmentListController extends Controller
         abort_if(! $this->loanTableExists('loans'), 404);
         DB::connection('mysql_loan')->table('loans')->where('id', $loan)->delete();
         return response()->json(['success' => true, 'message' => 'Loan deleted']);
+    }
+
+
+
+
+    public function contract(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+        $loanRow = $this->attachLoanCustomerKhmerName($loanRow);
+
+        $customerRow = null;
+        if ($this->loanTableExists('loan_customers') && ! empty($loanRow->customer_id)) {
+            $customerRow = DB::connection('mysql_loan')->table('loan_customers')->where('id', $loanRow->customer_id)->first();
+        }
+
+        $customer = (object) [
+            'name' => trim((string) ($loanRow->customer_khmer_name ?? ''))
+                ?: (trim((string) ($customerRow->khmer_name ?? ''))
+                    ?: ($loanRow->customer_name_snapshot ?? ($customerRow->name ?? '-'))),
+            'latin_name' => $customerRow->name ?? ($loanRow->customer_name_snapshot ?? '-'),
+            'mobile' => $loanRow->customer_phone_snapshot ?? ($customerRow->phone ?? '-'),
+            'address' => $loanRow->customer_address_snapshot ?? ($customerRow->address ?? '-'),
+            'id_card' => $customerRow->id_card_number ?? ($loanRow->id_card_number ?? '-'),
+            'occupation' => $customerRow->occupation ?? ($loanRow->occupation ?? '-'),
+            'gender' => $customerRow->gender ?? '-',
+            'dob' => $customerRow->date_of_birth ?? null,
+        ];
+
+        $guarantor = (object) [
+            'name' => $loanRow->guarantor_name ?? ($customerRow->family_contact_name ?? '-'),
+            'phone' => $loanRow->guarantor_phone ?? ($customerRow->family_contact_phone ?? '-'),
+            'id_card' => $loanRow->guarantor_id_number ?? '-',
+            'relationship' => $loanRow->guarantor_relationship ?? '-',
+            'address' => $loanRow->guarantor_address ?? '-',
+        ];
+
+        $products = collect();
+        if ($this->loanTableExists('loan_items')) {
+            $products = DB::connection('mysql_loan')->table('loan_items')->where('loan_id', $loan)->get();
+        }
+
+        $schedules = collect();
+        if ($this->loanTableExists('loan_payment_schedules')) {
+            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->orderBy('installment_no')
+                ->get();
+        }
+
+        $businessName = session('business.name', 'ស្ថាប័នឥណទាន និងលក់បង់រំលស់');
+        $locationName = $loanRow->location_name_snapshot ?? 'ការិយាល័យកណ្តាល';
+
+        return view('loanmanagement::loans.print.contract', compact(
+            'loanRow',
+            'customer',
+            'guarantor',
+            'products',
+            'schedules',
+            'businessName',
+            'locationName'
+        ));
+    }
+
+    public function settlementModal(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $schedules = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+            ? DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->whereNotIn('status', ['paid'])
+                ->where('amount_balance', '>', 0)
+                ->whereNull('deleted_at')
+                ->orderBy('due_date')
+                ->get()
+            : collect();
+
+        $futureInterest = (float) $schedules->sum(fn ($schedule) => min((float) ($schedule->interest_due ?? 0), max(0, (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0) - (float) ($schedule->penalty_due ?? 0))));
+        $accruedPenalties = (float) $schedules->sum(fn ($schedule) => min((float) ($schedule->penalty_due ?? 0), (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)));
+        $principalBalance = max(0, round($schedules->sum(fn ($schedule) => (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)) - $futureInterest - $accruedPenalties, 2));
+        $suggestedSettlement = $principalBalance + $accruedPenalties;
+
+        $paymentTypes = $this->ultimatePosPaymentTypes($loanRow);
+        $defaultPaymentMethod = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? 'cash');
+
+        return view('loanmanagement::loans.partials.settlement_modal', compact(
+            'loanRow',
+            'schedules',
+            'principalBalance',
+            'futureInterest',
+            'accruedPenalties',
+            'suggestedSettlement',
+            'paymentTypes',
+            'defaultPaymentMethod'
+        ));
+    }
+
+    public function processSettlement(Request $request, int $loan)
+    {
+        $this->authorizeFinancialAction(['loan_management.approve', 'loan_management.loans.approve']);
+        $payload = $request->validate([
+            'settlement_amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|string|max:50',
+            'prepayment_fee' => 'nullable|numeric|min:0',
+            'interest_discount' => 'nullable|numeric|min:0',
+            'paid_date' => 'required|date',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $settlementAmount = (float) $payload['settlement_amount'];
+        abort_unless($this->loanTableExists('loan_payments') && $this->loanTableExists('loan_payment_schedules'), 409, 'Payment and schedule records are required for settlement.');
+        $receiptNo = 'STMT-'.date('YmdHis').'-'.$loan;
+
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $payload, $settlementAmount, $receiptNo) {
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->lockForUpdate()->first();
+            abort_if(! $loanRow || ! empty($loanRow->deleted_at), 404);
+            abort_if(in_array($loanRow->status, ['completed', 'closed', 'cancelled', 'rejected', 'draft', 'pending'], true), 422, 'This loan cannot be settled in its current status.');
+            $schedules = DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->whereNull('deleted_at')->lockForUpdate()->get();
+            $outstanding = round($schedules->sum(fn ($schedule) => (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)), 2);
+            $discount = round((float) ($payload['interest_discount'] ?? 0), 2);
+            $unpaidInterest = round($schedules->sum(fn ($schedule) => min(
+                (float) ($schedule->interest_due ?? 0),
+                max(0, (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0) - (float) ($schedule->penalty_due ?? 0))
+            )), 2);
+            abort_if($outstanding <= 0 || $discount > $unpaidInterest + 0.005, 422, 'The interest rebate exceeds unpaid interest or the loan has no outstanding balance.');
+            $fee = round((float) ($payload['prepayment_fee'] ?? 0), 2);
+            $required = round($outstanding - $discount + $fee, 2);
+            abort_if(abs(round($settlementAmount, 2) - $required) > 0.005, 422, 'Settlement payment must equal '.$required.' after the interest rebate and prepayment fee.');
+            if ($this->loanTableExists('loan_payments')) {
+                $cols = $this->loanTableColumns('loan_payments');
+                $paymentRow = [
+                    'loan_id' => $loan,
+                    'customer_id' => $loanRow->customer_id ?? null,
+                    'payment_ref_no' => $receiptNo,
+                    'amount' => $settlementAmount,
+                    'total_paid' => $settlementAmount,
+                    'total_paid_base' => $settlementAmount,
+                    'channel' => $payload['payment_method'],
+                    'discount_amount' => (float) ($payload['interest_discount'] ?? 0),
+                    'paid_at' => $payload['paid_date'] . ' ' . date('H:i:s'),
+                    'status' => 'confirmed',
+                    'note' => 'Early Payoff & Full Settlement. Prepayment fee: '.$fee.'. ' . ($payload['note'] ?? ''),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                if (in_array('receipt_number', $cols, true)) {
+                    $paymentRow['receipt_number'] = $receiptNo;
+                }
+                if (in_array('payment_type', $cols, true)) {
+                    $paymentRow['payment_type'] = 'payoff';
+                }
+                if (in_array('received_by', $cols, true)) {
+                    $paymentRow['received_by'] = auth()->id();
+                }
+                if (in_array('received_by_name_snapshot', $cols, true)) {
+                    $paymentRow['received_by_name_snapshot'] = auth()->user()->name ?? 'Officer';
+                }
+
+                DB::connection('mysql_loan')->table('loan_payments')->insert(array_intersect_key($paymentRow, array_flip($cols)));
+            }
+
+            $this->applySettlementToSchedules($schedules, $discount, $payload['paid_date'].' '.now()->format('H:i:s'));
+
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+                'status' => 'completed',
+                'balance_amount' => 0,
+                'paid_amount' => round((float) ($loanRow->paid_amount ?? 0) + $settlementAmount, 2),
+                'discount_amount' => round((float) ($loanRow->discount_amount ?? 0) + $discount, 2),
+                'total_amount' => round((float) ($loanRow->total_amount ?? 0) - $discount + $fee, 2),
+                'total_payable_amount' => round((float) ($loanRow->total_payable_amount ?? $loanRow->total_amount ?? 0) - $discount + $fee, 2),
+                'updated_at' => now(),
+            ]));
+
+            if ($this->loanTableExists('loan_status_logs')) {
+                $cols = $this->loanTableColumns('loan_status_logs');
+                DB::connection('mysql_loan')->table('loan_status_logs')->insert(array_intersect_key([
+                    'loan_id' => $loan,
+                    'status' => 'completed',
+                    'from_status' => $loanRow->status,
+                    'to_status' => 'completed',
+                    'changed_by' => auth()->id(),
+                    'note' => 'Full Early Payoff / Settlement executed. Receipt: ' . $receiptNo,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ], array_flip($cols)));
+            }
+
+            if ($this->loanTableExists('loan_activity_logs')) {
+                DB::connection('mysql_loan')->table('loan_activity_logs')->insert([
+                    'user_id' => auth()->id(),
+                    'user_name_snapshot' => auth()->user()->name ?? 'System',
+                    'action' => 'loan_early_settlement',
+                    'method' => 'POST',
+                    'route_name' => 'loan-management.loans.settlement.process',
+                    'url' => request()->fullUrl(),
+                    'source' => 'loan_settlement',
+                    'subject_type' => 'loan',
+                    'subject_id' => $loan,
+                    'response_status' => 200,
+                    'ip_address' => request()->ip(),
+                    'request_payload_json' => json_encode($payload),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan successfully settled and closed.',
+            'redirect_url' => route('loan-management.loans.view', $loan),
+        ]);
+    }
+
+    protected function applySettlementToSchedules($schedules, float $discount, string $paidAt): void
+    {
+        $remainingDiscount = $discount;
+        foreach ($schedules as $schedule) {
+            $balance = (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0);
+            if ($balance <= 0) {
+                continue;
+            }
+            $rebate = min($remainingDiscount, (float) ($schedule->interest_due ?? 0), max(0, $balance - (float) ($schedule->penalty_due ?? 0)));
+            $remainingDiscount = round($remainingDiscount - $rebate, 2);
+            $paid = round((float) ($schedule->paid_amount ?? $schedule->amount_paid ?? 0) + $balance - $rebate, 2);
+            DB::connection('mysql_loan')->table('loan_payment_schedules')->where('id', $schedule->id)
+                ->update($this->loanSafeColumns('loan_payment_schedules', [
+                    'status' => 'paid',
+                    'amount_balance' => 0,
+                    'balance_amount' => 0,
+                    'amount_paid' => $paid,
+                    'paid_amount' => $paid,
+                    'paid_value' => $paid,
+                    'discount_amount' => round((float) ($schedule->discount_amount ?? 0) + $rebate, 2),
+                    'amount_due' => round((float) $schedule->amount_due - $rebate, 2),
+                    'schedule_amount' => round((float) $schedule->amount_due - $rebate, 2),
+                    'paid_at' => $paidAt,
+                    'updated_at' => now(),
+                ]));
+        }
+    }
+
+    public function rescheduleModal(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $unpaidSchedules = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+            ? DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->whereNotIn('status', ['paid'])
+                ->whereNull('deleted_at')
+                ->orderBy('due_date')
+                ->get()
+            : collect();
+
+        $accruedPenalties = (float) $unpaidSchedules->sum(fn ($schedule) => min((float) ($schedule->penalty_due ?? 0), (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)));
+        $balanceAmount = max(0, round((float) ($loanRow->balance_amount ?? $unpaidSchedules->sum('amount_balance')) - $accruedPenalties, 2));
+        $annualInterestRate = (float) ($loanRow->interest_rate ?? 0) * (($loanRow->interest_rate_type ?? 'monthly') === 'yearly' ? 1 : 12);
+
+        return view('loanmanagement::loans.partials.reschedule_modal', compact(
+            'loanRow',
+            'unpaidSchedules',
+            'balanceAmount',
+            'accruedPenalties',
+            'annualInterestRate'
+        ));
+    }
+
+    public function processReschedule(Request $request, int $loan)
+    {
+        $this->authorizeFinancialAction(['loan_management.approve', 'loan_management.loans.approve']);
+        $payload = $request->validate([
+            'reschedule_amount' => 'required|numeric|min:0.01',
+            'new_duration_months' => 'required|integer|min:1|max:60',
+            'new_interest_rate' => 'required|numeric|min:0',
+            'interest_type' => 'required|in:flat,reducing_balance',
+            'waive_penalties' => 'nullable|boolean',
+            'first_due_date' => 'required|date',
+            'reason' => 'required|string|max:500',
+        ]);
+
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $loanRow, $payload) {
+            $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->lockForUpdate()->first();
+            abort_if(! $loanRow || ! empty($loanRow->deleted_at), 404);
+            abort_if(in_array($loanRow->status, ['completed', 'closed', 'cancelled', 'rejected', 'draft', 'pending'], true), 422, 'This loan cannot be restructured in its current status.');
+            $oldSchedules = DB::connection('mysql_loan')->table('loan_payment_schedules')->where('loan_id', $loan)->whereNull('deleted_at')->where('status', '!=', 'paid')->lockForUpdate()->get();
+            abort_if($oldSchedules->isEmpty(), 422, 'No unpaid schedules to restructure.');
+            $penalties = ! empty($payload['waive_penalties']) ? 0.0 : round($oldSchedules->sum(fn ($schedule) => min(
+                (float) ($schedule->penalty_due ?? 0), (float) ($schedule->balance_amount ?? $schedule->amount_balance ?? 0)
+            )), 2);
+            // Soft delete old unpaid schedules
+            if ($this->loanTableExists('loan_payment_schedules')) {
+                DB::connection('mysql_loan')->table('loan_payment_schedules')
+                    ->where('loan_id', $loan)
+                    ->whereNotIn('status', ['paid'])
+                    ->whereNull('deleted_at')
+                    ->update([
+                        'deleted_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            // Generate new schedule rows
+            $terms = (int) $payload['new_duration_months'];
+            $newPrincipal = (float) $payload['reschedule_amount'];
+            $rate = (float) $payload['new_interest_rate'];
+            $interestType = $payload['interest_type'];
+            $scheduleRows = app(\Modules\LoanManagement\Services\LoanQuotationService::class)->calculateSchedule(
+                $newPrincipal, $rate / 12, $interestType, $terms, 'monthly', $payload['first_due_date']
+            );
+            $totalInterest = round(array_sum(array_column($scheduleRows, 'interest_amount')), 2);
+
+            $lastPaidTerm = (int) DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->where('status', 'paid')
+                ->max('installment_no') ?: 0;
+
+            foreach ($scheduleRows as $row) {
+                $i = $row['installment_no'];
+                $installmentNo = $lastPaidTerm + $i;
+                $dueDate = $row['due_date'];
+                $pDue = $row['principal_amount'];
+                $iDue = $row['interest_amount'];
+                $penaltyDue = $i === 1 ? $penalties : 0;
+                $totDue = round($pDue + $iDue + $penaltyDue, 2);
+
+                DB::connection('mysql_loan')->table('loan_payment_schedules')->insert($this->loanSafeColumns('loan_payment_schedules', [
+                    'loan_id' => $loan,
+                    'installment_no' => $installmentNo,
+                    'due_date' => $dueDate,
+                    'principal_due' => $pDue,
+                    'interest_due' => $iDue,
+                    'penalty_due' => $penaltyDue,
+                    'principal_amount' => $pDue,
+                    'interest_amount' => $iDue,
+                    'schedule_amount' => $totDue,
+                    'schedule_no' => $installmentNo,
+                    'amount_due' => $totDue,
+                    'amount_paid' => 0,
+                    'amount_balance' => $totDue,
+                    'balance_amount' => $totDue,
+                    'paid_amount' => 0,
+                    'paid_value' => 0,
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+            }
+
+            // Update loan record
+            $loanMeta = json_decode((string) ($loanRow->meta_json ?? ''), true) ?: [];
+            $loanMeta = array_merge($loanMeta, [
+                'interest_rate' => $rate / 12, 'interest_type' => $interestType,
+                'duration_months' => $terms, 'payment_frequency' => 'monthly', 'first_due_date' => $payload['first_due_date'],
+                'restructured_principal_amount' => $newPrincipal,
+            ]);
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+                'status' => 'active',
+                'balance_amount' => round($newPrincipal + $totalInterest + $penalties, 2),
+                'penalty_amount' => $penalties,
+                'interest_type' => $interestType,
+                'interest_rate' => $rate / 12,
+                'interest_rate_type' => 'monthly',
+                'duration_months' => $terms,
+                'payment_frequency' => 'monthly',
+                'total_amount' => round((float) ($loanRow->paid_amount ?? 0) + $newPrincipal + $totalInterest + $penalties, 2),
+                'total_payable_amount' => round((float) ($loanRow->paid_amount ?? 0) + $newPrincipal + $totalInterest + $penalties, 2),
+                'meta_json' => json_encode($loanMeta),
+                'first_due_date' => $payload['first_due_date'],
+                'installment_count' => $lastPaidTerm + $terms,
+                'updated_at' => now(),
+            ]));
+
+            // Log status change
+            if ($this->loanTableExists('loan_status_logs')) {
+                $cols = $this->loanTableColumns('loan_status_logs');
+                DB::connection('mysql_loan')->table('loan_status_logs')->insert(array_intersect_key([
+                    'loan_id' => $loan,
+                    'status' => 'active',
+                    'from_status' => $loanRow->status,
+                    'to_status' => 'active',
+                    'changed_by' => auth()->id(),
+                    'note' => 'Loan restructured & rescheduled: ' . $payload['reason'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ], array_flip($cols)));
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan successfully restructured with a new repayment schedule.',
+            'redirect_url' => route('loan-management.loans.view', $loan),
+        ]);
+    }
+
+    public function ptpModal(int $loan)
+    {
+        abort_if(! $this->loanTableExists('loans'), 404);
+        $loanRow = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->first();
+        abort_if(! $loanRow, 404);
+
+        $overdueBalance = Schema::connection('mysql_loan')->hasTable('loan_payment_schedules')
+            ? (float) DB::connection('mysql_loan')->table('loan_payment_schedules')
+                ->where('loan_id', $loan)
+                ->whereNotIn('status', ['paid'])
+                ->where('amount_balance', '>', 0)
+                ->whereNull('deleted_at')
+                ->sum('amount_balance')
+            : (float) ($loanRow->balance_amount ?? 0);
+
+        return view('loanmanagement::loans.partials.ptp_modal', compact('loanRow', 'overdueBalance'));
+    }
+
+    public function logPtp(Request $request, int $loan)
+    {
+        $payload = $request->validate([
+            'ptp_date' => 'required|date|after_or_equal:today',
+            'ptp_amount' => 'required|numeric|min:0.01',
+            'note' => 'nullable|string|max:500',
+        ]);
+        abort_if(! $this->loanTableExists('loans'), 404);
+        foreach (['ptp_date', 'ptp_amount', 'ptp_note', 'ptp_status'] as $column) {
+            abort_unless($this->loanTableHasCol('loans', $column), 503, 'Promise-to-pay setup is incomplete. Please contact an administrator.');
+        }
+        DB::connection('mysql_loan')->transaction(function () use ($loan, $payload) {
+            $row = DB::connection('mysql_loan')->table('loans')->where('id', $loan)->lockForUpdate()->first();
+            abort_if(! $row || ! empty($row->deleted_at), 404);
+            abort_if(in_array(strtolower((string) ($row->status ?? 'active')), ['completed', 'closed', 'cancelled', 'rejected'], true), 422, 'This account is closed.');
+            DB::connection('mysql_loan')->table('loans')->where('id', $loan)->update($this->loanSafeColumns('loans', [
+                'ptp_date' => $payload['ptp_date'],
+                'ptp_amount' => round((float) $payload['ptp_amount'], 2),
+                'ptp_note' => $payload['note'] ?? null,
+                'ptp_status' => 'active',
+                'collection_status' => 'ptp',
+                'last_contact_at' => now(),
+                'last_contact_result' => 'promise_to_pay',
+                'updated_at' => now(),
+            ]));
+            if ($this->loanTableExists('loan_collection_follow_ups')) {
+                DB::connection('mysql_loan')->table('loan_collection_follow_ups')->insert($this->loanSafeColumns('loan_collection_follow_ups', [
+                    'loan_id' => $loan, 'user_id' => auth()->id(), 'status' => 'promise_to_pay',
+                    'promised_at' => $payload['ptp_date'], 'promised_amount' => $payload['ptp_amount'],
+                    'note' => $payload['note'] ?? 'Promise to Pay logged', 'created_at' => now(), 'updated_at' => now(),
+                ]));
+            }
+        });
+
+        return response()->json(['success' => true, 'message' => 'Promise to Pay (PTP) date successfully recorded.']);
+    }
+
+    protected function loanHasPayments(int $loan): bool
+    {
+        return $this->loanTableExists('loan_payments') && DB::connection('mysql_loan')->table('loan_payments')->where('loan_id', $loan)->exists();
     }
 }

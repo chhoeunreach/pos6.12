@@ -14,13 +14,28 @@ class StoreStandaloneLoanRequest extends FormRequest
         );
     }
 
+    protected function prepareForValidation(): void
+    {
+        $name = trim((string) $this->input('customer_name', ''));
+        $merge = [];
+        if (! $this->has('customer_english_name') || trim((string) $this->input('customer_english_name', '')) === '') {
+            $merge['customer_english_name'] = $name;
+        }
+        if (! $this->has('customer_khmer_name') || trim((string) $this->input('customer_khmer_name', '')) === '') {
+            $merge['customer_khmer_name'] = $name;
+        }
+        if (! empty($merge)) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'customer_id' => 'nullable|integer',
             'customer_name' => 'required|string|max:191',
-            'customer_english_name' => 'required|string|max:191',
-            'customer_khmer_name' => 'required|string|max:191',
+            'customer_english_name' => 'nullable|string|max:191',
+            'customer_khmer_name' => 'nullable|string|max:191',
             'customer_phone' => 'nullable|string|max:191',
             'alternate_phone' => 'nullable|string|max:191',
             'customer_address' => 'nullable|string|max:1000',
@@ -47,6 +62,7 @@ class StoreStandaloneLoanRequest extends FormRequest
             'exchange_rate' => 'nullable|numeric|min:0',
             'penalty_type' => 'nullable|string|max:50',
             'penalty_amount' => 'nullable|numeric|min:0',
+            'daily_penalty_rate' => 'nullable|numeric|min:0',
             'assigned_collector_id' => 'nullable|integer',
             'note' => 'nullable|string|max:1000',
             'business_location_id' => 'nullable|integer',
@@ -91,8 +107,10 @@ class StoreStandaloneLoanRequest extends FormRequest
             'id_card_ocr_fields.khmer_name' => 'nullable|string|max:191',
             'id_card_ocr_fields.english_name' => 'nullable|string|max:191',
             'id_card_ocr_fields.address' => 'nullable|string|max:1000',
-            'documents' => 'nullable|array',
-            'documents.*' => 'nullable|string',
+            'documents' => 'nullable|array|max:12',
+            'documents.*' => 'nullable|string|max:14000000',
+            'document_names' => 'nullable|array|max:12',
+            'document_names.*' => 'nullable|string|max:255',
             'document_text' => 'nullable|string|max:5000',
             'document_links' => 'nullable|array',
             'document_links.*' => 'nullable|url|max:1000',

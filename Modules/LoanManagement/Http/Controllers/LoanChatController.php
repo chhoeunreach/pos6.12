@@ -79,7 +79,7 @@ class LoanChatController extends Controller
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
         $data = ChatThreadResource::collection($rows)->resolve();
 
-        if ($webSupportInbox && (string) $request->input('view', 'all') === 'all') {
+        if ($webSupportInbox && ! $request->boolean('threads_only') && (string) $request->input('view', 'all') === 'all') {
             $data = $this->appendCustomerChatTargets($data, $request);
         }
 
@@ -133,6 +133,10 @@ class LoanChatController extends Controller
     public function show(Request $request, int $thread)
     {
         abort_unless(auth()->user()->can('loan_management.chat.view'), 403);
+        $receiptInput = $request->boolean('lightweight') ? $request->validate([
+            'receipt_ids' => 'sometimes|array|max:50',
+            'receipt_ids.*' => 'required|integer|min:1',
+        ]) : [];
         $row = LoanChatThread::query()->find($thread);
         if (! $row || ! $this->canViewThread($row)) return $this->fail('Thread not found', 404, (object) []);
         $beforeId = (int) $request->input('before_message_id', 0);
@@ -141,12 +145,12 @@ class LoanChatController extends Controller
             'limit' => (int) $request->input('message_limit', 25),
             'before_id' => $beforeId,
             'after_id' => $afterId,
-            'count_total' => $beforeId <= 0 && $afterId <= 0,
+            'count_total' => ! $request->boolean('lightweight') && $beforeId <= 0 && $afterId <= 0,
         ]);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
         if ($beforeId <= 0 && ! $request->boolean('skip_read')) {
-            $this->chatService->markSeen($row, 'staff');
+            $this->chatService->markAsRead($row, $this->isAdmin() ? 'admin' : 'staff', (int) auth()->id());
         }
         foreach ($row->messages as $message) {
             if ($message->sender_type === 'customer') {
@@ -154,7 +158,15 @@ class LoanChatController extends Controller
             }
         }
         $data = (new ChatThreadResource($row))->resolve();
-        $data['sidebar'] = $this->chatService->getCustomerSidebarData($row);
+        if (! $request->boolean('lightweight')) {
+            $data['sidebar'] = $this->chatService->getCustomerSidebarData($row);
+        } else {
+            $receiptIds = $receiptInput['receipt_ids'] ?? [];
+            $receipts = empty($receiptIds) ? collect() : $row->messages()->whereIn('id', $receiptIds)->get();
+            $data['message_receipts'] = collect(ChatMessageResource::collection($receipts)->resolve($request))
+                ->map(fn ($message) => array_intersect_key($message, array_flip(['id', 'read_at', 'delivered_at'])))
+                ->values()->all();
+        }
         return $this->ok('Thread loaded', $data);
     }
 
@@ -360,7 +372,9 @@ class LoanChatController extends Controller
         $initialThreadId = $request->input('thread') ? (int) $request->input('thread') : null;
         $initialCustomerId = $request->input('customer_id') ? (int) $request->input('customer_id') : null;
 
-        return view('loanmanagement::chat.inbox', [
+        $live = $request->routeIs('loan-management.live-chat') || $request->input('channel') === 'live';
+
+        return view($live ? 'loanmanagement::chat.live' : 'loanmanagement::chat.inbox', [
             'initialThreadId' => $initialThreadId,
             'initialCustomerId' => $initialCustomerId,
         ]);
@@ -368,7 +382,7 @@ class LoanChatController extends Controller
 
     public function webDetail(int $thread)
     {
-        return view('loanmanagement::chat.inbox', [
+        return view(request()->routeIs('loan-management.live-chat.detail') ? 'loanmanagement::chat.live' : 'loanmanagement::chat.inbox', [
             'initialThreadId' => $thread,
             'initialCustomerId' => null,
         ]);

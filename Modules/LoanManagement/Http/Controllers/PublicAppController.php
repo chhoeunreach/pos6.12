@@ -15,17 +15,29 @@ use Modules\LoanManagement\Entities\LoanProduct;
 use Modules\LoanManagement\Services\BusinessSettingsService;
 use Modules\LoanManagement\Services\CreateStandaloneLoanService;
 use Modules\LoanManagement\Services\LoanCustomerService;
+use Illuminate\Http\UploadedFile;
+use Modules\LoanManagement\Entities\Loan;
 
 class PublicAppController extends Controller
 {
     use ApiResponseTrait;
 
-    public function home()
+    public function home(Request $request)
     {
         if (! BusinessSettingsService::isCmsEnabled()) {
             return Route::has('login')
                 ? redirect()->route('login')
                 : redirect('/login');
+        }
+
+        $langParam = $request->query('lang') ?? $request->query('language');
+        if ($langParam && in_array($langParam, ['en', 'km'], true)) {
+            $user = $request->session()->get('user', []);
+            $user['language'] = $langParam;
+            $request->session()->put('user', $user);
+            $request->session()->put('user.language', $langParam);
+            cookie()->queue(cookie()->forever('lm_lang', $langParam));
+            app()->setLocale($langParam);
         }
 
         $products = $this->catalogProducts();
@@ -42,6 +54,15 @@ class PublicAppController extends Controller
 
     public function register()
     {
+        if (request()->has('product_id') || request()->has('apply') || request()->has('cart')) {
+            return redirect()->route('loan-management.public.home', array_filter([
+                'apply' => 1,
+                'product_id' => request('product_id'),
+                'months' => request('months'),
+                'down_payment' => request('down_payment'),
+            ]));
+        }
+
         return view('loanmanagement::public.register', [
             'settings' => BusinessSettingsService::get(),
         ]);
@@ -49,15 +70,57 @@ class PublicAppController extends Controller
 
     public function storeRegistration(Request $request, LoanCustomerService $customers)
     {
+        if (! BusinessSettingsService::isCustomerLoginEnabled()) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Customer portal registration is disabled.'], 403);
+            }
+            return response('Customer portal registration is disabled.', 403);
+        }
+
+        $isInstallmentRequest = $request->boolean('installment_request') || $request->has('installment_items');
+
+        if ($isInstallmentRequest && $request->has('installment_items')) {
+            $rawItems = $request->input('installment_items');
+            $items = is_string($rawItems) ? json_decode($rawItems, true) : (is_array($rawItems) ? $rawItems : null);
+            if (! is_array($items)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'installment_items' => ['Invalid cart items format.'],
+                ]);
+            }
+            $catalogMap = collect($this->catalogProducts())->keyBy('id');
+            foreach ($items as $item) {
+                if (! is_array($item) || ! isset($item['id']) || ! $catalogMap->has($item['id'])) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'installment_items' => ['One or more items in the cart are invalid or no longer available.'],
+                    ]);
+                }
+                if (! isset($item['qty']) || (int) $item['qty'] <= 0 || (int) $item['qty'] > 99) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'installment_items' => ['Invalid item quantity.'],
+                    ]);
+                }
+            }
+        }
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'khmer_name' => 'nullable|string|max:255',
             'phone' => 'required|string|max:50',
             'telegram' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string|max:1000',
-            'password' => 'required|string|min:8|confirmed',
-            'installment_items' => 'nullable|string|max:10000',
+            'address' => $isInstallmentRequest ? 'required|string|max:1000' : 'nullable|string|max:1000',
+            'password' => $isInstallmentRequest ? 'nullable|string' : 'required|string|min:8|confirmed',
+            'preferred_months' => 'nullable|integer|min:1|max:120',
+            'preferred_down_payment' => 'nullable|numeric|min:0',
+            'installment_items' => 'nullable',
+            'id_card_front' => 'nullable|array|max:8',
+            'id_card_front.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'id_card_back' => 'nullable|array|max:8',
+            'id_card_back.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'income_proof' => 'nullable|array|max:8',
+            'income_proof.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'collateral_photo' => 'nullable|array|max:8',
+            'collateral_photo.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
         ]);
 
         $phone = trim((string) $data['phone']);
@@ -67,6 +130,32 @@ class PublicAppController extends Controller
             return back()
                 ->withErrors(['phone' => 'This phone number is already registered. Please login or contact support.'])
                 ->withInput($request->except('password', 'password_confirmation'));
+        }
+
+        if ($isInstallmentRequest) {
+            $installmentNote = $this->installmentRequestNote((string) ($data['installment_items'] ?? ''));
+            if (!empty($data['preferred_months'])) {
+                $installmentNote .= "\nPreferred installment term: ".(int) $data['preferred_months'].' months (subject to staff review).';
+            }
+            if (isset($data['preferred_down_payment']) && $data['preferred_down_payment'] !== null && $data['preferred_down_payment'] !== '') {
+                $installmentNote .= "\nProposed down payment: ".number_format((float) $data['preferred_down_payment'], 2).'.';
+            }
+            unset($data['installment_items'], $data['preferred_months'], $data['preferred_down_payment'], $data['password'], $data['status'], $data['can_login']);
+            unset($data['id_card_front'], $data['id_card_back'], $data['income_proof'], $data['collateral_photo']);
+            $customerId = $customers->create(array_merge($data, [
+                'can_login' => 0,
+                'status' => 'pending',
+                'customer_type' => 'public_installment_request',
+                'note' => $installmentNote,
+            ]));
+            $this->storePendingCustomerDocuments($request, $customerId);
+            $message = 'Your installment request is pending review. Our staff will contact you to follow up.';
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $message, 'status' => 'pending'], 201);
+            }
+            return redirect()
+                ->route('loan-management.public.home')
+                ->with('installment_request_success', $message);
         }
 
         $installmentNote = $this->installmentRequestNote((string) ($data['installment_items'] ?? ''));
@@ -100,33 +189,29 @@ class PublicAppController extends Controller
 
     public function customerLogin()
     {
-        if (! BusinessSettingsService::isCustomerLoginEnabled()) {
-            return redirect()->route('loan-management.public.home')
-                ->with('status', 'Customer login portal is currently disabled by administrator.');
+        if ($disabled = $this->customerPortalDisabledRedirect()) {
+            return $disabled;
         }
 
         if (Auth::guard('customer_loan')->check()) {
             return redirect()->route('loan-management.public.customer-dashboard');
         }
 
-        $demoCustomers = LoanCustomer::query()
-            ->where('can_login', 1)
-            ->where('status', 'active')
-            ->select('id', 'name', 'phone', 'login_phone', 'username')
-            ->take(3)
-            ->get();
+        $settings = BusinessSettingsService::get();
+        $demoLogin = BusinessSettingsService::isDemoCustomerLoginEnabled()
+            ? \Modules\LoanManagement\Services\PortalDemoService::credentials('customer')
+            : null;
 
-        return view('loanmanagement::public.customer_login', [
-            'settings' => BusinessSettingsService::get(),
-            'demoCustomers' => $demoCustomers,
-        ]);
+        return view('loanmanagement::public.customer_login', compact('settings', 'demoLogin'));
     }
 
     public function customerLoginStore(Request $request)
     {
-        if (! BusinessSettingsService::isCustomerLoginEnabled()) {
-            return redirect()->route('loan-management.public.home')
-                ->with('status', 'Customer login portal is currently disabled by administrator.');
+        if ($disabled = $this->customerPortalDisabledRedirect()) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Customer login portal is currently disabled.'], 403);
+            }
+            return $disabled;
         }
 
         $credentials = $request->validate([
@@ -139,24 +224,30 @@ class PublicAppController extends Controller
             ->where(function ($q) use ($login) {
                 $q->where('username', $login)
                     ->orWhere('phone', $login)
-                    ->orWhere('login_phone', $login);
+                    ->orWhere('login_phone', $login)
+                    ->orWhere('email', $login);
             })
             ->where('can_login', 1)
             ->where('status', 'active')
             ->first();
 
-        // Disallow concurrent logins: log out admin/web session if active
-        if (Auth::guard('web')->check() || Auth::check()) {
-            Auth::guard('web')->logout();
-            Auth::logout();
-        }
-
         if (! $customer || ! Auth::guard('customer_loan')->attempt(['id' => $customer->id, 'password' => $credentials['password']], $request->boolean('remember'))) {
+            if ($request->expectsJson()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['login' => 'These credentials do not match our records.']);
+            }
             return back()->withErrors(['login' => 'These credentials do not match our records.'])->onlyInput('login');
         }
 
+        if (Auth::guard('web')->check()) {
+            Auth::guard('web')->logout();
+            $request->session()->forget('url.intended');
+        }
         $request->session()->regenerate();
         $customer->forceFill(['last_login_at' => now()])->save();
+
+        if ($request->expectsJson()) {
+            return response()->json(['redirect' => route('loan-management.public.customer-dashboard')]);
+        }
 
         return redirect()->intended(route('loan-management.public.customer-dashboard'));
     }
@@ -177,6 +268,10 @@ class PublicAppController extends Controller
 
     public function customerDashboard()
     {
+        if ($disabled = $this->customerPortalDisabledRedirect()) {
+            return $disabled;
+        }
+
         $customer = Auth::guard('customer_loan')->user();
         if (! $customer) {
             return redirect()->route('loan-management.public.customer-login');
@@ -292,7 +387,7 @@ class PublicAppController extends Controller
             $path = $file->store($folder, $disk);
 
             $payload = [
-                'fileable_type' => 'loan_customer',
+                'fileable_type' => LoanCustomer::class,
                 'fileable_id' => $customer->id,
                 'category' => 'customer_photo',
                 'disk' => $disk,
@@ -375,10 +470,14 @@ class PublicAppController extends Controller
             'guarantor_phone' => 'nullable|string|max:50',
             'guarantor_relationship' => 'nullable|string|max:100',
             'note' => 'nullable|string|max:2000',
-            'id_card_front' => 'nullable|image|mimes:jpeg,png,jpg,webp,pdf|max:10240',
-            'id_card_back' => 'nullable|image|mimes:jpeg,png,jpg,webp,pdf|max:10240',
-            'income_proof' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
-            'collateral_photo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:10240',
+            'id_card_front' => 'nullable|array|max:8',
+            'id_card_front.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'id_card_back' => 'nullable|array|max:8',
+            'id_card_back.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'income_proof' => 'nullable|array|max:8',
+            'income_proof.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'collateral_photo' => 'nullable|array|max:8',
+            'collateral_photo.*' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
         ]);
 
         // Update customer profile with any newly provided details
@@ -461,20 +560,32 @@ class PublicAppController extends Controller
 
             if (Schema::connection('mysql_loan')->hasTable('loan_files')) {
                 $columns = Schema::connection('mysql_loan')->getColumnListing('loan_files');
+                $disk = 'public';
+                $folder = 'loan-files/'.$loanId;
+
                 foreach ($fileCategories as $inputName => $category) {
-                    if ($request->hasFile($inputName)) {
-                        $file = $request->file($inputName);
-                        $disk = 'public';
-                        $folder = 'loan-files/'.$loanId;
+                    $files = $request->file($inputName);
+                    if (! is_array($files)) {
+                        $files = $files ? [$files] : [];
+                    }
+
+                    foreach ($files as $file) {
+                        if (! $file instanceof UploadedFile || ! $file->isValid()) {
+                            continue;
+                        }
+
                         $path = $file->store($folder, $disk);
+                        if ($path === false) {
+                            continue;
+                        }
 
                         $filePayload = [
-                            'fileable_type' => 'loan',
+                            'fileable_type' => Loan::class,
                             'fileable_id' => $loanId,
                             'category' => $category,
                             'disk' => $disk,
                             'path' => $path,
-                            'original_name' => $file->getClientOriginalName(),
+                            'original_name' => mb_substr((string) $file->getClientOriginalName(), 0, 255),
                             'mime_type' => $file->getClientMimeType(),
                             'size_bytes' => $file->getSize(),
                             'uploaded_by' => null,
@@ -637,10 +748,14 @@ class PublicAppController extends Controller
     protected function installmentRequestNote(string $itemsJson): ?string
     {
         $items = json_decode($itemsJson, true);
-        if (! is_array($items) || empty($items)) {
+        if (! is_array($items)) {
             return null;
         }
+        if (empty($items)) {
+            return "Public installment request:\n- Staff will help customer choose a product.";
+        }
 
+        $catalogMap = collect($this->catalogProducts())->keyBy('id');
         $lines = ['Public installment request:'];
         $total = 0;
         foreach (array_slice($items, 0, 20) as $item) {
@@ -648,11 +763,13 @@ class PublicAppController extends Controller
                 continue;
             }
 
-            $name = trim((string) ($item['name'] ?? 'Product'));
+            $id = $item['id'] ?? null;
+            $catItem = $id ? $catalogMap->get($id) : null;
+            $name = $catItem ? ($catItem['name'] ?? 'Product') : trim((string) ($item['name'] ?? 'Product'));
+            $sku = $catItem ? ($catItem['sku'] ?? '') : trim((string) ($item['sku'] ?? ''));
+            $price = $catItem ? (float) ($catItem['price'] ?? 0) : round((float) ($item['price'] ?? 0), 2);
             $qty = max(1, (int) ($item['qty'] ?? 1));
-            $price = round((float) ($item['price'] ?? 0), 2);
             $total += $qty * $price;
-            $sku = trim((string) ($item['sku'] ?? ''));
             $lines[] = '- '.$name.($sku !== '' ? ' (SKU: '.$sku.')' : '').' x'.$qty.' = '.number_format($qty * $price, 2);
         }
 
@@ -681,5 +798,100 @@ class PublicAppController extends Controller
             'version' => (string) config('loanmanagement.version', '1.0.0'),
             'min_flutter_version' => '1.0.0',
         ]);
+    }
+
+
+    public function homeImage()
+    {
+        $path = module_path('LoanManagement', 'Resources/assets/cms-home/hero.jpg');
+        $uploaded = BusinessSettingsService::get()['home_hero_path'];
+        if (is_string($uploaded) && str_starts_with($uploaded, 'loan-management/cms/') && ! str_contains($uploaded, '..') && \Illuminate\Support\Facades\Storage::disk('public')->exists($uploaded)) {
+            $path = \Illuminate\Support\Facades\Storage::disk('public')->path($uploaded);
+        }
+        abort_unless(is_file($path), 404);
+
+        return response()->file($path, ['Cache-Control' => 'no-cache']);
+    }
+
+    protected function customerPortalDisabledRedirect()
+    {
+        if (BusinessSettingsService::isCustomerLoginEnabled()) {
+            return null;
+        }
+
+        if (Auth::guard('customer_loan')->check()) {
+            Auth::guard('customer_loan')->logout();
+        }
+
+        return redirect()->route('loan-management.public.home')
+            ->with('status', 'Customer login portal is currently disabled by administrator.');
+    }
+
+    public function storePendingCustomerDocuments(Request $request, int $customerId): void
+    {
+        if ($customerId <= 0 || ! Schema::connection('mysql_loan')->hasTable('loan_files')) {
+            return;
+        }
+
+        $categories = [
+            'id_card_front' => 'id_front',
+            'id_card_back' => 'id_back',
+            'income_proof' => 'income_proof',
+            'collateral_photo' => 'collateral',
+        ];
+
+        $columns = Schema::connection('mysql_loan')->getColumnListing('loan_files');
+        $disk = 'public';
+        $folder = 'loan-customers/'.$customerId;
+        $references = [];
+
+        foreach ($categories as $inputName => $category) {
+            $files = $request->file($inputName);
+            if (! is_array($files)) {
+                $files = $files ? [$files] : [];
+            }
+            foreach ($files as $file) {
+                if (! $file instanceof \Illuminate\Http\UploadedFile || ! $file->isValid()) {
+                    continue;
+                }
+
+                $path = $file->store($folder, $disk);
+                if ($path === false) {
+                    continue;
+                }
+
+                $payload = [
+                    'fileable_type' => LoanCustomer::class,
+                    'fileable_id' => $customerId,
+                    'category' => $category,
+                    'disk' => $disk,
+                    'path' => $path,
+                    'original_name' => mb_substr((string) $file->getClientOriginalName(), 0, 255),
+                    'mime_type' => $file->getClientMimeType(),
+                    'size_bytes' => $file->getSize(),
+                    'uploaded_by' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                $fileId = (int) DB::connection('mysql_loan')->table('loan_files')->insertGetId(
+                    array_intersect_key($payload, array_flip($columns))
+                );
+                $references[$category] = $references[$category] ?? $fileId;
+            }
+        }
+
+        if ($references && Schema::connection('mysql_loan')->hasTable('loan_customers')) {
+            $updates = [];
+            foreach (['id_front' => 'id_front_file_id', 'id_back' => 'id_back_file_id'] as $category => $column) {
+                if (! empty($references[$category]) && Schema::connection('mysql_loan')->hasColumn('loan_customers', $column)) {
+                    $updates[$column] = $references[$category];
+                }
+            }
+            if ($updates) {
+                $updates['updated_at'] = now();
+                DB::connection('mysql_loan')->table('loan_customers')->where('id', $customerId)->update($updates);
+            }
+        }
     }
 }

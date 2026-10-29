@@ -896,67 +896,67 @@
         </div>
     </div>
 
-    {{-- Collection Summary KPI Cards (All Due / Today / Last Month / Paid / Unpaid) --}}
+    {{-- Monthly KPI Cards (6-Card Enhanced Grid: Last Month(s) Arrears + This Month Due) --}}
     <div class="cal-kpi-grid">
-        {{-- Card 1: All Due (Due Today + Last Month Not Yet Paid) --}}
-        <div class="cal-kpi-card" style="border-left: 3px solid #e11d48; background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);">
-            <div class="cal-kpi-top">
-                <div class="cal-kpi-icon cal-tone-red" style="background:#ffe4e6;color:#e11d48;border-color:#fecdd3;">
-                    <i class="fa fa-bell"></i>
-                </div>
-                <div class="cal-kpi-info">
-                    <small style="color:#be123c;">{{ $bi('All Due', 'សរុបត្រូវបង់') }}</small>
-                    <strong style="color:#be123c;">{{ $money($kpi['all_due_total'] ?? 0) }}</strong>
-                </div>
-            </div>
-            <div class="cal-kpi-sub">
-                <span>{{ $bi('Due Today + Last Month Unpaid', 'ថ្ងៃនេះ + ខែមុន') }}:</span>
-                <strong style="color: #0f172a;">{{ $number(($kpi['due_today_count'] ?? 0) + ($kpi['last_month_unpaid_count'] ?? 0)) }} {{ $bi('inst.', 'វគ្គ') }}</strong>
-            </div>
-        </div>
-
-        {{-- Card 2: Today Due --}}
-        <div class="cal-kpi-card" style="border-left: 3px solid #0284c7;">
+        {{-- Card 1: This Month Due --}}
+        <div class="cal-kpi-card">
             <div class="cal-kpi-top">
                 <div class="cal-kpi-icon cal-tone-blue">
                     <i class="fa fa-calendar-check-o"></i>
                 </div>
                 <div class="cal-kpi-info">
-                    <small>{{ $bi('Today Due', 'ដល់ថ្ងៃបង់ថ្ងៃនេះ') }}</small>
-                    <strong>{{ $money($kpi['due_today_total'] ?? 0) }}</strong>
+                    <small>{{ $bi('This Month Due', 'ត្រូវបង់ខែនេះ') }}</small>
+                    <strong>{{ $money($kpi['total_due'] ?? 0) }}</strong>
                 </div>
             </div>
             <div class="cal-kpi-sub">
-                <span>{{ $bi('Unpaid Installments', 'វគ្គមិនទាន់បង់') }}:</span>
-                <strong style="color: #0f172a;">{{ $number($kpi['due_today_count'] ?? 0) }} / {{ $number($kpi['due_today_customers'] ?? 0) }} {{ $bi('cust.', 'អតិថិជន') }}</strong>
+                <span>{{ $bi('Scheduled Accounts', 'គណនីត្រូវបង់') }}:</span>
+                <strong style="color: #0f172a;">{{ $number($kpi['total_customers'] ?? 0) }}</strong>
             </div>
         </div>
 
-        {{-- Card 3: Last Month Due (Not Yet Paid) --}}
+        {{-- Card 2: Last Month(s) Still Not Yet Paid (Prior Arrears) --}}
         <div class="cal-kpi-card" style="border-left: 3px solid #e11d48;">
             <div class="cal-kpi-top">
                 <div class="cal-kpi-icon cal-tone-red" style="background:#ffe4e6;color:#e11d48;border-color:#fecdd3;">
                     <i class="fa fa-history"></i>
                 </div>
                 <div class="cal-kpi-info">
-                    <small style="color:#be123c;">{{ $bi('Last Month Due (Unpaid)', 'បំណុលខែមុនមិនទាន់បង់') }}</small>
-                    <strong style="color:#e11d48;">{{ $money($kpi['last_month_due_total'] ?? 0) }}</strong>
+                    <small style="color:#be123c;">{{ $bi('Prior Arrears (Last Mo+)', 'ជំពាក់សល់ពីខែមុន') }}</small>
+                    <strong style="color:#e11d48;">{{ $money($kpi['prior_unpaid_balance'] ?? 0) }}</strong>
                 </div>
             </div>
             <div class="cal-kpi-sub">
-                <span>{{ $bi('Unpaid Installments', 'វគ្គមិនទាន់បង់') }}:</span>
-                <strong style="color: #be123c;">{{ $number($kpi['last_month_unpaid_count'] ?? 0) }} / {{ $number($kpi['last_month_unpaid_customers'] ?? 0) }} {{ $bi('cust.', 'អតិថិជន') }}</strong>
+                <span>{{ $bi('Arrears Accounts', 'គណនីជំពាក់') }}:</span>
+                <strong style="color: #be123c;">{{ $number($kpi['prior_unpaid_customers'] ?? 0) }} ({{ $number($kpi['prior_unpaid_count'] ?? 0) }} {{ $bi('inst.', 'វគ្គ') }})</strong>
             </div>
         </div>
 
-        {{-- Card 4: Total Paid (This Month) --}}
+        {{-- Card 3: Grand Total Due to Collect (Last Mo + This Mo) --}}
+        <div class="cal-kpi-card" style="background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); border-left: 3px solid #4f46e5;">
+            <div class="cal-kpi-top">
+                <div class="cal-kpi-icon cal-tone-purple" style="background:#eef2ff;color:#4f46e5;border-color:#c7d2fe;">
+                    <i class="fa fa-calculator"></i>
+                </div>
+                <div class="cal-kpi-info">
+                    <small style="color:#4338ca;">{{ $bi('Grand Total Due', 'សរុបត្រូវប្រមូល') }}</small>
+                    <strong style="color:#312e81;">{{ $money($kpi['grand_total_due'] ?? 0) }}</strong>
+                </div>
+            </div>
+            <div class="cal-kpi-sub">
+                <span style="font-size:11px;">{{ $bi('Last Mo + This Mo', 'ខែមុន + ខែនេះ') }}</span>
+                <span class="badge" style="background:#e0e7ff;color:#3730a3;font-size:10.5px;">{{ $bi('Combined', 'រួមបញ្ចូល') }}</span>
+            </div>
+        </div>
+
+        {{-- Card 4: Collected So Far --}}
         <div class="cal-kpi-card">
             <div class="cal-kpi-top">
                 <div class="cal-kpi-icon cal-tone-green">
                     <i class="fa fa-check-circle"></i>
                 </div>
                 <div class="cal-kpi-info">
-                    <small>{{ $bi('Total Paid (This Month)', 'បានបង់សរុប (ខែនេះ)') }}</small>
+                    <small>{{ $bi('Collected So Far', 'បានប្រមូលរួច') }}</small>
                     <strong style="color:#15803d;">{{ $money($kpi['total_paid'] ?? 0) }}</strong>
                 </div>
             </div>
@@ -966,20 +966,40 @@
             </div>
         </div>
 
-        {{-- Card 5: Total Unpaid (This Month Left) --}}
+        {{-- Card 5: Grand Remaining Balance --}}
         <div class="cal-kpi-card">
             <div class="cal-kpi-top">
                 <div class="cal-kpi-icon cal-tone-amber">
                     <i class="fa fa-hourglass-half"></i>
                 </div>
                 <div class="cal-kpi-info">
-                    <small>{{ $bi('Total Unpaid (This Month)', 'នៅសល់មិនទាន់បង់ (ខែនេះ)') }}</small>
-                    <strong style="color:#b45309;">{{ $money($kpi['total_unpaid'] ?? 0) }}</strong>
+                    <small>{{ $bi('Grand Balance Left', 'សមតុល្យនៅសល់សរុប') }}</small>
+                    <strong style="color:#b45309;">{{ $money($kpi['grand_total_balance'] ?? 0) }}</strong>
                 </div>
             </div>
             <div class="cal-kpi-sub">
-                <span>{{ $bi('Open Installments', 'វគ្គមិនទាន់បង់') }}:</span>
-                <strong style="color: #92400e;">{{ $number($kpi['open_count'] ?? 0) }}</strong>
+                <span>{{ $bi('This Mo Left', 'នៅសល់ខែនេះ') }}:</span>
+                <strong style="color: #0f172a;">{{ $money($kpi['total_balance'] ?? 0) }}</strong>
+            </div>
+        </div>
+
+        {{-- Card 6: Collection Rate Progress --}}
+        <div class="cal-kpi-card">
+            <div class="cal-kpi-top">
+                <div class="cal-kpi-icon cal-tone-purple">
+                    <i class="fa fa-pie-chart"></i>
+                </div>
+                <div class="cal-kpi-info">
+                    <small>{{ $bi('Collection Rate', 'អត្រាប្រមូល') }}</small>
+                    <strong>{{ $collectionRate }}%</strong>
+                </div>
+            </div>
+            <div class="cal-rate-bar-wrap">
+                <div class="cal-rate-bar-fill" style="width: {{ min(100, $collectionRate) }}%;"></div>
+            </div>
+            <div class="cal-kpi-sub">
+                <span>{{ $bi('Grand Rate', 'អត្រាសរុប') }}: {{ $kpi['grand_collection_rate'] ?? 0 }}%</span>
+                <span title="Collected / Grand Total">{{ $money($kpi['total_paid'] ?? 0) }} / {{ $money($kpi['grand_total_due'] ?? 0) }}</span>
             </div>
         </div>
     </div>
@@ -1125,7 +1145,7 @@
                          data-due="{{ $stats['total_due'] }}"
                          data-balance="{{ $stats['total_balance'] }}"
                      @endif>
-                    
+
                     {{-- Cell Top Header --}}
                     <div>
                         <div class="cal-cell-top">
@@ -1704,7 +1724,7 @@
                         var statusDot = c.status === 'paid' ? 'cal-dot-paid' : (c.status === 'overdue' ? 'cal-dot-overdue' : (c.status === 'due_today' ? 'cal-dot-today' : 'cal-dot-open'));
                         var statusBorder = c.status === 'paid' ? '#16a34a' : (c.status === 'overdue' ? '#dc2626' : (c.status === 'due_today' ? '#d97706' : '#0284c7'));
                         var priorTag = c.has_prior_unpaid ? ' <span class="cal-chip-prior-tag" title="Prior: $' + Number(c.prior_balance).toFixed(2) + '">+$' + Number(c.prior_balance).toFixed(0) + '</span>' : '';
-                        
+
                         html += '<div class="cal-week-card" style="border-left: 3px solid ' + statusBorder + ';">' +
                             '<div class="cal-week-card-top">' +
                                 '<strong style="color:#0f172a;"><span class="cal-chip-dot ' + statusDot + '" style="display:inline-block;margin-right:4px;"></span>' + esc(c.customer_name) + priorTag + '</strong>' +

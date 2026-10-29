@@ -376,6 +376,8 @@
                 <i class="fa fa-money"></i> {{ $lmText('Add Payment', 'ទទួលការទូទាត់') }}
             </button>
 
+
+
             @can('loan_management.edit')
             <button type="button"
                     class="lm-btn-nav lm-btn-nav-primary btn-modal"
@@ -391,6 +393,43 @@
                     data-container=".view_modal">
                 <i class="fa fa-print"></i> {{ $lmText('Print', 'បោះពុម្ព') }}
             </button>
+
+            <a href="{{ route('loan-management.loans.contract', $loanRow->id) }}"
+               target="_blank"
+               class="lm-btn-nav"
+               title="{{ $lmText('Official Legal Contract', 'កិច្ចសន្យាឥណទានផ្លូវការ') }}">
+                <i class="fa fa-file-text-o"></i> {{ $lmText('Contract', 'កិច្ចសន្យា') }}
+            </a>
+
+            @if(!in_array(strtolower((string) $loanRow->status), ['completed', 'closed', 'rejected', 'cancelled']))
+            @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.approve|loan_management.loans.approve'))
+            <button type="button"
+                    class="lm-btn-nav btn-modal"
+                    data-href="{{ route('loan-management.loans.settlement.modal', $loanRow->id) }}"
+                    data-container=".view_modal"
+                    title="{{ $lmText('Early Payoff & Settlement', 'ទូទាត់ផ្តាច់កម្ចីមុនកំណត់') }}">
+                <i class="fa fa-handshake-o"></i> {{ $lmText('Early Payoff', 'ទូទាត់ផ្តាច់') }}
+            </button>
+
+            <button type="button"
+                    class="lm-btn-nav btn-modal"
+                    data-href="{{ route('loan-management.loans.reschedule.modal', $loanRow->id) }}"
+                    data-container=".view_modal"
+                    title="{{ $lmText('Restructure / Reschedule', 'រៀបចំកម្ចីឡើងវិញ') }}">
+                <i class="fa fa-refresh"></i> {{ $lmText('Restructure', 'រៀបចំកម្ចី') }}
+            </button>
+
+            @endif
+            @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.collection.view|loan_management.view'))
+            <button type="button"
+                    class="lm-btn-nav btn-modal"
+                    data-href="{{ route('loan-management.loans.ptp.modal', $loanRow->id) }}"
+                    data-container=".view_modal"
+                    title="{{ $lmText('Promise to Pay (PTP)', 'កត់ត្រាការសន្យាសង') }}">
+                <i class="fa fa-calendar-check-o"></i> {{ $lmText('Log PTP', 'សន្យាសង') }}
+            </button>
+            @endif
+            @endif
 
             @can('loan_management.edit')
             <button type="button"
@@ -674,6 +713,7 @@
         <span class="lm-mab-amount">{{ number_format($balanceAmount, 2) }} {{ $loanRow->currency ?? 'USD' }}</span>
     </div>
     <div class="lm-mab-actions">
+
         <button type="button"
                 class="lm-mab-btn lm-quick-pay-trigger"
                 data-url="{{ route('loan-management.loans.payment.quick-pay', $loanRow->id) }}"
@@ -686,6 +726,12 @@
                 data-container=".view_modal">
             <i class="fa fa-print"></i>
         </button>
+        <a href="{{ route('loan-management.loans.contract', $loanRow->id) }}"
+           target="_blank"
+           class="lm-mab-btn lm-mab-btn-outline"
+           title="{{ $lmText('Official Legal Contract', 'កិច្ចសន្យាឥណទានផ្លូវការ') }}">
+            <i class="fa fa-file-text-o"></i>
+        </a>
         @can('loan_management.edit')
         <button type="button"
                 class="lm-mab-btn lm-mab-btn-outline btn-modal"

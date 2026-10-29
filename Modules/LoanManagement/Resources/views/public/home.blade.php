@@ -1,11 +1,80 @@
 @php
     $businessLogoUrl = \Modules\LoanManagement\Services\BusinessSettingsService::publicLogoUrl();
-    $loginBackgroundUrl = \Modules\LoanManagement\Services\BusinessSettingsService::loginBackgroundUrl();
     $businessName = \Modules\LoanManagement\Services\BusinessSettingsService::businessName();
+    $loanLanguage = session('user.language') ?? request()->cookie('lm_lang') ?? request('lang') ?? config('app.locale', 'en');
+    $loanLanguage = in_array($loanLanguage, ['en', 'km'], true) ? $loanLanguage : 'en';
+    $lmIsKhmer = $loanLanguage === 'km';
+    $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
+
     $headline = $settings['home_headline'] ?? 'Simple loan service for customers';
+    if ($lmIsKhmer && $headline === 'Simple loan service for customers') {
+        $headline = 'សេវាកម្មបង់រំលស់ងាយស្រួលសម្រាប់អតិថិជន';
+    }
     $subtitle = $settings['home_subtitle'] ?? '';
     $body = $settings['home_body'] ?? '';
-    $themeColor = $settings['theme_color'] ?? '#2563eb';
+    $cms = \Modules\LoanManagement\Services\CmsHomeService::normalize($settings['home_cms'] ?? []);
+
+    if ($lmIsKhmer) {
+        if ($cms['tagline'] === 'Showroom & Installment') $cms['tagline'] = 'បន្ទប់តាំងបង្ហាញ & សេវាកម្មបង់រំលស់';
+        if ($cms['announcement_text'] === 'Showroom & Installment') $cms['announcement_text'] = 'បន្ទប់តាំងបង្ហាញ & សេវាកម្មបង់រំលស់';
+        if ($cms['hero_eyebrow'] === 'Installment Shopping') $cms['hero_eyebrow'] = 'ទិញទំនិញបង់រំលស់';
+        if ($cms['assessment_title'] === 'Instant Loan Assessment') $cms['assessment_title'] = 'គណនាប្រាក់បង់រំលស់ភ្លាមៗ';
+        if ($cms['assessment_note'] === 'Estimate before interest and fees. Our staff confirms final installment terms after review.') {
+            $cms['assessment_note'] = 'ការប៉ាន់ស្មានមុនការប្រាក់ និងថ្លៃសេវា។ បុគ្គលិកយើងនឹងបញ្ជាក់លក្ខខណ្ឌចុងក្រោយបន្ទាប់ពីពិនិត្យ។';
+        }
+        if ($cms['brands_title'] === 'Authorized Brands & Partners') $cms['brands_title'] = 'ម៉ាកយីហោ និងដៃគូសហការ';
+        if ($cms['guide_title'] === 'Apply in a few minutes') $cms['guide_title'] = 'ស្នើសុំត្រឹមតែប៉ុន្មាននាទី';
+        if ($cms['guide_description'] === 'Choose a product, submit your request, and our staff will follow up.') {
+            $cms['guide_description'] = 'ជ្រើសរើសទំនិញ បញ្ជូនសំណើរបស់អ្នក ហើយបុគ្គលិកយើងនឹងទាក់ទងមកវិញ។';
+        }
+        if ($cms['step_1_title'] === 'Choose product') $cms['step_1_title'] = 'ជ្រើសរើសទំនិញ';
+        if ($cms['step_1_body'] === 'Add products from the catalog to your installment cart.' || $cms['step_1_body'] === 'Browse the catalog and add your selected products to the installment cart.') {
+            $cms['step_1_body'] = 'ជ្រើសរើសទំនិញពីកាតាឡុកដាក់ចូលក្នុងកន្ត្រកបង់រំលស់។';
+        }
+        if ($cms['step_2_title'] === 'Submit request') $cms['step_2_title'] = 'បញ្ជូនសំណើ';
+        if ($cms['step_2_body'] === 'Send your name, phone number, and contact address with your selected items.' || $cms['step_2_body'] === 'Send your contact details and selected items to our team.') {
+            $cms['step_2_body'] = 'ផ្ញើព័ត៌មានទំនាក់ទំនង និងទំនិញដែលបានជ្រើសរើសទៅកាន់ក្រុមការងារយើង។';
+        }
+        if ($cms['step_3_title'] === 'Staff follow-up') $cms['step_3_title'] = 'បុគ្គលិកទាក់ទងមកវិញ';
+        if ($cms['step_3_body'] === 'Our staff will contact you to review your request and discuss installment terms.' || $cms['step_3_body'] === 'Our staff will contact you to review your pending request.') {
+            $cms['step_3_body'] = 'បុគ្គលិកយើងនឹងទាក់ទងមកដើម្បីពិនិត្យសំណើដែលកំពុងរង់ចាំរបស់អ្នក។';
+        }
+        if ($cms['experience_title'] === 'Simple customer experience') $cms['experience_title'] = 'បទពិសោធន៍អតិថិជនងាយស្រួល';
+        if ($cms['experience_description'] === 'Browse products, request installment service, and return to your customer account once staff has enabled access.') {
+            $cms['experience_description'] = 'ស្វែងរកទំនិញ ស្នើសុំសេវាបង់រំលស់ និងចូលទៅកាន់គណនីអតិថិជនបន្ទាប់ពីបុគ្គលិកបានអនុញ្ញាត។';
+        }
+        if ($cms['experience_1_title'] === 'Choose product') $cms['experience_1_title'] = 'ជ្រើសរើសទំនិញ';
+        if ($cms['experience_1_body'] === 'Add products from the catalog to your installment cart.') $cms['experience_1_body'] = 'ជ្រើសរើសទំនិញពីកាតាឡុកដាក់ចូលក្នុងកន្ត្រកបង់រំលស់។';
+        if ($cms['experience_2_title'] === 'Submit request') $cms['experience_2_title'] = 'បញ្ជូនសំណើ';
+        if ($cms['experience_2_body'] === 'Send your contact details and selected items. Our staff will follow up.') $cms['experience_2_body'] = 'ផ្ញើព័ត៌មានទំនាក់ទំនង និងទំនិញដែលបានជ្រើសរើស។ បុគ្គលិកយើងនឹងទាក់ទងមកវិញ។';
+        if ($cms['experience_3_title'] === 'Track your account') $cms['experience_3_title'] = 'តាមដានគណនីរបស់អ្នក';
+        if ($cms['experience_3_body'] === 'After staff enables your account, log in to view loan records and payment history.') $cms['experience_3_body'] = 'បន្ទាប់ពីបុគ្គលិកបើកគណនីរបស់អ្នក សូមចូលដើម្បីមើលកំណត់ត្រាកម្ចី និងប្រវត្តិបង់ប្រាក់។';
+        if ($cms['catalog_title'] === 'Products Catalog') $cms['catalog_title'] = 'កាតាឡុកទំនិញ';
+        if ($cms['catalog_description'] === 'Find your next product and submit an installment request. All requests are subject to review.') {
+            $cms['catalog_description'] = 'ស្វែងរកទំនិញ និងបញ្ជូនសំណើបង់រំលស់។ សំណើទាំងអស់ត្រូវឆ្លងកាត់ការពិនិត្យ។';
+        }
+        if ($cms['about_title'] === 'About Us') $cms['about_title'] = 'អំពីយើង';
+        if ($cms['contact_title'] === 'Contact Us') $cms['contact_title'] = 'ទាក់ទងមកយើង';
+        if ($cms['privacy_title'] === 'Privacy Policy') $cms['privacy_title'] = 'គោលការណ៍ភាពឯកជន';
+        if ($cms['privacy_body'] === 'Contact our showroom team for information about our privacy policy.') {
+            $cms['privacy_body'] = 'សូមទាក់ទងក្រុមការងារបន្ទប់តាំងបង្ហាញរបស់យើងសម្រាប់ព័ត៌មានអំពីគោលការណ៍ភាពឯកជន។';
+        }
+        if ($cms['footer_text'] === 'For your applications, installment account, and payment history, visit the Customer Portal.') {
+            $cms['footer_text'] = 'សម្រាប់ពាក្យស្នើសុំ គណនីបង់រំលស់ និងប្រវត្តិបង់ប្រាក់ សូមចូលទៅកាន់ផតថលអតិថិជន។';
+        }
+        if ($cms['footer_note'] === 'All installment requests are subject to review and approval by our team.') {
+            $cms['footer_note'] = 'សំណើបង់រំលស់ទាំងអស់ស្ថិតក្រោមការពិនិត្យ និងអនុម័តដោយក្រុមការងាររបស់យើង។';
+        }
+        if ($cms['footer_links_title'] === 'Quick Links') $cms['footer_links_title'] = 'តំណភ្ជាប់រហ័ស';
+        if ($cms['footer_accounts_title'] === 'Accounts') $cms['footer_accounts_title'] = 'គណនី';
+        if ($cms['footer_contact_title'] === 'Get In Touch') $cms['footer_contact_title'] = 'ទាក់ទងមកយើង';
+        if ($cms['footer_social_title'] === 'Follow Us') $cms['footer_social_title'] = 'តាមដានពួកយើង';
+    }
+
+    $customerPortalEnabled = \Modules\LoanManagement\Services\BusinessSettingsService::isCustomerLoginEnabled();
+    $partnerBrands = \Modules\LoanManagement\Services\CmsHomeService::visibleBrands($cms, $brands ?? []);
+    $menuSections = ['home' => 'hero', 'products' => 'catalog', 'how' => 'guide', 'cart' => 'cart', 'about' => 'about', 'contact' => 'contact'];
+    $visibleMenu = array_filter($menuSections, fn ($section, $key) => $cms['menu_'.$key] && $cms[$section] && ($key !== 'cart' || $cms['catalog']), ARRAY_FILTER_USE_BOTH);
 
     $customerUser = Auth::guard('customer_loan')->user();
     $adminUser = Auth::guard('web')->user() ?? Auth::user();
@@ -21,728 +90,460 @@
             $adminPhotoUrl = session('user.profile_photo_url');
         }
     }
+
+    $footerUrl = function ($value) {
+        $url = trim((string) $value);
+        if ($url === '') {
+            return null;
+        }
+        return preg_match('#^(https?:)?//#i', $url) ? $url : 'https://'.$url;
+    };
+    $footerSocials = array_values(array_filter([
+        ['url' => $footerUrl($cms['footer_facebook']), 'icon' => 'fa-brands fa-facebook-f', 'label' => 'Facebook'],
+        ['url' => $footerUrl($cms['footer_telegram']), 'icon' => 'fa-brands fa-telegram', 'label' => 'Telegram'],
+        ['url' => $footerUrl($cms['footer_tiktok']), 'icon' => 'fa-brands fa-tiktok', 'label' => 'TikTok'],
+        ['url' => $footerUrl($cms['footer_instagram']), 'icon' => 'fa-brands fa-instagram', 'label' => 'Instagram'],
+        ['url' => $footerUrl($cms['footer_youtube']), 'icon' => 'fa-brands fa-youtube', 'label' => 'YouTube'],
+        ['url' => $footerUrl($cms['footer_whatsapp'] ?? ''), 'icon' => 'fa-brands fa-whatsapp', 'label' => 'WhatsApp'],
+        ['url' => $footerUrl($cms['footer_linkedin'] ?? ''), 'icon' => 'fa-brands fa-linkedin-in', 'label' => 'LinkedIn'],
+        ['url' => $footerUrl($cms['footer_twitter'] ?? ''), 'icon' => 'fa-brands fa-x-twitter', 'label' => 'X (Twitter)'],
+        ['url' => $footerUrl($cms['footer_website']), 'icon' => 'fa-solid fa-globe', 'label' => 'Website'],
+    ], fn ($item) => filled($item['url'])));
+    $footerContactRows = array_values(array_filter([
+        ['icon' => 'fa-solid fa-location-dot', 'value' => $cms['contact_address']],
+        ['icon' => 'fa-solid fa-phone', 'value' => $cms['contact_phone'], 'link' => 'tel:'.preg_replace('/[^0-9+]/', '', $cms['contact_phone'])],
+        ['icon' => 'fa-solid fa-envelope', 'value' => $cms['contact_email'], 'link' => 'mailto:'.$cms['contact_email']],
+        ['icon' => 'fa-solid fa-clock', 'value' => $cms['contact_hours']],
+    ], fn ($item) => filled($item['value'])));
+    $footerCopyright = trim(strtr($cms['footer_copyright'] ?: ($lmIsKhmer ? '© {year} {business}។ រក្សាសិទ្ធិគ្រប់យ៉ាង។' : '© {year} {business}. All rights reserved.'), [
+        '{year}' => date('Y'),
+        '{business}' => $businessName,
+    ])) ?: ($lmIsKhmer ? '© '.date('Y').' '.$businessName.'។ រក្សាសិទ្ធិគ្រប់យ៉ាង។' : '© '.date('Y').' '.$businessName);
+    $footerQuickLinks = [];
+    foreach ($visibleMenu as $footerKey => $footerSection) {
+        $footerMenuLabel = $cms['label_'.$footerKey];
+        if ($lmIsKhmer) {
+            $defaultMenuMap = [
+                'Home' => 'ទំព័រដើម',
+                'Products Catalog' => 'កាតាឡុកទំនិញ',
+                'Installment Guide' => 'របៀបស្នើសុំ',
+                'Cart' => 'កន្ត្រក',
+                'About Us' => 'អំពីយើង',
+                'Contact' => 'ទំនាក់ទំនង',
+            ];
+            $footerMenuLabel = $defaultMenuMap[$footerMenuLabel] ?? $footerMenuLabel;
+        }
+        $footerQuickLinks[] = ['href' => '#'.$footerKey, 'label' => $footerMenuLabel, 'icon' => 'fa-solid fa-chevron-right'];
+    }
+    if (! $customerUser && $customerPortalEnabled && $cms['catalog']) {
+        $footerQuickLinks[] = ['href' => route('loan-management.public.register'), 'label' => $lmText('Request Installment', 'ស្នើសុំបង់រំលស់'), 'icon' => 'fa-solid fa-chevron-right'];
+    }
+    $footerAccounts = [];
+    if ($customerUser) {
+        $footerAccounts[] = ['href' => route('loan-management.public.customer-dashboard'), 'label' => $lmText('My Dashboard', 'ផ្ទាំងគ្រប់គ្រងរបស់ខ្ញុំ'), 'icon' => 'fa-solid fa-gauge-high'];
+    }
+    if ($adminUser) {
+        $footerAccounts[] = ['href' => route('loan-management.dashboard'), 'label' => $lmText('Admin Dashboard', 'ផ្ទាំងគ្រប់គ្រងរដ្ឋបាល'), 'icon' => 'fa-solid fa-gauge-high'];
+    } else {
+        $footerAccounts[] = [
+            'href' => route('login'),
+            'label' => $lmText('Admin Login', 'ចូលប្រព័ន្ធគ្រប់គ្រង'),
+            'icon' => 'fa-solid fa-user-shield',
+            'confirm' => $customerUser ? $lmText('Are you sure you want to log out first to access Admin Login?', 'តើអ្នកប្រាកដជាចង់ចាកចេញដើម្បីចូលប្រព័ន្ធគ្រប់គ្រង?') : null,
+        ];
+    }
+    if ($customerPortalEnabled) $footerAccounts[] = [
+        'href' => route('loan-management.public.customer-login'),
+        'label' => $customerUser ? $lmText('Switch Customer Account', 'ប្តូរគណនីអតិថិជន') : $lmText('Customer Portal', 'ផតថលអតិថិជន'),
+        'icon' => 'fa-solid fa-id-card',
+        'confirm' => $adminUser ? $lmText('You are currently signed in as Administrator ('.($adminUser->name ?? 'Admin').'). Are you sure you want to log out first to switch to Customer Portal?', 'អ្នកកំពុងចូលជាអ្នកគ្រប់គ្រង ('.($adminUser->name ?? 'Admin').')។ តើអ្នកប្រាកដជាចង់ចាកចេញដើម្បីប្តូរទៅកាន់ផតថលអតិថិជន?') : null,
+    ];
+    $footerAccounts[] = [
+        'href' => route('loan-management.products'),
+        'label' => $lmText('Installment Products Setup', 'រៀបចំទំនិញបង់រំលស់'),
+        'icon' => 'fa-solid fa-boxes-stacked',
+    ];
+    $footerAccounts[] = [
+        'href' => route('loan-management.public.home'),
+        'label' => $lmText('Back to Homepage', 'ត្រឡប់ទៅទំព័រដើម'),
+        'icon' => 'fa-solid fa-house',
+    ];
+    $footerSignedIn = $customerUser ?? $adminUser;
+    $catalogCount = count($products ?? []);
 @endphp
 <!doctype html>
-<html lang="en">
+<html lang="{{ $lmIsKhmer ? 'km' : 'en' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $businessName }}</title>
+    @if($lmIsKhmer)
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700;800&display=swap">
+    @endif
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --public-primary: {{ $themeColor }}; --ink: #102033; --muted: #64748b; --line: #e2e8f0; --panel: #fff; --soft: #f5f8fc; }
-        * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--soft); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
-        .public-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        :root { --public-primary:#b9570b; --brand-orange:#d76b17; --ink:#231f20; --muted:#6d6d72; --line:#e5e5e7; --panel:#fff; --soft:#f6f6f7; }
+        * { box-sizing:border-box; letter-spacing:0; }
+        html { scroll-behavior:smooth; scroll-padding-top:90px; }
+        body { margin:0; font:14px/1.5 Arial,sans-serif; color:var(--ink); background:var(--soft); }
+        a { color:inherit; text-decoration:none; }
+        button,input,select { font:inherit; }
+        button,a,input,select { -webkit-tap-highlight-color:transparent; }
+        button { cursor:pointer; }
+        :focus-visible { outline:3px solid var(--brand-orange); outline-offset:3px; }
+        svg { width:18px; height:18px; flex-shrink:0; }
+        .announcement { background:#202020; color:#ddd; font-size:12px; padding:9px 0; }
+        .announcement-inner,.nav-inner,.section-inner,.footer-inner,.brand-strip-inner { max-width:1240px; width:calc(100% - 48px); margin:auto; }
+        .announcement-inner { display:flex; justify-content:space-between; gap:16px; }
+        .announcement-links { display:flex; flex-wrap:wrap; gap:16px; }
+        .announcement i { color:#f69b64; margin-right:6px; }
+        .site-nav { position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid var(--line); }
+        .nav-inner { display:flex; align-items:center; justify-content:space-between; min-height:78px; gap:22px; }
+        .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+        .brand-logo { width:48px; height:44px; background:#202020; color:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; flex-shrink:0; overflow:hidden; }
+        .brand-logo img { width:100%; height:100%; object-fit:contain; background:#fff; }
+        .brand-text { font-size:18px; font-weight:800; overflow-wrap:anywhere; }
+        .brand-text small { display:block; color:var(--muted); font-size:10px; font-weight:400; }
+        .menu { display:flex; gap:22px; align-items:center; font-weight:600; font-size:13px; }
+        .menu a { padding:12px 0; overflow-wrap:anywhere; }
+        .menu a.active,.menu a:hover { color:var(--public-primary); }
+        .nav-actions { display:flex; align-items:center; gap:10px; }
+        .button,.button-outline,.cart-apply { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:42px; padding:10px 20px; border-radius:6px; background:var(--public-primary); color:#fff; border:1px solid var(--public-primary); font-weight:700; text-align:center; }
+        .button:hover,.cart-apply:hover { background:#934407; }
+        .button-outline { background:#fff; color:#303030; border-color:var(--line); }
+        .button-outline:hover { border-color:var(--public-primary); color:var(--public-primary); }
+        .menu-toggle { display:none; width:40px; height:40px; border:1px solid var(--line); background:#fff; border-radius:4px; }
+        .hero { position:relative; color:#fff; background:#222; }
+        .hero-image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center 55%; }
+        .hero::after { content:''; position:absolute; inset:0; background:rgba(20,18,19,.56); }
+        .hero-inner { position:relative; z-index:1; max-width:1240px; width:calc(100% - 48px); margin:auto; min-height:440px; padding:52px 0; display:flex; align-items:center; }
+        .hero-copy { max-width:670px; }
+        .eyebrow { display:inline-flex; align-items:center; gap:10px; font-size:12px; font-weight:700; color:#ffbd92; }
+        .eyebrow::before { content:''; width:28px; height:2px; background:currentColor; }
+        .hero h1 { margin:16px 0 20px; font-size:52px; line-height:1.08; overflow-wrap:anywhere; }
+        .hero .subtitle { font-size:18px; margin:0 0 12px; max-width:600px; }
+        .hero .subtitle:first-of-type { font-size:24px; font-weight:600; }
+        .hero .body-copy { color:#f2f2f2; font-size:15px; max-width:540px; margin:0 0 22px; }
+        .hero-cta { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+        .hero-cta a { min-height:48px; }
+        .hero .button-outline { background:rgba(0,0,0,.25); color:#fff; border-color:#fff; }
+        .brand-strip { padding:28px 0; background:#fff; border-bottom:1px solid var(--line); }
+        .brand-strip-inner { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); align-items:center; gap:12px; }
+        .brand-strip small { color:var(--muted); font-size:11px; }
+        .brand-strip span { font-size:18px; font-weight:800; color:#363235; }
+        .brand-strip h2 { margin:0 0 20px; text-align:center; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; }
+        .brand-partner { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-width:0; min-height:64px; padding:8px; color:#555; text-decoration:none; overflow-wrap:anywhere; text-align:center; }
+        a.brand-partner:hover span { color:var(--public-primary); }
+        .brand-partner img { width:120px; max-width:100%; height:44px; object-fit:contain; }
+        .assessment { background:#f6f6f7; padding:28px 0; border-bottom:1px solid var(--line); border-top:3px solid var(--brand-orange); }
+        .assessment h2 { font-size:21px; margin:0 0 18px; color:var(--ink); }
+        .assessment-grid { display:grid; grid-template-columns:minmax(180px,2fr) repeat(3,minmax(120px,1fr)); gap:16px; align-items:end; }
+        .assessment label { display:block; font-weight:600; font-size:12px; margin-bottom:6px; }
+        .assessment input,.assessment select { width:100%; height:42px; border:1px solid var(--line); border-radius:6px; padding:8px; background:#fff; }
+        .assessment-output { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-top:18px; }
+        .assessment-output strong { font-size:28px; color:var(--public-primary); margin-left:8px; }
+        .assessment p { color:var(--muted); margin:12px 0 0; }
+        .footer-policy-btn { background:transparent; border:0; color:inherit; padding:0; font:inherit; text-decoration:underline; }
+        .product-stock { font-size:11px; color:#18733d; margin-bottom:6px; }
+        .product-stock.unavailable { color:#b42318; }
+        @media(max-width:700px) { .assessment-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        .section { padding:48px 0; }
+        .section.alt { background:#fff; }
+        .section-head { margin-bottom:24px; }
+        .section h2 { margin:0 0 10px; font-size:28px; line-height:1.25; }
+        .section-head p { color:var(--muted); margin:0; }
+        .feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:30px; }
+        .feature { padding:16px 0; min-width:0; border-top:1px solid var(--line); }
+        .feature-icon { width:40px; height:40px; display:grid; place-items:center; background:#fff1e6; color:var(--public-primary); font-weight:700; border-radius:6px; margin-bottom:14px; }
+        #experience { background:#231f20; color:#fff; }
+        #experience .section-head p,#experience .feature span { color:#c6c4c5; }
+        #experience .feature { border-color:#4b4548; }
+        #experience .feature-icon { background:transparent; color:#ffbd92; font-size:24px; }
+        #about { border-top:1px solid var(--line); }
+        #contact { border-top:1px solid var(--line); }
+        .feature strong { display:block; font-size:18px; margin-bottom:6px; }
+        .feature span { display:block; color:var(--muted); }
+        .shop-inner { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:28px; align-items:start; }
+        .shop-inner > div { min-width:0; }
+        .shop-inner.without-cart { grid-template-columns:minmax(0,1fr); }
+        .contact-details { display:flex; flex-wrap:wrap; gap:20px; }
+        .contact-details p,.section p { white-space:pre-line; overflow-wrap:anywhere; }
+        .catalog-filter-bar { margin-bottom:20px; }
+        .catalog-search-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+        .search-input-box { position:relative; flex:1; min-width:180px; }
+        .search-input-box > svg { position:absolute; left:12px; top:13px; color:var(--muted); }
+        .search-input-box input { width:100%; height:44px; border:1px solid var(--line); border-radius:6px; padding:0 36px; background:#fff; }
+        .search-clear-btn { position:absolute; right:8px; top:7px; border:0; background:none; font-size:22px; height:30px; }
+        .sort-select-box select { height:44px; max-width:100%; border:1px solid var(--line); border-radius:6px; background:#fff; padding:0 10px; }
+        .category-chips-scroll { display:flex; gap:8px; flex-wrap:wrap; }
+        .category-chip { min-height:34px; border:1px solid var(--line); background:#fff; padding:6px 12px; border-radius:4px; font-size:12px; }
+        .category-chip.active { background:var(--public-primary); border-color:var(--public-primary); color:#fff; }
+        .chip-count { margin-left:6px; font-weight:700; }
+        .product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+        .product-card { display:flex; flex-direction:column; min-width:0; overflow:hidden; background:#fff; border:1px solid var(--line); border-radius:8px; transition:border-color .2s,box-shadow .2s; }
+        .product-card:hover { border-color:#d9bca5; box-shadow:0 6px 20px #231f2010; }
+        .product-image-wrap { position:relative; aspect-ratio:3/2; background:#fff; display:grid; place-items:center; border-bottom:1px solid var(--line); overflow:hidden; }
+        .product-image-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; padding:18px; }
+        .product-fallback-icon { color:#9aa4b2; }
+        .card-badge-top-left,.card-badge-top-right { position:absolute; top:10px; background:#fff; font-size:10px; font-weight:700; padding:4px 7px; border-radius:4px; }
+        .card-badge-top-left { left:10px; color:#5a5558; }
+        .card-badge-top-right { right:10px; color:#77411c; }
+        .product-body { display:flex; flex-direction:column; gap:8px; padding:18px; flex:1; }
+        .product-brand-tag { color:var(--muted); font-size:11px; }
+        .product-title { margin:0; font-size:17px; line-height:1.4; min-height:48px; overflow-wrap:anywhere; }
+        .product-sku { color:var(--muted); font-size:11px; }
+        .product-price-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:8px; }
+        .price-cash { font-size:24px; font-weight:800; color:var(--ink); }
+        .price-monthly-tag { font-size:11px; color:var(--public-primary); }
+        .product-actions-grid { display:flex; gap:8px; margin-top:8px; }
+        .cart-btn,.apply-btn { display:flex; align-items:center; justify-content:center; gap:6px; border:1px solid #252525; background:#252525; color:#fff; min-height:40px; border-radius:6px; font-size:12px; padding:8px 10px; font-weight:600; }
+        .cart-btn { flex:1; }
+        .apply-btn { background:#fff; color:#252525; }
+        .cart-btn:hover { background:var(--public-primary); border-color:var(--public-primary); }
+        .cart-panel { position:sticky; top:100px; padding:22px; background:#fff; border:1px solid var(--line); border-top:3px solid var(--brand-orange); border-radius:8px; }
+        .cart-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+        .cart-panel h2 { font-size:18px; margin:0; }
+        .cart-count-pill { font-size:11px; color:#a24415; white-space:nowrap; }
+        .cart-items { padding:12px 0; }
+        .cart-empty { font-size:13px; color:var(--muted); padding:14px 0; }
+        .cart-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
+        .cart-item > div:first-child { min-width:0; }
+        .cart-item strong { display:block; font-size:12px; overflow-wrap:anywhere; }
+        .cart-item span { display:block; font-size:12px; margin-top:4px; }
+        .qty-row { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+        .qty-row button { width:28px; height:28px; background:#fff; border:1px solid var(--line); border-radius:4px; }
+        .cart-total { display:flex; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding:18px 0; font-weight:700; }
+        .cart-apply { width:100%; font-size:13px; }
+        .footer { background:#202020; color:#b8bec8; padding:40px 0 24px; }
+        .footer-grid { display:grid; grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr)); gap:32px; margin-bottom:26px; align-items:start; }
+        .footer-group { min-width:0; }
+        .footer-group-title { margin:0 0 12px; font-size:16px; font-weight:800; color:#fff; }
+        .footer-group-toggle { display:flex; width:100%; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:0; background:none; border:0; color:#fff; font-size:16px; font-weight:800; text-align:left; }
+        .footer-group-toggle i { display:none; font-size:13px; color:#ffc39e; transition:transform .2s ease; }
+        .footer p { font-size:13px; max-width:400px; margin:0 0 12px; white-space:pre-line; overflow-wrap:anywhere; }
+        .footer-brand { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+        .footer-brand-logo { width:46px; height:42px; flex-shrink:0; display:grid; place-items:center; border-radius:4px; background:#303030; color:#fff; font-size:18px; font-weight:800; overflow:hidden; }
+        .footer-brand-logo img { width:100%; height:100%; object-fit:contain; background:#fff; }
+        .footer-brand strong { display:block; color:#fff; font-size:15px; overflow-wrap:anywhere; }
+        .footer-brand small { display:block; color:#8b929c; font-size:11px; margin-top:2px; }
+        .footer-links { display:flex; flex-direction:column; gap:9px; font-size:13px; }
+        .footer-links a { display:inline-flex; align-items:center; gap:8px; width:fit-content; }
+        .footer-links i { width:14px; color:#6f7681; }
+        .footer-contact-list { display:flex; flex-direction:column; gap:11px; font-size:13px; }
+        .footer-contact-list > div { display:flex; gap:10px; align-items:flex-start; }
+        .footer-contact-list i { width:15px; flex-shrink:0; margin-top:2px; color:#ffc39e; }
+        .footer-contact-list span { min-width:0; overflow-wrap:anywhere; white-space:pre-line; }
+        .footer-social-title { margin:18px 0 10px; font-size:12px; font-weight:800; color:#8b929c; letter-spacing:0; text-transform:uppercase; }
+        .footer-social { display:flex; flex-wrap:wrap; gap:9px; }
+        .footer-social a { width:36px; height:36px; display:grid; place-items:center; border:1px solid #414141; border-radius:6px; background:#2a2a2a; color:#d3d7dd; }
+        .footer-social a:hover { color:#fff; border-color:#ffc39e; }
+        .footer-cta { display:flex; flex-wrap:wrap; gap:10px; margin-top:4px; }
+        .footer-cta a { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; padding:9px 16px; border:1px solid #4b4b4b; border-radius:6px; background:#2a2a2a; color:#fff; font-size:12px; font-weight:700; }
+        .footer-cta a.primary { background:var(--public-primary); border-color:var(--public-primary); }
+        .footer a:hover { color:#ffc39e; }
+        .footer-note { border-top:1px solid #414141; border-bottom:1px solid #414141; padding:13px 0; margin-bottom:16px; font-size:12px; color:#8b929c; }
+        .footer-bottom { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; font-size:12px; }
+        .footer-meta { display:flex; flex-wrap:wrap; gap:6px 18px; }
+        .footer-meta a { color:#8b929c; }
+        .footer-top-btn { position:fixed; right:20px; bottom:20px; z-index:60; width:44px; height:44px; display:grid; place-items:center; border:1px solid #414141; border-radius:50%; background:#202020; color:#fff; box-shadow:0 10px 24px rgba(0,0,0,.28); opacity:0; visibility:hidden; transform:translateY(10px); transition:opacity .2s ease, transform .2s ease, visibility .2s ease; }
+        .footer-top-btn.is-visible { opacity:1; visibility:visible; transform:translateY(0); }
+        .footer-top-btn:hover { background:var(--public-primary); border-color:var(--public-primary); }
+        @media (max-width:980px) {
+            .footer-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+        }
+        @media (max-width:700px) {
+            .footer-grid { grid-template-columns:minmax(0,1fr); gap:0; }
+            .footer-group { border-top:1px solid #343434; padding:4px 0; }
+            .footer-group:first-child { border-top:0; }
+            .footer-group-toggle { margin:0; padding:14px 0; }
+            .footer-group-toggle i { display:block; }
+            .footer-group.is-collapsed .footer-group-toggle i { transform:rotate(-90deg); }
+            .footer-group.is-collapsed .footer-group-body { display:none; }
+            .footer-group-body { padding:2px 0 16px; }
+            .footer-top-btn { right:14px; bottom:14px; width:40px; height:40px; }
+        }
+        .user-dropdown-wrapper { position:relative; }
+        .user-profile-btn { display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line); border-radius:6px; min-height:42px; padding:6px 10px; }
+        .user-profile-name { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+        .user-avatar-img,.user-avatar-badge { width:28px; height:28px; object-fit:cover; border-radius:50%; display:grid; place-items:center; background:#fce8da; }
+        .user-dropdown-menu { display:none; position:absolute; right:0; top:calc(100% + 8px); width:270px; max-width:calc(100vw - 24px); background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 10px 28px #0002; overflow:hidden; z-index:80; }
+        .user-dropdown-wrapper.open .user-dropdown-menu { display:block; }
+        .dropdown-header-box { display:flex; gap:10px; padding:16px; align-items:center; }
+        .dropdown-avatar-circle,.dropdown-avatar-circle-fallback { width:36px; height:36px; border-radius:50%; background:#fce8da; object-fit:cover; display:grid; place-items:center; flex-shrink:0; }
+        .dropdown-user-name { font-weight:700; overflow-wrap:anywhere; }
+        .dropdown-user-sub { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+        .dropdown-item { display:flex; gap:10px; align-items:center; width:100%; padding:12px 16px; background:#fff; border:0; font-size:12px; text-align:left; }
+        .dropdown-item:hover { background:#f4f5f7; }
+        .dropdown-item.danger { color:#ba2929; }
+        .dropdown-divider { border-top:1px solid var(--line); }
+        .mobile-bottom-nav { display:none; }
+        @media (max-width:1050px) {
+            .menu { gap:12px; font-size:12px; }
+            .nav-inner { gap:12px; }
+            .brand-text { font-size:15px; }
+            .shop-inner { grid-template-columns:minmax(0,1fr) 290px; gap:18px; }
+        }
+        @media (max-width:1100px) {
+            .brand-strip-inner { grid-template-columns:repeat(4,minmax(0,1fr)); }
+            .announcement-inner,.nav-inner,.section-inner,.footer-inner,.brand-strip-inner,.hero-inner { width:calc(100% - 32px); }
+            .menu-toggle { display:block; }
+            .menu { display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border-bottom:1px solid var(--line); padding:12px 16px; flex-direction:column; align-items:stretch; gap:0; }
+            .menu.is-open { display:flex; }
+            .menu a { padding:12px 0; }
+            .nav-inner { min-height:68px; }
+            .shop-inner { grid-template-columns:1fr; }
+            .cart-panel { position:static; }
+            .feature-grid { gap:16px; }
+            .hero h1 { font-size:36px; }
+            .hero-inner { min-height:350px; padding:38px 0; }
+        }
+        @media (max-width:520px) {
+            .brand-strip-inner { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+            .brand-partner { min-height:48px; }
+            .hero .subtitle:first-of-type { font-size:20px; }
+            .hero-cta { margin-top:20px; }
+            .announcement-inner { flex-direction:column; gap:4px; }
+            .announcement { font-size:11px; }
+            .brand-logo { width:34px; height:36px; font-size:15px; }
+            .brand-text { font-size:13px; max-width:125px; }
+            .brand-text small { font-size:8px; }
+            .nav-inner { gap:6px; }
+            .nav-actions { gap:6px; }
+            .nav-actions > .button,.nav-actions > .button-outline { padding:7px 9px; min-height:36px; font-size:11px; }
+            .menu-toggle { width:34px; height:36px; }
+            .user-profile-name { max-width:60px; font-size:11px; }
+            .hero h1 { font-size:32px; }
+            .hero .subtitle { font-size:17px; }
+            .hero .body-copy { font-size:13px; }
+            .hero .button,.hero .button-outline { padding:9px 14px; font-size:12px; }
+            .section { padding:28px 0; }
+            .section h2 { font-size:23px; }
+            .feature-grid { grid-template-columns:1fr; gap:0; }
+            .feature { display:grid; grid-template-columns:40px 1fr; gap:4px 14px; border-bottom:1px solid var(--line); }
+            .feature-icon { grid-row:span 2; margin:0; }
+            .feature strong { margin:0; font-size:16px; }
+            .feature span { font-size:13px; }
+            .product-grid { gap:12px; }
+            .product-body { padding:12px; }
+            .product-title { font-size:14px; min-height:42px; }
+            .product-image-wrap img { padding:16px; }
+            .product-price-row { align-items:start; flex-direction:column; }
+            .price-cash { font-size:18px; }
+            .product-actions-grid { flex-direction:column; }
+            .card-badge-top-left { left:6px; top:6px; }
+            .card-badge-top-right { right:6px; top:auto; bottom:6px; }
+            .footer-grid { grid-template-columns:minmax(0,1fr); }
+        }
+        @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
 
-        /* Top Nav Bar */
-        .site-nav {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background: rgba(255,255,255,.88);
-            border-bottom: 1px solid rgba(226,232,240,.75);
-            backdrop-filter: blur(20px) saturate(1.25);
-            -webkit-backdrop-filter: blur(20px) saturate(1.25);
-            box-shadow: 0 14px 34px rgba(15,23,42,.06);
-        }
-        .nav-inner {
-            width: min(1240px, calc(100% - 32px));
-            margin: 0 auto;
-            min-height: 72px;
-            display: grid;
-            grid-template-columns: minmax(190px, .8fr) auto minmax(190px, .8fr);
-            align-items: center;
-            gap: 16px;
-        }
-        .brand {
+        /* Language switcher styling */
+        .cms-lang-switch {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            text-decoration: none;
-            font-weight: 800;
-            color: #0f172a;
-            min-width: 0;
-            justify-self: start;
-            padding: 6px 8px 6px 4px;
-            border-radius: 12px;
-            transition: background .16s ease, transform .16s ease;
-        }
-        .brand:hover { background: rgba(248,250,252,.9); transform: translateY(-1px); }
-        .brand-logo { width: 42px; height: 42px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: color-mix(in srgb, var(--public-primary) 10%, #fff); border: 1px solid color-mix(in srgb, var(--public-primary) 22%, #dbe4ef); color: var(--public-primary); flex-shrink: 0; box-shadow: 0 8px 18px color-mix(in srgb, var(--public-primary) 16%, transparent); }
-        .brand-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .brand-text { font-size: 18px; font-weight: 900; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
-
-        .menu {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            min-width: 0;
-            padding: 5px;
-            border: 1px solid rgba(226,232,240,.9);
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
             border-radius: 999px;
-            background: rgba(248,250,252,.82);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
-            justify-self: center;
-        }
-        .menu::-webkit-scrollbar { display: none; }
-        .menu a {
-            min-height: 38px;
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 0 14px;
-            border-radius: 999px;
-            color: #475569;
-            text-decoration: none;
-            font-size: 15px;
-            font-weight: 800;
-            white-space: nowrap;
-            flex-shrink: 0;
-            transition: background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
-        }
-        .menu a svg { width: 17px; height: 17px; color: #94a3b8; transition: color .16s ease; }
-        .menu a:hover,
-        .menu a.active {
-            background: #fff;
-            color: #0f172a;
-            box-shadow: 0 8px 18px rgba(15,23,42,.08);
-            transform: translateY(-1px);
-        }
-        .menu a:hover svg,
-        .menu a.active svg { color: var(--public-primary); }
-
-        .nav-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; flex-wrap: nowrap; justify-self: end; }
-        .button, .button-outline, .button-danger-outline { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; border-radius: 9px; text-decoration: none; font-weight: 850; border: 1px solid transparent; cursor: pointer; transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease; font-size: 14px; gap: 6px; white-space: nowrap; flex-shrink: 0; }
-        .button { color: #fff; background: linear-gradient(135deg, var(--public-primary), color-mix(in srgb, var(--public-primary) 78%, #111827)); border-color: color-mix(in srgb, var(--public-primary) 75%, #111827); box-shadow: 0 12px 22px color-mix(in srgb, var(--public-primary) 24%, transparent); }
-        .button:hover { color: #fff; transform: translateY(-1px); box-shadow: 0 16px 28px color-mix(in srgb, var(--public-primary) 30%, transparent); }
-        .button-outline { color: #0f172a; background: rgba(255,255,255,.9); border-color: #dbe4ef; box-shadow: 0 8px 18px rgba(15,23,42,.04); }
-        .button-outline:hover { background: #fff; border-color: color-mix(in srgb, var(--public-primary) 30%, #cbd5e1); color: var(--public-primary); transform: translateY(-1px); }
-        .button-danger-outline { color: #dc2626; background: #fff; border-color: #fee2e2; }
-        .button-danger-outline:hover { background: #fef2f2; border-color: #fca5a5; }
-
-        /* Profile Dropdown Menu */
-        .user-dropdown-wrapper { position: relative; display: inline-block; flex-shrink: 0; }
-        .user-profile-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #fff;
-            border: 1.5px solid #dbe4ef;
-            padding: 3px 10px 3px 4px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-            color: #0f172a;
-            cursor: pointer;
-            transition: all .15s ease-in-out;
-            height: 36px;
-            white-space: nowrap;
-        }
-        .user-profile-btn:hover, .user-dropdown-wrapper.open .user-profile-btn {
-            border-color: var(--public-primary);
-            box-shadow: 0 4px 12px rgba(37,99,235,.12);
-            background: #f8fafc;
-        }
-        .user-avatar-badge {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            background: var(--public-primary);
-            color: #fff;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 12px;
-            flex-shrink: 0;
-        }
-        .user-profile-name {
-            max-width: 110px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 13px;
-        }
-        .chevron-icon {
-            color: #64748b;
-            transition: transform .2s ease;
-            flex-shrink: 0;
-        }
-        .user-dropdown-wrapper.open .chevron-icon {
-            transform: rotate(180deg);
-        }
-        .user-dropdown-menu {
-            position: absolute;
-            top: calc(100% + 6px);
-            right: 0;
-            width: 220px;
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            box-shadow: 0 16px 36px -8px rgba(15,23,42,.18);
-            padding: 6px 4px;
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
+            padding: 2px 3px;
+            height: 34px;
+            box-sizing: border-box;
+            user-select: none;
             gap: 2px;
-            animation: dropdownFade .15s ease-out;
-        }
-        .user-dropdown-wrapper.open .user-dropdown-menu {
-            display: flex;
-        }
-        .admin-profile-btn {
-            background: #faf5ff;
-            border-color: #e9d5ff;
-            color: #7e22ce;
-        }
-        .admin-profile-btn:hover, .user-dropdown-wrapper.open .admin-profile-btn {
-            border-color: #a855f7;
-            background: #f3e8ff;
-            box-shadow: 0 4px 12px rgba(147, 51, 234, .14);
-        }
-        .admin-avatar-badge {
-            background: #7e22ce;
-            color: #fff;
-        }
-        @keyframes dropdownFade {
-            from { opacity: 0; transform: translateY(-6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .user-avatar-img {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            object-fit: cover;
-            display: inline-block;
             flex-shrink: 0;
         }
-        .dropdown-header-box {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-        }
-        .dropdown-avatar-circle {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            object-fit: cover;
-            flex-shrink: 0;
-            border: 2px solid #edf2f7;
-        }
-        .dropdown-avatar-circle-fallback {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            display: flex;
+        .cms-lang-btn {
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
-            font-weight: 800;
-            color: #fff;
-            background: var(--public-primary);
-            flex-shrink: 0;
-        }
-        .admin-avatar-circle-fallback {
-            background: #7e22ce;
-        }
-        .dropdown-user-name {
-            font-size: 13px;
-            font-weight: 800;
-            color: #0f172a;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .dropdown-user-sub {
-            font-size: 11px;
-            color: #64748b;
-            margin-top: 2px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .dropdown-divider {
-            height: 1px;
-            background: #edf2f7;
-            margin: 4px 6px;
-        }
-        .dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            border-radius: 6px;
+            height: 28px;
+            padding: 0 10px;
             font-size: 12px;
             font-weight: 700;
-            color: #334155;
-            text-decoration: none;
-            border: 0;
+            color: #64748b;
+            text-decoration: none !important;
+            border-radius: 999px;
             background: transparent;
-            width: 100%;
             cursor: pointer;
-            text-align: left;
-            transition: background .15s, color .15s;
+            line-height: 1;
+            transition: all .15s ease;
         }
-        .dropdown-item:hover {
-            background: #f1f5f9;
+        .cms-lang-btn:hover {
             color: #0f172a;
+        }
+        .cms-lang-btn.active {
+            background: #ffffff;
+            color: var(--public-primary, #b9570b);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            font-weight: 800;
+        }
+        .cms-lang-divider {
+            width: 1px;
+            height: 14px;
+            background: #cbd5e1;
+            display: inline-block;
+        }
+        .announcement-lang {
+            margin-left: 10px;
+            padding-left: 10px;
+            border-left: 1px solid rgba(255,255,255,0.25);
+            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .announcement-lang a {
+            color: rgba(255,255,255,0.75);
             text-decoration: none;
+            font-weight: 600;
         }
-        .dropdown-item.danger {
-            color: #dc2626;
+        .announcement-lang a.active {
+            color: #ffffff;
+            font-weight: 800;
+            text-decoration: underline;
         }
-        .dropdown-item.danger:hover {
-            background: #fef2f2;
-            color: #b91c1c;
-        }
-
-        /* Hero Section */
-        .hero { color: #fff; background: linear-gradient(90deg, rgba(7,18,33,.88), rgba(7,18,33,.58), rgba(7,18,33,.25)), @if($loginBackgroundUrl) url('{{ $loginBackgroundUrl }}') @else linear-gradient(135deg, #12324e, #607d95) @endif; background-size: cover; background-position: center; }
-        .hero-inner { width: min(1180px, calc(100% - 24px)); min-height: auto; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: center; padding: 42px 0 54px; }
-        .hero-copy { max-width: 680px; }
-        .eyebrow { display: inline-flex; min-height: 28px; align-items: center; padding: 0 10px; border: 1px solid rgba(255,255,255,.34); border-radius: 999px; color: rgba(255,255,255,.9); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
-        h1 { margin: 14px 0 0; font-size: clamp(24px, 4.5vw, 46px); line-height: 1.14; font-weight: 900; letter-spacing: -.4px; }
-        .subtitle { margin: 12px 0 0; max-width: 600px; font-size: clamp(14px, 1.8vw, 16px); line-height: 1.6; color: rgba(255,255,255,.90); }
-        .body-copy { margin: 10px 0 0; max-width: 600px; font-size: 13px; line-height: 1.6; color: rgba(255,255,255,.78); white-space: pre-wrap; }
-        .hero-cta { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .hero-card { background: rgba(255,255,255,.96); border: 1px solid rgba(255,255,255,.58); border-radius: 12px; color: #0f172a; padding: 18px; box-shadow: 0 16px 40px rgba(0,0,0,.16); }
-        .hero-card h2 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.2px; }
-        .hero-card p { margin: 6px 0 14px; color: var(--muted); line-height: 1.5; font-size: 13px; }
-        .quick-stat { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #edf2f7; color: #334155; font-size: 13px; }
-        .quick-stat strong { color: #0f172a; font-weight: 800; }
-
-        /* Sections & Feature Cards */
-        .section { padding: 40px 12px; }
-        .section.alt { background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-        .section-inner { width: min(1180px, 100%); margin: 0 auto; }
-        .section-head { margin: 0 0 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
-        .section-head h2 { margin: 0; color: #0f172a; font-size: clamp(20px, 3.5vw, 26px); font-weight: 900; letter-spacing: -.3px; }
-        .section-head p { margin: 6px 0 0; max-width: 600px; color: var(--muted); line-height: 1.55; font-size: 13px; }
-        .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-        .feature { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; box-shadow: 0 6px 20px rgba(15,23,42,.04); }
-        .feature-icon { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; background: #eef6ff; color: var(--public-primary); font-weight: 900; margin-bottom: 12px; font-size: 16px; }
-        .feature strong { display: block; color: #0f172a; font-size: 15px; font-weight: 800; }
-        .feature span { display: block; margin-top: 6px; color: var(--muted); line-height: 1.5; font-size: 13px; }
-        .shop-inner { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
-
-        /* Catalog Search & Category Filter Toolbar */
-        .catalog-filter-bar {
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 12px 14px;
-            margin-bottom: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            box-shadow: 0 4px 12px rgba(15,23,42,.02);
-        }
-        .catalog-search-row {
-            display: flex;
+        .menu-mobile-lang {
+            display: none;
+            padding: 12px 0 6px;
+            margin-top: 8px;
+            border-top: 1px solid var(--line);
+            font-size: 13px;
+            color: var(--muted);
             align-items: center;
             gap: 8px;
-            flex-wrap: wrap;
         }
-        .search-input-box {
-            position: relative;
-            flex: 1;
-            min-width: 180px;
-        }
-        .search-input-box svg {
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #94a3b8;
-            pointer-events: none;
-            width: 14px;
-            height: 14px;
-        }
-        .search-input-box input {
-            width: 100%;
-            height: 38px;
-            padding: 0 30px 0 32px;
-            border: 1.5px solid #cbd5e1;
-            border-radius: 6px;
-            font-size: 13px;
-            outline: none;
-            transition: border-color .15s, box-shadow .15s;
-            background: #f8fafc;
-        }
-        .search-input-box input:focus {
-            border-color: var(--public-primary);
-            background: #fff;
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--public-primary) 15%, transparent);
-        }
-        .search-clear-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: #94a3b8;
-            font-size: 16px;
-            cursor: pointer;
-            padding: 0;
-            line-height: 1;
-        }
-        .search-clear-btn:hover { color: #0f172a; }
-        .sort-select-box select {
-            height: 38px;
-            padding: 0 10px;
-            border: 1.5px solid #cbd5e1;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #334155;
-            background: #fff;
-            outline: none;
-            cursor: pointer;
-        }
-        .category-chips-scroll {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            overflow-x: auto;
-            padding-bottom: 2px;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
-        }
-        .category-chips-scroll::-webkit-scrollbar { display: none; }
-        .category-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            height: 30px;
-            padding: 0 12px;
-            border-radius: 999px;
-            border: 1px solid #e2e8f0;
-            background: #f8fafc;
-            color: #475569;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all .15s ease;
-            flex-shrink: 0;
-        }
-        .category-chip:hover {
-            background: #f1f5f9;
-            border-color: #cbd5e1;
-            color: #0f172a;
-        }
-        .category-chip.active {
-            background: var(--public-primary);
-            border-color: var(--public-primary);
-            color: #fff;
-            box-shadow: 0 3px 8px color-mix(in srgb, var(--public-primary) 25%, transparent);
-        }
-        .category-chip .chip-count {
-            font-size: 10px;
-            opacity: 0.88;
-            background: rgba(0,0,0,0.08);
-            padding: 1px 5px;
-            border-radius: 10px;
-        }
-        .category-chip.active .chip-count {
-            background: rgba(255,255,255,0.25);
-        }
-
-        /* Product Cards */
-        .product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-        .product-card {
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 6px 18px rgba(15,23,42,.03);
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-            position: relative;
-        }
-        .product-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 28px -6px rgba(15,23,42,.09);
-            border-color: color-mix(in srgb, var(--public-primary) 40%, #cbd5e1);
-        }
-        .product-image-wrap {
-            aspect-ratio: 4 / 3;
-            background: #f8fafc;
-            display: grid;
-            place-items: center;
-            color: #52657c;
-            position: relative;
-            overflow: hidden;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .product-image-wrap img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            transition: transform .3s ease;
-        }
-        .product-card:hover .product-image-wrap img {
-            transform: scale(1.04);
-        }
-        .product-fallback-icon {
-            font-size: 32px;
-            color: #cbd5e1;
-        }
-        .card-badge-top-left {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(4px);
-            color: #fff;
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 7px;
-            border-radius: 5px;
-            text-transform: uppercase;
-            letter-spacing: .3px;
-        }
-        .card-badge-top-right {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: #ecfdf5;
-            color: #16a34a;
-            border: 1px solid #bbf7d0;
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 7px;
-            border-radius: 5px;
-        }
-        .product-body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-        .product-brand-tag { font-size: 11px; font-weight: 800; color: var(--public-primary); text-transform: uppercase; letter-spacing: .3px; }
-        .product-title { margin: 0; color: #0f172a; font-size: 14px; font-weight: 800; line-height: 1.35; letter-spacing: -.2px; }
-        .product-sku { color: var(--muted); font-size: 11px; }
-        .product-price-row {
-            margin-top: auto;
-            padding-top: 8px;
-            border-top: 1px solid #f1f5f9;
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 6px;
-        }
-        .price-cash { color: #0f172a; font-size: 17px; font-weight: 900; }
-        .price-monthly-tag { font-size: 11px; font-weight: 800; color: #16a34a; background: #f0fdf4; padding: 2px 6px; border-radius: 4px; }
-
-        .product-actions-grid {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 6px;
-            margin-top: 8px;
-        }
-        .cart-btn {
-            min-height: 36px;
-            border: 0;
-            border-radius: 6px;
-            background: var(--public-primary);
-            color: #fff;
-            font-weight: 800;
-            font-size: 12px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            transition: background .15s, transform .1s;
-        }
-        .cart-btn:hover {
-            opacity: 0.92;
-        }
-        .cart-btn:active {
-            transform: scale(0.98);
-        }
-        .apply-btn {
-            min-height: 36px;
-            padding: 0 10px;
-            border: 1.5px solid #dbe4ef;
-            border-radius: 6px;
-            background: #fff;
-            color: #334155;
-            font-weight: 800;
-            font-size: 12px;
+        .menu-mobile-lang a {
+            color: var(--ink);
             text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: all .15s ease;
+            font-weight: 600;
         }
-        .apply-btn:hover {
-            background: #f8fafc;
-            color: #0f172a;
-            border-color: #94a3b8;
-        }
-
-        /* Cart Panel */
-        .cart-panel {
-            position: sticky;
-            top: 76px;
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            box-shadow: 0 8px 24px rgba(15,23,42,.05);
-            overflow: hidden;
-        }
-        .cart-panel-head {
-            padding: 14px 16px;
-            border-bottom: 1px solid #edf2f7;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .cart-panel-head h2 { margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; }
-        .cart-count-pill { background: var(--public-primary); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
-        .cart-items { padding: 12px 16px; display: grid; gap: 10px; max-height: 320px; overflow-y: auto; }
-        .cart-empty { color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; padding: 18px 0; }
-        .cart-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
-        .cart-item strong { display: block; color: #0f172a; font-size: 12px; overflow-wrap: anywhere; font-weight: 700; }
-        .cart-item span { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
-        .qty-row { display: inline-flex; align-items: center; gap: 3px; }
-        .qty-row button { width: 24px; height: 24px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 800; color: #334155; font-size: 12px; }
-        .qty-row button:hover { background: #f1f5f9; }
-        .qty-row span { min-width: 18px; text-align: center; font-weight: 700; font-size: 11px; color: #0f172a; margin: 0; }
-        .cart-total { padding: 12px 16px; border-top: 1px solid #edf2f7; display: flex; justify-content: space-between; gap: 10px; font-weight: 800; color: #0f172a; font-size: 14px; }
-        .cart-apply { margin: 0 16px 16px; width: calc(100% - 32px); min-height: 38px; border-radius: 6px; border: 0; background: var(--public-primary); color: #fff; font-weight: 800; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; }
-
-        .footer { padding: 22px 14px; background: #0f172a; color: rgba(255,255,255,.78); font-size: 12px; }
-        .footer-inner { width: min(1180px, 100%); margin: 0 auto; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-        .footer a { color: #fff; text-decoration: none; font-weight: 800; }
-
-        /* Responsive Breakpoints & Professional Mobile UI */
-        @media (max-width: 1120px) {
-            .nav-inner {
-                width: min(100% - 24px, 1040px);
-                grid-template-columns: minmax(150px, .7fr) auto minmax(150px, .7fr);
-                gap: 10px;
-            }
-            .brand-text { max-width: 170px; }
-            .menu { gap: 3px; padding: 4px; }
-            .menu a { min-height: 36px; padding: 0 10px; font-size: 14px; gap: 5px; }
-            .menu a svg { width: 15px; height: 15px; }
-            .button, .button-outline, .button-danger-outline { min-height: 38px; padding: 0 12px; font-size: 13px; }
-            .user-profile-name { max-width: 90px; }
-        }
-        @media (max-width: 960px) {
-            .nav-inner {
-                min-height: 58px;
-                padding: 4px 0;
-                display: flex;
-                justify-content: space-between;
-            }
-            .menu { display: none !important; }
-            .hero-inner, .shop-inner { grid-template-columns: 1fr; }
-            .hero-inner { min-height: auto; padding: 32px 0 44px; }
-            .feature-grid { grid-template-columns: 1fr; }
-            .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .cart-panel { position: static; margin-top: 10px; }
-            .section-head { display: block; }
-        }
-        @media (max-width: 640px) {
-            body { padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
-            .site-nav { padding: 0; }
-            .nav-inner { gap: 8px; min-height: 50px; padding: 0 8px; }
-            .brand-text { max-width: 150px; font-size: 14px; }
-            .brand-logo { width: 32px; height: 32px; }
-            .user-profile-btn { height: 34px; padding: 2px 10px 2px 3px; font-size: 12px; }
-            .user-avatar-badge, .user-avatar-img { width: 24px; height: 24px; font-size: 11px; }
-            .user-profile-name { max-width: 85px; }
-            .button, .button-outline, .button-danger-outline { min-height: 34px; padding: 0 10px; font-size: 12px; }
-
-            /* 2-Column Clean Mobile Products Catalog */
-            .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-            .product-card { border-radius: 8px; }
-            .product-body { padding: 10px 8px; gap: 4px; }
-            .product-title { font-size: 12px; height: 32px; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
-            .product-sku { display: none; }
-            .product-brand-tag { font-size: 10px; }
-            .price-cash { font-size: 14px; }
-            .price-monthly-tag { font-size: 10px; padding: 1px 4px; }
-            .product-price-row { padding-top: 6px; }
-            .product-actions-grid { grid-template-columns: 1fr; gap: 4px; margin-top: 6px; }
-            .cart-btn, .apply-btn { min-height: 30px; font-size: 11px; padding: 0 6px; }
-
-            /* Compact Mobile Search Toolbar */
-            .catalog-filter-bar { padding: 8px 10px; gap: 8px; }
-            .catalog-search-row { flex-direction: row; gap: 6px; flex-wrap: nowrap; }
-            .search-input-box { min-width: 0; flex: 1; }
-            .search-input-box input { height: 34px; font-size: 12px; padding: 0 24px 0 28px; }
-            .sort-select-box { flex-shrink: 0; }
-            .sort-select-box select { height: 34px; padding: 0 6px; font-size: 11px; }
-            .category-chip { height: 26px; padding: 0 9px; font-size: 11px; gap: 4px; }
-            .section { padding: 24px 8px; }
-        }
-        @media (max-width: 380px) {
-            .brand-text { max-width: 105px; font-size: 12px; }
-        }
-
-        /* Modern Mobile Bottom Navigation Bar */
-        .mobile-bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.96);
-            border-top: 1px solid rgba(226, 232, 240, 0.9);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
-            display: none;
-            grid-template-columns: repeat(4, 1fr);
-            padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
-        }
-        @media (max-width: 640px) {
-            .mobile-bottom-nav { display: grid; }
-        }
-        .mobile-nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 2px;
-            color: #64748b;
-            text-decoration: none;
-            font-size: 10px;
+        .menu-mobile-lang a.active {
+            color: var(--public-primary);
             font-weight: 800;
-            padding: 4px 0;
-            transition: color .15s ease, transform .1s ease;
-            position: relative;
+            text-decoration: underline;
         }
-        .mobile-nav-item:active { transform: scale(0.94); }
-        .mobile-nav-item.active, .mobile-nav-item:hover { color: var(--public-primary); text-decoration: none; }
-        .mobile-nav-item svg { width: 18px; height: 18px; }
-        .mobile-nav-badge {
-            position: absolute;
-            top: 2px;
-            right: calc(50% - 14px);
-            background: #dc2626;
-            color: #fff;
-            font-size: 9px;
-            font-weight: 900;
-            min-width: 15px;
-            height: 15px;
-            line-height: 15px;
-            border-radius: 999px;
-            text-align: center;
-            padding: 0 3px;
-            display: none;
+        @media (max-width: 1100px) {
+            .menu-mobile-lang { display: flex; }
+        }
+        @media (max-width: 520px) {
+            .cms-lang-switch { height: 32px; padding: 2px; }
+            .cms-lang-btn { height: 26px; padding: 0 7px; font-size: 11px; }
+        }
+        /* Khmer font support */
+        html[lang="km"],
+        body.lm-lang-km {
+            font-family: "Kantumruy Pro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         }
     </style>
 </head>
-<body>
+<body @class(['lm-lang-km' => $lmIsKhmer])>
     <main class="public-shell">
+        @if($cms['announcement'])
+        <div class="announcement"><div class="announcement-inner">
+            <span>{{ $businessName }} &middot; {{ $cms['announcement_text'] }} @if($cms['contact_address']) &middot; {{ $cms['contact_address'] }} @endif @if($cms['contact_phone']) &middot; <a href="tel:{{ preg_replace('/[^0-9+]/', '', $cms['contact_phone']) }}">{{ $cms['contact_phone'] }}</a> @endif</span>
+            <div class="announcement-links">@if($customerPortalEnabled)<a href="{{ route('loan-management.public.customer-login') }}">{{ $lmText('Customer Portal', 'ផតថលអតិថិជន') }}</a>@endif<a href="{{ route('login') }}">{{ $lmText('Admin Login', 'ចូលប្រព័ន្ធគ្រប់គ្រង') }}</a><span class="announcement-lang"><a href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" data-lang="en" class="{{ !$lmIsKhmer ? 'active' : '' }}">EN</a> &middot; <a href="{{ request()->fullUrlWithQuery(['lang' => 'km']) }}" data-lang="km" class="{{ $lmIsKhmer ? 'active' : '' }}">ខ្មែរ</a></span></div>
+        </div></div>
+        @endif
         <header class="site-nav">
             <div class="nav-inner">
                 <a class="brand" href="{{ route('loan-management.public.home') }}">
@@ -753,27 +554,54 @@
                             {{ strtoupper(mb_substr($businessName, 0, 1)) }}
                         @endif
                     </span>
-                    <span class="brand-text">{{ $businessName }}</span>
+                    <span class="brand-text">{{ $businessName }}<small>{{ $cms['tagline'] }}</small></span>
                 </a>
-                <nav class="menu" aria-label="Main menu">
-                    <a href="#home" class="active" data-section-link="home">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
-                        Home
-                    </a>
-                    <a href="#products" data-section-link="products">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 2h12l3 5v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7h18"/><path d="M16 11a4 4 0 0 1-8 0"/></svg>
-                        Products
-                    </a>
-                    <a href="#how" data-section-link="how">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                        How It Works
-                    </a>
-                    <a href="#cart" data-section-link="cart">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h3l2.4 12.2A2 2 0 0 0 9.4 17H18a2 2 0 0 0 2-1.5L22 7H6"/></svg>
-                        Cart
-                    </a>
+                @if(!empty($visibleMenu))<button type="button" class="menu-toggle" id="publicMenuToggle" aria-label="{{ $lmText('Toggle navigation', 'បើក/បិទ ម៉ឺនុយ') }}" aria-controls="publicMainMenu" aria-expanded="false"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>@endif
+                <nav class="menu" id="publicMainMenu" aria-label="{{ $lmText('Main menu', 'ម៉ឺនុយមេ') }}">
+                    @foreach($visibleMenu as $key => $section)
+                        @php
+                            $menuLabel = $cms['label_'.$key] ?? '';
+                            if ($lmIsKhmer) {
+                                $defaultMenuMap = [
+                                    'Home' => 'ទំព័រដើម',
+                                    'Products Catalog' => 'កាតាឡុកទំនិញ',
+                                    'Installment Guide' => 'របៀបស្នើសុំ',
+                                    'Cart' => 'កន្ត្រក',
+                                    'About Us' => 'អំពីយើង',
+                                    'Contact' => 'ទំនាក់ទំនង',
+                                ];
+                                $menuLabel = $defaultMenuMap[$menuLabel] ?? $menuLabel;
+                            }
+                        @endphp
+                        <a href="#{{ $key }}" data-section-link="{{ $key }}" @class(['active' => $loop->first])>{{ $menuLabel }}</a>
+                    @endforeach
+                    <div class="menu-mobile-lang">
+                        <span>{{ $lmText('Language:', 'ភាសា៖') }}</span>
+                        <a href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" data-lang="en" class="{{ !$lmIsKhmer ? 'active' : '' }}">English</a>
+                        &middot;
+                        <a href="{{ request()->fullUrlWithQuery(['lang' => 'km']) }}" data-lang="km" class="{{ $lmIsKhmer ? 'active' : '' }}">ភាសាខ្មែរ</a>
+                    </div>
                 </nav>
                 <div class="nav-actions">
+                    {{-- Language Switcher near Customer Login --}}
+                    <div class="cms-lang-switch" role="group" aria-label="{{ $lmText('Language selector', 'ជ្រើសរើសភាសា') }}" title="{{ $lmText('Switch language', 'ប្តូរភាសា') }}">
+                        <a href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}"
+                           data-lang="en"
+                           @class(['cms-lang-btn', 'active' => !$lmIsKhmer])
+                           aria-pressed="{{ !$lmIsKhmer ? 'true' : 'false' }}"
+                           title="English">
+                            EN
+                        </a>
+                        <span class="cms-lang-divider"></span>
+                        <a href="{{ request()->fullUrlWithQuery(['lang' => 'km']) }}"
+                           data-lang="km"
+                           @class(['cms-lang-btn', 'active' => $lmIsKhmer])
+                           aria-pressed="{{ $lmIsKhmer ? 'true' : 'false' }}"
+                           title="ភាសាខ្មែរ">
+                            ខ្មែរ
+                        </a>
+                    </div>
+
                     @if($adminUser)
                         <div class="user-dropdown-wrapper" id="adminDropdownWrapper">
                             <button type="button" class="user-profile-btn admin-profile-btn" id="adminProfileToggle" aria-expanded="false">
@@ -794,28 +622,28 @@
                                     @endif
                                     <div style="min-width: 0;">
                                         <div class="dropdown-user-name">{{ $adminUser->name ?? $adminUser->username ?? 'Administrator' }}</div>
-                                        <div class="dropdown-user-sub">{{ $adminUser->email ?? 'Admin & Staff Portal' }}</div>
+                                        <div class="dropdown-user-sub">{{ $adminUser->email ?? $lmText('Admin & Staff Portal', 'ផតថលរដ្ឋបាល និងបុគ្គលិក') }}</div>
                                     </div>
                                 </div>
                                 <div class="dropdown-divider"></div>
                                 <a href="{{ route('loan-management.dashboard') }}" class="dropdown-item">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                                    Admin Dashboard
+                                    {{ $lmText('Admin Dashboard', 'ផ្ទាំងគ្រប់គ្រងរដ្ឋបាល') }}
                                 </a>
-                                <a href="{{ Route::has('logout') ? route('logout') : url('/logout') }}?redirect={{ urlencode(route('loan-management.public.customer-login')) }}" class="dropdown-item" onclick="return confirm('Are you sure you want to log out and switch to Customer Portal?');" title="Switch or login as customer">
+                                <a href="{{ Route::has('logout') ? route('logout') : url('/logout') }}?redirect={{ urlencode(route('loan-management.public.customer-login')) }}" class="dropdown-item" onclick="return confirm('{{ $lmText('Are you sure you want to log out and switch to Customer Portal?', 'តើអ្នកប្រាកដជាចង់ចាកចេញ ហើយប្តូរទៅកាន់ផតថលអតិថិជន?') }}');" title="{{ $lmText('Switch or login as customer', 'ប្តូរ ឬចូលជាអតិថិជន') }}">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                                    Switch to Customer
+                                    {{ $lmText('Switch to Customer', 'ប្តូរទៅអតិថិជន') }}
                                 </a>
-                                <a href="{{ Route::has('logout') ? route('logout') : url('/logout') }}?redirect={{ urlencode(route('login')) }}" class="dropdown-item" onclick="return confirm('Are you sure you want to log out and switch admin account?');" title="Switch or login as another admin user">
+                                <a href="{{ Route::has('logout') ? route('logout') : url('/logout') }}?redirect={{ urlencode(route('login')) }}" class="dropdown-item" onclick="return confirm('{{ $lmText('Are you sure you want to log out and switch admin account?', 'តើអ្នកប្រាកដជាចង់ចាកចេញ ហើយប្តូរគណនីរដ្ឋបាល?') }}');" title="{{ $lmText('Switch or login as another admin user', 'ប្តូរ ឬចូលជាគណនីរដ្ឋបាលផ្សេង') }}">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                    Switch / Other Admin
+                                    {{ $lmText('Switch / Other Admin', 'ប្តូរ / គណនីរដ្ឋបាលផ្សេង') }}
                                 </a>
                                 <div class="dropdown-divider"></div>
-                                <form method="POST" action="{{ Route::has('logout') ? route('logout') : url('/logout') }}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to log out?');">
+                                <form method="POST" action="{{ Route::has('logout') ? route('logout') : url('/logout') }}" style="margin: 0;" onsubmit="return confirm('{{ $lmText('Are you sure you want to log out?', 'តើអ្នកប្រាកដជាចង់ចាកចេញមែនទេ?') }}');">
                                     @csrf
                                     <button type="submit" class="dropdown-item danger">
                                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                                        Logout Admin
+                                        {{ $lmText('Logout Admin', 'ចាកចេញពីរដ្ឋបាល') }}
                                     </button>
                                 </form>
                             </div>
@@ -830,7 +658,7 @@
                                 @else
                                     <span class="user-avatar-badge">{{ strtoupper(mb_substr($customerUser->name ?: 'C', 0, 1)) }}</span>
                                 @endif
-                                <span class="user-profile-name">{{ $customerUser->name ?: 'Customer' }}</span>
+                                <span class="user-profile-name">{{ $customerUser->name ?: $lmText('Customer', 'អតិថិជន') }}</span>
                                 <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                             </button>
                             <div class="user-dropdown-menu" id="customerDropdownMenu">
@@ -841,48 +669,51 @@
                                         <div class="dropdown-avatar-circle-fallback">{{ strtoupper(mb_substr($customerUser->name ?: 'C', 0, 1)) }}</div>
                                     @endif
                                     <div style="min-width: 0;">
-                                        <div class="dropdown-user-name">{{ $customerUser->name ?: 'Customer' }}</div>
+                                        <div class="dropdown-user-name">{{ $customerUser->name ?: $lmText('Customer', 'អតិថិជន') }}</div>
                                         <div class="dropdown-user-sub">{{ $customerUser->phone ?: $customerUser->username }}</div>
                                     </div>
                                 </div>
                                 <div class="dropdown-divider"></div>
                                 <a href="{{ route('loan-management.public.customer-dashboard') }}" class="dropdown-item">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                                    My Dashboard
+                                    {{ $lmText('My Dashboard', 'ផ្ទាំងគ្រប់គ្រងរបស់ខ្ញុំ') }}
                                 </a>
-                                <a href="{{ route('loan-management.public.customer-logout') }}?redirect={{ urlencode(route('loan-management.public.customer-login')) }}" class="dropdown-item" onclick="return confirm('Are you sure you want to log out and switch to another account?');" title="Switch or add another customer account">
+                                <a href="{{ route('loan-management.public.customer-logout') }}?redirect={{ urlencode(route('loan-management.public.customer-login')) }}" class="dropdown-item" onclick="return confirm('{{ $lmText('Are you sure you want to log out and switch to another account?', 'តើអ្នកប្រាកដជាចង់ចាកចេញ ហើយប្តូរទៅកាន់គណនីផ្សេង?') }}');" title="{{ $lmText('Switch or add another customer account', 'ប្តូរ ឬបន្ថែមគណនីអតិថិជនផ្សេង') }}">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                                    Switch Account
+                                    {{ $lmText('Switch Account', 'ប្តូរគណនី') }}
                                 </a>
                                 @if(! $adminUser)
-                                    <a href="{{ route('loan-management.public.customer-logout') }}?redirect={{ urlencode(route('login')) }}" class="dropdown-item" onclick="return confirm('Are you sure you want to log out and go to Admin Login?');">
+                                    <a href="{{ route('loan-management.public.customer-logout') }}?redirect={{ urlencode(route('login')) }}" class="dropdown-item" onclick="return confirm('{{ $lmText('Are you sure you want to log out and go to Admin Login?', 'តើអ្នកប្រាកដជាចង់ចាកចេញ ហើយទៅកាន់ការចូលប្រព័ន្ធគ្រប់គ្រង?') }}');">
                                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                        Admin Login
+                                        {{ $lmText('Admin Login', 'ចូលប្រព័ន្ធគ្រប់គ្រង') }}
                                     </a>
                                 @endif
                                 <div class="dropdown-divider"></div>
-                                <form method="POST" action="{{ route('loan-management.public.customer-logout') }}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to log out?');">
+                                <form method="POST" action="{{ route('loan-management.public.customer-logout') }}" style="margin: 0;" onsubmit="return confirm('{{ $lmText('Are you sure you want to log out?', 'តើអ្នកប្រាកដជាចង់ចាកចេញមែនទេ?') }}');">
                                     @csrf
                                     <button type="submit" class="dropdown-item danger">
                                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                                        Logout Customer
+                                        {{ $lmText('Logout Customer', 'ចាកចេញពីអតិថិជន') }}
                                     </button>
                                 </form>
                             </div>
                         </div>
-                    @elseif(! $adminUser)
-                        <a class="button-outline" href="{{ route('loan-management.public.customer-login') }}">Login</a>
-                        <a class="button" href="{{ route('loan-management.public.register') }}">Register</a>
+                    @elseif(! $adminUser && $customerPortalEnabled)
+                        <a class="button-outline" href="{{ route('loan-management.public.customer-login') }}">{{ $lmText('Login', 'ចូលប្រើ') }}</a>
+                        <a class="button" href="{{ route('loan-management.public.register') }}">{{ $lmText('Apply Now', 'ស្នើសុំឥឡូវនេះ') }}</a>
                     @endif
                 </div>
             </div>
         </header>
 
+        @if($cms['hero'])
         <section class="hero" id="home">
+            <img class="hero-image" src="{{ route('loan-management.public.home-image') }}" alt="Computer and technology showroom" fetchpriority="high">
             <div class="hero-inner">
                 <div class="hero-copy">
-                    <span class="eyebrow">Installment Shopping</span>
-                    <h1>{{ $headline }}</h1>
+                    <span class="eyebrow">{{ $cms['hero_eyebrow'] }}</span>
+                    <h1>{{ $businessName }}</h1>
+                    <p class="subtitle">{{ $headline }}</p>
                     @if($subtitle)
                         <p class="subtitle">{{ $subtitle }}</p>
                     @endif
@@ -891,50 +722,86 @@
                     @endif
                     <div class="hero-cta">
                         @if($customerUser)
-                            <a class="button" href="{{ route('loan-management.public.customer-dashboard') }}">Go to My Dashboard</a>
-                            <a class="button-outline" href="#products">Shop Products</a>
+                            <a class="button" href="{{ route('loan-management.public.customer-dashboard') }}">{{ $lmText('Go to My Dashboard', 'ទៅកាន់ផ្ទាំងគ្រប់គ្រង') }}</a>
+                            @if($cms['catalog'])<a class="button-outline" href="#products">{{ $lmText('Shop Products', 'ទិញទំនិញ') }}</a>@endif
                         @elseif($adminUser)
-                            <a class="button" href="{{ route('loan-management.dashboard') }}">Open Admin Dashboard</a>
-                            <a class="button-outline" href="{{ route('loan-management.public.customer-login') }}" onclick="return confirm('You are currently signed in as Administrator ({{ $adminUser->name ?? $adminUser->username ?? 'Admin' }}). Are you sure you want to log out first to switch to Customer Portal?');">Customer Login / Switch</a>
+                            <a class="button" href="{{ route('loan-management.dashboard') }}">{{ $lmText('Open Admin Dashboard', 'បើកផ្ទាំងគ្រប់គ្រងរដ្ឋបាល') }}</a>
+                            <a class="button-outline" href="{{ route('loan-management.public.customer-login') }}" onclick="return confirm('{{ $lmText('You are currently signed in as Administrator. Are you sure you want to log out first to switch to Customer Portal?', 'អ្នកកំពុងចូលជាអ្នកគ្រប់គ្រង។ តើអ្នកប្រាកដជាចង់ចាកចេញដើម្បីប្តូរទៅកាន់ផតថលអតិថិជនមែនទេ?') }}');">{{ $lmText('Customer Login / Switch', 'ចូលគណនីអតិថិជន / ប្តូរ') }}</a>
                         @else
-                            <a class="button" href="#products">Shop Products</a>
-                            <a class="button-outline" href="{{ route('loan-management.public.register') }}">Apply Now</a>
+                            @if($cms['catalog'])<a class="button" href="#products">{{ $lmText('Shop Products', 'ទិញទំនិញ') }}</a>@endif
+                            @if($customerPortalEnabled)<a class="button-outline" href="{{ route('loan-management.public.register') }}">{{ $lmText('Apply Now', 'ស្នើសុំឥឡូវនេះ') }}</a>@endif
                         @endif
                     </div>
                 </div>
-                <aside class="hero-card">
-                    <h2>Apply in a few minutes</h2>
-                    <p>Select products, submit your registration, then our team reviews your installment request.</p>
-                    <div class="quick-stat"><span>Step 1</span><strong>Add products</strong></div>
-                    <div class="quick-stat"><span>Step 2</span><strong>Register account</strong></div>
-                    <div class="quick-stat"><span>Step 3</span><strong>Staff follow-up</strong></div>
-                </aside>
             </div>
         </section>
+        @endif
 
+        @if($cms['assessment'] && $cms['catalog'] && !empty($products))
+        <section class="assessment" aria-labelledby="assessmentTitle"><div class="section-inner">
+            <h2 id="assessmentTitle">{{ $cms['assessment_title'] }}</h2>
+            <div class="assessment-grid">
+                <div><label for="assessmentProduct">{{ $lmText('Selected Item', 'ទំនិញដែលបានជ្រើស') }}</label><select id="assessmentProduct">@foreach($products as $product)<option value="{{ $loop->index }}">{{ $product['name'] }}</option>@endforeach</select></div>
+                <div><label for="assessmentPrice">{{ $lmText('Product Price', 'តម្លៃទំនិញ') }}</label><input id="assessmentPrice" readonly></div>
+                <div><label for="assessmentMonths">{{ $lmText('Months', 'ចំនួនខែ') }}</label><input id="assessmentMonths" type="number" min="1" max="120" value="12" required></div>
+                <div><label for="assessmentDownPayment">{{ $lmText('Down Payment', 'ប្រាក់កក់មុន ($)') }}</label><input id="assessmentDownPayment" type="number" min="0" step="0.01" value="0" required></div>
+            </div>
+            <div class="assessment-output"><div>{{ $lmText('Estimated Monthly:', 'ការបង់ប្រចាំខែប៉ាន់ស្មាន:') }} <strong id="assessmentMonthly"></strong></div>@if($customerPortalEnabled)<button type="button" class="button" id="assessmentApply"><i class="fa-solid fa-sliders" aria-hidden="true"></i> {{ $lmText('Configure Installment', 'កំណត់រំលស់') }}</button>@endif</div>
+            <p>{{ $cms['assessment_note'] }}</p>
+        </div></section>
+        @endif
+
+        @if($cms['brands'] && !empty($partnerBrands))
+            <section class="brand-strip" aria-labelledby="partnerBrandsTitle">
+                <h2 id="partnerBrandsTitle">{{ $cms['brands_title'] }}</h2>
+                <div class="brand-strip-inner">
+                    @foreach($partnerBrands as $partner)
+                        @if($partner['website_url'])
+                            <a class="brand-partner" href="{{ $partner['website_url'] }}" target="_blank" rel="noopener noreferrer">
+                        @else
+                            <div class="brand-partner">
+                        @endif
+                            @if($partner['logo_url'])<img src="{{ $partner['logo_url'] }}" alt="" loading="lazy" onerror="this.hidden=true">@endif
+                            <span>{{ $partner['name'] }}</span>
+                        @if($partner['website_url'])</a>@else</div>@endif
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if($cms['guide'])
         <section class="section alt" id="how">
             <div class="section-inner">
                 <div class="section-head">
                     <div>
-                        <h2>Simple customer experience</h2>
-                        <p>Customers can browse products, request installment service, and return later to view their own account dashboard.</p>
+                        <h2>{{ $cms['guide_title'] }}</h2>
+                        <p>{{ $cms['guide_description'] }}</p>
                     </div>
                 </div>
                 <div class="feature-grid">
-                    <div class="feature"><div class="feature-icon">1</div><strong>Choose product</strong><span>Add computers or other products from the catalog into your installment cart.</span></div>
-                    <div class="feature"><div class="feature-icon">2</div><strong>Submit request</strong><span>Register once and send the selected cart items to the business team.</span></div>
-                    <div class="feature"><div class="feature-icon">3</div><strong>Track your account</strong><span>Login to see personal information, loan records, and recent payment history.</span></div>
+                    @foreach([1, 2, 3] as $step)
+                        <div class="feature"><div class="feature-icon">{{ $step }}</div><strong>{{ $cms['step_'.$step.'_title'] }}</strong><span>{{ $cms['step_'.$step.'_body'] }}</span></div>
+                    @endforeach
                 </div>
             </div>
         </section>
+        @endif
 
+        @if($cms['experience'])
+        <section class="section" id="experience"><div class="section-inner">
+            <div class="section-head"><div><h2>{{ $cms['experience_title'] }}</h2><p>{{ $cms['experience_description'] }}</p></div></div>
+            <div class="feature-grid">@foreach([1,2,3] as $step)<div class="feature"><div class="feature-icon"><i class="fa-solid {{ [1 => 'fa-laptop', 2 => 'fa-wallet', 3 => 'fa-headset'][$step] }}" aria-hidden="true"></i></div><strong>{{ $cms['experience_'.$step.'_title'] }}</strong><span>{{ $cms['experience_'.$step.'_body'] }}</span></div>@endforeach</div>
+        </div></section>
+        @endif
+
+        @if($cms['catalog'])
         <section class="section" id="products">
-            <div class="section-inner shop-inner">
+            <div @class(['section-inner', 'shop-inner', 'without-cart' => !$cms['cart']])>
                 <div>
                     <div class="section-head">
                         <div>
-                            <h2>Products for Installment</h2>
-                            <p>Browse installment catalog items, calculate monthly repayments, and add products to your cart for instant application.</p>
+                            <h2>{{ $cms['catalog_title'] }}</h2>
+                            <p>{{ $cms['catalog_description'] }}</p>
                         </div>
                     </div>
 
@@ -943,15 +810,15 @@
                         <div class="catalog-search-row">
                             <div class="search-input-box">
                                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                                <input type="text" id="catalogSearchInput" placeholder="Search by product name, brand, model, SKU..." autocomplete="off">
-                                <button type="button" class="search-clear-btn" id="searchClearBtn" style="display: none;" title="Clear search">&times;</button>
+                                <input type="text" id="catalogSearchInput" aria-label="{{ $lmText('Search products', 'ស្វែងរកទំនិញ') }}" placeholder="{{ $lmText('Search products, brand, SKU...', 'ស្វែងរកទំនិញ ម៉ាក ឬលេខកូដ...') }}" autocomplete="off">
+                                <button type="button" class="search-clear-btn" id="searchClearBtn" style="display: none;" title="{{ $lmText('Clear search', 'សម្អាតការស្វែងរក') }}">&times;</button>
                             </div>
                             <div class="sort-select-box">
-                                <select id="catalogSortSelect">
-                                    <option value="default">✨ Featured / Newest</option>
-                                    <option value="price_low">💵 Price: Low to High</option>
-                                    <option value="price_high">💎 Price: High to Low</option>
-                                    <option value="name_asc">🔤 Name: A to Z</option>
+                                <select id="catalogSortSelect" aria-label="{{ $lmText('Sort products', 'តម្រៀបទំនិញ') }}">
+                                    <option value="default">{{ $lmText('Featured / Newest', 'ទំនិញពិសេស / ថ្មីបំផុត') }}</option>
+                                    <option value="price_low">{{ $lmText('Price: Low to High', 'តម្លៃ: ទាបទៅខ្ពស់') }}</option>
+                                    <option value="price_high">{{ $lmText('Price: High to Low', 'តម្លៃ: ខ្ពស់ទៅទាប') }}</option>
+                                    <option value="name_asc">{{ $lmText('Name: A to Z', 'ឈ្មោះ: A ដល់ Z') }}</option>
                                 </select>
                             </div>
                         </div>
@@ -959,7 +826,7 @@
                         {{-- Category Filter Chips --}}
                         <div class="category-chips-scroll" id="categoryChipsContainer">
                             <button type="button" class="category-chip active" data-category="all">
-                                All Products <span class="chip-count" id="totalCountPill">{{ count($products) }}</span>
+                                {{ $lmText('All Products', 'ទំនិញទាំងអស់') }} <span class="chip-count" id="totalCountPill">{{ count($products) }}</span>
                             </button>
                             @foreach($categories ?? [] as $cat)
                                 @php
@@ -983,12 +850,13 @@
                                     $pBrand = (string) ($product['brand'] ?? '');
                                     $pCat = (string) ($product['category'] ?? 'General');
                                     $pMinDp = (float) ($product['min_down_payment_percent'] ?? 0);
-                                    $estMonthly = $pPrice > 0 ? round(($pPrice * 1.18) / 12, 2) : 0;
+                                    $estMonthly = $pPrice > 0 ? round($pPrice / 12, 2) : 0;
                                 @endphp
                                 <article class="product-card"
                                     data-name="{{ strtolower($pName) }}"
                                     data-sku="{{ strtolower($pSku) }}"
                                     data-brand="{{ strtolower($pBrand) }}"
+                                    data-model="{{ strtolower($product['model'] ?? '') }}"
                                     data-category="{{ strtolower($pCat) }}"
                                     data-price="{{ $pPrice }}"
                                     data-id="{{ $product['id'] ?? $loop->index }}">
@@ -1007,38 +875,39 @@
                                         @endif
 
                                         @if($pMinDp > 0)
-                                            <span class="card-badge-top-right">Min {{ $pMinDp }}% DP</span>
+                                            <span class="card-badge-top-right">{{ $lmText('Min ' . $pMinDp . '% DP', 'កក់ទាបបំផុត ' . $pMinDp . '%') }}</span>
                                         @else
-                                            <span class="card-badge-top-right">0% Down Payment</span>
+                                            <span class="card-badge-top-right">{{ $lmText('0% Down Payment', 'កក់មុន 0%') }}</span>
                                         @endif
                                     </div>
 
                                     <div class="product-body">
+                                        <div @class(['product-stock', 'unavailable' => ($product['qty_available'] ?? 1) <= 0])>{{ ($product['qty_available'] ?? 1) > 0 ? $lmText('In Stock', 'មានក្នុងស្តុក') : $lmText('Stock subject to staff confirmation', 'ស្តុកត្រូវបញ្ជាក់ជាមួយបុគ្គលិក') }}</div>
                                         @if($pBrand)
                                             <div class="product-brand-tag">{{ $pBrand }}</div>
                                         @endif
                                         <h3 class="product-title">{{ $pName }}</h3>
-                                        <div class="product-sku">{{ $pSku ? 'SKU: ' . $pSku : 'Installment Eligible' }}</div>
+                                        <div class="product-sku">{{ $pSku ? 'SKU: ' . $pSku : $lmText('Installment Eligible', 'អាចបង់រំលស់បាន') }}</div>
 
                                         <div class="product-price-row">
                                             <div class="price-cash">${{ number_format($pPrice, 2) }}</div>
                                             @if($estMonthly > 0)
-                                                <div class="price-monthly-tag">From ${{ number_format($estMonthly, 2) }}/mo</div>
+                                                <div class="price-monthly-tag">{{ $lmText('Est.', 'ប៉ាន់ស្មាន') }} ${{ number_format($estMonthly, 2) }}/{{ $lmText('mo', 'ខែ') }}</div>
                                             @endif
                                         </div>
 
                                         <div class="product-actions-grid">
-                                            <button type="button" class="cart-btn" data-product='@json($product)'>
+                                            @if($cms['cart'])<button type="button" class="cart-btn" data-product='@json($product)'>
                                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                                                Add to Cart
-                                            </button>
+                                                {{ $lmText('Add to Cart', 'ដាក់ក្នុងកន្ត្រក') }}
+                                            </button>@endif
                                             @if($customerUser)
-                                                <a href="{{ route('loan-management.public.customer-loan-request', ['product_id' => $product['id']]) }}" class="apply-btn" title="Direct Installment Request">
-                                                    Apply
+                                                <a href="{{ route('loan-management.public.customer-loan-request', ['product_id' => $product['id']]) }}" class="apply-btn" title="{{ $lmText('Direct Installment Request', 'ស្នើសុំបង់រំលស់ផ្ទាល់') }}">
+                                                    {{ $lmText('Apply', 'ស្នើរំលស់') }}
                                                 </a>
-                                            @else
-                                                <a href="{{ route('loan-management.public.register') }}" class="apply-btn" title="Direct Installment Request">
-                                                    Apply
+                                            @elseif($customerPortalEnabled)
+                                                <a href="{{ route('loan-management.public.register', ['product_id' => $product['id']]) }}" data-installment-product="{{ json_encode($product) }}" class="apply-btn" title="{{ $lmText('Direct Installment Request', 'ស្នើសុំបង់រំលស់ផ្ទាល់') }}">
+                                                    {{ $lmText('Apply', 'ស្នើរំលស់') }}
                                                 </a>
                                             @endif
                                         </div>
@@ -1048,99 +917,210 @@
                         </div>
                         <div id="noProductsFoundMsg" style="display: none; padding: 48px 20px; text-align: center; background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; margin-top: 10px;">
                             <div style="font-size: 38px; color: #94a3b8; margin-bottom: 8px;">🔍</div>
-                            <h4 style="margin: 0 0 4px; font-weight: 800; color: #0f172a;">No matching products found</h4>
-                            <p style="margin: 0 0 14px; color: #64748b; font-size: 13px;">Try searching with another keyword or resetting the category filter.</p>
-                            <button type="button" class="button-outline" onclick="resetAllFilters()" style="min-height: 36px; padding: 0 14px; font-size: 13px;">Reset Filters</button>
+                            <h4 style="margin: 0 0 4px; font-weight: 800; color: #0f172a;">{{ $lmText('No matching products found', 'រកមិនឃើញទំនិញដែលត្រូវគ្នាទេ') }}</h4>
+                            <p style="margin: 0 0 14px; color: #64748b; font-size: 13px;">{{ $lmText('Try searching with another keyword or resetting the category filter.', 'សូមសាកល្បងពាក្យគន្លឹះផ្សេង ឬកំណត់តម្រងឡើងវិញ') }}</p>
+                            <button type="button" class="button-outline" onclick="resetAllFilters()" style="min-height: 36px; padding: 0 14px; font-size: 13px;">{{ $lmText('Reset Filters', 'កំណត់តម្រងឡើងវិញ') }}</button>
                         </div>
                     @else
                         <div class="feature">
-                            <strong>No installment products available</strong>
-                            <span>Add products in Admin -> Installment Products to display them here.</span>
+                            <strong>{{ $lmText('No installment products available', 'មិនទាន់មានទំនិញរំលស់ទេ') }}</strong>
+                            <span>{{ $lmText('Please check back soon for new products.', 'សូមចូលពិនិត្យមើលឡើងវិញនៅពេលក្រោយ') }}</span>
                         </div>
                     @endif
                 </div>
 
-                <aside class="cart-panel" id="cart">
+                @if($cms['cart'])<aside class="cart-panel" id="cart">
                     <div class="cart-panel-head">
-                        <h2>Installment Cart</h2>
-                        <span class="cart-count-pill" id="cartCountPill">0 items</span>
+                        <h2>{{ $lmText('Installment Cart', 'កន្ត្រករំលស់') }}</h2>
+                        <span class="cart-count-pill" id="cartCountPill">{{ $lmText('0 items', '0 មុខ') }}</span>
                     </div>
                     <div class="cart-items" id="cartItems"></div>
                     <div class="cart-total">
-                        <span>Estimated Total</span>
+                        <span>{{ $lmText('Subtotal', 'សរុបរង') }}</span><span id="cartSubtotal">$0.00</span>
+                    </div>
+                    <div class="cart-total">
+                        <span>{{ $lmText('Estimated Total', 'សរុបប៉ាន់ស្មាន') }}</span>
                         <span id="cartTotal">$0.00</span>
                     </div>
+                    <p id="cartLimitMessage" role="status" hidden style="color:#b42318;"></p>
                     @if($customerUser)
                         <a class="cart-apply" href="{{ route('loan-management.public.customer-loan-request') }}" id="cartApply">
-                            Apply Installment Installment
+                            {{ $lmText('Apply Installment', 'ស្នើសុំរំលស់') }}
                         </a>
-                    @else
+                    @elseif($customerPortalEnabled)
                         <a class="cart-apply" href="{{ route('loan-management.public.register') }}" id="cartApply">
-                            Apply Installment Installment
+                            {{ $lmText('Apply Installment', 'ស្នើសុំរំលស់') }}
                         </a>
                     @endif
-                </aside>
+                </aside>@endif
             </div>
         </section>
+        @endif
 
-        <footer class="footer">
+        @if($cms['about'])
+        <section class="section alt" id="about"><div class="section-inner">
+            <h2>{{ $cms['about_title'] }}</h2>
+            <p>{{ $body ?: $subtitle }}</p>
+        </div></section>
+        @endif
+        @if($cms['contact'])
+            <section class="section" id="contact"><div class="section-inner">
+                <h2>{{ $cms['contact_title'] }}</h2>
+                <div class="contact-details">
+                    @if($cms['contact_phone'])<p><i class="fa-solid fa-phone" aria-hidden="true"></i> <a href="tel:{{ preg_replace('/[^0-9+]/', '', $cms['contact_phone']) }}">{{ $cms['contact_phone'] }}</a></p>@endif
+                    @if($cms['contact_email'])<p><i class="fa-solid fa-envelope" aria-hidden="true"></i> <a href="mailto:{{ $cms['contact_email'] }}">{{ $cms['contact_email'] }}</a></p>@endif
+                    @if($cms['contact_address'])<p><i class="fa-solid fa-location-dot" aria-hidden="true"></i> {{ $cms['contact_address'] }}</p>@endif
+                    @if($cms['contact_hours'])<p><i class="fa-solid fa-clock" aria-hidden="true"></i> {{ $cms['contact_hours'] }}</p>@endif
+                </div>
+                @if($customerPortalEnabled)<a class="button-outline" href="{{ route('loan-management.public.customer-login') }}">{{ $lmText('Customer Portal', 'ផតថលអតិថិជន') }}</a>@endif
+            </div></section>
+        @endif
+
+        @if($cms['footer'])<footer class="footer" id="publicFooter">
             <div class="footer-inner">
-                <span>{{ $businessName }}</span>
-                <span>
-                    @if($customerUser)
-                        <a href="{{ route('loan-management.public.customer-dashboard') }}">Customer Dashboard</a>
-                        &nbsp;|&nbsp;
-                    @endif
-                    @if($adminUser)
-                        <a href="{{ route('loan-management.dashboard') }}">Admin Dashboard</a>
-                        &nbsp;|&nbsp;
-                    @else
-                        <a href="{{ route('login') }}" @if($customerUser) onclick="return confirm('You are currently signed in as Customer ({{ $customerUser->name }}). Are you sure you want to log out first to access Admin Login?');" @endif>Admin Login</a>
-                        &nbsp;|&nbsp;
-                    @endif
-                    <a href="{{ route('loan-management.public.customer-login') }}" @if($adminUser) onclick="return confirm('You are currently signed in as Administrator ({{ $adminUser->name ?? 'Admin' }}). Are you sure you want to log out first to switch to Customer Portal?');" @elseif($customerUser) onclick="return confirm('You are currently signed in as Customer ({{ $customerUser->name }}). Are you sure you want to log out first to switch accounts?');" @endif>Customer Portal</a>
-                </span>
-            </div>
-        </footer>
+                <div class="footer-grid">
+                    <section class="footer-group footer-brand-group">
+                        <div class="footer-brand">
+                            <span class="footer-brand-logo">
+                                @if($businessLogoUrl)
+                                    <img src="{{ $businessLogoUrl }}" alt="{{ $businessName }}">
+                                @else
+                                    {{ strtoupper(mb_substr($businessName, 0, 1)) }}
+                                @endif
+                            </span>
+                            <span>
+                                <strong>{{ $businessName }}</strong>
+                                <small>{{ $cms['tagline'] }}</small>
+                            </span>
+                        </div>
+                        <div class="footer-group-body">
+                            @if($cms['footer_text'])<p>{{ $cms['footer_text'] }}</p>@endif
+                            <div class="footer-cta">
+                                @if($customerUser)
+                                    <a class="primary" href="{{ route('loan-management.public.customer-dashboard') }}"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> {{ $lmText('My Dashboard', 'ផ្ទាំងគ្រប់គ្រង') }}</a>
+                                @elseif($adminUser)
+                                    <a class="primary" href="{{ route('loan-management.dashboard') }}"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> {{ $lmText('Admin Dashboard', 'ផ្ទាំងគ្រប់គ្រងរដ្ឋបាល') }}</a>
+                                @elseif($customerPortalEnabled)
+                                    <a class="primary" href="{{ route('loan-management.public.register') }}"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> {{ $lmText('Apply Now', 'ស្នើសុំឥឡូវនេះ') }}</a>
+                                    <a href="{{ route('loan-management.public.customer-login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> {{ $lmText('Login', 'ចូលគណនី') }}</a>
+                                @endif
+                            </div>
+                            @if($footerSignedIn)
+                                <p style="margin-top:12px; color:#8b929c;"><i class="fa-solid fa-circle-user" aria-hidden="true"></i> {{ $lmText('Signed in as', 'បានចូលដោយឈ្មោះ') }} {{ $customerUser ? $customerUser->name : ($adminUser->name ?? $adminUser->username ?? 'Administrator') }}</p>
+                            @endif
+                            @if($cms['footer_show_social'] && $footerSocials)
+                                <div class="footer-social-title">{{ $cms['footer_social_title'] }}</div>
+                                <div class="footer-social">
+                                    @foreach($footerSocials as $footerSocial)
+                                        <a href="{{ $footerSocial['url'] }}" target="_blank" rel="noopener noreferrer" title="{{ $footerSocial['label'] }}" aria-label="{{ $footerSocial['label'] }}"><i class="{{ $footerSocial['icon'] }}" aria-hidden="true"></i></a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    </section>
 
-        <!-- Mobile Bottom Navigation Bar -->
-        <nav class="mobile-bottom-nav" aria-label="Mobile Bottom Navigation">
-            <a href="#home" class="mobile-nav-item active" id="mobNavHome">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                <span>Home</span>
-            </a>
-            <a href="#products" class="mobile-nav-item" id="mobNavProducts">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                <span>Products</span>
-            </a>
-            <a href="#cart" class="mobile-nav-item" id="mobNavCart">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                <span class="mobile-nav-badge" id="mobileCartBadge">0</span>
-                <span>Cart</span>
-            </a>
-            @if($customerUser)
-                <a href="{{ route('loan-management.public.customer-dashboard') }}" class="mobile-nav-item" id="mobNavProfile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span>Account</span>
-                </a>
-            @elseif($adminUser)
-                <a href="{{ route('loan-management.dashboard') }}" class="mobile-nav-item" id="mobNavAdmin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                    <span>Admin</span>
-                </a>
-            @else
-                <a href="{{ route('loan-management.public.customer-login') }}" class="mobile-nav-item" id="mobNavLogin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                    <span>Login</span>
-                </a>
-            @endif
-        </nav>
+                    @if($cms['footer_show_links'] && $footerQuickLinks)
+                        <section class="footer-group">
+                            <button type="button" class="footer-group-toggle" aria-expanded="true" aria-controls="footerLinksBody">
+                                <span>{{ $cms['footer_links_title'] }}</span>
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="footer-group-body" id="footerLinksBody">
+                                <div class="footer-links">
+                                    @foreach($footerQuickLinks as $footerLink)
+                                        <a href="{{ $footerLink['href'] }}"><i class="{{ $footerLink['icon'] }}" aria-hidden="true"></i> {{ $footerLink['label'] }}</a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </section>
+                    @endif
+
+                    @if($cms['footer_show_accounts'] && $footerAccounts)
+                        <section class="footer-group">
+                            <button type="button" class="footer-group-toggle" aria-expanded="true" aria-controls="footerAccountsBody">
+                                <span>{{ $cms['footer_accounts_title'] }}</span>
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="footer-group-body" id="footerAccountsBody">
+                                <div class="footer-links">
+                                    @foreach($footerAccounts as $footerAccount)
+                                        <a href="{{ $footerAccount['href'] }}"@if(!empty($footerAccount['confirm'])) onclick="return confirm(@json($footerAccount['confirm']));"@endif><i class="{{ $footerAccount['icon'] }}" aria-hidden="true"></i> {{ $footerAccount['label'] }}</a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </section>
+                    @endif
+
+                    @if($cms['footer_show_contact'] && $footerContactRows)
+                        <section class="footer-group">
+                            <button type="button" class="footer-group-toggle" aria-expanded="true" aria-controls="footerContactBody">
+                                <span>{{ $cms['footer_contact_title'] }}</span>
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="footer-group-body" id="footerContactBody">
+                                <div class="footer-contact-list">
+                                    @foreach($footerContactRows as $footerContact)
+                                        <div>
+                                            <i class="{{ $footerContact['icon'] }}" aria-hidden="true"></i>
+                                            @if(!empty($footerContact['link']))<a href="{{ $footerContact['link'] }}"><span>{{ $footerContact['value'] }}</span></a>
+                                            @else<span>{{ $footerContact['value'] }}</span>@endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </section>
+                    @endif
+                </div>
+
+                @if($cms['footer_show_note'] && $cms['footer_note'])<div class="footer-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{ $cms['footer_note'] }}</div>@endif
+                @if($cms['privacy'] && $cms['privacy_body'])<p><button type="button" class="footer-policy-btn" id="privacyOpen">{{ $cms['privacy_title'] }}</button></p>@endif
+
+                <div class="footer-bottom">
+                    <div>{{ $footerCopyright }}</div>
+                    <div class="footer-meta">
+                        @if($cms['hero'])<a href="#home" data-section-link="home"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i> {{ $lmText('Back to top', 'ត្រឡប់ទៅលើ') }}</a>@endif
+                        @if($cms['cart'] && $catalogCount)<span>{{ $catalogCount }} {{ $lmText($catalogCount === 1 ? 'product available' : 'products available', 'មុខទំនិញមានលក់') }}</span>@endif
+                        <span>{{ $businessName }} &middot; Powered by rvstechsolution.com</span>
+                    </div>
+                </div>
+            </div>
+        </footer>@endif
+
+        <button type="button" class="footer-top-btn" id="backToTopBtn" aria-label="{{ $lmText('Back to top', 'ត្រឡប់ទៅលើ') }}" title="{{ $lmText('Back to top', 'ត្រឡប់ទៅលើ') }}">
+            <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+        </button>
+
     </main>
+
+    @include('loanmanagement::public.partials.installment_request_modal')
+    @include('loanmanagement::public.partials.customer_login_modal')
+    @if($cms['privacy'] && $cms['privacy_body'])
+        <dialog class="installment-modal" id="privacyModal" aria-labelledby="privacyTitle"><h2 id="privacyTitle">{{ $cms['privacy_title'] }}</h2><p style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ $cms['privacy_body'] }}</p><form method="dialog"><button class="button" type="submit">{{ $lmText('Close', 'បិទ') }}</button></form></dialog>
+    @endif
 
     <script>
         (function () {
+            var menuToggle = document.getElementById('publicMenuToggle');
+            var mainMenu = document.getElementById('publicMainMenu');
+            function closeMenu() {
+                if (!menuToggle) return;
+                mainMenu.classList.remove('is-open');
+                menuToggle.setAttribute('aria-expanded', 'false');
+            }
+            if (menuToggle) menuToggle.addEventListener('click', function () {
+                var open = mainMenu.classList.toggle('is-open');
+                menuToggle.setAttribute('aria-expanded', String(open));
+            });
+            mainMenu.addEventListener('click', function (event) {
+                if (event.target.closest('a')) closeMenu();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeMenu();
+            });
             var cartKey = 'loan_public_installment_cart';
+            var liveCatalog = @json($products ?? []);
             var cart = [];
+            var isKhmer = {{ $lmIsKhmer ? 'true' : 'false' }};
             var itemsBox = document.getElementById('cartItems');
             var totalBox = document.getElementById('cartTotal');
             var countPill = document.getElementById('cartCountPill');
@@ -1156,23 +1136,32 @@
             }
 
             function save() {
-                localStorage.setItem(cartKey, JSON.stringify(cart));
+                try { localStorage.setItem(cartKey, JSON.stringify(cart)); } catch (e) {}
             }
 
             function load() {
                 try {
                     cart = JSON.parse(localStorage.getItem(cartKey) || '[]') || [];
+                    if (!Array.isArray(cart)) cart = [];
+                    cart = cart.filter(function (item) { return item && typeof item === 'object' && Number.isInteger(Number(item.id)) && Number(item.id) > 0 && Number.isFinite(Number(item.price)) && Number(item.price) >= 0 && Number.isInteger(Number(item.qty)) && Number(item.qty) > 0 && Number(item.qty) <= 99; }).slice(0,20);
+                    cart = cart.map(function (item) {
+                        var product = liveCatalog.find(function (product) { return Number(product.id) === Number(item.id) && Number(product.variation_id || 0) === Number(item.variation_id || 0); });
+                        return product ? Object.assign({}, product, {qty:Number(item.qty)}) : null;
+                    }).filter(Boolean);
                 } catch (e) {
                     cart = [];
                 }
             }
 
             function renderCart() {
+                if (!itemsBox) return;
+                var limitNotice = document.getElementById('cartLimitMessage');
+                if (limitNotice) limitNotice.hidden = true;
                 var total = 0;
                 var totalItems = 0;
                 itemsBox.innerHTML = '';
                 if (!cart.length) {
-                    itemsBox.innerHTML = '<div class="cart-empty">No products selected yet.</div>';
+                    itemsBox.innerHTML = '<div class="cart-empty">' + (isKhmer ? 'មិនទាន់មានទំនិញត្រូវបានជ្រើសរើសនៅឡើយទេ។' : 'No products selected yet.') + '</div>';
                 }
 
                 cart.forEach(function (item, index) {
@@ -1190,12 +1179,13 @@
                 });
 
                 totalBox.textContent = money(total);
-                if (countPill) countPill.textContent = totalItems + (totalItems === 1 ? ' item' : ' items');
+                document.getElementById('cartSubtotal').textContent = money(total);
+                if (countPill) countPill.textContent = totalItems + (isKhmer ? ' មុខ' : (totalItems === 1 ? ' item' : ' items'));
                 if (mobCartBadge) {
                     mobCartBadge.textContent = totalItems;
                     mobCartBadge.style.display = totalItems > 0 ? 'inline-block' : 'none';
                 }
-                apply.href = applyBaseUrl + (cart.length ? '?cart=1' : '');
+                if (apply) apply.href = applyBaseUrl + (cart.length ? '?cart=1' : '');
             }
 
             // Add to Cart Buttons
@@ -1205,8 +1195,10 @@
                     var key = String(product.id || product.product_id || product.name);
                     var existing = cart.find(function (item) { return String(item.id || item.product_id || item.name) === key; });
                     if (existing) {
+                        if (existing.qty >= 99) { showCartLimit(isKhmer ? 'អតិបរមា 99 ឯកតាក្នុងមួយទំនិញ។' : 'Maximum 99 units per product.'); return; }
                         existing.qty = Number(existing.qty || 1) + 1;
                     } else {
+                        if (cart.length >= 20) { showCartLimit(isKhmer ? 'អតិបរមា 20 មុខទំនិញខុសៗគ្នាក្នុងមួយសំណើ។' : 'Maximum 20 different products per request.'); return; }
                         product.qty = 1;
                         cart.push(product);
                     }
@@ -1216,7 +1208,7 @@
                     // Button feedback animation
                     var originalHtml = button.innerHTML;
                     button.style.background = '#16a34a';
-                    button.innerHTML = '✓ Added!';
+                    button.innerHTML = isKhmer ? '✓ បានបញ្ចូល!' : '✓ Added!';
                     setTimeout(function() {
                         button.style.background = '';
                         button.innerHTML = originalHtml;
@@ -1225,12 +1217,13 @@
             });
 
             // Cart Quantity Adjustment
-            itemsBox.addEventListener('click', function (event) {
+            if (itemsBox) itemsBox.addEventListener('click', function (event) {
                 var button = event.target.closest('button[data-action]');
                 if (!button) return;
                 var index = Number(button.getAttribute('data-index'));
                 if (!cart[index]) return;
                 if (button.getAttribute('data-action') === 'plus') {
+                    if (cart[index].qty >= 99) { showCartLimit(isKhmer ? 'អតិបរមា 99 ឯកតាក្នុងមួយទំនិញ។' : 'Maximum 99 units per product.'); return; }
                     cart[index].qty = Number(cart[index].qty || 1) + 1;
                 } else {
                     cart[index].qty = Number(cart[index].qty || 1) - 1;
@@ -1241,7 +1234,73 @@
             });
 
             load();
+            save();
             renderCart();
+
+            function showCartLimit(message) {
+                var notice = document.getElementById('cartLimitMessage');
+                if (notice) { notice.textContent = message; notice.hidden = false; }
+            }
+            var assessmentProducts = @json($products ?? []);
+            var assessmentSelect = document.getElementById('assessmentProduct');
+            var assessmentMonths = document.getElementById('assessmentMonths');
+            var assessmentDown = document.getElementById('assessmentDownPayment');
+            function updateAssessment() {
+                if (!assessmentSelect) return;
+                var product = assessmentProducts[Number(assessmentSelect.value)];
+                var price = Number(product.price || 0);
+                assessmentDown.max = price;
+                document.getElementById('assessmentPrice').value = money(price);
+                var valid = assessmentMonths.checkValidity() && assessmentDown.checkValidity();
+                document.getElementById('assessmentMonthly').textContent = valid ? money((price - Number(assessmentDown.value)) / Number(assessmentMonths.value)) + (isKhmer ? ' / ខែ' : ' / mo') : '--';
+            }
+            if (assessmentSelect) {
+                [assessmentSelect, assessmentMonths, assessmentDown].forEach(function (input) { input.addEventListener('input', updateAssessment); });
+                var configure = document.getElementById('assessmentApply');
+                if (configure) configure.addEventListener('click', function () {
+                    if (!assessmentMonths.reportValidity() || !assessmentDown.reportValidity()) return;
+                    window.openInstallmentRequest([Object.assign({}, assessmentProducts[Number(assessmentSelect.value)], {qty:1})], false, {months:assessmentMonths.value, downPayment:assessmentDown.value});
+                });
+                updateAssessment();
+            }
+            var privacyOpen = document.getElementById('privacyOpen');
+            if (privacyOpen) privacyOpen.addEventListener('click', function () { document.getElementById('privacyModal').showModal(); });
+
+            var registrationPath = new URL(@json(route('loan-management.public.register')), window.location.href).pathname;
+            document.addEventListener('click', function (event) {
+                var link = event.target.closest('a[href]');
+                if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                var url = new URL(link.href, window.location.href);
+                if (url.origin !== window.location.origin || url.pathname !== registrationPath) return;
+                event.preventDefault();
+                closeMenu();
+                var product = link.getAttribute('data-installment-product');
+                window.openInstallmentRequest(product ? [Object.assign(JSON.parse(product), {qty: 1})] : cart, !product);
+            });
+            document.addEventListener('installment-request-submitted', function (event) {
+                if (event.detail.clearCart) {
+                    cart = [];
+                    save();
+                    renderCart();
+                }
+            });
+            var requestParams = new URLSearchParams(window.location.search);
+            if (requestParams.get('apply') === '1' || @json((bool) old('installment_request'))) {
+                var initialProducts = @json($products ?? []);
+                var requestedProduct = initialProducts.find(function (product) { return String(product.id) === requestParams.get('product_id'); });
+                var oldItems = @json(old('installment_items'));
+                var requestedItems = requestedProduct ? [Object.assign({}, requestedProduct, {qty: 1})] : cart;
+                if (oldItems) {
+                    try {
+                        var parsedItems = JSON.parse(oldItems);
+                        if (Array.isArray(parsedItems)) requestedItems = parsedItems.map(function (item) {
+                            var product = initialProducts.find(function (product) { return Number(product.id) === Number(item.id) && Number(product.variation_id || 0) === Number(item.variation_id || 0); });
+                            return Object.assign({}, product || item, {qty:item.qty});
+                        });
+                    } catch (error) {}
+                }
+                window.openInstallmentRequest(requestedItems, !requestedProduct);
+            }
 
             var sectionLinks = Array.from(document.querySelectorAll('[data-section-link]'));
             var trackedSections = sectionLinks
@@ -1253,23 +1312,63 @@
 
             function setActiveSection(id) {
                 sectionLinks.forEach(function (link) {
-                    link.classList.toggle('active', link.getAttribute('data-section-link') === id);
+                    var active = link.getAttribute('data-section-link') === id;
+                    link.classList.toggle('active', active);
+                    if (active) link.setAttribute('aria-current', 'location');
+                    else link.removeAttribute('aria-current');
                 });
             }
 
             if (trackedSections.length) {
-                window.addEventListener('scroll', function () {
-                    var activeId = trackedSections[0].id;
-                    var offset = 130;
-
-                    trackedSections.forEach(function (item) {
-                        if (item.section.getBoundingClientRect().top <= offset) {
-                            activeId = item.id;
-                        }
+                // Nested sticky panels are navigation targets, not page-section boundaries.
+                var pageSections = trackedSections.filter(function (item) {
+                    return !trackedSections.some(function (other) {
+                        return other !== item && other.section.contains(item.section);
                     });
+                }).sort(function (a, b) {
+                    return a.section.compareDocumentPosition(b.section) & 4 ? -1 : 1;
+                });
+                var selectedTarget = null;
+                var header = document.querySelector('.site-nav');
 
+                function updateActiveSection() {
+                    if (selectedTarget) {
+                        setActiveSection(selectedTarget);
+                        return;
+                    }
+                    var activeId = pageSections[0].id;
+                    var offset = header.getBoundingClientRect().height + 14;
+                    pageSections.forEach(function (item) {
+                        if (item.section.getBoundingClientRect().top <= offset) activeId = item.id;
+                    });
                     setActiveSection(activeId);
+                }
+
+                function selectTarget(hash) {
+                    var item = trackedSections.find(function (item) { return '#' + item.id === hash; });
+                    selectedTarget = item ? item.id : null;
+                    updateActiveSection();
+                }
+
+                document.querySelector('.public-shell').addEventListener('click', function (event) {
+                    var link = event.target.closest('a[href^="#"]');
+                    if (link && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) selectTarget(link.getAttribute('href'));
+                });
+                window.addEventListener('hashchange', function () { selectTarget(window.location.hash); });
+                window.addEventListener('scroll', updateActiveSection, { passive: true });
+                ['wheel', 'touchmove'].forEach(function (type) {
+                    window.addEventListener(type, function () { selectedTarget = null; }, { passive: true });
+                });
+                window.addEventListener('keydown', function (event) {
+                    if (event.target.closest('input, textarea, select, button, [contenteditable]')) return;
+                    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) selectedTarget = null;
+                });
+                window.addEventListener('resize', function () {
+                    document.documentElement.style.scrollPaddingTop = (header.getBoundingClientRect().height + 12) + 'px';
+                    updateActiveSection();
                 }, { passive: true });
+                document.documentElement.style.scrollPaddingTop = (header.getBoundingClientRect().height + 12) + 'px';
+                selectTarget(window.location.hash);
             }
 
             // Category & Search Engine
@@ -1294,9 +1393,10 @@
                     var cName = (card.getAttribute('data-name') || '').toLowerCase();
                     var cSku = (card.getAttribute('data-sku') || '').toLowerCase();
                     var cBrand = (card.getAttribute('data-brand') || '').toLowerCase();
+                    var cModel = (card.getAttribute('data-model') || '').toLowerCase();
 
                     var matchesCat = (currentCategory === 'all' || cCat === currentCategory);
-                    var matchesSearch = (query === '' || cName.includes(query) || cSku.includes(query) || cBrand.includes(query) || cCat.includes(query));
+                    var matchesSearch = (query === '' || cName.includes(query) || cSku.includes(query) || cBrand.includes(query) || cModel.includes(query) || cCat.includes(query));
 
                     if (matchesCat && matchesSearch) {
                         card.style.display = 'flex';
@@ -1342,6 +1442,7 @@
                     else c.classList.remove('active');
                 });
                 if (sortSelect) sortSelect.value = 'default';
+                if (sortSelect) sortSelect.dispatchEvent(new Event('change'));
                 applyFilter();
             };
 
@@ -1396,11 +1497,62 @@
                         if (custWrapper) custWrapper.classList.remove('open');
                     } else if (!admWrapper.contains(e.target)) {
                         admWrapper.classList.remove('open');
-                        admToggle.setAttribute('aria-expanded', 'false');
+                        if (admToggle) admToggle.setAttribute('aria-expanded', 'false');
                     }
                 }
             });
+
+            // Footer Accordion, Back To Top And Live Year
+            (function () {
+                var footer = document.getElementById('publicFooter');
+                var topBtn = document.getElementById('backToTopBtn');
+                var accordionBreakpoint = window.matchMedia('(max-width: 700px)');
+
+                function syncTopButton() {
+                    if (topBtn) topBtn.classList.toggle('is-visible', window.pageYOffset > 420);
+                }
+
+                if (topBtn) {
+                    topBtn.addEventListener('click', function () {
+                        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                        window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+                    });
+                    window.addEventListener('scroll', syncTopButton, { passive: true });
+                    syncTopButton();
+                }
+
+                if (!footer) return;
+
+                var toggles = Array.from(footer.querySelectorAll('.footer-group-toggle'));
+
+                function setGroupState(group, toggle, collapsed) {
+                    group.classList.toggle('is-collapsed', collapsed);
+                    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                }
+
+                toggles.forEach(function (toggle) {
+                    toggle.addEventListener('click', function () {
+                        var group = toggle.closest('.footer-group');
+                        setGroupState(group, toggle, !group.classList.contains('is-collapsed'));
+                    });
+                });
+
+                function applyLayout() {
+                    var collapsed = accordionBreakpoint.matches;
+                    toggles.forEach(function (toggle) {
+                        setGroupState(toggle.closest('.footer-group'), toggle, collapsed);
+                    });
+                }
+
+                applyLayout();
+                if (typeof accordionBreakpoint.addEventListener === 'function') {
+                    accordionBreakpoint.addEventListener('change', applyLayout);
+                } else if (typeof accordionBreakpoint.addListener === 'function') {
+                    accordionBreakpoint.addListener(applyLayout);
+                }
+            })();
         })();
     </script>
+    @include('loanmanagement::layouts.partials.alert_dialog')
 </body>
 </html>

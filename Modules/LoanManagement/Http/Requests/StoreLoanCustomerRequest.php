@@ -51,10 +51,10 @@ class StoreLoanCustomerRequest extends FormRequest
             'id_back_file_id' => 'nullable|integer',
             'blacklist_status' => 'nullable|boolean',
             'blacklist_reason' => 'nullable|string|max:1000',
-            'note' => 'nullable|string|max:5000',
+            'note' => 'nullable|string|max:10000',
             'allow_gps_tracking' => 'nullable|boolean',
             'gps_tracking_note' => 'nullable|string|max:1000',
-            'status' => 'nullable|in:active,inactive',
+            'status' => 'nullable|in:active,inactive,pending',
             'create_mode' => 'nullable|in:new,clone',
         ];
     }

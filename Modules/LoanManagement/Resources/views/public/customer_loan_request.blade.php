@@ -425,6 +425,11 @@
         .doc-label { font-size: 12px; font-weight: 800; color: #334155; display: block; }
         .doc-sub { font-size: 11px; color: #94a3b8; display: block; margin-top: 2px; }
         .doc-preview { display: none; width: 100%; height: 80px; object-fit: cover; border-radius: 6px; margin-top: 6px; }
+        .doc-upload-grid .md-doc-slot { text-align: center; transition: all .15s ease; }
+        .doc-upload-grid .md-doc-slot:hover { border-color: var(--primary); background: var(--primary-light); }
+        .doc-upload-grid .md-doc-slot:hover .doc-icon { background: var(--primary); color: #fff; }
+        .doc-upload-grid .md-doc-slot .md-doc-queue,
+        .doc-upload-grid .md-doc-slot .md-doc-add { text-align: left; }
 
         /* Sticky Summary Panel */
         .sticky-summary {
@@ -799,38 +804,31 @@
                         </div>
                         <div class="card-body">
                             <div class="doc-upload-grid">
-                                <label class="doc-dropzone" id="dropIdFront">
-                                    <input type="file" name="id_card_front" accept="image/*,application/pdf" class="doc-file-input" data-preview="previewIdFront">
-                                    <div class="doc-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
-                                    <span class="doc-label">National ID (Front)</span>
-                                    <span class="doc-sub">Click to select photo</span>
-                                    <img src="" class="doc-preview" id="previewIdFront" alt="ID Front Preview">
-                                </label>
-
-                                <label class="doc-dropzone" id="dropIdBack">
-                                    <input type="file" name="id_card_back" accept="image/*,application/pdf" class="doc-file-input" data-preview="previewIdBack">
-                                    <div class="doc-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
-                                    <span class="doc-label">National ID (Back)</span>
-                                    <span class="doc-sub">Click to select photo</span>
-                                    <img src="" class="doc-preview" id="previewIdBack" alt="ID Back Preview">
-                                </label>
-
-                                <label class="doc-dropzone" id="dropIncome">
-                                    <input type="file" name="income_proof" accept="image/*,application/pdf" class="doc-file-input" data-preview="previewIncome">
-                                    <div class="doc-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-                                    <span class="doc-label">Income Proof / Pay Slip</span>
-                                    <span class="doc-sub">Work ID or salary proof</span>
-                                    <img src="" class="doc-preview" id="previewIncome" alt="Income Proof Preview">
-                                </label>
-
-                                <label class="doc-dropzone" id="dropCollateral">
-                                    <input type="file" name="collateral_photo" accept="image/*,application/pdf" class="doc-file-input" data-preview="previewCollateral">
-                                    <div class="doc-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><circle cx="12" cy="13" r="3"/></svg></div>
-                                    <span class="doc-label">Product / Receipt Photo</span>
-                                    <span class="doc-sub">Optional collateral photo</span>
-                                    <img src="" class="doc-preview" id="previewCollateral" alt="Collateral Preview">
-                                </label>
-                            </div>
+                            @php
+                                $mdSlots = [
+                                    ['name' => 'id_card_front', 'label' => 'National ID (Front)', 'sub' => 'Click to select photo', 'icon' => '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>'],
+                                    ['name' => 'id_card_back', 'label' => 'National ID (Back)', 'sub' => 'Click to select photo', 'icon' => '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>'],
+                                    ['name' => 'income_proof', 'label' => 'Income Proof / Pay Slip', 'sub' => 'Work ID or salary proof', 'icon' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'],
+                                    ['name' => 'collateral_photo', 'label' => 'Product / Receipt Photo', 'sub' => 'Optional collateral photo', 'icon' => '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><circle cx="12" cy="13" r="3"/>'],
+                                ];
+                            @endphp
+                            @foreach ($mdSlots as $mdSlot)
+                                <div class="md-doc-slot" data-md-slot data-md-max="8">
+                                    <input type="file" name="{{ $mdSlot['name'] }}[]" multiple accept="image/*,application/pdf" data-md-input>
+                                    <span class="md-doc-count" data-md-count>0</span>
+                                    <div class="doc-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">{!! $mdSlot['icon'] !!}</svg></div>
+                                    <span class="doc-label">{{ $mdSlot['label'] }}</span>
+                                    <span class="doc-sub">{{ $mdSlot['sub'] }}</span>
+                                    <div class="md-doc-queue" data-md-queue></div>
+                                    <button type="button" class="md-doc-add" data-md-add><i class="fa fa-plus"></i> Add more files</button>
+                                </div>
+                            @endforeach
+                        </div>
+                        <p style="margin-top: 12px; font-size: 11px; color: var(--muted);">
+                            You can attach up to 8 files per section (JPEG, PNG, WebP or PDF, max 10 MB each).
+                            Images can be cropped before upload, or you can keep the untouched original.
+                        </p>
+                        @include('loanmanagement::partials.multi_doc_upload')
                         </div>
                     </div>
                 </div>
@@ -1224,27 +1222,6 @@
             frequencySelect.addEventListener('change', recalculate);
             firstDueDateInput.addEventListener('change', recalculate);
 
-            // Document Upload Previews
-            document.querySelectorAll('.doc-file-input').forEach(function (input) {
-                input.addEventListener('change', function () {
-                    var previewId = input.getAttribute('data-preview');
-                    var previewEl = document.getElementById(previewId);
-                    if (input.files && input.files[0] && previewEl) {
-                        var file = input.files[0];
-                        if (file.type.startsWith('image/')) {
-                            var reader = new FileReader();
-                            reader.onload = function (e) {
-                                previewEl.src = e.target.result;
-                                previewEl.style.display = 'block';
-                            };
-                            reader.readAsDataURL(file);
-                        } else {
-                            previewEl.style.display = 'none';
-                        }
-                    }
-                });
-            });
-
             // Product Catalog Modal
             var catalogModal = document.getElementById('catalogModal');
             var btnOpenCatalogModal = document.getElementById('btnOpenCatalogModal');
@@ -1312,8 +1289,9 @@
                 });
             }
 
-            // Form Submit: Clear cart on successful dispatch
+            // Form Submit: sync cropped/original files, then clear cart
             document.getElementById('loanRequestForm').addEventListener('submit', function () {
+                if (window.MDUpload) { window.MDUpload.syncAll(); }
                 localStorage.removeItem(cartKey);
             });
 

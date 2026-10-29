@@ -1702,6 +1702,8 @@
             width: calc(100% - 24px);
         }
     }
+    .tg-live-link { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #c7d2fe; border-radius:8px; background:#eef2ff; color:#4338ca; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
+    .tg-live-link:hover, .tg-live-link:focus { background:#e0e7ff; color:#3730a3; text-decoration:none; }
 </style>
 @endsection
 
@@ -1720,6 +1722,7 @@
                 <h1 class="tg-app-title">Telegram</h1>
             </div>
             <div class="tg-top-actions">
+                <a href="{{ route('loan-management.live-chat') }}" class="tg-live-link" title="Live Chat" aria-label="Open Live Chat"><i class="fa fa-comments" aria-hidden="true"></i> Live Chat</a>
                 <button type="button" class="tg-icon-btn" id="tgListMenuBtn" aria-label="Menu" title="Menu">
                     <i class="fa fa-ellipsis-v"></i>
                 </button>
@@ -1785,7 +1788,7 @@
             <a class="tg-dropdown-item" id="tgActionRefreshAll" href="javascript:void(0)"><i class="fa fa-refresh"></i> Refresh All Chats</a>
             <a class="tg-dropdown-item" id="tgActionManageFoldersDropdown" href="javascript:void(0)"><i class="fa fa-folder-open-o"></i> Manage Chat Folders</a>
             <a class="tg-dropdown-item" id="tgActionNewFolderDropdown" href="javascript:void(0)"><i class="fa fa-plus-circle"></i> Create New Folder</a>
-            <a class="tg-dropdown-item" href="{{ route('loan-management.settings.telegram') }}"><i class="fa fa-cog"></i> Telegram Settings</a>
+            <a class="tg-dropdown-item" href="{{ route('loan-management.settings.business') }}#tab-notifications"><i class="fa fa-cog"></i> Telegram Settings</a>
         </div>
     </aside>
 

@@ -68,7 +68,7 @@
                         </a>
                     @endif
                 </div>
-                <form method="POST" action="{{ route('loan-management.import.store') }}" enctype="multipart/form-data" id="loan_import_form">
+                <form method="POST" action="{{ route('loan-management.import.upload') }}" enctype="multipart/form-data" id="loan_import_form">
                     @csrf
                     <div class="box-body">
                         <div class="alert alert-info">
