@@ -255,6 +255,63 @@ class TelecomSsdReportTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
     }
 
+    public function test_xlsx_export_contains_all_filtered_rows_with_text_identifiers_and_numeric_prices()
+    {
+        $this->allowReport();
+        config(['excel.temporary_files.local_path' => sys_get_temp_dir() . '/telecom-ssd-excel-tests']);
+        DB::table('transactions')->where('id', 2)->update(['location_id' => 1]);
+        DB::table('purchase_lines')->where('id', 1)->update(['qa_number' => '00123', 'model_number' => '=1+1']);
+        $request = $this->reportRequest(['export' => 'xlsx', 'length' => 1]);
+        $response = (new TelecomSsdReportController)->index($request, new TelecomSsdReport);
+        $path = $response->getFile()->getPathname();
+        try {
+            $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $sheet = $book->getActiveSheet();
+            $this->assertSame(4, $sheet->getHighestRow());
+            $this->assertSame(TelecomSsdReport::KHMER_HEADINGS, $sheet->rangeToArray('A1:M1')[0]);
+            $this->assertSame(TelecomSsdReport::HEADINGS, $sheet->rangeToArray('A2:M2')[0]);
+            $this->assertSame('dotted', $sheet->getStyle('B3')->getBorders()->getBottom()->getBorderStyle());
+            $this->assertSame('thin', $sheet->getStyle('B1')->getBorders()->getRight()->getBorderStyle());
+            $this->assertTrue($sheet->getStyle('A2')->getFont()->getBold());
+            $this->assertSame('Khmer OS Battambang', $sheet->getStyle('A1')->getFont()->getName());
+            $this->assertSame('landscape', $sheet->getPageSetup()->getOrientation());
+            $this->assertSame('A3', $sheet->getFreezePane());
+            $this->assertSame('00123', $sheet->getCell('D4')->getValue());
+            $this->assertSame('s', $sheet->getCell('D4')->getDataType());
+            $this->assertSame('=1+1', $sheet->getCell('C4')->getValue());
+            $this->assertSame('s', $sheet->getCell('C4')->getDataType());
+            $this->assertEquals(200, $sheet->getCell('J4')->getValue());
+            $this->assertSame('n', $sheet->getCell('J4')->getDataType());
+            $book->disconnectWorksheets();
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function test_print_export_contains_all_filtered_rows_in_sorted_order_and_escapes_text()
+    {
+        $this->allowReport();
+        DB::table('transactions')->where('id', 2)->update(['location_id' => 1]);
+        DB::table('transactions')->where('id', 1)->update(['additional_notes' => '<script>unsafe()</script>']);
+        $request = $this->reportRequest(['export' => 'print', 'length' => 1, 'order' => [['column' => 2, 'dir' => 'desc']]]);
+        $view = (new TelecomSsdReportController)->index($request, new TelecomSsdReport);
+        $this->assertSame('report.telecom_ssd_print', $view->name());
+        $data = $view->getData();
+        $rows = iterator_to_array($data['rows']);
+        $this->assertCount(2, $rows);
+        $this->assertSame('LOT-MODEL', $rows[0]->model_number);
+        // Render the standalone print view without unrelated module view composers.
+        request()->headers->set('X-Requested-With', 'XMLHttpRequest');
+        Auth::shouldReceive('check')->andReturn(false);
+        $data['rows'] = $rows;
+        $html = view('report.telecom_ssd_print', $data)->render();
+        foreach (array_merge(TelecomSsdReport::KHMER_HEADINGS, TelecomSsdReport::HEADINGS) as $heading) {
+            $this->assertStringContainsString(e($heading), $html);
+        }
+        $this->assertStringContainsString('&lt;script&gt;unsafe()', $html);
+        $this->assertStringNotContainsString('<script>unsafe()', $html);
+    }
+
     public function test_report_denies_users_without_report_permission()
     {
         Auth::shouldReceive('user')->andReturn(new class { public function can($permission) { return false; } });

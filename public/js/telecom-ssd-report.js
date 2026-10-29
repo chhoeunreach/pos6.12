@@ -7,7 +7,7 @@ $(function() {
     var $startDate = $('#telecom_ssd_start_date');
     var $endDate = $('#telecom_ssd_end_date');
 
-    function updateExportLink() {
+    function exportUrl(format) {
         var exportFilters = filters.concat([{name: 'search_text', value: table ? table.search() : ($table.data('initial-search') || '')}]);
         if (table) {
             table.order().forEach(function(order, index) {
@@ -15,8 +15,26 @@ $(function() {
                 exportFilters.push({name: 'order[' + index + '][dir]', value: order[1]});
             });
         }
-        $('#telecom_ssd_export').attr('href', $table.data('url') + '?' + $.param(exportFilters) + '&export=csv');
+        return $table.data('url') + '?' + $.param(exportFilters) + '&export=' + format;
     }
+
+    function updateExportLink() {
+        $('#telecom_ssd_export').attr('href', exportUrl('csv'));
+    }
+
+    var reportButtons = $.extend(true, [], $.fn.dataTable.defaults.buttons || []);
+    reportButtons.forEach(function(button) {
+        if (button.extend === 'excel' || button.extend === 'print') {
+            var format = button.extend === 'excel' ? 'xlsx' : 'print';
+            button.action = function() {
+                if (format === 'print') {
+                    window.open(exportUrl(format), '_blank', 'noopener');
+                } else {
+                    window.location.assign(exportUrl(format));
+                }
+            };
+        }
+    });
 
     function numberCell(value, type) {
         return type === 'display' ? __currency_trans_from_en(parseFloat(value) || 0, false, false, __quantity_precision, true) : value;
@@ -34,6 +52,7 @@ $(function() {
         searchDelay: 350,
         search: {search: $table.data('initial-search') || ''},
         fixedHeader: false,
+        buttons: reportButtons,
         columnDefs: [{targets: '_all', searchable: false}],
         ordering: true,
         order: [[10, 'desc']],

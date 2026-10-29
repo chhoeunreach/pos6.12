@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class LoanPaymentController extends Controller
 {
@@ -149,9 +150,10 @@ class LoanPaymentController extends Controller
         $schedules = Schema::connection($this->connection)->hasTable('loan_payment_schedules')
             ? DB::connection($this->connection)->table('loan_payment_schedules')->where('loan_id', $row->loan_id)->orderBy('id')->get()
             : collect();
-        $detail = Schema::connection($this->connection)->hasTable('loan_payment_details')
-            ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->first()
-            : null;
+        $details = Schema::connection($this->connection)->hasTable('loan_payment_details')
+            ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->get()
+            : collect();
+        $detail = $details->first();
 
         if ($detail && empty($row->payment_method_snapshot) && empty($row->method) && empty($row->channel)) {
             $row->payment_method_snapshot = $detail->payment_method_snapshot ?? $detail->method ?? null;
@@ -166,6 +168,7 @@ class LoanPaymentController extends Controller
             'loan' => $loan,
             'schedules' => $schedules,
             'methods' => $this->paymentMethodOptions($loan),
+            'details' => $details,
         ]);
     }
 
@@ -233,6 +236,11 @@ class LoanPaymentController extends Controller
             'paid_date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
             'method' => 'nullable|string|max:100',
+            'payment_details' => 'sometimes|required|array|min:1|max:50',
+            'payment_details.*.id' => 'nullable|integer|min:1|distinct',
+            'payment_details.*.method' => 'required|string|max:100',
+            'payment_details.*.amount' => 'required|numeric|min:0.01',
+            'payment_details.*.reference_number' => 'nullable|string|max:191',
             'payment_type' => 'nullable|string|max:50',
             'schedule_id' => 'nullable|integer|min:1',
             'status' => 'nullable|string|max:50',
@@ -242,9 +250,23 @@ class LoanPaymentController extends Controller
 
         $loan = DB::connection($this->connection)->table('loans')->where('id', $row->loan_id)->first();
         $paymentTypes = $this->paymentMethodOptions($loan);
-        $method = trim((string) ($payload['method'] ?? ''));
-        $methodName = $this->paymentMethodName($method, $paymentTypes);
         $newAmount = round((float) $payload['amount'], 2);
+        $details = $payload['payment_details'] ?? [[
+            'method' => $payload['method'] ?? '',
+            'amount' => $newAmount,
+            'reference_number' => $payload['reference_number'] ?? null,
+        ]];
+        $details = array_values($details);
+        $detailTotal = array_sum(array_map(fn ($detail) => (int) round((float) $detail['amount'] * 100), $details));
+        if ($detailTotal !== (int) round($newAmount * 100)) {
+            throw ValidationException::withMessages(['payment_details' => 'Payment method amounts must equal the total amount paid.']);
+        }
+        if (count($details) > 1 && ! Schema::connection($this->connection)->hasTable('loan_payment_details')) {
+            throw ValidationException::withMessages(['payment_details' => 'Payment details storage is unavailable. Please run the loan payment migrations.']);
+        }
+        $methodName = mb_substr(implode(' + ', array_unique(array_map(
+            fn ($detail) => $this->paymentMethodName($detail['method'], $paymentTypes), $details
+        ))), 0, 100);
         $oldAmount = (float) ($row->total_paid_base ?? $row->total_paid ?? $row->amount ?? 0);
         $newScheduleId = ! empty($payload['schedule_id']) ? (int) $payload['schedule_id'] : null;
         $oldScheduleId = ! empty($row->schedule_id) ? (int) $row->schedule_id : null;
@@ -252,12 +274,13 @@ class LoanPaymentController extends Controller
         $paidAt = $paidDate.' '.now()->format('H:i:s');
         $paymentTypeVal = trim((string) ($payload['payment_type'] ?? ($row->payment_type ?? 'monthly'))) ?: 'monthly';
 
-        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $method, $methodName, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt, $paymentTypeVal) {
+        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $details, $loan, $paymentTypes, $methodName, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt, $paymentTypeVal) {
             DB::connection($this->connection)->table('loan_payments')->where('id', $payment)->update($this->safeColumns('loan_payments', [
                 'schedule_id' => $newScheduleId,
                 'payment_type' => $paymentTypeVal,
                 'payment_method_snapshot' => $methodName,
                 'channel' => $methodName,
+                'method' => count($details) === 1 ? $details[0]['method'] : 'multiple',
                 'amount' => $newAmount,
                 'total_paid' => $newAmount,
                 'total_paid_base' => $newAmount,
@@ -270,27 +293,43 @@ class LoanPaymentController extends Controller
             ]));
 
             if (Schema::connection($this->connection)->hasTable('loan_payment_details')) {
-                $detail = DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->first();
-                $detailPayload = $this->safeColumns('loan_payment_details', [
-                    'payment_method_snapshot' => $methodName,
-                    'method' => $method !== '' ? $method : $methodName,
-                    'amount' => $newAmount,
-                    'amount_base' => $newAmount,
-                    'reference_number' => trim((string) ($payload['reference_number'] ?? '')) ?: null,
-                    'transaction_no' => trim((string) ($payload['reference_number'] ?? '')) ?: null,
-                    'note' => trim((string) ($payload['note'] ?? '')) ?: null,
-                    'updated_at' => now(),
-                ]);
-
-                if ($detail) {
-                    DB::connection($this->connection)->table('loan_payment_details')->where('id', $detail->id)->update($detailPayload);
-                } else {
-                    $detailPayload = array_merge($detailPayload, $this->safeColumns('loan_payment_details', [
-                        'payment_id' => $payment,
-                        'created_at' => now(),
-                    ]));
-                    DB::connection($this->connection)->table('loan_payment_details')->insert($detailPayload);
+                $existing = DB::connection($this->connection)->table('loan_payment_details')
+                    ->where('payment_id', $payment)->lockForUpdate()->get()->keyBy('id');
+                $keptIds = [];
+                foreach ($details as $index => $detail) {
+                    $saved = ! empty($detail['id']) ? $existing->get($detail['id']) : null;
+                    if (! empty($detail['id']) && ! $saved) {
+                        throw ValidationException::withMessages(["payment_details.$index.id" => 'This detail does not belong to this payment.']);
+                    }
+                    $baseAmount = round((float) $detail['amount'], 2);
+                    // Keep the original currency and conversion ratio for existing details.
+                    $ratio = $saved && (float) ($saved->amount_base ?? 0) > 0
+                        ? (float) $saved->amount / (float) $saved->amount_base : 1;
+                    $name = $this->paymentMethodName($detail['method'], $paymentTypes);
+                    $detailPayload = $this->safeColumns('loan_payment_details', [
+                        'payment_method_snapshot' => $name,
+                        'payment_method_id' => $saved && ($saved->payment_method_snapshot ?? '') === $name ? ($saved->payment_method_id ?? null) : null,
+                        'method' => $detail['method'] ?: $name,
+                        'currency' => $saved->currency ?? $loan->currency ?? $row->currency ?? 'USD',
+                        'exchange_rate' => $saved->exchange_rate ?? 1,
+                        'amount' => round($baseAmount * $ratio, 4),
+                        'amount_base' => $baseAmount,
+                        'reference_number' => $detail['reference_number'] ?? null,
+                        'transaction_no' => $detail['reference_number'] ?? null,
+                        'note' => $saved->note ?? ($payload['note'] ?? null),
+                        'updated_at' => now(),
+                    ]);
+                    if ($saved) {
+                        DB::connection($this->connection)->table('loan_payment_details')->where('id', $saved->id)->update($detailPayload);
+                        $keptIds[] = $saved->id;
+                    } else {
+                        $keptIds[] = DB::connection($this->connection)->table('loan_payment_details')->insertGetId(array_merge($detailPayload, $this->safeColumns('loan_payment_details', [
+                            'payment_id' => $payment,
+                            'created_at' => now(),
+                        ])));
+                    }
                 }
+                DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->whereNotIn('id', $keptIds)->delete();
             }
 
             if ($oldScheduleId && $oldScheduleId !== $newScheduleId) {

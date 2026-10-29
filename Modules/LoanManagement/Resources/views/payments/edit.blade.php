@@ -458,6 +458,11 @@
 
         <!-- Form Form Area -->
         <form method="POST" action="{{ route('loan-management.payments.update', ['payment' => $payment->id] + ($isEmbeddedModal ? ['_lm_modal' => 1] : [])) }}" id="lmEditPaymentForm">
+            @if($errors->any())
+                <div class="alert alert-danger" role="alert">
+                    @foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach
+                </div>
+            @endif
             @csrf
             @method('PUT')
             @if($isEmbeddedModal)
@@ -529,34 +534,35 @@
                                         </option>
                                     </select>
                                 </div>
-                                <div class="lm-field">
-                                    <label class="lm-label">{{ $lmText('Payment Method', 'វិធីទូទាត់') }} <span class="text-danger">*</span></label>
-                                    <div class="lm-control-with-icon">
-                                        <i class="fa fa-credit-card"></i>
-                                        <select name="method" class="lm-control lm-method-select" required>
-                                            @php
-                                                $currentMethod = old('method', $payment->method ?? $payment->channel ?? $payment->payment_method_snapshot ?? '');
-                                                $currentMethodShown = false;
-                                            @endphp
-                                            @foreach($methods as $key => $label)
-                                                @php
-                                                    $displayMethodLabel = (string) $label;
-                                                    if (str_starts_with($displayMethodLabel, 'lang_v1.') || str_starts_with($displayMethodLabel, 'messages.')) {
-                                                        $rawKey = str_replace(['lang_v1.', 'messages.'], '', $displayMethodLabel);
-                                                        $displayMethodLabel = $rawKey === 'advance' ? $lmText('Advance Payment', 'ប្រាក់បង់មុន / បុរេប្រទាន (Advance)') : ucfirst(str_replace('_', ' ', $rawKey));
-                                                    }
-                                                    $isCurrentMethod = (string) $currentMethod === (string) $key || (string) $currentMethod === (string) $label || (string) $currentMethod === $displayMethodLabel;
-                                                    $currentMethodShown = $currentMethodShown || $isCurrentMethod;
-                                                @endphp
-                                                <option value="{{ $key }}" {{ $isCurrentMethod ? 'selected' : '' }}>{{ $displayMethodLabel }}</option>
-                                            @endforeach
-                                            @if(trim((string) $currentMethod) !== '' && ! $currentMethodShown)
-                                                <option value="{{ $currentMethod }}" selected>{{ $currentMethod }}</option>
-                                            @endif
-                                        </select>
-                                    </div>
-                                </div>
                             </div>
+
+                            @php
+                                $methodRows = old('payment_details', $details->map(fn ($detail) => [
+                                    'id' => $detail->id,
+                                    'method' => $detail->method ?? $detail->payment_method_snapshot ?? '',
+                                    'amount' => $detail->amount_base ?? $detail->amount ?? 0,
+                                    'reference_number' => $detail->reference_number ?? $detail->transaction_no ?? '',
+                                ])->all());
+                                if (empty($methodRows)) {
+                                    $methodRows = [[
+                                        'method' => old('method', $payment->method ?? $payment->channel ?? $payment->payment_method_snapshot ?? 'cash'),
+                                        'amount' => old('amount', $amount),
+                                        'reference_number' => $payment->reference_number ?? '',
+                                    ]];
+                                }
+                            @endphp
+                            <label class="lm-label">{{ $lmText('Payment Methods', 'វិធីទូទាត់') }} ({{ $loanCurrency }})</label>
+                            <p class="text-muted">{{ $lmText('Split the total between Cash, ABA, or other payment methods.', 'បែងចែកទឹកប្រាក់តាមសាច់ប្រាក់ ABA ឬវិធីទូទាត់ផ្សេងទៀត។') }}</p>
+                            <div id="lmPaymentMethodRows">
+                                @foreach($methodRows as $index => $methodRow)
+                                    @include('loanmanagement::payments.partials.method_row')
+                                @endforeach
+                            </div>
+                            <template id="lmPaymentMethodTemplate">
+                                @include('loanmanagement::payments.partials.method_row', ['index' => '__INDEX__', 'methodRow' => ['method' => 'cash', 'amount' => '', 'reference_number' => '']])
+                            </template>
+                            <button type="button" id="lmAddPaymentMethod" class="lm-btn-action lm-btn-cancel"><i class="fa fa-plus"></i> {{ $lmText('Add Payment Method', 'បន្ថែមវិធីទូទាត់') }}</button>
+                            <p id="lmPaymentMethodTotal" aria-live="polite" style="margin-top: 10px;"></p>
 
                             <!-- Schedule & Status -->
                             <div class="lm-form-row">
@@ -745,10 +751,52 @@
         var noteDateTimeBtn = document.getElementById('lmPaymentNoteDateTimeBtn');
         var noteDateTimePicker = document.getElementById('lmPaymentNoteDateTime');
 
+        var methodRows = document.getElementById('lmPaymentMethodRows');
+        var methodTemplate = document.getElementById('lmPaymentMethodTemplate');
+        var methodTotal = document.getElementById('lmPaymentMethodTotal');
+        var nextMethodIndex = {{ max(array_map('intval', array_keys($methodRows))) + 1 }};
+
+        function updateMethodTotal() {
+            var totalCents = 0;
+            methodRows.querySelectorAll('.lm-method-amount').forEach(function (input) {
+                totalCents += Math.round((parseFloat(input.value) || 0) * 100);
+            });
+            var matches = totalCents === Math.round((parseFloat(amtInput.value) || 0) * 100);
+            methodTotal.textContent = @json($lmText('Payment methods total: ', 'សរុបវិធីទូទាត់៖ ')) + (totalCents / 100).toFixed(2) + ' ' + currency;
+            methodTotal.style.color = matches ? '#15803d' : '#dc2626';
+            amtInput.setCustomValidity(matches ? '' : @json($lmText('Payment method amounts must equal the total amount paid.', 'ទឹកប្រាក់តាមវិធីទូទាត់ត្រូវស្មើនឹងទឹកប្រាក់បង់សរុប។')));
+            var removeButtons = methodRows.querySelectorAll('.lm-remove-method');
+            removeButtons.forEach(function (button) { button.disabled = removeButtons.length === 1; });
+        }
+        document.getElementById('lmAddPaymentMethod').addEventListener('click', function () {
+            var content = methodTemplate.innerHTML.replace(/__INDEX__/g, nextMethodIndex++);
+            methodRows.insertAdjacentHTML('beforeend', content);
+            var inputs = methodRows.querySelectorAll('.lm-method-amount');
+            var assigned = 0;
+            for (var i = 0; i < inputs.length - 1; i++) assigned += Math.round((parseFloat(inputs[i].value) || 0) * 100);
+            var remaining = Math.round((parseFloat(amtInput.value) || 0) * 100) - assigned;
+            inputs[inputs.length - 1].value = remaining > 0 ? (remaining / 100).toFixed(2) : '';
+            updateMethodTotal();
+        });
+        methodRows.addEventListener('input', updateMethodTotal);
+        methodRows.addEventListener('click', function (event) {
+            var button = event.target.closest('.lm-remove-method');
+            if (button && methodRows.children.length > 1) {
+                button.closest('.lm-method-row').remove();
+                updateMethodTotal();
+            }
+        });
+        function syncSingleMethodAmount() {
+            var inputs = methodRows.querySelectorAll('.lm-method-amount');
+            if (inputs.length === 1) inputs[0].value = amtInput.value;
+            updateMethodTotal();
+        }
+
         window.setPaymentAmount = function (val) {
             if (amtInput) {
                 amtInput.value = parseFloat(val).toFixed(2);
                 updateForecast();
+                syncSingleMethodAmount();
             }
         };
 
@@ -826,7 +874,7 @@
         }
 
         if (amtInput) {
-            amtInput.addEventListener('input', updateForecast);
+            amtInput.addEventListener('input', function () { updateForecast(); syncSingleMethodAmount(); });
         }
         if (schedSelect) {
             schedSelect.addEventListener('change', updateSchedCard);
@@ -850,6 +898,7 @@
 
         updateForecast();
         updateSchedCard();
+        updateMethodTotal();
     })();
 </script>
 @endsection

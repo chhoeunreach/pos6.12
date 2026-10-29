@@ -6,8 +6,10 @@ use App\Brands;
 use App\BusinessLocation;
 use App\Category;
 use App\Contact;
+use App\Exports\TelecomSsdReportExport;
 use App\Services\Reports\TelecomSsdReport;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
 class TelecomSsdReportController extends Controller
@@ -23,13 +25,29 @@ class TelecomSsdReportController extends Controller
             'brand_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
             'search_text' => 'nullable|string|max:255',
-            'export' => 'nullable|in:csv',
+            'export' => 'nullable|in:csv,xlsx,print',
             'order' => 'sometimes|array|max:13',
             'order.*.column' => 'required|integer|min:0|max:12',
             'order.*.dir' => 'required|in:asc,desc',
         ]);
         $businessId = (int) $request->session()->get('user.business_id');
         $query = $report->query($businessId, auth()->user()->permitted_locations(), $filters);
+
+        if ($request->input('export') === 'xlsx') {
+            return Excel::download(new TelecomSsdReportExport(
+                $report->applyOrder($query, $request->input('order', [])), $report
+            ), 'telecom-ssd-report.xlsx');
+        }
+        if ($request->input('export') === 'print') {
+            return view('report.telecom_ssd_print', [
+                'headings' => TelecomSsdReport::HEADINGS,
+                'khmerHeadings' => TelecomSsdReport::KHMER_HEADINGS,
+                'columnWidths' => TelecomSsdReport::EXPORT_COLUMN_WIDTHS,
+                'rows' => $report->applyOrder($query, $request->input('order', []))->cursor(),
+                'report' => $report,
+                'filters' => $filters,
+            ]);
+        }
 
         if ($request->input('export') === 'csv') {
             return response()->streamDownload(function () use ($query, $report, $request) {

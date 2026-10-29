@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Schema;
 class TelecomSsdReport
 {
     public const HEADINGS = ['N°', 'Product Name', 'Model Number', 'QA Number', 'Trademark', 'Country of Manufacture', 'SIM', 'Quantity', 'Unit Price', 'Total Price', 'Date', 'Client Name', 'Remark'];
+    public const KHMER_HEADINGS = ['ល.រ', 'ឈ្មោះផលិតផល', 'លេខម៉ូដែល', 'លេខ QA', 'ម៉ាក', 'ប្រទេសផលិត', 'ការតភ្ជាប់បណ្ដាញ', 'បរិមាណ', 'តម្លៃឯកតា', 'តម្លៃសរុប', 'កាលបរិច្ឆេទ', 'ឈ្មោះអតិថិជន', 'កំណត់សម្គាល់'];
+    public const EXPORT_COLUMN_WIDTHS = ['A' => 6, 'B' => 25, 'C' => 15, 'D' => 16, 'E' => 16, 'F' => 22, 'G' => 22, 'H' => 12, 'I' => 16, 'J' => 17, 'K' => 16, 'L' => 25, 'M' => 26];
 
     public function query(int $businessId, $permittedLocations, array $filters): Builder
     {
@@ -108,15 +110,18 @@ class TelecomSsdReport
         return $query->orderByDesc('pl.id');
     }
 
+    public function dataRow($row, int $number): array
+    {
+        return [$number, $row->product_name, $row->model_number, $row->qa_number,
+            $row->trademark, $row->country_of_manufacture, $row->sim, (float) $row->quantity,
+            (float) $row->unit_price, (float) $row->total_price, substr($row->transaction_date, 0, 10), $row->client_name, $row->remark];
+    }
+
     public function csvRow($row, int $number): array
     {
-        $values = [$number, $row->product_name, $row->model_number, $row->qa_number,
-            $row->trademark, $row->country_of_manufacture, $row->sim, $row->quantity,
-            $row->unit_price, $row->total_price, substr($row->transaction_date, 0, 10), $row->client_name, $row->remark];
-
         return array_map(function ($value) {
             // Keep user-entered text from being interpreted as spreadsheet formulas.
             return is_string($value) && preg_match('/^[\s]*[=+@-]/u', $value) ? "'" . $value : $value;
-        }, $values);
+        }, $this->dataRow($row, $number));
     }
 }
