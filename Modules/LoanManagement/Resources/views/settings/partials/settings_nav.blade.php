@@ -8,7 +8,7 @@
     $tabUrl = fn ($tabId) => $isSinglePage ? '#' . $tabId : $businessUrl . '#' . $tabId;
 @endphp
 
-<aside class="lm-settings-nav" id="lmSettingsNav">
+<aside aria-label="Settings sections" class="lm-settings-nav" id="lmSettingsNav">
     <div>
         <!-- GROUP 1: CORE CONFIGURATION -->
         <div class="lm-nav-group-title">{{ $lmText('Core Configuration', 'ការកំណត់ស្នូល') }}</div>
@@ -80,7 +80,7 @@
             <i class="fa fa-telegram"></i>
             <span>{{ $lmText('Telegram Alerts', 'ការជូនដំណឹង Telegram') }}</span>
             @if(!empty($settings['telegram_bot_token']))
-                <span class="nav-badge" style="background:#ecfdf5; color:#047857;">ON</span>
+                <span class="nav-badge" style="background:#ecfdf5; color:#047857;">SET</span>
             @endif
         </a>
 
@@ -122,29 +122,37 @@
         <div class="lm-nav-divider"></div>
         <div class="lm-nav-group-title">{{ $lmText('Enterprise Modules', 'ម៉ូឌុលបន្ថែម') }}</div>
 
+        @if(auth()->user()->can('loan_management.settings.view') || auth()->user()->can('loan_management.setting') || auth()->user()->can('loan_management.view'))
         <a href="{{ route('loan-management.locations.index') }}" class="lm-nav-item">
             <i class="fa fa-building"></i>
             <span>{{ $lmText('Branch Locations', 'សាខាប្រតិបត្តិការ') }}</span>
             <i class="fa fa-angle-right" style="margin-left:auto; font-size:12px; opacity:0.5;"></i>
         </a>
+        @endif
 
+        @if(auth()->user()->can('loan_management.setting') || auth()->user()->can('loan_management.view'))
         <a href="{{ route('loan-management.activity-logs.index') }}" class="lm-nav-item">
             <i class="fa fa-history"></i>
             <span>{{ $lmText('Audit Logs & Trail', 'កំណត់ហេតុសវនកម្ម') }}</span>
             <i class="fa fa-angle-right" style="margin-left:auto; font-size:12px; opacity:0.5;"></i>
         </a>
+        @endif
 
+        @if(auth()->user()->can('loan_management.setting'))
         <a href="{{ route('loan-management.system.status') }}" class="lm-nav-item">
             <i class="fa fa-heartbeat"></i>
             <span>{{ $lmText('System Health', 'សុខភាពប្រព័ន្ធ') }}</span>
             <i class="fa fa-angle-right" style="margin-left:auto; font-size:12px; opacity:0.5;"></i>
         </a>
+        @endif
 
+        @if(auth()->user()->can('loan_management.reports.view') || auth()->user()->can('loan_management.view'))
         <a href="{{ route('loan-management.reports.cbc-export') }}" class="lm-nav-item">
             <i class="fa fa-file-excel-o"></i>
             <span>{{ $lmText('CBC Credit Export', 'របាយការណ៍ CBC') }}</span>
             <i class="fa fa-angle-right" style="margin-left:auto; font-size:12px; opacity:0.5;"></i>
         </a>
+        @endif
     </div>
 
     @if(!empty($settings['system_name']))

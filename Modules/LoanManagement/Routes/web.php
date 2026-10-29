@@ -266,6 +266,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get('/settings/payment-methods', [SettingsController::class, 'paymentMethods'])->name('loan-management.settings.payment-methods');
         });
         Route::middleware('loan.permission:loan_management.setting')->group(function () {
+            Route::post('/settings/telegram/test', [SettingsController::class, 'testTelegram'])->middleware('throttle:10,1')->name('loan-management.settings.telegram.test');
             Route::post('/settings/business', [SettingsController::class, 'updateBusiness'])->name('loan-management.settings.business.update');
             Route::post('/settings/cms', [SettingsController::class, 'updateCms'])->name('loan-management.settings.cms.update');
             Route::post('/settings/invoice-prefix', fn () => redirect()->route('loan-management.locations.index'))->name('loan-management.settings.invoice-prefix');

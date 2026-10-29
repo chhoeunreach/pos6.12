@@ -2,6 +2,7 @@
 @section('title', 'Business Settings')
 
 @section('loan_css')
+<link rel="stylesheet" href="{{ asset('css/loan-settings.css') }}?v=20261029">
 <style>
     /* ========================================================
        ENTERPRISE UNIFIED SETTINGS HUB - MODERN EXECUTIVE REDESIGN
@@ -819,6 +820,7 @@
 
 @section('content_body')
 @php
+    $canSaveSettings = auth()->user()->can('loan_management.setting');
     $lmIsKhmer = session('user.language', config('app.locale')) === 'km';
     $lmText = fn ($en, $km) => $lmIsKhmer ? $km : $en;
     $themePresets = ['#6366f1', '#2563eb', '#0891b2', '#059669', '#dc2626', '#7c3aed', '#0f172a'];
@@ -847,12 +849,12 @@
     $activeMethodsCount = $paymentMethods->where('is_active', 1)->count();
 @endphp
 
-<div class="lm-settings-wrapper" @if($loginBackgroundUrl) style="--lm-login-background: url('{{ $loginBackgroundUrl }}');" @endif>
+<div class="lm-settings-wrapper" data-can-save="{{ $canSaveSettings ? '1' : '0' }}" @if($loginBackgroundUrl) style="--lm-login-background: url('{{ $loginBackgroundUrl }}');" @endif>
 
     <!-- Top Header -->
     <div class="lm-settings-header">
         <div class="lm-settings-header-left">
-            <h1><i class="fa fa-sliders" style="color:var(--lm-primary); margin-right:8px;"></i> {{ $lmText('System & Business Settings Hub', 'មជ្ឈមណ្ឌលកំណត់ប្រព័ន្ធ និងអាជីវកម្ម') }}</h1>
+            <h1><i class="fa fa-sliders" style="color:var(--lm-primary); margin-right:8px;"></i> {{ $lmText('Business Settings', 'មជ្ឈមណ្ឌលកំណត់ប្រព័ន្ធ និងអាជីវកម្ម') }}</h1>
             <p>{{ $lmText('Unified control center for company profile, loan policies, payment channels, CMS website, and alert gateways.', 'មជ្ឈមណ្ឌលគ្រប់គ្រងព័ត៌មានក្រុមហ៊ុន គោលការណ៍ឥណទាន វិធីបង់ប្រាក់ គេហទំព័រ CMS និងការជូនដំណឹង។') }}</p>
         </div>
         <div class="lm-settings-header-chips">
@@ -860,7 +862,7 @@
             <span class="lm-chip"><i class="fa fa-percent"></i> {{ $currentInterestRate }}% / {{ ucfirst($settings['interest_rate_period'] ?? 'monthly') }}</span>
             <span class="lm-chip"><i class="fa fa-credit-card"></i> {{ $activeMethodsCount }} {{ $lmText('Active Channels', 'វិធីបង់ប្រាក់') }}</span>
             @if(!empty($settings['telegram_bot_token']))
-                <span class="lm-chip lm-chip-success"><i class="fa fa-telegram"></i> Telegram Active</span>
+                <span class="lm-chip lm-chip-success"><i class="fa fa-telegram"></i> Telegram Configured</span>
             @endif
         </div>
     </div>
@@ -868,7 +870,7 @@
     <!-- Real-time Search Box -->
     <div class="lm-settings-searchbar">
         <i class="fa fa-search search-icon"></i>
-        <input type="search" id="businessSettingsSearch" placeholder="{{ $lmText('Search any setting (e.g. interest rate, ABA bank, logo, telegram, penalty, CMS)...', 'ស្វែងរកការកំណត់ (ឧ. អត្រាការប្រាក់, ធនាគារ ABA, រូបសញ្ញា, តេឡេក្រាម, CMS)...') }}" autocomplete="off">
+        <input type="search" id="businessSettingsSearch" aria-label="Search settings" placeholder="{{ $lmText('Search any setting (e.g. interest rate, ABA bank, logo, telegram, penalty, CMS)...', 'ស្វែងរកការកំណត់ (ឧ. អត្រាការប្រាក់, ធនាគារ ABA, រូបសញ្ញា, តេឡេក្រាម, CMS)...') }}" autocomplete="off">
         <button type="button" class="clear-search" id="clearSearchBtn" aria-label="Clear search"><i class="fa fa-times-circle"></i></button>
     </div>
 
@@ -884,16 +886,21 @@
         </div>
     @endif
 
+    <div id="settingsSearchSummary" class="lm-settings-search-summary" role="status" aria-live="polite" hidden></div>
+    @unless($canSaveSettings)
+        <div class="alert alert-info"><i class="fa fa-lock" aria-hidden="true"></i> {{ $lmText('You can view settings. Ask an administrator for permission to save changes.', 'អ្នកអាចមើលការកំណត់។ សូមទាក់ទងអ្នកគ្រប់គ្រងដើម្បីរក្សាទុកការផ្លាស់ប្តូរ។') }}</div>
+    @endunless
     @if($errors->any())
         <div class="alert alert-danger" style="border-radius:10px; margin-bottom:18px;">
-            <i class="fa fa-exclamation-triangle"></i> {{ $errors->first() }}
+            <strong><i class="fa fa-exclamation-triangle"></i> {{ $lmText('Please check the following settings:', 'សូមពិនិត្យការកំណត់ខាងក្រោម៖') }}</strong>
+            <ul id="settingsErrors">@foreach($errors->messages() as $field => $messages)<li><button type="button" class="lm-error-link" data-error-field="{{ $field }}">{{ $messages[0] }}</button></li>@endforeach</ul>
         </div>
     @endif
 
     <form method="POST" action="{{ route('loan-management.settings.business.update') }}" enctype="multipart/form-data" id="businessSettingsForm">
         @csrf
 
-        <input type="hidden" name="active_tab" id="activeTabInput" value="tab-profile">
+        <input type="hidden" name="active_tab" id="activeTabInput" value="{{ old('active_tab', 'tab-profile') }}">
         <!-- Hidden inputs preserving legacy compatibility -->
         <input type="hidden" name="stock_accounting_method" value="{{ $settings['stock_accounting_method'] ?? 'fifo' }}">
         <input type="hidden" name="quantity_precision" value="{{ $settings['quantity_precision'] ?? 2 }}">
@@ -912,6 +919,7 @@
 
             <!-- Main Content Area -->
             <main class="lm-settings-content">
+                <fieldset class="lm-settings-fields" {{ $canSaveSettings ? '' : 'disabled' }}>
 
                 <!-- TAB 1: COMPANY PROFILE -->
                 <div class="lm-tab-pane active" id="tab-profile">
@@ -1396,7 +1404,7 @@
                             @php
                                 $usageRow = $methodUsage->get($method->name, ['payments_count' => 0, 'total_amount' => 0]);
                                 $number = $index + 1;
-                                $isActive = !empty($method->is_active);
+                                $isActive = (bool) old('methods.'.$method->id.'.is_active', $method->is_active);
                                 $code = $method->code ?? '';
                             @endphp
                             <div class="lm-method-card {{ $isActive ? '' : 'inactive' }}" data-search-target>
@@ -1429,17 +1437,17 @@
 
                                 <div style="margin-top:10px;">
                                     <label class="lm-field-label">{{ $lmText('Display Name', 'ឈ្មោះបង្ហាញលើប្រព័ន្ធ') }}</label>
-                                    <input type="text" name="methods[{{ $method->id }}][name]" class="lm-input" value="{{ $method->name }}" maxlength="191" placeholder="e.g. ABA Bank / Cash">
+                                    <input type="text" name="methods[{{ $method->id }}][name]" class="lm-input" value="{{ old('methods.'.$method->id.'.name', $method->name) }}" maxlength="191" {{ ($usageRow['payments_count'] ?? 0) > 0 ? 'readonly' : '' }} placeholder="e.g. ABA Bank / Cash">
                                 </div>
 
                                 <div class="lm-method-row-2">
                                     <div>
                                         <label class="lm-field-label">{{ $lmText('Channel Code', 'កូដសម្គាល់') }}</label>
-                                        <input type="text" name="methods[{{ $method->id }}][code]" class="lm-input" value="{{ $code }}" maxlength="60" placeholder="e.g. aba, cash">
+                                        <input type="text" name="methods[{{ $method->id }}][code]" class="lm-input" value="{{ old('methods.'.$method->id.'.code', $code) }}" maxlength="60" placeholder="e.g. aba, cash">
                                     </div>
                                     <div>
                                         <label class="lm-field-label">{{ $lmText('Sort Order', 'លំដាប់') }}</label>
-                                        <input type="number" name="methods[{{ $method->id }}][sort_order]" class="lm-input" value="{{ $method->sort_order ?? 0 }}" min="0" max="999">
+                                        <input type="number" name="methods[{{ $method->id }}][sort_order]" class="lm-input" value="{{ old('methods.'.$method->id.'.sort_order', $method->sort_order ?? 0) }}" min="0" max="999">
                                     </div>
                                 </div>
 
@@ -1449,7 +1457,7 @@
                                         <strong>{{ number_format($usageRow['payments_count'] ?? 0) }}</strong> {{ $lmText('payments', 'ប្រតិបត្តិការ') }}
                                     </span>
                                     <span>
-                                        <strong>${{ number_format((float) ($usageRow['total_amount'] ?? 0), 2) }}</strong> {{ $lmText('collected', 'ប្រមូលបាន') }}
+                                        <strong>{{ $savedCurrencySymbol }}{{ number_format((float) ($usageRow['total_amount'] ?? 0), (int) $settings['currency_precision']) }}</strong> {{ $lmText('collected', 'ប្រមូលបាន') }}
                                     </span>
                                 </div>
                             </div>
@@ -1476,15 +1484,15 @@
                         <div style="display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr) 100px; gap:14px;">
                             <div>
                                 <label class="lm-field-label">{{ $lmText('Method Name', 'ឈ្មោះវិធីបង់ប្រាក់') }}</label>
-                                <input type="text" name="new_method[name]" class="lm-input" placeholder="e.g. ACLEDA Unity / Wing / Bakong">
+                                <input type="text" name="new_method[name]" value="{{ old('new_method.name') }}" maxlength="191" class="lm-input" placeholder="e.g. ACLEDA Unity / Wing / Bakong">
                             </div>
                             <div>
                                 <label class="lm-field-label">{{ $lmText('System Code', 'កូដប្រព័ន្ធ') }}</label>
-                                <input type="text" name="new_method[code]" class="lm-input" placeholder="e.g. acleda_bank">
+                                <input type="text" name="new_method[code]" value="{{ old('new_method.code') }}" maxlength="60" class="lm-input" placeholder="e.g. acleda_bank">
                             </div>
                             <div>
                                 <label class="lm-field-label">{{ $lmText('Sort Order', 'លំដាប់') }}</label>
-                                <input type="number" name="new_method[sort_order]" class="lm-input" value="{{ $paymentMethods->count() + 1 }}" min="0">
+                                <input type="number" name="new_method[sort_order]" class="lm-input" value="{{ old('new_method.sort_order', $paymentMethods->count() + 1) }}" min="0" max="999">
                             </div>
                         </div>
                     </div>
@@ -1613,10 +1621,17 @@
                             </label>
                             <div class="lm-input-group">
                                 <span class="lm-addon"><i class="fa fa-key"></i></span>
-                                <input type="text" id="telegramBotTokenInput" name="telegram_bot_token" class="lm-input"
-                                       value="{{ old('telegram_bot_token', $settings['telegram_bot_token'] ?? '') }}" maxlength="120" placeholder="123456789:ABCdefGHIjk-lmnOPQrstUVwxyZ">
+                                <input type="password" autocomplete="new-password" spellcheck="false" id="telegramBotTokenInput" name="telegram_bot_token" class="lm-input"
+                                       value="{{ $canSaveSettings ? old('telegram_bot_token', $settings['telegram_bot_token'] ?? '') : '' }}" maxlength="120" placeholder="123456789:ABCdefGHIjk-lmnOPQrstUVwxyZ">
                             </div>
                             <div class="lm-field-hint">{{ $lmText('Created via @BotFather on Telegram.', 'បង្កើតឡើងតាមរយៈ @BotFather ក្នុង Telegram។') }}</div>
+                            @if($canSaveSettings)
+                            <div class="lm-settings-inline-actions">
+                                <button type="button" class="btn btn-default btn-sm" id="toggleTelegramToken" aria-controls="telegramBotTokenInput" aria-pressed="false"><i class="fa fa-eye"></i> {{ $lmText('Show token', 'បង្ហាញ Token') }}</button>
+                                <button type="button" class="btn btn-default btn-sm" id="testTelegramBot" data-url="{{ route('loan-management.settings.telegram.test') }}"><i class="fa fa-plug"></i> {{ $lmText('Check connection', 'ពិនិត្យការតភ្ជាប់') }}</button>
+                            </div>
+                            <div id="telegramTestResult" class="lm-field-hint" role="status" aria-live="polite">{{ $lmText('Checks bot credentials without sending a message. Save to keep changes.', 'ពិនិត្យ Bot ដោយមិនផ្ញើសារ។ រក្សាទុកដើម្បីរក្សាការផ្លាស់ប្តូរ។') }}</div>
+                            @endif
                         </div>
 
                         <div class="lm-field" data-search-target>
@@ -2046,19 +2061,23 @@
                     </div>
                 </div>
 
+                </fieldset>
                 <!-- Sticky Bottom Action Bar -->
                 <div class="lm-sticky-actions">
                     <div class="lm-save-status">
                         <span class="dot"></span>
-                        <span id="saveStatusText">{{ $lmText('Ready to save changes', 'រួចរាល់សម្រាប់ការរក្សាទុក') }}</span>
+                        <span id="saveStatusText" role="status" aria-live="polite">{{ $lmText('Ready to save changes', 'រួចរាល់សម្រាប់ការរក្សាទុក') }}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <a href="{{ route('loan-management.dashboard') }}" class="btn btn-default" style="border-radius:8px; font-weight:700; padding:8px 16px;">
                             {{ $lmText('Cancel', 'បោះបង់') }}
                         </a>
+                        @if($canSaveSettings)
+                        <button type="button" class="btn btn-default" id="resetSettingsBtn"><i class="fa fa-undo"></i> {{ $lmText('Reset changes', 'កំណត់ឡើងវិញ') }}</button>
                         <button type="submit" class="btn btn-primary" id="saveSettingsBtn" style="border-radius:8px; font-weight:800; padding:8px 22px;">
                             <i class="fa fa-save" style="margin-right:6px;"></i> {{ $lmText('Save All Settings', 'រក្សាទុកការកំណត់ទាំងអស់') }}
                         </button>
+                        @endif
                     </div>
                 </div>
 
@@ -2069,416 +2088,5 @@
 @endsection
 
 @section('loan_js')
-<script>
-    (function () {
-        // Tab Switching Mechanism
-        var navItems = document.querySelectorAll('.lm-nav-item[data-tab]');
-        var tabPanes = document.querySelectorAll('.lm-tab-pane');
-        var activeTabInput = document.getElementById('activeTabInput');
-
-        function switchTab(tabId) {
-            navItems.forEach(function (item) {
-                if (item.getAttribute('data-tab') === tabId) {
-                    item.classList.add('active');
-                } else {
-                    item.classList.remove('active');
-                }
-            });
-
-            tabPanes.forEach(function (pane) {
-                if (pane.id === tabId) {
-                    pane.classList.add('active');
-                } else {
-                    pane.classList.remove('active');
-                }
-            });
-
-            if (activeTabInput) {
-                activeTabInput.value = tabId;
-            }
-
-            if (history.replaceState) {
-                history.replaceState(null, null, '#' + tabId);
-            }
-        }
-
-        navItems.forEach(function (item) {
-            item.addEventListener('click', function (e) {
-                var tabId = this.getAttribute('data-tab');
-                if (tabId && document.getElementById(tabId)) {
-                    e.preventDefault();
-                    switchTab(tabId);
-                }
-            });
-        });
-
-        // Restore hash on load
-        var currentHash = window.location.hash ? window.location.hash.replace('#', '') : '';
-        if (currentHash && document.getElementById(currentHash)) {
-            switchTab(currentHash);
-        }
-
-        // Live Preview Bindings
-        var businessInput = document.getElementById('businessNameInput');
-        var systemInput = document.getElementById('systemNameInput');
-        var subtitleInput = document.getElementById('systemSubtitleInput');
-        var defaultInterestInput = document.getElementById('defaultInterestRateInput');
-        var hiddenProfitPercent = document.getElementById('hiddenDefaultProfitPercent');
-        var colorInput = document.getElementById('themeColorInput');
-        var colorPicker = document.getElementById('themeColorPicker');
-        var logoInput = document.getElementById('logoInput');
-        var stampInput = document.getElementById('stampInput');
-        var loginBackgroundInput = document.getElementById('loginBackgroundInput');
-        var invoiceTemplateInput = document.getElementById('invoiceMessageTemplateInput');
-        var invoiceTemplatePreview = document.getElementById('invoiceMessageTemplatePreview');
-        var currencyCodeInput = document.getElementById('currencyCodeInput');
-        var currencySymbolInput = document.getElementById('currencySymbolInput');
-        var penaltyTypeInput = document.getElementById('penaltyTypeInput');
-        var penaltyUnitLabel = document.getElementById('penaltyUnitLabel');
-
-        var previewBusiness = document.getElementById('previewBusinessName');
-        var previewSystem = document.getElementById('previewSystemName');
-        var backgroundPreviewBusinessName = document.getElementById('backgroundPreviewBusinessName');
-        var logoPreviewBox = document.getElementById('logoPreviewBox');
-        var sidebarLogoPreview = document.getElementById('sidebarLogoPreview');
-        var stampPreviewBox = document.getElementById('stampPreviewBox');
-        var loginBackgroundPreview = document.getElementById('loginBackgroundPreview');
-
-        function hexToRgb(color) {
-            var normalized = color.replace('#', '');
-            return [
-                parseInt(normalized.substring(0, 2), 16),
-                parseInt(normalized.substring(2, 4), 16),
-                parseInt(normalized.substring(4, 6), 16)
-            ];
-        }
-
-        function rgbToHex(r, g, b) {
-            return '#' + [r, g, b].map(function (value) {
-                var hex = Math.max(0, Math.min(255, Math.round(value))).toString(16);
-                return hex.length === 1 ? '0' + hex : hex;
-            }).join('');
-        }
-
-        function mixWithWhite(rgb, ratio) {
-            return rgbToHex(
-                rgb[0] * (1 - ratio) + 255 * ratio,
-                rgb[1] * (1 - ratio) + 255 * ratio,
-                rgb[2] * (1 - ratio) + 255 * ratio
-            );
-        }
-
-        function setPreviewColor(color) {
-            if (!/^#[0-9A-Fa-f]{6}$/.test(color || '')) {
-                return;
-            }
-            var rgb = hexToRgb(color);
-            document.documentElement.style.setProperty('--lm-primary', color);
-            document.documentElement.style.setProperty('--lm-primary-dark', rgbToHex(rgb[0] * .82, rgb[1] * .82, rgb[2] * .82));
-            document.documentElement.style.setProperty('--lm-primary-light', mixWithWhite(rgb, .25));
-            document.documentElement.style.setProperty('--lm-primary-50', mixWithWhite(rgb, .92));
-            document.documentElement.style.setProperty('--lm-primary-100', mixWithWhite(rgb, .84));
-            document.documentElement.style.setProperty('--lm-primary-200', mixWithWhite(rgb, .70));
-            document.documentElement.style.setProperty('--lm-primary-rgb', rgb.join(', '));
-            document.documentElement.style.setProperty('--lm-sidebar-active', color);
-        }
-
-        function syncPreview() {
-            var bName = (businessInput && businessInput.value) || 'Loan Management';
-            var sName = (systemInput && systemInput.value) || 'Loan Management';
-
-            if (previewBusiness) previewBusiness.textContent = bName;
-            if (previewSystem) previewSystem.textContent = sName;
-            if (backgroundPreviewBusinessName) backgroundPreviewBusinessName.textContent = bName;
-
-            if (defaultInterestInput && hiddenProfitPercent) {
-                hiddenProfitPercent.value = defaultInterestInput.value;
-            }
-
-            if (invoiceTemplatePreview && invoiceTemplateInput) {
-                invoiceTemplatePreview.textContent = (invoiceTemplateInput.value || '')
-                    .split('{Customer Name}').join('Sok San (អតិថិជនគំរូ)')
-                    .split('{Business Name}').join(bName);
-            }
-
-            if (colorInput) {
-                setPreviewColor(colorInput.value);
-            }
-        }
-
-        [businessInput, systemInput, subtitleInput, defaultInterestInput, colorInput, invoiceTemplateInput].forEach(function (input) {
-            if (input) {
-                input.addEventListener('input', syncPreview);
-            }
-        });
-
-        // Insert tags into receipt template
-        document.querySelectorAll('.insert-tag').forEach(function (button) {
-            button.addEventListener('click', function () {
-                var tag = this.getAttribute('data-tag');
-                if (invoiceTemplateInput) {
-                    var start = invoiceTemplateInput.selectionStart;
-                    var end = invoiceTemplateInput.selectionEnd;
-                    var text = invoiceTemplateInput.value;
-                    invoiceTemplateInput.value = text.substring(0, start) + tag + text.substring(end);
-                    invoiceTemplateInput.focus();
-                    invoiceTemplateInput.selectionStart = invoiceTemplateInput.selectionEnd = start + tag.length;
-                    syncPreview();
-                }
-            });
-        });
-
-        // Penalty type change handler
-        if (penaltyTypeInput && penaltyUnitLabel) {
-            penaltyTypeInput.addEventListener('change', function () {
-                penaltyUnitLabel.textContent = this.value === 'percentage' ? '% / day' : 'Fixed Fee (' + (currencySymbolInput ? currencySymbolInput.value : '$') + ')';
-            });
-        }
-
-        // Currency select
-        if (currencyCodeInput && currencySymbolInput) {
-            currencyCodeInput.addEventListener('change', function () {
-                var selected = currencyCodeInput.options[currencyCodeInput.selectedIndex];
-                if (selected && selected.getAttribute('data-symbol')) {
-                    currencySymbolInput.value = selected.getAttribute('data-symbol');
-                    if (penaltyTypeInput && penaltyTypeInput.value === 'fixed') {
-                        penaltyUnitLabel.textContent = 'Fixed Fee (' + currencySymbolInput.value + ')';
-                    }
-                }
-            });
-        }
-
-        // Color swatches & picker
-        if (colorPicker && colorInput) {
-            colorPicker.addEventListener('input', function () {
-                colorInput.value = colorPicker.value;
-                syncPreview();
-            });
-            colorInput.addEventListener('input', function () {
-                if (/^#[0-9A-Fa-f]{6}$/.test(colorInput.value)) {
-                    colorPicker.value = colorInput.value;
-                }
-            });
-        }
-        document.querySelectorAll('.lm-swatch-circle').forEach(function (button) {
-            button.addEventListener('click', function () {
-                var col = this.getAttribute('data-color');
-                if (colorInput) colorInput.value = col;
-                if (colorPicker) colorPicker.value = col;
-                syncPreview();
-            });
-        });
-
-        // Instant image previews
-        if (logoInput && logoPreviewBox) {
-            logoInput.addEventListener('change', function () {
-                var file = logoInput.files && logoInput.files[0];
-                if (file && file.type.match(/^image\//)) {
-                    var reader = new FileReader();
-                    reader.onload = function (e) {
-                        var img = '<img src="' + e.target.result + '" alt="">';
-                        logoPreviewBox.innerHTML = img;
-                        if (sidebarLogoPreview) sidebarLogoPreview.innerHTML = img;
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        if (stampInput && stampPreviewBox) {
-            stampInput.addEventListener('change', function () {
-                var file = stampInput.files && stampInput.files[0];
-                if (file && file.type.match(/^image\//)) {
-                    var reader = new FileReader();
-                    reader.onload = function (e) {
-                        stampPreviewBox.innerHTML = '<img src="' + e.target.result + '" alt="">';
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        if (loginBackgroundInput && loginBackgroundPreview) {
-            loginBackgroundInput.addEventListener('change', function () {
-                var file = loginBackgroundInput.files && loginBackgroundInput.files[0];
-                if (file && file.type.match(/^image\//)) {
-                    var reader = new FileReader();
-                    reader.onload = function (e) {
-                        loginBackgroundPreview.style.backgroundImage = 'linear-gradient(135deg, rgba(15,23,42,0.7), rgba(99,102,241,0.5)), url("' + e.target.result + '")';
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        // Live Search across all tabs
-        var searchInput = document.getElementById('businessSettingsSearch');
-        var clearBtn = document.getElementById('clearSearchBtn');
-        var searchTargets = document.querySelectorAll('[data-search-target]');
-
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                var query = this.value.trim().toLowerCase();
-                if (clearBtn) {
-                    clearBtn.style.display = query.length > 0 ? 'block' : 'none';
-                }
-
-                if (query.length === 0) {
-                    searchTargets.forEach(function (el) { el.style.display = ''; });
-                    return;
-                }
-
-                var firstFoundTab = null;
-                searchTargets.forEach(function (el) {
-                    var text = el.textContent.toLowerCase();
-                    if (text.indexOf(query) !== -1) {
-                        el.style.display = '';
-                        var parentPane = el.closest('.lm-tab-pane');
-                        if (parentPane && !firstFoundTab) {
-                            firstFoundTab = parentPane.id;
-                        }
-                    } else {
-                        el.style.display = 'none';
-                    }
-                });
-
-                if (firstFoundTab) {
-                    switchTab(firstFoundTab);
-                }
-            });
-
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function () {
-                    searchInput.value = '';
-                    clearBtn.style.display = 'none';
-                    searchTargets.forEach(function (el) { el.style.display = ''; });
-                    searchInput.focus();
-                });
-            }
-        }
-
-        // Form submit visual feedback
-        var form = document.getElementById('businessSettingsForm');
-        var saveBtn = document.getElementById('saveSettingsBtn');
-        if (form && saveBtn) {
-            form.addEventListener('submit', function () {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin" style="margin-right:6px;"></i> Saving...';
-            });
-        }
-
-        // CMS Live Headline Preview in Tab
-        var cmsHInput = document.getElementById('homeHeadlineInput');
-        var cmsSInput = document.getElementById('homeSubtitleInput');
-        var cmsBInput = document.getElementById('homeBodyInput');
-        var cmsPH = document.getElementById('cmsPreviewHeadline');
-        var cmsPS = document.getElementById('cmsPreviewSubtitle');
-        var cmsPB = document.getElementById('cmsPreviewBody');
-
-        function syncCmsPreview() {
-            if (cmsPH && cmsHInput) cmsPH.textContent = cmsHInput.value || '';
-            if (cmsPS && cmsSInput) cmsPS.textContent = cmsSInput.value || '';
-            if (cmsPB && cmsBInput) cmsPB.textContent = cmsBInput.value || '';
-        }
-        [cmsHInput, cmsSInput, cmsBInput].forEach(function(i) {
-            if (i) i.addEventListener('input', syncCmsPreview);
-        });
-
-        var homeHeroInput = document.getElementById('homeHeroInput');
-        var cmsHeroThumbnail = document.getElementById('cmsHeroThumbnail');
-        var cmsPreviewHero = document.getElementById('cmsPreviewHero');
-        if (homeHeroInput) {
-            homeHeroInput.addEventListener('change', function () {
-                var file = homeHeroInput.files && homeHeroInput.files[0];
-                if (file && file.type.match(/^image\//)) {
-                    var reader = new FileReader();
-                    reader.onload = function (e) {
-                        if (cmsHeroThumbnail) cmsHeroThumbnail.src = e.target.result;
-                        if (cmsPreviewHero) cmsPreviewHero.style.setProperty('--lm-hero-preview', 'url("' + e.target.result + '")');
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        // Social Media & Follow Us Live Preview and Verification
-        var socialTitleInput = document.getElementById('socialTitleInput');
-        var socialShowToggle = document.getElementById('socialShowToggle');
-        var socialPreviewTitle = document.getElementById('socialPreviewTitle');
-        var socialPreviewBody = document.getElementById('socialPreviewBody');
-        var socialPreviewEmptyNotice = document.getElementById('socialPreviewEmptyNotice');
-
-        var socialPlatformKeys = [
-            'footer_facebook', 'footer_telegram', 'footer_tiktok', 'footer_instagram',
-            'footer_youtube', 'footer_whatsapp', 'footer_linkedin', 'footer_twitter', 'footer_website'
-        ];
-
-        function syncSocialPreview() {
-            if (socialPreviewTitle && socialTitleInput) {
-                socialPreviewTitle.textContent = (socialTitleInput.value || '').trim() || 'FOLLOW US';
-            }
-            if (socialPreviewBody && socialShowToggle) {
-                socialPreviewBody.style.opacity = socialShowToggle.checked ? '1' : '0.4';
-            }
-
-            var activeCount = 0;
-            socialPlatformKeys.forEach(function(key) {
-                var input = document.getElementById('cms_' + key);
-                var iconEl = document.getElementById('preview_icon_' + key);
-                var badgeEl = document.getElementById('badge_' + key);
-                var testBtn = document.getElementById('test_btn_' + key);
-                if (!input) return;
-
-                var val = (input.value || '').trim();
-                var hasVal = val.length > 0;
-                if (hasVal) activeCount++;
-
-                if (iconEl) {
-                    iconEl.style.display = hasVal ? 'inline-grid' : 'none';
-                    if (hasVal) {
-                        var fullUrl = /^(https?:)?\/\//i.test(val) ? val : 'https://' + val;
-                        iconEl.setAttribute('href', fullUrl);
-                    }
-                }
-
-                if (badgeEl) {
-                    if (hasVal) {
-                        badgeEl.className = 'lm-social-badge active';
-                        badgeEl.innerHTML = '<i class="fa fa-check-circle"></i> {{ $lmText("Active", "បានភ្ជាប់") }}';
-                    } else {
-                        badgeEl.className = 'lm-social-badge inactive';
-                        badgeEl.textContent = '{{ $lmText("Not Set", "មិនទាន់កំណត់") }}';
-                    }
-                }
-
-                if (testBtn) {
-                    if (hasVal) {
-                        var fullUrl = /^(https?:)?\/\//i.test(val) ? val : 'https://' + val;
-                        testBtn.href = fullUrl;
-                        testBtn.classList.remove('disabled');
-                    } else {
-                        testBtn.href = 'javascript:void(0)';
-                        testBtn.classList.add('disabled');
-                    }
-                }
-            });
-
-            if (socialPreviewEmptyNotice) {
-                socialPreviewEmptyNotice.style.display = activeCount === 0 ? 'block' : 'none';
-            }
-        }
-
-        if (socialTitleInput) socialTitleInput.addEventListener('input', syncSocialPreview);
-        if (socialShowToggle) socialShowToggle.addEventListener('change', syncSocialPreview);
-
-        socialPlatformKeys.forEach(function(key) {
-            var input = document.getElementById('cms_' + key);
-            if (input) input.addEventListener('input', syncSocialPreview);
-        });
-
-        syncSocialPreview();
-
-        syncPreview();
-    })();
-</script>
+<script src="{{ asset('js/loan-settings.js') }}?v=20261029"></script>
 @endsection

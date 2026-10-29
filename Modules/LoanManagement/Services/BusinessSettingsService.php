@@ -87,7 +87,7 @@ class BusinessSettingsService
             'license_number' => self::cleanText($data['license_number'] ?? $current['license_number'], 50),
             'system_name' => self::cleanText($data['system_name'] ?? $current['system_name'], 80),
             'system_subtitle' => self::cleanText($data['system_subtitle'] ?? $current['system_subtitle'], 120),
-            'start_date' => self::cleanDate($data['start_date'] ?? $current['start_date']),
+            'start_date' => self::cleanDate(array_key_exists('start_date', $data) ? $data['start_date'] : $current['start_date']),
             'default_interest_rate' => self::cleanDecimal($data['default_interest_rate'] ?? ($data['default_profit_percent'] ?? $current['default_interest_rate']), 0, 1000, 2),
             'interest_rate_period' => self::cleanChoice($data['interest_rate_period'] ?? $current['interest_rate_period'], ['monthly', 'yearly'], self::DEFAULTS['interest_rate_period']),
             'default_interest_method' => self::cleanChoice($data['default_interest_method'] ?? $current['default_interest_method'], ['flat', 'declining', 'annuity'], self::DEFAULTS['default_interest_method']),
@@ -113,16 +113,16 @@ class BusinessSettingsService
             'currency_precision' => self::cleanInteger($data['currency_precision'] ?? $current['currency_precision'], 0, 4, self::DEFAULTS['currency_precision']),
             'quantity_precision' => self::cleanInteger($data['quantity_precision'] ?? $current['quantity_precision'], 0, 4, self::DEFAULTS['quantity_precision']),
             'theme_color' => self::cleanColor($data['theme_color'] ?? $current['theme_color']),
-            'logo_path' => $data['logo_path'] ?? $current['logo_path'],
+            'logo_path' => array_key_exists('logo_path', $data) ? $data['logo_path'] : $current['logo_path'],
             'stamp_path' => array_key_exists('stamp_path', $data) ? $data['stamp_path'] : $current['stamp_path'],
             'receipt_printer_type' => self::cleanChoice($data['receipt_printer_type'] ?? $current['receipt_printer_type'], ['thermal_80mm', 'a4', 'a5'], self::DEFAULTS['receipt_printer_type']),
-            'contract_terms' => self::cleanMultilineText($data['contract_terms'] ?? $current['contract_terms'], 5000, self::DEFAULTS['contract_terms']),
+            'contract_terms' => self::cleanMultilineText($data['contract_terms'] ?? $current['contract_terms'], 5000),
             'telegram_bot_token' => self::cleanText($data['telegram_bot_token'] ?? $current['telegram_bot_token'], 120),
             'telegram_chat_id' => self::cleanText($data['telegram_chat_id'] ?? $current['telegram_chat_id'], 120),
             'notify_new_loan' => filter_var($data['notify_new_loan'] ?? $current['notify_new_loan'], FILTER_VALIDATE_BOOLEAN),
             'notify_payment_received' => filter_var($data['notify_payment_received'] ?? $current['notify_payment_received'], FILTER_VALIDATE_BOOLEAN),
             'notify_overdue_daily' => filter_var($data['notify_overdue_daily'] ?? $current['notify_overdue_daily'], FILTER_VALIDATE_BOOLEAN),
-            'login_background_path' => $data['login_background_path'] ?? $current['login_background_path'],
+            'login_background_path' => array_key_exists('login_background_path', $data) ? $data['login_background_path'] : $current['login_background_path'],
             'cms_enabled' => filter_var($data['cms_enabled'] ?? $current['cms_enabled'], FILTER_VALIDATE_BOOLEAN),
             'customer_login_enabled' => filter_var($data['customer_login_enabled'] ?? $current['customer_login_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'demo_customer_login_enabled' => filter_var($data['demo_customer_login_enabled'] ?? $current['demo_customer_login_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
@@ -142,7 +142,16 @@ class BusinessSettingsService
             mkdir($directory, 0755, true);
         }
 
-        file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $temporary = tempnam($directory, 'settings-');
+        try {
+            if ($temporary === false || file_put_contents($temporary, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), LOCK_EX) === false || ! rename($temporary, $path)) {
+                throw new \RuntimeException('Unable to save business settings.');
+            }
+        } finally {
+            if ($temporary && is_file($temporary)) {
+                unlink($temporary);
+            }
+        }
     }
 
     public static function isCustomerLoginEnabled(): bool

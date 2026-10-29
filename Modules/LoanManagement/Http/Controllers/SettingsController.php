@@ -19,9 +19,7 @@ class SettingsController extends Controller
 
     public function business()
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(false);
 
         $settings = BusinessSettingsService::get();
         $currencies = $this->businessCurrencyOptions();
@@ -48,9 +46,7 @@ class SettingsController extends Controller
 
     public function updateBusiness(Request $request)
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(true);
 
         $data = $request->validate([
             'business_name' => 'required|string|max:80',
@@ -70,8 +66,8 @@ class SettingsController extends Controller
             'grace_period_days' => 'nullable|integer|min:0|max:365',
             'penalty_type' => 'nullable|in:percentage,fixed',
             'penalty_value' => 'nullable|numeric|min:0|max:100000',
-            'min_loan_amount' => 'nullable|numeric|min:0',
-            'max_loan_amount' => 'nullable|numeric|min:0',
+            'min_loan_amount' => 'nullable|numeric|min:0|max:10000000',
+            'max_loan_amount' => 'nullable|numeric|min:0|max:10000000|gte:min_loan_amount',
             'loan_prefix' => 'nullable|string|max:20',
             'customer_prefix' => 'nullable|string|max:20',
             'receipt_prefix' => 'nullable|string|max:20',
@@ -86,7 +82,7 @@ class SettingsController extends Controller
             'currency_code' => 'required|string|max:10',
             'currency_symbol' => 'nullable|string|max:10',
             'currency_symbol_placement' => 'required|in:before,after',
-            'time_zone' => 'required|string|max:80',
+            'time_zone' => 'required|timezone',
             'fy_start_month' => 'required|integer|min:1|max:12',
             'stock_accounting_method' => 'nullable|in:fifo,lifo,avco',
             'transaction_edit_days' => 'required|integer|min:0|max:3650',
@@ -113,8 +109,12 @@ class SettingsController extends Controller
             'remove_home_hero' => 'nullable|boolean',
             'home_cms' => 'nullable|array',
             'home_cms.*' => 'nullable',
+            'active_tab' => 'nullable|in:tab-profile,tab-policies,tab-branding,tab-currency,tab-payment,tab-templates,tab-notifications,tab-social,tab-cms,tab-portal',
+            ...$this->paymentMethodRules(),
+            ...$this->socialSettingsRules(),
         ]);
 
+        $this->validatePaymentMethodNames($request);
         $current = BusinessSettingsService::get();
         $logoPath = $current['logo_path'] ?? null;
         $stampPath = $current['stamp_path'] ?? null;
@@ -170,15 +170,15 @@ class SettingsController extends Controller
 
         BusinessSettingsService::save([
             'business_name' => $data['business_name'],
-            'legal_name' => $data['legal_name'] ?? $current['legal_name'],
-            'tax_number' => $data['tax_number'] ?? $current['tax_number'],
-            'company_phone' => $data['company_phone'] ?? $current['company_phone'],
-            'company_email' => $data['company_email'] ?? $current['company_email'],
-            'company_address' => $data['company_address'] ?? $current['company_address'],
-            'license_number' => $data['license_number'] ?? $current['license_number'],
+            'legal_name' => (array_key_exists('legal_name', $data) ? ($data['legal_name'] ?? '') : $current['legal_name']),
+            'tax_number' => (array_key_exists('tax_number', $data) ? ($data['tax_number'] ?? '') : $current['tax_number']),
+            'company_phone' => (array_key_exists('company_phone', $data) ? ($data['company_phone'] ?? '') : $current['company_phone']),
+            'company_email' => (array_key_exists('company_email', $data) ? ($data['company_email'] ?? '') : $current['company_email']),
+            'company_address' => (array_key_exists('company_address', $data) ? ($data['company_address'] ?? '') : $current['company_address']),
+            'license_number' => (array_key_exists('license_number', $data) ? ($data['license_number'] ?? '') : $current['license_number']),
             'system_name' => $data['system_name'],
-            'system_subtitle' => ($data['system_subtitle'] ?? $current['system_subtitle'] ?? '') ?: 'Dedicated loan operation workspace',
-            'start_date' => $data['start_date'] ?? null,
+            'system_subtitle' => ((array_key_exists('system_subtitle', $data) ? ($data['system_subtitle'] ?? '') : $current['system_subtitle']) ?? '') ?: 'Dedicated loan operation workspace',
+            'start_date' => array_key_exists('start_date', $data) ? $data['start_date'] : $current['start_date'],
             'default_interest_rate' => $interestRate,
             'default_profit_percent' => $interestRate,
             'interest_rate_period' => $data['interest_rate_period'] ?? $current['interest_rate_period'],
@@ -188,10 +188,10 @@ class SettingsController extends Controller
             'penalty_value' => $data['penalty_value'] ?? $current['penalty_value'],
             'min_loan_amount' => $data['min_loan_amount'] ?? $current['min_loan_amount'],
             'max_loan_amount' => $data['max_loan_amount'] ?? $current['max_loan_amount'],
-            'loan_prefix' => $data['loan_prefix'] ?? $current['loan_prefix'],
-            'customer_prefix' => $data['customer_prefix'] ?? $current['customer_prefix'],
-            'receipt_prefix' => $data['receipt_prefix'] ?? $current['receipt_prefix'],
-            'quotation_prefix' => $data['quotation_prefix'] ?? $current['quotation_prefix'],
+            'loan_prefix' => (array_key_exists('loan_prefix', $data) ? ($data['loan_prefix'] ?? '') : $current['loan_prefix']),
+            'customer_prefix' => (array_key_exists('customer_prefix', $data) ? ($data['customer_prefix'] ?? '') : $current['customer_prefix']),
+            'receipt_prefix' => (array_key_exists('receipt_prefix', $data) ? ($data['receipt_prefix'] ?? '') : $current['receipt_prefix']),
+            'quotation_prefix' => (array_key_exists('quotation_prefix', $data) ? ($data['quotation_prefix'] ?? '') : $current['quotation_prefix']),
             'currency_code' => strtoupper($data['currency_code']),
             'currency_symbol' => ($data['currency_symbol'] ?? '') ?: $this->currencySymbolFor(strtoupper($data['currency_code'])),
             'currency_symbol_placement' => $data['currency_symbol_placement'],
@@ -205,16 +205,16 @@ class SettingsController extends Controller
             'quantity_precision' => $data['quantity_precision'] ?? $current['quantity_precision'],
             'theme_color' => strtolower($data['theme_color']),
             'receipt_printer_type' => $data['receipt_printer_type'] ?? $current['receipt_printer_type'],
-            'contract_terms' => $data['contract_terms'] ?? $current['contract_terms'],
-            'telegram_bot_token' => $data['telegram_bot_token'] ?? $current['telegram_bot_token'],
-            'telegram_chat_id' => $data['telegram_chat_id'] ?? $current['telegram_chat_id'],
-            'notify_new_loan' => $request->boolean('notify_new_loan'),
-            'notify_payment_received' => $request->boolean('notify_payment_received'),
-            'notify_overdue_daily' => $request->boolean('notify_overdue_daily'),
-            'cms_enabled' => $request->boolean('cms_enabled'),
-            'customer_login_enabled' => $request->boolean('customer_login_enabled'),
-            'demo_customer_login_enabled' => $request->boolean('demo_customer_login_enabled'),
-            'demo_admin_login_enabled' => $request->boolean('demo_admin_login_enabled'),
+            'contract_terms' => (array_key_exists('contract_terms', $data) ? ($data['contract_terms'] ?? '') : $current['contract_terms']),
+            'telegram_bot_token' => (array_key_exists('telegram_bot_token', $data) ? ($data['telegram_bot_token'] ?? '') : $current['telegram_bot_token']),
+            'telegram_chat_id' => (array_key_exists('telegram_chat_id', $data) ? ($data['telegram_chat_id'] ?? '') : $current['telegram_chat_id']),
+            'notify_new_loan' => $request->has('notify_new_loan') ? $request->boolean('notify_new_loan') : $current['notify_new_loan'],
+            'notify_payment_received' => $request->has('notify_payment_received') ? $request->boolean('notify_payment_received') : $current['notify_payment_received'],
+            'notify_overdue_daily' => $request->has('notify_overdue_daily') ? $request->boolean('notify_overdue_daily') : $current['notify_overdue_daily'],
+            'cms_enabled' => $request->has('cms_enabled') ? $request->boolean('cms_enabled') : $current['cms_enabled'],
+            'customer_login_enabled' => $request->has('customer_login_enabled') ? $request->boolean('customer_login_enabled') : $current['customer_login_enabled'],
+            'demo_customer_login_enabled' => $request->has('demo_customer_login_enabled') ? $request->boolean('demo_customer_login_enabled') : $current['demo_customer_login_enabled'],
+            'demo_admin_login_enabled' => $request->has('demo_admin_login_enabled') ? $request->boolean('demo_admin_login_enabled') : $current['demo_admin_login_enabled'],
             'home_headline' => $request->filled('home_headline') ? $request->input('home_headline') : $current['home_headline'],
             'home_subtitle' => $request->filled('home_subtitle') ? $request->input('home_subtitle') : $current['home_subtitle'],
             'home_body' => $request->has('home_body') ? $request->input('home_body') : $current['home_body'],
@@ -226,41 +226,10 @@ class SettingsController extends Controller
             'login_background_path' => $loginBackgroundPath,
         ]);
 
-        if ($request->has('methods') || $request->has('new_method')) {
-            $this->ensurePaymentMethodSettingsColumns();
-            $rows = (array) $request->input('methods', []);
-            foreach ($rows as $id => $row) {
-                $name = trim((string) ($row['name'] ?? ''));
-                if ($name === '') {
-                    continue;
-                }
-                DB::connection($this->connection)
-                    ->table('loan_payment_methods')
-                    ->where('id', (int) $id)
-                    ->update($this->paymentMethodPayload([
-                        'name' => mb_substr($name, 0, 191),
-                        'code' => trim((string) ($row['code'] ?? '')),
-                        'is_active' => ! empty($row['is_active']) ? 1 : 0,
-                        'sort_order' => (int) ($row['sort_order'] ?? 0),
-                        'updated_at' => now(),
-                    ]));
-            }
+        $this->savePaymentMethods($request);
 
-            $newName = trim((string) $request->input('new_method.name', ''));
-            if ($newName !== '') {
-                DB::connection($this->connection)
-                    ->table('loan_payment_methods')
-                    ->updateOrInsert(
-                        ['name' => mb_substr($newName, 0, 191)],
-                        $this->paymentMethodPayload([
-                            'code' => trim((string) $request->input('new_method.code', '')),
-                            'is_active' => 1,
-                            'sort_order' => (int) $request->input('new_method.sort_order', 99),
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ])
-                    );
-            }
+        if ($heroPath !== ($current['home_hero_path'] ?? null) && str_starts_with($current['home_hero_path'] ?? '', 'loan-management/cms/')) {
+            Storage::disk('public')->delete($current['home_hero_path']);
         }
 
         $request->session()->put(BusinessSettingsService::sessionPayload());
@@ -274,9 +243,7 @@ class SettingsController extends Controller
 
     public function cms()
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(false);
 
         $settings = BusinessSettingsService::get();
 
@@ -285,9 +252,7 @@ class SettingsController extends Controller
 
     public function updateCms(Request $request)
     {
-        if (! auth()->user()->can('loan_management.edit')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(true);
 
         $rules = [
             'home_headline' => 'required|string|max:140',
@@ -339,9 +304,7 @@ class SettingsController extends Controller
 
     public function businessLogo()
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(false);
 
         $settings = BusinessSettingsService::get();
         $path = $settings['logo_path'] ?? null;
@@ -448,55 +411,18 @@ class SettingsController extends Controller
 
     public function paymentMethods()
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(false);
 
         return redirect()->to(route('loan-management.settings.business') . '#tab-payment');
     }
 
     public function updatePaymentMethods(Request $request)
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(true);
 
-        $this->ensurePaymentMethodSettingsColumns();
-        $rows = (array) $request->input('methods', []);
-
-        foreach ($rows as $id => $row) {
-            $name = trim((string) ($row['name'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-
-            DB::connection($this->connection)
-                ->table('loan_payment_methods')
-                ->where('id', (int) $id)
-                ->update($this->paymentMethodPayload([
-                    'name' => mb_substr($name, 0, 191),
-                    'code' => trim((string) ($row['code'] ?? '')),
-                    'is_active' => ! empty($row['is_active']) ? 1 : 0,
-                    'sort_order' => (int) ($row['sort_order'] ?? 0),
-                    'updated_at' => now(),
-                ]));
-        }
-
-        $newName = trim((string) $request->input('new_method.name', ''));
-        if ($newName !== '') {
-            DB::connection($this->connection)
-                ->table('loan_payment_methods')
-                ->updateOrInsert(
-                    ['name' => mb_substr($newName, 0, 191)],
-                    $this->paymentMethodPayload([
-                        'code' => trim((string) $request->input('new_method.code', '')),
-                        'is_active' => 1,
-                        'sort_order' => (int) $request->input('new_method.sort_order', 99),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ])
-                );
-        }
+        $request->validate($this->paymentMethodRules());
+        $this->validatePaymentMethodNames($request);
+        $this->savePaymentMethods($request);
 
         return redirect()
             ->to(route('loan-management.settings.business') . '#tab-payment')
@@ -577,6 +503,151 @@ class SettingsController extends Controller
             ->with('status', ['success' => 1, 'msg' => 'Currency settings updated successfully.']);
     }
 
+    protected function authorizeSettings(bool $write = false): void
+    {
+        $permissions = $write ? ['loan_management.setting'] : ['loan_management.settings.view', 'loan_management.setting', 'loan_management.view'];
+        foreach ($permissions as $permission) {
+            if (auth()->user() && auth()->user()->can($permission)) {
+                return;
+            }
+        }
+        abort(403, 'Unauthorized action.');
+    }
+
+    protected function savePaymentMethods(Request $request): void
+    {
+        if (! $request->has('methods') && ! $request->filled('new_method.name')) {
+            return;
+        }
+        $this->ensurePaymentMethodSettingsColumns();
+        DB::connection($this->connection)->transaction(function () use ($request) {
+            $rows = (array) $request->input('methods', []);
+            foreach ($rows as $id => $row) {
+                $name = trim((string) ($row['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                DB::connection($this->connection)
+                    ->table('loan_payment_methods')
+                    ->where('id', (int) $id)
+                    ->update($this->paymentMethodPayload([
+                        'name' => mb_substr($name, 0, 191),
+                        'code' => trim((string) ($row['code'] ?? '')),
+                        'is_active' => ! empty($row['is_active']) ? 1 : 0,
+                        'sort_order' => (int) ($row['sort_order'] ?? 0),
+                        'updated_at' => now(),
+                    ]));
+            }
+
+            $newName = trim((string) $request->input('new_method.name', ''));
+            if ($newName !== '') {
+                DB::connection($this->connection)
+                    ->table('loan_payment_methods')
+                    ->updateOrInsert(
+                        ['name' => mb_substr($newName, 0, 191)],
+                        $this->paymentMethodPayload([
+                            'code' => trim((string) $request->input('new_method.code', '')),
+                            'is_active' => 1,
+                            'sort_order' => (int) $request->input('new_method.sort_order', 99),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ])
+                    );
+            }
+        });
+    }
+
+    protected function paymentMethodRules(): array
+    {
+        return [
+            'methods' => 'sometimes|array|max:200',
+            'methods.*' => 'required|array',
+            'methods.*.name' => 'required|string|max:191',
+            'methods.*.code' => 'nullable|string|max:60',
+            'methods.*.is_active' => 'nullable|boolean',
+            'methods.*.sort_order' => 'nullable|integer|min:0|max:999',
+            'new_method' => 'sometimes|array',
+            'new_method.name' => 'nullable|string|max:191',
+            'new_method.code' => 'nullable|string|max:60',
+            'new_method.sort_order' => 'nullable|integer|min:0|max:999',
+        ];
+    }
+
+    protected function socialSettingsRules(): array
+    {
+        $rules = ['home_cms.footer_show_social' => 'nullable|boolean', 'home_cms.footer_social_title' => 'nullable|string|max:80'];
+        foreach (['facebook', 'telegram', 'tiktok', 'instagram', 'youtube', 'whatsapp', 'linkedin', 'twitter', 'website'] as $platform) {
+            $rules['home_cms.footer_'.$platform] = ['nullable', 'string', 'max:2048', function ($attribute, $value, $fail) {
+                $url = preg_match('~^https?://~i', $value) ? $value : 'https://'.$value;
+                if (preg_match('~^[a-z][a-z0-9+.-]*:~i', $value) && ! preg_match('~^https?://~i', $value)
+                    || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                    $fail('Please enter a valid http or https website address.');
+                }
+            }];
+        }
+        return $rules;
+    }
+
+    protected function validatePaymentMethodNames(Request $request): void
+    {
+        $rows = (array) $request->input('methods', []);
+        $newName = trim((string) $request->input('new_method.name', ''));
+        if (! $rows && $newName === '') {
+            return;
+        }
+        $this->ensurePaymentMethodSettingsColumns();
+        $existing = DB::connection($this->connection)->table('loan_payment_methods')->pluck('name', 'id')->all();
+        $names = [];
+        foreach ($rows as $id => $row) {
+            if (! ctype_digit((string) $id) || ! array_key_exists($id, $existing)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['methods' => 'A payment method no longer exists. Reload Settings and try again.']);
+            }
+            $name = trim($row['name']);
+            if ($name !== $existing[$id]) {
+                $usage = $this->loanPaymentMethodUsage();
+                if (($usage[$existing[$id]]['payments_count'] ?? 0) > 0) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['methods.'.$id.'.name' => 'This method has recorded payments. Keep its name and deactivate it if needed.']);
+                }
+                foreach ($existing as $otherId => $otherName) {
+                    if ((string) $otherId !== (string) $id && mb_strtolower($name) === mb_strtolower($otherName)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['methods.'.$id.'.name' => 'This payment method name is already in use.']);
+                    }
+                }
+            }
+            $names['methods.'.$id.'.name'] = $name;
+        }
+        foreach ($existing as $id => $name) {
+            $names['methods.'.$id.'.name'] = $names['methods.'.$id.'.name'] ?? $name;
+        }
+        if ($newName !== '') {
+            $names['new_method.name'] = $newName;
+        }
+        $seen = [];
+        foreach ($names as $field => $name) {
+            $key = mb_strtolower($name);
+            if (isset($seen[$key])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([$field => 'Each payment method must have a different name.']);
+            }
+            $seen[$key] = true;
+        }
+    }
+
+    public function testTelegram(Request $request)
+    {
+        $this->authorizeSettings(true);
+        $data = $request->validate(['telegram_bot_token' => 'required|string|max:120|regex:/^[0-9]+:[A-Za-z0-9_-]+$/']);
+        try {
+            // getMe verifies credentials only. It does not send a message or change a webhook.
+            $response = Http::timeout(10)->get('https://api.telegram.org/bot'.$data['telegram_bot_token'].'/getMe');
+            if ($response->successful() && $response->json('ok')) {
+                return response()->json(['success' => true, 'message' => 'Connected to @'.$response->json('result.username')]);
+            }
+        } catch (Throwable $exception) {
+            // Never expose the HTTP exception: its URL includes the bot token.
+        }
+        return response()->json(['success' => false, 'message' => 'Unable to verify this bot. Check the token and try again.'], 422);
+    }
+
     protected function loanPaymentMethodUsage(): array
     {
         if (! Schema::connection('mysql_loan')->hasTable('loan_payments')) {
@@ -593,6 +664,24 @@ class SettingsController extends Controller
 
         if (empty($methodColumn) || empty($amountColumn)) {
             return [];
+        }
+
+        if (Schema::connection($this->connection)->hasTable('loan_payment_details')) {
+            $detailColumns = Schema::connection($this->connection)->getColumnListing('loan_payment_details');
+            $detailMethod = in_array('payment_method_snapshot', $detailColumns, true) ? 'payment_method_snapshot' : (in_array('method', $detailColumns, true) ? 'method' : null);
+            $detailAmount = in_array('amount_base', $detailColumns, true) ? 'amount_base' : (in_array('amount', $detailColumns, true) ? 'amount' : null);
+            if ($detailMethod && $detailAmount && in_array('payment_id', $detailColumns, true)) {
+                $details = DB::connection($this->connection)->table('loan_payment_details as d')
+                    ->join('loan_payments as p', 'p.id', '=', 'd.payment_id')
+                    ->selectRaw("d.payment_id, COALESCE(NULLIF(d.$detailMethod, ''), 'Unknown') as method_name, d.$detailAmount as collected");
+                $legacy = DB::connection($this->connection)->table('loan_payments as p')
+                    ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('loan_payment_details as d')->whereColumn('d.payment_id', 'p.id'))
+                    ->selectRaw("p.id as payment_id, COALESCE(NULLIF(p.$methodColumn, ''), 'Unknown') as method_name, p.$amountColumn as collected");
+                return DB::connection($this->connection)->query()->fromSub($details->unionAll($legacy), 'payment_usage')
+                    ->selectRaw('method_name, COUNT(DISTINCT payment_id) as payments_count, SUM(collected) as total_amount')
+                    ->groupBy('method_name')->get()->keyBy('method_name')
+                    ->map(fn ($row) => ['payments_count' => (int) $row->payments_count, 'total_amount' => (float) $row->total_amount])->all();
+            }
         }
 
         $methodExpression = "COALESCE(NULLIF($methodColumn, ''), 'Unknown')";
@@ -750,9 +839,7 @@ class SettingsController extends Controller
 
     public function businessStamp()
     {
-        if (! auth()->user()->can('loan_management.view')) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeSettings(false);
 
         $settings = BusinessSettingsService::get();
         $path = $settings['stamp_path'] ?? null;

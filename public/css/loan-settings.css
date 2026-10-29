@@ -1,0 +1,38 @@
+/* Settings enhancements use the icon fonts already bundled with the POS. */
+body.loan-management-page .lm-settings-wrapper .fa-telegram,
+body.loan-management-page .lm-settings-wrapper .fa-facebook,
+body.loan-management-page .lm-settings-wrapper .fa-instagram,
+body.loan-management-page .lm-settings-wrapper .fa-youtube-play,
+body.loan-management-page .lm-settings-wrapper .fa-whatsapp,
+body.loan-management-page .lm-settings-wrapper .fa-linkedin,
+body.loan-management-page .lm-settings-wrapper .fa-twitter {
+    font-family: "Font Awesome 5 Brands" !important; font-weight: 400 !important;
+}
+body.loan-management-page .lm-settings-wrapper .fa-telegram:before { content: "\f2c6"; }
+body.loan-management-page .lm-settings-wrapper .fa-facebook:before { content: "\f09a"; }
+body.loan-management-page .lm-settings-wrapper .fa-youtube-play:before { content: "\f167"; }
+body.loan-management-page .lm-settings-wrapper .fa-linkedin:before { content: "\f08c"; }
+body.loan-management-page .lm-settings-wrapper .fa-comment-o:before { content: "\f075"; }
+body.loan-management-page .lm-settings-wrapper .fa-newspaper-o:before { content: "\f1ea"; }
+.lm-settings-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.lm-settings-fields:disabled { opacity: .8; }
+.lm-settings-search-summary { padding: 12px 16px; margin-bottom: 16px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; border-radius: 10px; }
+.lm-settings-wrapper [aria-invalid=true] { border-color: #dc2626 !important; box-shadow: 0 0 0 2px #fee2e2; }
+.lm-error-link { border: 0; background: transparent; padding: 4px 0; color: inherit; text-decoration: underline; text-align: start; }
+.lm-settings-wrapper .lm-no-match { opacity: .5; }
+.lm-settings-wrapper .lm-nav-item:focus-visible, .lm-settings-wrapper button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.lm-settings-wrapper.has-unsaved-changes .lm-save-status .dot { background: #f59e0b; }
+.lm-settings-inline-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+@media (max-width: 1024px) {
+    .lm-settings-wrapper .lm-settings-nav > div:first-child { display: flex; gap: 6px; }
+    .lm-settings-wrapper .lm-settings-nav > div:last-child:not(:first-child) { display: none; }
+    .lm-settings-wrapper .lm-nav-item { flex: 0 0 auto; }
+}
+@media (max-width: 640px) {
+    .lm-settings-wrapper .lm-settings-header-left h1 { font-size: 22px; line-height: 1.5; }
+    .lm-settings-wrapper .lm-settings-content { padding: 18px 12px; }
+    .lm-settings-wrapper .lm-add-method-card > div:last-child { grid-template-columns: 1fr !important; }
+    .lm-settings-wrapper .lm-sticky-actions { padding: 12px; bottom: 6px; flex-wrap: wrap; }
+    .lm-settings-wrapper .lm-sticky-actions > div:last-child { flex-wrap: wrap; width: 100%; }
+    .lm-settings-wrapper #saveSettingsBtn { flex: 1; }
+}

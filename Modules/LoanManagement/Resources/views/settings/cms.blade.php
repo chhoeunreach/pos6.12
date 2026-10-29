@@ -2,6 +2,7 @@
 @section('title', 'CMS & Public Portal Settings')
 
 @section('loan_css')
+<link rel="stylesheet" href="{{ asset('css/loan-settings.css') }}?v=20261029">
 <style>
     /* ========================================================
        ENTERPRISE CMS & PORTAL - MODERN EXECUTIVE REDESIGN
