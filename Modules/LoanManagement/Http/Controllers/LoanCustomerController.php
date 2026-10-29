@@ -564,57 +564,62 @@ class LoanCustomerController extends Controller
 
     protected function getCustomerRelatedData(int $customer): array
     {
+        $schema = Schema::connection($this->connection);
+        $db = DB::connection($this->connection);
         $loans = collect();
         $payments = collect();
+        $loanSummary = ['count' => 0, 'principal' => 0.0, 'balance' => 0.0, 'currencies' => collect()];
+        $paymentSummary = ['count' => 0, 'amount' => 0.0];
 
-        if (Schema::connection($this->connection)->hasTable('loans')) {
-            $loans = DB::connection($this->connection)
-                ->table('loans')
-                ->where('customer_id', $customer)
-                ->orderByDesc('id')
-                ->limit(20)
-                ->get();
-        }
-
-        if (Schema::connection($this->connection)->hasTable('loan_payments')) {
-            $paymentsQuery = DB::connection($this->connection)
-                ->table('loan_payments as p')
-                ->leftJoin('loans as l', 'l.id', '=', 'p.loan_id')
-                ->where(function ($query) use ($customer) {
-                    $query->where('p.customer_id', $customer)
-                        ->orWhere('l.customer_id', $customer);
-                })
-                ->select([
-                    'p.*',
-                    'l.loan_number',
-                    'l.customer_id as loan_customer_id',
-                ])
-                ->orderByDesc('p.id')
-                ->limit(20);
-
-            if (Schema::connection($this->connection)->hasColumn('loan_payments', 'paid_date')) {
-                $paymentsQuery->orderByDesc('p.paid_date');
-            } elseif (Schema::connection($this->connection)->hasColumn('loan_payments', 'paid_at')) {
-                $paymentsQuery->orderByDesc('p.paid_at');
+        if ($schema->hasTable('loans')) {
+            $loanQuery = $db->table('loans')->where('customer_id', $customer);
+            if ($schema->hasColumn('loans', 'deleted_at')) {
+                $loanQuery->whereNull('deleted_at');
             }
-
-            $payments = $paymentsQuery->get();
+            $currencyExpression = $schema->hasColumn('loans', 'currency') ? "COALESCE(NULLIF(currency, ''), 'USD')" : "'USD'";
+            $groups = (clone $loanQuery)->selectRaw("$currencyExpression as currency, COUNT(*) as count, COALESCE(SUM(principal_amount), 0) as principal, COALESCE(SUM(balance_amount), 0) as balance")
+                ->groupByRaw($currencyExpression)->orderBy('currency')->get();
+            $loanSummary = ['count' => (int) $groups->sum('count'), 'principal' => (float) $groups->sum('principal'), 'balance' => (float) $groups->sum('balance'), 'currencies' => $groups];
+            $loans = (clone $loanQuery)->orderByDesc('id')->limit(20)->get();
         }
 
-        return [
-            'loans' => $loans,
-            'payments' => $payments,
-            'loanSummary' => [
-                'count' => $loans->count(),
-                'principal' => (float) $loans->sum(fn ($loan) => (float) ($loan->principal_amount ?? 0)),
-                'balance' => (float) $loans->sum(fn ($loan) => (float) ($loan->balance_amount ?? 0)),
-            ],
-            'paymentSummary' => [
-                'count' => $payments->count(),
-                'amount' => (float) $payments->sum(function ($payment) {
-                    return (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
-                }),
-            ],
-        ];
+        if ($schema->hasTable('loan_payments')) {
+            $columns = $schema->getColumnListing('loan_payments');
+            $paymentsQuery = $db->table('loan_payments as p');
+            $hasLoans = $schema->hasTable('loans') && in_array('loan_id', $columns, true);
+            if ($hasLoans) {
+                $paymentsQuery->leftJoin('loans as l', 'l.id', '=', 'p.loan_id');
+            }
+            if (in_array('customer_id', $columns, true) || $hasLoans) {
+                $paymentsQuery->where(function ($query) use ($customer, $columns, $hasLoans) {
+                    if (in_array('customer_id', $columns, true)) {
+                        $query->where('p.customer_id', $customer);
+                        if ($hasLoans) {
+                            $query->orWhere('l.customer_id', $customer);
+                        }
+                    } else {
+                        $query->where('l.customer_id', $customer);
+                    }
+                });
+                if (in_array('deleted_at', $columns, true)) {
+                    $paymentsQuery->whereNull('p.deleted_at');
+                }
+                $amountColumns = array_values(array_intersect(['total_paid_base', 'total_paid', 'amount'], $columns));
+                $amountExpression = $amountColumns ? 'COALESCE('.implode(', ', array_map(fn ($column) => 'p.'.$column, $amountColumns)).', 0)' : '0';
+                $summary = (clone $paymentsQuery)->selectRaw("COUNT(*) as count, COALESCE(SUM($amountExpression), 0) as amount")->first();
+                $paymentSummary = ['count' => (int) $summary->count, 'amount' => (float) $summary->amount];
+                $paymentsQuery->select('p.*');
+                if ($hasLoans) {
+                    $paymentsQuery->addSelect('l.loan_number', 'l.customer_id as loan_customer_id');
+                }
+                $dateColumn = in_array('paid_date', $columns, true) ? 'paid_date' : (in_array('paid_at', $columns, true) ? 'paid_at' : null);
+                if ($dateColumn) {
+                    $paymentsQuery->orderByDesc('p.'.$dateColumn);
+                }
+                $payments = $paymentsQuery->orderByDesc('p.id')->limit(20)->get();
+            }
+        }
+
+        return compact('loans', 'payments', 'loanSummary', 'paymentSummary');
     }
 }

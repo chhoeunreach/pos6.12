@@ -407,41 +407,34 @@
     .lm-badge-suspended { background: #fee2e2; color: #b91c1c; }
     .lm-badge-blacklist { background: #ffe4e6; color: #e11d48; border: 1px solid #fecdd3; }
 
-    /* Action Buttons */
-    .lm-action-btn-group {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
+    /* Customer action dropdown */
+    .lm-customer-actions-toggle {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 34px; padding: 7px 12px; border: 1px solid #cbd5e1;
+        border-radius: 7px; background: #fff; color: #334155; font-size: 12px; font-weight: 600;
     }
-    .lm-btn-action {
-        width: 30px;
-        height: 30px;
-        border-radius: 6px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid #cbd5e1;
-        background: #fff;
-        color: #475569;
-        font-size: 12px;
-        transition: all .15s ease;
-        text-decoration: none;
+    .lm-customer-actions-toggle:hover, .lm-customer-actions-toggle[aria-expanded="true"] {
+        color: #2563eb; border-color: #93c5fd; background: #eff6ff;
     }
-    .lm-btn-action:hover {
-        background: #f8fafc;
-        color: #0f172a;
-        border-color: #94a3b8;
+    .lm-customer-actions-menu {
+        position: fixed; z-index: 1100; min-width: 210px; max-width: calc(100vw - 16px);
+        padding: 6px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(15,23,42,.16); text-align: left;
     }
-    .lm-btn-action-primary:hover {
-        background: #eff6ff;
-        color: #2563eb;
-        border-color: #93c5fd;
+    .lm-customer-actions-menu[hidden] { display: none !important; }
+    .lm-customer-actions-menu a, .lm-customer-actions-menu button {
+        display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px;
+        color: #334155; border: 0; border-radius: 6px; background: transparent;
+        text-decoration: none; text-align: left; font-size: 12px; line-height: 1.7;
+        font-family: inherit;
     }
-    .lm-btn-action-danger:hover {
-        background: #fef2f2;
-        color: #dc2626;
-        border-color: #fca5a5;
-    }
+    .lm-customer-actions-menu a:hover, .lm-customer-actions-menu button:hover,
+    .lm-customer-actions-menu [role="menuitem"]:focus { background: #eff6ff; color: #2563eb; outline: none; }
+    .lm-customer-actions-menu .fa { width: 16px; text-align: center; }
+    .lm-customer-actions-menu form { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid #f1f5f9; }
+    .lm-customer-actions-menu .lm-customer-delete { color: #dc2626; }
+    .lm-customer-actions-menu .lm-customer-delete:hover, .lm-customer-actions-menu .lm-customer-delete:focus { background: #fef2f2; color: #b91c1c; }
+    .lm-customer-actions-toggle:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
 
     /* Contact Links */
     .lm-phone-link {
@@ -684,24 +677,23 @@
                                     {{ ($customers->currentPage() - 1) * $customers->perPage() + $index + 1 }}
                                 </td>
                                 <td style="text-align: center;">
-                                    <div class="lm-action-btn-group">
-                                        <a href="{{ route('loan-management.customers.show', $c->id) }}" class="lm-btn-action lm-btn-action-primary" title="{{ $lmText('View Profile & Loans', 'មើលប្រវត្តិរូប & កម្ចី') }}">
-                                            <i class="fa fa-eye"></i>
-                                        </a>
-                                        @can('loan_management.edit')
-                                            <a href="{{ route('loan-management.customers.edit', $c->id) }}" class="lm-btn-action" title="{{ $lmText('Edit Customer', 'កែប្រែព័ត៌មាន') }}">
-                                                <i class="fa fa-pencil"></i>
-                                            </a>
-                                        @endcan
-                                        @can('loan_management.delete')
-                                            <form method="POST" action="{{ route('loan-management.customers.destroy', $c->id) }}" style="display:inline;" onsubmit="return confirm('{{ $lmText('Are you sure you want to delete this customer record?', 'តើអ្នកប្រាកដជាចង់លុបអតិថិជននេះមែនទេ?') }}');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="lm-btn-action lm-btn-action-danger" title="{{ $lmText('Delete Customer', 'លុប') }}">
-                                                    <i class="fa fa-trash"></i>
-                                                </button>
-                                            </form>
-                                        @endcan
+                                    <div class="lm-customer-actions">
+                                        <button type="button" class="lm-customer-actions-toggle" id="customerActionsButton-{{ $c->id }}" aria-haspopup="menu" aria-expanded="false" aria-controls="customerActions-{{ $c->id }}" aria-label="{{ $lmText('Actions for', 'សកម្មភាពសម្រាប់') }} {{ $displayName }}">
+                                            {{ $lmText('Actions', 'សកម្មភាព') }} <i class="fa fa-angle-down" aria-hidden="true"></i>
+                                        </button>
+                                        <div class="lm-customer-actions-menu" id="customerActions-{{ $c->id }}" role="menu" aria-labelledby="customerActionsButton-{{ $c->id }}" hidden>
+                                            <a role="menuitem" href="{{ route('loan-management.customers.show', $c->id) }}"><i class="fa fa-eye" aria-hidden="true"></i> {{ $lmText('View Customer Detail', 'មើលព័ត៌មានអតិថិជន') }}</a>
+                                            @if(auth()->user()->can('loan_management.customers.edit') || auth()->user()->can('loan_management.edit'))
+                                                <a role="menuitem" href="{{ route('loan-management.customers.edit', $c->id) }}"><i class="fa fa-edit" aria-hidden="true"></i> {{ $lmText('Edit Customer', 'កែប្រែព័ត៌មាន') }}</a>
+                                            @endif
+                                            @if(auth()->user()->can('loan_management.customers.delete') || auth()->user()->can('loan_management.delete'))
+                                                <form method="POST" action="{{ route('loan-management.customers.destroy', $c->id) }}" onsubmit="return confirm('{{ $lmText('Are you sure you want to delete this customer record?', 'តើអ្នកប្រាកដជាចង់លុបអតិថិជននេះមែនទេ?') }}');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" role="menuitem" class="lm-customer-delete"><i class="fa fa-trash" aria-hidden="true"></i> {{ $lmText('Delete Customer', 'លុបអតិថិជន') }}</button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
@@ -843,6 +835,7 @@
 @endsection
 
 @section('loan_js')
+<script src="{{ asset('js/loan-customer-actions.js') }}?v=20261029"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
