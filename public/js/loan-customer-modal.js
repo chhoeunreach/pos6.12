@@ -19,14 +19,15 @@
         if ($pane.length) $('#loanCustomerModalForm .nav-tabs a').filter(function () { return this.getAttribute('href') === '#' + $pane.attr('id'); }).tab('show');
     }
     function showError(message) { $body.empty().append($('<div class="alert alert-danger" role="alert">').text(message)); }
-    function load(url, title, message) {
+    function load(url, title, message, preserveOnError) {
+        var previous = preserveOnError ? $body.children().detach() : null;
         if (request) request.abort();
         var id = ++sequence;
         dirty = false;
         $title.text(title);
         $body.html('<div class="lcm-loading" role="status"><i class="fa fa-spinner fa-spin" aria-hidden="true"></i> ' + text('Loading customer…', 'កំពុងផ្ទុកព័ត៌មានអតិថិជន…') + '</div>');
         $modal.modal('show');
-        request = $.ajax({ url: url, data: { _customer_modal: 1 }, dataType: 'html' }).done(function (html) {
+        request = $.ajax({ url: url, data: { _customer_modal: 1 }, dataType: 'html', headers: { Accept: 'application/json' } }).done(function (html) {
             if (id !== sequence) return;
             if (!/data-customer-modal-view\s*=/.test(html)) {
                 showError(text('Your session may have expired. Close this window and reload the page.', 'សម័យចូលប្រើអាចផុតកំណត់។ សូមបិទ និងផ្ទុកទំព័រឡើងវិញ។'));
@@ -41,7 +42,13 @@
             }
         }).fail(function (xhr, status) {
             if (status === 'abort' || id !== sequence) return;
-            showError(text('Unable to load this customer. Close the window and try again.', 'មិនអាចផ្ទុកព័ត៌មានអតិថិជន។ សូមបិទ និងព្យាយាមម្តងទៀត។'));
+            if (previous && previous.length) {
+                var data = xhr.responseJSON || {};
+                if (!data.errors && xhr.responseText) { try { data = JSON.parse(xhr.responseText); } catch (error) {} }
+                $body.empty().append(previous);
+                var message = data.errors ? Object.values(data.errors).map(function (errors) { return errors[0]; }).join(' ') : text('Unable to load the ledger. Try again.', 'មិនអាចផ្ទុកបញ្ជីគណនី។ សូមព្យាយាមម្តងទៀត។');
+                $body.prepend($('<div class="alert alert-danger" role="alert">').text(message));
+            } else showError(text('Unable to load this customer. Close the window and try again.', 'មិនអាចផ្ទុកព័ត៌មានអតិថិជន។ សូមបិទ និងព្យាយាមម្តងទៀត។'));
         }).always(function () { if (id === sequence) request = null; });
     }
     $(document).on('click', '.js-customer-modal', function (event) {
@@ -51,6 +58,13 @@
         if (!$.contains($modal[0], this)) opener = this;
         load(this.href, $(this).data('title') || text('Customer Detail', 'ព័ត៌មានអតិថិជន'));
     });
+    $modal.on('submit', '.js-customer-ledger-filter', function (event) {
+        event.preventDefault();
+        var url = new URL(this.action, window.location.href);
+        $(this).serializeArray().forEach(function (field) { if (field.value) url.searchParams.set(field.name, field.value); });
+        load(url.toString(), text('Customer Ledger', 'បញ្ជីគណនីអតិថិជន'), null, true);
+    });
+    $modal.on('change', '#ledgerStartDate', function () { $('#ledgerEndDate').attr('min', this.value); });
     $modal.on('input change', '#loanCustomerModalForm', function () { dirty = snapshot(this) !== initial; });
     $modal.on('submit', '#loanCustomerModalForm', function (event) {
         event.preventDefault();

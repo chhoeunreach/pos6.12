@@ -163,6 +163,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get('/customers', [LoanCustomerController::class, 'index'])->name('loan-management.customers');
             Route::get('/customers/index', [LoanCustomerController::class, 'index'])->name('loan-management.customers.index');
             Route::get('/customers/search-main-contacts', [LoanCustomerController::class, 'searchMainContacts'])->name('loan-management.customers.search-main-contacts');
+            Route::get('/customers/{customer}/ledger', [LoanCustomerController::class, 'ledger'])->middleware('loan.permission:loan_management.loans.view|loan_management.payments.view|loan_management.payment|loan_management.view')->name('loan-management.customers.ledger');
             Route::get('/customers/{customer}', [LoanCustomerController::class, 'show'])->name('loan-management.customers.show');
         });
         Route::middleware('loan.permission:loan_management.customers.create|loan_management.create')->group(function () {

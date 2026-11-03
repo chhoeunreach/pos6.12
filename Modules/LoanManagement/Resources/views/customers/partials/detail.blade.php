@@ -68,6 +68,7 @@
             <a class="lcd-button" href="{{ route('loan-management.customers') }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ $text('Back to customers', 'ត្រឡប់ទៅអតិថិជន') }}</a>
             @endif
             @if($canEdit)<a class="lcd-button lcd-button-primary {{ ($customerModal ?? false) ? 'js-customer-modal' : '' }}" data-title="{{ $text('Edit Customer', 'កែប្រែអតិថិជន') }}" href="{{ route('loan-management.customers.edit', $customerRow->id) }}"><i class="fa fa-edit" aria-hidden="true"></i> {{ $text('Edit customer', 'កែប្រែអតិថិជន') }}</a>@endif
+            @if($canViewLoan || $canViewPayment)<a class="lcd-button {{ ($customerModal ?? false) ? 'js-customer-modal' : '' }}" data-title="{{ $text('Customer Ledger', 'បញ្ជីគណនីអតិថិជន') }}" href="{{ route('loan-management.customers.ledger', $customerRow->id) }}"><i class="fa fa-book" aria-hidden="true"></i> {{ $text('Ledger', 'បញ្ជីគណនី') }}</a>@endif
             @if($phone)<a class="lcd-button" href="tel:{{ $phone }}"><i class="fa fa-phone" aria-hidden="true"></i> {{ $text('Call customer', 'ហៅអតិថិជន') }}</a>@endif
         </div>
     </header>

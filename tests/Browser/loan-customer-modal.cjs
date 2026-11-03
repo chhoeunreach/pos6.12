@@ -77,4 +77,24 @@ function boot() {
     assert.equal($('#loanCustomerModalBody').text(), '');
     console.log('PASS stale requests, expired sessions and close cancellation'); dom.window.close();
 }
-console.log('3 customer modal UI checks passed');
+{
+    const { dom, $, requests } = boot();
+    $('#open').trigger('click');
+    const ledger = '<div data-customer-modal-view="ledger"><form class="js-customer-ledger-filter" action="/customers/1/ledger"><input name="start_date" id="ledgerStartDate" value="2026-01-01"><input name="end_date" id="ledgerEndDate" value="2026-02-01"><input name="loan_id" value="7"><button type="submit">Apply</button></form><p>Ledger rows</p></div>';
+    requests[0].d.resolve(ledger);
+    $('#ledgerStartDate').val('2026-03-01').trigger('change');
+    assert.equal($('#ledgerEndDate').attr('min'), '2026-03-01');
+    $('.js-customer-ledger-filter').trigger('submit');
+    const target = new URL(requests[1].options.url);
+    assert.equal(target.searchParams.get('loan_id'), '7');
+    assert.equal(target.searchParams.get('start_date'), '2026-03-01');
+    assert.equal(requests[1].options.data._customer_modal, 1);
+    requests[1].d.reject({ status: 422, responseText: JSON.stringify({ errors: { end_date: ['End date must follow start date.'] } }) });
+    assert.equal($('#ledgerStartDate').val(), '2026-03-01', 'Filter errors retain the selected dates and ledger');
+    assert.match($('#loanCustomerModalBody .alert-danger').text(), /End date/);
+    $('#ledgerEndDate').val('2026-04-01');
+    $('.js-customer-ledger-filter').trigger('submit'); requests[2].d.resolve(ledger);
+    assert.equal($('#loanCustomerModalBody [data-customer-modal-view]').attr('data-customer-modal-view'), 'ledger');
+    console.log('PASS ledger filters, date constraints, validation recovery and modal refresh'); dom.window.close();
+}
+console.log('4 customer modal UI checks passed');

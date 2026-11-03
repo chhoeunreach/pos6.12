@@ -44,6 +44,7 @@
 
     $expenseLocations = $expenseRows->pluck('location_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
     $expenseCashiers = $expenseRows->pluck('created_by_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+    $expenseCategories = $expenseRows->pluck('category_name')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
 @endphp
 
 <!-- Content Header (Page header) -->
@@ -210,6 +211,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="form-group">
+                            <label for="expense_table_category_filter">{{ $t('category') }}</label>
+                            <select id="expense_table_category_filter" class="form-control select2 all-sale-category-filter" data-table-id="local_cashier_expenses_detail_table" multiple data-placeholder="{{ $t('all_categories') }}">
+                                @foreach($expenseCategories as $categoryName)
+                                    <option value="{{ $categoryName }}">{{ $categoryName }}</option>
+                                @endforeach
+                            </select>
+                            <div class="all-sale-filter-actions">
+                                <button type="button" class="btn btn-xs btn-default all-sale-select-all" data-target=".all-sale-category-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('select_all') }}</button>
+                                <button type="button" class="btn btn-xs btn-default all-sale-clear-select" data-target=".all-sale-category-filter" data-table-id="local_cashier_expenses_detail_table">{{ $t('clear') }}</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -223,7 +238,7 @@
                             <th class="all-sale-cashier-column">{{ $t('cashier_user') }}</th>
                             <th>{{ $t('expense_for') }}</th>
                             <th class="all-sale-location-column">{{ $t('location') }}</th>
-                            <th>{{ $t('category') }}</th>
+                            <th class="all-sale-category-column">{{ $t('category') }}</th>
                             <th>{{ $t('payment_status') }}</th>
                             @foreach($staticPaymentColumns as $column)
                                 <th class="text-right">{{ \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) ($column['key'] ?? ''), (string) ($column['label'] ?? '')) }}</th>
@@ -550,8 +565,10 @@
             var table = $('#' + tableId).DataTable();
             var locations = $('.all-sale-location-filter[data-table-id="' + tableId + '"]').val();
             var cashiers = $('.all-sale-cashier-filter[data-table-id="' + tableId + '"]').val();
+            var categories = $('.all-sale-category-filter[data-table-id="' + tableId + '"]').val();
             var locationColumn = localCashierColumnIndexByClass(table, 'all-sale-location-column');
             var cashierColumn = localCashierColumnIndexByClass(table, 'all-sale-cashier-column');
+            var categoryColumn = localCashierColumnIndexByClass(table, 'all-sale-category-column');
 
             if (locationColumn >= 0) {
                 table.column(locationColumn).search(exactMatchAnyRegex(locations), true, false);
@@ -559,11 +576,14 @@
             if (cashierColumn >= 0) {
                 table.column(cashierColumn).search(exactMatchAnyRegex(cashiers), true, false);
             }
+            if (categoryColumn >= 0) {
+                table.column(categoryColumn).search(exactMatchAnyRegex(categories), true, false);
+            }
 
             table.draw();
         }
 
-        $(document).on('change', '.all-sale-location-filter, .all-sale-cashier-filter', function () {
+        $(document).on('change', '.all-sale-location-filter, .all-sale-cashier-filter, .all-sale-category-filter', function () {
             applyAllSaleFilters($(this).data('table-id'));
         });
 

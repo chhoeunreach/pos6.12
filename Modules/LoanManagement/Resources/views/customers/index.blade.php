@@ -16,6 +16,7 @@
 @section('loan_css')
 <link rel="stylesheet" href="{{ asset('css/loan-customer-detail.css') }}?v=20261029">
 <link rel="stylesheet" href="{{ asset('css/loan-customer-modal.css') }}?v=20261029">
+<link rel="stylesheet" href="{{ asset('css/loan-customer-ledger.css') }}?v=20261029">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap.min.css">
 <style>
     /* =========================================================
@@ -685,6 +686,9 @@
                                         </button>
                                         <div class="lm-customer-actions-menu" id="customerActions-{{ $c->id }}" role="menu" aria-labelledby="customerActionsButton-{{ $c->id }}" hidden>
                                             <a role="menuitem" class="js-customer-modal" data-title="{{ $lmText('Customer Detail', 'ព័ត៌មានអតិថិជន') }}" href="{{ route('loan-management.customers.show', $c->id) }}"><i class="fa fa-eye" aria-hidden="true"></i> {{ $lmText('View Customer Detail', 'មើលព័ត៌មានអតិថិជន') }}</a>
+                                            @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.loans.view|loan_management.payments.view|loan_management.payment|loan_management.view'))
+                                                <a role="menuitem" class="js-customer-modal" data-title="{{ $lmText('Customer Ledger', 'បញ្ជីគណនីអតិថិជន') }}" href="{{ route('loan-management.customers.ledger', $c->id) }}"><i class="fa fa-book" aria-hidden="true"></i> {{ $lmText('Ledger', 'បញ្ជីគណនី') }}</a>
+                                            @endif
                                             @if(auth()->user()->can('loan_management.customers.edit') || auth()->user()->can('loan_management.edit'))
                                                 <a role="menuitem" class="js-customer-modal" data-title="{{ $lmText('Edit Customer', 'កែប្រែអតិថិជន') }}" href="{{ route('loan-management.customers.edit', $c->id) }}"><i class="fa fa-edit" aria-hidden="true"></i> {{ $lmText('Edit Customer', 'កែប្រែព័ត៌មាន') }}</a>
                                             @endif
@@ -845,7 +849,7 @@
         </div>
     </div>
 </div>
-<script src="{{ asset('js/loan-customer-modal.js') }}?v=20261029"></script>
+<script src="{{ asset('js/loan-customer-modal.js') }}?v=20261029-ledger"></script>
 <script src="{{ asset('js/loan-customer-actions.js') }}?v=20261029"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap.min.js"></script>

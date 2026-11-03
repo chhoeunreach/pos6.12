@@ -223,6 +223,46 @@ class LoanCustomerController extends Controller
         ], $relatedData));
     }
 
+    public function ledger(Request $request, int $customer)
+    {
+        $filters = $request->validate([
+            'start_date' => 'nullable|date_format:Y-m-d',
+            'end_date' => 'nullable|date_format:Y-m-d'.($request->filled('start_date') ? '|after_or_equal:start_date' : ''),
+            'loan_id' => 'nullable|integer|min:1',
+            'currency' => 'nullable|string|max:10|regex:/^[A-Za-z0-9]+$/',
+            'export' => 'nullable|in:csv',
+            'print' => 'nullable|boolean',
+        ]);
+        $customerRow = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
+        abort_if(!$customerRow || !empty($customerRow->deleted_at), 404);
+        $ledger = app(\Modules\LoanManagement\Services\LoanCustomerLedgerService::class)->statement($customer, $filters);
+        $canExportLedger = auth()->user()->can('loan_management.export.view') || auth()->user()->can('view_export_buttons');
+        if (($filters['export'] ?? '') === 'csv') {
+            abort_unless($canExportLedger, 403);
+            return response()->streamDownload(function () use ($ledger) {
+                $file = fopen('php://output', 'w');
+                fwrite($file, "\xEF\xBB\xBF");
+                fputcsv($file, ['Date', 'Reference', 'Installment', 'Description', 'Method', 'Currency', 'Debit', 'Credit', 'Balance'], ',', '"', '');
+                $safe = fn ($value) => preg_match('/^[\s]*[=+@\-]/u', (string) $value) ? "'".$value : $value;
+                foreach ($ledger['summaries'] as $summary) {
+                    fputcsv($file, ['', '', '', 'Opening balance', '', $safe($summary['currency']), '', '', number_format($summary['opening'] / 100, 2, '.', '')], ',', '"', '');
+                }
+                foreach ($ledger['rows'] as $row) {
+                    fputcsv($file, [$row['date'] ?? 'Undated', $safe($row['reference']), $safe($row['loan_number']), $row['description'], $safe($row['method']), $safe($row['currency']), number_format($row['debit'] / 100, 2, '.', ''), number_format($row['credit'] / 100, 2, '.', ''), number_format($row['balance'] / 100, 2, '.', '')], ',', '"', '');
+                }
+                fclose($file);
+            }, 'customer-'.$customer.'-ledger.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
+        $posLedgerUrl = null;
+        if (!empty($customerRow->main_contact_id) && (auth()->user()->can('customer.view') || auth()->user()->can('customer.view_own'))) {
+            if (Schema::hasTable('contacts') && DB::table('contacts')->where('id', $customerRow->main_contact_id)->where('business_id', session('user.business_id'))->exists()) {
+                $posLedgerUrl = action([\App\Http\Controllers\ContactController::class, 'show'], $customerRow->main_contact_id).'?view=ledger';
+            }
+        }
+        $view = $request->boolean('print') ? 'loanmanagement::customers.ledger_print' : ($request->boolean('_customer_modal') ? 'loanmanagement::customers.modal_ledger' : 'loanmanagement::customers.ledger');
+        return view($view, compact('customerRow', 'ledger', 'filters', 'canExportLedger', 'posLedgerUrl'));
+    }
+
     public function edit(int $customer)
     {
         $customerRow = DB::connection($this->connection)->table($this->table)->where('id', $customer)->first();
