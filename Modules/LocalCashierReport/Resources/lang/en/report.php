@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'finance_remaining_categories' => 'Remaining categories',
     'finance_print_browser_help' => 'Choose A4 paper and Portrait or Landscape under Layout in the browser print settings.',
     'print_orientation' => 'Print orientation',
     'portrait' => 'Portrait',
@@ -65,7 +66,7 @@ return [
     'finance_unavailable' => 'A selected data source could not be loaded. Affected figures and combined totals are unavailable. Please try again.',
     'finance_no_locations' => 'Select at least one accessible location to view the financial dashboard.',
     'finance_no_expenses' => 'No expenses recorded for these locations and dates.',
-    'finance_chart_note' => 'Share of positive category totals after expense refunds. The largest eight categories are shown; remaining categories are grouped as Other.',
+    'finance_chart_note' => 'Share of positive category totals after expense refunds. The largest eight categories are shown individually; the rest appear under Remaining categories.',
     'copy_telegram' => 'Copy for Telegram',
     'telegram_report' => 'Telegram Report',
     'telegram_copied' => 'Report copied',

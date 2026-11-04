@@ -502,4 +502,38 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('name="excluded_expense_categories[]" value="Office"', $portraitHtml);
         $this->assertStringContainsString('repeat(4,minmax(0,1fr))!important', $portraitHtml);
     }
+
+    public function test_real_other_category_and_remaining_categories_have_distinct_chart_labels_and_filters()
+    {
+        $this->seedSales();
+        DB::table('expense_categories')->insert(['id' => 3, 'name' => 'ផ្សេងៗ']);
+        DB::table('transactions')->insert(['id' => 30, 'type' => 'expense', 'final_total' => 1000, 'expense_category_id' => 3]);
+        for ($i = 1; $i <= 7; $i++) {
+            DB::table('expense_categories')->insert(['id' => $i + 3, 'name' => 'Category '.$i]);
+            DB::table('transactions')->insert(['id' => 30 + $i, 'type' => 'expense', 'final_total' => $i, 'expense_category_id' => $i + 3]);
+        }
+        $data = $this->controllerRequest(['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'report_lang' => 'km', 'location_ids' => [1]])->getData();
+        $this->assertEquals(1043, $data['report']['total']['expenses']);
+        $directory = sys_get_temp_dir().'/finance-dashboard-test-views';
+        if (! is_dir($directory)) mkdir($directory);
+        config(['view.compiled' => $directory]);
+        \Illuminate\Support\Facades\Blade::swap(new \Illuminate\View\Compilers\BladeCompiler($this->app['files'], $directory));
+        $this->app['view.engine.resolver']->forget('blade');
+        $source = file_get_contents(base_path('Modules/LocalCashierReport/Resources/views/financial_dashboard.blade.php'));
+        $source = preg_replace('/^@extends\([^\n]*\)\r?$/m', '', $source)."\n@yield('content')";
+        $html = \Illuminate\Support\Facades\Blade::render($source, $data + ['errors' => new \Illuminate\Support\ViewErrorBag]);
+        $document = new \DOMDocument;
+        $document->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new \DOMXPath($document);
+        $links = $xpath->query('//a[contains(concat(" ", normalize-space(@class), " "), " finance-bar-row ")]');
+        $filtersByLabel = [];
+        foreach ($links as $link) {
+            $label = trim($xpath->query('.//div[contains(@class, "finance-bar-label")]/span', $link)->item(0)->textContent);
+            parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $query);
+            $filtersByLabel[$label] = $query['expense_categories'];
+        }
+        $this->assertCount(9, $filtersByLabel);
+        $this->assertSame(['ផ្សេងៗ'], $filtersByLabel['ផ្សេងៗ']);
+        $this->assertSame(['Category 1'], $filtersByLabel['ប្រភេទចំណាយដែលនៅសល់ (1)']);
+    }
 }
