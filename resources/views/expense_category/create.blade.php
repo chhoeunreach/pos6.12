@@ -16,6 +16,7 @@
       <div class="form-group">
         {!! Form::label('code', __( 'expense.category_code' ) . ':') !!}
           {!! Form::text('code', null, ['class' => 'form-control', 'placeholder' => __( 'expense.category_code' )]); !!}
+          <p class="help-block">@lang('expense.category_code_unique_help')</p>
       </div>
 
         <div class="form-group">

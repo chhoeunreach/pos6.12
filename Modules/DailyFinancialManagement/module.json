@@ -1,0 +1,23 @@
+{
+    "name": "DailyFinancialManagement",
+    "alias": "dailyfinancialmanagement",
+    "description": "KNEAYERNG Phone Shop Daily Financial Management & Reporting System",
+    "keywords": [
+        "finance",
+        "pos",
+        "installment",
+        "accounting",
+        "closing",
+        "reconciliation",
+        "cashflow"
+    ],
+    "active": 1,
+    "order": 40,
+    "providers": [
+        "Modules\\DailyFinancialManagement\\Providers\\DailyFinancialManagementServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
+

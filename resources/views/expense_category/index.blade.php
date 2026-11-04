@@ -41,10 +41,21 @@
                 </a>
             </div>
         @endslot
+        <div class="tw-mb-3">
+            <button type="button" id="delete_selected_expense_categories" disabled
+                class="tw-dw-btn tw-dw-btn-sm tw-dw-btn-outline tw-dw-btn-error"
+                data-url="{{ action([\App\Http\Controllers\ExpenseCategoryController::class, 'bulkDestroy']) }}"
+                data-confirm="{{ __('expense.confirm_delete_selected_categories') }}">
+                <i class="fa fa-trash"></i> @lang('expense.delete_selected')
+                (<span id="expense_categories_selected_count">0</span>)
+            </button>
+            <span class="help-block">@lang('expense.select_all_categories_help')</span>
+        </div>
         <div class="table-responsive">
             <table class="table table-bordered table-striped" id="expense_category_table">
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="select_all_expense_categories" disabled aria-label="{{ __('expense.select_all_categories') }}" title="{{ __('expense.select_all_categories') }}"></th>
                         <th>@lang( 'expense.category_name' )</th>
                         <th>@lang( 'expense.category_code' )</th>
                         <th>@lang( 'messages.action' )</th>
@@ -80,6 +91,14 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label for="exp_cat_existing_action">@lang('expense.existing_categories')</label>
+                        <select class="form-control" id="exp_cat_existing_action">
+                            <option value="keep">@lang('expense.keep_existing_categories')</option>
+                            <option value="update">@lang('expense.update_existing_categories')</option>
+                        </select>
+                        <p class="help-block">@lang('expense.existing_categories_help')</p>
+                    </div>
                     <hr>
 
                     <div id="exp_cat_preview_summary" class="well well-sm" style="display:none;"></div>
@@ -163,7 +182,7 @@
             resetImportPreview();
         });
 
-        $('#exp_cat_import_file').on('change', function() {
+        $('#exp_cat_import_file, #exp_cat_existing_action').on('change', function() {
             resetImportPreview();
         });
 
@@ -179,6 +198,7 @@
             var formData = new FormData();
             formData.append('_token', '{{ csrf_token() }}');
             formData.append('file', fileInput.files[0]);
+            formData.append('existing_action', $('#exp_cat_existing_action').val());
 
             $.ajax({
                 method: 'POST',
@@ -189,6 +209,7 @@
                 dataType: 'json',
                 beforeSend: function() {
                     $('#exp_cat_preview_btn').prop('disabled', true);
+                    $('#exp_cat_import_file, #exp_cat_existing_action').prop('disabled', true);
                     $('#exp_cat_confirm_import_btn').prop('disabled', true);
                 },
                 success: function(result) {
@@ -204,6 +225,7 @@
                     var summaryHtml = '<b>Total:</b> ' + (s.total_rows || 0)
                         + ' | <b>New:</b> ' + (s.new_rows || 0)
                         + ' | <b>Existing:</b> ' + (s.existing_rows || 0)
+                        + ' | <b>Kept:</b> ' + (s.skipped_rows || 0)
                         + ' | <b>Errors:</b> ' + (s.error_rows || 0);
                     $('#exp_cat_preview_summary').html(summaryHtml).show();
 
@@ -215,7 +237,7 @@
                             + '<td>' + (r.name || '') + '</td>'
                             + '<td>' + (r.code || '') + '</td>'
                             + '<td>' + (r.parent_category || '') + '</td>'
-                            + '<td>' + (r.status || '') + '</td>'
+                            + '<td>' + (r.status === 'existing' ? 'existing (' + result.existing_action + ')' : (r.status || '')) + '</td>'
                             + '<td>' + errors + '</td>'
                             + '</tr>';
                         $('#exp_cat_preview_table tbody').append(tr);
@@ -232,6 +254,9 @@
                 error: function() {
                     $('#exp_cat_preview_btn').prop('disabled', false);
                     toastr.error(LANG.something_went_wrong);
+                },
+                complete: function() {
+                    $('#exp_cat_import_file, #exp_cat_existing_action').prop('disabled', false);
                 }
             });
         });
@@ -258,9 +283,8 @@
                     if (result && result.success) {
                         toastr.success(result.msg);
                         $('#exp_cat_import_modal').modal('hide');
-                        if (typeof expense_category_table !== 'undefined') {
-                            expense_category_table.ajax.reload();
-                        }
+                        $('#expense_category_table').trigger('expense-categories:reset-selection');
+                        $('#expense_category_table').DataTable().ajax.reload();
                     } else {
                         toastr.error((result && result.msg) ? result.msg : LANG.something_went_wrong);
                         $('#exp_cat_confirm_import_btn').prop('disabled', false);

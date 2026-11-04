@@ -399,6 +399,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('expense-categories/export', [ExpenseCategoryController::class, 'export']);
     Route::post('expense-categories/import-preview', [ExpenseCategoryController::class, 'importPreview']);
     Route::post('expense-categories/import-confirm', [ExpenseCategoryController::class, 'importConfirm']);
+    Route::post('expense-categories/bulk-delete', [ExpenseCategoryController::class, 'bulkDestroy']);
     Route::resource('expense-categories', ExpenseCategoryController::class);
 
     //Expenses...

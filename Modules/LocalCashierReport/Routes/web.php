@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\LocalCashierReport\Http\Controllers\ExpenseListReportController;
+use Modules\LocalCashierReport\Http\Controllers\FinancialDashboardController;
+use Modules\LocalCashierReport\Http\Controllers\FinancialExpenseController;
 use Modules\LocalCashierReport\Http\Controllers\InstallController;
 use Modules\LocalCashierReport\Http\Controllers\LocalCashierReportController;
 
@@ -27,6 +29,12 @@ Route::middleware([
         Route::get('/print', [LocalCashierReportController::class, 'print'])->name('local-cashier-report.print');
         Route::get('/expenses-list', [ExpenseListReportController::class, 'index'])->name('local-cashier-report.expenses-list');
     });
+
+    Route::get('/reports/financial-dashboard/expenses', [FinancialExpenseController::class, 'index'])->name('reports.financial-expenses.index');
+    Route::get('/reports/financial-dashboard/expenses/{source}/{id}', [FinancialExpenseController::class, 'edit'])->whereNumber('id')->name('reports.financial-expenses.edit');
+    Route::put('/reports/financial-dashboard/expenses/{source}/{id}', [FinancialExpenseController::class, 'update'])->whereNumber('id')->name('reports.financial-expenses.update');
+
+    Route::get('/reports/financial-dashboard', [FinancialDashboardController::class, 'index'])->name('reports.financial-dashboard');
 
     Route::get('/reports/cashier-expenses-list', [ExpenseListReportController::class, 'index']);
     Route::get('/reports/expenses-list', [ExpenseListReportController::class, 'index'])->name('reports.expenses-list');

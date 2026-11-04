@@ -1,0 +1,26 @@
+{
+    "name": "kneayerng/daily-financial-management",
+    "description": "KNEAYERNG Daily Financial Management and Reporting System Module for UltimatePOS",
+    "type": "laravel-module",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "KNEAYERNG Dev Team",
+            "email": "reach@kneayerng.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Modules\\DailyFinancialManagement\\": ""
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\DailyFinancialManagement\\Providers\\DailyFinancialManagementServiceProvider"
+            ],
+            "aliases": {}
+        }
+    }
+}
+

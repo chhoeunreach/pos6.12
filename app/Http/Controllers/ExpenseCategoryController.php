@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -43,10 +44,9 @@ class ExpenseCategoryController extends Controller
                         return $row->name;
                     }
                 })
-                ->removeColumn('id')
                 ->removeColumn('parent_id')
-                ->rawColumns([2])
-                ->make(false);
+                ->rawColumns(['action'])
+                ->make(true);
         }
 
         return view('expense_category.index');
@@ -95,6 +95,8 @@ class ExpenseCategoryController extends Controller
             $output = ['success' => true,
                 'msg' => __('expense.added_success'),
             ];
+        } catch (ValidationException $e) {
+            $output = ['success' => false, 'msg' => collect($e->errors())->flatten()->first()];
         } catch (\Exception $e) {
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
@@ -175,6 +177,8 @@ class ExpenseCategoryController extends Controller
                 $output = ['success' => true,
                     'msg' => __('expense.updated_success'),
                 ];
+            } catch (ValidationException $e) {
+                $output = ['success' => false, 'msg' => collect($e->errors())->flatten()->first()];
             } catch (\Exception $e) {
                 \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
@@ -221,6 +225,45 @@ class ExpenseCategoryController extends Controller
             }
 
             return $output;
+        }
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        if (! (auth()->user()->can('expense.add') || auth()->user()->can('expense.edit'))) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $data = $request->validate([
+            'ids' => 'required|array|min:1|max:10000',
+            'ids.*' => 'required|integer|distinct',
+        ]);
+        $business_id = $request->session()->get('user.business_id');
+
+        try {
+            $count = \DB::transaction(function () use ($data, $business_id) {
+                $ids = ExpenseCategory::where('business_id', $business_id)
+                    ->whereIn('id', $data['ids'])->lockForUpdate()->pluck('id')->all();
+                if (count($ids) !== count($data['ids'])) {
+                    throw ValidationException::withMessages([
+                        'ids' => __('expense.selected_categories_unavailable'),
+                    ]);
+                }
+
+                // Match single deletion: deleting a parent also removes its children.
+                return ExpenseCategory::where('business_id', $business_id)
+                    ->where(function ($query) use ($ids) {
+                        $query->whereIn('id', $ids)->orWhereIn('parent_id', $ids);
+                    })->delete();
+            });
+
+            return ['success' => true, 'msg' => __('expense.categories_bulk_deleted', ['count' => $count])];
+        } catch (ValidationException $e) {
+            return ['success' => false, 'msg' => collect($e->errors())->flatten()->first()];
+        } catch (\Exception $e) {
+            Log::error('Expense category bulk deletion failed', ['business_id' => $business_id, 'error' => $e->getMessage()]);
+
+            return ['success' => false, 'msg' => __('messages.something_went_wrong')];
         }
     }
 
@@ -312,34 +355,56 @@ class ExpenseCategoryController extends Controller
 
         $request->validate([
             'file' => 'required|file|max:5120',
+            'existing_action' => 'sometimes|required|in:keep,update',
         ]);
 
         $business_id = $request->session()->get('user.business_id');
         $user_id = $request->session()->get('user.id');
 
+        $existing_action = $request->input('existing_action', 'keep');
+
         try {
-            $sheets = Excel::toArray(new \App\Imports\BlankImport, $request->file('file'));
+            $sheets = Excel::toArray(new \App\Imports\ExpenseCategoriesImport, $request->file('file'));
             $rawRows = $sheets[0] ?? [];
+            $headings = array_shift($rawRows) ?? [];
+            $aliases = [
+                'name' => 'name', 'category_name' => 'name', 'ឈ្មោះប្រភេទ' => 'name',
+                'code' => 'code', 'category_code' => 'code', 'លេខកូដ' => 'code',
+                'parent_category' => 'parent_category', 'ប្រភេទមេ' => 'parent_category',
+            ];
+            $columns = [];
+            foreach ($headings as $index => $heading) {
+                $heading = trim(str_replace("\xEF\xBB\xBF", '', (string) $heading));
+                $key = preg_replace('/\s+/u', '_', mb_strtolower($heading));
+                if (isset($aliases[$key])) {
+                    $columns[$aliases[$key]] = $index;
+                }
+            }
+            if (! array_key_exists('name', $columns)) {
+                return ['success' => false, 'msg' => 'Category name column not found. Use name, Category name, or ឈ្មោះប្រភេទ in the first row of the first sheet.'];
+            }
 
             $normalizedRows = [];
             $names = [];
             foreach ($rawRows as $i => $row) {
-                if ($i === 0) {
+                if (empty(array_filter($row, fn ($v) => $v !== null && trim((string) $v) !== ''))) {
                     continue;
                 }
-                $row = array_change_key_case(array_map(fn ($v) => is_string($v) ? trim($v) : $v, $row), CASE_LOWER);
-                if (empty(array_filter($row, fn ($v) => $v !== null && $v !== ''))) {
-                    continue;
+                $data = [];
+                foreach ($columns as $key => $index) {
+                    $data[$key] = trim((string) ($row[$index] ?? ''));
                 }
-                $name = trim((string) ($row['name'] ?? ''));
-                if ($name === '') {
-                    continue;
-                }
+                $row = $data;
+                $name = $row['name'];
                 $names[] = $name;
                 $normalizedRows[] = [
-                    'row_number' => $i + 1,
+                    'row_number' => $i + 2,
                     'data' => $row,
                 ];
+            }
+
+            if (empty($normalizedRows)) {
+                return ['success' => false, 'msg' => 'No categories found in the first sheet. Add category rows below the headings and preview again.'];
             }
 
             $existingByName = ExpenseCategory::where('business_id', $business_id)
@@ -350,6 +415,31 @@ class ExpenseCategoryController extends Controller
             $parentCategories = ExpenseCategory::where('business_id', $business_id)
                 ->whereNull('parent_id')
                 ->pluck('id', 'name');
+
+            // Resolve parents from the entire upload so new parents work
+            // regardless of their row order.
+            $uploadedRoots = [];
+            foreach ($normalizedRows as $rowInfo) {
+                $data = $rowInfo['data'];
+                $name = trim((string) $data['name']);
+                $existing = $existingByName[$name] ?? null;
+                $uploadedRoots[$name] = $existing_action === 'keep' && $existing
+                    ? $existing->parent_id === null
+                    : trim((string) ($data['parent_category'] ?? '')) === '';
+            }
+
+            $uploadedCodeNames = [];
+            foreach ($normalizedRows as $rowInfo) {
+                $data = $rowInfo['data'];
+                $name = trim((string) $data['name']);
+                if ($existing_action === 'keep' && isset($existingByName[$name])) {
+                    continue;
+                }
+                $code = mb_strtolower(trim((string) ($data['code'] ?? '')));
+                if ($code !== '') {
+                    $uploadedCodeNames[$code][$name] = true;
+                }
+            }
 
             $summary = [
                 'total_rows' => count($normalizedRows),
@@ -373,16 +463,31 @@ class ExpenseCategoryController extends Controller
                     $errors[] = 'name is required';
                 }
 
+                $existing = $existingByName[$name] ?? null;
+                $exists = ! empty($existing);
+                $keepExisting = $exists && $existing_action === 'keep';
+
+                if (! $keepExisting && $code !== '') {
+                    if (count($uploadedCodeNames[mb_strtolower($code)] ?? []) > 1) {
+                        $errors[] = __('expense.category_code_duplicate_in_file', ['code' => $code]);
+                    }
+                    if (ExpenseCategory::codeIsTaken($business_id, $code, $existing ? $existing->id : null)) {
+                        $errors[] = __('expense.category_code_taken', ['code' => $code]);
+                    }
+                }
+
                 $parent_id = null;
-                if ($parent_name !== '') {
+                if (! $keepExisting && $parent_name !== '') {
                     $parent_id = $parentCategories[$parent_name] ?? null;
-                    if ($parent_id === null) {
+                    if (array_key_exists($parent_name, $uploadedRoots)) {
+                        if (! $uploadedRoots[$parent_name]) {
+                            $errors[] = "parent_category '$parent_name' must be a top-level category";
+                        }
+                    } elseif ($parent_id === null) {
                         $errors[] = "parent_category '$parent_name' not found";
                     }
                 }
 
-                $existing = $existingByName[$name] ?? null;
-                $exists = ! empty($existing);
                 $status = $exists ? 'existing' : 'new';
 
                 if (! empty($errors)) {
@@ -393,6 +498,9 @@ class ExpenseCategoryController extends Controller
                     $summary['error_rows']++;
                 } elseif ($exists) {
                     $summary['existing_rows']++;
+                    if ($keepExisting) {
+                        $summary['skipped_rows']++;
+                    }
                 } else {
                     $summary['new_rows']++;
                 }
@@ -416,6 +524,7 @@ class ExpenseCategoryController extends Controller
                 'business_id' => $business_id,
                 'user_id' => $user_id,
                 'rows' => $previewRows,
+                'existing_action' => $existing_action,
                 'created_at' => now()->toDateTimeString(),
             ], now()->addMinutes(30));
 
@@ -430,6 +539,7 @@ class ExpenseCategoryController extends Controller
                 'success' => true,
                 'token' => $token,
                 'summary' => $summary,
+                'existing_action' => $existing_action,
                 'rows' => $previewRows,
             ];
         } catch (\Exception $e) {
@@ -461,6 +571,7 @@ class ExpenseCategoryController extends Controller
             return ['success' => false, 'msg' => 'Import preview expired. Please preview again.'];
         }
 
+        $existing_action = $payload['existing_action'] ?? 'keep';
         $rows = $payload['rows'] ?? [];
         $errorRows = array_filter($rows, fn ($r) => ($r['status'] ?? '') === 'error');
         if (! empty($errorRows)) {
@@ -468,7 +579,7 @@ class ExpenseCategoryController extends Controller
         }
 
         try {
-            $result = \DB::transaction(function () use ($rows, $business_id) {
+            $result = \DB::transaction(function () use ($rows, $business_id, $existing_action) {
                 $updated = 0;
                 $inserted = 0;
                 $skipped = 0;
@@ -481,10 +592,23 @@ class ExpenseCategoryController extends Controller
                     ->whereNull('parent_id')
                     ->pluck('id', 'name');
 
-                foreach ($rows as $row) {
+                // Save roots first, then resolve children to their real IDs.
+                $isRoot = fn ($row) => trim((string) ($row['data']['parent_category'] ?? '')) === '';
+                $orderedRows = array_merge(
+                    array_filter($rows, $isRoot),
+                    array_filter($rows, fn ($row) => ! $isRoot($row))
+                );
+
+                foreach ($orderedRows as $row) {
                     $data = $row['data'] ?? [];
                     $name = trim((string) ($data['name'] ?? ''));
                     if ($name === '') {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $existing = $existingByName[$name] ?? null;
+                    if ($existing && $existing_action === 'keep') {
                         $skipped++;
                         continue;
                     }
@@ -494,22 +618,31 @@ class ExpenseCategoryController extends Controller
                     $parent_id = null;
                     if ($parent_name !== '') {
                         $parent_id = $parentCategories[$parent_name] ?? null;
+                        if ($parent_id === null) {
+                            throw new \RuntimeException("parent_category '$parent_name' no longer exists. Please preview again.");
+                        }
                     }
 
-                    $existing = $existingByName[$name] ?? null;
                     if ($existing) {
                         $existing->code = $code;
                         $existing->parent_id = $parent_id;
                         $existing->save();
                         $updated++;
                     } else {
-                        ExpenseCategory::create([
+                        $existing = ExpenseCategory::create([
                             'name' => $name,
                             'code' => $code,
                             'parent_id' => $parent_id,
                             'business_id' => $business_id,
                         ]);
                         $inserted++;
+                    }
+
+                    $existingByName[$name] = $existing;
+                    if ($parent_name === '') {
+                        $parentCategories[$name] = $existing->id;
+                    } else {
+                        unset($parentCategories[$name]);
                     }
                 }
 
@@ -528,6 +661,8 @@ class ExpenseCategoryController extends Controller
                 'success' => true,
                 'msg' => "Import completed. Inserted: {$result['inserted']}, Updated: {$result['updated']}, Skipped: {$result['skipped']}",
             ];
+        } catch (ValidationException $e) {
+            return ['success' => false, 'msg' => collect($e->errors())->flatten()->first()];
         } catch (\Exception $e) {
             Log::emergency('Expense cat import confirm error File:' . $e->getFile() . ' Line:' . $e->getLine() . ' Message:' . $e->getMessage());
 

@@ -38,5 +38,6 @@
     "Accessory": false,
     "Service": false,
     "NotificationCenter": true,
-    "KneayerngLinks": true
+    "KneayerngLinks": true,
+    "DailyFinancialManagement": true
 }

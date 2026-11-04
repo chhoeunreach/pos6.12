@@ -25,14 +25,15 @@ class DataController extends Controller
             return;
         }
 
+        $canViewFinancial = auth()->user()->can('profit_loss_report.view');
         $canViewLocalCashier = auth()->user()->can('local_cashier_report.view');
         $canViewExpense = auth()->user()->can('expense_report.view') || $canViewLocalCashier;
 
-        if (! $canViewLocalCashier && ! $canViewExpense) {
+        if (! $canViewLocalCashier && ! $canViewExpense && ! $canViewFinancial) {
             return;
         }
 
-        Menu::modify('admin-sidebar-menu', function ($menu) use ($canViewLocalCashier, $canViewExpense) {
+        Menu::modify('admin-sidebar-menu', function ($menu) use ($canViewLocalCashier, $canViewExpense, $canViewFinancial) {
             $reports = $menu->whereTitle(__('report.reports'));
 
             $isLocalCashierActive = request()->segment(1) === 'local-cashier-report' && request()->segment(2) !== 'expenses-list';
@@ -40,6 +41,14 @@ class DataController extends Controller
                 || (request()->segment(1) === 'reports' && (request()->segment(2) === 'expenses-list' || request()->segment(2) === 'cashier-expenses-list'));
 
             if (! empty($reports)) {
+                if ($canViewFinancial) {
+                    $reports->url(
+                        route('reports.financial-dashboard'),
+                        ReportLanguage::text('financial_dashboard'),
+                        ['icon' => 'fa fa-line-chart', 'active' => request()->is('reports/financial-dashboard')]
+                    )->order(998);
+                }
+
                 if ($canViewLocalCashier) {
                     $reports->url(
                         route('local-cashier-report.index'),
