@@ -57,6 +57,59 @@
         init: function (root) {
             root.querySelectorAll('.wiz-deposit-edit-form').forEach(update);
         },
+        initActions: function (options) {
+            var $ = window.jQuery;
+            var busy = false;
+            var labels = options.labels || {};
+            function feedback(message, error) {
+                $('#wizDepositFeedback').text(message).removeClass('alert-danger alert-success').addClass(error ? 'alert-danger' : 'alert-success').prop('hidden', false);
+            }
+            function notifyParent() {
+                if (window.parent !== window) window.parent.postMessage({type: 'loan-deposit-payments-changed', loanId: options.loanId}, window.location.origin);
+            }
+            function refresh(message, openId) {
+                return $.ajax({url: options.refreshUrl, dataType: 'html', cache: false}).then(function (html) {
+                    var page = $('<div>').append($.parseHTML(html, document, false));
+                    var block = page.find('#wizCustomerDepositBlock');
+                    if (block.length !== 1) throw new Error('Deposit block was not returned');
+                    $('#wizCustomerDepositBlock').replaceWith(block);
+                    window.LoanDepositPayments.init(block[0]);
+                    if (openId != null) block.find('.wiz-deposit-row').filter(function() { return String($(this).attr('data-id')) === String(openId); }).addClass('open').find('.wiz-deposit-body').show();
+                    if (message) feedback(message, false);
+                });
+            }
+            function lock(value) {
+                busy = value;
+                $('#wizCustomerDepositBlock .wiz-deposit-update-btn, #wizCustomerDepositBlock .wiz-deposit-remove, #wizCustomerDepositBlock .wiz-deposit-refresh').prop('disabled', value);
+            }
+            $(document).off('.loanDepositActions');
+            $(document).on('click.loanDepositActions', '.wiz-deposit-refresh', function() {
+                if (busy) return;
+                lock(true);
+                refresh().fail(function() { feedback(labels.refreshError, true); }).always(function() { lock(false); });
+            });
+            $(document).on('click.loanDepositActions', '.wiz-deposit-update-btn, .wiz-deposit-remove', function() {
+                if (busy) return;
+                var button = $(this), deleting = button.hasClass('wiz-deposit-remove');
+                var row = button.closest('.wiz-deposit-row'), form = button.closest('.wiz-deposit-edit-form');
+                if (deleting && !window.confirm(labels.confirmDelete)) return;
+                if (!deleting && !window.LoanDepositPayments.validate(form[0])) return;
+                var payload = deleting ? [] : form.find(':input').serializeArray();
+                payload.push({name: '_token', value: options.token}, {name: '_method', value: deleting ? 'DELETE' : 'PUT'});
+                if (deleting) payload.push({name: 'return_to', value: button.attr('data-return-to') || options.refreshUrl});
+                lock(true);
+                $.ajax({url: options.updateBase + '/' + row.attr('data-id'), method: 'POST', data: $.param(payload), dataType: 'json'})
+                    .then(function(result) {
+                        if (!result.success) { feedback(result.message || labels.error, true); return; }
+                        notifyParent();
+                        return refresh(result.message || (deleting ? labels.deleted : labels.updated), deleting ? null : row.attr('data-id'))
+                            .then(null, function() { feedback(labels.refreshError, true); });
+                    }, function(xhr) {
+                        var response = xhr.responseJSON || {}, errors = response.errors && Object.values(response.errors);
+                        feedback(errors && errors.length ? errors[0][0] : (response.message || labels.error), true);
+                    }).always(function() { lock(false); });
+            });
+        },
         validate: function (form) {
             var matches = update(form);
             var inputs = form.querySelectorAll('input, select');

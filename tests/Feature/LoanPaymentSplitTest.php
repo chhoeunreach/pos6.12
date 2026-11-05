@@ -126,6 +126,20 @@ class LoanPaymentSplitTest extends TestCase
         $this->assertEquals(100, $db->table('loan_payment_schedules')->value('balance_amount'));
     }
 
+    public function test_deleting_a_deposit_removes_its_details_and_refreshes_loan_totals(): void
+    {
+        $db = DB::connection('loan_split_test');
+        $db->table('loan_payments')->where('id', 1)->update(['payment_type' => 'loan', 'schedule_id' => null]);
+        $request = Request::create('/loan-management/payments/1', 'DELETE');
+        $request->headers->set('Accept', 'application/json');
+        $response = $this->controller->destroy($request, 1);
+        $this->assertTrue($response->getData()->success);
+        $this->assertEquals(0, $db->table('loan_payments')->count());
+        $this->assertEquals(0, $db->table('loan_payment_details')->count());
+        $this->assertEquals(0, $db->table('loans')->value('paid_amount'));
+        $this->assertEquals(100, $db->table('loan_payment_schedules')->value('balance_amount'));
+    }
+
     public function test_mismatched_total_is_rejected_without_changes(): void
     {
         try {

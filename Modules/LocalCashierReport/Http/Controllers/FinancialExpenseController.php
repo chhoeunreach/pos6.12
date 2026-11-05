@@ -66,9 +66,14 @@ class FinancialExpenseController extends Controller
     public function index(Request $request)
     {
         [$businessId, $locations, $filters] = $this->dashboard->context($request);
-        $request->validate(['page' => 'nullable|integer|min:1|max:2000']);
-        $page = (int) $request->input('page', 1);
-        $perPage = 25;
+        $request->validate(['page' => 'nullable|integer|min:1|max:2000', 'per_page' => 'nullable|integer|in:-1,10,25,50,100',
+            'sort' => 'nullable|in:date,reference,location,source,category,amount,note', 'direction' => 'nullable|in:asc,desc']);
+        $perPage = (int) $request->input('per_page', 25);
+        $sort = $request->input('sort', 'date');
+        $direction = $request->input('direction', 'desc');
+        $fields = ['date' => 'transaction_date', 'reference' => 'ref_no', 'location' => 'location_name', 'source' => 'source',
+            'category' => 'category_name', 'amount' => 'amount', 'note' => 'additional_notes'];
+        $queries = [];
         $rows = collect();
         $count = 0;
         $amount = 0;
@@ -81,21 +86,46 @@ class FinancialExpenseController extends Controller
             $summary = (clone $query)->selectRaw("COUNT(*) as count, COALESCE(SUM(CASE WHEN t.type = 'expense_refund' THEN -t.final_total ELSE t.final_total END), 0) as amount")->first();
             $count += (int) $summary->count;
             $amount += (float) $summary->amount;
+            $queries[$source] = $query;
+        }
+        $lastPage = $perPage === -1 ? 1 : max(1, (int) ceil($count / $perPage));
+        $page = min((int) $request->input('page', 1), $lastPage);
+        foreach ($queries as $source => $query) {
             $records = (clone $query)->leftJoin('business_locations as location', 'location.id', '=', 't.location_id')
                 ->select('t.id', 't.transaction_date', 't.ref_no', 't.type', 't.final_total', 't.additional_notes', 'location.name as location_name')
                 ->selectRaw("COALESCE(root.name, ec.name, '__uncategorized__') as category_name")
-                ->orderByDesc('t.transaction_date')->orderByDesc('t.id')->limit($page * $perPage)->get();
-            foreach ($records as $row) {
+                ->selectRaw("CASE WHEN t.type = 'expense_refund' THEN -t.final_total ELSE t.final_total END as amount");
+            $expressions = ['date' => 't.transaction_date', 'reference' => 't.ref_no', 'location' => 'location.name',
+                'category' => "COALESCE(root.name, ec.name, '__uncategorized__')", 'note' => 't.additional_notes'];
+            if ($sort === 'amount') {
+                $records->orderBy('amount', $direction);
+            } elseif ($sort !== 'source') {
+                // Use the same byte ordering in each database and the merged result.
+                $expression = "COALESCE(".$expressions[$sort].", '')";
+                $expression = DB::connection($this->connection($source))->getDriverName() === 'sqlite'
+                    ? $expression.' COLLATE BINARY' : 'BINARY '.$expression;
+                $records->orderByRaw($expression.' '.$direction);
+            }
+            $records->orderByDesc('t.id');
+            if ($perPage !== -1) $records->limit($page * $perPage);
+            foreach ($records->get() as $row) {
                 $row->source = $source;
                 $row->amount = (float) $row->final_total * ($row->type === 'expense_refund' ? -1 : 1);
                 $row->edit_url = $request->user()->can('expense.edit') ? route('reports.financial-expenses.edit', [$source, $row->id]) : null;
                 $rows->push($row);
             }
         }
-        $rows = $rows->sortBy(fn ($row) => $row->transaction_date.'|'.str_pad($row->id, 20, '0', STR_PAD_LEFT).'|'.$row->source, SORT_REGULAR, true)
-            ->slice(($page - 1) * $perPage, $perPage)->values();
+        $field = $fields[$sort];
+        $rows = $rows->sort(function ($a, $b) use ($field, $direction) {
+            $order = $field === 'amount' ? $a->amount <=> $b->amount : strcmp((string) $a->$field, (string) $b->$field);
+            if ($order !== 0) return $direction === 'asc' ? $order : -$order;
 
-        return response()->json(['rows' => $rows, 'total' => $count, 'amount' => $amount, 'page' => $page, 'last_page' => max(1, (int) ceil($count / $perPage))]);
+            return ($b->id <=> $a->id) ?: strcmp($b->source, $a->source);
+        });
+        $rows = ($perPage === -1 ? $rows : $rows->slice(($page - 1) * $perPage, $perPage))->values();
+
+        return response()->json(['rows' => $rows, 'total' => $count, 'amount' => $amount, 'page' => $page,
+            'per_page' => $perPage, 'sort' => $sort, 'direction' => $direction, 'last_page' => $lastPage]);
     }
 
     private function expense(Request $request, string $source, int $id, bool $lock = false)

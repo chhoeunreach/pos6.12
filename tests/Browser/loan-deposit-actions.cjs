@@ -1,0 +1,100 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const {test} = require('node:test');
+const {JSDOM} = require('../../storage/app/stock-ui-tests/node_modules/jsdom');
+const jquery = require('../../storage/app/stock-ui-tests/node_modules/jquery');
+const root = path.resolve(__dirname, '../..');
+const tick = () => new Promise(resolve => setTimeout(resolve, 30));
+async function waitFor(predicate) { for (let i = 0; i < 50; i++) { if (predicate()) return; await tick(); } assert.ok(predicate(), 'async update completed'); }
+function block(amount = 100, deleted = false) {
+    return `<div id="wizCustomerDepositBlock"><div id="wizDepositFeedback" hidden></div><button class="wiz-deposit-refresh">Refresh</button><strong>${deleted ? 0 : amount}</strong>${deleted ? '' : `<div class="wiz-deposit-row" data-id="1"><div class="wiz-deposit-body"><div class="wiz-deposit-edit-form"><input name="amount" type="number" step="0.01" value="${amount}" min="0.01" required><input name="paid_date" value="2026-11-05"><input name="payment_type" value="loan"><input name="reference_number" value="REF-1"><textarea name="note">Deposit note</textarea><div class="wiz-deposit-methods" data-next-index="1"><div class="lm-method-row"><select name="payment_details[0][method]"><option value="cash">Cash</option></select><input class="lm-method-amount" name="payment_details[0][amount]" value="${amount}" type="number" step="0.01" min="0.01"><button class="lm-remove-method">Remove</button></div></div><button class="wiz-deposit-add-method">Add method</button><p class="wiz-deposit-method-total" data-label="Total" data-currency="USD" data-mismatch="Mismatch"></p><button class="wiz-deposit-update-btn">Update</button><button class="wiz-deposit-remove" data-return-to="/loan-management/loans/1/edit">Delete</button></div></div></div>`}</div>`;
+}
+function fixture() {
+    const dom = new JSDOM('<input id="unsaved-loan-field" value="Unsaved">' + block(), {url: 'http://localhost/loan-management/loans/1/edit', runScripts: 'outside-only'});
+    const $ = jquery(dom.window), requests = [], messages = [];
+    dom.window.jQuery = $;
+    dom.window.confirm = () => true;
+    dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+    Object.defineProperty(dom.window, 'parent', {value: {postMessage: (...args) => messages.push(args)}});
+    $.ajax = options => { const result = $.Deferred(); requests.push({options, result}); return result.promise(); };
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/loan-deposit-payments.js'), 'utf8'));
+    dom.window.LoanDepositPayments.init(dom.window.document);
+    dom.window.LoanDepositPayments.initActions({updateBase: '/loan-management/payments', refreshUrl: '/loan-management/loans/1/edit', token: 'csrf', loanId: 1, labels: {error: 'Save failed', refreshError: 'Saved; refresh failed'}});
+    return {dom, $, requests, messages};
+}
+test('updating sends every deposit field, refreshes only the block and signals its parent', async () => {
+    const f = fixture();
+    f.$('.wiz-deposit-update-btn').trigger('click');
+    const request = f.requests[0];
+    assert.match(request.options.data, /_method=PUT/);
+    assert.match(request.options.data, /_token=csrf/);
+    assert.match(request.options.data, /reference_number=REF-1/);
+    assert.match(request.options.data, /note=Deposit/);
+    assert.match(request.options.data, /payment_details/);
+    f.$('.wiz-deposit-remove').trigger('click');
+    assert.equal(f.requests.length, 1, 'duplicate mutations are blocked');
+    request.result.resolve({success: true, message: 'Saved'});
+    await tick();
+    assert.equal(f.messages[0][0].type, 'loan-deposit-payments-changed');
+    assert.equal(f.messages[0][1], 'http://localhost');
+    f.requests[1].result.resolve('<html><body>' + block(120) + '<script>window.bad=true</script></body></html>');
+    await tick();
+    assert.equal(f.$('[name="amount"]').val(), '120');
+    assert.equal(f.$('#unsaved-loan-field').val(), 'Unsaved');
+    assert.equal(f.$('.wiz-deposit-row').hasClass('open'), true);
+    assert.equal(f.$('#wizDepositFeedback').text(), 'Saved');
+    assert.equal(f.dom.window.bad, undefined);
+    assert.equal(f.$('.wiz-deposit-update-btn').prop('disabled'), false);
+});
+test('deletion confirms, deletes and replaces the deposit block with the empty state', async () => {
+    const f = fixture();
+    f.dom.window.confirm = () => false;
+    f.$('.wiz-deposit-remove').trigger('click');
+    assert.equal(f.requests.length, 0);
+    f.dom.window.confirm = () => true;
+    f.$('.wiz-deposit-remove').trigger('click');
+    assert.match(f.requests[0].options.data, /_method=DELETE/);
+    f.requests[0].result.resolve({success: true, message: 'Deleted'});
+    await tick();
+    f.requests[1].result.resolve(block(0, true));
+    await tick();
+    assert.equal(f.$('.wiz-deposit-row').length, 0);
+    assert.equal(f.$('#wizDepositFeedback').text(), 'Deleted');
+});
+test('validation failures keep edits and refresh failure reports that the payment was saved', async () => {
+    const f = fixture();
+    f.$('.wiz-deposit-update-btn').trigger('click');
+    f.requests[0].result.reject({responseJSON: {errors: {amount: ['Invalid amount']}}});
+    await waitFor(() => !f.$('.wiz-deposit-update-btn').prop('disabled'));
+    assert.equal(f.$('#wizDepositFeedback').text(), 'Invalid amount');
+    assert.equal(f.messages.length, 0);
+    assert.equal(f.$('.wiz-deposit-update-btn').prop('disabled'), false);
+    f.$('.wiz-deposit-update-btn').trigger('click');
+    f.requests[1].result.resolve({success: true});
+    await tick();
+    f.requests[2].result.reject({});
+    await waitFor(() => !f.$('.wiz-deposit-update-btn').prop('disabled'));
+    assert.equal(f.$('#wizDepositFeedback').text(), 'Saved; refresh failed');
+    assert.equal(f.$('.wiz-deposit-update-btn').prop('disabled'), false);
+});
+test('parent refreshes only after closing a changed modal from a verified iframe', () => {
+    const dom = new JSDOM('<div class="modal" id="parent-modal"><iframe></iframe></div>');
+    const $ = jquery(dom.window), handlers = {}, state = {reloads: 0};
+    const host = {jQuery: $, location: {origin: 'http://localhost', reload: () => state.reloads++}, addEventListener: (name, fn) => handlers[name] = fn};
+    host.parent = host;
+    vm.runInNewContext(fs.readFileSync(path.join(root, 'public/js/loan-deposit-refresh.js'), 'utf8'), {window: host, document: dom.window.document});
+    const frame = dom.window.document.querySelector('iframe');
+    const message = {origin: 'http://localhost', source: frame.contentWindow, data: {type: 'loan-deposit-payments-changed', loanId: 1}};
+    handlers.message({...message, origin: 'https://untrusted.test'});
+    $('#parent-modal').trigger('hidden.bs.modal');
+    assert.equal(state.reloads, 0);
+    handlers.message({...message, source: {}});
+    $('#parent-modal').trigger('hidden.bs.modal');
+    assert.equal(state.reloads, 0);
+    handlers.message(message);
+    assert.equal(state.reloads, 0);
+    $('#parent-modal').trigger('hidden.bs.modal');
+    assert.equal(state.reloads, 1);
+});

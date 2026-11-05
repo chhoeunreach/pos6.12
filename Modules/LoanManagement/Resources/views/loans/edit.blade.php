@@ -1172,7 +1172,7 @@
                     </div>
 
                     <!-- Customer Deposit / Down Payment Card -->
-                    <div class="lm-card">
+                    <div class="lm-card" id="wizCustomerDepositBlock">
                         <div class="lm-card-head">
                             <h3 class="lm-card-title"><i class="fa fa-money"></i> {{ $lmText('Customer Deposit Payments', 'ប្រាក់កក់របស់អតិថិជន') }}</h3>
                             <button type="button"
@@ -1184,6 +1184,8 @@
                             </button>
                         </div>
                         <div class="lm-card-body">
+                            <div class="alert" id="wizDepositFeedback" role="status" hidden></div>
+                            <button type="button" class="btn btn-xs btn-default wiz-deposit-refresh" style="margin-bottom:10px;"><i class="fa fa-refresh"></i> {{ $lmText('Refresh deposits', 'ផ្ទុកប្រាក់កក់ឡើងវិញ') }}</button>
                             <div class="lm-field">
                                 <label class="lm-label">{{ $lmText('Total Customer Deposit Paid', 'ប្រាក់កក់បានបង់សរុប') }}</label>
                                 <div class="lm-control" style="background: #f8fafc; font-weight: 800; color: #059669; display: flex; align-items: center;">
@@ -1236,8 +1238,10 @@
                                                         </div>
                                                     </div>
                                                     <input type="hidden" name="payment_type" value="{{ $dp->payment_type ?? 'loan' }}">
-                                                    <input type="hidden" name="reference_number" value="{{ $dp->reference_number ?? '' }}">
-                                                    <input type="hidden" name="note" value="{{ $dpNote }}">
+                                                    <div class="wiz-deposit-form-grid" style="margin-top:10px;">
+                                                        <div class="wiz-deposit-field"><label>{{ $lmText('Reference', 'លេខយោង') }}</label><input class="lm-wiz-input" name="reference_number" maxlength="191" value="{{ $dp->reference_number ?? '' }}"></div>
+                                                        <div class="wiz-deposit-field" style="grid-column:span 3;"><label>{{ $lmText('Note', 'កំណត់សម្គាល់') }}</label><textarea class="lm-wiz-input" name="note" maxlength="1000" rows="2">{{ $dpNote }}</textarea></div>
+                                                    </div>
                                                     @php
                                                         $dpMethodRows = ($dp->details ?? collect())->map(fn ($detail) => [
                                                             'id' => $detail->id,
@@ -2330,62 +2334,19 @@
         });
     });
 
-    $(document).on('click', '.wiz-deposit-remove', function () {
-        if (!confirm('{{ $lmText('Delete this deposit payment? This will update loan totals.', 'តើអ្នកពិតជាចង់លុបប្រាក់កក់នេះមែនទេ? ការលុបនេះនឹងគណនាតម្លៃសរុបឡើងវិញ។') }}')) return;
-        var $btn = $(this);
-        var paymentId = $btn.data('payment-id');
-        var returnTo = $btn.data('return-to');
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
-        $.ajax({
-            url: wizUrls.paymentUpdateBase + '/' + paymentId,
-            method: 'POST',
-            data: { _method: 'DELETE', _token: '{{ csrf_token() }}', return_to: returnTo },
-            dataType: 'json',
-            success: function (res) {
-                if (window.toastr) toastr.success(res.message || '{{ $lmText('Deposit removed.', 'ប្រាក់កក់ត្រូវបានលុប។') }}');
-                setTimeout(function () { window.location.reload(); }, 800);
-            },
-            error: function (xhr) {
-                var msg = (xhr.responseJSON && xhr.responseJSON.message) || '{{ $lmText('Failed to remove deposit.', 'មិនអាចលុបប្រាក់កក់បានទេ។') }}';
-                if (window.toastr) toastr.error(msg); else alert(msg);
-                $btn.prop('disabled', false).html('{{ $lmText('Remove', 'លុបចេញ') }}');
-            }
-        });
-    });
-
-    $(document).on('click', '.wiz-deposit-update-btn', function () {
-        var $btn = $(this);
-        var $form = $btn.closest('.wiz-deposit-edit-form');
-        var $row = $form.closest('.wiz-deposit-row');
-        var paymentId = $row.data('id');
-        if (!window.LoanDepositPayments.validate($form[0])) return;
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
-        var payload = $form.find(':input').serializeArray();
-        payload.push({ name: '_token', value: '{{ csrf_token() }}' });
-        payload.push({ name: '_method', value: 'PUT' });
-        $.ajax({
-            url: wizUrls.paymentUpdateBase + '/' + paymentId,
-            method: 'POST',
-            data: $.param(payload),
-            dataType: 'json',
-            success: function (res) {
-                if (window.toastr) toastr.success(res.message || '{{ $lmText('Deposit updated.', 'ប្រាក់កក់ត្រូវបានកែប្រែ។') }}');
-                setTimeout(function () { window.location.reload(); }, 800);
-            },
-            error: function (xhr) {
-                var errors = xhr.responseJSON && xhr.responseJSON.errors;
-                var firstError = errors && errors[Object.keys(errors)[0]];
-                var msg = (firstError && firstError[0]) || (xhr.responseJSON && xhr.responseJSON.message) || '{{ $lmText('Failed to update deposit.', 'មិនអាចកែប្រែប្រាក់កក់បានទេ។') }}';
-                if (window.toastr) toastr.error(msg); else alert(msg);
-            },
-            complete: function () {
-                $btn.prop('disabled', false).html('{{ $lmText('Update Deposit', 'កែប្រែប្រាក់កក់') }}');
-            }
-        });
-    });
-
     $(function () {
         window.LoanDepositPayments.init(document);
+        window.LoanDepositPayments.initActions({
+            updateBase: wizUrls.paymentUpdateBase, token: @json(csrf_token()), loanId: @json($loanRow->id),
+            refreshUrl: @json(route('loan-management.loans.edit', $editRouteParams)),
+            labels: {
+                confirmDelete: @json($lmText('Delete this deposit payment? This will update loan totals.', 'តើអ្នកពិតជាចង់លុបប្រាក់កក់នេះមែនទេ? ការលុបនេះនឹងគណនាតម្លៃសរុបឡើងវិញ។')),
+                updated: @json($lmText('Deposit updated.', 'ប្រាក់កក់ត្រូវបានកែប្រែ។')),
+                deleted: @json($lmText('Deposit removed.', 'ប្រាក់កក់ត្រូវបានលុប។')),
+                error: @json($lmText('Unable to save the deposit. Please try again.', 'មិនអាចរក្សាទុកប្រាក់កក់បានទេ។ សូមព្យាយាមម្តងទៀត។')),
+                refreshError: @json($lmText('The payment was saved, but the deposit block could not refresh. Click Refresh deposits.', 'ការទូទាត់ត្រូវបានរក្សាទុក ប៉ុន្តែមិនអាចផ្ទុកប្លុកប្រាក់កក់ឡើងវិញបានទេ។ សូមចុចផ្ទុកប្រាក់កក់ឡើងវិញ។'))
+            }
+        });
         wizEditRecalcTotals();
         wizInitAddressSelects();
     });

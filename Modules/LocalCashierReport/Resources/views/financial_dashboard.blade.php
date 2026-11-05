@@ -5,6 +5,9 @@
     $fmt = fn ($value) => $value === null ? '—' : ($value < 0 ? '(' . $currencySymbol . number_format(abs($value), 2) . ')' : $currencySymbol . number_format($value, 2));
     $query = $filters + ['report_lang' => $language, 'location_filter_applied' => 1];
     $financeLink = fn ($overrides = []) => route('reports.financial-dashboard', array_merge($query, $overrides));
+    $costDetailsLink = fn ($overrides = []) => route('reports.financial-cost-sales.index', array_merge($query, $overrides));
+    $salesDetailsLink = fn ($overrides = []) => route('reports.financial-sales.index', array_merge($query, $overrides));
+    $canViewSales = auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.view') || auth()->user()->can('direct_sell.access') || auth()->user()->can('view_own_sell_only');
     $expenseDetailsLink = fn ($overrides = []) => route('reports.financial-expenses.index', array_merge($query, $overrides));
     $canViewExpenseDetails = auth()->user()->can('all_expense.access') || auth()->user()->can('view_own_expense');
     $clearExpenses = ['expense_filter_applied' => 0, 'expense_categories' => [], 'excluded_expense_categories' => []];
@@ -13,8 +16,7 @@
     $selectedExpenses = array_values(array_diff($filters['expense_filter_applied'] ? $filters['expense_categories'] : $report['expense_options'], $filters['excluded_expense_categories']));
     $total = $report['total'];
     $units = fn ($value) => $value === null ? '—' : rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
-    $performanceMetrics = ['main_sales', 'accessory_sales', 'service_sales'];
-    $performanceMetrics = [...$performanceMetrics, 'net_sales', 'cost', 'gross_profit', 'gross_margin'];
+    $performanceMetrics = ['main_sales', 'accessory_sales', 'service_sales', 'net_sales', 'cost', 'gross_profit', 'gross_margin'];
     $chartRows = array_values(array_filter($report['expenses'], fn ($row) => $row['total'] > 0));
     if (count($chartRows) > 8) {
         $rest = array_slice($chartRows, 8);
@@ -42,7 +44,7 @@
 .finance-filter-panel{border:1px solid var(--line);background:#fff;border-radius:9px;margin-bottom:16px}.finance-filter-panel summary{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 17px;cursor:pointer;font-size:12px;font-weight:600;list-style:none}.finance-filter-panel summary::-webkit-details-marker{display:none}.finance-filter-summary{font-size:11px;font-weight:400;color:var(--muted)}.finance-filter-panel[open] summary{border-bottom:1px solid var(--line)}.finance-filter-panel[open] summary .fa-chevron-down{transform:rotate(180deg)}.finance-filter-panel .finance-filter{border:0;margin:0;border-radius:0 0 9px 9px}.finance-category-tools{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;margin-top:7px}.finance-category-tools button{border:0;background:transparent;color:var(--blue);padding:0}.finance-active-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.finance-active-filters:empty{display:none}.finance-filter-chip{padding:5px 10px;background:#e3edf9;color:#234f81;border-radius:15px;font-size:11px}.finance-expense-scope{padding:9px 12px;border-left:3px solid #3876b5;background:#eaf1fa;font-size:11px;line-height:1.8}.finance-data-link{color:inherit}.finance-data-link:hover,.finance-data-link:focus{color:var(--blue);text-decoration:underline}.finance-result .finance-data-link:hover{color:#fff}.finance-remove-category{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;color:#a0394c;font-size:17px;vertical-align:middle}.finance-remove-category:hover{background:#fde8ec;color:#962238}.finance-bar-row.finance-data-link{display:block;color:var(--ink)}.finance-bar-row.finance-data-link:hover{text-decoration:none}.finance-bar-row:hover .finance-bar-track{outline:1px solid #84a6cb}.finance-filter-panel .finance-field:has(#finance-date-range){min-width:235px}
 @media print{.finance-data-link{color:inherit!important;text-decoration:none!important}.finance-filter-chip{display:none}}
 .finance-chart-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 15px;font-size:10px}.finance-chart-controls .finance-btn{font-size:10px;padding:6px 9px;min-height:30px}.finance-chart-total{margin:0 15px 12px;padding:12px;background:#edf2f8;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}.finance-chart-total strong{font-variant-numeric:tabular-nums;font-size:16px}.finance-chart-item{margin-bottom:16px}.finance-chart-item .finance-bar-row{margin-bottom:3px}.finance-chart-item-actions{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:10px}.finance-chart-item:nth-child(2n) .finance-bar-fill{background:#3876b5}.finance-chart-item:first-child .finance-bar-fill,.finance-chart-item:nth-child(4n) .finance-bar-fill{background:#c62e46}
-#finance-expense-details-modal .modal-dialog{width:96%;max-width:1150px}#finance-expense-details-modal .modal-content{font-size:12px}#finance-details-table th,#finance-details-table td{font-size:11px;vertical-align:middle}#finance-details-table td{max-width:260px;word-break:break-word}.finance-edit-form{background:#f1f5fa;padding:15px;border:1px solid var(--line);border-radius:7px;margin-bottom:16px}.finance-edit-form h4{font-size:14px;margin:0 0 15px}.finance-edit-form label{font-size:11px}.finance-details-summary,.finance-details-pagination{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:12px 0}.finance-chart-details{display:block;font-size:11px;margin:0 15px 10px}.finance-section-row .finance-btn{font-size:10px;padding:4px 9px;min-height:26px;margin-left:10px}
+.finance-selection-trigger{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.finance-selection-options{max-height:50vh;overflow-y:auto;border:1px solid #d9e2ec;border-radius:5px}.finance-selection-option{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0;border-bottom:1px solid #edf1f5;cursor:pointer;font-weight:400}.finance-selection-option input{margin:0;flex-shrink:0}.finance-selection-option[hidden]{display:none}.finance-formula-hint{display:block;font-size:.85em;font-weight:400;line-height:1.6;opacity:.8;margin-top:3px}.finance-sales-sort,.finance-expense-sort{background:transparent;border:0;padding:0;color:inherit;font:inherit;font-weight:700;text-align:inherit;cursor:pointer}.finance-sales-sort:focus-visible,.finance-expense-sort:focus-visible{outline:2px solid #24568a;outline-offset:3px}.finance-sales-sort span,.finance-expense-sort span{margin-left:5px}#finance-expense-details-modal .modal-dialog{width:96%;max-width:1150px}#finance-expense-details-modal .modal-content{font-size:12px}#finance-details-table th,#finance-details-table td{font-size:11px;vertical-align:middle}#finance-details-table td{max-width:260px;word-break:break-word}.finance-edit-form{background:#f1f5fa;padding:15px;border:1px solid var(--line);border-radius:7px;margin-bottom:16px}.finance-edit-form h4{font-size:14px;margin:0 0 15px}.finance-edit-form label{font-size:11px}.finance-details-summary,.finance-details-pagination{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:12px 0}.finance-chart-details{display:block;font-size:11px;margin:0 15px 10px}.finance-section-row .finance-btn{font-size:10px;padding:4px 9px;min-height:26px;margin-left:10px}
 @media print{#main_app_header,.side-bar,.main-footer,#receipt_section,.print_section,.finance-topline,.finance-active-filters{display:none!important}.thetop,.thetop>main,#scrollable-container{display:block!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;width:100%!important}.financial-dashboard{width:100%!important}.finance-kpis{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
 </style>
 @endsection
@@ -69,17 +71,17 @@
             <input type="hidden" id="finance-start" name="start_date" value="{{ $filters['start_date'] }}" aria-label="{{ $t('from_date') }}">
             <input type="hidden" id="finance-end" name="end_date" value="{{ $filters['end_date'] }}" aria-label="{{ $t('to_date') }}">
             <div class="finance-field"><label for="finance-date-range">{{ $t('date_range') }}</label><div class="input-group"><span class="input-group-addon"><i class="fa fa-calendar" aria-hidden="true"></i></span><input class="form-control" id="finance-date-range" value="{{ $filters['start_date'] }} ~ {{ $filters['end_date'] }}" readonly></div></div>
-            <div class="finance-field locations"><label for="finance-locations">{{ $t('locations') }}</label><select class="form-control select2" id="finance-locations" name="location_ids[]" multiple>
+            <div class="finance-field locations"><label for="finance-choose-locations">{{ $t('locations') }}</label><button type="button" class="form-control finance-selection-trigger" id="finance-choose-locations" data-select="finance-locations" data-title="{{ $t('locations') }}" aria-haspopup="dialog">{{ $t('locations') }}</button><select hidden id="finance-locations" name="location_ids[]" multiple>
                 @foreach($locations as $location)<option value="{{ $location->id }}" @selected(in_array((int) $location->id, $filters['location_ids'], true))>{{ $location->name }}</option>@endforeach
             </select></div>
             <div class="finance-field"><label for="finance-source">{{ $t('finance_source') }}</label><select class="form-control" id="finance-source" name="source">@foreach(['all', 'main', 'accessory', 'service'] as $source)<option value="{{ $source }}" @selected($filters['source'] === $source)>{{ $t('finance_source_'.$source) }}</option>@endforeach</select></div>
-            <div class="finance-field locations"><label for="finance-expense-categories">{{ $t('expense_breakdown') }}</label>
+            <div class="finance-field locations"><label for="finance-choose-expenses">{{ $t('expense_breakdown') }}</label><button type="button" class="form-control finance-selection-trigger" id="finance-choose-expenses" data-select="finance-expense-categories" data-title="{{ $t('expense_breakdown') }}" aria-haspopup="dialog">{{ $t('expense_breakdown') }}</button>
                 <input type="hidden" id="finance-expense-filter-applied" name="expense_filter_applied" value="{{ $filters['expense_filter_applied'] }}">
                 @foreach($filters['excluded_expense_categories'] as $excluded)<input type="hidden" class="finance-excluded-category" name="excluded_expense_categories[]" value="{{ $excluded }}">@endforeach
-                <select class="form-control select2" id="finance-expense-categories" name="expense_categories[]" multiple>
+                <select hidden id="finance-expense-categories" name="expense_categories[]" multiple>
                     @foreach($expenseChoices as $name)<option value="{{ $name }}" @selected(in_array($name, $selectedExpenses, true))>{{ $name === '__uncategorized__' ? $t('uncategorized') : $name }}</option>@endforeach
                 </select>
-                <div class="finance-category-tools"><button type="button" id="finance-expenses-all">{{ $t('select_all') }}</button><button type="button" id="finance-expenses-none">{{ $t('deselect_all') }}</button><a href="{{ $financeLink($clearExpenses) }}">{{ $t('finance_restore_expenses') }}</a></div>
+                <div class="finance-category-tools"><a href="{{ $financeLink($clearExpenses) }}">{{ $t('finance_restore_expenses') }}</a></div>
             </div>
             <button class="finance-btn primary" type="submit"><i class="fa fa-filter" aria-hidden="true"></i> {{ $t('view_report') }}</button>
             <a class="finance-btn" href="{{ route('reports.financial-dashboard', ['report_lang' => $language]) }}">{{ $t('reset') }}</a>
@@ -87,9 +89,9 @@
         </form>
     </details>
     <div class="finance-active-filters">
-        @if($filters['source'] !== 'all')<a class="finance-filter-chip" href="{{ $financeLink(['source' => 'all']) }}">{{ $t('finance_source_'.$filters['source']) }} <span aria-hidden="true">×</span></a>@endif
+        @if($filters['source'] !== 'all')<a class="finance-filter-chip" href="{{ $financeLink(['source' => 'all']) }}">{{ $t('finance_source_'.$filters['source']) }} <span class="finance-sort-indicator" aria-hidden="true">×</span></a>@endif
         @if($report['expense_filter_active'])<div class="finance-expense-scope">{{ $t('finance_expense_filter_note') }} <a href="{{ $financeLink($clearExpenses) }}">{{ $t('finance_restore_expenses') }}</a></div>@endif
-        @foreach($filters['excluded_expense_categories'] as $name)<a class="finance-filter-chip" href="{{ $financeLink(['excluded_expense_categories' => array_values(array_diff($filters['excluded_expense_categories'], [$name]))]) }}">{{ $t('finance_excluded') }}: {{ $name === '__uncategorized__' ? $t('uncategorized') : $name }} <span aria-hidden="true">×</span></a>@endforeach
+        @foreach($filters['excluded_expense_categories'] as $name)<a class="finance-filter-chip" href="{{ $financeLink(['excluded_expense_categories' => array_values(array_diff($filters['excluded_expense_categories'], [$name]))]) }}">{{ $t('finance_excluded') }}: {{ $name === '__uncategorized__' ? $t('uncategorized') : $name }} <span class="finance-sort-indicator" aria-hidden="true">×</span></a>@endforeach
     </div>
     @if($errors->any())<div class="finance-warning" role="alert">{{ $errors->first() }}</div>@endif
     @if($report['unavailable'])<div class="finance-warning" role="alert">{{ $t('finance_unavailable') }}</div>@endif
@@ -99,8 +101,8 @@
 
     <div class="finance-kpis">
         <div class="finance-kpi finance-kpi-profit"><div class="finance-kpi-label"><span>{{ $t('finance_gross_profit') }} <small>{{ $language === 'km' ? '(Gross Profit)' : '' }}</small></span><i class="fa fa-line-chart" aria-hidden="true"></i></div><div class="finance-kpi-value">{{ $fmt($total['gross_profit']) }}</div><div class="finance-kpi-foot">{{ $t('gross_profit_formula') }}</div></div>
-        <div class="finance-kpi finance-kpi-revenue"><div class="finance-kpi-label"><span>{{ $t('total_revenue') }} <small>{{ $language === 'km' ? '(Total Revenue)' : '' }}</small></span><i class="fa fa-dollar" aria-hidden="true"></i></div><div class="finance-kpi-value">{{ $fmt($total['net_sales']) }}</div><div class="finance-kpi-foot">{{ \Carbon\Carbon::parse($filters['start_date'])->format('d M') }} — {{ \Carbon\Carbon::parse($filters['end_date'])->format('d M Y') }}</div></div>
-        <div class="finance-kpi finance-kpi-units"><div class="finance-kpi-label"><span>{{ $t('total_units_sold') }} <small>{{ $language === 'km' ? '(Total Units Sold)' : '' }}</small></span><i class="fa fa-cubes" aria-hidden="true"></i></div><div class="finance-kpi-value">{{ $units($total['units']) }} <small>{{ $t('units') }}</small></div><div class="finance-kpi-foot">{{ $t('units_net_returns') }}</div></div>
+        <div class="finance-kpi finance-kpi-revenue"><div class="finance-kpi-label"><span>{{ $t('finance_net_sales') }} <small>{{ $language === 'km' ? '(Total Revenue)' : '' }}</small></span><i class="fa fa-dollar" aria-hidden="true"></i></div><div class="finance-kpi-value">{{ $fmt($total['net_sales']) }}</div><div class="finance-kpi-foot">{{ \Carbon\Carbon::parse($filters['start_date'])->format('d M') }} — {{ \Carbon\Carbon::parse($filters['end_date'])->format('d M Y') }}</div></div>
+        <div class="finance-kpi finance-kpi-units"><div class="finance-kpi-label"><span>{{ $t('total_units_sold') }} <small>{{ $language === 'km' ? '(Total Units Sold)' : '' }}</small></span><i class="fa fa-cubes" aria-hidden="true"></i></div><div class="finance-kpi-value">@if($canViewSales && $total['units'] !== null)<a class="finance-sales-details finance-data-link" href="{{ $salesDetailsLink() }}">{{ $units($total['units']) }} <small>{{ $t('units') }}</small></a>@else{{ $units($total['units']) }} <small>{{ $t('units') }}</small>@endif</div><div class="finance-kpi-foot">{{ $t('units_net_returns') }}</div></div>
         <div class="finance-kpi finance-kpi-location"><div class="finance-kpi-label"><span>{{ $t('top_location') }} <small>{{ $language === 'km' ? '(Top Location)' : '' }}</small></span><i class="fa fa-map-marker" aria-hidden="true"></i></div><div class="finance-kpi-value finance-top-name">@if($report['top_location'])<a class="finance-data-link" href="{{ $financeLink(['location_ids' => $report['top_location']['location_ids']]) }}">{{ $report['top_location']['name'] }}</a>@else — @endif</div><div class="finance-kpi-foot">{{ $report['top_location'] ? $units($report['top_location']['units']).' '.$t('units') : ($total['units'] === null ? $t('not_available') : $t('no_sales')) }}</div></div>
     </div>
 
@@ -112,26 +114,26 @@
             <div class="finance-panel-heading"><h2>{{ $t('financial_performance') }}</h2><span>{{ $currencySymbol }} · {{ $t('currency') }}</span></div>
             <div class="finance-table-wrap"><table class="finance-table finance-combined-table">
                 <thead><tr><th scope="col"><div>{{ $t('financial_overview') }}</div><small>{{ $filters['start_date'] }} — {{ $filters['end_date'] }}</small></th>
-                    @foreach($report['branches'] as $branch)<th scope="col"><a href="{{ route('reports.financial-dashboard', array_merge($query, ['location_ids' => $branch['location_ids']])) }}">{{ $branch['name'] }}<strong>{{ $units($branch['units']) }} {{ $t('units') }}</strong></a></th>@endforeach
-                    <th scope="col">{{ $t('total') }}<strong>{{ $units($total['units']) }} {{ $t('units') }}</strong></th></tr></thead>
+                    @foreach($report['branches'] as $branch)<th scope="col"><a href="{{ route('reports.financial-dashboard', array_merge($query, ['location_ids' => $branch['location_ids']])) }}">{{ $branch['name'] }}</a><strong>@if($canViewSales && $branch['units'] !== null)<a class="finance-sales-details" href="{{ $salesDetailsLink(['location_ids' => $branch['location_ids']]) }}">{{ $units($branch['units']) }} {{ $t('units') }}</a>@else{{ $units($branch['units']) }} {{ $t('units') }}@endif</strong></th>@endforeach
+                    <th scope="col">{{ $t('total') }}<strong>@if($canViewSales && $total['units'] !== null)<a class="finance-sales-details" href="{{ $salesDetailsLink() }}">{{ $units($total['units']) }} {{ $t('units') }}</a>@else{{ $units($total['units']) }} {{ $t('units') }}@endif</strong></th></tr></thead>
                 <tbody>
                 @foreach($performanceMetrics as $metric)
                     <tr class="{{ in_array($metric, ['net_sales', 'gross_profit']) ? 'finance-subtotal' : (str_contains($metric, 'margin') ? 'finance-margin' : '') }}">
-                        <th scope="row">{{ $t('finance_'.$metric) }}</th>
+                        <th scope="row">{{ $t('finance_'.$metric) }}@if(in_array($metric, ['net_sales', 'gross_profit', 'net_profit']))<small class="finance-formula-hint">{{ $t('finance_formula_'.$metric) }}</small>@endif</th>
                         @foreach([...array_values($report['branches']), $total] as $branch)@include('localcashierreport::partials.financial_metric_cell')@endforeach
                     </tr>
                 @endforeach
                 <tr class="finance-section-row"><th colspan="{{ count($report['branches']) + 2 }}">{{ $t('expense_breakdown') }} @if($canViewExpenseDetails)<a class="finance-expense-details finance-btn finance-no-print" href="{{ $expenseDetailsLink() }}">{{ $t('finance_expense_details') }}</a>@endif</th></tr>
                 @if($report['unavailable'])<tr><td colspan="{{ count($report['branches']) + 2 }}">{{ $t('finance_unavailable') }}</td></tr>
                 @else
-                    @forelse($report['expenses'] as $expense)<tr><th scope="row"><a class="finance-data-link" href="{{ $focusExpense($expense['name']) }}" title="{{ $t('finance_click_filter') }}">{{ $expense['name'] === '__uncategorized__' ? $t('uncategorized') : $expense['name'] }}</a> <a class="finance-remove-category finance-no-print" href="{{ $financeLink(['excluded_expense_categories' => array_values(array_unique([...$filters['excluded_expense_categories'], $expense['name']]))]) }}" aria-label="{{ $t('finance_remove_category') }}: {{ $expense['name'] }}" title="{{ $t('finance_remove_category') }}">×</a></th>
+                    @forelse($report['expenses'] as $expense)<tr><th scope="row"><a class="finance-data-link {{ $canViewExpenseDetails ? 'finance-expense-details' : '' }}" href="{{ $canViewExpenseDetails ? $expenseDetailsLink(['expense_filter_applied' => 1, 'expense_categories' => [$expense['name']], 'excluded_expense_categories' => []]) : $focusExpense($expense['name']) }}" title="{{ $t($canViewExpenseDetails ? 'finance_expense_details' : 'finance_click_filter') }}">{{ $expense['name'] === '__uncategorized__' ? $t('uncategorized') : $expense['name'] }}</a> <a class="finance-remove-category finance-no-print" href="{{ $financeLink(['excluded_expense_categories' => array_values(array_unique([...$filters['excluded_expense_categories'], $expense['name']]))]) }}" aria-label="{{ $t('finance_remove_category') }}: {{ $expense['name'] }}" title="{{ $t('finance_remove_category') }}">×</a></th>
                     @foreach($report['branches'] as $key => $expenseBranch)<td><a class="finance-data-link {{ $canViewExpenseDetails ? 'finance-expense-details' : '' }}" href="{{ $canViewExpenseDetails ? $expenseDetailsLink(['location_ids' => $expenseBranch['location_ids'], 'expense_filter_applied' => 1, 'expense_categories' => [$expense['name']], 'excluded_expense_categories' => []]) : $focusExpense($expense['name'], ['location_ids' => $expenseBranch['location_ids']]) }}">{{ $fmt($expense['values'][$key] ?? 0) }}</a></td>@endforeach<td><a class="finance-data-link {{ $canViewExpenseDetails ? 'finance-expense-details' : '' }}" href="{{ $canViewExpenseDetails ? $expenseDetailsLink(['expense_filter_applied' => 1, 'expense_categories' => [$expense['name']], 'excluded_expense_categories' => []]) : $focusExpense($expense['name']) }}">{{ $fmt($expense['total']) }}</a></td></tr>
                     @empty<tr><td colspan="{{ count($report['branches']) + 2 }}">{{ $t('finance_no_expenses') }}</td></tr>@endforelse
                 @endif
                 </tbody>
                 <tbody class="finance-totals">
                 @foreach(['expenses', 'net_profit', 'margin'] as $metric)
-                    <tr class="{{ $metric === 'net_profit' ? 'finance-result' : ($metric === 'expenses' ? 'finance-subtotal' : 'finance-margin') }}"><th scope="row">{{ $t('finance_'.$metric) }}</th>@foreach([...array_values($report['branches']), $total] as $branch)@include('localcashierreport::partials.financial_metric_cell')@endforeach</tr>
+                    <tr class="{{ $metric === 'net_profit' ? 'finance-result' : ($metric === 'expenses' ? 'finance-subtotal' : 'finance-margin') }}"><th scope="row">{{ $t('finance_'.$metric) }}@if(in_array($metric, ['net_sales', 'gross_profit', 'net_profit']))<small class="finance-formula-hint">{{ $t('finance_formula_'.$metric) }}</small>@endif</th>@foreach([...array_values($report['branches']), $total] as $branch)@include('localcashierreport::partials.financial_metric_cell')@endforeach</tr>
                 @endforeach
                 </tbody>
             </table></div>
@@ -150,7 +152,7 @@
             @else<div class="finance-chart">
                 @foreach($chartRows as $expense)
                     <div class="finance-chart-item">
-                        <a class="finance-bar-row finance-data-link" href="{{ $focusExpense($expense['category_names'] ?? [$expense['name']]) }}" title="{{ $t('finance_click_filter') }}"><div class="finance-bar-label"><span>{{ $expense['name'] === '__other__' ? $t('finance_remaining_categories').' ('.count($expense['category_names']).')' : ($expense['name'] === '__uncategorized__' ? $t('uncategorized') : $expense['name']) }}</span><strong>{{ number_format($expense['share'], 1) }}%</strong></div><div class="finance-bar-track" role="img" aria-label="{{ number_format($expense['share'], 1) }}%"><div class="finance-bar-fill" style="width:{{ min(100, max(0, $expense['share'])) }}%"></div></div></a>
+                        <a class="finance-bar-row finance-data-link {{ $canViewExpenseDetails ? 'finance-expense-details' : '' }}" href="{{ $canViewExpenseDetails ? $expenseDetailsLink(['expense_filter_applied' => 1, 'expense_categories' => $expense['category_names'] ?? [$expense['name']], 'excluded_expense_categories' => []]) : $focusExpense($expense['category_names'] ?? [$expense['name']]) }}" title="{{ $t($canViewExpenseDetails ? 'finance_expense_details' : 'finance_click_filter') }}"><div class="finance-bar-label"><span>{{ $expense['name'] === '__other__' ? $t('finance_remaining_categories').' ('.count($expense['category_names']).')' : ($expense['name'] === '__uncategorized__' ? $t('uncategorized') : $expense['name']) }}</span><strong>{{ number_format($expense['share'], 1) }}%</strong></div><div class="finance-bar-track" role="img" aria-label="{{ number_format($expense['share'], 1) }}%"><div class="finance-bar-fill" style="width:{{ min(100, max(0, $expense['share'])) }}%"></div></div></a>
                         <div class="finance-chart-item-actions"><span>@if($canViewExpenseDetails)<a class="finance-expense-details finance-data-link" href="{{ $expenseDetailsLink(['expense_filter_applied' => 1, 'expense_categories' => $expense['category_names'] ?? [$expense['name']], 'excluded_expense_categories' => []]) }}">{{ $fmt($expense['total']) }}</a>@else{{ $fmt($expense['total']) }}@endif</span><a class="finance-remove-category finance-no-print" href="{{ $financeLink(['excluded_expense_categories' => array_values(array_unique([...$filters['excluded_expense_categories'], ...($expense['category_names'] ?? [$expense['name']])]))]) }}" title="{{ $t('finance_remove_category') }}" aria-label="{{ $t('finance_remove_category') }}">×</a></div>
                     </div>
                 @endforeach
@@ -158,14 +160,39 @@
         </aside>
     </div>
     @endif
+<div class="modal fade finance-no-print" id="finance-selection-modal" tabindex="-1" role="dialog" aria-labelledby="finance-selection-title">
+    <div class="modal-dialog" role="document"><div class="modal-content">
+        <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 class="modal-title" id="finance-selection-title"></h4></div>
+        <div class="modal-body">
+            <label class="finance-screen-reader" for="finance-selection-search">{{ $t('search') }}</label><input class="form-control" id="finance-selection-search" type="search" placeholder="{{ $t('search') }}" autocomplete="off">
+            <div class="finance-details-pagination"><button type="button" class="finance-btn" id="finance-selection-all">{{ $t('select_all') }}</button><button type="button" class="finance-btn" id="finance-selection-none">{{ $t('deselect_all') }}</button><span id="finance-selection-count" role="status"></span></div>
+            <div id="finance-selection-options" class="finance-selection-options"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="finance-btn" data-dismiss="modal">{{ $t('cancel') }}</button><button type="button" class="finance-btn primary" id="finance-selection-apply">{{ $t('apply') }}</button></div>
+    </div></div>
+</div>
 <div class="modal fade finance-no-print" id="finance-expense-details-modal" tabindex="-1" role="dialog" aria-labelledby="finance-expense-modal-title">
     <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
         <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 class="modal-title" id="finance-expense-modal-title">{{ $t('finance_expense_details') }}</h4></div>
         <div class="modal-body">
             <div id="finance-details-error" class="alert alert-danger" role="alert" hidden></div>
             <div id="finance-details-success" class="alert alert-success" role="status" hidden></div>
+
+            <div class="finance-details-summary"><span id="finance-details-count"></span><strong id="finance-details-total"></strong><label>{{ $t('finance_rows_per_page') }} <select id="finance-details-page-size" class="finance-btn"><option>10</option><option selected>25</option><option>50</option><option>100</option><option value="-1">{{ $t('all') }}</option></select></label><button type="button" class="finance-btn" id="finance-details-refresh">{{ $t('finance_refresh') }}</button></div>
+            <div class="table-responsive"><table class="table table-striped table-bordered" id="finance-details-table"><thead><tr>
+                <th scope="col" aria-sort="descending"><button type="button" class="finance-expense-sort" data-sort="date">{{ $t('date') }} <span class="finance-sort-indicator" aria-hidden="true">▼</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="reference">{{ $t('ref_no') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="location">{{ $t('location') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="source">{{ $t('finance_source') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="category">{{ $t('expense_category') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="amount">{{ $t('amount') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-expense-sort" data-sort="note">{{ $t('finance_expense_note') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col">{{ $t('edit') }}</th>
+            </tr></thead><tbody></tbody></table></div>
+            <div class="finance-details-pagination"><button type="button" class="finance-btn" id="finance-details-prev">{{ $t('previous') }}</button><label>{{ $t('finance_page') }} <input type="number" id="finance-details-page-input" class="finance-btn" min="1" value="1" style="width:80px"></label><span id="finance-details-page"></span><button type="button" class="finance-btn" id="finance-details-next">{{ $t('next') }}</button></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="finance-btn" data-dismiss="modal">{{ $t('close') }}</button></div>
+    </div></div>
+</div>
+<div class="modal fade finance-no-print" id="finance-expense-edit-modal" tabindex="-1" role="dialog" aria-labelledby="finance-expense-edit-title" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
+        <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 class="modal-title" id="finance-expense-edit-title">{{ $t('edit') }} · {{ $t('expenses') }}</h4></div>
+        <div class="modal-body">
+            <div id="finance-edit-error" class="alert alert-danger" role="alert" hidden></div>
             <form id="finance-details-edit-form" class="finance-edit-form" hidden>
-                <h4>{{ $t('edit') }} · {{ $t('expenses') }}</h4>
                 <input type="hidden" name="report_lang" value="{{ $language }}">
                 <input type="hidden" name="updated_at" id="finance-edit-version">
                 <div class="row">
@@ -178,11 +205,20 @@
                 </div>
                 <button class="finance-btn primary" type="submit">{{ $t('finance_save_expense') }}</button><button class="finance-btn" type="button" id="finance-edit-cancel">{{ $t('cancel') }}</button>
             </form>
-            <div class="finance-details-summary"><span id="finance-details-count"></span><strong id="finance-details-total"></strong></div>
-            <div class="table-responsive"><table class="table table-striped table-bordered" id="finance-details-table"><thead><tr>
-                <th>{{ $t('date') }}</th><th>{{ $t('ref_no') }}</th><th>{{ $t('location') }}</th><th>{{ $t('finance_source') }}</th><th>{{ $t('expense_category') }}</th><th>{{ $t('amount') }}</th><th>{{ $t('finance_expense_note') }}</th><th>{{ $t('edit') }}</th>
+        </div>
+    </div></div>
+</div>
+<div class="modal fade finance-no-print" id="finance-sales-modal" tabindex="-1" role="dialog" aria-labelledby="finance-sales-title">
+    <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
+        <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 id="finance-sales-title" data-default-title="{{ $t('finance_sales_list') }}">{{ $t('finance_sales_list') }}</h4></div>
+        <div class="modal-body">
+            <p>{{ $filters['start_date'] }} — {{ $filters['end_date'] }} · <span id="finance-sales-basis">{{ $t('units_net_returns') }}</span></p>
+            <div id="finance-sales-error" class="alert alert-danger" role="alert" hidden></div>
+            <div class="finance-details-pagination"><p id="finance-sales-summary" role="status"></p><label>{{ $t('finance_rows_per_page') }} <select id="finance-sales-page-size" class="finance-btn"><option>10</option><option selected>25</option><option>50</option><option>100</option><option value="-1">{{ $t('all') }}</option></select></label><button type="button" class="finance-btn" id="finance-sales-refresh">{{ $t('finance_refresh') }}</button></div>
+            <div class="table-responsive"><table class="table table-striped table-bordered" id="finance-sales-table"><thead><tr>
+                <th scope="col" aria-sort="descending"><button type="button" class="finance-sales-sort" data-sort="date">{{ $t('date') }} <span class="finance-sort-indicator" aria-hidden="true">▼</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-sales-sort" data-sort="invoice">{{ $t('invoice_no') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-sales-sort" data-sort="customer">{{ $t('customer') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-sales-sort" data-sort="location">{{ $t('location') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-sales-sort" data-sort="units">{{ $t('units') }} <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="finance-sales-sort" data-sort="amount"><span id="finance-sales-amount-label">{{ $t('amount') }}</span> <span class="finance-sort-indicator" aria-hidden="true">↕</span></button></th><th class="finance-cost-source" hidden>{{ $t('finance_source') }}</th><th scope="col">{{ $t('edit') }}</th>
             </tr></thead><tbody></tbody></table></div>
-            <div class="finance-details-pagination"><button type="button" class="finance-btn" id="finance-details-prev">{{ $t('previous') }}</button><span id="finance-details-page"></span><button type="button" class="finance-btn" id="finance-details-next">{{ $t('next') }}</button></div>
+            <div class="finance-details-pagination"><button type="button" class="finance-btn" id="finance-sales-prev">{{ $t('previous') }}</button><label>{{ $t('finance_page') }} <input type="number" id="finance-sales-page-input" class="finance-btn" min="1" value="1" style="width:80px"></label><span id="finance-sales-page"></span><button type="button" class="finance-btn" id="finance-sales-next">{{ $t('next') }}</button></div>
         </div>
         <div class="modal-footer"><button type="button" class="finance-btn" data-dismiss="modal">{{ $t('close') }}</button></div>
     </div></div>
@@ -201,7 +237,7 @@ $(function () {
     window.initFinancialDashboard({dateSettings: reportDateSettings, ranges: reportDateRanges,
         currencySymbol: @json($currencySymbol), reportLanguage: @json($language),
         labels: {loading: @json($t('loading')), error: @json($t('finance_expense_error')), edit: @json($t('edit')),
-            total: @json($t('total')), none: @json($t('none')), empty: @json($t('no_data')),
+            costTitle: @json($t('finance_cost_sales_list')), costBasis: @json($t('finance_cost_details_basis')), unitsBasis: @json($t('units_net_returns')), estimated: @json($t('finance_cost_estimate')), cost: @json($t('finance_cost')), amount: @json($t('amount')), salesTitle: @json($t('finance_sales_list')), selected: @json($t('finance_selected')), salesError: @json($t('finance_sales_error')), units: @json($t('units')), total: @json($t('total')), none: @json($t('none')), empty: @json($t('no_data')),
             main: @json($t('finance_source_main')), accessory: @json($t('finance_source_accessory')), service: @json($t('finance_source_service'))}
     });
 });

@@ -13,15 +13,24 @@ function fixture({savedOpen = null, datePicker = true} = {}) {
         <div class="finance-field"><input id="finance-date-range" readonly></div>
         <input type="hidden" id="finance-expense-filter-applied" value="0">
         <input class="finance-excluded-category" value="Office">
+        <button type="button" class="finance-selection-trigger" id="finance-choose-locations" data-select="finance-locations" data-title="Locations"></button>
+        <select id="finance-locations" multiple><option value="1" selected>Branch A</option><option value="2">Branch B</option></select>
+        <button type="button" class="finance-selection-trigger" id="finance-choose-expenses" data-select="finance-expense-categories" data-title="Expense categories"></button>
         <select id="finance-expense-categories" multiple><option value="Office">Office</option><option value="Travel" selected>Travel</option></select>
         <button type="button" id="finance-expenses-all">All</button><button type="button" id="finance-expenses-none">None</button>
         </form></details><button id="finance-open-category-filter">Filter categories</button>
+        <div id="finance-selection-modal"><h4 id="finance-selection-title"></h4><input id="finance-selection-search"><span id="finance-selection-count"></span><div id="finance-selection-options"></div><button id="finance-selection-all"></button><button id="finance-selection-none"></button><button id="finance-selection-apply"></button></div>
         <select id="finance-print-orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select>
         <a id="finance-print" href="/reports/financial-dashboard?print=1&orientation=landscape&start_date=2026-11-01&location_ids%5B0%5D=-2&excluded_expense_categories%5B0%5D=Office">Print</a>`,
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window);
     const state = {picker: null, callback: null, scrolled: 0, printed: 0};
     dom.window.$ = dom.window.jQuery = $;
+    $.fn.modal = function(action) {
+        this.toggleClass('in', action === 'show');
+        this.trigger(action === 'show' ? 'shown.bs.modal' : 'hidden.bs.modal');
+        return this;
+    };
     dom.window.print = () => state.printed++;
     dom.window.document.getElementById('finance-filter-panel').scrollIntoView = () => state.scrolled++;
     if (savedOpen !== null) dom.window.localStorage.setItem('financial-dashboard.filters-open', savedOpen);
@@ -62,7 +71,8 @@ test('collapse preference survives initialization and expanding from the chart o
     assert.equal(state.scrolled, 1);
     panel.dispatchEvent(new dom.window.Event('toggle'));
     assert.equal(dom.window.localStorage.getItem('financial-dashboard.filters-open'), 'true');
-    assert.equal(dom.window.document.activeElement.id, 'finance-expense-categories');
+    assert.equal($('#finance-selection-modal').hasClass('in'), true);
+    assert.equal(dom.window.document.activeElement.id, 'finance-selection-search');
 });
 
 test('select all and none make category scope explicit and clear previous exclusions', () => {
@@ -97,4 +107,39 @@ test('print orientation can switch both ways while preserving dashboard filters'
     url = new URL(dom.window.document.getElementById('finance-print').href);
     assert.equal(url.searchParams.get('orientation'), 'landscape');
     assert.equal(state.printed, 0);
+});
+
+test('location popup keeps draft selections until Apply and supports a single or multiple choices', () => {
+    const {$} = fixture();
+    $('#finance-choose-locations').trigger('click');
+    assert.equal($('#finance-selection-title').text(), 'Locations');
+    $('#finance-selection-options input').prop('checked', true).trigger('change');
+    assert.deepEqual(Array.from($('#finance-locations').val()), ['1']);
+    $('#finance-selection-modal').modal('hide');
+    $('#finance-choose-locations').trigger('click');
+    assert.equal($('#finance-selection-options input:checked').length, 1);
+    $('#finance-selection-all').trigger('click');
+    $('#finance-selection-apply').trigger('click');
+    assert.deepEqual(Array.from($('#finance-locations').val()), ['1', '2']);
+    assert.equal($('#finance-choose-locations').text(), 'Branch A, Branch B');
+    assert.equal($('#finance-expense-filter-applied').val(), '0');
+});
+test('category popup searches safely and Apply clears exclusions and makes category scope explicit', () => {
+    const {$} = fixture();
+    $('#finance-expense-categories').append($('<option>').val('<img>').text('<img src=x>'));
+    $('#finance-choose-expenses').trigger('click');
+    assert.equal($('#finance-selection-options img').length, 0);
+    $('#finance-selection-search').val('office').trigger('input');
+    assert.equal($('#finance-selection-options label:not([hidden])').length, 1);
+    $('#finance-selection-none').trigger('click');
+    $('#finance-selection-options input[value="Office"]').prop('checked', true).trigger('change');
+    $('#finance-selection-apply').trigger('click');
+    assert.deepEqual(Array.from($('#finance-expense-categories').val()), ['Office']);
+    assert.equal($('#finance-expense-filter-applied').val(), '1');
+    assert.equal($('.finance-excluded-category').length, 0);
+    $('#finance-choose-expenses').trigger('click');
+    $('#finance-selection-none').trigger('click');
+    $('#finance-selection-apply').trigger('click');
+    assert.deepEqual(Array.from($('#finance-expense-categories').val()), []);
+    assert.equal($('#finance-choose-expenses').text(), 'None');
 });

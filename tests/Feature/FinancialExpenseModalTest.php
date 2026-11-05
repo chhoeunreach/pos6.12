@@ -157,6 +157,36 @@ class FinancialExpenseModalTest extends TestCase
             'additional_notes' => 'Corrected note', 'expense_category_id' => 1, 'expense_sub_category_id' => 2, 'updated_at' => '2026-11-01 12:00:00'];
     }
 
+    public function test_expense_pagination_and_sorting_merge_all_sources_before_selecting_a_page()
+    {
+        $expected = [100, 200, 200];
+        foreach (['main', 'accessory', 'service'] as $offset => $source) {
+            for ($id = 2; $id <= 13; $id++) {
+                $amount = $id * 3 + $offset;
+                DB::connection('expense_modal_'.$source)->table('transactions')->insert(['id' => $id, 'final_total' => $amount, 'ref_no' => sprintf('EXP-%02d', 14 - $id)]);
+                $expected[] = $amount;
+            }
+        }
+        DB::table('transactions')->insert(['id' => 14, 'type' => 'expense_refund', 'final_total' => 5]);
+        $expected[] = -5;
+        sort($expected, SORT_NUMERIC);
+        $all = $this->controller()->index($this->request(['per_page' => -1, 'sort' => 'amount', 'direction' => 'asc']))->getData(true);
+        $this->assertEquals($expected, array_column($all['rows'], 'amount'));
+        $this->assertEquals(1, $all['last_page']);
+        $page = $this->controller()->index($this->request(['per_page' => 10, 'page' => 2, 'sort' => 'amount', 'direction' => 'asc']))->getData(true);
+        $this->assertEquals(array_slice($expected, 10, 10), array_column($page['rows'], 'amount'));
+        $this->assertEquals(4, $page['last_page']);
+        $descending = $this->controller()->index($this->request(['per_page' => 10, 'sort' => 'amount', 'direction' => 'desc']))->getData(true);
+        $this->assertEquals(array_slice(array_reverse($expected), 0, 10), array_column($descending['rows'], 'amount'));
+        $refs = $this->controller()->index($this->request(['per_page' => 10, 'sort' => 'reference', 'direction' => 'asc', 'source' => 'main']))->getData(true);
+        $referenceValues = array_column($refs['rows'], 'ref_no');
+        $sortedReferences = $referenceValues;
+        sort($sortedReferences, SORT_STRING);
+        $this->assertEquals($sortedReferences, $referenceValues);
+        $this->expectException(ValidationException::class);
+        $this->controller()->index($this->request(['sort' => 't.created_by']));
+    }
+
     public function test_list_matches_category_location_and_source_filters_with_signed_refunds()
     {
         DB::table('transactions')->insert(['id' => 2, 'type' => 'expense_refund', 'final_total' => 5]);

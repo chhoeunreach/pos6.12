@@ -17,9 +17,12 @@ function fixture() {
         <textarea id="finance-edit-note" name="additional_notes"></textarea><select id="finance-edit-category" name="expense_category_id"></select>
         <select id="finance-edit-subcategory" name="expense_sub_category_id"></select><button type="submit">Save</button><button type="button" id="finance-edit-cancel">Cancel</button></form>
         <span id="finance-details-count"></span><span id="finance-details-total"></span><span id="finance-details-page"></span>
-        <table id="finance-details-table"><tbody></tbody></table><button id="finance-details-prev">Previous</button><button id="finance-details-next">Next</button></div>`,
+        <select id="finance-details-page-size"><option selected>25</option><option>10</option><option value="-1">All</option></select><input id="finance-details-page-input"><button id="finance-details-refresh"></button>
+        <table id="finance-details-table"><thead><tr><th><button class="finance-expense-sort" data-sort="amount">Amount<span>↕</span></button></th></tr></thead><tbody></tbody></table><button id="finance-details-prev">Previous</button><button id="finance-details-next">Next</button></div>`,
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window);
+    $('body').append('<div id="finance-expense-edit-modal"><div id="finance-edit-error" hidden></div></div>');
+    $('#finance-details-edit-form').appendTo('#finance-expense-edit-modal');
     const requests = [];
     const state = {refreshes: 0};
     dom.window.$ = dom.window.jQuery = $;
@@ -73,6 +76,8 @@ test('editing saves the versioned form with CSRF protection and refreshes the da
     const f = fixture();
     openEdit(f);
     assert.equal(f.$('#finance-details-edit-form').prop('hidden'), false);
+    assert.equal(f.$('#finance-expense-edit-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-expense-details-modal').hasClass('in'), false);
     assert.equal(f.$('#finance-edit-version').val(), '2026-11-01 12:00:00');
     assert.equal(f.$('#finance-edit-subcategory').val(), '2');
     f.$('#finance-edit-amount').val('110');
@@ -84,6 +89,8 @@ test('editing saves the versioned form with CSRF protection and refreshes the da
     f.requests[2].success({success: true, msg: 'Saved'});
     f.requests[2].complete();
     assert.equal(f.$('#finance-details-edit-form').prop('hidden'), true);
+    assert.equal(f.$('#finance-expense-edit-modal').hasClass('in'), false);
+    assert.equal(f.$('#finance-expense-details-modal').hasClass('in'), true);
     assert.equal(f.requests.length, 4, 'the expense list reloads after saving');
     assert.equal(f.state.refreshes, 0);
     f.$('#finance-expense-details-modal').modal('hide');
@@ -96,7 +103,8 @@ test('validation failures retain the editable form and do not refresh the dashbo
     f.$('#finance-details-edit-form').trigger('submit');
     f.requests[2].error({responseJSON: {errors: {final_total: ['Amount is invalid.']}}});
     f.requests[2].complete();
-    assert.equal(f.$('#finance-details-error').text(), 'Amount is invalid.');
+    assert.equal(f.$('#finance-edit-error').text(), 'Amount is invalid.');
+    assert.equal(f.$('#finance-expense-edit-modal').hasClass('in'), true);
     assert.equal(f.$('#finance-details-edit-form').prop('hidden'), false);
     f.$('#finance-expense-details-modal').modal('hide');
     assert.equal(f.state.refreshes, 0);
@@ -107,4 +115,39 @@ test('read-only expense lists do not offer an edit action', () => {
     f.$('.finance-expense-details').trigger('click');
     f.requests[0].success(listResponse(false));
     assert.equal(f.$('.finance-edit-expense').length, 0);
+});
+
+test('canceling the edit popup returns to the list without saving or refreshing the dashboard', () => {
+    const f = fixture();
+    openEdit(f);
+    f.$('#finance-edit-cancel').trigger('click');
+    assert.equal(f.$('#finance-expense-edit-modal').hasClass('in'), false);
+    assert.equal(f.$('#finance-expense-details-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-details-edit-form').prop('hidden'), true);
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.state.refreshes, 0);
+});
+
+test('expense sorting and pagination retain category filters and support All rows', () => {
+    const f = fixture();
+    f.$('.finance-expense-details').trigger('click');
+    f.$('.finance-expense-sort').trigger('click');
+    assert.equal(f.requests[1].data.sort, 'amount');
+    assert.equal(f.requests[1].data.direction, 'asc');
+    assert.equal(f.requests[1].data.page, 1);
+    assert.match(f.requests[1].url, /expense_categories/);
+    assert.equal(f.$('.finance-expense-sort').closest('th').attr('aria-sort'), 'ascending');
+    f.requests[1].success({...listResponse(), last_page: 3});
+    f.requests[1].complete();
+    f.$('#finance-details-next').trigger('click');
+    assert.equal(f.requests[2].data.page, 2);
+    assert.equal(f.requests[2].data.sort, 'amount');
+    f.$('#finance-details-page-size').val('-1').trigger('change');
+    assert.equal(f.requests[3].data.per_page, -1);
+    assert.equal(f.requests[3].data.page, 1);
+    f.requests[3].success(listResponse());
+    f.requests[3].complete();
+    assert.equal(f.$('#finance-details-next').prop('disabled'), true);
+    f.$('.finance-expense-sort').trigger('click');
+    assert.equal(f.requests[4].data.direction, 'desc');
 });

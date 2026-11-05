@@ -245,6 +245,11 @@ class FinancialDashboardReport
 
     private function costs(string $connection, int $businessId, array $locationIds, array $filters)
     {
+        return $this->costQuery($connection, $businessId, $locationIds, $filters)->get()->keyBy('location_id');
+    }
+
+    public function costQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $byTransaction = false)
+    {
         $db = DB::connection($connection);
         $allocations = $db->table('transaction_sell_lines_purchase_lines as a')
             ->leftJoin('purchase_lines as p', 'p.id', '=', 'a.purchase_line_id')
@@ -294,12 +299,14 @@ class FinancialDashboardReport
         $unitCost = "CASE WHEN product.id IS NULL OR sale.id IS NULL THEN NULL WHEN product.enable_stock = 0 THEN 0 ELSE COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) END";
         $quantity = "CASE WHEN t.type = 'sell_return' AND line.parent_sell_line_id IS NULL THEN line.quantity_returned ELSE line.quantity END";
 
-        return $query->whereRaw("($quantity) > 0")->groupBy('t.location_id')->select('t.location_id')
+        $query->whereRaw("($quantity) > 0")->groupBy('t.location_id')->select('t.location_id');
+        if ($byTransaction) $query->groupBy('t.id')->addSelect('t.id as transaction_id');
+
+        return $query
             ->selectRaw('COUNT(DISTINCT t.id) as costed_transactions')
             ->selectRaw("SUM(CASE WHEN line.children_type IN ('combo', 'modifier') THEN 0 WHEN t.type = 'sell_return' THEN -($quantity) ELSE ($quantity) END) as units")
             ->selectRaw("SUM(CASE WHEN t.type = 'sell_return' THEN -1 ELSE 1 END * ($quantity) * ($unitCost)) as cost")
             ->selectRaw("SUM(CASE WHEN ($unitCost) IS NULL THEN 1 ELSE 0 END) as missing")
-            ->selectRaw("SUM(CASE WHEN product.enable_stock = 1 AND ($recorded) IS NULL AND COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END) as estimated")
-            ->get()->keyBy('location_id');
+            ->selectRaw("SUM(CASE WHEN product.enable_stock = 1 AND ($recorded) IS NULL AND COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END) as estimated");
     }
 }

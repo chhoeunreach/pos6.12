@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\LocalCashierReport\Http\Controllers\ExpenseListReportController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialDashboardController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialExpenseController;
+use Modules\LocalCashierReport\Http\Controllers\FinancialSalesController;
 use Modules\LocalCashierReport\Http\Controllers\InstallController;
 use Modules\LocalCashierReport\Http\Controllers\LocalCashierReportController;
 
@@ -29,6 +30,9 @@ Route::middleware([
         Route::get('/print', [LocalCashierReportController::class, 'print'])->name('local-cashier-report.print');
         Route::get('/expenses-list', [ExpenseListReportController::class, 'index'])->name('local-cashier-report.expenses-list');
     });
+
+    Route::get('/reports/financial-dashboard/cost-sales', [FinancialSalesController::class, 'costs'])->name('reports.financial-cost-sales.index');
+    Route::get('/reports/financial-dashboard/sales', [FinancialSalesController::class, 'index'])->name('reports.financial-sales.index');
 
     Route::get('/reports/financial-dashboard/expenses', [FinancialExpenseController::class, 'index'])->name('reports.financial-expenses.index');
     Route::get('/reports/financial-dashboard/expenses/{source}/{id}', [FinancialExpenseController::class, 'edit'])->whereNumber('id')->name('reports.financial-expenses.edit');

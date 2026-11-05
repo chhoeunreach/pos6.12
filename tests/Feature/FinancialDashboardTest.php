@@ -19,6 +19,7 @@ class FinancialDashboardTest extends TestCase
 {
     private $originalConnection;
     private $allowed = true;
+    private $salesPermissions = [];
     private $locations;
 
     protected function setUp(): void
@@ -38,6 +39,10 @@ class FinancialDashboardTest extends TestCase
                 $table->string('transaction_date')->default('2026-11-01 12:00:00');
                 $table->decimal('final_total')->default(0);
                 $table->integer('expense_category_id')->nullable();
+                $table->string('invoice_no')->nullable();
+                $table->integer('contact_id')->nullable();
+                $table->integer('created_by')->default(1);
+                $table->boolean('is_direct_sale')->default(false);
             });
             $schema->create('transaction_sell_lines', function (Blueprint $table) {
                 $table->integer('id');
@@ -73,6 +78,8 @@ class FinancialDashboardTest extends TestCase
                 $table->decimal('dpp_inc_tax')->nullable();
                 $table->decimal('default_purchase_price')->nullable();
             });
+            $schema->create('contacts', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
+            $schema->create('business_locations', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
             $schema->create('expense_categories', function (Blueprint $table) {
                 $table->integer('id');
                 $table->integer('business_id')->default(1);
@@ -100,7 +107,7 @@ class FinancialDashboardTest extends TestCase
         ]);
         $user = Mockery::mock(User::class)->makePartial();
         $user->id = 1;
-        $user->shouldReceive('can')->andReturnUsing(fn ($permission) => $this->allowed && $permission === 'profit_loss_report.view');
+        $user->shouldReceive('can')->andReturnUsing(fn ($permission) => $this->allowed && ($permission === 'profit_loss_report.view' || in_array($permission, $this->salesPermissions, true)));
         $this->actingAs($user);
         session()->put('user.business_id', 1);
         session()->put('business.name', 'Test business');
@@ -149,6 +156,144 @@ class FinancialDashboardTest extends TestCase
         return (new FinancialDashboardController($cashier, new FinancialDashboardReport))->index($request);
     }
 
+    private function salesRequest(array $data = [], bool $costs = false)
+    {
+        $request = Request::create('/reports/financial-dashboard/sales', 'GET', $data + ['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'location_ids' => [1]]);
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        $cashier = Mockery::mock(LocalCashierReportController::class);
+        $cashier->shouldReceive('getAccessibleLocations')->with(1)->andReturn($this->locations);
+        $dashboard = new FinancialDashboardController($cashier, new FinancialDashboardReport);
+
+        $controller = new \Modules\LocalCashierReport\Http\Controllers\FinancialSalesController($dashboard);
+        return ($costs ? $controller->costs($request, new FinancialDashboardReport) : $controller->index($request))->getData(true);
+    }
+
+    public function test_sales_modal_matches_pos_units_and_filters_locations_dates_and_sources()
+    {
+        $this->salesPermissions = ['sell.view'];
+        $this->seedSales();
+        DB::table('transactions')->insert([
+            ['id' => 20, 'business_id' => 2, 'location_id' => 1, 'status' => 'final'],
+            ['id' => 21, 'business_id' => 1, 'location_id' => 2, 'status' => 'final'],
+            ['id' => 22, 'business_id' => 1, 'location_id' => 1, 'status' => 'draft'],
+        ]);
+        foreach ([20, 21, 22] as $id) DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity' => 100]);
+        DB::table('transaction_sell_lines')->insert(['id' => 30, 'transaction_id' => 1, 'quantity' => 100, 'children_type' => 'combo']);
+        $result = $this->salesRequest(['location_ids' => [1, -2, -3, 999]]);
+        $this->assertEquals(2, $result['total']);
+        $this->assertEquals($this->build()['total']['units'], $result['units']);
+        $this->assertEquals(-1, $result['rows'][0]['units']);
+        $this->assertEquals(-110, $result['rows'][0]['amount']);
+        $this->assertEquals(-1, $this->salesRequest(['start_date' => '2026-11-04'])['units']);
+        $this->assertEquals(0, $this->salesRequest(['source' => 'accessory'])['total']);
+        $this->assertEquals(0, $this->salesRequest(['location_ids' => [999]])['total']);
+    }
+
+    public function test_sales_modal_requires_sales_permission()
+    {
+        $this->expectException(HttpException::class);
+        $this->expectExceptionCode(0);
+        try { $this->salesRequest(); } catch (HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+            throw $e;
+        }
+    }
+
+    public function test_sales_modal_limits_own_sales_and_paginates()
+    {
+        $this->salesPermissions = ['view_own_sell_only'];
+        for ($id = 1; $id <= 27; $id++) {
+            DB::table('transactions')->insert(['id' => $id, 'created_by' => $id === 27 ? 2 : 1]);
+            DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id]);
+        }
+        $first = $this->salesRequest();
+        $this->assertEquals(26, $first['total']);
+        $this->assertEquals(26, $first['units']);
+        $this->assertCount(25, $first['rows']);
+        $second = $this->salesRequest(['page' => 2]);
+        $this->assertCount(1, $second['rows']);
+        $this->assertEquals(1, $second['rows'][0]['id']);
+        $custom = $this->salesRequest(['per_page' => 10, 'page' => 2]);
+        $this->assertCount(10, $custom['rows']);
+        $this->assertEquals(3, $custom['last_page']);
+        $this->assertEquals(16, $custom['rows'][0]['id']);
+        $all = $this->salesRequest(['per_page' => -1, 'page' => 2]);
+        $this->assertCount(26, $all['rows']);
+        $this->assertEquals(1, $all['last_page']);
+        $this->assertEquals(1, $all['page']);
+        $this->assertEquals(-1, $all['per_page']);
+    }
+
+    public function test_sales_modal_edit_actions_use_each_sales_form_and_respect_permissions()
+    {
+        $this->salesPermissions = ['sell.view'];
+        DB::table('transactions')->insert([
+            ['id' => 1, 'is_direct_sale' => false, 'type' => 'sell'],
+            ['id' => 2, 'is_direct_sale' => true, 'type' => 'sell'],
+            ['id' => 3, 'is_direct_sale' => false, 'type' => 'sell_return'],
+        ]);
+        foreach ([1, 2, 3] as $id) DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity_returned' => 1]);
+        foreach ($this->salesRequest()['rows'] as $row) $this->assertNull($row['edit_url']);
+        $this->salesPermissions = ['sell.view', 'sell.update', 'direct_sell.update', 'access_sell_return'];
+        $rows = collect($this->salesRequest()['rows'])->keyBy('id');
+        $this->assertEquals(route('pos.edit', 1), $rows[1]['edit_url']);
+        $this->assertEquals(route('sells.edit', 2), $rows[2]['edit_url']);
+        $this->assertEquals(route('sell-return.edit', 3), $rows[3]['edit_url']);
+        $this->salesPermissions = ['sell.view', 'sell.update'];
+        $rows = collect($this->salesRequest()['rows'])->keyBy('id');
+        $this->assertNotNull($rows[1]['edit_url']);
+        $this->assertNull($rows[2]['edit_url']);
+        $this->assertNull($rows[3]['edit_url']);
+    }
+
+    public function test_sales_modal_sorts_numeric_columns_across_pages_and_rejects_unknown_columns()
+    {
+        $this->salesPermissions = ['sell.view'];
+        for ($id = 1; $id <= 12; $id++) {
+            DB::table('transactions')->insert(['id' => $id, 'final_total' => $id * 10, 'invoice_no' => sprintf('INV-%02d', 13 - $id)]);
+            DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity' => $id]);
+        }
+        $first = $this->salesRequest(['sort' => 'amount', 'direction' => 'asc', 'per_page' => 10]);
+        $second = $this->salesRequest(['sort' => 'amount', 'direction' => 'asc', 'per_page' => 10, 'page' => 2]);
+        $this->assertEquals(range(1, 10), array_column($first['rows'], 'id'));
+        $this->assertEquals([11, 12], array_column($second['rows'], 'id'));
+        $descending = $this->salesRequest(['sort' => 'units', 'direction' => 'desc', 'per_page' => -1]);
+        $this->assertEquals(range(12, 1), array_column($descending['rows'], 'id'));
+        $invoices = $this->salesRequest(['sort' => 'invoice', 'direction' => 'asc', 'per_page' => -1]);
+        $this->assertEquals(range(12, 1), array_column($invoices['rows'], 'id'));
+        $this->expectException(ValidationException::class);
+        $this->salesRequest(['sort' => 'sale.created_by']);
+    }
+
+    public function test_cost_sales_details_handle_missing_costs_sorting_pagination_and_access()
+    {
+        $this->salesPermissions = ['sell.view'];
+        DB::table('variations')->update(['dpp_inc_tax' => 10]);
+        for ($id = 1; $id <= 12; $id++) {
+            DB::table('transactions')->insert(['id' => $id]);
+            DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity' => $id]);
+        }
+        $details = $this->salesRequest(['per_page' => 10, 'sort' => 'amount', 'direction' => 'asc', 'page' => 2], true);
+        $this->assertEquals([110, 120], array_column($details['rows'], 'amount'));
+        $this->assertEquals(780, $details['amount']);
+        $this->assertEquals(2, $details['last_page']);
+        $all = $this->salesRequest(['per_page' => -1], true);
+        $this->assertCount(12, $all['rows']);
+        $this->assertGreaterThan(0, $all['rows'][0]['estimated']);
+        DB::table('variations')->update(['dpp_inc_tax' => null]);
+        $missing = $this->salesRequest([], true);
+        $this->assertNull($missing['amount']);
+        $this->assertNull($missing['rows'][0]['amount']);
+        DB::table('transaction_sell_lines')->delete();
+        $missingLines = $this->salesRequest([], true);
+        $this->assertEquals(12, $missingLines['total']);
+        $this->assertNull($missingLines['amount']);
+        $this->salesPermissions = [];
+        try { $this->salesRequest([], true); $this->fail('Sales access is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
+    }
+
     public function test_sales_returns_costs_expense_refunds_and_margins_use_their_own_dates()
     {
         $this->seedSales();
@@ -170,6 +315,7 @@ class FinancialDashboardTest extends TestCase
 
     public function test_all_three_sources_combine_by_branch_name_without_duplicate_invoice_totals()
     {
+        $this->salesPermissions = ['sell.view'];
         $this->seedSales();
         $accessory = DB::connection('finance_accessory');
         $accessory->table('transactions')->insert([
@@ -193,10 +339,21 @@ class FinancialDashboardTest extends TestCase
         $this->assertSame('Branch A', $report['top_location']['name']);
         $this->assertEquals(200, $report['total']['net_sales']);
         $this->assertEquals(80, $report['total']['cost']);
+        $this->assertEquals(120, $report['total']['gross_profit']);
+        $this->assertEquals($report['total']['main_sales'] + $report['total']['accessory_sales'] + $report['total']['service_sales'], $report['total']['net_sales']);
+        $this->assertEquals($report['total']['net_sales'] - $report['total']['cost'], $report['total']['gross_profit']);
         $this->assertEquals(18, $report['total']['expenses']);
         $this->assertEquals(102, $report['total']['net_profit']);
         $this->assertEquals(51, $report['total']['margin']);
         $this->assertEquals(18, $report['expenses']['Office']['total']);
+        $details = $this->salesRequest(['location_ids' => [1, -2, -3]], true);
+        $this->assertEquals(80, $details['amount']);
+        $this->assertEquals(4, $details['total']);
+        $this->assertEqualsCanonicalizing(['main', 'accessory', 'service'], array_values(array_unique(array_column($details['rows'], 'source'))));
+        $returnedCost = collect($details['rows'])->first(fn ($row) => $row['source'] === 'main' && $row['id'] === 2);
+        $this->assertEquals(-60, $returnedCost['amount']);
+        $this->assertEquals(-60, $this->salesRequest(['start_date' => '2026-11-04', 'end_date' => '2026-11-04'], true)['amount']);
+
     }
 
     public function test_accessory_and_service_use_saved_line_prices_and_return_quantities()
@@ -481,6 +638,7 @@ class FinancialDashboardTest extends TestCase
 
     public function test_dashboard_renders_four_kpis_the_combined_table_and_side_chart()
     {
+        $this->salesPermissions = ['sell.view', 'all_expense.access', 'expense.edit'];
         $this->seedSales();
         $view = $this->controllerRequest(['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'report_lang' => 'en', 'location_ids' => [1]]);
         $directory = sys_get_temp_dir().'/finance-dashboard-test-views';
@@ -493,8 +651,38 @@ class FinancialDashboardTest extends TestCase
         $html = \Illuminate\Support\Facades\Blade::render($source, $view->getData() + ['errors' => new \Illuminate\Support\ViewErrorBag]);
         $this->assertSame(4, substr_count($html, 'class="finance-kpi '));
         $this->assertStringContainsString('Total units sold', $html);
+        $this->assertStringContainsString('finance-sales-details', $html);
+        $this->assertStringContainsString('finance-sales-modal', $html);
+        $this->assertStringContainsString('data-cost-details="1"', $html);
+        $this->assertStringContainsString('/reports/financial-dashboard/cost-sales?', $html);
+
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+        $xpath = new \DOMXPath($dom);
+        $categoryLinks = $xpath->query('//th[@scope="row"]/a[contains(@class,"finance-expense-details")] | //a[contains(@class,"finance-bar-row") and contains(@class,"finance-expense-details")]');
+        $this->assertEquals(2, $categoryLinks->length);
+        foreach ($categoryLinks as $link) {
+            $this->assertStringContainsString('/reports/financial-dashboard/expenses?', $link->getAttribute('href'));
+            parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $categoryQuery);
+            $this->assertSame(['Office'], $categoryQuery['expense_categories']);
+            $this->assertEquals(1, $categoryQuery['expense_filter_applied']);
+            $this->assertEquals('2026-11-01', $categoryQuery['start_date']);
+            $this->assertEquals([1], $categoryQuery['location_ids']);
+        }
+        $this->assertStringContainsString('/reports/financial-dashboard/sales?', $html);
         $this->assertStringContainsString('Top location', $html);
         $this->assertStringContainsString('Gross profit margin', $html);
+        $metricLabels = [];
+        foreach ($xpath->query('//table[contains(@class,"finance-combined-table")]//th[@scope="row"]') as $label) $metricLabels[] = trim($label->textContent);
+        $positions = [];
+        foreach (['Total amount (POS)', 'Accessory — net sales', 'Service — net sales', 'All-department net sales', 'Cost of goods sold, net of returns', 'Gross profit'] as $expected) {
+            foreach ($metricLabels as $index => $label) {
+                if (str_starts_with($label, $expected)) { $positions[] = $index; break; }
+            }
+        }
+        $this->assertSame([0, 1, 2, 3, 4, 5], $positions);
+        $this->assertStringContainsString('POS + Accessory + Service, net of returns', $html);
+
         $this->assertStringContainsString('finance-combined-table', $html);
         $this->assertStringContainsString('finance-chart-panel', $html);
         $this->assertStringContainsString('Office', $html);
@@ -513,7 +701,7 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('target="_blank"', $html);
         request()->merge(['report_lang' => 'km']);
         $khmer = \Illuminate\Support\Facades\Blade::render($source, $view->getData() + ['errors' => new \Illuminate\Support\ViewErrorBag]);
-        $this->assertStringContainsString('ចំណូលសរុប', $khmer);
+        $this->assertStringContainsString('ចំណូលគ្រប់ផ្នែក', $khmer);
         $this->assertStringNotContainsString('ការលក់មុនដកទំនិញត្រឡប់', $khmer);
         $this->assertStringNotContainsString('ទំនិញលក់ត្រឡប់</th>', $khmer);
     }
