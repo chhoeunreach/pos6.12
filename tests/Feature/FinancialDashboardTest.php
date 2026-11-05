@@ -189,7 +189,7 @@ class FinancialDashboardTest extends TestCase
         $report = $this->build([1, -2, -3]);
         $this->assertCount(1, $report['branches']);
         $this->assertEquals(3, $report['total']['invoices']);
-        $this->assertEquals(3, $report['total']['units']);
+        $this->assertEquals(1, $report['total']['units']);
         $this->assertSame('Branch A', $report['top_location']['name']);
         $this->assertEquals(200, $report['total']['net_sales']);
         $this->assertEquals(80, $report['total']['cost']);
@@ -219,6 +219,8 @@ class FinancialDashboardTest extends TestCase
         }
         $report = $this->build([-2, -3]);
         $this->assertSame([], $report['unavailable']);
+        $this->assertEquals(0, $report['total']['units']);
+        $this->assertNull($report['top_location']);
         foreach (['sales' => 103, 'returns' => 25, 'net_sales' => 78, 'accessory_sales' => 39, 'service_sales' => 39, 'expenses' => 10, 'net_profit' => 68, 'missing_revenue' => 0] as $key => $value) {
             $this->assertEquals($value, $report['total'][$key], $key);
         }
@@ -240,6 +242,7 @@ class FinancialDashboardTest extends TestCase
         $report = $this->build([1, -2]);
         $this->assertSame([], $report['unavailable']);
         $this->assertEquals(2, $report['total']['missing_revenue']);
+        $this->assertEquals(1, $report['total']['units']);
         $this->assertEquals(110, $report['total']['main_sales']);
         $this->assertEquals(15, $report['total']['expenses']);
         foreach (['accessory_sales', 'sales', 'returns', 'net_sales', 'gross_profit', 'net_profit', 'margin'] as $metric) {
@@ -273,7 +276,7 @@ class FinancialDashboardTest extends TestCase
         $branch = array_values($report['branches'])[0];
         $this->assertSame('កម្ពុជាក្រោម', $branch['name']);
         $this->assertSame([1, -4, -6, 2, 3], $branch['location_ids']);
-        $this->assertEquals(7, $branch['units']);
+        $this->assertEquals(6, $branch['units']);
         $this->assertEquals(635, $branch['net_sales']);
         $this->assertEquals(380, $branch['cost']);
         $this->assertEquals(240, $branch['net_profit']);
@@ -344,6 +347,8 @@ class FinancialDashboardTest extends TestCase
         Schema::connection('finance_accessory')->drop('transactions');
         $report = $this->build([1, -2]);
         $this->assertSame(['accessory'], $report['unavailable']);
+        $this->assertEquals(1, $report['total']['units']);
+        $this->assertSame('Branch A', $report['top_location']['name']);
         $this->assertNull($report['total']['sales']);
         $this->assertNull($report['total']['net_profit']);
         $this->assertSame([], $report['expenses']);

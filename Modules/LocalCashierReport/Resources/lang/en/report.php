@@ -33,7 +33,7 @@ return [
     'finance_gross_margin' => 'Gross profit margin',
     'expense_share' => 'Expense share %',
     'gross_profit_formula' => 'Net sales − cost of goods sold',
-    'units_net_returns' => 'Sold quantity after returns',
+    'units_net_returns' => 'POS phones & computers, net of returns',
     'no_sales' => 'No sales in this period',
     'financial_dashboard' => 'Financial Dashboard',
     'financial_overview' => 'Monthly financial overview',

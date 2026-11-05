@@ -54,12 +54,12 @@ class FinancialDashboardReport
                     if (!empty($row->missing_revenue)) $branch[$source.'_sales'] = null;
                     $cost = $data['costs'][(int) $row->location_id] ?? null;
                     $branch['cost'] += (float) ($cost->cost ?? 0);
-                    $branch['units'] += (float) ($cost->units ?? 0);
+                    if ($source === 'main') $branch['units'] += (float) ($cost->units ?? 0);
                     $branch['missing_costs'] += (int) ($cost->missing ?? 0);
                     $branch['estimated_costs'] += (int) ($cost->estimated ?? 0);
                     if ((int) ($cost->costed_transactions ?? 0) < (int) $row->cost_transactions) {
                         $branch['missing_costs']++;
-                        $branch['missing_lines']++;
+                        if ($source === 'main') $branch['missing_lines']++;
                     }
                     unset($branch);
                 }
@@ -75,6 +75,7 @@ class FinancialDashboardReport
                 $unavailable[] = $source;
                 foreach ($locationMap as $branchKey) {
                     $branches[$branchKey]['unavailable'] = true;
+                    if ($source === 'main') $branches[$branchKey]['units_unavailable'] = true;
                 }
             }
         }
@@ -99,6 +100,7 @@ class FinancialDashboardReport
                 $total[$metric] = $total[$metric] === null || $branch[$metric] === null ? null : $total[$metric] + $branch[$metric];
             }
             $total['unavailable'] = $total['unavailable'] || $branch['unavailable'];
+            $total['units_unavailable'] = $total['units_unavailable'] || $branch['units_unavailable'];
             $branch = $this->calculate($branch);
         }
         unset($branch);
@@ -115,23 +117,25 @@ class FinancialDashboardReport
 
         return ['branches' => $branches, 'total' => $this->calculate($total), 'expenses' => $expenseRows,
             'expense_options' => $expenseOptions, 'expense_filter_active' => $expenseFilterActive,
-            'unavailable' => $unavailable, 'top_location' => ($unavailable || $total['missing_lines'] > 0) ? null : (reset($rankedBranches) ?: null)];
+            'unavailable' => $unavailable, 'top_location' => ($total['units_unavailable'] || $total['missing_lines'] > 0) ? null : (reset($rankedBranches) ?: null)];
     }
 
     private function emptyBranch(string $name): array
     {
         return array_fill_keys(['invoices', 'units', 'sales', 'returns', 'cost', 'expenses', 'main_sales', 'accessory_sales', 'service_sales', 'missing_costs', 'estimated_costs', 'missing_lines', 'missing_revenue'], 0)
-            + ['name' => $name, 'location_ids' => [], 'unavailable' => false];
+            + ['name' => $name, 'location_ids' => [], 'unavailable' => false, 'units_unavailable' => false];
     }
 
     private function calculate(array $row): array
     {
+        $posUnits = ($row['units_unavailable'] || $row['missing_lines'] > 0) ? null : $row['units'];
         $row['net_sales'] = $row['sales'] - $row['returns'];
         if ($row['unavailable']) {
             foreach (self::METRICS as $metric) {
                 $row[$metric] = null;
             }
-            $row['invoices'] = $row['units'] = $row['gross_margin'] = null;
+            $row['invoices'] = $row['gross_margin'] = null;
+            $row['units'] = $posUnits;
 
             return $row;
         }

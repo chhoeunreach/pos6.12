@@ -33,7 +33,7 @@ return [
     'finance_gross_margin' => 'អត្រាប្រាក់ចំណេញដុល',
     'expense_share' => 'ភាគរយនៃចំណាយ',
     'gross_profit_formula' => 'ចំណូលលក់សុទ្ធ − ថ្លៃដើមទំនិញលក់',
-    'units_net_returns' => 'ចំនួនលក់បន្ទាប់ពីដកទំនិញត្រឡប់',
+    'units_net_returns' => 'ទូរសព្ទ និងកុំព្យូទ័រ (POS) បន្ទាប់ពីដកទំនិញត្រឡប់',
     'no_sales' => 'មិនមានការលក់ក្នុងរយៈពេលនេះ',
     'financial_dashboard' => 'ផ្ទាំងគ្រប់គ្រងហិរញ្ញវត្ថុ',
     'financial_overview' => 'ទិដ្ឋភាពហិរញ្ញវត្ថុប្រចាំខែ',
