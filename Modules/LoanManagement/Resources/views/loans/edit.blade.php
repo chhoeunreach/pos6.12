@@ -344,6 +344,26 @@
     .wiz-deposit-body { padding: 8px; background: #fff; border-top: 1px solid #e2e8f0; }
     .wiz-deposit-form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 
+
+    #wizCustomerDepositBlock .wiz-deposit-summary{display:flex;align-items:end;gap:14px;background:#f0f9f7;border:1px solid #cfe8df;border-radius:10px;padding:16px}
+    #wizCustomerDepositBlock .wiz-deposit-total-input{display:flex;align-items:center;gap:8px;flex:1;min-width:160px;color:#047857;font-size:24px;font-weight:800}
+    #wizCustomerDepositBlock .wiz-deposit-total-input input{width:100%;background:#fff;color:#047857;border:1px solid #bad9cf;border-radius:7px;padding:8px 12px;font:inherit;min-width:0}
+    #wizCustomerDepositBlock .wiz-deposit-adjust-field{flex:1;min-width:180px}#wizCustomerDepositBlock .wiz-deposit-adjust-field label{display:block;font-size:11px;color:#64748b;margin:0 0 5px}
+    #wizCustomerDepositBlock .wiz-deposit-help{font-size:12px;color:#64748b;line-height:1.7;margin:9px 0 16px}
+    #wizCustomerDepositBlock .wiz-deposit-header{width:100%;border:0;font:inherit;text-align:left;background:#f8fafc;padding:12px 14px;gap:12px}
+    #wizCustomerDepositBlock .wiz-deposit-receipt{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere;font-size:13px}
+    #wizCustomerDepositBlock .wiz-deposit-receipt small{color:#64748b;font-size:11px}#wizCustomerDepositBlock .wiz-deposit-receipt-actions{display:flex;align-items:center;gap:12px;color:#047857;font-size:16px;flex-shrink:0}
+    #wizCustomerDepositBlock .wiz-deposit-draft-label{display:none;font-size:10px;color:#92400e;background:#fef3c7;border-radius:20px;padding:4px 8px}#wizCustomerDepositBlock .has-unsaved-amount .wiz-deposit-draft-label{display:inline-block}
+    #wizCustomerDepositBlock .wiz-deposit-status{font-size:10px;padding:4px 8px;background:#e2e8f0;border-radius:20px;color:#475569;font-weight:600}
+    #wizCustomerDepositBlock .wiz-deposit-body{padding:16px}#wizCustomerDepositBlock .wiz-deposit-form-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    #wizCustomerDepositBlock .wiz-deposit-field label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px}
+    #wizCustomerDepositBlock .lm-wiz-input,#wizCustomerDepositBlock select.lm-control{display:block;width:100%;min-width:0;height:auto;padding:9px 11px;background:#fff!important;color:#1e293b!important;border:1px solid #cbd5e1;border-radius:7px;font:inherit;font-size:13px;color-scheme:light}
+    #wizCustomerDepositBlock .lm-wiz-input:focus,#wizCustomerDepositBlock .lm-control:focus,#wizDepositTotalTarget:focus{outline:2px solid #93c5fd;outline-offset:1px}
+    #wizCustomerDepositBlock .wiz-deposit-form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid #e2e8f0;padding-top:14px;margin-top:14px}
+    #wizCustomerDepositBlock .wiz-deposit-remove{margin-left:auto}#wizCustomerDepositBlock .wiz-deposit-method-total{padding:10px 12px;border-radius:7px;background:#f8fafc;font-weight:600;line-height:1.6}
+    #wizCustomerDepositBlock .wiz-deposit-methods .lm-method-row{background:#f8fafc;margin-bottom:10px!important}
+    @media(max-width:640px){#wizCustomerDepositBlock .wiz-deposit-summary{flex-wrap:wrap}#wizCustomerDepositBlock .wiz-deposit-total-input,#wizCustomerDepositBlock .wiz-deposit-adjust-field{flex:1 1 100%}#wizCustomerDepositBlock .wiz-deposit-form-grid,#wizCustomerDepositBlock .lm-form-row{grid-template-columns:1fr}#wizCustomerDepositBlock .wiz-deposit-field{grid-column:auto!important}#wizCustomerDepositBlock .wiz-deposit-status{display:none}#wizCustomerDepositBlock .wiz-deposit-body{padding:12px}}
+
     /* Financial Metrics Overview (Compact Grid) */
     .lm-metrics-grid {
         display: grid;
@@ -1188,9 +1208,14 @@
                             <button type="button" class="btn btn-xs btn-default wiz-deposit-refresh" style="margin-bottom:10px;"><i class="fa fa-refresh"></i> {{ $lmText('Refresh deposits', 'ផ្ទុកប្រាក់កក់ឡើងវិញ') }}</button>
                             <div class="lm-field">
                                 <label class="lm-label">{{ $lmText('Total Customer Deposit Paid', 'ប្រាក់កក់បានបង់សរុប') }}</label>
-                                <div class="lm-control" style="background: #f8fafc; font-weight: 800; color: #059669; display: flex; align-items: center;">
-                                    ${{ number_format($customerDepositPaymentsAmount, 2) }}
+                                <div class="wiz-deposit-summary" data-current-total="{{ number_format($customerDepositPaymentsAmount, 2, '.', '') }}">
+                                    <div class="wiz-deposit-total-input"><span aria-hidden="true">$</span><input id="wizDepositTotalTarget" type="number" min="0" step="0.01" required value="{{ number_format($customerDepositPaymentsAmount, 2, '.', '') }}" aria-label="{{ $lmText('Total Customer Deposit Paid', 'ប្រាក់កក់បានបង់សរុប') }}"></div>
+                                    <div class="wiz-deposit-adjust-field"><label for="wizDepositAdjustPayment">{{ $lmText('Payment to adjust', 'ការទូទាត់ដែលត្រូវកែប្រែ') }}</label><select id="wizDepositAdjustPayment" class="lm-control">
+                                        @forelse($depositPayments as $adjustPayment)<option value="{{ $adjustPayment->id }}">{{ $adjustPayment->receipt_number ?? $adjustPayment->payment_ref_no ?? $adjustPayment->reference_number ?? ('Payment #'.$adjustPayment->id) }} · ${{ number_format((float)($adjustPayment->total_paid_base ?? $adjustPayment->total_paid ?? $adjustPayment->amount ?? 0), 2) }}</option>@empty<option value="">{{ $lmText('No deposit payments yet', 'មិនទាន់មានប្រាក់កក់') }}</option>@endforelse
+                                    </select></div>
+                                    <button type="button" class="btn btn-primary wiz-deposit-total-review"><i class="fa fa-pencil"></i> {{ $lmText('Review adjustment', 'ពិនិត្យការកែប្រែ') }}</button>
                                 </div>
+                                <p class="wiz-deposit-help">{{ $lmText('Enter the new total, choose a payment, then review its amount and payment methods before saving. Other payments stay unchanged.', 'បញ្ចូលសរុបថ្មី ជ្រើសការទូទាត់ រួចពិនិត្យចំនួនទឹកប្រាក់ និងវិធីទូទាត់មុនរក្សាទុក។ ការទូទាត់ផ្សេងទៀតរក្សាដដែល។') }}</p>
                             </div>
 
                             @if($depositPayments->isNotEmpty())
@@ -1205,18 +1230,12 @@
                                             $dpNote = $dp->note ?? '';
                                             $dpEditReturnUrl = route('loan-management.loans.edit', $editRouteParams);
                                         @endphp
-                                        <div class="wiz-deposit-row" data-id="{{ $dp->id }}">
-                                            <div class="wiz-deposit-header" onclick="$(this).closest('.wiz-deposit-row').toggleClass('open').find('.wiz-deposit-body').slideToggle(200);">
-                                                <div>
-                                                    <strong style="font-size: 12px; color: #1e293b;">{{ $dpRef }}</strong>
-                                                    <small style="color: #64748b; margin-left: 6px;">{{ $dpDate }} &middot; {{ ucfirst($dpMethod) }}</small>
-                                                </div>
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    <span style="font-weight: 800; color: #059669;">${{ number_format($dpAmount, 2) }}</span>
-                                                    <i class="fa fa-chevron-down" style="font-size: 11px; color: #94a3b8;"></i>
-                                                </div>
-                                            </div>
-                                            <div class="wiz-deposit-body" style="display:none;">
+                                        <div class="wiz-deposit-row" data-id="{{ $dp->id }}" data-saved-amount="{{ number_format($dpAmount, 2, '.', '') }}">
+                                            <button type="button" class="wiz-deposit-header" aria-expanded="false" aria-controls="wiz-deposit-body-{{ $dp->id }}">
+                                                <span class="wiz-deposit-receipt"><strong>{{ $dpRef }}</strong><small>{{ $dpDate }} · {{ ucfirst($dpMethod) }}</small></span>
+                                                <span class="wiz-deposit-receipt-actions"><span class="wiz-deposit-draft-label">{{ $lmText('Unsaved amount', 'ចំនួនទឹកប្រាក់មិនទាន់រក្សាទុក') }}</span><span class="wiz-deposit-status">{{ ucfirst($dpStatus) }}</span><strong>${{ number_format($dpAmount, 2) }}</strong><i class="fa fa-chevron-down" aria-hidden="true"></i></span>
+                                            </button>
+                                            <div class="wiz-deposit-body" id="wiz-deposit-body-{{ $dp->id }}" style="display:none;">
                                                 <div class="wiz-deposit-edit-form">
                                                     <input type="hidden" name="return_to" value="{{ $dpEditReturnUrl }}">
                                                     <div class="wiz-deposit-form-grid">
@@ -1265,7 +1284,8 @@
                                                     <p class="wiz-deposit-method-total" aria-live="polite" data-label="{{ $lmText('Payment methods total', 'សរុបវិធីទូទាត់') }}" data-currency="{{ $loanRow->currency ?? 'USD' }}" data-mismatch="{{ $lmText('Payment method amounts must equal the total amount paid.', 'ទឹកប្រាក់តាមវិធីទូទាត់ត្រូវស្មើនឹងទឹកប្រាក់បង់សរុប។') }}"></p>
                                                     <div class="wiz-deposit-form-actions">
                                                         <button type="button" class="btn btn-sm btn-primary wiz-deposit-update-btn">{{ $lmText('Update Deposit', 'កែប្រែប្រាក់កក់') }}</button>
-                                                        <button type="button" class="btn btn-sm btn-danger wiz-deposit-remove" data-payment-id="{{ $dp->id }}" data-return-to="{{ $dpEditReturnUrl }}">{{ $lmText('Remove', 'លុបចេញ') }}</button>
+                                                        <button type="button" class="btn btn-sm btn-default wiz-deposit-cancel">{{ $lmText('Cancel changes', 'បោះបង់ការកែប្រែ') }}</button>
+                                                        <button type="button" class="btn btn-sm btn-danger wiz-deposit-remove" data-payment-id="{{ $dp->id }}" data-return-to="{{ $dpEditReturnUrl }}">{{ $lmText('Delete payment', 'លុបការទូទាត់') }}</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2340,6 +2360,10 @@
             updateBase: wizUrls.paymentUpdateBase, token: @json(csrf_token()), loanId: @json($loanRow->id),
             refreshUrl: @json(route('loan-management.loans.edit', $editRouteParams)),
             labels: {
+                noPayment: @json($lmText('Add a deposit payment first, then edit its total here.', 'សូមបន្ថែមការទូទាត់ប្រាក់កក់ជាមុន រួចកែសរុបនៅទីនេះ។')),
+                totalTooLow: @json($lmText('This total would make the selected payment zero or negative. Choose another payment or delete the payment to remove it.', 'សរុបនេះធ្វើឱ្យការទូទាត់ដែលបានជ្រើសមានតម្លៃសូន្យ ឬអវិជ្ជមាន។ សូមជ្រើសការទូទាត់ផ្សេង ឬលុបការទូទាត់។')),
+                review: @json($lmText('Review the adjusted payment amount and payment methods, then click Update Deposit to save.', 'ពិនិត្យចំនួនទឹកប្រាក់ និងវិធីទូទាត់ដែលបានកែ រួចចុចកែប្រែប្រាក់កក់ដើម្បីរក្សាទុក។')),
+                splitReview: @json($lmText('Distribute the new amount across the payment methods before saving.', 'សូមបែងចែកទឹកប្រាក់ថ្មីតាមវិធីទូទាត់មុនរក្សាទុក។')),
                 confirmDelete: @json($lmText('Delete this deposit payment? This will update loan totals.', 'តើអ្នកពិតជាចង់លុបប្រាក់កក់នេះមែនទេ? ការលុបនេះនឹងគណនាតម្លៃសរុបឡើងវិញ។')),
                 updated: @json($lmText('Deposit updated.', 'ប្រាក់កក់ត្រូវបានកែប្រែ។')),
                 deleted: @json($lmText('Deposit removed.', 'ប្រាក់កក់ត្រូវបានលុប។')),

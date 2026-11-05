@@ -61,6 +61,7 @@ class FinancialDashboardTest extends TestCase
                 $table->integer('transaction_id');
                 $table->integer('variation_id')->default(1);
                 $table->decimal('purchase_price_inc_tax')->nullable();
+                $table->string('lot_number')->nullable();
             });
             $schema->create('transaction_sell_lines_purchase_lines', function (Blueprint $table) {
                 $table->integer('sell_line_id');
@@ -71,10 +72,14 @@ class FinancialDashboardTest extends TestCase
                 $table->integer('id');
                 $table->integer('business_id')->default(1);
                 $table->boolean('enable_stock')->default(true);
+                $table->string('name')->default('Test product');
+                $table->string('sku')->default('SKU-1');
             });
             $schema->create('variations', function (Blueprint $table) {
                 $table->integer('id');
                 $table->integer('product_id')->default(1);
+                $table->string('name')->default('DUMMY');
+                $table->string('sub_sku')->nullable();
                 $table->decimal('dpp_inc_tax')->nullable();
                 $table->decimal('default_purchase_price')->nullable();
             });
@@ -267,6 +272,52 @@ class FinancialDashboardTest extends TestCase
         $this->salesRequest(['sort' => 'sale.created_by']);
     }
 
+    public function test_cost_sales_item_columns_use_saved_selling_prices_and_historical_lot_costs()
+    {
+        $this->salesPermissions = ['sell.view'];
+        $this->seedSales();
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['unit_price_inc_tax' => 110]);
+        DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'PHONE-LOT']);
+        DB::table('products')->where('id', 1)->update(['name' => 'Laptop', 'sku' => 'BASE-SKU']);
+        DB::table('variations')->where('id', 1)->update(['sub_sku' => 'LAPTOP-001', 'name' => '16GB']);
+        $details = $this->salesRequest(['per_page' => -1], true);
+        $sale = collect($details['rows'])->firstWhere('transaction_id', 1);
+        $returned = collect($details['rows'])->firstWhere('transaction_id', 2);
+        $this->assertSame('LAPTOP-001', $sale['sku']);
+        $this->assertSame('PHONE-LOT', $sale['lots']);
+        $this->assertSame('Laptop', $sale['product']);
+        $this->assertEquals(2, $sale['units']);
+        $this->assertEquals(60, $sale['purchase_price']);
+        $this->assertEquals(110, $sale['selling_price']);
+        $this->assertEquals(120, $sale['amount']);
+        $this->assertEquals(220, $sale['selling_total']);
+        $this->assertEquals(100, $sale['profit_loss']);
+        $this->assertEquals(-1, $returned['units']);
+        $this->assertEquals(-60, $returned['amount']);
+        $this->assertEquals(-50, $returned['profit_loss']);
+        $this->assertEquals($this->build()['total']['cost'], $details['amount']);
+        $accessory = DB::connection('finance_accessory');
+        $accessory->table('transactions')->insert([
+            ['id' => 1, 'type' => 'sell', 'status' => 'final'], ['id' => 2, 'type' => 'purchase', 'status' => 'received'],
+        ]);
+        $accessory->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'quantity' => 2, 'unit_price_inc_tax' => 50]);
+        $accessory->table('purchase_lines')->insert([
+            ['id' => 1, 'transaction_id' => 2, 'purchase_price_inc_tax' => 20, 'lot_number' => 'A'],
+            ['id' => 2, 'transaction_id' => 2, 'purchase_price_inc_tax' => 30, 'lot_number' => 'B'],
+        ]);
+        $accessory->table('transaction_sell_lines_purchase_lines')->insert([
+            ['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 1], ['sell_line_id' => 1, 'purchase_line_id' => 2, 'quantity' => 1],
+        ]);
+        $allocated = $this->salesRequest(['location_ids' => [-2]], true)['rows'][0];
+        $this->assertEquals(25, $allocated['purchase_price']);
+        $this->assertEquals(50, $allocated['amount']);
+        $this->assertEquals(50, $allocated['profit_loss']);
+        $this->assertEqualsCanonicalizing(['A', 'B'], explode(',', $allocated['lots']));
+        $sorted = $this->salesRequest(['location_ids' => [1, -2], 'sort' => 'purchase_price', 'direction' => 'asc', 'per_page' => -1], true);
+        $this->assertEquals([25, 60, 60], array_column($sorted['rows'], 'purchase_price'));
+
+    }
+
     public function test_cost_sales_details_handle_missing_costs_sorting_pagination_and_access()
     {
         $this->salesPermissions = ['sell.view'];
@@ -288,8 +339,8 @@ class FinancialDashboardTest extends TestCase
         $this->assertNull($missing['rows'][0]['amount']);
         DB::table('transaction_sell_lines')->delete();
         $missingLines = $this->salesRequest([], true);
-        $this->assertEquals(12, $missingLines['total']);
-        $this->assertNull($missingLines['amount']);
+        $this->assertEquals(0, $missingLines['total']);
+        $this->assertEquals(0, $missingLines['amount']);
         $this->salesPermissions = [];
         try { $this->salesRequest([], true); $this->fail('Sales access is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
     }
@@ -350,7 +401,7 @@ class FinancialDashboardTest extends TestCase
         $this->assertEquals(80, $details['amount']);
         $this->assertEquals(4, $details['total']);
         $this->assertEqualsCanonicalizing(['main', 'accessory', 'service'], array_values(array_unique(array_column($details['rows'], 'source'))));
-        $returnedCost = collect($details['rows'])->first(fn ($row) => $row['source'] === 'main' && $row['id'] === 2);
+        $returnedCost = collect($details['rows'])->first(fn ($row) => $row['source'] === 'main' && $row['transaction_id'] === 2);
         $this->assertEquals(-60, $returnedCost['amount']);
         $this->assertEquals(-60, $this->salesRequest(['start_date' => '2026-11-04', 'end_date' => '2026-11-04'], true)['amount']);
 
@@ -653,6 +704,9 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('Total units sold', $html);
         $this->assertStringContainsString('finance-sales-details', $html);
         $this->assertStringContainsString('finance-sales-modal', $html);
+        $this->assertStringContainsString('finance-sales-cost-head', $html);
+        foreach (['SKU', 'Lots', 'Product', 'Qty', 'Purchase Price', 'Selling Price', 'Profit/Loss'] as $column) $this->assertStringContainsString($column, $html);
+
         $this->assertStringContainsString('data-cost-details="1"', $html);
         $this->assertStringContainsString('/reports/financial-dashboard/cost-sales?', $html);
 

@@ -112,11 +112,16 @@ test('cost amounts open the cost sales list with purchase values and source labe
     assert.match(f.$('#finance-sales-title').text(), /Cost/);
     assert.equal(f.$('#finance-sales-amount-label').text(), 'Cost');
     f.requests[0].success({page: 1, last_page: 1, total: 2, units: 2, amount: 60, rows: [
-        {source: 'main', units: 1, amount: 60, estimated: 1},
+        {source: 'main', units: 1, amount: 60, purchase_price: 60, selling_price: 100, profit_loss: 40, sku: 'SKU-001', lots: 'LOT-01', product: '<img src=x>', estimated: 1},
         {source: 'accessory', units: 1, amount: null}
     ]});
     assert.match(f.$('#finance-sales-table').text(), /Estimated cost/);
     assert.match(f.$('#finance-sales-table').text(), /accessory/);
+    assert.match(f.$('#finance-sales-table').text(), /SKU-001/);
+    assert.match(f.$('#finance-sales-table').text(), /LOT-01/);
+    assert.equal(f.$('#finance-sales-table img').length, 0);
+    assert.equal(f.$('#finance-sales-table tbody tr').first().children('td').length, 8);
+    assert.match(f.$('#finance-sales-table').text(), /40.00/);
     assert.match(f.$('#finance-sales-table').text(), /—/);
     assert.match(f.$('#finance-sales-summary').text(), /60.00/);
     f.$('.finance-sales-details').first().trigger('click');

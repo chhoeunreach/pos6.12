@@ -189,17 +189,30 @@
                     page = result.page;
                     lastPage = result.last_page;
                     body.empty();
+                    function price(value) {
+                        return value === null || value === undefined ? '—' : (options.currencySymbol || '$') + Number(value).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
                     (result.rows || []).forEach(function(row) {
                         var tr = $('<tr>');
-                        [row.transaction_date, row.invoice_no, row.customer_name, row.location_name,
-                            row.units === null ? '—' : Number(row.units).toLocaleString(), row.amount === null ? '—' : (options.currencySymbol || '$') + Number(row.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})].forEach(function(value) {
-                            tr.append($('<td>').text(value == null ? '' : value));
-                        });
-                        if (costMode && row.estimated > 0) tr.find('td').last().append($('<small>').text(' (' + (labels.estimated || 'Estimated cost') + ')'));
-                        if (costMode) tr.append($('<td>').text(labels[row.source] || row.source));
-                        var actions = $('<td>');
-                        if (row.edit_url) actions.append($('<a class="finance-sales-edit finance-btn" target="_blank" rel="noopener">').attr('href', row.edit_url).text(labels.edit || 'Edit'));
-                        tr.append(actions);
+                        if (costMode) {
+                            [row.sku || '—', row.lots || '—'].forEach(function(value) { tr.append($('<td>').text(value)); });
+                            var product = $('<td>').text((row.product || '—') + (row.variation_name && row.variation_name !== 'DUMMY' ? ' · ' + row.variation_name : ''));
+                            product.append($('<small style="display:block;color:#64748b">').text([row.invoice_no, labels[row.source] || row.source, row.transaction_date].filter(Boolean).join(' · ')));
+                            tr.append(product);
+                            [row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.purchase_price), price(row.selling_price), price(row.amount), price(row.profit_loss)].forEach(function(value, index) {
+                                tr.append($('<td>').text(value).css('white-space', 'nowrap'));
+                            });
+                            if (row.estimated > 0) tr.find('td').eq(4).append($('<small style="display:block">').text(labels.estimated || 'Estimated cost'));
+                            if (Number(row.profit_loss) < 0) tr.find('td').last().css('color', '#b91c1c');
+                        } else {
+                            [row.transaction_date, row.invoice_no, row.customer_name, row.location_name,
+                                row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.amount)].forEach(function(value) {
+                                tr.append($('<td>').text(value == null ? '' : value));
+                            });
+                            var actions = $('<td>');
+                            if (row.edit_url) actions.append($('<a class="finance-sales-edit finance-btn" target="_blank" rel="noopener">').attr('href', row.edit_url).text(labels.edit || 'Edit'));
+                            tr.append(actions);
+                        }
                         body.append(tr);
                     });
                     if (!result.rows || !result.rows.length) body.append($('<tr>').append($('<td>').attr('colspan', costMode ? 8 : 7).text(labels.empty || 'No data.')));
@@ -219,11 +232,19 @@
         $(document).on('click', '.finance-sales-details', function(event) {
             event.preventDefault();
             listUrl = $(this).attr('href');
-            costMode = $(this).attr('data-cost-details') === '1';
+            var nextCostMode = $(this).attr('data-cost-details') === '1';
+            if (nextCostMode !== costMode) { sort = nextCostMode ? 'sku' : 'date'; direction = nextCostMode ? 'asc' : 'desc'; }
+            costMode = nextCostMode;
+            $('#finance-sales-normal-head').prop('hidden', costMode);
+            $('#finance-sales-cost-head').prop('hidden', !costMode);
+            modal.find('.finance-sales-sort').each(function() {
+                var active = $(this).attr('data-sort') === sort;
+                $(this).closest('th').attr('aria-sort', active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
+                $(this).find('.finance-sort-indicator').text(active ? (direction === 'asc' ? '▲' : '▼') : '↕');
+            });
             $('#finance-sales-title').text(costMode ? (labels.costTitle || 'Cost of goods sold details') : (labels.salesTitle || 'POS sales list'));
             $('#finance-sales-amount-label').text(costMode ? (labels.cost || 'Cost') : (labels.amount || 'Amount'));
-            $('#finance-sales-basis').text(costMode ? labels.costBasis : labels.unitsBasis);
-            modal.find('.finance-cost-source').prop('hidden', !costMode);
+            $('#finance-sales-basis').text(costMode ? labels.costLineBasis : labels.unitsBasis);
             page = lastPage = 1;
             modal.modal('show');
             load(1);

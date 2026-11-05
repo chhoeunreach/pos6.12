@@ -248,7 +248,7 @@ class FinancialDashboardReport
         return $this->costQuery($connection, $businessId, $locationIds, $filters)->get()->keyBy('location_id');
     }
 
-    public function costQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $byTransaction = false)
+    public function costQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $byTransaction = false, bool $byLine = false)
     {
         $db = DB::connection($connection);
         $allocations = $db->table('transaction_sell_lines_purchase_lines as a')
@@ -260,6 +260,7 @@ class FinancialDashboardReport
             ->groupBy('a.sell_line_id')->select('a.sell_line_id')
             ->selectRaw('SUM(a.quantity) as quantity, SUM(a.quantity * p.purchase_price_inc_tax) as cost')
             ->selectRaw('SUM(CASE WHEN p.purchase_price_inc_tax IS NOT NULL THEN a.quantity ELSE 0 END) as costed_quantity');
+        if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots");
         // Return lines point at the original sale, preserving its historical cost.
         $query = $this->transactions($connection, $businessId, $locationIds, $filters)
             ->whereIn('t.type', ['sell', 'sell_return'])
@@ -298,6 +299,20 @@ class FinancialDashboardReport
         )";
         $unitCost = "CASE WHEN product.id IS NULL OR sale.id IS NULL THEN NULL WHEN product.enable_stock = 0 THEN 0 ELSE COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) END";
         $quantity = "CASE WHEN t.type = 'sell_return' AND line.parent_sell_line_id IS NULL THEN line.quantity_returned ELSE line.quantity END";
+
+        if ($byLine) {
+            $signedQuantity = "CASE WHEN t.type = 'sell_return' THEN -($quantity) ELSE ($quantity) END";
+            $sellingPrice = "CASE WHEN COALESCE(line.children_type, sold.children_type, '') = 'combo' THEN 0 ELSE COALESCE(line.unit_price_inc_tax, CASE WHEN sale.id IS NOT NULL THEN sold.unit_price_inc_tax END) END";
+
+            return $query->whereRaw("($quantity) > 0")
+                ->select('line.id', 't.id as transaction_id', 't.location_id', 't.transaction_date', 't.invoice_no', 'product.name as product', 'v.name as variation_name')
+                ->selectRaw("COALESCE(NULLIF(v.sub_sku, ''), product.sku) as sku, COALESCE(NULLIF(lot.lot_number, ''), allocated.lots) as lots")
+                ->selectRaw("($signedQuantity) as units, ($unitCost) as purchase_price, ($sellingPrice) as selling_price")
+                ->selectRaw("($signedQuantity) * ($unitCost) as amount, ($signedQuantity) * ($sellingPrice) as selling_total")
+                ->selectRaw("($signedQuantity) * (($sellingPrice) - ($unitCost)) as profit_loss")
+                ->selectRaw("CASE WHEN ($unitCost) IS NULL THEN 1 ELSE 0 END as missing")
+                ->selectRaw("CASE WHEN product.enable_stock = 1 AND ($recorded) IS NULL AND COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END as estimated");
+        }
 
         $query->whereRaw("($quantity) > 0")->groupBy('t.location_id')->select('t.location_id');
         if ($byTransaction) $query->groupBy('t.id')->addSelect('t.id as transaction_id');

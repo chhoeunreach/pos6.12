@@ -79,6 +79,38 @@ test('validation failures keep edits and refresh failure reports that the paymen
     assert.equal(f.$('#wizDepositFeedback').text(), 'Saved; refresh failed');
     assert.equal(f.$('.wiz-deposit-update-btn').prop('disabled'), false);
 });
+test('editing the total prepares only the selected payment for review and Cancel restores it', () => {
+    const f = fixture();
+    f.$('.wiz-deposit-row').attr('data-saved-amount', '100');
+    f.$('#wizCustomerDepositBlock').prepend('<div class="wiz-deposit-summary" data-current-total="150"><input id="wizDepositTotalTarget" type="number" min="0" step="0.01" value="200"><select id="wizDepositAdjustPayment"><option value="1">Payment 1</option></select><button class="wiz-deposit-total-review">Review</button></div>');
+    f.$('.wiz-deposit-edit-form').append('<button class="wiz-deposit-cancel">Cancel</button>');
+    // Initialize after adding Cancel so the restored form includes all controls.
+    f.dom.window.LoanDepositPayments.init(f.dom.window.document);
+    f.$('.wiz-deposit-total-review').trigger('click');
+    assert.equal(f.$('[name="amount"]').val(), '150.00');
+    assert.equal(f.$('.lm-method-amount').val(), '150.00');
+    assert.equal(f.$('.wiz-deposit-row').hasClass('has-unsaved-amount'), true);
+    assert.equal(f.requests.length, 0, 'reviewing never saves automatically');
+    f.$('.wiz-deposit-cancel').trigger('click');
+    assert.equal(f.$('[name="amount"]').val(), '100');
+    assert.equal(f.$('#wizDepositTotalTarget').val(), '150');
+    assert.equal(f.$('.wiz-deposit-row').hasClass('has-unsaved-amount'), false);
+});
+test('total adjustment preserves split methods and prevents zero or negative payments', () => {
+    const f = fixture();
+    f.$('.wiz-deposit-row').attr('data-saved-amount', '100');
+    f.$('.lm-method-amount').val('60');
+    f.$('.wiz-deposit-methods').append('<div class="lm-method-row"><input class="lm-method-amount" name="payment_details[1][amount]" value="40"><button class="lm-remove-method">Remove</button></div>');
+    f.$('#wizCustomerDepositBlock').prepend('<div class="wiz-deposit-summary" data-current-total="150"><input id="wizDepositTotalTarget" type="number" min="0" step="0.01" value="200"><select id="wizDepositAdjustPayment"><option value="1">Payment 1</option></select><button class="wiz-deposit-total-review">Review</button></div>');
+    f.$('.wiz-deposit-total-review').trigger('click');
+    assert.equal(f.$('[name="amount"]').val(), '150.00');
+    assert.deepEqual(Array.from(f.$('.lm-method-amount').map(function() { return this.value; }).get()), ['60', '40']);
+    assert.equal(f.dom.window.LoanDepositPayments.validate(f.$('.wiz-deposit-edit-form')[0]), false);
+    f.$('#wizDepositTotalTarget').val('50');
+    f.$('.wiz-deposit-total-review').trigger('click');
+    assert.equal(f.$('#wizDepositFeedback').hasClass('alert-danger'), true);
+    assert.equal(f.requests.length, 0);
+});
 test('parent refreshes only after closing a changed modal from a verified iframe', () => {
     const dom = new JSDOM('<div class="modal" id="parent-modal"><iframe></iframe></div>');
     const $ = jquery(dom.window), handlers = {}, state = {reloads: 0};

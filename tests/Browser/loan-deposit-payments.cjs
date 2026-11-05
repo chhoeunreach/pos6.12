@@ -20,7 +20,12 @@ const second = document.getElementById('second');
 function set(input, value) { input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); }
 assert.equal(first.querySelector('.lm-remove-method').disabled, true);
 set(first.querySelector('.lm-method-amount'), 30);
-assert.equal(window.LoanDepositPayments.validate(first), false);
+assert.equal(first.querySelector('[name="amount"]').value, '30');
+assert.equal(window.LoanDepositPayments.validate(first), true);
+set(first.querySelector('[name="amount"]'), 100);
+set(first.querySelector('.lm-method-amount'), 30);
+// Split the original total across two methods for review.
+first.querySelector('[name="amount"]').value = '100';
 first.querySelector('.wiz-deposit-add-method').click();
 const inputs = first.querySelectorAll('.lm-method-amount');
 assert.equal(inputs[1].value, '70.00');

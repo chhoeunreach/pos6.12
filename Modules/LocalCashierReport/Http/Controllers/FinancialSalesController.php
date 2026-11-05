@@ -20,9 +20,9 @@ class FinancialSalesController extends Controller
         $allSales = $user->can('sell.view') || $user->can('direct_sell.view') || $user->can('direct_sell.access');
         abort_unless($allSales || $user->can('view_own_sell_only'), 403);
         $request->validate(['page' => 'nullable|integer|min:1|max:2000', 'per_page' => 'nullable|integer|in:-1,10,25,50,100',
-            'sort' => 'nullable|in:date,invoice,customer,location,units,amount', 'direction' => 'nullable|in:asc,desc']);
+            'sort' => 'nullable|in:sku,lots,product,units,purchase_price,selling_price,amount,profit_loss', 'direction' => 'nullable|in:asc,desc']);
         $perPage = (int) $request->input('per_page', 25);
-        $sort = $request->input('sort', 'date');
+        $sort = $request->input('sort', 'sku');
         $direction = $request->input('direction', 'desc');
         $connections = ['main' => config('database.default'), 'accessory' => config('accessory.database_connection', 'accessory'), 'service' => config('service.database_connection', 'service')];
         $rows = collect();
@@ -38,39 +38,18 @@ class FinancialSalesController extends Controller
             if (! $ids) continue;
             // Separate applications have independent user IDs.
             abort_if($source !== 'main' && ! $allSales, 403);
-            $costs = $report->costQuery($connection, $businessId, $ids, $filters, true);
-            if (! $allSales) $costs->where('t.created_by', $user->id);
-            $records = DB::connection($connection)->table('transactions as sale')
-                ->leftJoinSub($costs, 'sold', fn ($join) => $join->on('sold.transaction_id', '=', 'sale.id'))
-                ->leftJoin('contacts as customer', 'customer.id', '=', 'sale.contact_id')
-                ->leftJoin('business_locations as location', 'location.id', '=', 'sale.location_id')
-                ->where('sale.business_id', $businessId)->whereIn('sale.location_id', $ids)
-                ->where('sale.status', 'final')->whereIn('sale.type', ['sell', 'sell_return'])
-                ->whereBetween('sale.transaction_date', [$filters['start_date'].' 00:00:00', $filters['end_date'].' 23:59:59'])
-                ->select('sale.id', 'sale.transaction_date', 'sale.invoice_no', 'sale.type', 'sale.is_direct_sale', 'sale.created_by', 'customer.name as customer_name', 'location.name as location_name', 'sold.units', 'sold.estimated')
-                ->selectRaw('COALESCE(sold.missing, 1) as missing, CASE WHEN COALESCE(sold.missing, 1) > 0 THEN NULL ELSE sold.cost END as amount');
-            if (! $allSales) $records->where('sale.created_by', $user->id);
+            $records = $report->costQuery($connection, $businessId, $ids, $filters, false, true);
+            if (! $allSales) $records->where('t.created_by', $user->id);
             $records = $records->get();
             foreach ($records as $row) {
                 $row->source = $source;
                 $row->edit_url = null;
-                if ($source === 'main') {
-                    if ($row->type === 'sell_return') {
-                        if ($user->can('access_sell_return') || ($user->can('access_own_sell_return') && (int) $row->created_by === (int) $user->id)) $row->edit_url = route('sell-return.edit', $row->id);
-                    } elseif ($row->is_direct_sale && $user->can('direct_sell.update')) {
-                        $row->edit_url = route('sells.edit', $row->id);
-                    } elseif (! $row->is_direct_sale && $user->can('sell.update')) {
-                        $row->edit_url = route('pos.edit', $row->id);
-                    }
-                }
-                unset($row->created_by, $row->is_direct_sale);
                 $rows->push($row);
             }
         }
-        $fields = ['date' => 'transaction_date', 'invoice' => 'invoice_no', 'customer' => 'customer_name', 'location' => 'location_name', 'units' => 'units', 'amount' => 'amount'];
-        $field = $fields[$sort];
-        $rows = $rows->sort(function ($a, $b) use ($field, $direction) {
-            $order = in_array($field, ['units', 'amount'], true) ? $a->$field <=> $b->$field : strcmp((string) $a->$field, (string) $b->$field);
+        $numeric = ['units', 'purchase_price', 'selling_price', 'amount', 'profit_loss'];
+        $rows = $rows->sort(function ($a, $b) use ($sort, $direction, $numeric) {
+            $order = in_array($sort, $numeric, true) ? $a->$sort <=> $b->$sort : strcmp((string) $a->$sort, (string) $b->$sort);
             return ($order ? ($direction === 'asc' ? $order : -$order) : (($b->id <=> $a->id) ?: strcmp($b->source, $a->source)));
         });
         $count = $rows->count();

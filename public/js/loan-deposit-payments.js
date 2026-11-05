@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    var snapshots = new WeakMap();
+
     function cents(value) {
         return Math.round((parseFloat(value) || 0) * 100);
     }
@@ -19,10 +21,24 @@
         var buttons = rows.querySelectorAll('.lm-remove-method');
         buttons.forEach(function (button) { button.disabled = buttons.length === 1; });
         form.querySelector('.wiz-deposit-add-method').disabled = buttons.length >= 50;
+        var row = form.closest('.wiz-deposit-row');
+        if (row && row.hasAttribute('data-saved-amount')) {
+            var dirty = cents(form.querySelector('[name="amount"]').value) !== cents(row.getAttribute('data-saved-amount'));
+            row.classList.toggle('has-unsaved-amount', dirty);
+        }
         return matches;
     }
 
     document.addEventListener('click', function (event) {
+        var header = event.target.closest('.wiz-deposit-header');
+        if (header) {
+            var row = header.closest('.wiz-deposit-row');
+            var expanded = header.getAttribute('aria-expanded') !== 'true';
+            row.classList.toggle('open', expanded);
+            header.setAttribute('aria-expanded', String(expanded));
+            row.querySelector('.wiz-deposit-body').style.display = expanded ? 'block' : 'none';
+            return;
+        }
         var form = event.target.closest('.wiz-deposit-edit-form');
         if (!form) return;
         var rows = form.querySelector('.wiz-deposit-methods');
@@ -50,12 +66,16 @@
         if (!form) return;
         var inputs = form.querySelectorAll('.wiz-deposit-methods .lm-method-amount');
         if (event.target.name === 'amount' && inputs.length === 1) inputs[0].value = event.target.value;
+        else if (event.target.classList.contains('lm-method-amount') && inputs.length === 1) form.querySelector('[name="amount"]').value = event.target.value;
         update(form);
     });
 
     window.LoanDepositPayments = {
         init: function (root) {
-            root.querySelectorAll('.wiz-deposit-edit-form').forEach(update);
+            root.querySelectorAll('.wiz-deposit-edit-form').forEach(function(form) {
+                if (!snapshots.has(form)) snapshots.set(form, form.innerHTML);
+                update(form);
+            });
         },
         initActions: function (options) {
             var $ = window.jQuery;
@@ -74,15 +94,46 @@
                     if (block.length !== 1) throw new Error('Deposit block was not returned');
                     $('#wizCustomerDepositBlock').replaceWith(block);
                     window.LoanDepositPayments.init(block[0]);
-                    if (openId != null) block.find('.wiz-deposit-row').filter(function() { return String($(this).attr('data-id')) === String(openId); }).addClass('open').find('.wiz-deposit-body').show();
+                    if (openId != null) block.find('.wiz-deposit-row').filter(function() { return String($(this).attr('data-id')) === String(openId); }).addClass('open').find('.wiz-deposit-body').show().end().find('.wiz-deposit-header').attr('aria-expanded', 'true');
                     if (message) feedback(message, false);
                 });
             }
             function lock(value) {
                 busy = value;
-                $('#wizCustomerDepositBlock .wiz-deposit-update-btn, #wizCustomerDepositBlock .wiz-deposit-remove, #wizCustomerDepositBlock .wiz-deposit-refresh').prop('disabled', value);
+                $('#wizCustomerDepositBlock .wiz-deposit-update-btn, #wizCustomerDepositBlock .wiz-deposit-remove, #wizCustomerDepositBlock .wiz-deposit-refresh, #wizCustomerDepositBlock .wiz-deposit-cancel, #wizDepositTotalTarget, #wizDepositAdjustPayment, #wizCustomerDepositBlock .wiz-deposit-total-review').prop('disabled', value);
             }
             $(document).off('.loanDepositActions');
+            $(document).on('click.loanDepositActions', '.wiz-deposit-total-review', function() {
+                if (busy) return;
+                var target = document.getElementById('wizDepositTotalTarget');
+                if (!target.reportValidity()) return;
+                var id = $('#wizDepositAdjustPayment').val();
+                var row = $('#wizCustomerDepositBlock .wiz-deposit-row').filter(function() { return String($(this).attr('data-id')) === String(id); });
+                if (!row.length) { feedback(labels.noPayment || 'Add a deposit payment first.', true); return; }
+                var current = cents($('#wizCustomerDepositBlock .wiz-deposit-summary').attr('data-current-total'));
+                var adjusted = cents(target.value) - current + cents(row.attr('data-saved-amount'));
+                if (adjusted <= 0) { feedback(labels.totalTooLow || 'Choose another payment or delete this payment to remove it.', true); return; }
+                var form = row.find('.wiz-deposit-edit-form');
+                form.find('[name="amount"]').val((adjusted / 100).toFixed(2));
+                var methods = form.find('.lm-method-amount');
+                if (methods.length === 1) methods.val((adjusted / 100).toFixed(2));
+                update(form[0]);
+                row.addClass('open').find('.wiz-deposit-header').attr('aria-expanded', 'true');
+                row.find('.wiz-deposit-body').show();
+                feedback(methods.length > 1 ? (labels.splitReview || 'Review payment methods before saving.') : (labels.review || 'Review the amount and methods, then save.'), false);
+                form.find('[name="amount"]').trigger('focus');
+            });
+            $(document).on('click.loanDepositActions', '.wiz-deposit-cancel', function() {
+                if (busy) return;
+                var form = $(this).closest('.wiz-deposit-edit-form')[0];
+                if (snapshots.has(form)) form.innerHTML = snapshots.get(form);
+                update(form);
+                var row = $(form).closest('.wiz-deposit-row');
+                row.removeClass('open').find('.wiz-deposit-header').attr('aria-expanded', 'false');
+                row.find('.wiz-deposit-body').hide();
+                $('#wizDepositTotalTarget').val($('#wizCustomerDepositBlock .wiz-deposit-summary').attr('data-current-total'));
+                $('#wizDepositFeedback').prop('hidden', true);
+            });
             $(document).on('click.loanDepositActions', '.wiz-deposit-refresh', function() {
                 if (busy) return;
                 lock(true);
