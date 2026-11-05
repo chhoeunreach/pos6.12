@@ -12,10 +12,18 @@ function fixture() {
         <table id="finance-sales-table"><thead><tr><th><button class="finance-sales-sort" data-sort="date">Date<span class="finance-sort-indicator">▼</span></button></th><th><button class="finance-sales-sort" data-sort="amount">Amount<span class="finance-sort-indicator">↕</span></button></th></tr></thead><tbody></tbody></table><button id="finance-sales-prev"></button><span id="finance-sales-page"></span><button id="finance-sales-next"></button></div>`,
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window), requests = [], state = {refreshes: 0};
+    $('body').append('<div id="finance-purchase-price-modal" class="modal"><form class="purchase-lot-price-form"><div class="purchase-lot-price-error" hidden></div><p class="purchase-lot-price-loading"></p><div class="purchase-lot-price-fields"></div><button type="submit" class="purchase-lot-price-save">Save</button><button type="button" class="purchase-lot-price-cancel" data-dismiss="modal">Cancel</button></form></div>');
+    $('body').append('<a class="finance-pos-report-details" href="/smart-stock-inventory/stock-reports/sell?finance_embed=1&start_date=2026-11-01&end_date=2026-11-05&location_id%5B0%5D=1">POS total</a><div id="finance-pos-report-modal"><span id="finance-pos-report-loading"></span><iframe id="finance-pos-report-frame" src="about:blank"></iframe><a id="finance-pos-report-tab"></a></div>');
     $('#finance-sales-modal').append('<div class="finance-cost-tools" hidden><input id="finance-cost-search"><button id="finance-cost-clear-search"></button></div><div class="finance-cost-stats" hidden><strong id="finance-cost-stat-qty"></strong><strong id="finance-cost-stat-total"></strong><strong id="finance-cost-stat-profit"></strong></div><div id="finance-cost-quality" hidden></div><span id="finance-sales-range"></span><button id="finance-sales-first"></button><button id="finance-sales-last"></button>');
     dom.window.$ = dom.window.jQuery = $;
-    $.fn.modal = function(action) { this.toggleClass('in', action === 'show'); return this; };
+    $.fn.modal = function(action) {
+        if (action === 'show') { this.addClass('in').trigger('shown.bs.modal'); }
+        else { const event = $.Event('hide.bs.modal'); this.trigger(event); if (!event.isDefaultPrevented()) this.removeClass('in').trigger('hidden.bs.modal'); }
+        return this;
+    };
+    $(dom.window.document).on('click', '[data-dismiss="modal"]', function() { $(this).closest('.modal').modal('hide'); });
     $.ajax = options => requests.push(options);
+    dom.window.eval(fs.readFileSync(path.join(root, 'public/js/purchase-lot-price-modal.js'), 'utf8'));
     dom.window.eval(fs.readFileSync(path.join(root, 'public/js/financial-dashboard.js'), 'utf8'));
     dom.window.initFinancialDashboard({currencySymbol: '$', refreshDashboard: () => state.refreshes++, labels: {units: 'units', salesError: 'Load failed'}});
     return {dom, $, requests, state};
@@ -152,4 +160,65 @@ test('professional cost table searches all rows and updates filtered totals and 
     f.$('#finance-cost-clear-search').trigger('click');
     assert.equal(f.requests[3].data.q, '');
     assert.equal(f.requests[3].data.page, 1);
+});
+
+function openQuickCost(f, requestIndex) {
+    f.$('.finance-cost-price-edit').trigger('click');
+    f.requests[requestIndex].success({lots: [{id: 1, lot: 'LOT-01', reference: 'PUR-1', purchase_price: 50}], cost_version: 'a'.repeat(64), update_url: '/cost/main/1'});
+    assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
+}
+test('quick cost editing loads the original lot, saves with CSRF and refreshes filtered totals', () => {
+    const f = fixture();
+    f.$('head').append('<meta name="csrf-token" content="csrf-token">');
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, total: 1, units: 2, amount: 100, profit_loss: 20, rows: [{units: 2, purchase_price: 50, amount: 100, profit_loss: 20, cost_edit_url: '/cost/main/1'}]});
+    openQuickCost(f, 1);
+    assert.equal(f.$('#finance-purchase-price-modal form input[type="number"]').val(), '50');
+    assert.equal(f.$('#finance-purchase-price-modal form input[type=number]').length, 1);
+    f.$('#finance-purchase-price-modal form input[type="number"]').val('60');
+    f.$('#finance-purchase-price-modal form').trigger('submit');
+    assert.equal(f.requests[2].method, 'PUT');
+    assert.equal(f.requests[2].url, '/cost/main/1');
+    assert.match(f.requests[2].data, /prices%5B0%5D%5Bpurchase_price%5D=60/);
+    assert.match(f.requests[2].data, /cost_version=aaaa/);
+    assert.equal(f.requests[2].headers['X-CSRF-TOKEN'], 'csrf-token');
+    f.requests[2].success({success: true});
+    assert.equal(f.requests[3].url, f.requests[0].url);
+    assert.equal(f.requests[3].data.page, 1);
+    f.$('#finance-sales-modal').trigger('hidden.bs.modal');
+    assert.equal(f.state.refreshes, 1);
+});
+test('canceling or rejecting an original-lot price edit keeps the recorded cost unchanged', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, total: 1, units: 1, amount: 50, rows: [{units: 1, purchase_price: 50, amount: 50, cost_edit_url: '/cost/main/1'}]});
+    openQuickCost(f, 1);
+    f.$('.purchase-lot-price-cancel').trigger('click');
+    assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), false);
+    assert.equal(f.requests.length, 2);
+    openQuickCost(f, 2);
+    f.$('#finance-purchase-price-modal form').trigger('submit');
+    f.requests[3].error({responseJSON: {errors: {purchase_price: ['Invalid cost']}}});
+    f.requests[3].complete();
+    assert.equal(f.$('#finance-purchase-price-modal .purchase-lot-price-error').text(), 'Invalid cost');
+    assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-purchase-price-modal form button').first().prop('disabled'), false);
+});
+
+test('POS total opens the actual Stock Sell Report in a filtered modal and stops it on close', () => {
+    const f = fixture();
+    f.$('.finance-pos-report-details').trigger('click');
+    assert.equal(f.$('#finance-pos-report-modal').hasClass('in'), true);
+    const url = new URL(f.$('#finance-pos-report-frame').attr('src'));
+    assert.equal(url.pathname, '/smart-stock-inventory/stock-reports/sell');
+    assert.equal(url.searchParams.get('finance_embed'), '1');
+    assert.equal(url.searchParams.get('start_date'), '2026-11-01');
+    assert.equal(url.searchParams.get('location_id[0]'), '1');
+    const tab = new URL(f.$('#finance-pos-report-tab').attr('href'));
+    assert.equal(tab.searchParams.has('finance_embed'), false);
+    assert.equal(tab.searchParams.get('end_date'), '2026-11-05');
+    f.$('#finance-pos-report-frame').trigger('load');
+    assert.equal(f.$('#finance-pos-report-loading').prop('hidden'), true);
+    f.$('#finance-pos-report-modal').trigger('hidden.bs.modal');
+    assert.equal(f.$('#finance-pos-report-frame').attr('src'), 'about:blank');
 });

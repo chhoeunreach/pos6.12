@@ -102,6 +102,7 @@ class StockReportController extends Controller
 
     public function stockSellReport(Request $request)
     {
+        if ($request->boolean('finance_embed') || (!$request->ajax() && $request->hasAny(['start_date', 'end_date', 'location_id']))) $request->validate(['start_date' => 'nullable|date_format:Y-m-d', 'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date', 'location_id' => 'nullable|array', 'location_id.*' => 'integer|min:1']);
         if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
             abort(403, 'Unauthorized action.');
         }
@@ -285,7 +286,10 @@ class StockReportController extends Controller
                         return '<span data-export-value="Unavailable">Unavailable</span>';
                     }
 
-                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                    $value = '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
+                    if (!auth()->user()->can('purchase.update')) return $value;
+                    $url = ssi_route('ssi.report.purchase_cost.edit', ['sourceName' => 'main', 'line' => $row->id]);
+                    return '<button type="button" class="ssi-purchase-price-edit" data-url="'.e($url).'" title="Edit original purchase lot price">'.$value.' <i class="fa fa-pencil" aria-hidden="true"></i></button>';
                 })
                 ->editColumn('purchase_profit_loss', function ($row) {
                     if ($row->purchase_profit_loss === null) {

@@ -104,6 +104,20 @@ class StockSellPurchaseCostTest extends TestCase
             ->first();
     }
 
+    public function test_quick_edit_targets_the_same_lots_as_the_stock_sell_report()
+    {
+        $resolver = new \Modules\SmartStockInventory\Services\StockSellPurchaseCostResolver;
+        $line = DB::table('transaction_sell_lines')->where('id', 1)->first();
+        $sale = DB::table('transactions')->where('id', 10)->first();
+        $this->assertSame([1, 2], $resolver->resolve($line, $sale, [1]));
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['lot_no_line_id' => 1]);
+        $line->lot_no_line_id = 1;
+        $this->assertSame([1], $resolver->resolve($line, $sale, [1]));
+        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => null]);
+        $this->assertSame([2], $resolver->resolve($line, $sale, [1]));
+        $this->assertSame([], $resolver->resolve($line, $sale, [2]));
+    }
+
     public function test_corrected_batch_cost_updates_weighted_price_and_total()
     {
         $before = $this->reportCost();

@@ -231,6 +231,8 @@ class SmartStockAccessMiddleware
             'ssi.lot.history' => 'stock_inventory.view',
             'ssi.lot.update' => 'stock_inventory.update',
             'ssi.report.stock_sell' => 'stock_report.view',
+            'ssi.report.purchase_cost.edit' => 'purchase.update',
+            'ssi.report.purchase_cost.update' => 'purchase.update',
             'ssi.report.stock_purchase' => 'stock_report.view',
             'ssi.report.stock_transfer' => 'stock_report.view',
             'ssi.settings.index' => 'stock_inventory.settings',

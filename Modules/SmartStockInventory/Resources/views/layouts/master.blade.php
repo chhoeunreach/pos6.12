@@ -429,6 +429,15 @@
             }
         }
     </style>
+    @if(request()->boolean('finance_embed'))
+    <style>
+        .ssi-sidebar,.ssi-topbar,.ssi-header,.ssi-page-header,.ssi-action-bar,.content-header{display:none!important}
+        .ssi-shell{display:block!important;padding:0!important;min-height:0!important;height:auto!important}
+        .ssi-main{margin:0!important;width:100%!important;min-height:0!important}
+        .ssi-page{padding:10px!important;overflow:visible!important}.ssi-page>.content{padding:0!important}
+        body.ssi-standalone{background:#f6f8fc!important}.table-responsive{overflow-x:auto}
+    </style>
+    @endif
     @yield('css')
 </head>
 <body class="hold-transition skin-blue-light ssi-standalone">

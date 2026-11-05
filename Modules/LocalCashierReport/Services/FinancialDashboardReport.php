@@ -260,7 +260,7 @@ class FinancialDashboardReport
             ->groupBy('a.sell_line_id')->select('a.sell_line_id')
             ->selectRaw('SUM(a.quantity) as quantity, SUM(a.quantity * p.purchase_price_inc_tax) as cost')
             ->selectRaw('SUM(CASE WHEN p.purchase_price_inc_tax IS NOT NULL THEN a.quantity ELSE 0 END) as costed_quantity');
-        if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots");
+        if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots, GROUP_CONCAT(DISTINCT p.id) as purchase_ids");
         // Return lines point at the original sale, preserving its historical cost.
         $query = $this->transactions($connection, $businessId, $locationIds, $filters)
             ->whereIn('t.type', ['sell', 'sell_return'])
@@ -307,6 +307,16 @@ class FinancialDashboardReport
             return $query->whereRaw("($quantity) > 0")
                 ->select('line.id', 't.id as transaction_id', 't.location_id', 't.transaction_date', 't.invoice_no', 'product.name as product', 'v.name as variation_name')
                 ->selectRaw("COALESCE(NULLIF(v.sub_sku, ''), product.sku) as sku, COALESCE(NULLIF(lot.lot_number, ''), allocated.lots) as lots")
+                ->addSelect('product.enable_stock')
+                ->selectRaw("CASE WHEN lot_tx.id IS NOT NULL THEN CAST(lot.id AS CHAR)
+                    WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 THEN allocated.purchase_ids
+                    ELSE (SELECT CAST(recent.id AS CHAR) FROM purchase_lines as recent
+                        INNER JOIN transactions as purchase ON purchase.id = recent.transaction_id
+                        WHERE recent.variation_id = sold.variation_id AND purchase.business_id = t.business_id
+                            AND purchase.location_id = sale.location_id AND purchase.status = 'received'
+                            AND purchase.type IN ('purchase', 'opening_stock', 'production_purchase')
+                            AND purchase.transaction_date <= sale.transaction_date AND recent.purchase_price_inc_tax IS NOT NULL
+                        ORDER BY purchase.transaction_date DESC, recent.id DESC LIMIT 1) END as purchase_line_ids")
                 ->selectRaw("($signedQuantity) as units, ($unitCost) as purchase_price, ($sellingPrice) as selling_price")
                 ->selectRaw("($signedQuantity) * ($unitCost) as amount, ($signedQuantity) * ($sellingPrice) as selling_total")
                 ->selectRaw("($signedQuantity) * (($sellingPrice) - ($unitCost)) as profit_loss")

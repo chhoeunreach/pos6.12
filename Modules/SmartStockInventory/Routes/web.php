@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\SmartStockInventory\Http\Controllers\StockPurchaseCostController;
 
 Route::middleware(['web', 'auth'])->prefix('smart-stock-inventory')->group(function () {
     Route::get('/install', ['\Modules\SmartStockInventory\Http\Controllers\InstallController', 'index']);
@@ -94,6 +95,8 @@ Route::middleware([
     Route::get('/lot/history/{lot}', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'history'])->name('ssi.lot.history');
     Route::post('/lot/update', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'updateLot'])->name('ssi.lot.update');
 
+    Route::get('/stock-reports/sell/purchase-cost/{sourceName}/{line}', [StockPurchaseCostController::class, 'edit'])->where(['sourceName' => 'main', 'line' => '[0-9]+'])->name('ssi.report.purchase_cost.edit');
+    Route::put('/stock-reports/sell/purchase-cost/{sourceName}/{line}', [StockPurchaseCostController::class, 'update'])->where(['sourceName' => 'main', 'line' => '[0-9]+'])->name('ssi.report.purchase_cost.update');
     Route::get('/stock-reports/sell', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockSellReport'])->name('ssi.report.stock_sell');
     Route::get('/stock-reports/purchase', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockPurchaseReport'])->name('ssi.report.stock_purchase');
     Route::get('/stock-reports/transfer', ['\Modules\SmartStockInventory\Http\Controllers\StockReportController', 'stockTransferReport'])->name('ssi.report.stock_transfer');

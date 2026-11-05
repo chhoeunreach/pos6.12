@@ -44,6 +44,9 @@ class FinancialSalesController extends Controller
             foreach ($records as $row) {
                 $row->source = $source;
                 $row->edit_url = null;
+                $row->cost_edit_url = $user->can('purchase.update') && $row->enable_stock && !empty($row->purchase_line_ids)
+                    ? route('reports.financial-purchase-cost.edit', array_merge($filters, ['sourceName' => $source, 'line' => $row->id, 'location_filter_applied' => 1])) : null;
+                unset($row->purchase_line_ids, $row->enable_stock);
                 $rows->push($row);
             }
         }

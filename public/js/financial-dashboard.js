@@ -211,6 +211,13 @@
                             [row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.purchase_price), price(row.selling_price), price(row.amount), price(row.profit_loss)].forEach(function(value, index) {
                                 tr.append($('<td>').text(value).css('white-space', 'nowrap'));
                             });
+                            if (row.cost_edit_url) {
+                                var cell = tr.find('td').eq(4);
+                                cell.empty().append($('<button type="button" class="finance-cost-price-edit">')
+                                    .attr('data-url', row.cost_edit_url).attr('data-price', row.purchase_price == null ? '' : row.purchase_price)
+                                    .attr('data-version', row.cost_version || '').attr('title', labels.edit || 'Edit')
+                                    .text(price(row.purchase_price) + ' ✎'));
+                            }
                             if (row.estimated > 0) tr.find('td').eq(4).append($('<small class="finance-cost-estimate">').text(labels.estimated || 'Estimated cost'));
                             if (row.profit_loss !== null) tr.find('td').last().addClass(Number(row.profit_loss) < 0 ? 'finance-profit-negative' : 'finance-profit-positive');
                             if (Number(row.units) < 0) tr.addClass('finance-cost-return');
@@ -280,6 +287,15 @@
             modal.modal('show');
             load(1);
         });
+        if (typeof window.initPurchaseLotPriceModal === 'function') window.initPurchaseLotPriceModal({
+            modal: '#finance-purchase-price-modal', trigger: '.finance-cost-price-edit', labels: {error: labels.salesError},
+            saved: function() {
+                edited = true;
+                if (modal.hasClass('in')) load(page);
+                else if (typeof options.refreshDashboard === 'function') options.refreshDashboard();
+                else window.location.reload();
+            }
+        });
         $('#finance-cost-search').on('input', function() {
             clearTimeout(searchTimer);
             ++sequence;
@@ -305,7 +321,7 @@
         $('#finance-sales-page-input').on('change', function() { load(Math.max(1, Math.min(lastPage, Number(this.value) || 1))); });
         $('#finance-sales-refresh').on('click', function() { load(page); });
         modal.on('click', '.finance-sales-edit', function() { edited = true; });
-        $(window).on('focus', function() { if (edited && modal.hasClass('in')) load(page); });
+        $(window).on('focus', function() { if (edited && modal.hasClass('in') && !$('#finance-purchase-price-modal').hasClass('in')) load(page); });
         modal.on('hidden.bs.modal', function() {
             clearTimeout(searchTimer);
             ++sequence;
@@ -367,6 +383,34 @@
         modal.on('hidden.bs.modal', function() { if (activeTrigger) activeTrigger.trigger('focus'); });
     }
 
+    function initFinancialPosReport(options) {
+        var modal = $('#finance-pos-report-modal');
+        var frame = $('#finance-pos-report-frame');
+        if (!modal.length) return;
+        $(document).on('click', '.finance-pos-report-details', function(event) {
+            event.preventDefault();
+            var url = new URL($(this).attr('href'), window.location.href);
+            if (url.origin !== window.location.origin) return;
+            $('#finance-pos-report-loading').prop('hidden', false);
+            frame.attr('src', url.toString());
+            url.searchParams.delete('finance_embed');
+            $('#finance-pos-report-tab').attr('href', url.toString());
+            modal.modal('show');
+        });
+        frame.on('load', function() { $('#finance-pos-report-loading').prop('hidden', true); });
+        window.addEventListener('message', function(event) {
+            if (event.origin === window.location.origin && event.source === frame[0].contentWindow && event.data && event.data.type === 'financial-purchase-cost-updated') modal.data('purchaseChanged', true);
+        });
+        modal.on('hidden.bs.modal', function() {
+            frame.attr('src', 'about:blank');
+            if (modal.data('purchaseChanged')) {
+                modal.removeData('purchaseChanged');
+                if (typeof options.refreshDashboard === 'function') options.refreshDashboard();
+                else window.location.reload();
+            }
+        });
+    }
+
     window.initFinancialDashboard = function(options) {
         var panel = document.getElementById('finance-filter-panel');
         if (!panel) return;
@@ -374,6 +418,7 @@
         initFinancialExpenseDetails(options);
         initFinancialSalesDetails(options);
         initFinancialSelection(options);
+        initFinancialPosReport(options);
         var preferenceKey = 'financial-dashboard.filters-open';
         try {
             var saved = window.localStorage.getItem(preferenceKey);

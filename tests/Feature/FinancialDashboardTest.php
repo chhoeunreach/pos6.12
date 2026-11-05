@@ -43,6 +43,17 @@ class FinancialDashboardTest extends TestCase
                 $table->integer('contact_id')->nullable();
                 $table->integer('created_by')->default(1);
                 $table->boolean('is_direct_sale')->default(false);
+                $table->string('ref_no')->nullable();
+                $table->string('sub_type')->nullable();
+                $table->integer('commission_agent')->nullable();
+                $table->decimal('total_before_tax', 22, 4)->default(0);
+                $table->string('discount_type')->nullable();
+                $table->decimal('discount_amount', 22, 4)->default(0);
+                $table->integer('tax_id')->nullable();
+                $table->decimal('tax_amount', 22, 4)->default(0);
+                $table->decimal('shipping_charges', 22, 4)->default(0);
+                $table->string('payment_status')->default('due');
+                $table->timestamp('updated_at')->nullable();
             });
             $schema->create('transaction_sell_lines', function (Blueprint $table) {
                 $table->integer('id');
@@ -62,6 +73,13 @@ class FinancialDashboardTest extends TestCase
                 $table->integer('variation_id')->default(1);
                 $table->decimal('purchase_price_inc_tax')->nullable();
                 $table->string('lot_number')->nullable();
+                $table->decimal('quantity', 22, 4)->default(1);
+                $table->decimal('purchase_price', 22, 4)->default(0);
+                $table->decimal('pp_without_discount', 22, 4)->default(0);
+                $table->decimal('item_tax', 22, 4)->default(0);
+                $table->decimal('discount_percent', 22, 4)->default(0);
+                $table->integer('tax_id')->nullable();
+                $table->timestamp('updated_at')->nullable();
             });
             $schema->create('transaction_sell_lines_purchase_lines', function (Blueprint $table) {
                 $table->integer('sell_line_id');
@@ -82,6 +100,12 @@ class FinancialDashboardTest extends TestCase
                 $table->string('sub_sku')->nullable();
                 $table->decimal('dpp_inc_tax')->nullable();
                 $table->decimal('default_purchase_price')->nullable();
+            });
+            $schema->create('transaction_payments', function (Blueprint $table) { $table->integer('transaction_id'); $table->decimal('amount', 22, 4); $table->boolean('is_return')->default(false); });
+            $schema->create('activity_log', function (Blueprint $table) {
+                $table->increments('id'); $table->string('log_name')->nullable(); $table->string('description');
+                $table->string('subject_type')->nullable(); $table->integer('subject_id')->nullable(); $table->integer('business_id')->nullable();
+                $table->string('causer_type')->nullable(); $table->integer('causer_id')->nullable(); $table->text('properties')->nullable(); $table->timestamps();
             });
             $schema->create('contacts', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
             $schema->create('business_locations', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
@@ -112,6 +136,8 @@ class FinancialDashboardTest extends TestCase
         ]);
         $user = Mockery::mock(User::class)->makePartial();
         $user->id = 1;
+        $user->shouldReceive('permitted_locations')->andReturn([1]);
+        $user->shouldReceive('hasAnyPermission')->andReturnUsing(fn ($permissions) => $this->allowed && count(array_intersect($permissions, $this->salesPermissions)) > 0);
         $user->shouldReceive('can')->andReturnUsing(fn ($permission) => $this->allowed && ($permission === 'profit_loss_report.view' || in_array($permission, $this->salesPermissions, true)));
         $this->actingAs($user);
         session()->put('user.business_id', 1);
@@ -315,6 +341,17 @@ class FinancialDashboardTest extends TestCase
         $this->assertEqualsCanonicalizing(['A', 'B'], explode(',', $allocated['lots']));
         $sorted = $this->salesRequest(['location_ids' => [1, -2], 'sort' => 'purchase_price', 'direction' => 'asc', 'per_page' => -1], true);
         $this->assertEquals([25, 60, 60], array_column($sorted['rows'], 'purchase_price'));
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $lotEditor = $this->purchaseCostRequest([], false, 'accessory');
+        $this->assertCount(2, $lotEditor['lots']);
+        $this->purchaseCostRequest(['cost_version' => $lotEditor['cost_version'], 'prices' => [
+            ['id' => 1, 'purchase_price' => 24], ['id' => 2, 'purchase_price' => 36],
+        ]], true, 'accessory');
+        $this->assertEquals(60, $this->salesRequest(['location_ids' => [-2]], true)['amount']);
+        $this->assertEquals(60, DB::table('purchase_lines')->where('id', 1)->value('purchase_price_inc_tax'));
+        $this->assertEquals(1, $accessory->table('activity_log')->count());
+        $this->assertEquals(0, DB::table('activity_log')->count());
+
         $searched = $this->salesRequest(['q' => 'laptop-001', 'per_page' => 10], true);
         $this->assertEquals(2, $searched['total']);
         $this->assertEquals(60, $searched['amount']);
@@ -351,6 +388,93 @@ class FinancialDashboardTest extends TestCase
         $this->assertEquals(0, $missingLines['amount']);
         $this->salesPermissions = [];
         try { $this->salesRequest([], true); $this->fail('Sales access is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
+    }
+
+    private function purchaseCostRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $stock = false)
+    {
+        $request = Request::create('/reports/financial-dashboard/cost-sales/'.$source.'/'.$line, $save ? 'PUT' : 'GET', $data + ['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'location_ids' => [1, -2, -3]]);
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        $cashier = Mockery::mock(LocalCashierReportController::class);
+        $cashier->shouldReceive('getAccessibleLocations')->with(1)->andReturn($this->locations);
+        $dashboard = new FinancialDashboardController($cashier, new FinancialDashboardReport);
+        $module = Mockery::mock(\App\Utils\ModuleUtil::class);
+        $module->shouldReceive('isSubscribed')->with(1)->andReturn(true);
+        $class = $stock ? \Modules\SmartStockInventory\Http\Controllers\StockPurchaseCostController::class : \Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseCostController::class;
+        $controller = new $class($dashboard, new FinancialDashboardReport, $module);
+        return ($save ? $controller->update($request, $source, $line) : $controller->edit($request, $source, $line))->getData(true);
+    }
+
+    public function test_quick_purchase_cost_updates_the_original_lot_all_sales_returns_and_purchase_totals()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['quantity' => 10, 'purchase_price' => 60]);
+        DB::table('transactions')->where('id', 10)->update(['final_total' => 600, 'total_before_tax' => 600]);
+        $details = $this->purchaseCostRequest();
+        $this->assertCount(1, $details['lots']);
+        $this->assertEquals(60, $details['lots'][0]['purchase_price']);
+        $response = $this->purchaseCostRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 80]]], true);
+        $this->assertTrue($response['success']);
+        $this->assertEquals(80, DB::table('purchase_lines')->value('purchase_price_inc_tax'));
+        $this->assertEquals(800, DB::table('transactions')->where('id', 10)->value('final_total'));
+        $this->assertEquals(10, DB::table('purchase_lines')->value('quantity'));
+        $this->assertEquals(80, $this->build()['total']['cost']);
+        $this->assertEquals(1, DB::table('activity_log')->count());
+        $this->expectException(HttpException::class);
+        try { $this->purchaseCostRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 90]]], true); }
+        catch (HttpException $e) { $this->assertEquals(409, $e->getStatusCode()); throw $e; }
+    }
+
+    public function test_quick_purchase_cost_preserves_tax_and_discounts_and_recalculates_payment_status()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['quantity' => 2, 'purchase_price' => 100, 'purchase_price_inc_tax' => 110, 'item_tax' => 10, 'discount_percent' => 10]);
+        DB::table('transactions')->where('id', 10)->update(['total_before_tax' => 200, 'tax_amount' => 9.9, 'discount_type' => 'percentage', 'discount_amount' => 10, 'shipping_charges' => 5]);
+        DB::table('transaction_payments')->insert(['transaction_id' => 10, 'amount' => 225]);
+        $details = $this->purchaseCostRequest();
+        $this->purchaseCostRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 132]]], true);
+        $lot = DB::table('purchase_lines')->first();
+        $this->assertEquals(120, $lot->purchase_price);
+        $this->assertEquals(12, $lot->item_tax);
+        $this->assertEqualsWithDelta(133.3333, $lot->pp_without_discount, .0001);
+        $purchase = DB::table('transactions')->where('id', 10)->first();
+        $this->assertEquals(240, $purchase->total_before_tax);
+        $this->assertEquals(11.88, $purchase->tax_amount);
+        $this->assertEquals(254.48, $purchase->final_total);
+        $this->assertSame('partial', $purchase->payment_status);
+    }
+
+    public function test_stock_report_purchase_price_modal_updates_shared_lot_and_respects_own_sale_access()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        $metadata = $this->purchaseCostRequest([], false, 'main', 1, true);
+        $this->assertEquals(60, $metadata['lots'][0]['purchase_price']);
+        $this->purchaseCostRequest(['cost_version' => $metadata['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 75]]], true, 'main', 1, true);
+        $this->assertEquals(75, DB::table('purchase_lines')->where('id', 1)->value('purchase_price_inc_tax'));
+        $this->salesPermissions = ['view_own_sell_only', 'purchase.update'];
+        DB::table('transactions')->where('id', 1)->update(['created_by' => 2]);
+        try { $this->purchaseCostRequest([], false, 'main', 1, true); $this->fail('Another owner cannot edit this lot through the report'); }
+        catch (HttpException $e) { $this->assertEquals(404, $e->getStatusCode()); }
+        $this->salesPermissions = ['sell.view'];
+        try { $this->purchaseCostRequest([], false, 'main', 1, true); $this->fail('Purchase update permission is required'); }
+        catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
+    }
+
+    public function test_quick_purchase_cost_requires_permission_and_rejects_foreign_lot_ids()
+    {
+        $this->seedSales();
+        $this->salesPermissions = ['sell.view'];
+        try { $this->purchaseCostRequest(); $this->fail('Purchase update permission is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $details = $this->purchaseCostRequest();
+        try { $this->purchaseCostRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 999, 'purchase_price' => 2]]], true); $this->fail('Foreign lots cannot be edited'); }
+        catch (HttpException $e) { $this->assertEquals(422, $e->getStatusCode()); }
+        $this->assertEquals(60, DB::table('purchase_lines')->value('purchase_price_inc_tax'));
+        try { $this->purchaseCostRequest(['location_ids' => [2]]); $this->fail('Unselected locations cannot be edited'); } catch (HttpException $e) { $this->assertEquals(404, $e->getStatusCode()); }
     }
 
     public function test_sales_returns_costs_expense_refunds_and_margins_use_their_own_dates()
@@ -712,6 +836,8 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('Total units sold', $html);
         $this->assertStringContainsString('finance-sales-details', $html);
         $this->assertStringContainsString('finance-sales-modal', $html);
+        $this->assertStringContainsString('finance-pos-report-modal', $html);
+
         $this->assertStringContainsString('finance-sales-cost-head', $html);
         foreach (['SKU', 'Lots', 'Product', 'Qty', 'Purchase Price', 'Selling Price', 'Profit/Loss'] as $column) $this->assertStringContainsString($column, $html);
 
@@ -721,6 +847,17 @@ class FinancialDashboardTest extends TestCase
         $dom = new \DOMDocument;
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
         $xpath = new \DOMXPath($dom);
+
+        $posLinks = $xpath->query('//a[contains(@class,"finance-pos-report-details")]');
+        $this->assertEquals(3, $posLinks->length);
+        foreach ($posLinks as $link) {
+            $this->assertStringContainsString('/smart-stock-inventory/stock-reports/sell?', $link->getAttribute('href'));
+            parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $posQuery);
+            $this->assertEquals(1, $posQuery['finance_embed']);
+            $this->assertEquals('2026-11-01', $posQuery['start_date']);
+            $this->assertEquals('2026-11-30', $posQuery['end_date']);
+            $this->assertEquals([1], $posQuery['location_id']);
+        }
         $categoryLinks = $xpath->query('//th[@scope="row"]/a[contains(@class,"finance-expense-details")] | //a[contains(@class,"finance-bar-row") and contains(@class,"finance-expense-details")]');
         $this->assertEquals(2, $categoryLinks->length);
         foreach ($categoryLinks as $link) {
@@ -757,7 +894,6 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('finance-open-category-filter', $html);
         $this->assertStringContainsString('finance-remove-category', $html);
         $this->assertStringContainsString('excluded_expense_categories', $html);
-        $this->assertStringContainsString('source=main', $html);
         $this->assertStringContainsString('expense_categories%5B0%5D=Office', $html);
         $this->assertStringContainsString('print=1', $html);
         $this->assertStringContainsString('target="_blank"', $html);

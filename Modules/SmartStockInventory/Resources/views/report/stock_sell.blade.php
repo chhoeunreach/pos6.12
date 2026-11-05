@@ -84,23 +84,32 @@
 
 <section id="receipt_section" class="print_section"></section>
 
+@include('purchase.partials.lot_price_modal', ['costEditorId' => 'ssi-purchase-price-modal'])
 @stop
 @section('module_js')
+<script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
+<style>.ssi-purchase-price-edit{background:transparent;border:0;border-bottom:1px dashed #8ba5c2;color:#194f8c;font:inherit;cursor:pointer;padding:3px}.ssi-purchase-price-edit:focus-visible{outline:2px solid #93c5fd}</style>
 <script type="text/javascript">
     $(document).ready(function() {
-        $('#sell_list_filter_location_id').val(['all']).trigger('change.select2');
+        @php $initialStockFilters = (request()->boolean('finance_embed') || request()->hasAny(['start_date', 'end_date', 'location_id'])) ? ['locations' => request('location_id', []), 'start' => request('start_date'), 'end' => request('end_date')] : null; @endphp
+        var initialFilters = @json($initialStockFilters);
+        var initialStart = initialFilters && initialFilters.start ? moment(initialFilters.start, 'YYYY-MM-DD', true) : moment();
+        var initialEnd = initialFilters && initialFilters.end ? moment(initialFilters.end, 'YYYY-MM-DD', true) : moment();
+        if (!initialStart.isValid()) initialStart = moment();
+        if (!initialEnd.isValid()) initialEnd = moment();
+        $('#sell_list_filter_location_id').val(initialFilters && initialFilters.locations.length ? initialFilters.locations.map(String) : ['all']).trigger('change.select2');
 
         $('#sell_list_filter_date_range').daterangepicker(
             $.extend({}, dateRangeSettings, {
-                startDate: moment(),
-                endDate: moment()
+                startDate: initialStart,
+                endDate: initialEnd
             }),
             function (start, end) {
                 $('#sell_list_filter_date_range').val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
                 stock_sell_report_table.ajax.reload();
             }
         );
-        $('#sell_list_filter_date_range').val(moment().format(moment_date_format) + ' ~ ' + moment().format(moment_date_format));
+        $('#sell_list_filter_date_range').val(initialStart.format(moment_date_format) + ' ~ ' + initialEnd.format(moment_date_format));
 
         $('#sell_list_filter_date_range').on('cancel.daterangepicker', function() {
             $('#sell_list_filter_date_range').val('');
@@ -221,6 +230,11 @@
                 __currency_convert_recursively($('#stock_sell_report_table'));
             }
         });
+
+        window.initPurchaseLotPriceModal({modal: '#ssi-purchase-price-modal', trigger: '.ssi-purchase-price-edit', saved: function() {
+            stock_sell_report_table.ajax.reload(null, false);
+            if (window.parent !== window) window.parent.postMessage({type: 'financial-purchase-cost-updated'}, window.location.origin);
+        }});
 
         $(document).on('change', '#sell_list_filter_location_id, #sell_list_filter_customer_id, #sell_list_filter_payment_status, #created_by, #sales_cmsn_agnt, #service_staffs', function() {
             if ($(this).attr('id') === 'sell_list_filter_location_id') {
