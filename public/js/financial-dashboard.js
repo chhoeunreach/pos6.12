@@ -175,17 +175,19 @@
         var modal = $('#finance-sales-modal');
         if (!modal.length) return;
         var labels = options.labels || {};
-        var listUrl, page = 1, lastPage = 1, sequence = 0, edited = false, costMode = false, sort = 'date', direction = 'desc';
+        var listUrl, page = 1, lastPage = 1, sequence = 0, edited = false, costMode = false, searchTimer = null, sort = 'date', direction = 'desc';
         function load(nextPage) {
             var requestSequence = ++sequence;
+            $('#finance-sales-table').attr('aria-busy', 'true');
             $('#finance-sales-error').prop('hidden', true);
             $('#finance-sales-summary, #finance-sales-page').text('');
             var body = $('#finance-sales-table tbody').empty();
             body.append($('<tr>').append($('<td>').attr('colspan', costMode ? 8 : 7).text(labels.loading || 'Loading...')));
-            $('#finance-sales-prev, #finance-sales-next').prop('disabled', true);
-            $.ajax({url: listUrl, data: {page: nextPage, per_page: Number($('#finance-sales-page-size').val() || 25), sort: sort, direction: direction}, dataType: 'json',
+            $('#finance-sales-first, #finance-sales-prev, #finance-sales-next, #finance-sales-last').prop('disabled', true);
+            $.ajax({url: listUrl, data: {page: nextPage, per_page: Number($('#finance-sales-page-size').val() || 25), sort: sort, direction: direction, q: costMode ? ($('#finance-cost-search').val() || '') : ''}, dataType: 'json',
                 success: function(result) {
                     if (requestSequence !== sequence) return;
+                    $('#finance-sales-table').attr('aria-busy', 'false');
                     page = result.page;
                     lastPage = result.last_page;
                     body.empty();
@@ -195,15 +197,23 @@
                     (result.rows || []).forEach(function(row) {
                         var tr = $('<tr>');
                         if (costMode) {
-                            [row.sku || '—', row.lots || '—'].forEach(function(value) { tr.append($('<td>').text(value)); });
-                            var product = $('<td>').text((row.product || '—') + (row.variation_name && row.variation_name !== 'DUMMY' ? ' · ' + row.variation_name : ''));
-                            product.append($('<small style="display:block;color:#64748b">').text([row.invoice_no, labels[row.source] || row.source, row.transaction_date].filter(Boolean).join(' · ')));
+                            tr.append($('<td>').append($('<code>').text(row.sku || '—')));
+                            var lots = $('<td>');
+                            if (row.lots) String(row.lots).split(',').forEach(function(lot) { lots.append($('<span class="finance-lot-tag">').text(lot.trim())); });
+                            else lots.text('—');
+                            tr.append(lots);
+                            var product = $('<td class="finance-cost-product">').text((row.product || '—') + (row.variation_name && row.variation_name !== 'DUMMY' ? ' · ' + row.variation_name : ''));
+                            var meta = $('<small class="finance-cost-meta">');
+                            meta.append($('<span class="finance-cost-badge">').text(labels[row.source] || row.source));
+                            meta.append(document.createTextNode([row.invoice_no, row.transaction_date].filter(Boolean).join(' · ')));
+                            product.append(meta);
                             tr.append(product);
                             [row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.purchase_price), price(row.selling_price), price(row.amount), price(row.profit_loss)].forEach(function(value, index) {
                                 tr.append($('<td>').text(value).css('white-space', 'nowrap'));
                             });
-                            if (row.estimated > 0) tr.find('td').eq(4).append($('<small style="display:block">').text(labels.estimated || 'Estimated cost'));
-                            if (Number(row.profit_loss) < 0) tr.find('td').last().css('color', '#b91c1c');
+                            if (row.estimated > 0) tr.find('td').eq(4).append($('<small class="finance-cost-estimate">').text(labels.estimated || 'Estimated cost'));
+                            if (row.profit_loss !== null) tr.find('td').last().addClass(Number(row.profit_loss) < 0 ? 'finance-profit-negative' : 'finance-profit-positive');
+                            if (Number(row.units) < 0) tr.addClass('finance-cost-return');
                         } else {
                             [row.transaction_date, row.invoice_no, row.customer_name, row.location_name,
                                 row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.amount)].forEach(function(value) {
@@ -217,6 +227,20 @@
                     });
                     if (!result.rows || !result.rows.length) body.append($('<tr>').append($('<td>').attr('colspan', costMode ? 8 : 7).text(labels.empty || 'No data.')));
                     $('#finance-sales-summary').text((labels.total || 'Total') + ': ' + result.total + ' · ' + (costMode ? (labels.cost || 'Cost') + ': ' + (result.amount === null ? '—' : (options.currencySymbol || '$') + Number(result.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : Number(result.units).toLocaleString() + ' ' + (labels.units || 'units')));
+                    if (costMode) {
+                        $('#finance-cost-stat-qty, #finance-cost-foot-qty').text(Number(result.units || 0).toLocaleString());
+                        $('#finance-cost-stat-total, #finance-cost-foot-total').text(price(result.amount));
+                        $('#finance-cost-stat-profit, #finance-cost-foot-profit').text(price(result.profit_loss))
+                            .removeClass('finance-profit-positive finance-profit-negative').addClass(result.profit_loss == null ? '' : (Number(result.profit_loss) < 0 ? 'finance-profit-negative' : 'finance-profit-positive'));
+                        var estimated = result.estimated_count || 0, missing = result.missing_count || 0;
+                        $('#finance-cost-quality').prop('hidden', !estimated && !missing).text((labels.costQuality || ':estimated estimated costs; :missing missing costs.').replace(':estimated', estimated).replace(':missing', missing));
+                    }
+                    var size = Number($('#finance-sales-page-size').val() || 25);
+                    var first = result.total ? (size === -1 ? 1 : (page - 1) * size + 1) : 0;
+                    var last = result.total ? first + (result.rows || []).length - 1 : 0;
+                    $('#finance-sales-range').text((labels.showing || 'Showing :from–:to of :total items').replace(':from', first).replace(':to', last).replace(':total', result.total));
+                    $('#finance-sales-first').prop('disabled', page <= 1);
+                    $('#finance-sales-last').prop('disabled', page >= lastPage);
                     $('#finance-sales-page').text('/ ' + lastPage);
                     $('#finance-sales-page-input').val(page).attr('max', lastPage);
                     $('#finance-sales-prev').prop('disabled', page <= 1);
@@ -224,6 +248,7 @@
                 },
                 error: function(xhr) {
                     if (requestSequence !== sequence) return;
+                    $('#finance-sales-table').attr('aria-busy', 'false');
                     body.empty();
                     $('#finance-sales-error').text((xhr.responseJSON || {}).message || labels.salesError || 'Unable to load sales.').prop('hidden', false);
                 }
@@ -235,6 +260,12 @@
             var nextCostMode = $(this).attr('data-cost-details') === '1';
             if (nextCostMode !== costMode) { sort = nextCostMode ? 'sku' : 'date'; direction = nextCostMode ? 'asc' : 'desc'; }
             costMode = nextCostMode;
+            clearTimeout(searchTimer);
+            $('#finance-cost-search').val('');
+            modal.toggleClass('finance-cost-mode', costMode);
+            modal.find('.finance-cost-tools, .finance-cost-stats, #finance-cost-totals').prop('hidden', !costMode);
+            $('#finance-cost-quality').prop('hidden', true);
+            $('#finance-cost-stat-qty, #finance-cost-stat-total, #finance-cost-stat-profit, #finance-cost-foot-qty, #finance-cost-foot-total, #finance-cost-foot-profit').text('—');
             $('#finance-sales-normal-head').prop('hidden', costMode);
             $('#finance-sales-cost-head').prop('hidden', !costMode);
             modal.find('.finance-sales-sort').each(function() {
@@ -249,6 +280,14 @@
             modal.modal('show');
             load(1);
         });
+        $('#finance-cost-search').on('input', function() {
+            clearTimeout(searchTimer);
+            ++sequence;
+            searchTimer = setTimeout(function() { load(1); }, 300);
+        });
+        $('#finance-cost-clear-search').on('click', function() { clearTimeout(searchTimer); $('#finance-cost-search').val(''); load(1); });
+        $('#finance-sales-first').on('click', function() { if (page > 1) load(1); });
+        $('#finance-sales-last').on('click', function() { if (page < lastPage) load(lastPage); });
         $('#finance-sales-prev').on('click', function() { if (page > 1) load(page - 1); });
         $('#finance-sales-next').on('click', function() { if (page < lastPage) load(page + 1); });
         modal.on('click', '.finance-sales-sort', function() {
@@ -268,6 +307,7 @@
         modal.on('click', '.finance-sales-edit', function() { edited = true; });
         $(window).on('focus', function() { if (edited && modal.hasClass('in')) load(page); });
         modal.on('hidden.bs.modal', function() {
+            clearTimeout(searchTimer);
             ++sequence;
             if (edited) {
                 if (typeof options.refreshDashboard === 'function') options.refreshDashboard();

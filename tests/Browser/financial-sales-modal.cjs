@@ -12,6 +12,7 @@ function fixture() {
         <table id="finance-sales-table"><thead><tr><th><button class="finance-sales-sort" data-sort="date">Date<span class="finance-sort-indicator">▼</span></button></th><th><button class="finance-sales-sort" data-sort="amount">Amount<span class="finance-sort-indicator">↕</span></button></th></tr></thead><tbody></tbody></table><button id="finance-sales-prev"></button><span id="finance-sales-page"></span><button id="finance-sales-next"></button></div>`,
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window), requests = [], state = {refreshes: 0};
+    $('#finance-sales-modal').append('<div class="finance-cost-tools" hidden><input id="finance-cost-search"><button id="finance-cost-clear-search"></button></div><div class="finance-cost-stats" hidden><strong id="finance-cost-stat-qty"></strong><strong id="finance-cost-stat-total"></strong><strong id="finance-cost-stat-profit"></strong></div><div id="finance-cost-quality" hidden></div><span id="finance-sales-range"></span><button id="finance-sales-first"></button><button id="finance-sales-last"></button>');
     dom.window.$ = dom.window.jQuery = $;
     $.fn.modal = function(action) { this.toggleClass('in', action === 'show'); return this; };
     $.ajax = options => requests.push(options);
@@ -127,4 +128,28 @@ test('cost amounts open the cost sales list with purchase values and source labe
     f.$('.finance-sales-details').first().trigger('click');
     assert.equal(f.$('#finance-sales-amount-label').text(), 'Amount');
     assert.equal(f.$('#finance-sales-title').text(), 'POS sales list');
+});
+
+test('professional cost table searches all rows and updates filtered totals and navigation', async () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    assert.equal(f.$('#finance-sales-modal').hasClass('finance-cost-mode'), true);
+    assert.equal(f.$('.finance-cost-tools').prop('hidden'), false);
+    f.$('#finance-cost-search').val('LOT-01').trigger('input');
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.equal(f.requests[1].data.q, 'LOT-01');
+    assert.equal(f.requests[1].data.page, 1);
+    f.requests[1].success({page: 1, last_page: 2, total: 26, units: 26, amount: 260, profit_loss: -20, estimated_count: 2, missing_count: 0, rows: [{units: -1, amount: -10, profit_loss: -2, lots: '<img>, LOT-01', sku: 'SKU'}]});
+    assert.equal(f.$('#finance-cost-stat-total').text(), '$260.00');
+    assert.equal(f.$('#finance-cost-stat-profit').hasClass('finance-profit-negative'), true);
+    assert.match(f.$('#finance-cost-quality').text(), /2 estimated/);
+    assert.equal(f.$('#finance-sales-table img').length, 0);
+    assert.equal(f.$('#finance-sales-table tbody tr').hasClass('finance-cost-return'), true);
+    assert.equal(f.$('#finance-sales-table').attr('aria-busy'), 'false');
+    f.$('#finance-sales-last').trigger('click');
+    assert.equal(f.requests[2].data.page, 2);
+    assert.equal(f.requests[2].data.q, 'LOT-01');
+    f.$('#finance-cost-clear-search').trigger('click');
+    assert.equal(f.requests[3].data.q, '');
+    assert.equal(f.requests[3].data.page, 1);
 });

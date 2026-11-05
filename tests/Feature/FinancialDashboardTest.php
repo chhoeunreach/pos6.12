@@ -315,6 +315,14 @@ class FinancialDashboardTest extends TestCase
         $this->assertEqualsCanonicalizing(['A', 'B'], explode(',', $allocated['lots']));
         $sorted = $this->salesRequest(['location_ids' => [1, -2], 'sort' => 'purchase_price', 'direction' => 'asc', 'per_page' => -1], true);
         $this->assertEquals([25, 60, 60], array_column($sorted['rows'], 'purchase_price'));
+        $searched = $this->salesRequest(['q' => 'laptop-001', 'per_page' => 10], true);
+        $this->assertEquals(2, $searched['total']);
+        $this->assertEquals(60, $searched['amount']);
+        $this->assertEquals(50, $searched['profit_loss']);
+        $this->assertEquals(0, $searched['estimated_count']);
+        $this->assertEquals(0, $searched['missing_count']);
+        $this->assertEquals(0, $this->salesRequest(['q' => 'not-a-real-sku'], true)['total']);
+
 
     }
 

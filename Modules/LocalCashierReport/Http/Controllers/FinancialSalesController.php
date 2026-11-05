@@ -20,7 +20,7 @@ class FinancialSalesController extends Controller
         $allSales = $user->can('sell.view') || $user->can('direct_sell.view') || $user->can('direct_sell.access');
         abort_unless($allSales || $user->can('view_own_sell_only'), 403);
         $request->validate(['page' => 'nullable|integer|min:1|max:2000', 'per_page' => 'nullable|integer|in:-1,10,25,50,100',
-            'sort' => 'nullable|in:sku,lots,product,units,purchase_price,selling_price,amount,profit_loss', 'direction' => 'nullable|in:asc,desc']);
+            'sort' => 'nullable|in:sku,lots,product,units,purchase_price,selling_price,amount,profit_loss', 'direction' => 'nullable|in:asc,desc', 'q' => 'nullable|string|max:200']);
         $perPage = (int) $request->input('per_page', 25);
         $sort = $request->input('sort', 'sku');
         $direction = $request->input('direction', 'desc');
@@ -47,6 +47,14 @@ class FinancialSalesController extends Controller
                 $rows->push($row);
             }
         }
+        $unfilteredCount = $rows->count();
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $rows = $rows->filter(function ($row) use ($search) {
+                $text = implode(' ', [$row->sku, $row->lots, $row->product, $row->variation_name, $row->invoice_no, $row->source]);
+                return mb_stripos($text, $search) !== false;
+            });
+        }
         $numeric = ['units', 'purchase_price', 'selling_price', 'amount', 'profit_loss'];
         $rows = $rows->sort(function ($a, $b) use ($sort, $direction, $numeric) {
             $order = in_array($sort, $numeric, true) ? $a->$sort <=> $b->$sort : strcmp((string) $a->$sort, (string) $b->$sort);
@@ -55,11 +63,15 @@ class FinancialSalesController extends Controller
         $count = $rows->count();
         $amount = $rows->contains(fn ($row) => $row->amount === null) ? null : (float) $rows->sum('amount');
         $units = (float) $rows->sum('units');
+        $profit = $rows->contains(fn ($row) => $row->profit_loss === null) ? null : (float) $rows->sum('profit_loss');
+        $estimated = $rows->filter(fn ($row) => $row->estimated > 0)->count();
+        $missing = $rows->filter(fn ($row) => $row->missing > 0)->count();
         $lastPage = $perPage === -1 ? 1 : max(1, (int) ceil($count / $perPage));
         $page = min((int) $request->input('page', 1), $lastPage);
         $rows = ($perPage === -1 ? $rows : $rows->slice(($page - 1) * $perPage, $perPage))->values();
 
         return response()->json(['rows' => $rows, 'total' => $count, 'amount' => $amount, 'units' => $units,
+            'profit_loss' => $profit, 'estimated_count' => $estimated, 'missing_count' => $missing, 'unfiltered_total' => $unfilteredCount,
             'page' => $page, 'last_page' => $lastPage, 'per_page' => $perPage]);
     }
 
