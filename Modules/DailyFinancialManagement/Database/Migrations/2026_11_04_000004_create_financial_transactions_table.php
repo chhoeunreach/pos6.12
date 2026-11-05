@@ -66,9 +66,9 @@ return new class extends Migration
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->index(['business_id', 'transaction_date']);
-                $table->index(['business_id', 'business_location_id', 'transaction_date']);
-                $table->unique(['business_id', 'source_type', 'source_id'], 'unique_business_source_txn');
+                $table->index(['business_id', 'transaction_date'], 'idx_fin_tx_biz_date');
+                $table->index(['business_id', 'business_location_id', 'transaction_date'], 'idx_fin_tx_biz_loc_date');
+                $table->unique(['business_id', 'source_type', 'source_id'], 'unique_biz_src_txn');
             });
         }
     }

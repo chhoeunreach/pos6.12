@@ -27,8 +27,8 @@ return new class extends Migration
                 $table->unsignedInteger('created_by')->nullable();
                 $table->timestamps();
 
-                $table->index(['business_id', 'movement_date']);
-                $table->index(['financial_account_id', 'movement_date']);
+                $table->index(['business_id', 'movement_date'], 'idx_fin_mv_biz_date');
+                $table->index(['financial_account_id', 'movement_date'], 'idx_fin_mv_acc_date');
             });
         }
     }

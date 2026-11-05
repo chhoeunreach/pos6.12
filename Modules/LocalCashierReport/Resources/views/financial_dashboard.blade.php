@@ -93,6 +93,7 @@
     </div>
     @if($errors->any())<div class="finance-warning" role="alert">{{ $errors->first() }}</div>@endif
     @if($report['unavailable'])<div class="finance-warning" role="alert">{{ $t('finance_unavailable') }}</div>@endif
+    @if($total['missing_revenue'])<div class="finance-warning" role="status">{{ $t('finance_missing_selling_prices') }}</div>@endif
     @if($total['missing_costs'])<div class="finance-warning" role="status">{{ $t('finance_missing_costs') }}</div>@endif
     @if($total['estimated_costs'])<div class="finance-warning" role="status">{{ $t('finance_estimated_costs') }} ({{ $total['estimated_costs'] }})</div>@endif
 

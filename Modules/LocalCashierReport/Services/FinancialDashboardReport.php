@@ -42,14 +42,16 @@ class FinancialDashboardReport
         $unavailable = [];
         foreach ($sourceLocations as $source => $locationMap) {
             try {
-                $data = $this->sourceData($connections[$source], $businessId, array_keys($locationMap), $filters);
+                $data = $this->sourceData($connections[$source], $businessId, array_keys($locationMap), $filters, $source !== 'main');
                 foreach ($data['totals'] as $row) {
                     $branch = &$branches[$locationMap[(int) $row->location_id]];
                     $branch['invoices'] += (int) $row->invoices;
                     $branch['sales'] += (float) $row->sales;
                     $branch['returns'] += (float) $row->returns;
                     $branch['expenses'] += (float) $row->expenses;
-                    $branch[$source.'_sales'] += (float) $row->sales - (float) $row->returns;
+                    if ($branch[$source.'_sales'] !== null) $branch[$source.'_sales'] += (float) $row->sales - (float) $row->returns;
+                    $branch['missing_revenue'] += (int) ($row->missing_revenue ?? 0);
+                    if (!empty($row->missing_revenue)) $branch[$source.'_sales'] = null;
                     $cost = $data['costs'][(int) $row->location_id] ?? null;
                     $branch['cost'] += (float) ($cost->cost ?? 0);
                     $branch['units'] += (float) ($cost->units ?? 0);
@@ -93,8 +95,8 @@ class FinancialDashboardReport
 
         $total = $this->emptyBranch('Total');
         foreach ($branches as &$branch) {
-            foreach (['invoices', 'units', 'sales', 'returns', 'cost', 'expenses', 'main_sales', 'accessory_sales', 'service_sales', 'missing_costs', 'estimated_costs', 'missing_lines'] as $metric) {
-                $total[$metric] += $branch[$metric];
+            foreach (['invoices', 'units', 'sales', 'returns', 'cost', 'expenses', 'main_sales', 'accessory_sales', 'service_sales', 'missing_costs', 'estimated_costs', 'missing_lines', 'missing_revenue'] as $metric) {
+                $total[$metric] = $total[$metric] === null || $branch[$metric] === null ? null : $total[$metric] + $branch[$metric];
             }
             $total['unavailable'] = $total['unavailable'] || $branch['unavailable'];
             $branch = $this->calculate($branch);
@@ -118,7 +120,7 @@ class FinancialDashboardReport
 
     private function emptyBranch(string $name): array
     {
-        return array_fill_keys(['invoices', 'units', 'sales', 'returns', 'cost', 'expenses', 'main_sales', 'accessory_sales', 'service_sales', 'missing_costs', 'estimated_costs', 'missing_lines'], 0)
+        return array_fill_keys(['invoices', 'units', 'sales', 'returns', 'cost', 'expenses', 'main_sales', 'accessory_sales', 'service_sales', 'missing_costs', 'estimated_costs', 'missing_lines', 'missing_revenue'], 0)
             + ['name' => $name, 'location_ids' => [], 'unavailable' => false];
     }
 
@@ -134,6 +136,12 @@ class FinancialDashboardReport
             return $row;
         }
         if ($row['missing_lines'] > 0) $row['units'] = null;
+        if ($row['missing_revenue'] > 0) {
+            $row['sales'] = $row['returns'] = $row['net_sales'] = $row['gross_profit'] = $row['gross_margin'] = $row['net_profit'] = $row['margin'] = null;
+            if ($row['missing_costs'] > 0) $row['cost'] = null;
+
+            return $row;
+        }
         if ($row['missing_costs'] > 0) {
             $row['cost'] = $row['gross_profit'] = $row['gross_margin'] = $row['net_profit'] = $row['margin'] = null;
         } else {
@@ -154,7 +162,7 @@ class FinancialDashboardReport
             ->whereBetween('t.transaction_date', [$filters['start_date'].' 00:00:00', $filters['end_date'].' 23:59:59']);
     }
 
-    private function sourceData(string $connection, int $businessId, array $locationIds, array $filters): array
+    private function sourceData(string $connection, int $businessId, array $locationIds, array $filters, bool $useSellingPrices = false): array
     {
         $base = $this->transactions($connection, $businessId, $locationIds, $filters);
         $totals = (clone $base)->whereIn('t.type', ['sell', 'sell_return', 'expense', 'expense_refund'])
@@ -165,6 +173,16 @@ class FinancialDashboardReport
             ->selectRaw("SUM(CASE WHEN t.type = 'sell_return' THEN t.final_total ELSE 0 END) as returns")
             ->selectRaw("SUM(CASE WHEN t.type = 'expense' THEN t.final_total WHEN t.type = 'expense_refund' THEN -t.final_total ELSE 0 END) as expenses")
             ->get();
+        if ($useSellingPrices && $totals->sum('cost_transactions') > 0) {
+            $sellingTotals = $this->sellingTotals($connection, $businessId, $locationIds, $filters);
+            foreach ($totals as $row) {
+                $selling = $sellingTotals[(int) $row->location_id] ?? null;
+                $row->sales = (float) ($selling->sales ?? 0);
+                $row->returns = (float) ($selling->returns ?? 0);
+                $row->missing_revenue = (int) ($selling->missing_prices ?? 0)
+                    + max(0, (int) $row->cost_transactions - (int) ($selling->line_transactions ?? 0));
+            }
+        }
         $expenses = $this->expenseQuery($connection, $businessId, $locationIds, $filters, false)
             ->select('t.location_id')->selectRaw('COALESCE(root.name, ec.name) as category_name')
             ->selectRaw("SUM(CASE WHEN t.type = 'expense_refund' THEN -t.final_total ELSE t.final_total END) as amount")
@@ -175,6 +193,32 @@ class FinancialDashboardReport
         }
 
         return compact('totals', 'expenses', 'costs');
+    }
+
+    private function sellingTotals(string $connection, int $businessId, array $locationIds, array $filters)
+    {
+        $quantity = "CASE WHEN t.type = 'sell_return' AND line.parent_sell_line_id IS NULL THEN line.quantity_returned ELSE line.quantity END";
+        // unit_price_inc_tax is the saved selling price after item discounts. A zero price is valid.
+        $price = 'COALESCE(line.unit_price_inc_tax, CASE WHEN original_sale.id IS NOT NULL THEN original.unit_price_inc_tax END)';
+
+        return $this->transactions($connection, $businessId, $locationIds, $filters)
+            ->whereIn('t.type', ['sell', 'sell_return'])
+            ->join('transaction_sell_lines as line', 'line.transaction_id', '=', 't.id')
+            ->leftJoin('transaction_sell_lines as original', function ($join) {
+                $join->on('original.id', '=', DB::raw("CASE WHEN t.type = 'sell_return' THEN line.parent_sell_line_id ELSE line.id END"));
+            })
+            ->leftJoin('transactions as original_sale', function ($join) {
+                $join->on('original_sale.id', '=', 'original.transaction_id')->on('original_sale.business_id', '=', 't.business_id');
+            })
+            // Combo component prices allocate the parent's price and must not be counted again.
+            ->whereRaw("COALESCE(line.children_type, original.children_type, '') <> 'combo'")
+            ->whereRaw("($quantity) > 0")
+            ->groupBy('t.location_id')->select('t.location_id')
+            ->selectRaw('COUNT(DISTINCT t.id) as line_transactions')
+            ->selectRaw("SUM(CASE WHEN t.type = 'sell' THEN ($quantity) * ($price) ELSE 0 END) as sales")
+            ->selectRaw("SUM(CASE WHEN t.type = 'sell_return' THEN ($quantity) * ($price) ELSE 0 END) as returns")
+            ->selectRaw("SUM(CASE WHEN ($price) IS NULL THEN 1 ELSE 0 END) as missing_prices")
+            ->get()->keyBy('location_id');
     }
 
     public function expenseQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $applyCategories = true)

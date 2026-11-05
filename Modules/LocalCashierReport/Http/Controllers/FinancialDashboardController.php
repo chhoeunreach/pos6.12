@@ -103,6 +103,7 @@ class FinancialDashboardController extends Controller
                 $write($row);
             }
             $write([$t('finance_basis')]);
+            if ($report['total']['missing_revenue']) $write([$t('finance_missing_selling_prices')]);
             if ($report['total']['missing_costs']) $write([$t('finance_missing_costs')]);
             if ($report['total']['estimated_costs']) $write([$t('finance_estimated_costs')]);
             if ($report['unavailable']) $write([$t('finance_unavailable')]);

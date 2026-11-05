@@ -47,6 +47,7 @@ class FinancialDashboardTest extends TestCase
                 $table->integer('lot_no_line_id')->nullable();
                 $table->integer('parent_sell_line_id')->nullable();
                 $table->string('children_type')->nullable();
+                $table->decimal('unit_price_inc_tax')->nullable();
                 $table->decimal('quantity')->default(1);
                 $table->decimal('quantity_returned')->default(0);
             });
@@ -175,7 +176,7 @@ class FinancialDashboardTest extends TestCase
             ['id' => 1, 'type' => 'sell', 'final_total' => 50, 'status' => 'final'],
             ['id' => 10, 'type' => 'purchase', 'final_total' => 999, 'status' => 'received'],
         ]);
-        $accessory->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1]);
+        $accessory->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'unit_price_inc_tax' => 50]);
         $accessory->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'purchase_price_inc_tax' => 20]);
         $accessory->table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 1]);
         $service = DB::connection('finance_service');
@@ -184,7 +185,7 @@ class FinancialDashboardTest extends TestCase
             ['id' => 1, 'type' => 'sell', 'final_total' => 40, 'expense_category_id' => null],
             ['id' => 2, 'type' => 'expense', 'final_total' => 3, 'expense_category_id' => 1],
         ]);
-        $service->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1]);
+        $service->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'unit_price_inc_tax' => 40]);
         $report = $this->build([1, -2, -3]);
         $this->assertCount(1, $report['branches']);
         $this->assertEquals(3, $report['total']['invoices']);
@@ -196,6 +197,54 @@ class FinancialDashboardTest extends TestCase
         $this->assertEquals(102, $report['total']['net_profit']);
         $this->assertEquals(51, $report['total']['margin']);
         $this->assertEquals(18, $report['expenses']['Office']['total']);
+    }
+
+    public function test_accessory_and_service_use_saved_line_prices_and_return_quantities()
+    {
+        foreach (['finance_accessory', 'finance_service'] as $connection) {
+            $db = DB::connection($connection);
+            $db->table('products')->update(['enable_stock' => false]);
+            $db->table('transactions')->insert([
+                ['id' => 1, 'type' => 'sell', 'final_total' => 999, 'transaction_date' => '2026-11-01 12:00:00'],
+                ['id' => 2, 'type' => 'sell_return', 'final_total' => 500, 'transaction_date' => '2026-11-04 12:00:00'],
+                ['id' => 3, 'type' => 'expense', 'final_total' => 5, 'transaction_date' => '2026-11-04 12:00:00'],
+            ]);
+            $db->table('transaction_sell_lines')->insert([
+                ['id' => 1, 'transaction_id' => 1, 'quantity' => 3, 'unit_price_inc_tax' => 12.5, 'parent_sell_line_id' => null, 'children_type' => null],
+                ['id' => 2, 'transaction_id' => 1, 'quantity' => 2, 'unit_price_inc_tax' => 7, 'parent_sell_line_id' => null, 'children_type' => null],
+                ['id' => 3, 'transaction_id' => 1, 'quantity' => 1, 'unit_price_inc_tax' => 0, 'parent_sell_line_id' => null, 'children_type' => null],
+                ['id' => 4, 'transaction_id' => 1, 'quantity' => 3, 'unit_price_inc_tax' => 10, 'parent_sell_line_id' => 1, 'children_type' => 'combo'],
+                ['id' => 5, 'transaction_id' => 2, 'quantity' => 1, 'unit_price_inc_tax' => null, 'parent_sell_line_id' => 1, 'children_type' => null],
+            ]);
+        }
+        $report = $this->build([-2, -3]);
+        $this->assertSame([], $report['unavailable']);
+        foreach (['sales' => 103, 'returns' => 25, 'net_sales' => 78, 'accessory_sales' => 39, 'service_sales' => 39, 'expenses' => 10, 'net_profit' => 68, 'missing_revenue' => 0] as $key => $value) {
+            $this->assertEquals($value, $report['total'][$key], $key);
+        }
+        $returnsOnly = $this->build([-2, -3], ['start_date' => '2026-11-04', 'end_date' => '2026-11-04']);
+        $this->assertEquals(-25, $returnsOnly['total']['net_sales']);
+        $this->assertEquals(-35, $returnsOnly['total']['net_profit']);
+    }
+
+    public function test_missing_external_selling_prices_or_lines_do_not_show_partial_revenue_as_complete()
+    {
+        $this->seedSales();
+        $db = DB::connection('finance_accessory');
+        $db->table('products')->update(['enable_stock' => false]);
+        $db->table('transactions')->insert([
+            ['id' => 1, 'final_total' => 50],
+            ['id' => 2, 'final_total' => 90],
+        ]);
+        $db->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'quantity' => 2, 'unit_price_inc_tax' => null]);
+        $report = $this->build([1, -2]);
+        $this->assertSame([], $report['unavailable']);
+        $this->assertEquals(2, $report['total']['missing_revenue']);
+        $this->assertEquals(110, $report['total']['main_sales']);
+        $this->assertEquals(15, $report['total']['expenses']);
+        foreach (['accessory_sales', 'sales', 'returns', 'net_sales', 'gross_profit', 'net_profit', 'margin'] as $metric) {
+            $this->assertNull($report['total'][$metric], $metric);
+        }
     }
 
     public function test_location_suffixes_merge_into_one_branch_with_all_values_and_filter_ids()
@@ -217,7 +266,7 @@ class FinancialDashboardTest extends TestCase
             ['id' => 10, 'location_id' => 2, 'type' => 'purchase', 'status' => 'received', 'final_total' => 20],
         ]);
         $accessory->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'purchase_price_inc_tax' => 20]);
-        $accessory->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'quantity' => 1, 'lot_no_line_id' => 1]);
+        $accessory->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'quantity' => 1, 'lot_no_line_id' => 1, 'unit_price_inc_tax' => 25]);
 
         $report = $this->build([1, -4, -6, 2, 3]);
         $this->assertCount(1, $report['branches']);
