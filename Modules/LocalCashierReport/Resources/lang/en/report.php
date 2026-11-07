@@ -1,6 +1,20 @@
 <?php
 
 return [
+    'finance_lot_history_scope' => 'Purchase, sale, return, transfer and adjustment history across your permitted locations. All dates.',
+    'finance_lot_in' => 'In',
+    'finance_lot_out' => 'Out',
+    'finance_lot_type' => 'Type',
+    'finance_lot_reference' => 'Reference',
+    'finance_lot_type_purchase' => 'Purchase',
+    'finance_lot_type_opening_stock' => 'Opening stock',
+    'finance_lot_type_production_purchase' => 'Production receipt',
+    'finance_lot_type_purchase_transfer' => 'Transfer in',
+    'finance_lot_type_sell' => 'Sale',
+    'finance_lot_type_sell_return' => 'Sales return',
+    'finance_lot_type_sell_transfer' => 'Transfer out',
+    'finance_lot_type_stock_adjustment' => 'Stock adjustment',
+    'finance_revenue_line_basis' => 'Net sales = quantity × selling price. Returns are negative; combo components are excluded to avoid counting the parent sale twice.',
     'finance_cost_used' => 'Cost used',
     'finance_latest_purchase' => 'Latest purchase (incl. tax)',
     'finance_cost_lot_unavailable' => 'This cost is not linked to an editable purchase receipt in your permitted locations. Refresh the sales list and open the original receipt to correct its price.',

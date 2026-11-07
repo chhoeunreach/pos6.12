@@ -12,6 +12,8 @@
 .ssi-sales-metric-primary{background:#153d65;border-color:#153d65;color:#fff}
 .ssi-sales-metric-primary>span,.ssi-sales-metric-primary small{color:#c6d7e8}
 .ssi-sales-negative{color:#c63845}
+#stock_sell_report_table .ssi-profit-negative{color:#dc2626!important;font-weight:600}
+#stock_sell_report_table .ssi-profit-positive{color:#2563eb!important;font-weight:600}
 .ssi-sales-filter-card{margin-bottom:18px}
 .ssi-sales-filter-card .box-title{font-size:15px!important;margin:0!important;padding:13px 16px!important}
 .ssi-sales-filter-card .box-header a{color:#375c7d!important;text-decoration:none}

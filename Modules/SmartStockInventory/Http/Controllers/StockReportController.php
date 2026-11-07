@@ -346,7 +346,8 @@ class StockReportController extends Controller
                         return '<span data-export-value="Unavailable">Unavailable</span>';
                     }
 
-                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_profit_loss.'">'.$row->purchase_profit_loss.'</span>';
+                    $color = $row->purchase_profit_loss < 0 ? 'ssi-profit-negative' : ($row->purchase_profit_loss > 0 ? 'ssi-profit-positive' : '');
+                    return '<span class="display_currency '.$color.'" data-currency_symbol="true" data-orig-value="'.$row->purchase_profit_loss.'">'.$row->purchase_profit_loss.'</span>';
                 })
                 ->editColumn('purchase_total', function ($row) {
                     if ($row->purchase_total === null) {

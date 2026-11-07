@@ -5,6 +5,7 @@ use Modules\LocalCashierReport\Http\Controllers\ExpenseListReportController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialDashboardController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialExpenseController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialSalesController;
+use Modules\LocalCashierReport\Http\Controllers\FinancialLotHistoryController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseCostController;
 use Modules\LocalCashierReport\Http\Controllers\InstallController;
 use Modules\LocalCashierReport\Http\Controllers\LocalCashierReportController;
@@ -35,6 +36,8 @@ Route::middleware([
     Route::get('/reports/financial-dashboard/cost-sales/{sourceName}/{line}', [FinancialPurchaseCostController::class, 'edit'])->whereNumber('line')->name('reports.financial-purchase-cost.edit');
     Route::put('/reports/financial-dashboard/cost-sales/{sourceName}/{line}', [FinancialPurchaseCostController::class, 'update'])->whereNumber('line')->name('reports.financial-purchase-cost.update');
     Route::get('/reports/financial-dashboard/cost-sales', [FinancialSalesController::class, 'costs'])->name('reports.financial-cost-sales.index');
+    Route::get('/reports/financial-dashboard/revenue-sales', [FinancialSalesController::class, 'revenues'])->name('reports.financial-revenue-sales.index');
+    Route::get('/reports/financial-dashboard/lot-history/{sourceName}/{variation}/{lot}', [FinancialLotHistoryController::class, 'show'])->whereNumber('variation')->where('lot', '.*')->name('reports.financial-lot-history.show');
     Route::get('/reports/financial-dashboard/sales', [FinancialSalesController::class, 'index'])->name('reports.financial-sales.index');
 
     Route::get('/reports/financial-dashboard/expenses', [FinancialExpenseController::class, 'index'])->name('reports.financial-expenses.index');

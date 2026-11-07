@@ -187,7 +187,7 @@ class FinancialDashboardTest extends TestCase
         return (new FinancialDashboardController($cashier, new FinancialDashboardReport))->index($request);
     }
 
-    private function salesRequest(array $data = [], bool $costs = false)
+    private function salesRequest(array $data = [], bool $costs = false, bool $revenues = false)
     {
         $request = Request::create('/reports/financial-dashboard/sales', 'GET', $data + ['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'location_ids' => [1]]);
         $request->setLaravelSession($this->app['session']->driver());
@@ -198,7 +198,83 @@ class FinancialDashboardTest extends TestCase
         $dashboard = new FinancialDashboardController($cashier, new FinancialDashboardReport);
 
         $controller = new \Modules\LocalCashierReport\Http\Controllers\FinancialSalesController($dashboard);
-        return ($costs ? $controller->costs($request, new FinancialDashboardReport) : $controller->index($request))->getData(true);
+        return ($revenues ? $controller->revenues($request, new FinancialDashboardReport) : ($costs ? $controller->costs($request, new FinancialDashboardReport) : $controller->index($request)))->getData(true);
+    }
+
+    public function test_accessory_and_service_revenue_details_match_net_sales_and_keep_sources_separate()
+    {
+        $this->salesPermissions = ['sell.view'];
+        $accessory = DB::connection('finance_accessory');
+        $accessory->table('transactions')->insert([
+            ['id' => 1, 'type' => 'sell', 'final_total' => 999, 'status' => 'final'],
+            ['id' => 2, 'type' => 'sell_return', 'final_total' => 999, 'status' => 'final'],
+            ['id' => 10, 'type' => 'purchase', 'final_total' => 0, 'status' => 'received'],
+        ]);
+        $accessory->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'purchase_price_inc_tax' => 20]);
+        $accessory->table('transaction_sell_lines')->insert([
+            ['id' => 1, 'transaction_id' => 1, 'quantity' => 2, 'unit_price_inc_tax' => 50, 'lot_no_line_id' => 1, 'parent_sell_line_id' => null],
+            ['id' => 2, 'transaction_id' => 2, 'quantity' => 1, 'unit_price_inc_tax' => 50, 'lot_no_line_id' => null, 'parent_sell_line_id' => 1],
+        ]);
+        $service = DB::connection('finance_service');
+        $service->table('products')->update(['enable_stock' => false]);
+        $service->table('transactions')->insert(['id' => 1, 'type' => 'sell', 'final_total' => 999]);
+        $service->table('transaction_sell_lines')->insert([
+            ['id' => 1, 'transaction_id' => 1, 'quantity' => 3, 'unit_price_inc_tax' => 30, 'children_type' => null],
+            ['id' => 2, 'transaction_id' => 1, 'quantity' => 1, 'unit_price_inc_tax' => 30, 'children_type' => 'combo'],
+        ]);
+        $totals = $this->build([1, -2, -3])['total'];
+        $accessoryRows = $this->salesRequest(['source' => 'accessory', 'location_ids' => [-2, -3]], false, true);
+        $this->assertEquals(50, $accessoryRows['amount']);
+        $this->assertEquals($totals['accessory_sales'], $accessoryRows['amount']);
+        $this->assertEquals(2, $accessoryRows['total']);
+        $this->assertSame(['accessory'], array_values(array_unique(array_column($accessoryRows['rows'], 'source'))));
+        $serviceRows = $this->salesRequest(['source' => 'service', 'location_ids' => [-2, -3]], false, true);
+        $this->assertEquals(90, $serviceRows['amount']);
+        $this->assertEquals($totals['service_sales'], $serviceRows['amount']);
+        $this->assertEquals(1, $serviceRows['total']);
+        $this->salesPermissions = ['view_own_sell_only'];
+        try { $this->salesRequest(['source' => 'accessory', 'location_ids' => [-2]], false, true); $this->fail('Independent source user IDs must not share own-sale access'); }
+        catch (HttpException $e) { $this->assertSame(403, $e->getStatusCode()); }
+    }
+
+    private function lotHistoryRequest(string $source, string $lot)
+    {
+        $request = Request::create('/reports/financial-dashboard/lot-history/'.$source.'/1/'.$lot, 'GET', ['source' => $source, 'report_lang' => 'en']);
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        $cashier = Mockery::mock(LocalCashierReportController::class);
+        $cashier->shouldReceive('getAccessibleLocations')->with(1)->andReturn($this->locations);
+        $dashboard = new FinancialDashboardController($cashier, new FinancialDashboardReport);
+
+        return (new \Modules\LocalCashierReport\Http\Controllers\FinancialLotHistoryController($dashboard))->show($request, $source, 1, $lot);
+    }
+
+    public function test_lot_links_and_history_keep_main_accessory_and_service_records_separate()
+    {
+        $this->salesPermissions = ['sell.view', 'stock_inventory.view'];
+        foreach (['main' => 10, 'accessory' => 20, 'service' => 30] as $source => $price) {
+            $db = DB::connection('finance_'.$source);
+            $db->table('transactions')->insert(['id' => 10, 'type' => 'purchase', 'status' => 'received', 'ref_no' => $source.'-PURCHASE']);
+            $db->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'lot_number' => 'SHARED-LOT', 'purchase_price_inc_tax' => $price]);
+            $db->table('transactions')->insert(['id' => 1, 'type' => 'sell', 'invoice_no' => $source.'-SALE']);
+            $db->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'lot_no_line_id' => 1]);
+            $db->table('transactions')->insert(['id' => 11, 'type' => 'purchase', 'status' => 'received', 'location_id' => 99, 'transaction_date' => '2000-01-01', 'ref_no' => 'HIDDEN']);
+            $db->table('purchase_lines')->insert(['id' => 2, 'transaction_id' => 11, 'lot_number' => 'SHARED-LOT', 'purchase_price_inc_tax' => 999]);
+            $view = $this->lotHistoryRequest($source, 'SHARED-LOT');
+            $history = $view->getData();
+            $this->assertSame($source, $history['sourceName']);
+            $this->assertEquals(2, $history['movements']->count());
+            $this->assertSame([$source.'-SALE', $source.'-PURCHASE'], $history['movements']->pluck('reference')->all());
+            foreach ($history['movements'] as $movement) $this->assertEquals($price, $movement->purchase_price);
+            $details = $this->salesRequest(['source' => $source, 'location_ids' => [1, -2, -3]], true);
+            $this->assertStringContainsString($source === 'main' ? '/smart-stock-inventory/lot/history/SHARED-LOT' : '/lot-history/'.$source.'/1/SHARED-LOT', $details['rows'][0]['lot_history_links'][0]['url']);
+            $this->assertStringContainsString($source.'-PURCHASE', $view->render());
+        }
+        $this->salesPermissions = ['sell.view'];
+        $this->assertSame([], $this->salesRequest([], true)['rows'][0]['lot_history_links']);
+        try { $this->lotHistoryRequest('main', 'SHARED-LOT'); $this->fail('History permission is required'); }
+        catch (HttpException $e) { $this->assertSame(403, $e->getStatusCode()); }
     }
 
     public function test_dashboard_date_range_defaults_to_today_and_preserves_selected_dates()
@@ -980,6 +1056,17 @@ class FinancialDashboardTest extends TestCase
         $dom = new \DOMDocument;
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
         $xpath = new \DOMXPath($dom);
+
+        $detailHeadings = $xpath->query('//table[contains(@class,"finance-combined-table")]//th[@scope="row"]/a[@data-cost-details="1"]');
+        $this->assertEquals(3, $detailHeadings->length);
+        foreach ($xpath->query('//a[@data-detail-kind="revenue"]') as $link) {
+            $this->assertStringContainsString('/reports/financial-dashboard/revenue-sales?', $link->getAttribute('href'));
+            $this->assertStringContainsString('finance-sales-details', $link->getAttribute('class'));
+            parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $detailQuery);
+            $this->assertContains($detailQuery['source'], ['accessory', 'service']);
+            $this->assertEquals('2026-11-01', $detailQuery['start_date']);
+            $this->assertEquals('2026-11-30', $detailQuery['end_date']);
+        }
 
         $posLinks = $xpath->query('//a[contains(@class,"finance-pos-report-details")]');
         $this->assertEquals(3, $posLinks->length);

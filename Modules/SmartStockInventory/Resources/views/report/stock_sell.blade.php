@@ -6,16 +6,6 @@
 @section('module_content')
 
 <section class="content no-print ssi-sales-report">
-    <div class="ssi-sales-heading">
-        <div><span class="ssi-sales-eyebrow">POS · SALES</span><h2>តម្លៃសរុប (POS)</h2><p>របាយការណ៍លក់ស្តុក · Stock Sell Report</p></div>
-        <span class="ssi-sales-period"><i class="fa fa-calendar" aria-hidden="true"></i> <span id="ssi-sales-period"></span></span>
-    </div>
-    <div class="ssi-sales-metrics" aria-live="polite">
-        <div class="ssi-sales-metric"><span>ចំនួនទំនិញ · Units sold</span><strong id="ssi-sales-metric-quantity">—</strong><small>ក្នុងលក្ខខណ្ឌតម្រងដែលបានជ្រើសរើស</small></div>
-        <div class="ssi-sales-metric ssi-sales-metric-primary"><span>តម្លៃសរុប · Sales total</span><strong id="ssi-sales-metric-total">—</strong><small>Filtered sales amount</small></div>
-        <div class="ssi-sales-metric"><span>ចំណេញ / ខាត · Profit / loss</span><strong id="ssi-sales-metric-profit">—</strong><small>Sales less purchase cost</small></div>
-        <div class="ssi-sales-metric"><span>ថ្លៃដើមសរុប · Purchase cost</span><strong id="ssi-sales-metric-cost">—</strong><small>Cost used for filtered sales</small></div>
-    </div>
     <div class="ssi-sales-filter-card">
     @component('components.filters', ['title' => __('report.filters')])
         <div class="col-md-3">
@@ -122,8 +112,6 @@
         var initialEnd = initialFilters && initialFilters.end ? moment(initialFilters.end, 'YYYY-MM-DD', true) : moment();
         if (!initialStart.isValid()) initialStart = moment();
         if (!initialEnd.isValid()) initialEnd = moment();
-        function updateReportPeriod(first, last) { $('#ssi-sales-period').text(first.format('DD MMM YYYY') + ' — ' + last.format('DD MMM YYYY')); }
-        updateReportPeriod(initialStart, initialEnd);
         $('#sell_list_filter_location_id').val(initialFilters && initialFilters.locations.length ? initialFilters.locations.map(String) : ['all']).trigger('change.select2');
 
         $('#sell_list_filter_date_range').daterangepicker(
@@ -132,7 +120,6 @@
                 endDate: initialEnd
             }),
             function (start, end) {
-                updateReportPeriod(start, end);
                 $('#sell_list_filter_date_range').val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
                 stock_sell_report_table.ajax.reload();
             }
@@ -141,7 +128,6 @@
 
         $('#sell_list_filter_date_range').on('cancel.daterangepicker', function() {
             $('#sell_list_filter_date_range').val('');
-            $('#ssi-sales-period').text('All dates');
             stock_sell_report_table.ajax.reload();
         });
 
@@ -173,11 +159,6 @@
             $('#stock_sell_footer_monthly').html(ssiFormatFooterMoney(totals.monthly));
             $('#stock_sell_footer_paid').html(ssiFormatFooterMoney(totals.paid));
             $('#stock_sell_footer_due').html(ssiFormatFooterMoney(totals.due));
-            $('#ssi-sales-metric-quantity').html(ssiFormatFooterQty(totals.quantity));
-            $('#ssi-sales-metric-total').html(ssiFormatFooterMoney(totals.total));
-            $('#ssi-sales-metric-profit').html(ssiFormatFooterMoney(totals.profit_loss))
-                .toggleClass('ssi-sales-negative', totals.profit_loss !== null && Number(totals.profit_loss) < 0);
-            $('#ssi-sales-metric-cost').html(ssiFormatFooterMoney(totals.purchase_total));
         });
 
         var stockSellButtons = $.map($.fn.dataTable.defaults.buttons || [], function(button) {

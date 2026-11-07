@@ -11,6 +11,7 @@
         return $ids ? route('ssi.report.stock_sell', ['finance_embed' => 1, 'start_date' => $filters['start_date'], 'end_date' => $filters['end_date'], 'location_id' => $ids]) : null;
     };
     $costDetailsLink = fn ($overrides = []) => route('reports.financial-cost-sales.index', array_merge($query, $overrides));
+    $revenueDetailsLink = fn ($overrides = []) => route('reports.financial-revenue-sales.index', array_merge($query, $overrides));
     $salesDetailsLink = fn ($overrides = []) => route('reports.financial-sales.index', array_merge($query, $overrides));
     $canViewSales = auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.view') || auth()->user()->can('direct_sell.access') || auth()->user()->can('view_own_sell_only');
     $expenseDetailsLink = fn ($overrides = []) => route('reports.financial-expenses.index', array_merge($query, $overrides));
@@ -34,6 +35,7 @@
 @section('css')
 <style>
 #finance-pos-report-modal .modal-title{color:#fff!important}
+a.finance-lot-history-link{border:1px solid #c9dced;color:#245e94;text-decoration:none}a.finance-lot-history-link:hover{background:#dcebf9}a.finance-lot-history-link:focus-visible{outline:2px solid #397bb8;outline-offset:2px}
 @font-face{font-family:FinanceKhmer;src:url('{{ asset('fonts/khmer/NotoSansKhmer-Regular.ttf') }}') format('truetype');font-display:swap}
 .financial-dashboard{--navy:#102d52;--ink:#20364e;--muted:#687c91;--line:#e1e8ef;--paper:#fff;--blue:#2264b0;font-family:FinanceKhmer,Arial,sans-serif;color:var(--ink);padding:22px;background:#f2f5f9;min-height:85vh}
 .finance-topline{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:22px;flex-wrap:wrap}.finance-eyebrow{font-size:11px;letter-spacing:1.6px;color:var(--muted);text-transform:uppercase;margin:0 0 7px}.finance-topline h1{font-size:27px;font-weight:700;color:var(--navy);margin:0;line-height:1.7}.finance-topline p{color:var(--muted);margin:5px 0 0}.finance-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.finance-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #d5dfea;border-radius:7px;color:var(--ink);padding:9px 13px;font-size:12px;min-height:38px}.finance-btn:hover{background:#edf3fa;color:var(--navy)}.finance-btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}.finance-languages{display:flex;gap:3px;background:#e8edf4;padding:3px;border-radius:7px;margin-right:7px}.finance-languages a{padding:6px 10px;color:var(--muted);border-radius:5px;font-size:12px}.finance-languages a.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px #142d4b18}
@@ -141,7 +143,16 @@
                 <tbody>
                 @foreach($performanceMetrics as $metric)
                     <tr class="{{ in_array($metric, ['net_sales', 'gross_profit']) ? 'finance-subtotal' : (str_contains($metric, 'margin') ? 'finance-margin' : '') }}">
-                        <th scope="row">@if($metric === 'main_sales' && $canViewSales && $posReportLink())<a class="finance-data-link finance-pos-report-details" href="{{ $posReportLink() }}">{{ $t('finance_'.$metric) }}</a>@else{{ $t('finance_'.$metric) }}@endif @if(in_array($metric, ['net_sales', 'gross_profit', 'net_profit']))<small class="finance-formula-hint">{{ $t('finance_formula_'.$metric) }}</small>@endif</th>
+                        <th scope="row">
+                            @if($metric === 'main_sales' && $canViewSales && $posReportLink())
+                                <a class="finance-data-link finance-pos-report-details" href="{{ $posReportLink() }}">{{ $t('finance_'.$metric) }}</a>
+                            @elseif($metric === 'cost' && $canViewSales)
+                                <a class="finance-data-link finance-sales-details" data-cost-details="1" href="{{ $costDetailsLink() }}">{{ $t('finance_'.$metric) }}</a>
+                            @elseif(in_array($metric, ['accessory_sales', 'service_sales']) && $canViewSales && in_array($filters['source'], ['all', str_replace('_sales', '', $metric)], true))
+                                <a class="finance-data-link finance-sales-details" data-cost-details="1" data-detail-kind="revenue" data-detail-title="{{ $t('finance_'.$metric) }}" href="{{ $revenueDetailsLink(['source' => str_replace('_sales', '', $metric)]) }}">{{ $t('finance_'.$metric) }}</a>
+                            @else{{ $t('finance_'.$metric) }}@endif
+                            @if(in_array($metric, ['net_sales', 'gross_profit', 'net_profit']))<small class="finance-formula-hint">{{ $t('finance_formula_'.$metric) }}</small>@endif
+                        </th>
                         @foreach([...array_values($report['branches']), $total] as $branch)@include('localcashierreport::partials.financial_metric_cell')@endforeach
                     </tr>
                 @endforeach
@@ -254,7 +265,7 @@
                 <button type="button" class="finance-btn finance-cost-export" data-format="print"><i class="fa fa-print" aria-hidden="true"></i> {{ $t('print') }}</button>
             </div><span class="finance-cost-scope">{{ $t('finance_cost_filtered_totals') }}</span></div>
             <div class="finance-cost-stats" hidden>
-                <div><span>{{ $t('finance_cost_qty') }}</span><strong id="finance-cost-stat-qty">—</strong></div><div><span>{{ $t('finance_cost') }}</span><strong id="finance-cost-stat-total">—</strong></div><div><span>{{ $t('finance_profit_loss') }}</span><strong id="finance-cost-stat-profit">—</strong></div>
+                <div><span>{{ $t('finance_cost_qty') }}</span><strong id="finance-cost-stat-qty">—</strong></div><div><span id="finance-cost-stat-amount-label">{{ $t('finance_cost') }}</span><strong id="finance-cost-stat-total">—</strong></div><div><span>{{ $t('finance_profit_loss') }}</span><strong id="finance-cost-stat-profit">—</strong></div>
             </div>
             <div id="finance-cost-quality" class="finance-cost-quality" role="status" hidden></div>
             <div class="finance-details-pagination" id="finance-sales-controls"><p id="finance-sales-summary" role="status"></p><label>{{ $t('finance_rows_per_page') }} <select id="finance-sales-page-size" class="finance-btn"><option>10</option><option selected>25</option><option>50</option><option>100</option><option value="-1">{{ $t('all') }}</option></select></label><button type="button" class="finance-btn" id="finance-sales-refresh">{{ $t('finance_refresh') }}</button></div>
@@ -295,7 +306,8 @@ $(function () {
         currencySymbol: @json($currencySymbol), reportLanguage: @json($language),
         labels: {loading: @json($t('loading')), error: @json($t('finance_expense_error')), sharedLot: @json($t('finance_cost_shared_lot')), save: @json($t('finance_cost_save')), cancel: @json($t('cancel')), edit: @json($t('edit')),
             showing: @json($t('finance_showing_rows')), costQuality: @json($t('finance_cost_quality')), costTitle: @json($t('finance_cost_sales_list')), costBasis: @json($t('finance_cost_details_basis')), unitsBasis: @json($t('units_net_returns')), costLineBasis: @json($t('finance_cost_line_basis')), estimated: @json($t('finance_cost_estimate')), cost: @json($t('finance_cost')), amount: @json($t('amount')), salesTitle: @json($t('finance_sales_list')), selected: @json($t('finance_selected')), salesError: @json($t('finance_sales_error')), units: @json($t('units')), total: @json($t('total')), none: @json($t('none')), empty: @json($t('no_data')),
-            costUsed: @json($t('finance_cost_used')), latestPurchase: @json($t('finance_latest_purchase')),
+            lotHistory: @json(__('lang_v1.lot_history')), costUsed: @json($t('finance_cost_used')), latestPurchase: @json($t('finance_latest_purchase')),
+            netSales: @json($t('finance_net_sales')), revenueLineBasis: @json($t('finance_revenue_line_basis')),
             main: @json($t('finance_source_main')), accessory: @json($t('finance_source_accessory')), service: @json($t('finance_source_service'))}
     });
 });

@@ -16,7 +16,18 @@ class FinancialSalesController extends Controller
 
     public function costs(Request $request, FinancialDashboardReport $report)
     {
+        return $this->lineDetails($request, $report, false);
+    }
+
+    public function revenues(Request $request, FinancialDashboardReport $report)
+    {
+        return $this->lineDetails($request, $report, true);
+    }
+
+    private function lineDetails(Request $request, FinancialDashboardReport $report, bool $revenue)
+    {
         [$businessId, $locations, $filters] = $this->dashboard->context($request);
+        if ($revenue) abort_unless(in_array($filters['source'], ['accessory', 'service'], true), 422);
         $user = $request->user();
         $allSales = $user->can('sell.view') || $user->can('direct_sell.view') || $user->can('direct_sell.access');
         abort_unless($allSales || $user->can('view_own_sell_only'), 403);
@@ -40,6 +51,7 @@ class FinancialSalesController extends Controller
             // Separate applications have independent user IDs.
             abort_if($source !== 'main' && ! $allSales, 403);
             $records = $report->costQuery($connection, $businessId, $ids, $filters, false, true);
+            if ($revenue) $records->whereRaw("COALESCE(line.children_type, sold.children_type, '') <> 'combo'");
             if (! $allSales) $records->where('t.created_by', $user->id);
             $records = $records->get();
             // A recorded cost may belong to a transfer or a receipt outside the
@@ -71,8 +83,19 @@ class FinancialSalesController extends Controller
                 }
             }
             foreach ($records as $row) {
+                if ($revenue) $row->amount = $row->selling_total;
                 $row->source = $source;
                 $row->edit_url = null;
+                $row->lot_history_links = [];
+                if ($user->can('stock_inventory.view')) {
+                    $historyRoute = ($source === 'main' ? '' : $source.'.').'ssi.lot.history';
+                    foreach (array_unique(array_filter(array_map('trim', explode(',', (string) $row->lots)), fn ($lot) => $lot !== '')) as $lot) {
+                        $historyUrl = Route::has($historyRoute) ? route($historyRoute, ['lot' => $lot, 'finance_embed' => 1, 'report_lang' => $request->input('report_lang', 'km')]) : route('reports.financial-lot-history.show', [
+                            'sourceName' => $source, 'variation' => $row->variation_id, 'lot' => $lot, 'source' => $source,
+                            'report_lang' => $request->input('report_lang', 'km')]);
+                        $row->lot_history_links[] = ['lot' => $lot, 'url' => $historyUrl];
+                    }
+                }
                 $rowLotIds = array_map('intval', explode(',', (string) $row->purchase_line_ids));
                 $row->cost_edit_url = $row->enable_stock && !empty($row->purchase_line_ids) && !array_diff($rowLotIds, $editableIds)
                     ? route('reports.financial-purchase-cost.edit', array_merge($filters, ['sourceName' => $source, 'line' => $row->id, 'location_filter_applied' => 1])) : null;

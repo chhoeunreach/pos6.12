@@ -202,6 +202,40 @@ test('cost price links open the matching purchase form in a modal and refresh de
     assert.equal(f.$('.finance-cost-price-edit, .finance-cost-price-edit-link').length, 0);
 });
 
+test('accessory and service revenue links open source-scoped details with revenue labels', () => {
+    const f = fixture();
+    f.$('body').append('<a class="finance-sales-details revenue-link" data-cost-details="1" data-detail-kind="revenue" data-detail-title="Accessory net sales" href="/reports/financial-dashboard/revenue-sales?source=accessory&location_ids%5B0%5D=-2">Accessory</a>');
+    f.$('.finance-cost-stats').append('<span id="finance-cost-stat-amount-label"></span>');
+    f.$('.revenue-link').trigger('click');
+    assert.match(f.requests[0].url, /revenue-sales\?source=accessory/);
+    assert.equal(f.$('#finance-sales-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-sales-title').text(), 'Accessory net sales');
+    assert.equal(f.$('#finance-cost-stat-amount-label').text(), 'Net sales');
+    f.requests[0].success({page: 1, last_page: 1, total: 1, units: 2, amount: 100, profit_loss: 60,
+        rows: [{source: 'accessory', product: 'Accessory', units: 2, purchase_price: 20, selling_price: 50, amount: 100, profit_loss: 60}]});
+    assert.match(f.$('#finance-sales-summary').text(), /Net sales: \$100\.00/);
+    assert.equal(f.$('#finance-cost-stat-total').text(), '$100.00');
+    f.$('[data-cost-details]').first().trigger('click');
+    assert.equal(f.$('#finance-cost-stat-amount-label').text(), 'Cost');
+});
+
+test('each lot opens its source history in a modal without marking purchase data as changed', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, rows: [{source: 'accessory', units: 1, lots: 'LOT-1, LOT-2',
+        lot_history_links: [{lot: 'LOT-1', url: '/lot-history/accessory/1/LOT-1'}, {lot: 'LOT-2', url: '/lot-history/accessory/1/LOT-2'}]}]});
+    const links = f.$('.finance-lot-history-link');
+    assert.equal(links.length, 2);
+    links.last().trigger('click');
+    assert.equal(f.$('#finance-purchase-edit-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), '/lot-history/accessory/1/LOT-2');
+    assert.match(f.$('#finance-purchase-edit-title').text(), /Lot history · LOT-2/);
+    f.$('#finance-purchase-edit-modal').modal('hide');
+    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), 'about:blank');
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.$('body').hasClass('modal-open'), true);
+});
+
 test('quick cost editing loads the original lot, saves with CSRF and refreshes filtered totals', () => {
     const f = fixture();
     f.$('head').append('<meta name="csrf-token" content="csrf-token">');

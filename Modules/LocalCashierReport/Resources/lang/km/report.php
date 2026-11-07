@@ -1,6 +1,20 @@
 <?php
 
 return [
+    'finance_lot_history_scope' => 'ប្រវត្តិទិញ លក់ ត្រឡប់ ផ្ទេរ និងកែសម្រួលស្តុក ក្នុងទីតាំងដែលអ្នកមានសិទ្ធិ។ គ្រប់កាលបរិច្ឆេទ។',
+    'finance_lot_in' => 'ចូល',
+    'finance_lot_out' => 'ចេញ',
+    'finance_lot_type' => 'ប្រភេទ',
+    'finance_lot_reference' => 'លេខយោង',
+    'finance_lot_type_purchase' => 'ទិញចូល',
+    'finance_lot_type_opening_stock' => 'ស្តុកដើម',
+    'finance_lot_type_production_purchase' => 'ផលិតចូល',
+    'finance_lot_type_purchase_transfer' => 'ផ្ទេរចូល',
+    'finance_lot_type_sell' => 'លក់',
+    'finance_lot_type_sell_return' => 'លក់ត្រឡប់',
+    'finance_lot_type_sell_transfer' => 'ផ្ទេរចេញ',
+    'finance_lot_type_stock_adjustment' => 'កែសម្រួលស្តុក',
+    'finance_revenue_line_basis' => 'ការលក់សុទ្ធ = ចំនួន × តម្លៃលក់។ ទំនិញត្រឡប់មានតម្លៃអវិជ្ជមាន។ សមាសធាតុឈុតមិនរាប់បញ្ចូល ដើម្បីជៀសវាងការរាប់ការលក់ស្ទួន។',
     'finance_cost_used' => 'ថ្លៃដើមដែលប្រើក្នុងរបាយការណ៍',
     'finance_latest_purchase' => 'តម្លៃទិញចុងក្រោយ (រួមពន្ធ)',
     'finance_cost_lot_unavailable' => 'ថ្លៃដើមនេះមិនភ្ជាប់នឹងការទិញដែលអាចកែប្រែក្នុងទីតាំងដែលអ្នកមានសិទ្ធិទេ។ សូមផ្ទុកបញ្ជីលក់ឡើងវិញ ហើយបើកបង្កាន់ដៃដើមដើម្បីកែតម្លៃ។',
