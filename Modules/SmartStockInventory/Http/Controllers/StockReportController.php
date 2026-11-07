@@ -50,6 +50,19 @@ class StockReportController extends Controller
             ->groupBy('tspl.sell_line_id');
     }
 
+    protected function latestPurchaseReferences($row, int $businessId, $allowedLocations)
+    {
+        $lots = array_values(array_filter(array_map('trim', explode(',', (string) $row->lots)), fn ($lot) => $lot !== ''));
+        if (!$lots) return collect();
+        $query = DB::table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
+            ->where('t.business_id', $businessId)->where('t.type', 'purchase')->where('t.status', 'received')
+            ->where('p.variation_id', $row->variation_id)->whereIn('p.lot_number', $lots);
+        if ($allowedLocations !== 'all') $query->whereIn('t.location_id', $allowedLocations);
+
+        return $query->orderByDesc('t.transaction_date')->orderByDesc('t.id')->orderByDesc('p.id')
+            ->get(['t.id', 't.ref_no', 'p.lot_number'])->unique('lot_number')->values();
+    }
+
     protected function purchaseCostExpressions()
     {
         $price = "COALESCE(
@@ -160,6 +173,7 @@ class StockReportController extends Controller
                 ->whereNull('transaction_sell_lines.parent_sell_line_id')
                 ->select(
                     'transaction_sell_lines.id',
+                    'transaction_sell_lines.variation_id',
                     't.id as transaction_id',
                     't.transaction_date',
                     't.invoice_no',
@@ -281,15 +295,21 @@ class StockReportController extends Controller
                 ->editColumn('price', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->price.'">'.$row->price.'</span>';
                 })
-                ->editColumn('purchase_price', function ($row) {
+                ->editColumn('purchase_price', function ($row) use ($business_id, $permitted_locations) {
                     if ($row->purchase_price === null) {
                         return '<span data-export-value="Unavailable">Unavailable</span>';
                     }
 
                     $value = '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->purchase_price.'">'.$row->purchase_price.'</span>';
                     if (!auth()->user()->can('purchase.update')) return $value;
-                    $url = ssi_route('ssi.report.purchase_cost.edit', ['sourceName' => 'main', 'line' => $row->id]);
-                    return '<button type="button" class="ssi-purchase-price-edit" data-url="'.e($url).'" title="Edit original purchase lot price">'.$value.' <i class="fa fa-pencil" aria-hidden="true"></i></button>';
+                    $references = $this->latestPurchaseReferences($row, (int) $business_id, $permitted_locations);
+                    if ($references->isEmpty()) return $value;
+                    return $references->map(function ($purchase) use ($value) {
+                        $reference = $purchase->ref_no ?: '#'.$purchase->id;
+                        $title = $purchase->lot_number.' · '.$reference;
+                        return '<a class="ssi-purchase-reference-edit" href="'.e(ssi_route('purchases.edit', $purchase->id)).'" title="'.e($title).'">'
+                            .$value.' <i class="fa fa-pencil" aria-hidden="true"></i></a><small style="display:block">'.e($title).'</small>';
+                    })->implode('<br>');
                 })
                 ->editColumn('purchase_profit_loss', function ($row) {
                     if ($row->purchase_profit_loss === null) {

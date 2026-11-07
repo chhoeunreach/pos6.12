@@ -176,6 +176,88 @@
         if (!modal.length) return;
         var labels = options.labels || {};
         var listUrl, page = 1, lastPage = 1, sequence = 0, edited = false, costMode = false, searchTimer = null, sort = 'date', direction = 'desc';
+        var controls = $('#finance-sales-controls'), controlsHome = $('<div>').insertBefore(controls);
+        function xml(value) {
+            return String(value == null ? '—' : value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/[&<>"']/g, function(c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}[c];
+            });
+        }
+        function download(blob, extension) {
+            var url = window.URL.createObjectURL(blob), link = document.createElement('a');
+            link.href = url;
+            link.download = 'cost-of-goods-sold.' + extension;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(function() { window.URL.revokeObjectURL(url); }, 1000);
+        }
+        function excel(rows) {
+            var zip = new window.JSZip();
+            zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+            zip.file('_rels/.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+            zip.file('xl/workbook.xml', '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Cost of goods sold" sheetId="1" r:id="rId1"/></sheets></workbook>');
+            zip.file('xl/_rels/workbook.xml.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+            zip.file('xl/worksheets/sheet1.xml', '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + rows.map(function(row, index) {
+                return '<row r="' + (index + 1) + '">' + row.map(function(value, col) {
+                    var ref = String.fromCharCode(65 + col) + (index + 1);
+                    return typeof value === 'number' && isFinite(value) ? '<c r="' + ref + '"><v>' + value + '</v></c>' : '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + xml(value) + '</t></is></c>';
+                }).join('') + '</row>';
+            }).join('') + '</sheetData></worksheet>');
+            var settings = {type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
+            return zip.generateAsync ? zip.generateAsync(settings) : Promise.resolve(zip.generate(settings));
+        }
+        modal.on('click', '.finance-cost-export', function() {
+            if (!costMode || !listUrl) return;
+            var format = $(this).attr('data-format'), requestSequence = sequence;
+            var printWindow = format === 'print' ? window.open('', '_blank') : null;
+            function error(message) { $('#finance-sales-error').text(message || labels.salesError || 'Unable to load sales.').prop('hidden', false); }
+            if (format === 'print' && !printWindow) { error(labels.salesError); return; }
+            var title = $('#finance-sales-title').text();
+            var context = $('#finance-sales-basis').parent().text() + ($('#finance-cost-search').val() ? ' · ' + $('#finance-cost-search').val() : '');
+            if (printWindow) printWindow.document.body.textContent = labels.loading || 'Loading...';
+            var buttons = modal.find('.finance-cost-export').prop('disabled', true);
+            $('#finance-sales-error').prop('hidden', true);
+            $.ajax({url: listUrl, dataType: 'json', data: {page: 1, per_page: -1, sort: sort, direction: direction, q: $('#finance-cost-search').val() || ''},
+                success: function(result) {
+                    if (requestSequence !== sequence) { if (printWindow) printWindow.close(); return; }
+                    var headings = $('#finance-sales-cost-head th').map(function() { return $(this).clone().find('.finance-sort-indicator').remove().end().text().trim(); }).get();
+                    var rows = (result.rows || []).map(function(row) {
+                        return [row.sku || '—', row.lots || '—', (row.product || '—') + (row.variation_name && row.variation_name !== 'DUMMY' ? ' · ' + row.variation_name : '')].concat(['units', 'purchase_price', 'selling_price', 'amount', 'profit_loss'].map(function(key) { return row[key] == null ? '—' : Number(row[key]); }));
+                    });
+                    rows.unshift(headings);
+                    rows.push([labels.total || 'Total', '', '', Number(result.units || 0), '', '', result.amount == null ? '—' : Number(result.amount), result.profit_loss == null ? '—' : Number(result.profit_loss)]);
+                    if (format === 'excel') {
+                        try {
+                            excel(rows).then(function(blob) { if (requestSequence === sequence) download(blob, 'xlsx'); }).catch(function() { error(); });
+                        } catch (exception) { error(); }
+                    } else if (format === 'csv') {
+                        var csv = rows.map(function(row) { return row.map(function(value) {
+                            var text = String(value);
+                            if (typeof value !== 'number' && /^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
+                            return '"' + text.replace(/"/g, '""') + '"';
+                        }).join(','); }).join('\r\n');
+                        download(new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'}), 'csv');
+                    } else if (printWindow && !printWindow.closed) {
+                        var doc = printWindow.document;
+                        doc.title = title;
+                        doc.documentElement.lang = options.reportLanguage || 'km';
+                        doc.body.textContent = '';
+                        $(doc.head).append($('<meta charset="utf-8">'), $('<style>').text('@page{size:landscape;margin:12mm}body{font:12px Arial,sans-serif;color:#173b67}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd6e0;padding:8px;text-align:left}td:nth-child(n+4){text-align:right}thead,tfoot{background:#edf3fb}tr{break-inside:avoid}'));
+                        $(doc.body).append($('<h2>').text(title), $('<p>').text(context));
+                        var table = $('<table>'), head = $('<thead>').appendTo(table), body = $('<tbody>').appendTo(table), foot = $('<tfoot>').appendTo(table);
+                        rows.forEach(function(row, index) {
+                            var tr = $('<tr>').appendTo(index === 0 ? head : (index === rows.length - 1 ? foot : body));
+                            row.forEach(function(value) { tr.append($(index === 0 ? '<th>' : '<td>').text(value)); });
+                        });
+                        $(doc.body).append(table);
+                        printWindow.focus();
+                        printWindow.print();
+                    }
+                },
+                error: function(xhr) { if (printWindow) printWindow.close(); if (requestSequence === sequence) error((xhr.responseJSON || {}).message); },
+                complete: function() { buttons.prop('disabled', false); }
+            });
+        });
         function load(nextPage) {
             var requestSequence = ++sequence;
             $('#finance-sales-table').attr('aria-busy', 'true');
@@ -211,7 +293,18 @@
                             [row.units === null ? '—' : Number(row.units).toLocaleString(), price(row.purchase_price), price(row.selling_price), price(row.amount), price(row.profit_loss)].forEach(function(value, index) {
                                 tr.append($('<td>').text(value).css('white-space', 'nowrap'));
                             });
-                            if (row.cost_edit_url) {
+                            if (Array.isArray(row.purchase_edit_links)) {
+                                if (row.purchase_edit_links.length) {
+                                    var purchaseCell = tr.find('td').eq(4).empty();
+                                    row.purchase_edit_links.forEach(function(purchase, index) {
+                                        if (index) purchaseCell.append($('<br>'));
+                                        purchaseCell.append($('<a class="finance-cost-price-edit-link">')
+                                            .attr('href', purchase.url).attr('title', purchase.lot + ' · ' + purchase.reference)
+                                            .text(price(row.purchase_price) + ' ✎'));
+                                        purchaseCell.append($('<small class="finance-cost-meta">').text(purchase.lot + ' · ' + purchase.reference));
+                                    });
+                                }
+                            } else if (row.cost_edit_url) {
                                 var cell = tr.find('td').eq(4);
                                 cell.empty().append($('<button type="button" class="finance-cost-price-edit">')
                                     .attr('data-url', row.cost_edit_url).attr('data-price', row.purchase_price == null ? '' : row.purchase_price)
@@ -270,6 +363,9 @@
             clearTimeout(searchTimer);
             $('#finance-cost-search').val('');
             modal.toggleClass('finance-cost-mode', costMode);
+            if (costMode) controls.appendTo(modal.find('.finance-cost-tools'));
+            else controls.insertAfter(controlsHome);
+            modal.find('.finance-cost-export-actions').prop('hidden', !costMode);
             modal.find('.finance-cost-tools, .finance-cost-stats, #finance-cost-totals').prop('hidden', !costMode);
             $('#finance-cost-quality').prop('hidden', true);
             $('#finance-cost-stat-qty, #finance-cost-stat-total, #finance-cost-stat-profit, #finance-cost-foot-qty, #finance-cost-foot-total, #finance-cost-foot-profit').text('—');
@@ -320,8 +416,42 @@
         $('#finance-sales-page-size').on('change', function() { load(1); });
         $('#finance-sales-page-input').on('change', function() { load(Math.max(1, Math.min(lastPage, Number(this.value) || 1))); });
         $('#finance-sales-refresh').on('click', function() { load(page); });
+        var purchaseModal = $('#finance-purchase-edit-modal'), purchaseFrame = $('#finance-purchase-edit-frame');
+        modal.on('click', '.finance-cost-price-edit-link', function(event) {
+            event.preventDefault();
+            $('#finance-purchase-edit-title').text((labels.edit || 'Edit') + ' · ' + $(this).attr('title'));
+            $('#finance-purchase-edit-loading').prop('hidden', false);
+            purchaseFrame.attr('src', $(this).attr('href'));
+            purchaseModal.modal('show');
+        });
+        purchaseFrame.on('load', function() {
+            if ($(this).attr('src') === 'about:blank') return;
+            $('#finance-purchase-edit-loading').prop('hidden', true);
+            // Keep the original purchase form and its scripts in their own document.
+            try {
+                var doc = this.contentDocument;
+                if (doc && !doc.getElementById('finance-purchase-embed-style')) {
+                    var style = doc.createElement('style');
+                    style.id = 'finance-purchase-embed-style';
+                    style.textContent = '.main-header,.main-sidebar,.main-footer,.control-sidebar,#main_app_header,.side-bar{display:none!important}.content-wrapper{margin-left:0!important}.thetop>main{width:100%!important}';
+                    doc.head.appendChild(style);
+                }
+            } catch (error) { /* The browser keeps cross-origin documents isolated. */ }
+        });
+        purchaseModal.on('shown.bs.modal', function() { $('.modal-backdrop').last().css('z-index', 1060); });
+        purchaseModal.on('hidden.bs.modal', function() {
+            purchaseFrame.attr('src', 'about:blank');
+            edited = true;
+            if (modal.hasClass('in')) {
+                $('body').addClass('modal-open');
+                var instance = modal.data('bs.modal');
+                if (instance && typeof instance.enforceFocus === 'function') instance.enforceFocus();
+                load(page);
+            } else if (typeof options.refreshDashboard === 'function') options.refreshDashboard();
+            else window.location.reload();
+        });
         modal.on('click', '.finance-sales-edit', function() { edited = true; });
-        $(window).on('focus', function() { if (edited && modal.hasClass('in') && !$('#finance-purchase-price-modal').hasClass('in')) load(page); });
+        $(window).on('focus', function() { if (edited && modal.hasClass('in') && !$('#finance-purchase-price-modal, #finance-purchase-edit-modal').hasClass('in')) load(page); });
         modal.on('hidden.bs.modal', function() {
             clearTimeout(searchTimer);
             ++sequence;

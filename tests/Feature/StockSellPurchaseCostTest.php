@@ -36,6 +36,7 @@ class StockSellPurchaseCostTest extends TestCase
             $table->string('type');
             $table->string('status')->default('received');
             $table->string('transaction_date');
+            $table->string('ref_no')->nullable();
         });
         Schema::create('variations', function (Blueprint $table) {
             $table->integer('id');
@@ -116,6 +117,33 @@ class StockSellPurchaseCostTest extends TestCase
         DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => null]);
         $this->assertSame([2], $resolver->resolve($line, $sale, [1]));
         $this->assertSame([], $resolver->resolve($line, $sale, [2]));
+    }
+
+    public function test_purchase_reference_edit_selects_the_latest_received_purchase_for_each_exact_lot()
+    {
+        foreach ([
+            11 => ['transaction_date' => '2026-11-07', 'ref_no' => 'PUR-11'],
+            12 => ['transaction_date' => '2026-11-07', 'ref_no' => 'PUR-12'],
+            13 => ['business_id' => 2],
+            14 => ['location_id' => 2],
+            15 => ['status' => 'ordered'],
+            16 => ['type' => 'purchase_transfer'],
+            17 => [],
+        ] as $id => $attributes) {
+            DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'status' => 'received', 'transaction_date' => '2026-11-08']);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'variation_id' => $id === 17 ? 2 : 1, 'lot_number' => 'LOT-1']);
+        }
+        $controller = $this->app->make(StockReportController::class);
+        $method = new \ReflectionMethod($controller, 'latestPurchaseReferences');
+        $method->setAccessible(true);
+        $row = (object) ['variation_id' => 1, 'lots' => 'LOT-1, LOT-2'];
+        $references = $method->invoke($controller, $row, 1, [1]);
+        $this->assertSame([12, 2], $references->pluck('id')->all());
+        $this->assertSame('PUR-12', $references->first()->ref_no);
+        $this->assertSame([14], $method->invoke($controller, $row, 1, [2])->pluck('id')->all());
+        $this->assertSame([14, 2], $method->invoke($controller, $row, 1, 'all')->pluck('id')->all());
+        $row->lots = 'NO-MATCH';
+        $this->assertTrue($method->invoke($controller, $row, 1, [1])->isEmpty());
     }
 
     public function test_corrected_batch_cost_updates_weighted_price_and_total()

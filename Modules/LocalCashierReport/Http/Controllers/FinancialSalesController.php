@@ -5,6 +5,7 @@ namespace Modules\LocalCashierReport\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Modules\LocalCashierReport\Services\FinancialDashboardReport;
 
 class FinancialSalesController extends Controller
@@ -41,12 +42,49 @@ class FinancialSalesController extends Controller
             $records = $report->costQuery($connection, $businessId, $ids, $filters, false, true);
             if (! $allSales) $records->where('t.created_by', $user->id);
             $records = $records->get();
+            // A recorded cost may belong to a transfer or a receipt outside the
+            // user's locations. Only offer edits that the lot editor can accept.
+            $editableIds = [];
+            $latestPurchases = collect();
+            $purchaseRoute = ($source === 'main' ? '' : $source.'.').'purchases.edit';
+            if ($user->can('purchase.update')) {
+                $allowed = $locations->pluck('id')->map(fn ($id) => (int) $id)->filter(fn ($id) =>
+                    $source === 'main' ? $id > 0 : ($id < -1 && (-$id % 2) === ($source === 'service' ? 1 : 0)))
+                    ->map(fn ($id) => $source === 'main' ? $id : intdiv(-$id, 2))->all();
+                $lotIds = $records->flatMap(fn ($row) => explode(',', (string) $row->purchase_line_ids))->filter()->unique()->all();
+                $editableIds = DB::connection($connection)->table('purchase_lines as p')
+                    ->join('transactions as t', 't.id', '=', 'p.transaction_id')
+                    ->where('t.business_id', $businessId)->whereIn('t.location_id', $allowed)
+                    ->whereIn('t.type', ['purchase', 'opening_stock', 'production_purchase'])->where('t.status', 'received')
+                    ->whereIn('p.id', $lotIds)->pluck('p.id')->map(fn ($id) => (int) $id)->all();
+                if (Route::has($purchaseRoute)) {
+                    $lotNumbers = $records->flatMap(fn ($row) => explode(',', (string) $row->lots))->filter(fn ($lot) => $lot !== '')->unique()->all();
+                    $latestPurchases = DB::connection($connection)->table('purchase_lines as p')
+                        ->join('transactions as t', 't.id', '=', 'p.transaction_id')
+                        ->where('t.business_id', $businessId)->whereIn('t.location_id', $allowed)
+                        ->where('t.type', 'purchase')->where('t.status', 'received')
+                        ->whereIn('p.lot_number', $lotNumbers)->whereIn('p.variation_id', $records->pluck('variation_id')->unique()->all())
+                        ->orderByDesc('t.transaction_date')->orderByDesc('t.id')->orderByDesc('p.id')
+                        ->get(['p.lot_number', 'p.variation_id', 't.id', 't.ref_no'])
+                        ->unique(fn ($purchase) => $purchase->variation_id.':'.$purchase->lot_number)
+                        ->keyBy(fn ($purchase) => $purchase->variation_id.':'.$purchase->lot_number);
+                }
+            }
             foreach ($records as $row) {
                 $row->source = $source;
                 $row->edit_url = null;
-                $row->cost_edit_url = $user->can('purchase.update') && $row->enable_stock && !empty($row->purchase_line_ids)
+                $rowLotIds = array_map('intval', explode(',', (string) $row->purchase_line_ids));
+                $row->cost_edit_url = $row->enable_stock && !empty($row->purchase_line_ids) && !array_diff($rowLotIds, $editableIds)
                     ? route('reports.financial-purchase-cost.edit', array_merge($filters, ['sourceName' => $source, 'line' => $row->id, 'location_filter_applied' => 1])) : null;
-                unset($row->purchase_line_ids, $row->enable_stock);
+                $row->purchase_edit_links = [];
+                if ($row->enable_stock) {
+                    foreach (array_unique(explode(',', (string) $row->lots)) as $lot) {
+                        $purchase = $latestPurchases->get($row->variation_id.':'.$lot);
+                        if ($purchase) $row->purchase_edit_links[] = ['lot' => $lot, 'reference' => $purchase->ref_no ?: '#'.$purchase->id,
+                            'url' => route($purchaseRoute, $purchase->id)];
+                    }
+                }
+                unset($row->purchase_line_ids, $row->enable_stock, $row->variation_id);
                 $rows->push($row);
             }
         }

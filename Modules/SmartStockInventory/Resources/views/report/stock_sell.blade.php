@@ -84,11 +84,22 @@
 
 <section id="receipt_section" class="print_section"></section>
 
-@include('purchase.partials.lot_price_modal', ['costEditorId' => 'ssi-purchase-price-modal'])
+<div class="modal fade no-print" id="ssi-purchase-reference-modal" tabindex="-1" role="dialog" aria-labelledby="ssi-purchase-reference-title" style="z-index:1070">
+    <div class="modal-dialog" style="width:96%;max-width:1450px"><div class="modal-content">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="{{ __('messages.close') }}">×</button>
+            <h4 class="modal-title" id="ssi-purchase-reference-title">{{ __('purchase.edit_purchase') }}</h4>
+        </div>
+        <div class="modal-body" style="padding:0">
+            <p id="ssi-purchase-reference-loading" role="status" style="padding:16px">{{ __('localcashierreport::report.loading') }}</p>
+            <iframe id="ssi-purchase-reference-frame" title="{{ __('purchase.edit_purchase') }}" src="about:blank" style="display:block;width:100%;height:75vh;border:0"></iframe>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">{{ __('messages.close') }}</button></div>
+    </div></div>
+</div>
 @stop
 @section('module_js')
-<script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
-<style>.ssi-purchase-price-edit{background:transparent;border:0;border-bottom:1px dashed #8ba5c2;color:#194f8c;font:inherit;cursor:pointer;padding:3px}.ssi-purchase-price-edit:focus-visible{outline:2px solid #93c5fd}</style>
+<style>.ssi-purchase-reference-edit{background:transparent;border:0;border-bottom:1px dashed #8ba5c2;color:#194f8c;font:inherit;cursor:pointer;padding:3px}.ssi-purchase-reference-edit:focus-visible{outline:2px solid #93c5fd}</style>
 <script type="text/javascript">
     $(document).ready(function() {
         @php $initialStockFilters = (request()->boolean('finance_embed') || request()->hasAny(['start_date', 'end_date', 'location_id'])) ? ['locations' => request('location_id', []), 'start' => request('start_date'), 'end' => request('end_date')] : null; @endphp
@@ -231,10 +242,33 @@
             }
         });
 
-        window.initPurchaseLotPriceModal({modal: '#ssi-purchase-price-modal', trigger: '.ssi-purchase-price-edit', saved: function() {
+        var purchaseModal = $('#ssi-purchase-reference-modal'), purchaseFrame = $('#ssi-purchase-reference-frame');
+        $(document).on('click', '.ssi-purchase-reference-edit', function(event) {
+            event.preventDefault();
+            $('#ssi-purchase-reference-title').text($(this).attr('title'));
+            $('#ssi-purchase-reference-loading').prop('hidden', false);
+            purchaseFrame.attr('src', $(this).attr('href'));
+            purchaseModal.modal('show');
+        });
+        purchaseFrame.on('load', function() {
+            if ($(this).attr('src') === 'about:blank') return;
+            $('#ssi-purchase-reference-loading').prop('hidden', true);
+            try {
+                var doc = this.contentDocument;
+                if (doc && !doc.getElementById('ssi-purchase-embed-style')) {
+                    var style = doc.createElement('style');
+                    style.id = 'ssi-purchase-embed-style';
+                    style.textContent = '.main-header,.main-sidebar,.main-footer,.control-sidebar,#main_app_header,.side-bar{display:none!important}.content-wrapper{margin-left:0!important}.thetop>main{width:100%!important}';
+                    doc.head.appendChild(style);
+                }
+            } catch (error) { /* The browser keeps cross-origin documents isolated. */ }
+        });
+        purchaseModal.on('shown.bs.modal', function() { $('.modal-backdrop').last().css('z-index', 1060); });
+        purchaseModal.on('hidden.bs.modal', function() {
+            purchaseFrame.attr('src', 'about:blank');
             stock_sell_report_table.ajax.reload(null, false);
             if (window.parent !== window) window.parent.postMessage({type: 'financial-purchase-cost-updated'}, window.location.origin);
-        }});
+        });
 
         $(document).on('change', '#sell_list_filter_location_id, #sell_list_filter_customer_id, #sell_list_filter_payment_status, #created_by, #sales_cmsn_agnt, #service_staffs', function() {
             if ($(this).attr('id') === 'sell_list_filter_location_id') {

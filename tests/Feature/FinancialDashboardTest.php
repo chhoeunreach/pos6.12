@@ -464,6 +464,25 @@ class FinancialDashboardTest extends TestCase
         catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
     }
 
+    public function test_stock_quick_cost_honors_gate_granted_report_access_without_direct_permissions()
+    {
+        $this->seedSales();
+        // Administrators are authorized by Gate::before, so can() may grant
+        // access even when Spatie's direct permission lookup returns false.
+        $admin = Mockery::mock(User::class)->makePartial();
+        $admin->id = 1;
+        $admin->shouldReceive('can')->andReturnUsing(fn ($permission) => in_array($permission, ['purchase.update', 'stock_report.view', 'direct_sell.view'], true));
+        $admin->shouldReceive('hasAnyPermission')->andReturn(false);
+        $admin->shouldReceive('permitted_locations')->andReturn([1]);
+        $this->actingAs($admin);
+
+        $metadata = $this->purchaseCostRequest([], false, 'main', 1, true);
+        $this->assertEquals(60, $metadata['lots'][0]['purchase_price']);
+        $result = $this->purchaseCostRequest(['cost_version' => $metadata['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 75]]], true, 'main', 1, true);
+        $this->assertTrue($result['success']);
+        $this->assertEquals(75, DB::table('purchase_lines')->where('id', 1)->value('purchase_price_inc_tax'));
+    }
+
     public function test_quick_purchase_cost_requires_permission_and_rejects_foreign_lot_ids()
     {
         $this->seedSales();
@@ -475,6 +494,83 @@ class FinancialDashboardTest extends TestCase
         catch (HttpException $e) { $this->assertEquals(422, $e->getStatusCode()); }
         $this->assertEquals(60, DB::table('purchase_lines')->value('purchase_price_inc_tax'));
         try { $this->purchaseCostRequest(['location_ids' => [2]]); $this->fail('Unselected locations cannot be edited'); } catch (HttpException $e) { $this->assertEquals(404, $e->getStatusCode()); }
+    }
+
+    public function test_cost_sales_only_offers_quick_edits_for_accessible_received_purchase_lots()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        $this->assertNotNull($this->salesRequest([], true)['rows'][0]['cost_edit_url']);
+
+        foreach ([['type' => 'purchase_transfer'], ['type' => 'purchase', 'status' => 'ordered'],
+            ['type' => 'purchase', 'status' => 'received', 'location_id' => 99]] as $attributes) {
+            DB::table('transactions')->where('id', 10)->update($attributes);
+            $rows = $this->salesRequest([], true)['rows'];
+            $this->assertNotEmpty($rows);
+            foreach ($rows as $row) $this->assertNull($row['cost_edit_url']);
+            try {
+                $this->purchaseCostRequest();
+                $this->fail('A stale edit link must explain why the receipt cannot be edited');
+            } catch (HttpException $e) {
+                $this->assertEquals(422, $e->getStatusCode());
+                $this->assertNotEmpty($e->getMessage());
+            }
+        }
+    }
+
+    public function test_quick_cost_link_loads_through_the_registered_route()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        $url = $this->salesRequest([], true)['rows'][0]['cost_edit_url'];
+        $request = Request::create($url, 'GET');
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        $cashier = Mockery::mock(LocalCashierReportController::class);
+        $cashier->shouldReceive('getAccessibleLocations')->with(1)->andReturn($this->locations);
+        $this->app->instance(FinancialDashboardController::class, new FinancialDashboardController($cashier, new FinancialDashboardReport));
+        $route = $this->app['router']->getRoutes()->match($request);
+        $request->setRouteResolver(fn () => $route);
+        $response = $route->run();
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertCount(1, $response->getData(true)['lots']);
+        $this->assertEquals($request->fullUrl(), $response->getData(true)['update_url']);
+    }
+
+    public function test_cost_details_links_to_the_latest_received_purchase_by_lot_and_variation()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'SERIAL-1']);
+        foreach ([
+            11 => ['transaction_date' => '2026-11-07 10:00:00', 'ref_no' => 'PUR-11'],
+            12 => ['transaction_date' => '2026-11-07 10:00:00', 'ref_no' => 'PUR-12'],
+            13 => ['business_id' => 2],
+            14 => ['location_id' => 99],
+            15 => ['status' => 'ordered'],
+            16 => ['type' => 'purchase_transfer'],
+            17 => [],
+        ] as $id => $attributes) {
+            DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'status' => 'received', 'transaction_date' => '2026-11-08 10:00:00']);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'lot_number' => 'SERIAL-1', 'variation_id' => $id === 17 ? 2 : 1, 'purchase_price_inc_tax' => 90]);
+        }
+        $row = $this->salesRequest([], true)['rows'][0];
+        $this->assertSame([['lot' => 'SERIAL-1', 'reference' => 'PUR-12', 'url' => route('purchases.edit', 12)]], $row['purchase_edit_links']);
+        $this->assertEquals(60, $row['purchase_price']);
+
+        $this->salesPermissions = ['sell.view'];
+        $this->assertSame([], $this->salesRequest([], true)['rows'][0]['purchase_edit_links']);
+    }
+
+    public function test_cost_details_does_not_link_to_an_unrelated_purchase_without_a_matching_lot()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        $this->assertSame([], $this->salesRequest([], true)['rows'][0]['purchase_edit_links']);
+        DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'OPENING-LOT']);
+        DB::table('transactions')->where('id', 10)->update(['type' => 'opening_stock']);
+        $this->assertSame([], $this->salesRequest([], true)['rows'][0]['purchase_edit_links']);
     }
 
     public function test_sales_returns_costs_expense_refunds_and_margins_use_their_own_dates()

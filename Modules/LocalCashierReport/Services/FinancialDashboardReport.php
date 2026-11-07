@@ -307,7 +307,7 @@ class FinancialDashboardReport
             return $query->whereRaw("($quantity) > 0")
                 ->select('line.id', 't.id as transaction_id', 't.location_id', 't.transaction_date', 't.invoice_no', 'product.name as product', 'v.name as variation_name')
                 ->selectRaw("COALESCE(NULLIF(v.sub_sku, ''), product.sku) as sku, COALESCE(NULLIF(lot.lot_number, ''), allocated.lots) as lots")
-                ->addSelect('product.enable_stock')
+                ->addSelect('product.enable_stock', 'sold.variation_id')
                 ->selectRaw("CASE WHEN lot_tx.id IS NOT NULL THEN CAST(lot.id AS CHAR)
                     WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 THEN allocated.purchase_ids
                     ELSE (SELECT CAST(recent.id AS CHAR) FROM purchase_lines as recent

@@ -3,10 +3,19 @@
     window.initPurchaseLotPriceModal = function(options) {
         var modal = $(options.modal), form = modal.find('form'), fields = modal.find('.purchase-lot-price-fields');
         if (!modal.length) return;
-        var sequence = 0, saving = false, labels = options.labels || {};
-        function error(xhr) {
+        var sequence = 0, saving = false, labels = options.labels || {}, requestUrl = '', requestMethod = 'GET';
+        var diagnostics = $('<pre class="purchase-lot-price-diagnostics">').css({whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: '10px'}).prop('hidden', true);
+        modal.find('.purchase-lot-price-error').after(diagnostics);
+        function error(xhr, textStatus) {
             var response = xhr && xhr.responseJSON || {}, errors = response.errors && Object.values(response.errors);
-            modal.find('.purchase-lot-price-error').text(errors && errors.length ? errors[0][0] : (response.message || labels.error || 'Unable to update purchase price.')).prop('hidden', false);
+            var message = errors && errors.length ? (Array.isArray(errors[0]) ? errors[0][0] : errors[0]) : response.message;
+            if (!message) {
+                message = labels.error || 'Unable to update purchase price.';
+                if (xhr && typeof xhr.status === 'number') message += ' (HTTP ' + xhr.status + (textStatus === 'parsererror' ? ', invalid JSON' : '') + ')';
+            }
+            modal.find('.purchase-lot-price-error').text(message).prop('hidden', false);
+            diagnostics.text(requestMethod + ' ' + requestUrl + '\nHTTP ' + (xhr && typeof xhr.status === 'number' ? xhr.status : 'unknown')
+                + ' · ' + (textStatus || (xhr && xhr.statusText) || 'request failed')).prop('hidden', false);
         }
         function disable(value) { modal.find('button, input').prop('disabled', value); }
         $(document).on('click', options.trigger, function(event) {
@@ -15,10 +24,12 @@
             var current = ++sequence;
             fields.empty(); form.removeAttr('action');
             modal.find('.purchase-lot-price-error').prop('hidden', true);
+            diagnostics.prop('hidden', true);
             modal.find('.purchase-lot-price-loading').prop('hidden', false);
             disable(false); modal.find('.purchase-lot-price-save').prop('disabled', true);
             modal.modal('show');
-            $.ajax({url: $(this).attr('data-url'), dataType: 'json',
+            requestUrl = $(this).attr('data-url'); requestMethod = 'GET';
+            $.ajax({url: requestUrl, method: 'GET', dataType: 'json',
                 success: function(result) {
                     if (current !== sequence) return;
                     form.attr('action', result.update_url);
@@ -37,7 +48,7 @@
                     modal.find('.purchase-lot-price-save').prop('disabled', !(result.lots || []).length);
                     fields.find('input[type=number]').first().trigger('focus').trigger('select');
                 },
-                error: function(xhr) { if (current === sequence) { modal.find('.purchase-lot-price-loading').prop('hidden', true); error(xhr); } }
+                error: function(xhr, textStatus) { if (current === sequence) { modal.find('.purchase-lot-price-loading').prop('hidden', true); error(xhr, textStatus); } }
             });
         });
         form.on('submit', function(event) {
@@ -45,7 +56,9 @@
             if (saving || !form.attr('action') || !form[0].checkValidity()) return;
             var data = form.serialize(); saving = true; disable(true);
             modal.find('.purchase-lot-price-error').prop('hidden', true);
-            $.ajax({url: form.attr('action'), method: 'PUT', data: data, dataType: 'json',
+            diagnostics.prop('hidden', true);
+            requestUrl = form.attr('action'); requestMethod = 'PUT';
+            $.ajax({url: requestUrl, method: 'PUT', data: data, dataType: 'json',
                 headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')},
                 success: function(result) {
                     if (!result.success) { error({responseJSON: result}); return; }

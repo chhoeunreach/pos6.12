@@ -13,8 +13,16 @@ function fixture() {
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window), requests = [], state = {refreshes: 0};
     $('body').append('<div id="finance-purchase-price-modal" class="modal"><form class="purchase-lot-price-form"><div class="purchase-lot-price-error" hidden></div><p class="purchase-lot-price-loading"></p><div class="purchase-lot-price-fields"></div><button type="submit" class="purchase-lot-price-save">Save</button><button type="button" class="purchase-lot-price-cancel" data-dismiss="modal">Cancel</button></form></div>');
+    $('body').append('<div id="finance-purchase-edit-modal" class="modal"><h4 id="finance-purchase-edit-title"></h4><p id="finance-purchase-edit-loading"></p><iframe id="finance-purchase-edit-frame" src="about:blank"></iframe></div>');
     $('body').append('<a class="finance-pos-report-details" href="/smart-stock-inventory/stock-reports/sell?finance_embed=1&start_date=2026-11-01&end_date=2026-11-05&location_id%5B0%5D=1">POS total</a><div id="finance-pos-report-modal"><span id="finance-pos-report-loading"></span><iframe id="finance-pos-report-frame" src="about:blank"></iframe><a id="finance-pos-report-tab"></a></div>');
     $('#finance-sales-modal').append('<div class="finance-cost-tools" hidden><input id="finance-cost-search"><button id="finance-cost-clear-search"></button></div><div class="finance-cost-stats" hidden><strong id="finance-cost-stat-qty"></strong><strong id="finance-cost-stat-total"></strong><strong id="finance-cost-stat-profit"></strong></div><div id="finance-cost-quality" hidden></div><span id="finance-sales-range"></span><button id="finance-sales-first"></button><button id="finance-sales-last"></button>');
+    $('#finance-sales-modal').append('<div class="finance-cost-export-actions"><button class="finance-cost-export" data-format="csv"></button><button class="finance-cost-export" data-format="excel"></button><button class="finance-cost-export" data-format="print"></button></div>');
+    $('#finance-sales-table').prepend('<thead id="finance-sales-cost-head"><tr><th>SKU</th><th>Lots</th><th>Product</th><th>Qty</th><th>Purchase</th><th>Selling</th><th>Cost</th><th>Profit</th></tr></thead>');
+    $('<div id="finance-sales-controls">').insertBefore('#finance-sales-table').append($('#finance-sales-summary, #finance-sales-page-size, #finance-sales-refresh'));
+    state.downloads = [];
+    dom.window.URL.createObjectURL = blob => { state.downloads.push(blob); return 'blob:export'; };
+    dom.window.URL.revokeObjectURL = () => {};
+    dom.window.HTMLAnchorElement.prototype.click = function() { state.filename = this.download; };
     dom.window.$ = dom.window.jQuery = $;
     $.fn.modal = function(action) {
         if (action === 'show') { this.addClass('in').trigger('shown.bs.modal'); }
@@ -167,6 +175,31 @@ function openQuickCost(f, requestIndex) {
     f.requests[requestIndex].success({lots: [{id: 1, lot: 'LOT-01', reference: 'PUR-1', purchase_price: 50}], cost_version: 'a'.repeat(64), update_url: '/cost/main/1'});
     assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
 }
+test('cost price links open the matching purchase form in a modal and refresh details on close', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/old-quick-cost',
+        purchase_edit_links: [{lot: 'SERIAL-1', reference: 'PUR-12', url: '/purchases/12/edit'}, {lot: 'SERIAL-2', reference: 'PUR-13', url: '/purchases/13/edit'}]}]});
+    const links = f.$('.finance-cost-price-edit-link');
+    assert.equal(links.length, 2);
+    assert.equal(links.first().attr('href'), '/purchases/12/edit');
+    assert.equal(links.first().attr('target'), undefined);
+    assert.match(f.$('#finance-sales-table tbody').text(), /SERIAL-1 · PUR-12/);
+    assert.equal(f.$('.finance-cost-price-edit').length, 0);
+    assert.equal(f.requests.length, 1);
+    links.first().trigger('click');
+    assert.equal(f.$('#finance-purchase-edit-modal').hasClass('in'), true);
+    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), '/purchases/12/edit');
+    assert.match(f.$('#finance-purchase-edit-title').text(), /SERIAL-1 · PUR-12/);
+    f.$('#finance-purchase-edit-modal').modal('hide');
+    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), 'about:blank');
+    assert.equal(f.$('body').hasClass('modal-open'), true);
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.requests[1].url, f.requests[0].url);
+    f.requests[1].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/old-quick-cost', purchase_edit_links: []}]});
+    assert.equal(f.$('.finance-cost-price-edit, .finance-cost-price-edit-link').length, 0);
+});
+
 test('quick cost editing loads the original lot, saves with CSRF and refreshes filtered totals', () => {
     const f = fixture();
     f.$('head').append('<meta name="csrf-token" content="csrf-token">');
@@ -205,6 +238,26 @@ test('canceling or rejecting an original-lot price edit keeps the recorded cost 
     assert.equal(f.$('#finance-purchase-price-modal form button').first().prop('disabled'), false);
 });
 
+test('quick price load failures show the HTTP status when the server has no JSON error', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/cost/main/1'}]});
+    f.$('.finance-cost-price-edit').trigger('click');
+    f.requests[1].error({status: 404});
+    assert.match(f.$('.purchase-lot-price-error').text(), /HTTP 404/);
+    assert.match(f.$('.purchase-lot-price-diagnostics').text(), /GET \/cost\/main\/1\nHTTP 404/);
+    assert.equal(f.$('.purchase-lot-price-save').prop('disabled'), true);
+    assert.equal(f.$('.purchase-lot-price-loading').prop('hidden'), true);
+    f.$('.finance-cost-price-edit').trigger('click');
+    f.requests[2].error({status: 200}, 'parsererror');
+    assert.match(f.$('.purchase-lot-price-error').text(), /HTTP 200, invalid JSON/);
+    f.$('.finance-cost-price-edit').trigger('click');
+    assert.equal(f.$('.purchase-lot-price-diagnostics').prop('hidden'), true);
+    f.requests[3].error({status: 0}, 'error');
+    assert.match(f.$('.purchase-lot-price-error').text(), /HTTP 0/);
+    assert.match(f.$('.purchase-lot-price-diagnostics').text(), /HTTP 0/);
+});
+
 test('POS total opens the actual Stock Sell Report in a filtered modal and stops it on close', () => {
     const f = fixture();
     f.$('.finance-pos-report-details').trigger('click');
@@ -221,4 +274,90 @@ test('POS total opens the actual Stock Sell Report in a filtered modal and stops
     assert.equal(f.$('#finance-pos-report-loading').prop('hidden'), true);
     f.$('#finance-pos-report-modal').trigger('hidden.bs.modal');
     assert.equal(f.$('#finance-pos-report-frame').attr('src'), 'about:blank');
+});
+
+function exportResult() {
+    return {units: -2, amount: -40, profit_loss: -10, rows: [{sku: '001', lots: 'LOT,01', product: '=SUM(1,2)', units: -2, purchase_price: 20, selling_price: 25, amount: -40, profit_loss: -10}, {sku: '002', product: '<script>bad()</script>', units: 1, purchase_price: null, amount: null, profit_loss: null}]};
+}
+test('CSV toolbar exports all filtered rows, preserves sorting and protects spreadsheet text', async () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.$('#finance-cost-search').val('LOT');
+    f.$('[data-format="csv"]').trigger('click');
+    const request = f.requests[1];
+    assert.equal(request.url, f.requests[0].url);
+    assert.deepEqual(JSON.parse(JSON.stringify(request.data)), {page: 1, per_page: -1, sort: 'sku', direction: 'asc', q: 'LOT'});
+    assert.equal(f.$('[data-format="csv"]').prop('disabled'), true);
+    request.success(exportResult());
+    request.complete();
+    const reader = new f.dom.window.FileReader();
+    const content = await new Promise(resolve => { reader.onload = () => resolve(reader.result); reader.readAsText(f.state.downloads[0]); });
+    assert.ok(content.includes('"\'=SUM(1,2)"'));
+    assert.ok(content.includes('"LOT,01"'));
+    assert.ok(content.includes('"-40"'));
+    assert.equal(f.state.filename, 'cost-of-goods-sold.csv');
+    assert.equal(f.$('[data-format="csv"]').prop('disabled'), false);
+});
+test('Excel toolbar creates typed worksheet cells with literal product text and missing costs', async () => {
+    const f = fixture(), files = {};
+    f.dom.window.JSZip = function() {
+        this.file = (name, text) => { files[name] = text; };
+        this.generate = () => new f.dom.window.Blob(['xlsx']);
+    };
+    f.$('[data-cost-details]').trigger('click');
+    f.$('[data-format="excel"]').trigger('click');
+    f.requests[1].success(exportResult());
+    await Promise.resolve();
+    const sheet = new f.dom.window.DOMParser().parseFromString(files['xl/worksheets/sheet1.xml'], 'application/xml');
+    assert.equal(sheet.querySelector('parsererror'), null);
+    assert.equal(sheet.querySelector('c[r="A2"]').getAttribute('t'), 'inlineStr');
+    assert.equal(sheet.querySelector('c[r="A2"] t').textContent, '001');
+    assert.equal(sheet.querySelector('c[r="C2"] t').textContent, '=SUM(1,2)');
+    assert.equal(sheet.querySelector('c[r="G2"] v').textContent, '-40');
+    assert.equal(sheet.querySelector('c[r="G3"] t').textContent, '—');
+    assert.equal(sheet.querySelectorAll('f').length, 0);
+    assert.equal(Object.keys(files).length, 5);
+    assert.equal(f.state.filename, 'cost-of-goods-sold.xlsx');
+});
+test('print toolbar uses all matching rows and inserts product names as safe text', () => {
+    const f = fixture();
+    const preview = new JSDOM('<html><head></head><body></body></html>').window;
+    let printed = false;
+    preview.focus = () => {};
+    preview.print = () => { printed = true; };
+    f.dom.window.open = () => preview;
+    f.$('[data-cost-details]').trigger('click');
+    f.$('[data-format="print"]').trigger('click');
+    f.requests[1].success(exportResult());
+    assert.equal(printed, true);
+    assert.equal(preview.document.querySelectorAll('tbody tr').length, 2);
+    assert.equal(preview.document.querySelectorAll('script').length, 0);
+    assert.match(preview.document.body.textContent, /<script>bad/);
+    assert.equal(preview.document.querySelectorAll('tfoot tr').length, 1);
+});
+test('toolbar reports export failures and discards responses after closing the list', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.$('[data-format="csv"]').trigger('click');
+    f.requests[1].error({responseJSON: {message: 'Forbidden'}});
+    f.requests[1].complete();
+    assert.equal(f.$('#finance-sales-error').text(), 'Forbidden');
+    assert.equal(f.$('[data-format="csv"]').prop('disabled'), false);
+    f.$('[data-format="csv"]').trigger('click');
+    f.$('#finance-sales-modal').trigger('hidden.bs.modal');
+    f.requests[2].success(exportResult());
+    assert.equal(f.state.downloads.length, 0);
+});
+
+test('cost toolbar groups row controls and restores them when reopening ordinary sales', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    assert.equal(f.$('.finance-cost-tools #finance-sales-page-size').length, 1);
+    assert.equal(f.$('.finance-cost-tools #finance-sales-refresh').length, 1);
+    assert.equal(f.$('.finance-cost-export-actions').prop('hidden'), false);
+    f.$('.finance-sales-details').first().trigger('click');
+    assert.equal(f.$('.finance-cost-tools #finance-sales-controls').length, 0);
+    assert.equal(f.$('#finance-sales-controls').length, 1);
+    assert.equal(f.$('.finance-cost-tools').prop('hidden'), true);
+    assert.equal(f.$('.finance-cost-export-actions').prop('hidden'), true);
 });

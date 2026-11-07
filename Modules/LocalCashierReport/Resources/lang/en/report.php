@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'finance_cost_lot_unavailable' => 'This cost is not linked to an editable purchase receipt in your permitted locations. Refresh the sales list and open the original receipt to correct its price.',
     'finance_remaining_categories' => 'Remaining categories',
     'finance_print_browser_help' => 'Choose A4 paper and Portrait or Landscape under Layout in the browser print settings.',
     'print_orientation' => 'Print orientation',

@@ -57,7 +57,7 @@ class FinancialPurchaseCostController extends Controller
             ->select('p.*', 't.ref_no as purchase_reference')->orderBy('p.id');
         if ($lock) $query->lockForUpdate();
         $lots = $query->get();
-        abort_unless($lots->count() === count($ids), 404);
+        abort_unless($lots->count() === count($ids), 422, ReportLanguage::text('finance_cost_lot_unavailable'));
 
         return $lots;
     }

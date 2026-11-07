@@ -11,9 +11,13 @@ class StockPurchaseCostController extends FinancialPurchaseCostController
 {
     protected function scope(Request $request, string $source, int $line): array
     {
-        abort_unless($source === 'main' && $request->user()->can('purchase.update'), 403);
+        abort_unless($source === 'main' && $request->user()->can('purchase.update'), 403, 'Unauthorized action.');
         $user = $request->user();
-        abort_unless($user->hasAnyPermission(['stock_report.view', 'purchase_n_sell_report.view', 'sell.view', 'sell.create', 'direct_sell.access', 'view_own_sell_only']), 403);
+        // Match StockReportController: can() also honors administrator grants
+        // from Gate::before, unlike Spatie's direct hasAnyPermission() lookup.
+        $canViewReport = collect(['stock_report.view', 'purchase_n_sell_report.view', 'sell.view', 'sell.create', 'direct_sell.access', 'view_own_sell_only'])
+            ->contains(fn ($permission) => $user->can($permission));
+        abort_unless($canViewReport, 403, 'Unauthorized action.');
         $business = (int) $request->session()->get('user.business_id');
         $allowed = $user->permitted_locations();
         if ($allowed === 'all') $allowed = DB::table('business_locations')->where('business_id', $business)->pluck('id')->all();
