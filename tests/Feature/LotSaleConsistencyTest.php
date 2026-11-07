@@ -5748,6 +5748,23 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertCount(2, collect($response['data'])->where('movement_type_key', 'transfer'));
     }
 
+    public function test_lot_history_purchase_price_shows_actual_receipt_cost_even_after_a_stale_transfer(): void
+    {
+        [, $transferReceipt] = $this->historyTransferFixture();
+        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 2549]);
+        DB::table('purchase_lines')->where('transaction_id', $transferReceipt->id)->update(['purchase_price_inc_tax' => 2540]);
+        $response = $this->lotHistoryResponse('INVOICE-LOT');
+        $this->assertArrayNotHasKey('error', $response);
+        $this->assertNotEmpty($response['data']);
+        foreach ($response['data'] as $movement) {
+            $this->assertStringContainsString('data-orig-value="2549"', $movement['purchase_price']);
+        }
+        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 0]);
+        foreach ($this->lotHistoryResponse('INVOICE-LOT')['data'] as $movement) {
+            $this->assertStringContainsString('data-orig-value="0"', $movement['purchase_price']);
+        }
+    }
+
     public function test_lot_history_does_not_invent_incoming_stock_for_a_different_receiving_lot(): void
     {
         [, $purchase] = $this->historyTransferFixture();

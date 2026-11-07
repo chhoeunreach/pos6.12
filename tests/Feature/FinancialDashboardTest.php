@@ -571,8 +571,8 @@ class FinancialDashboardTest extends TestCase
             DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'lot_number' => 'SERIAL-1', 'variation_id' => $id === 17 ? 2 : 1, 'purchase_price_inc_tax' => 90]);
         }
         $row = $this->salesRequest([], true)['rows'][0];
-        $this->assertSame([['lot' => 'SERIAL-1', 'reference' => 'PUR-12', 'url' => route('purchases.edit', 12)]], $row['purchase_edit_links']);
-        $this->assertEquals(60, $row['purchase_price']);
+        $this->assertSame([['lot' => 'SERIAL-1', 'reference' => 'PUR-12', 'purchase_price' => 90, 'url' => route('purchases.edit', 12)]], $row['purchase_edit_links']);
+        $this->assertEquals(90, $row['purchase_price']);
 
         $this->salesPermissions = ['sell.view'];
         $this->assertSame([], $this->salesRequest([], true)['rows'][0]['purchase_edit_links']);
@@ -586,6 +586,28 @@ class FinancialDashboardTest extends TestCase
         DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'OPENING-LOT']);
         DB::table('transactions')->where('id', 10)->update(['type' => 'opening_stock']);
         $this->assertSame([], $this->salesRequest([], true)['rows'][0]['purchase_edit_links']);
+    }
+
+    public function test_actual_purchase_lot_price_is_used_for_sale_cost_returns_and_dashboard_totals()
+    {
+        $this->salesPermissions = ['sell.view', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'SJQWD2F2GCD', 'purchase_price_inc_tax' => 2540]);
+        DB::table('transactions')->insert(['id' => 32765, 'type' => 'purchase', 'status' => 'received', 'transaction_date' => '2026-11-07 10:00:00', 'ref_no' => 'PO2026/2209']);
+        DB::table('purchase_lines')->insert(['id' => 32765, 'transaction_id' => 32765, 'lot_number' => 'SJQWD2F2GCD', 'purchase_price_inc_tax' => 2549]);
+        $row = $this->salesRequest([], true)['rows'][0];
+        $this->assertEquals(2549, $row['purchase_price']);
+        $this->assertEquals(2549, $row['purchase_edit_links'][0]['purchase_price']);
+        $this->assertSame('PO2026/2209', $row['purchase_edit_links'][0]['reference']);
+        $this->assertSame(route('purchases.edit', 32765), $row['purchase_edit_links'][0]['url']);
+        $this->assertEquals(2549, $this->build()['total']['cost']);
+        $this->assertEquals(110 - 2549, $this->build()['total']['gross_profit']);
+        // A sale allocated to a stale transfer lot must use the same receipt.
+        DB::table('transactions')->where('id', 10)->update(['type' => 'purchase_transfer']);
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 2]);
+        foreach ($this->salesRequest([], true)['rows'] as $sale) $this->assertEquals(2549, $sale['purchase_price']);
+        $this->assertEquals(2549, $this->build()['total']['cost']);
     }
 
     public function test_sales_returns_costs_expense_refunds_and_margins_use_their_own_dates()

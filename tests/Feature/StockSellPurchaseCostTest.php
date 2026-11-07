@@ -146,6 +146,23 @@ class StockSellPurchaseCostTest extends TestCase
         $this->assertTrue($method->invoke($controller, $row, 1, [1])->isEmpty());
     }
 
+    public function test_each_lot_has_a_safe_history_link_and_history_permission_is_respected()
+    {
+        $controller = $this->app->make(StockReportController::class);
+        $method = new \ReflectionMethod($controller, 'lotHistoryLinks');
+        $method->setAccessible(true);
+        $html = $method->invoke($controller, 'SJQWD2F2GCD, LOT <script>, SJQWD2F2GCD', true);
+        $this->assertSame(2, substr_count($html, '<a '));
+        $this->assertStringContainsString(e(ssi_route('ssi.lot.history', ['lot' => 'SJQWD2F2GCD', 'finance_embed' => 1])), $html);
+        $this->assertStringContainsString('ssi-lot-history-link', $html);
+        $this->assertStringContainsString('LOT &lt;script&gt;', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+        $readOnly = $method->invoke($controller, 'LOT-1, LOT-2', false);
+        $this->assertStringNotContainsString('<a ', $readOnly);
+        $this->assertStringContainsString('LOT-1', $readOnly);
+        $this->assertStringContainsString('—', $method->invoke($controller, null, true));
+    }
+
     public function test_corrected_batch_cost_updates_weighted_price_and_total()
     {
         $before = $this->reportCost();
@@ -260,14 +277,14 @@ class StockSellPurchaseCostTest extends TestCase
         $this->assertEquals(80, $cost->purchase_price);
     }
 
-    public function test_exact_lot_match_does_not_use_another_sku_business_or_location()
+    public function test_exact_lot_match_does_not_use_another_sku_business_or_unreceived_purchase()
     {
         DB::table('transaction_sell_lines')->update(['lot_no_line_id' => 1]);
         DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => null]);
         DB::table('purchase_lines')->insert([
             'id' => 3, 'transaction_id' => 2, 'variation_id' => 2, 'lot_number' => 'LOT-1', 'purchase_price_inc_tax' => 999,
         ]);
-        foreach ([['business_id' => 2], ['location_id' => 2]] as $index => $attributes) {
+        foreach ([['business_id' => 2], ['status' => 'ordered']] as $index => $attributes) {
             $id = 20 + $index;
             DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'transaction_date' => '2026-10-10']);
             DB::table('purchase_lines')->insert([
@@ -275,6 +292,26 @@ class StockSellPurchaseCostTest extends TestCase
             ]);
         }
         $this->assertEquals(80, $this->reportCost()->purchase_price);
+    }
+
+    public function test_original_purchase_price_overrides_stale_transfer_cost_for_explicit_and_allocated_lots()
+    {
+        DB::table('transactions')->where('id', 1)->update(['type' => 'purchase_transfer']);
+        DB::table('purchase_lines')->where('id', 1)->update(['lot_number' => 'SJQWD2F2GCD', 'purchase_price_inc_tax' => 2540]);
+        DB::table('transactions')->insert(['id' => 32765, 'type' => 'purchase', 'transaction_date' => '2026-11-07', 'location_id' => 2]);
+        DB::table('purchase_lines')->insert(['id' => 32765, 'transaction_id' => 32765, 'lot_number' => 'SJQWD2F2GCD', 'purchase_price_inc_tax' => 2549]);
+        DB::table('transaction_sell_lines')->update(['quantity' => 1, 'lot_no_line_id' => 1]);
+        DB::table('transaction_sell_lines_purchase_lines')->delete();
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 1]);
+        foreach ([1, null] as $selectedLot) {
+            DB::table('transaction_sell_lines')->update(['lot_no_line_id' => $selectedLot]);
+            $cost = $this->reportCost();
+            $this->assertEquals(2549, $cost->purchase_price);
+            $this->assertEquals(2549, $cost->purchase_total);
+            $this->assertEquals(-204, 2345 - $cost->purchase_price);
+        }
+        DB::table('purchase_lines')->where('id', 32765)->update(['purchase_price_inc_tax' => 0]);
+        $this->assertEquals(0, $this->reportCost()->purchase_price);
     }
 
     public function test_purchase_activity_displays_old_and_corrected_cost_including_zero()

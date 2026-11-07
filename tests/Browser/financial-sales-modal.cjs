@@ -178,11 +178,13 @@ function openQuickCost(f, requestIndex) {
 test('cost price links open the matching purchase form in a modal and refresh details on close', () => {
     const f = fixture();
     f.$('[data-cost-details]').trigger('click');
-    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/old-quick-cost',
-        purchase_edit_links: [{lot: 'SERIAL-1', reference: 'PUR-12', url: '/purchases/12/edit'}, {lot: 'SERIAL-2', reference: 'PUR-13', url: '/purchases/13/edit'}]}]});
+    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 2540, cost_edit_url: '/old-quick-cost',
+        purchase_edit_links: [{lot: 'SERIAL-1', reference: 'PUR-12', purchase_price: 2549, url: '/purchases/12/edit'}, {lot: 'SERIAL-2', reference: 'PUR-13', purchase_price: 2540, url: '/purchases/13/edit'}]}]});
     const links = f.$('.finance-cost-price-edit-link');
     assert.equal(links.length, 2);
     assert.equal(links.first().attr('href'), '/purchases/12/edit');
+    assert.match(links.first().text(), /Latest purchase: \$2,549\.00/);
+    assert.match(f.$('#finance-sales-table tbody').text(), /Cost used: \$2,540\.00/);
     assert.equal(links.first().attr('target'), undefined);
     assert.match(f.$('#finance-sales-table tbody').text(), /SERIAL-1 · PUR-12/);
     assert.equal(f.$('.finance-cost-price-edit').length, 0);

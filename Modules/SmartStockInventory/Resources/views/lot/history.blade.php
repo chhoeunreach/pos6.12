@@ -197,6 +197,7 @@
                                     <th>{{ __('lang_v1.lot_number') }}</th>
                                     <th>{{ __('product.sku') }}</th>
                                     <th>{{ __('business.product') }}</th>
+                                    <th class="text-right">{{ __('lang_v1.purchase_price_inc_tax') }}</th>
                                     <th>Type</th>
                                     <th>Ref No.</th>
                                     <th>Location</th>
@@ -269,6 +270,7 @@
                 { data: 'lot_number', name: 'lot_number' },
                 { data: 'sku', name: 'sku' },
                 { data: 'product', name: 'product' },
+                { data: 'purchase_price', name: 'purchase_price', className: 'text-right', searchable: false },
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
                 { data: 'location_display', name: 'location_display' },

@@ -6,6 +6,7 @@ use App\BusinessLocation;
 use App\Contact;
 use App\Product;
 use App\PurchaseLine;
+use App\Services\PurchaseLotCost;
 use App\StockAdjustmentLine;
 use App\Transaction;
 use App\TransactionSellLine;
@@ -37,13 +38,20 @@ class StockReportController extends Controller
     protected function linkedPurchaseCosts()
     {
         // This report shows original sales; returns are reported separately.
+        $receipt = PurchaseLotCost::receiptValue('pl', 'cost_purchase.business_id', 'cost_line.variation_id');
+        $price = "COALESCE($receipt, pl.purchase_price_inc_tax)";
         return DB::table('transaction_sell_lines_purchase_lines as tspl')
             ->leftJoin('purchase_lines as pl', 'tspl.purchase_line_id', '=', 'pl.id')
+            ->join('transaction_sell_lines as cost_line', 'cost_line.id', '=', 'tspl.sell_line_id')
+            ->join('transactions as cost_purchase', 'cost_purchase.id', '=', 'pl.transaction_id')
+            ->join('transactions as cost_sale', 'cost_sale.id', '=', 'cost_line.transaction_id')
+            ->whereColumn('pl.variation_id', 'cost_line.variation_id')
+            ->whereColumn('cost_purchase.business_id', 'cost_sale.business_id')
             ->select(
                 'tspl.sell_line_id',
-                DB::raw('SUM(tspl.quantity * pl.purchase_price_inc_tax) as purchase_total'),
+                DB::raw("SUM(tspl.quantity * ($price)) as purchase_total"),
                 DB::raw('SUM(tspl.quantity) as purchase_qty'),
-                DB::raw('SUM(CASE WHEN pl.purchase_price_inc_tax IS NOT NULL THEN tspl.quantity ELSE 0 END) as costed_qty')
+                DB::raw("SUM(CASE WHEN ($price) IS NOT NULL THEN tspl.quantity ELSE 0 END) as costed_qty")
             )
             ->whereNotNull('tspl.sell_line_id')
             ->where('tspl.quantity', '>', 0)
@@ -60,12 +68,27 @@ class StockReportController extends Controller
         if ($allowedLocations !== 'all') $query->whereIn('t.location_id', $allowedLocations);
 
         return $query->orderByDesc('t.transaction_date')->orderByDesc('t.id')->orderByDesc('p.id')
-            ->get(['t.id', 't.ref_no', 'p.lot_number'])->unique('lot_number')->values();
+            ->get(['t.id', 't.ref_no', 'p.lot_number', 'p.purchase_price_inc_tax'])->unique('lot_number')->values();
+    }
+
+    protected function lotHistoryLinks(?string $lots, bool $canViewHistory): string
+    {
+        $numbers = array_unique(array_filter(array_map('trim', explode(',', (string) $lots)), fn ($lot) => $lot !== ''));
+        if (!$numbers) return '<span class="ssi-sales-muted">—</span>';
+
+        return collect($numbers)->map(function ($lot) use ($canViewHistory) {
+            if (!$canViewHistory) return '<span class="ssi-lot-badge">'.e($lot).'</span>';
+            $url = ssi_route('ssi.lot.history', ['lot' => $lot, 'finance_embed' => 1]);
+            return '<a class="ssi-lot-badge ssi-lot-history-link" href="'.e($url).'" title="'.e(__('lang_v1.lot_history').' · '.$lot).'">'
+                .'<i class="fa fa-history" aria-hidden="true"></i> '.e($lot).'</a>';
+        })->implode(' ');
     }
 
     protected function purchaseCostExpressions()
     {
+        $receipt = PurchaseLotCost::receiptValue('lot_pl', 't.business_id', 'transaction_sell_lines.variation_id');
         $price = "COALESCE(
+            $receipt,
             CASE WHEN lot_pl.variation_id = transaction_sell_lines.variation_id
                 THEN lot_pl.purchase_price_inc_tax END,
             (
@@ -275,6 +298,9 @@ class StockReportController extends Controller
                 ->first();
 
             return Datatables::of($sells)
+                ->editColumn('lots', function ($row) {
+                    return $this->lotHistoryLinks($row->lots, auth()->user()->can('stock_inventory.view'));
+                })
                 ->editColumn('transaction_date', function ($row) {
                     return $this->copySafeDateCell($row->transaction_date);
                 })
@@ -304,11 +330,15 @@ class StockReportController extends Controller
                     if (!auth()->user()->can('purchase.update')) return $value;
                     $references = $this->latestPurchaseReferences($row, (int) $business_id, $permitted_locations);
                     if ($references->isEmpty()) return $value;
-                    return $references->map(function ($purchase) use ($value) {
+                    $differentCost = $references->contains(fn ($purchase) => $purchase->purchase_price_inc_tax === null || abs((float) $purchase->purchase_price_inc_tax - (float) $row->purchase_price) > .00005);
+                    $costUsed = $differentCost ? '<small class="ssi-sales-cost-used">'.e(__('localcashierreport::report.finance_cost_used')).': '.$value.'</small>' : '';
+                    return $costUsed.$references->map(function ($purchase) use ($differentCost) {
                         $reference = $purchase->ref_no ?: '#'.$purchase->id;
                         $title = $purchase->lot_number.' · '.$reference;
+                        $value = $purchase->purchase_price_inc_tax === null ? 'Unavailable' : '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$purchase->purchase_price_inc_tax.'">'.$purchase->purchase_price_inc_tax.'</span>';
+                        $label = $differentCost ? '<small class="ssi-sales-cost-used">'.e(__('localcashierreport::report.finance_latest_purchase')).'</small>' : '';
                         return '<a class="ssi-purchase-reference-edit" href="'.e(ssi_route('purchases.edit', $purchase->id)).'" title="'.e($title).'">'
-                            .$value.' <i class="fa fa-pencil" aria-hidden="true"></i></a><small style="display:block">'.e($title).'</small>';
+                            .$label.$value.' <i class="fa fa-pencil" aria-hidden="true"></i></a><small style="display:block">'.e($title).'</small>';
                     })->implode('<br>');
                 })
                 ->editColumn('purchase_profit_loss', function ($row) {
@@ -368,7 +398,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_profit_loss', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['lots', 'transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_profit_loss', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }

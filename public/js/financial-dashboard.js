@@ -296,11 +296,18 @@
                             if (Array.isArray(row.purchase_edit_links)) {
                                 if (row.purchase_edit_links.length) {
                                     var purchaseCell = tr.find('td').eq(4).empty();
+                                    var differentPurchaseCost = row.purchase_edit_links.some(function(purchase) {
+                                        return Object.prototype.hasOwnProperty.call(purchase, 'purchase_price') &&
+                                            (purchase.purchase_price === null || row.purchase_price === null || Math.abs(Number(purchase.purchase_price) - Number(row.purchase_price)) > 0.00005);
+                                    });
+                                    if (differentPurchaseCost) purchaseCell.append($('<small class="finance-cost-meta">')
+                                        .text((labels.costUsed || 'Cost used') + ': ' + price(row.purchase_price)));
                                     row.purchase_edit_links.forEach(function(purchase, index) {
                                         if (index) purchaseCell.append($('<br>'));
                                         purchaseCell.append($('<a class="finance-cost-price-edit-link">')
                                             .attr('href', purchase.url).attr('title', purchase.lot + ' · ' + purchase.reference)
-                                            .text(price(row.purchase_price) + ' ✎'));
+                                            .text((differentPurchaseCost ? (labels.latestPurchase || 'Latest purchase') + ': ' : '') +
+                                                price(Object.prototype.hasOwnProperty.call(purchase, 'purchase_price') ? purchase.purchase_price : row.purchase_price) + ' ✎'));
                                         purchaseCell.append($('<small class="finance-cost-meta">').text(purchase.lot + ' · ' + purchase.reference));
                                     });
                                 }

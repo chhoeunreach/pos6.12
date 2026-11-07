@@ -2,6 +2,7 @@
 
 namespace Modules\LocalCashierReport\Services;
 
+use App\Services\PurchaseLotCost;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -251,6 +252,9 @@ class FinancialDashboardReport
     public function costQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $byTransaction = false, bool $byLine = false)
     {
         $db = DB::connection($connection);
+        $allocatedReceipt = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id');
+        $allocatedReceiptId = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id', 'id');
+        $allocatedPrice = "COALESCE($allocatedReceipt, p.purchase_price_inc_tax)";
         $allocations = $db->table('transaction_sell_lines_purchase_lines as a')
             ->leftJoin('purchase_lines as p', 'p.id', '=', 'a.purchase_line_id')
             ->leftJoin('transactions as pt', 'pt.id', '=', 'p.transaction_id')
@@ -258,10 +262,10 @@ class FinancialDashboardReport
             ->whereColumn('p.variation_id', 'allocated_line.variation_id')
             ->where('a.quantity', '>', 0)->where('pt.business_id', $businessId)
             ->groupBy('a.sell_line_id')->select('a.sell_line_id')
-            ->selectRaw('SUM(a.quantity) as quantity, SUM(a.quantity * p.purchase_price_inc_tax) as cost')
-            ->selectRaw('SUM(CASE WHEN p.purchase_price_inc_tax IS NOT NULL THEN a.quantity ELSE 0 END) as costed_quantity');
-        if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots, GROUP_CONCAT(DISTINCT p.id) as purchase_ids");
-        // Return lines point at the original sale, preserving its historical cost.
+            ->selectRaw("SUM(a.quantity) as quantity, SUM(a.quantity * ($allocatedPrice)) as cost")
+            ->selectRaw("SUM(CASE WHEN ($allocatedPrice) IS NOT NULL THEN a.quantity ELSE 0 END) as costed_quantity");
+        if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots, GROUP_CONCAT(DISTINCT COALESCE($allocatedReceiptId, p.id)) as purchase_ids");
+        // Returns use the original sale's lot and the same actual purchase cost.
         $query = $this->transactions($connection, $businessId, $locationIds, $filters)
             ->whereIn('t.type', ['sell', 'sell_return'])
             ->join('transaction_sell_lines as line', 'line.transaction_id', '=', 't.id')
@@ -284,8 +288,10 @@ class FinancialDashboardReport
                 $join->on('lot_tx.id', '=', 'lot.transaction_id')->on('lot_tx.business_id', '=', 't.business_id');
             })
             ->leftJoinSub($allocations, 'allocated', fn ($join) => $join->on('allocated.sell_line_id', '=', 'sold.id'));
+        $directReceipt = PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id');
+        $directReceiptId = PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id', 'id');
         $recorded = "COALESCE(
-            CASE WHEN lot_tx.id IS NOT NULL THEN lot.purchase_price_inc_tax END,
+            CASE WHEN lot_tx.id IS NOT NULL THEN COALESCE($directReceipt, lot.purchase_price_inc_tax) END,
             CASE WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 AND ABS(allocated.costed_quantity - allocated.quantity) < 0.00001 THEN allocated.cost / NULLIF(allocated.quantity, 0) END
         )";
         $historical = "COALESCE($recorded,
@@ -308,7 +314,7 @@ class FinancialDashboardReport
                 ->select('line.id', 't.id as transaction_id', 't.location_id', 't.transaction_date', 't.invoice_no', 'product.name as product', 'v.name as variation_name')
                 ->selectRaw("COALESCE(NULLIF(v.sub_sku, ''), product.sku) as sku, COALESCE(NULLIF(lot.lot_number, ''), allocated.lots) as lots")
                 ->addSelect('product.enable_stock', 'sold.variation_id')
-                ->selectRaw("CASE WHEN lot_tx.id IS NOT NULL THEN CAST(lot.id AS CHAR)
+                ->selectRaw("CASE WHEN lot_tx.id IS NOT NULL THEN CAST(COALESCE($directReceiptId, lot.id) AS CHAR)
                     WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 THEN allocated.purchase_ids
                     ELSE (SELECT CAST(recent.id AS CHAR) FROM purchase_lines as recent
                         INNER JOIN transactions as purchase ON purchase.id = recent.transaction_id

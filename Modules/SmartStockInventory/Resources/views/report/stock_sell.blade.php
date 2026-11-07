@@ -1,12 +1,22 @@
 @extends('smartstockinventory::layouts.master')
 @section('page_title', 'Stock Sell Report')
+@section('css')
+<link rel="stylesheet" href="{{ asset('css/stock-sell-report.css') }}?v={{ filemtime(public_path('css/stock-sell-report.css')) }}">
+@endsection
 @section('module_content')
 
-<section class="content-header no-print">
-    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">Stock Sell Report</h1>
-</section>
-
-<section class="content no-print">
+<section class="content no-print ssi-sales-report">
+    <div class="ssi-sales-heading">
+        <div><span class="ssi-sales-eyebrow">POS · SALES</span><h2>តម្លៃសរុប (POS)</h2><p>របាយការណ៍លក់ស្តុក · Stock Sell Report</p></div>
+        <span class="ssi-sales-period"><i class="fa fa-calendar" aria-hidden="true"></i> <span id="ssi-sales-period"></span></span>
+    </div>
+    <div class="ssi-sales-metrics" aria-live="polite">
+        <div class="ssi-sales-metric"><span>ចំនួនទំនិញ · Units sold</span><strong id="ssi-sales-metric-quantity">—</strong><small>ក្នុងលក្ខខណ្ឌតម្រងដែលបានជ្រើសរើស</small></div>
+        <div class="ssi-sales-metric ssi-sales-metric-primary"><span>តម្លៃសរុប · Sales total</span><strong id="ssi-sales-metric-total">—</strong><small>Filtered sales amount</small></div>
+        <div class="ssi-sales-metric"><span>ចំណេញ / ខាត · Profit / loss</span><strong id="ssi-sales-metric-profit">—</strong><small>Sales less purchase cost</small></div>
+        <div class="ssi-sales-metric"><span>ថ្លៃដើមសរុប · Purchase cost</span><strong id="ssi-sales-metric-cost">—</strong><small>Cost used for filtered sales</small></div>
+    </div>
+    <div class="ssi-sales-filter-card">
     @component('components.filters', ['title' => __('report.filters')])
         <div class="col-md-3">
             <div class="form-group">
@@ -16,7 +26,10 @@
         </div>
         @include('sell.partials.sell_list_filters', ['only' => ['sell_list_filter_customer_id', 'sell_list_filter_payment_status', 'sell_list_filter_date_range']])
     @endcomponent
+    </div>
 
+    <div class="ssi-sales-table-card">
+    <div class="ssi-sales-table-heading"><div><h3>បញ្ជីលក់ · Sales details</h3><p>ចុចលើឡូត៍ ដើម្បីមើលប្រវត្តិ · Click a lot to view its history.</p></div><span><i class="fa fa-arrows-h" aria-hidden="true"></i> Scroll to see all columns</span></div>
     @component('components.widget', ['class' => 'box-primary'])
         <div class="table-responsive">
             <table class="table table-bordered table-striped ajax_view" id="stock_sell_report_table" style="width: 100%;">
@@ -80,6 +93,7 @@
             </table>
         </div>
     @endcomponent
+    </div>
 </section>
 
 <section id="receipt_section" class="print_section"></section>
@@ -108,6 +122,8 @@
         var initialEnd = initialFilters && initialFilters.end ? moment(initialFilters.end, 'YYYY-MM-DD', true) : moment();
         if (!initialStart.isValid()) initialStart = moment();
         if (!initialEnd.isValid()) initialEnd = moment();
+        function updateReportPeriod(first, last) { $('#ssi-sales-period').text(first.format('DD MMM YYYY') + ' — ' + last.format('DD MMM YYYY')); }
+        updateReportPeriod(initialStart, initialEnd);
         $('#sell_list_filter_location_id').val(initialFilters && initialFilters.locations.length ? initialFilters.locations.map(String) : ['all']).trigger('change.select2');
 
         $('#sell_list_filter_date_range').daterangepicker(
@@ -116,6 +132,7 @@
                 endDate: initialEnd
             }),
             function (start, end) {
+                updateReportPeriod(start, end);
                 $('#sell_list_filter_date_range').val(start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format));
                 stock_sell_report_table.ajax.reload();
             }
@@ -124,6 +141,7 @@
 
         $('#sell_list_filter_date_range').on('cancel.daterangepicker', function() {
             $('#sell_list_filter_date_range').val('');
+            $('#ssi-sales-period').text('All dates');
             stock_sell_report_table.ajax.reload();
         });
 
@@ -155,6 +173,11 @@
             $('#stock_sell_footer_monthly').html(ssiFormatFooterMoney(totals.monthly));
             $('#stock_sell_footer_paid').html(ssiFormatFooterMoney(totals.paid));
             $('#stock_sell_footer_due').html(ssiFormatFooterMoney(totals.due));
+            $('#ssi-sales-metric-quantity').html(ssiFormatFooterQty(totals.quantity));
+            $('#ssi-sales-metric-total').html(ssiFormatFooterMoney(totals.total));
+            $('#ssi-sales-metric-profit').html(ssiFormatFooterMoney(totals.profit_loss))
+                .toggleClass('ssi-sales-negative', totals.profit_loss !== null && Number(totals.profit_loss) < 0);
+            $('#ssi-sales-metric-cost').html(ssiFormatFooterMoney(totals.purchase_total));
         });
 
         var stockSellButtons = $.map($.fn.dataTable.defaults.buttons || [], function(button) {
@@ -243,9 +266,11 @@
         });
 
         var purchaseModal = $('#ssi-purchase-reference-modal'), purchaseFrame = $('#ssi-purchase-reference-frame');
-        $(document).on('click', '.ssi-purchase-reference-edit', function(event) {
+        $(document).on('click', '.ssi-purchase-reference-edit, .ssi-lot-history-link', function(event) {
             event.preventDefault();
+            purchaseModal.data('editingPurchase', $(this).hasClass('ssi-purchase-reference-edit'));
             $('#ssi-purchase-reference-title').text($(this).attr('title'));
+            purchaseFrame.attr('title', $(this).attr('title'));
             $('#ssi-purchase-reference-loading').prop('hidden', false);
             purchaseFrame.attr('src', $(this).attr('href'));
             purchaseModal.modal('show');
@@ -258,7 +283,7 @@
                 if (doc && !doc.getElementById('ssi-purchase-embed-style')) {
                     var style = doc.createElement('style');
                     style.id = 'ssi-purchase-embed-style';
-                    style.textContent = '.main-header,.main-sidebar,.main-footer,.control-sidebar,#main_app_header,.side-bar{display:none!important}.content-wrapper{margin-left:0!important}.thetop>main{width:100%!important}';
+                    style.textContent = '.main-header,.main-sidebar,.main-footer,.control-sidebar,#main_app_header,.side-bar,.ssi-sidebar,.ssi-topbar,.ssi-header,.ssi-page-header,.ssi-action-bar{display:none!important}.content-wrapper{margin-left:0!important}.thetop>main{width:100%!important}.ssi-shell{display:block!important;padding:0!important}.ssi-main{width:100%!important;margin:0!important}';
                     doc.head.appendChild(style);
                 }
             } catch (error) { /* The browser keeps cross-origin documents isolated. */ }
@@ -266,6 +291,7 @@
         purchaseModal.on('shown.bs.modal', function() { $('.modal-backdrop').last().css('z-index', 1060); });
         purchaseModal.on('hidden.bs.modal', function() {
             purchaseFrame.attr('src', 'about:blank');
+            if (!purchaseModal.data('editingPurchase')) return;
             stock_sell_report_table.ajax.reload(null, false);
             if (window.parent !== window) window.parent.postMessage({type: 'financial-purchase-cost-updated'}, window.location.origin);
         });

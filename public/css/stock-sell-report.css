@@ -1,0 +1,54 @@
+.ssi-sales-report{--sales-ink:#173453;--sales-muted:#708198;--sales-line:#e2e9f1;color:var(--sales-ink);padding:18px!important;background:#f5f7fb}
+.ssi-sales-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}
+.ssi-sales-eyebrow{font-size:11px;font-weight:700;letter-spacing:1.8px;color:#527393}
+.ssi-sales-heading h2{font-size:25px;font-weight:700;line-height:1.65;margin:4px 0;color:#153451}
+.ssi-sales-heading p{margin:0;color:var(--sales-muted);font-size:13px}
+.ssi-sales-period{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--sales-line);border-radius:10px;padding:11px 15px;font-size:12px;white-space:nowrap}
+.ssi-sales-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+.ssi-sales-metric{background:#fff;border:1px solid var(--sales-line);border-radius:13px;padding:18px 20px;box-shadow:0 3px 10px #183b5b04;min-width:0}
+.ssi-sales-metric>span{display:block;color:#60768e;font-size:12px;line-height:1.8}
+.ssi-sales-metric strong{display:block;font-size:27px;font-weight:700;line-height:1.6;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ssi-sales-metric small{display:block;font-size:11px;color:var(--sales-muted);margin-top:5px;line-height:1.8}
+.ssi-sales-metric-primary{background:#153d65;border-color:#153d65;color:#fff}
+.ssi-sales-metric-primary>span,.ssi-sales-metric-primary small{color:#c6d7e8}
+.ssi-sales-negative{color:#c63845}
+.ssi-sales-filter-card{margin-bottom:18px}
+.ssi-sales-filter-card .box-title{font-size:15px!important;margin:0!important;padding:13px 16px!important}
+.ssi-sales-filter-card .box-header a{color:#375c7d!important;text-decoration:none}
+.ssi-sales-filter-card .box-body{display:flow-root;padding:6px 12px 14px}
+.ssi-sales-filter-card .form-group label{font-size:12px;color:#5a7087;margin-bottom:8px}
+.ssi-sales-filter-card .form-control{min-height:39px;border:1px solid #dce4ee;border-radius:7px;background:#fff}
+.ssi-sales-filter-card .select2-selection{min-height:39px;border-color:#dce4ee!important;border-radius:7px!important}
+.ssi-sales-table-card{background:#fff;border:1px solid var(--sales-line);border-radius:14px;overflow:hidden}
+.ssi-sales-table-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 20px;border-bottom:1px solid var(--sales-line)}
+.ssi-sales-table-heading h3{font-size:16px;line-height:1.7;font-weight:700;margin:0 0 3px}
+.ssi-sales-table-heading p,.ssi-sales-table-heading>span{font-size:11px;color:var(--sales-muted);margin:0;line-height:1.8}
+.ssi-sales-table-card .box{border:0;box-shadow:none;margin:0}
+.ssi-sales-table-card .table-responsive{padding:15px 18px;max-height:68vh;overflow:auto}
+.ssi-sales-table-card .dataTables_wrapper>.row{margin-bottom:14px}
+.ssi-sales-table-card .dataTables_filter input,.ssi-sales-table-card .dataTables_length select{border:1px solid #dce4ee;border-radius:7px;padding:7px 10px;height:35px}
+.ssi-sales-table-card .dt-buttons .btn{background:#fff;border:1px solid #dce4ee;color:#47627d;border-radius:6px!important;font-size:11px;margin:2px;padding:7px 10px;box-shadow:none}
+#stock_sell_report_table{font-size:12px;border:0!important;border-collapse:separate!important;border-spacing:0!important}
+#stock_sell_report_table thead th{position:sticky;top:0;z-index:2;background:#eef3f9!important;color:#49627c;font-size:11px;font-weight:700;padding:13px 18px 13px 12px;white-space:nowrap;border:0;border-bottom:1px solid #dce5ef!important}
+#stock_sell_report_table tbody td{padding:13px 12px;vertical-align:top;line-height:1.65;border:0;border-bottom:1px solid #edf1f6;font-variant-numeric:tabular-nums}
+#stock_sell_report_table tbody tr:nth-child(odd){background:#fff}
+#stock_sell_report_table tbody tr:nth-child(even){background:#fafbfd}
+#stock_sell_report_table tbody tr:hover{background:#f0f6fd}
+#stock_sell_report_table tbody td:nth-child(6){font-family:monospace;white-space:nowrap;color:#536d86}
+#stock_sell_report_table tbody td:nth-child(7){min-width:155px}
+#stock_sell_report_table tbody td:nth-child(8){min-width:210px;font-weight:600}
+#stock_sell_report_table tbody td:nth-child(n+9):nth-child(-n+24){white-space:nowrap;min-width:95px}
+#stock_sell_report_table tfoot th{padding:14px 12px;background:#edf3fa;border:0;border-top:2px solid #d9e4ef;color:#173453;white-space:nowrap}
+.ssi-lot-badge{display:inline-flex;align-items:center;gap:6px;margin:2px 3px 2px 0;border:1px solid #d6e4f2;border-radius:6px;padding:4px 8px;background:#eff5fc;color:#275a89!important;font:11px/1.6 monospace;white-space:nowrap;text-decoration:none!important}
+a.ssi-lot-badge:hover{background:#deebfa;border-color:#8eb4dc}
+a.ssi-lot-badge:focus-visible{outline:2px solid #3978b7;outline-offset:2px}
+.ssi-lot-badge .fa{font-size:11px;opacity:.7}
+.ssi-sales-muted,.ssi-sales-cost-used{color:#718297;font-size:10px;font-weight:400}
+.ssi-sales-cost-used{display:block;margin-bottom:4px;white-space:normal;max-width:190px}
+#ssi-purchase-reference-modal .modal-content{border:0;border-radius:14px;overflow:hidden;box-shadow:0 20px 65px #0e284a40}
+#ssi-purchase-reference-modal .modal-header{padding:17px 22px;background:#173d65;color:#fff;border:0}
+#ssi-purchase-reference-modal .modal-title{font-size:16px;color:#fff!important;line-height:1.6}
+#ssi-purchase-reference-modal .close{color:#fff;opacity:.9}
+#ssi-purchase-reference-modal .modal-footer{background:#f7f9fc;border-top:1px solid #e2e9f1}
+@media(max-width:1000px){.ssi-sales-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ssi-sales-heading{align-items:flex-start;flex-direction:column;gap:12px}}
+@media(max-width:600px){.ssi-sales-report{padding:10px!important}.ssi-sales-metrics{gap:8px}.ssi-sales-metric{padding:12px}.ssi-sales-metric strong{font-size:21px}.ssi-sales-table-heading{padding:12px;align-items:flex-start;flex-direction:column;gap:5px}.ssi-sales-table-card .table-responsive{padding:10px}.ssi-sales-heading h2{font-size:21px}.ssi-sales-period{font-size:11px}}

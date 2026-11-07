@@ -33,6 +33,7 @@
 
 @section('css')
 <style>
+#finance-pos-report-modal .modal-title{color:#fff!important}
 @font-face{font-family:FinanceKhmer;src:url('{{ asset('fonts/khmer/NotoSansKhmer-Regular.ttf') }}') format('truetype');font-display:swap}
 .financial-dashboard{--navy:#102d52;--ink:#20364e;--muted:#687c91;--line:#e1e8ef;--paper:#fff;--blue:#2264b0;font-family:FinanceKhmer,Arial,sans-serif;color:var(--ink);padding:22px;background:#f2f5f9;min-height:85vh}
 .finance-topline{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:22px;flex-wrap:wrap}.finance-eyebrow{font-size:11px;letter-spacing:1.6px;color:var(--muted);text-transform:uppercase;margin:0 0 7px}.finance-topline h1{font-size:27px;font-weight:700;color:var(--navy);margin:0;line-height:1.7}.finance-topline p{color:var(--muted);margin:5px 0 0}.finance-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.finance-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #d5dfea;border-radius:7px;color:var(--ink);padding:9px 13px;font-size:12px;min-height:38px}.finance-btn:hover{background:#edf3fa;color:var(--navy)}.finance-btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}.finance-languages{display:flex;gap:3px;background:#e8edf4;padding:3px;border-radius:7px;margin-right:7px}.finance-languages a{padding:6px 10px;color:var(--muted);border-radius:5px;font-size:12px}.finance-languages a.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px #142d4b18}
@@ -294,6 +295,7 @@ $(function () {
         currencySymbol: @json($currencySymbol), reportLanguage: @json($language),
         labels: {loading: @json($t('loading')), error: @json($t('finance_expense_error')), sharedLot: @json($t('finance_cost_shared_lot')), save: @json($t('finance_cost_save')), cancel: @json($t('cancel')), edit: @json($t('edit')),
             showing: @json($t('finance_showing_rows')), costQuality: @json($t('finance_cost_quality')), costTitle: @json($t('finance_cost_sales_list')), costBasis: @json($t('finance_cost_details_basis')), unitsBasis: @json($t('units_net_returns')), costLineBasis: @json($t('finance_cost_line_basis')), estimated: @json($t('finance_cost_estimate')), cost: @json($t('finance_cost')), amount: @json($t('amount')), salesTitle: @json($t('finance_sales_list')), selected: @json($t('finance_selected')), salesError: @json($t('finance_sales_error')), units: @json($t('units')), total: @json($t('total')), none: @json($t('none')), empty: @json($t('no_data')),
+            costUsed: @json($t('finance_cost_used')), latestPurchase: @json($t('finance_latest_purchase')),
             main: @json($t('finance_source_main')), accessory: @json($t('finance_source_accessory')), service: @json($t('finance_source_service'))}
     });
 });

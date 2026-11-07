@@ -7,6 +7,7 @@ use App\BusinessLocation;
 use App\Category;
 use App\Exports\ArrayExport;
 use App\Product;
+use App\Services\PurchaseLotCost;
 use App\Unit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -210,6 +211,10 @@ class LotController extends BaseSmartStockController
                 $query->where('pl.lot_number', $lot);
             };
 
+            $receiptCost = PurchaseLotCost::receiptValue('pl', 't.business_id', 'pl.variation_id');
+            $movementCost = "CASE WHEN t.type IN ('purchase', 'opening_stock', 'production_purchase')
+                THEN pl.purchase_price_inc_tax ELSE COALESCE($receiptCost, pl.purchase_price_inc_tax) END";
+
             $purchaseMovements = DB::table('purchase_lines as pl')
                 ->join('transactions as t', 'pl.transaction_id', '=', 't.id')
                 ->join('products as p', 'pl.product_id', '=', 'p.id')
@@ -226,6 +231,7 @@ class LotController extends BaseSmartStockController
             $applyCommonFilters($purchaseMovements, 't');
 
             $purchaseMovements = $purchaseMovements->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'purchase' as movement_type"),
                 DB::raw('1 as movement_sort'),
@@ -259,6 +265,7 @@ class LotController extends BaseSmartStockController
             $applyCommonFilters($sellMovements, 't');
 
             $sellMovements = $sellMovements->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'sell' as movement_type"),
                 DB::raw('4 as movement_sort'),
@@ -297,6 +304,7 @@ class LotController extends BaseSmartStockController
             $applyCommonFilters($sellReturnMovements, 't');
 
             $sellReturnMovements = $sellReturnMovements->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'sell_return' as movement_type"),
                 DB::raw('5 as movement_sort'),
@@ -335,6 +343,7 @@ class LotController extends BaseSmartStockController
             $applyCommonFilters($transferMovements, 't');
 
             $transferMovements = $transferMovements->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'transfer' as movement_type"),
                 DB::raw('2 as movement_sort'),
@@ -376,6 +385,7 @@ class LotController extends BaseSmartStockController
                 ->whereNotNull('pl.lot_number');
             $applyCommonFilters($transferReceipts, 't');
             $transferReceipts = $transferReceipts->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'transfer' as movement_type"),
                 DB::raw('3 as movement_sort'),
@@ -414,6 +424,7 @@ class LotController extends BaseSmartStockController
             $applyCommonFilters($adjustmentMovements, 't');
 
             $adjustmentMovements = $adjustmentMovements->select([
+                DB::raw($movementCost.' as purchase_price'),
                 DB::raw('t.transaction_date as movement_date'),
                 DB::raw("'adjustment' as movement_type"),
                 DB::raw('6 as movement_sort'),
@@ -450,6 +461,12 @@ class LotController extends BaseSmartStockController
             $movementRows = $this->prepareLotHistoryRows($movementRows, $movementType, $startDate, $endDate);
 
             return DataTables::of($movementRows)
+                ->editColumn('purchase_price', function ($row) {
+                    if ($row->purchase_price === null) return '<span class="text-muted">—</span>';
+                    $price = (float) $row->purchase_price;
+
+                    return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$price.'">'.$price.'</span>';
+                })
                 ->addColumn('transaction_id', function ($row) {
                     return (int) ($row->transaction_id ?? 0);
                 })
@@ -559,7 +576,7 @@ class LotController extends BaseSmartStockController
 
                     return $userName !== '' ? e($userName) : '--';
                 })
-                ->rawColumns(['qty_in', 'qty_out', 'balance_qty', 'quantity_change', 'status', 'ref_no'])
+                ->rawColumns(['purchase_price', 'qty_in', 'qty_out', 'balance_qty', 'quantity_change', 'status', 'ref_no'])
                 ->with(['current_stock' => $currentStock, 'stock_location_display' => $stockLocationDisplay,
                     'stock_reconciliation_required' => $stockNeedsReview,
                     'stock_review_html' => view('smartstockinventory::lot.partials.stock_review', compact('stockReview'))->render()])
