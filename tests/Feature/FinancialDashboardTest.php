@@ -201,6 +201,21 @@ class FinancialDashboardTest extends TestCase
         return ($costs ? $controller->costs($request, new FinancialDashboardReport) : $controller->index($request))->getData(true);
     }
 
+    public function test_dashboard_date_range_defaults_to_today_and_preserves_selected_dates()
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::parse('2026-11-07 14:00:00'));
+        try {
+            $filters = $this->controllerRequest()->getData()['filters'];
+            $this->assertSame('2026-11-07', $filters['start_date']);
+            $this->assertSame('2026-11-07', $filters['end_date']);
+            $selected = $this->controllerRequest(['start_date' => '2026-11-01', 'end_date' => '2026-11-04'])->getData()['filters'];
+            $this->assertSame('2026-11-01', $selected['start_date']);
+            $this->assertSame('2026-11-04', $selected['end_date']);
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
     public function test_sales_modal_matches_pos_units_and_filters_locations_dates_and_sources()
     {
         $this->salesPermissions = ['sell.view'];

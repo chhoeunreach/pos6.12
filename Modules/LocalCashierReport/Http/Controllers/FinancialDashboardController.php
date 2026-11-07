@@ -54,14 +54,15 @@ class FinancialDashboardController extends Controller
         $businessId = (int) session('user.business_id');
         $locations = $this->cashierReport->getAccessibleLocations($businessId);
         $allowedIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $today = Carbon::today()->format('Y-m-d');
         $filters = [
             'source' => $data['source'] ?? 'all',
             'expense_filter_applied' => array_key_exists('expense_filter_applied', $data)
                 ? (int) $request->boolean('expense_filter_applied') : (isset($data['expense_categories']) ? 1 : 0),
             'expense_categories' => array_values(array_unique($data['expense_categories'] ?? [])),
             'excluded_expense_categories' => array_values(array_unique($data['excluded_expense_categories'] ?? [])),
-            'start_date' => $data['start_date'] ?? Carbon::now()->startOfMonth()->format('Y-m-d'),
-            'end_date' => $data['end_date'] ?? Carbon::now()->format('Y-m-d'),
+            'start_date' => $data['start_date'] ?? $today,
+            'end_date' => $data['end_date'] ?? $today,
             'location_ids' => $request->boolean('location_filter_applied') || isset($data['location_ids'])
                 ? array_values(array_intersect(array_map('intval', $data['location_ids'] ?? []), $allowedIds)) : $allowedIds,
         ];
