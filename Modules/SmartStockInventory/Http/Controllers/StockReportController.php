@@ -35,7 +35,35 @@ class StockReportController extends Controller
         return '<span data-export-value="'.e($export_date).'">'.e($formatted_date).'</span>';
     }
 
-    protected function linkedPurchaseCosts()
+    protected function stockSellTransactions(Request $request, int $businessId, $permittedLocations)
+    {
+        $query = DB::table('transactions as t')->select('t.id')
+            ->where('t.business_id', $businessId)->where('t.type', 'sell')->where('t.status', 'final')
+            ->where(function ($query) { $query->whereNull('t.sub_type')->orWhere('t.sub_type', '!=', 'project_invoice'); });
+        if ($permittedLocations !== 'all') $query->whereIn('t.location_id', $permittedLocations);
+        $user = $request->user();
+        if (!$user->can('direct_sell.view') && $user->hasAnyPermission(['view_own_sell_only', 'access_own_shipping', 'view_commission_agent_sell', 'access_commission_agent_shipping'])) {
+            $query->where(function ($query) use ($user, $request) {
+                if ($user->hasAnyPermission(['view_own_sell_only', 'access_own_shipping'])) $query->where('t.created_by', $request->session()->get('user.id'));
+                if ($user->hasAnyPermission(['view_commission_agent_sell', 'access_commission_agent_shipping'])) $query->orWhere('t.commission_agent', $request->session()->get('user.id'));
+            });
+        }
+        $selected = $request->input('location_id');
+        if (!empty($selected)) {
+            $selected = is_array($selected) ? array_values(array_filter($selected, fn ($id) => $id !== 'all')) : ($selected === 'all' ? [] : [$selected]);
+            if ($selected) $query->whereIn('t.location_id', $selected);
+        }
+        if ($request->filled('customer_id')) $query->where('t.contact_id', $request->input('customer_id'));
+        if ($request->filled('payment_status')) $query->where('t.payment_status', $request->input('payment_status'));
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $end = \Illuminate\Support\Carbon::createFromFormat('!Y-m-d', $request->input('end_date'))->addDay()->format('Y-m-d H:i:s');
+            $query->where('t.transaction_date', '>=', $request->input('start_date').' 00:00:00')->where('t.transaction_date', '<', $end);
+        }
+
+        return $query;
+    }
+
+    protected function linkedPurchaseCosts($saleTransactions = null)
     {
         // This report shows original sales; returns are reported separately.
         $receipt = PurchaseLotCost::receiptValue('pl', 'cost_purchase.business_id', 'cost_line.variation_id');
@@ -47,6 +75,7 @@ class StockReportController extends Controller
             ->join('transactions as cost_sale', 'cost_sale.id', '=', 'cost_line.transaction_id')
             ->whereColumn('pl.variation_id', 'cost_line.variation_id')
             ->whereColumn('cost_purchase.business_id', 'cost_sale.business_id')
+            ->when($saleTransactions, fn ($query) => $query->whereIn('cost_line.transaction_id', $saleTransactions))
             ->select(
                 'tspl.sell_line_id',
                 DB::raw("SUM(tspl.quantity * ($price)) as purchase_total"),
@@ -147,6 +176,7 @@ class StockReportController extends Controller
 
     public function stockSellReport(Request $request)
     {
+        if ($request->ajax()) $request->validate(['start_date' => 'nullable|date_format:Y-m-d', 'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date']);
         if ($request->boolean('finance_embed') || (!$request->ajax() && $request->hasAny(['start_date', 'end_date', 'location_id']))) $request->validate(['start_date' => 'nullable|date_format:Y-m-d', 'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date', 'location_id' => 'nullable|array', 'location_id.*' => 'integer|min:1']);
         if (! auth()->user()->can('stock_report.view') && ! auth()->user()->can('purchase_n_sell_report.view') && ! auth()->user()->can('sell.view') && ! auth()->user()->can('sell.create') && ! auth()->user()->can('direct_sell.access') && ! auth()->user()->can('view_own_sell_only')) {
             abort(403, 'Unauthorized action.');
@@ -156,6 +186,7 @@ class StockReportController extends Controller
 
         if ($request->ajax()) {
             $permitted_locations = auth()->user()->permitted_locations();
+            $saleTransactions = $this->stockSellTransactions($request, (int) $business_id, $permitted_locations);
 
             $payments = DB::table('transaction_payments')
                 ->select(
@@ -171,10 +202,11 @@ class StockReportController extends Controller
                     DB::raw("SUM(IF(method = 'custom_pay_7', IF(is_return = 1, -1 * amount, amount), 0)) as monthly"),
                     DB::raw('SUM(IF(is_return = 1, -1 * amount, amount)) as paid')
                 )
+                ->whereIn('transaction_id', $saleTransactions)
                 ->whereNull('parent_id')
                 ->groupBy('transaction_id');
 
-            $purchase_costs = $this->linkedPurchaseCosts()
+            $purchase_costs = $this->linkedPurchaseCosts($saleTransactions)
                 ->addSelect(DB::raw("GROUP_CONCAT(DISTINCT NULLIF(pl.lot_number, '') ORDER BY pl.lot_number SEPARATOR ', ') as lots"));
 
             [$purchase_price_sql, $purchase_total_sql, $lots_sql] = $this->purchaseCostExpressions();
@@ -195,13 +227,7 @@ class StockReportController extends Controller
                 ->leftJoinSub($purchase_costs, 'pc', function ($join) {
                     $join->on('pc.sell_line_id', '=', 'transaction_sell_lines.id');
                 })
-                ->where('t.business_id', $business_id)
-                ->where('t.type', 'sell')
-                ->where('t.status', 'final')
-                ->where(function ($query) {
-                    $query->where('t.sub_type', '!=', 'project_invoice')
-                        ->orWhereNull('t.sub_type');
-                })
+                ->whereIn('t.id', $saleTransactions)
                 ->whereNull('transaction_sell_lines.parent_sell_line_id')
                 ->select(
                     'transaction_sell_lines.id',
@@ -241,52 +267,16 @@ class StockReportController extends Controller
                     DB::raw("CONCAT(COALESCE(u.surname, ''),' ',COALESCE(u.first_name, ''),' ',COALESCE(u.last_name,'')) as user_name")
                 );
 
-            if ($permitted_locations != 'all') {
-                $sells->whereIn('t.location_id', $permitted_locations);
+            // Totals do not need the display-only product, lot and unit-price expressions.
+            $footerRows = (clone $sells)->select('transaction_sell_lines.quantity')
+                ->selectRaw($line_sell_total_sql.' as total, '.$purchase_total_sql.' as purchase_total')
+                ->selectRaw('('.$line_sell_total_sql.' - '.$purchase_total_sql.') as profit_loss');
+            foreach (['cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid'] as $paymentColumn) {
+                $footerRows->selectRaw('COALESCE(tp.'.$paymentColumn.', 0) as '.$paymentColumn);
             }
-
-            if (! auth()->user()->can('direct_sell.view') && auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping', 'view_commission_agent_sell', 'access_commission_agent_shipping'])) {
-                $sells->where(function ($query) {
-                    if (auth()->user()->hasAnyPermission(['view_own_sell_only', 'access_own_shipping'])) {
-                        $query->where('t.created_by', request()->session()->get('user.id'));
-                    }
-
-                    if (auth()->user()->hasAnyPermission(['view_commission_agent_sell', 'access_commission_agent_shipping'])) {
-                        $query->orWhere('t.commission_agent', request()->session()->get('user.id'));
-                    }
-                });
-            }
-
-            if (! empty(request()->input('location_id'))) {
-                $location_id = request()->input('location_id');
-                if (is_array($location_id)) {
-                    $location_id = array_values(array_filter($location_id, function ($id) {
-                        return $id !== 'all';
-                    }));
-
-                    if (! empty($location_id)) {
-                        $sells->whereIn('t.location_id', $location_id);
-                    }
-                } elseif ($location_id !== 'all') {
-                    $sells->where('t.location_id', $location_id);
-                }
-            }
-
-            if (! empty(request()->input('customer_id'))) {
-                $sells->where('t.contact_id', request()->input('customer_id'));
-            }
-
-            if (! empty(request()->input('payment_status'))) {
-                $sells->where('t.payment_status', request()->input('payment_status'));
-            }
-
-            if (! empty(request()->input('start_date')) && ! empty(request()->input('end_date'))) {
-                $sells->whereDate('t.transaction_date', '>=', request()->input('start_date'))
-                    ->whereDate('t.transaction_date', '<=', request()->input('end_date'));
-            }
-
+            $footerRows->selectRaw('(t.final_total - COALESCE(tp.paid, 0)) as due');
             $footer_totals = DB::query()
-                ->fromSub((clone $sells)->toBase(), 'stock_sell_report_totals')
+                ->fromSub($footerRows->toBase(), 'stock_sell_report_totals')
                 ->selectRaw('
                     COALESCE(SUM(quantity), 0) as quantity,
                     COALESCE(SUM(total), 0) as total,

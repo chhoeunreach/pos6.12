@@ -37,6 +37,11 @@ class StockSellPurchaseCostTest extends TestCase
             $table->string('status')->default('received');
             $table->string('transaction_date');
             $table->string('ref_no')->nullable();
+            $table->string('sub_type')->nullable();
+            $table->integer('created_by')->default(7);
+            $table->integer('commission_agent')->nullable();
+            $table->integer('contact_id')->default(1);
+            $table->string('payment_status')->default('paid');
         });
         Schema::create('variations', function (Blueprint $table) {
             $table->integer('id');
@@ -81,6 +86,60 @@ class StockSellPurchaseCostTest extends TestCase
         config(['database.default' => $this->originalConnection]);
         parent::tearDown();
     }
+
+    private function stockSaleScope(array $filters = [], $locations = [1], array $permissions = ['direct_sell.view'])
+    {
+        $request = \Illuminate\Http\Request::create('/stock-sell', 'GET', $filters + ['start_date' => '2026-10-03', 'end_date' => '2026-10-03']);
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->session()->put('user.id', 7);
+        $user = new class($permissions) {
+            public function __construct(private array $permissions) {}
+            public function can($permission) { return in_array($permission, $this->permissions, true); }
+            public function hasAnyPermission($permissions) { return count(array_intersect($permissions, $this->permissions)) > 0; }
+        };
+        $request->setUserResolver(fn () => $user);
+        $method = new \ReflectionMethod(StockReportController::class, 'stockSellTransactions');
+        $method->setAccessible(true);
+        return $method->invoke($this->app->make(StockReportController::class), $request, 1, $locations);
+    }
+
+    public function test_stock_report_limits_cost_aggregation_to_the_filtered_sales_and_keeps_historical_receipt_costs()
+    {
+        DB::table('transactions')->where('id', 10)->update(['status' => 'final', 'transaction_date' => '2026-10-03 00:00:00']);
+        foreach ([11 => ['transaction_date' => '2026-10-03 23:59:59.999999'], 12 => ['transaction_date' => '2026-10-04 00:00:00'],
+            13 => ['transaction_date' => '2026-10-02 23:59:59'], 14 => ['business_id' => 2], 15 => ['location_id' => 2],
+            16 => ['status' => 'draft'], 17 => ['sub_type' => 'project_invoice'], 18 => ['type' => 'expense']] as $id => $attributes) {
+            DB::table('transactions')->insert($attributes + ['id' => $id, 'type' => 'sell', 'status' => 'final', 'transaction_date' => '2026-10-03 12:00:00']);
+            DB::table('transaction_sell_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity' => 1]);
+            DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => $id, 'purchase_line_id' => 2, 'quantity' => 1]);
+        }
+        $scope = $this->stockSaleScope();
+        $this->assertEquals([10, 11], (clone $scope)->orderBy('t.id')->pluck('t.id')->all());
+        $costs = new \ReflectionMethod(StockReportController::class, 'linkedPurchaseCosts');
+        $costs->setAccessible(true);
+        $rows = $costs->invoke($this->app->make(StockReportController::class), $scope)->orderBy('tspl.sell_line_id')->get();
+        $this->assertEquals([1, 11], $rows->pluck('sell_line_id')->all());
+        $this->assertEquals(280, $rows->first()->purchase_total);
+        $this->assertEquals(360, $rows->sum('purchase_total'));
+        $this->assertEquals([], $this->stockSaleScope(['location_id' => [2]])->pluck('t.id')->all());
+        $this->assertEquals([15], $this->stockSaleScope(['location_id' => [2]], 'all')->pluck('t.id')->all());
+        $this->assertEquals([10, 11], $this->stockSaleScope(['location_id' => ['all']])->orderBy('t.id')->pluck('t.id')->all());
+        $this->assertEquals([], $this->stockSaleScope([], [])->pluck('t.id')->all());
+    }
+
+    public function test_stock_report_scope_preserves_own_commission_customer_and_payment_filters()
+    {
+        DB::table('transactions')->where('id', 10)->update(['status' => 'final', 'transaction_date' => '2026-10-03 12:00:00', 'created_by' => 7, 'contact_id' => 1, 'payment_status' => 'paid']);
+        DB::table('transactions')->insert(['id' => 11, 'type' => 'sell', 'status' => 'final', 'transaction_date' => '2026-10-03 13:00:00', 'created_by' => 8, 'commission_agent' => 7, 'contact_id' => 2, 'payment_status' => 'due']);
+        $this->assertEquals([10], $this->stockSaleScope([], [1], ['view_own_sell_only'])->pluck('t.id')->all());
+        $this->assertEquals([11], $this->stockSaleScope([], [1], ['view_commission_agent_sell'])->pluck('t.id')->all());
+        $this->assertEquals([10, 11], $this->stockSaleScope([], [1], ['view_own_sell_only', 'view_commission_agent_sell'])->orderBy('t.id')->pluck('t.id')->all());
+        $this->assertEquals([10, 11], $this->stockSaleScope([], [1], ['direct_sell.view', 'view_own_sell_only'])->orderBy('t.id')->pluck('t.id')->all());
+        $this->assertEquals([10], $this->stockSaleScope(['customer_id' => 1, 'payment_status' => 'paid'])->pluck('t.id')->all());
+        $this->assertEquals([11], $this->stockSaleScope(['customer_id' => 2, 'payment_status' => 'due'])->pluck('t.id')->all());
+        $this->assertEquals([], $this->stockSaleScope(['customer_id' => 1, 'payment_status' => 'due'])->pluck('t.id')->all());
+    }
+
 
     private function reportCost()
     {
