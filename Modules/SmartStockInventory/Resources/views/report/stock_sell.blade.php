@@ -102,8 +102,10 @@
     </div></div>
 </div>
 @include('purchase.partials.lot_price_modal', ['costEditorId' => 'ssi-purchase-price-modal'])
+@include('purchase.partials.price_history_modal')
 @stop
 @section('module_js')
+<script src="{{ asset('js/purchase-price-history.js') }}?v={{ filemtime(public_path('js/purchase-price-history.js')) }}"></script>
 <script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
 <style>.ssi-purchase-reference-edit{background:transparent;border:0;border-bottom:1px dashed #8ba5c2;color:#194f8c;font:inherit;cursor:pointer;padding:3px}.ssi-purchase-reference-edit:focus-visible{outline:2px solid #93c5fd}</style>
 <script type="text/javascript">

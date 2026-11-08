@@ -244,6 +244,7 @@ a.finance-lot-history-link{border:1px solid #c9dced;color:#245e94;text-decoratio
     </div></div>
 </div>
 @include('purchase.partials.lot_price_modal', ['costEditorId' => 'finance-purchase-price-modal', 'costEditorLabels' => ['title' => $t('finance_purchase_price'), 'shared' => $t('finance_cost_shared_lot'), 'cancel' => $t('cancel'), 'save' => $t('finance_cost_save'), 'loading' => $t('loading')]])
+@include('purchase.partials.price_history_modal')
 <div class="modal fade finance-no-print" id="finance-pos-report-modal" tabindex="-1" role="dialog" aria-labelledby="finance-pos-report-title">
     <div class="modal-dialog" role="document"><div class="modal-content">
         <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 class="modal-title" id="finance-pos-report-title">{{ $t('finance_main_sales') }} · {{ $t('finance_stock_sell_report') }}</h4></div>
@@ -298,6 +299,7 @@ a.finance-lot-history-link{border:1px solid #c9dced;color:#245e94;text-decoratio
 @endsection
 
 @section('javascript')
+<script src="{{ asset('js/purchase-price-history.js') }}?v={{ filemtime(public_path('js/purchase-price-history.js')) }}"></script>
 <script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
 <script src="{{ asset('js/financial-dashboard.js?v=' . $asset_v . '&m=' . filemtime(public_path('js/financial-dashboard.js'))) }}"></script>
 <script>
@@ -308,7 +310,7 @@ $(function () {
         currencySymbol: @json($currencySymbol), reportLanguage: @json($language),
         labels: {loading: @json($t('loading')), error: @json($t('finance_expense_error')), sharedLot: @json($t('finance_cost_shared_lot')), save: @json($t('finance_cost_save')), cancel: @json($t('cancel')), edit: @json($t('edit')),
             showing: @json($t('finance_showing_rows')), costQuality: @json($t('finance_cost_quality')), costTitle: @json($t('finance_cost_sales_list')), costBasis: @json($t('finance_cost_details_basis')), unitsBasis: @json($t('units_net_returns')), costLineBasis: @json($t('finance_cost_line_basis')), estimated: @json($t('finance_cost_estimate')), cost: @json($t('finance_cost')), amount: @json($t('amount')), salesTitle: @json($t('finance_sales_list')), selected: @json($t('finance_selected')), salesError: @json($t('finance_sales_error')), units: @json($t('units')), total: @json($t('total')), none: @json($t('none')), empty: @json($t('no_data')),
-            lotHistory: @json(__('lang_v1.lot_history')), editPrice: @json($t('finance_edit_purchase_price')), costUsed: @json($t('finance_cost_used')), latestPurchase: @json($t('finance_latest_purchase')),
+            lotHistory: @json(__('lang_v1.lot_history')), purchaseHistory: @json($t('finance_purchase_price_history')), editPrice: @json($t('finance_edit_purchase_price')), costUsed: @json($t('finance_cost_used')), latestPurchase: @json($t('finance_latest_purchase')),
             netSales: @json($t('finance_net_sales')), revenueLineBasis: @json($t('finance_revenue_line_basis')),
             main: @json($t('finance_source_main')), accessory: @json($t('finance_source_accessory')), service: @json($t('finance_source_service'))}
     });

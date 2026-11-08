@@ -146,6 +146,19 @@ class StockSellPurchaseCostTest extends TestCase
         $this->assertTrue($method->invoke($controller, $row, 1, [1])->isEmpty());
     }
 
+    public function test_sku_history_link_is_safe_and_respects_purchase_history_access()
+    {
+        $controller = $this->app->make(StockReportController::class);
+        $method = new \ReflectionMethod($controller, 'purchasePriceHistoryLink');
+        $method->setAccessible(true);
+        $html = $method->invoke($controller, 'SKU <script>', 1, true);
+        $this->assertStringContainsString('/purchase-price-history/main/1', $html);
+        $this->assertStringContainsString('purchase-price-history-link', $html);
+        $this->assertStringContainsString('SKU &lt;script&gt;', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertSame('SKU &lt;script&gt;', $method->invoke($controller, 'SKU <script>', 1, false));
+    }
+
     public function test_each_lot_has_a_safe_history_link_and_history_permission_is_respected()
     {
         $controller = $this->app->make(StockReportController::class);

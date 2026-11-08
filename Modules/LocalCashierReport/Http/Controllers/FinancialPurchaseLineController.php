@@ -54,7 +54,7 @@ class FinancialPurchaseLineController extends FinancialPurchaseCostController
                 ->orWhere('product.name', 'like', '%'.$search.'%');
             if (ctype_digit($search)) $query->orWhere('p.id', (int) $search);
         });
-        $rows = $query->orderBy('p.id')->paginate(25, ['p.id', 'p.quantity', 'p.lot_number', 'p.purchase_price_inc_tax', 'product.name as product', 'v.sub_sku as sku'])->withQueryString();
+        $rows = $query->orderBy('p.id')->paginate(25, ['p.id', 'p.variation_id', 'p.quantity', 'p.lot_number', 'p.purchase_price_inc_tax', 'product.name as product', 'v.sub_sku as sku'])->withQueryString();
 
         return view('localcashierreport::purchase_line_prices', compact('receipt', 'rows', 'sourceName', 'search'));
     }

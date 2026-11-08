@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'finance_purchase_price_history' => 'Purchase price history',
+    'finance_purchase_price_history_scope' => 'Received purchase receipts for this exact SKU across your permitted locations. All dates, newest first by default. Prices include item tax.',
     'finance_view_full_purchase' => 'View full purchase',
     'finance_edit_purchase_price' => 'Edit purchase price',
     'finance_find_purchase_row' => 'Find row by product, SKU, lot or row ID',

@@ -269,6 +269,18 @@ test('service revenue exports selling totals without a profit column or purchase
     assert.equal(f.state.filename, 'net-sales-details.csv');
 });
 
+test('SKU cells link to purchase-price-only history and escape SKU text', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, rows: [{sku: '<img src=x>', units: 1,
+        purchase_price_history_url: '/reports/financial-dashboard/purchase-price-history/service/7'}]});
+    const link = f.$('#finance-sales-table .purchase-price-history-link');
+    assert.equal(link.attr('href'), '/reports/financial-dashboard/purchase-price-history/service/7');
+    assert.equal(link.text(), '<img src=x>');
+    assert.equal(link.attr('aria-haspopup'), 'dialog');
+    assert.equal(f.$('#finance-sales-table img').length, 0);
+});
+
 test('each lot opens its source history in a modal without marking purchase data as changed', () => {
     const f = fixture();
     f.$('[data-cost-details]').trigger('click');

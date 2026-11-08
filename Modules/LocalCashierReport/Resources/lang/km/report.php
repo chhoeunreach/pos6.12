@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'finance_purchase_price_history' => 'ប្រវត្តិតម្លៃទិញ',
+    'finance_purchase_price_history_scope' => 'ការទិញដែលបានទទួលសម្រាប់ SKU នេះ នៅទីតាំងដែលអ្នកមានសិទ្ធិមើល។ គ្រប់កាលបរិច្ឆេទ ដោយបង្ហាញថ្មីបំផុតមុនជាលំនាំដើម។ តម្លៃរួមពន្ធទំនិញ។',
     'finance_view_full_purchase' => 'មើលការទិញពេញលេញ',
     'finance_edit_purchase_price' => 'កែប្រែតម្លៃទិញ',
     'finance_find_purchase_row' => 'ស្វែងរកជួរតាមផលិតផល SKU លេខឡូត៍ ឬលេខជួរ',

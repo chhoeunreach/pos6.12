@@ -71,6 +71,15 @@ class StockReportController extends Controller
             ->get(['t.id', 't.ref_no', 'p.id as purchase_line_id', 'p.lot_number', 'p.purchase_price_inc_tax'])->unique('lot_number')->values();
     }
 
+    protected function purchasePriceHistoryLink(?string $sku, int $variation, bool $canView): string
+    {
+        if (!$canView || !\Illuminate\Support\Facades\Route::has('reports.financial-purchase-price-history')) return e($sku ?? '—');
+        $source = request()->routeIs('accessory.*') ? 'accessory' : (request()->routeIs('service.*') ? 'service' : 'main');
+        $url = route('reports.financial-purchase-price-history', ['sourceName' => $source, 'variation' => $variation, 'report_lang' => request('report_lang', 'km')]);
+
+        return '<a class="purchase-price-history-link" aria-haspopup="dialog" data-sku="'.e($sku).'" href="'.e($url).'" title="'.e(__('localcashierreport::report.finance_purchase_price_history')).'">'.e($sku ?? '—').'</a>';
+    }
+
     protected function lotHistoryLinks(?string $lots, bool $canViewHistory): string
     {
         $numbers = array_unique(array_filter(array_map('trim', explode(',', (string) $lots)), fn ($lot) => $lot !== ''));
@@ -298,6 +307,10 @@ class StockReportController extends Controller
                 ->first();
 
             return Datatables::of($sells)
+                ->editColumn('sku', function ($row) {
+                    $user = auth()->user();
+                    return $this->purchasePriceHistoryLink($row->sku, (int) $row->variation_id, $user->can('stock_inventory.view') || $user->can('purchase.view') || $user->can('purchase.update'));
+                })
                 ->editColumn('lots', function ($row) {
                     return $this->lotHistoryLinks($row->lots, auth()->user()->can('stock_inventory.view'));
                 })
@@ -404,7 +417,7 @@ class StockReportController extends Controller
                 ->editColumn('due', function ($row) {
                     return '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$row->due.'">'.$row->due.'</span>';
                 })
-                ->rawColumns(['lots', 'transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_profit_loss', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
+                ->rawColumns(['sku', 'lots', 'transaction_date', 'quantity', 'price', 'purchase_price', 'purchase_profit_loss', 'purchase_total', 'total', 'profit_loss', 'cash', 'wing', 'aba', 'acleda', 'true_money', 'card', 'other', 'voido', 'monthly', 'paid', 'due'])
                 ->with(['footer_totals' => $footer_totals])
                 ->make(true);
         }

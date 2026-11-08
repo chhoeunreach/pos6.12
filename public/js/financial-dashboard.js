@@ -282,7 +282,11 @@
                     (result.rows || []).forEach(function(row) {
                         var tr = $('<tr>');
                         if (costMode) {
-                            tr.append($('<td>').append($('<code>').text(row.sku || '—')));
+                            var sku = $('<code>').text(row.sku || '—');
+                            if (row.purchase_price_history_url) sku = $('<a class="purchase-price-history-link" aria-haspopup="dialog">')
+                                .attr('href', row.purchase_price_history_url).attr('data-sku', row.sku || '—')
+                                .attr('title', labels.purchaseHistory || 'Purchase price history').append(sku);
+                            tr.append($('<td>').append(sku));
                             var lots = $('<td>');
                             if (row.lots) String(row.lots).split(',').forEach(function(lot) {
                                 var number = lot.trim(), history = (row.lot_history_links || []).find(function(link) { return link.lot === number; });

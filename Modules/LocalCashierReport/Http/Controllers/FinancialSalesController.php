@@ -85,6 +85,8 @@ class FinancialSalesController extends Controller
             foreach ($records as $row) {
                 if ($revenue) $row->amount = $row->selling_total;
                 $row->source = $source;
+                $row->purchase_price_history_url = $user->can('stock_inventory.view') || $user->can('purchase.view') || $user->can('purchase.update')
+                    ? route('reports.financial-purchase-price-history', ['sourceName' => $source, 'variation' => $row->variation_id, 'report_lang' => $request->input('report_lang', 'km')]) : null;
                 $row->edit_url = null;
                 $row->lot_history_links = [];
                 if ($user->can('stock_inventory.view')) {

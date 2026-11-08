@@ -108,7 +108,7 @@ class FinancialDashboardTest extends TestCase
                 $table->string('causer_type')->nullable(); $table->integer('causer_id')->nullable(); $table->text('properties')->nullable(); $table->timestamps();
             });
             $schema->create('contacts', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
-            $schema->create('business_locations', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
+            $schema->create('business_locations', function (Blueprint $table) { $table->integer('id'); $table->integer('business_id')->default(1); $table->string('name'); });
             $schema->create('expense_categories', function (Blueprint $table) {
                 $table->integer('id');
                 $table->integer('business_id')->default(1);
@@ -506,6 +506,103 @@ class FinancialDashboardTest extends TestCase
         $this->salesPermissions = [];
         try { $this->salesRequest([], true); $this->fail('Sales access is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
     }
+
+    public function test_sku_purchase_history_sorts_numeric_values_across_pages_and_preserves_sort_links()
+    {
+        $this->salesPermissions = ['purchase.view'];
+        DB::table('business_locations')->insert(['id' => 1, 'name' => 'Branch A']);
+        for ($id = 1; $id <= 61; $id++) {
+            DB::table('transactions')->insert(['id' => $id, 'type' => 'purchase', 'status' => 'received', 'ref_no' => 'PUR-'.$id]);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'lot_number' => 'LOT-'.$id,
+                'quantity' => 61 - $id, 'purchase_price_inc_tax' => $id === 61 ? null : $id]);
+        }
+        $first = $this->skuPurchaseHistoryRequest('main', ['sort' => 'purchase_price', 'direction' => 'asc'])->getData()['rows'];
+        $this->assertEquals(range(1, 50), $first->pluck('id')->all());
+        $view = $this->skuPurchaseHistoryRequest('main', ['sort' => 'purchase_price', 'direction' => 'asc', 'page' => 2, 'report_lang' => 'en']);
+        $second = $view->getData()['rows'];
+        $this->assertEquals(range(51, 61), $second->pluck('id')->all());
+        $this->assertStringContainsString('sort=purchase_price', $second->previousPageUrl());
+        $this->assertStringContainsString('direction=asc', $second->previousPageUrl());
+        $html = $view->render();
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+        $xpath = new \DOMXPath($dom);
+        $links = $xpath->query('//a[@class="purchase-history-sort"]');
+        $this->assertSame(6, $links->length);
+        foreach ($links as $link) {
+            parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $query);
+            $this->assertSame('1', $query['page']);
+            $this->assertSame('en', $query['report_lang']);
+        }
+        parse_str(parse_url($links->item(5)->getAttribute('href'), PHP_URL_QUERY), $priceLink);
+        $this->assertSame('purchase_price', $priceLink['sort']);
+        $this->assertSame('desc', $priceLink['direction']);
+        $this->assertSame('ascending', $links->item(5)->parentNode->getAttribute('aria-sort'));
+        $descending = $this->skuPurchaseHistoryRequest('main', ['sort' => 'purchase_price', 'direction' => 'desc'])->getData()['rows'];
+        $this->assertEquals(range(60, 11), $descending->pluck('id')->all());
+        $quantities = $this->skuPurchaseHistoryRequest('main', ['sort' => 'quantity', 'direction' => 'asc'])->getData()['rows'];
+        $this->assertEquals(range(61, 12), $quantities->pluck('id')->all());
+        foreach (['date', 'reference', 'location', 'lot'] as $sort) {
+            $rows = $this->skuPurchaseHistoryRequest('main', ['sort' => $sort, 'direction' => 'asc'])->getData()['rows'];
+            $this->assertEquals(61, $rows->total());
+        }
+    }
+
+    public function test_sku_purchase_history_rejects_unknown_sort_columns_and_directions()
+    {
+        $this->salesPermissions = ['purchase.view'];
+        foreach ([['sort' => 't.id desc'], ['direction' => 'invalid']] as $query) {
+            try { $this->skuPurchaseHistoryRequest('main', $query); $this->fail('Invalid sorting must be rejected'); }
+            catch (ValidationException $e) { $this->assertArrayHasKey(array_key_first($query), $e->errors()); }
+        }
+    }
+
+
+    private function skuPurchaseHistoryRequest(string $source, array $data = [], int $variation = 1)
+    {
+        $request = Request::create('/reports/financial-dashboard/purchase-price-history/'.$source.'/'.$variation, 'GET', $data);
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        return (new \Modules\LocalCashierReport\Http\Controllers\FinancialPurchasePriceHistoryController)->show($request, $source, $variation);
+    }
+
+    public function test_sku_purchase_history_shows_only_received_purchases_for_the_exact_source_and_permitted_location()
+    {
+        $this->salesPermissions = ['purchase.view'];
+        foreach (['main', 'accessory', 'service'] as $source) {
+            $db = DB::connection('finance_'.$source);
+            $db->table('variations')->update(['sub_sku' => $source.'-SKU']);
+            foreach ([1 => [], 2 => ['transaction_date' => '2026-11-08 12:00:00'], 3 => ['location_id' => 2], 4 => ['business_id' => 2],
+                5 => ['status' => 'ordered'], 6 => ['type' => 'purchase_transfer'], 7 => ['type' => 'sell'], 8 => []] as $id => $attributes) {
+                $db->table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'status' => 'received', 'ref_no' => $source.'-'.$id, 'transaction_date' => '2020-01-01 12:00:00']);
+                $db->table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'variation_id' => $id === 8 ? 2 : 1, 'quantity' => 1, 'purchase_price_inc_tax' => $id * 10]);
+            }
+            $view = $this->skuPurchaseHistoryRequest($source);
+            $history = $view->getData();
+            $this->assertSame($source.'-SKU', $history['product']->sku);
+            $this->assertEquals([2, 1], $history['rows']->pluck('id')->all());
+            $this->assertEquals([20, 10], $history['rows']->pluck('purchase_price_inc_tax')->all());
+            $html = $view->render();
+            $this->assertStringContainsString($source.'-2', $html);
+            $this->assertStringNotContainsString($source.'-3', $html);
+            $this->assertStringNotContainsString('finance_lot_sell_price', $html);
+        }
+        for ($id = 20; $id < 75; $id++) {
+            DB::table('transactions')->insert(['id' => $id, 'type' => 'purchase', 'status' => 'received']);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'quantity' => 1, 'purchase_price_inc_tax' => 30]);
+        }
+        $first = $this->skuPurchaseHistoryRequest('main')->getData()['rows'];
+        $second = $this->skuPurchaseHistoryRequest('main', ['page' => 2])->getData()['rows'];
+        $this->assertCount(50, $first->items());
+        $this->assertCount(7, $second->items());
+        $this->assertEquals(57, $first->total());
+        $this->assertSame([], array_intersect($first->pluck('id')->all(), $second->pluck('id')->all()));
+        $this->salesPermissions = [];
+        try { $this->skuPurchaseHistoryRequest('main'); $this->fail('Purchase history permission is required'); }
+        catch (HttpException $e) { $this->assertSame(403, $e->getStatusCode()); }
+    }
+
 
     private function linePriceRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $listing = false, bool $json = false)
     {

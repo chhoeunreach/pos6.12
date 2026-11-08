@@ -8,6 +8,7 @@ use Modules\LocalCashierReport\Http\Controllers\FinancialSalesController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialLotHistoryController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseCostController;
 use Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseLineController;
+use Modules\LocalCashierReport\Http\Controllers\FinancialPurchasePriceHistoryController;
 use Modules\LocalCashierReport\Http\Controllers\InstallController;
 use Modules\LocalCashierReport\Http\Controllers\LocalCashierReportController;
 
@@ -30,6 +31,8 @@ Route::middleware([
     Route::get('/reports/financial-dashboard/purchase-price/{sourceName}/{line}', [FinancialPurchaseLineController::class, 'show'])->where(['sourceName' => 'main|accessory|service', 'line' => '[0-9]+'])->name('reports.financial-purchase-line.show');
     Route::get('/reports/financial-dashboard/purchase-prices/{sourceName}/{purchase}', [FinancialPurchaseLineController::class, 'index'])->where(['sourceName' => 'main|accessory|service', 'purchase' => '[0-9]+'])->name('reports.financial-purchase-line.index');
     Route::put('/reports/financial-dashboard/purchase-price/{sourceName}/{line}', [FinancialPurchaseLineController::class, 'update'])->where(['sourceName' => 'main|accessory|service', 'line' => '[0-9]+'])->name('reports.financial-purchase-line.update');
+
+    Route::get('/reports/financial-dashboard/purchase-price-history/{sourceName}/{variation}', [FinancialPurchasePriceHistoryController::class, 'show'])->where(['sourceName' => 'main|accessory|service', 'variation' => '[0-9]+'])->name('reports.financial-purchase-price-history');
 
     Route::prefix('local-cashier-report')->group(function () {
         Route::get('/', [LocalCashierReportController::class, 'index'])->name('local-cashier-report.index');
