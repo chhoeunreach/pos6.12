@@ -224,6 +224,22 @@ test('canceling a quick row price modal does not refresh the report', () => {
     assert.equal(f.state.refreshes, 0);
 });
 
+test('gross profit, gross margin and all-department revenue open the same filtered item modal as cost details', () => {
+    const f = fixture();
+    ['Gross profit', 'All-department net sales', 'Gross profit margin'].forEach((title, index) => {
+        const link = f.$('<a class="finance-sales-details" data-cost-details="1">').attr({
+            href: '/reports/financial-dashboard/cost-sales?source=all&location_ids%5B0%5D=12&start_date=2026-11-01',
+            'data-detail-title': title
+        }).appendTo('body');
+        link.trigger('click');
+        assert.equal(f.$('#finance-sales-modal').hasClass('in'), true);
+        assert.equal(f.$('#finance-sales-modal').hasClass('finance-cost-mode'), true);
+        assert.equal(f.$('#finance-sales-modal').hasClass('finance-revenue-mode'), false);
+        assert.equal(f.$('#finance-sales-title').text(), title);
+        assert.match(f.requests[index].url, /cost-sales\?source=all&location_ids%5B0%5D=12&start_date=2026-11-01/);
+    });
+});
+
 test('accessory and service revenue links open source-scoped details with revenue labels', () => {
     const f = fixture();
     f.$('body').append('<a class="finance-sales-details revenue-link" data-cost-details="1" data-detail-kind="revenue" data-detail-title="Accessory net sales" href="/reports/financial-dashboard/revenue-sales?source=accessory&location_ids%5B0%5D=-2">Accessory</a>');

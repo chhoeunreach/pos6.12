@@ -1,7 +1,7 @@
 @php
     $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key);
     $symbol = (string) data_get(session('currency'), 'symbol', '$');
-    $columns = ['date' => $t('date'), 'reference' => $t('finance_lot_reference'), 'location' => $t('location'),
+    $columns = ['date' => $t('date'), 'reference' => $t('finance_lot_reference'), 'supplier' => $t('finance_supplier_name'), 'location' => $t('location'),
         'lot' => $t('finance_cost_lots'), 'quantity' => $t('finance_cost_qty'), 'purchase_price' => $t('finance_purchase_price').' ('.__('product.inc_of_tax').')'];
 @endphp
 <!doctype html>
@@ -17,8 +17,8 @@
     </th>
 @endforeach
 </tr></thead>
-<tbody>@forelse($rows as $row)<tr><td>{{ $row->transaction_date }}</td><td>{{ $row->ref_no ?: '#'.$row->purchase_id }}</td><td>{{ $row->location ?: '—' }}</td><td>{{ $row->lot_number ?: '—' }}</td><td class="number">{{ (float) $row->quantity }}</td><td class="number">{{ $row->purchase_price_inc_tax === null ? '—' : $symbol.number_format($row->purchase_price_inc_tax, 4) }}</td></tr>
-@empty<tr><td colspan="6">{{ $t('no_data') }}</td></tr>@endforelse</tbody></table></div>
+<tbody>@forelse($rows as $row)<tr><td>{{ $row->transaction_date }}</td><td>{{ $row->ref_no ?: '#'.$row->purchase_id }}</td><td>{{ $row->supplier_name ?: '—' }}</td><td>{{ $row->location ?: '—' }}</td><td>{{ $row->lot_number ?: '—' }}</td><td class="number">{{ (float) $row->quantity }}</td><td class="number">{{ $row->purchase_price_inc_tax === null ? '—' : $symbol.number_format($row->purchase_price_inc_tax, 4) }}</td></tr>
+@empty<tr><td colspan="7">{{ $t('no_data') }}</td></tr>@endforelse</tbody></table></div>
 <p>{{ $rows->total() }} · {{ $rows->currentPage() }} / {{ $rows->lastPage() }}
 @if($rows->previousPageUrl()) · <a href="{{ $rows->previousPageUrl() }}">{{ $t('previous') }}</a>@endif
 @if($rows->nextPageUrl()) · <a href="{{ $rows->nextPageUrl() }}">{{ $t('next') }}</a>@endif</p>

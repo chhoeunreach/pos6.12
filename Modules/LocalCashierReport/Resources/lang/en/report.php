@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'finance_supplier_name' => 'Supplier name',
+    'export_word' => 'Export Word',
+    'finance_basis_heading' => 'Calculation notes',
     'finance_purchase_price_history' => 'Purchase price history',
     'finance_purchase_price_history_scope' => 'Received purchase receipts for this exact SKU across your permitted locations. All dates, newest first by default. Prices include item tax.',
     'finance_view_full_purchase' => 'View full purchase',

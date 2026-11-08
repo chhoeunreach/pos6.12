@@ -22,6 +22,10 @@ class FinancialDashboardController extends Controller
         if ($request->input('download') === 'csv') {
             return $this->csv($report, $filters);
         }
+        if ($request->input('download') === 'word') {
+            return app(\Modules\LocalCashierReport\Services\FinancialDashboardWordExport::class)->download($report, $filters,
+                (string) session('business.name', config('app.name')), (string) data_get(session('currency'), 'symbol', '$'));
+        }
 
         return view('localcashierreport::financial_dashboard', [
             'businessName' => (string) session('business.name', config('app.name')),
@@ -47,7 +51,7 @@ class FinancialDashboardController extends Controller
             'expense_categories.*' => 'string|max:255',
             'excluded_expense_categories' => 'nullable|array|max:1000',
             'excluded_expense_categories.*' => 'string|max:255',
-            'report_lang' => 'nullable|in:km,en', 'download' => 'nullable|in:csv',
+            'report_lang' => 'nullable|in:km,en', 'download' => 'nullable|in:csv,word',
             'print' => 'nullable|boolean',
             'orientation' => 'nullable|in:portrait,landscape',
             'refresh' => 'nullable|boolean',

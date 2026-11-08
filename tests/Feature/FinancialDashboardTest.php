@@ -107,7 +107,7 @@ class FinancialDashboardTest extends TestCase
                 $table->string('subject_type')->nullable(); $table->integer('subject_id')->nullable(); $table->integer('business_id')->nullable();
                 $table->string('causer_type')->nullable(); $table->integer('causer_id')->nullable(); $table->text('properties')->nullable(); $table->timestamps();
             });
-            $schema->create('contacts', function (Blueprint $table) { $table->integer('id'); $table->string('name'); });
+            $schema->create('contacts', function (Blueprint $table) { $table->integer('id'); $table->integer('business_id')->default(1); $table->string('name'); $table->string('supplier_business_name')->nullable(); });
             $schema->create('business_locations', function (Blueprint $table) { $table->integer('id'); $table->integer('business_id')->default(1); $table->string('name'); });
             $schema->create('expense_categories', function (Blueprint $table) {
                 $table->integer('id');
@@ -528,16 +528,16 @@ class FinancialDashboardTest extends TestCase
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
         $xpath = new \DOMXPath($dom);
         $links = $xpath->query('//a[@class="purchase-history-sort"]');
-        $this->assertSame(6, $links->length);
+        $this->assertSame(7, $links->length);
         foreach ($links as $link) {
             parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $query);
             $this->assertSame('1', $query['page']);
             $this->assertSame('en', $query['report_lang']);
         }
-        parse_str(parse_url($links->item(5)->getAttribute('href'), PHP_URL_QUERY), $priceLink);
+        parse_str(parse_url($links->item(6)->getAttribute('href'), PHP_URL_QUERY), $priceLink);
         $this->assertSame('purchase_price', $priceLink['sort']);
         $this->assertSame('desc', $priceLink['direction']);
-        $this->assertSame('ascending', $links->item(5)->parentNode->getAttribute('aria-sort'));
+        $this->assertSame('ascending', $links->item(6)->parentNode->getAttribute('aria-sort'));
         $descending = $this->skuPurchaseHistoryRequest('main', ['sort' => 'purchase_price', 'direction' => 'desc'])->getData()['rows'];
         $this->assertEquals(range(60, 11), $descending->pluck('id')->all());
         $quantities = $this->skuPurchaseHistoryRequest('main', ['sort' => 'quantity', 'direction' => 'asc'])->getData()['rows'];
@@ -558,6 +558,34 @@ class FinancialDashboardTest extends TestCase
     }
 
 
+    public function test_sku_purchase_history_supplier_column_sorts_names_and_hides_foreign_contacts()
+    {
+        $this->salesPermissions = ['purchase.view'];
+        DB::table('contacts')->insert([
+            ['id' => 1, 'business_id' => 1, 'name' => 'Zeta <Supplier>', 'supplier_business_name' => null],
+            ['id' => 2, 'business_id' => 1, 'name' => ' ', 'supplier_business_name' => 'Alpha company'],
+            ['id' => 3, 'business_id' => 2, 'name' => 'Hidden supplier', 'supplier_business_name' => null],
+        ]);
+        for ($id = 1; $id <= 4; $id++) {
+            DB::table('transactions')->insert(['id' => $id, 'type' => 'purchase', 'status' => 'received', 'contact_id' => $id, 'transaction_date' => '2026-11-01 12:00:00']);
+            DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'purchase_price_inc_tax' => 20]);
+        }
+        $view = $this->skuPurchaseHistoryRequest('main', ['sort' => 'supplier', 'direction' => 'asc', 'report_lang' => 'en']);
+        $rows = $view->getData()['rows'];
+        $named = $rows->filter(fn ($row) => $row->supplier_name !== null)->values();
+        $this->assertEquals([2, 1], $named->pluck('id')->all());
+        $this->assertSame('Alpha company', $named->first()->supplier_name);
+        $this->assertNull($rows->firstWhere('id', 3)->supplier_name);
+        $this->assertNull($rows->firstWhere('id', 4)->supplier_name);
+        $html = $view->render();
+        $this->assertStringContainsString('Supplier name', $html);
+        $this->assertStringContainsString('Zeta &lt;Supplier&gt;', $html);
+        $this->assertStringNotContainsString('Hidden supplier', $html);
+        $descending = $this->skuPurchaseHistoryRequest('main', ['sort' => 'supplier', 'direction' => 'desc'])->getData()['rows'];
+        $this->assertEquals([1, 2], $descending->filter(fn ($row) => $row->supplier_name !== null)->values()->pluck('id')->all());
+    }
+
+
     private function skuPurchaseHistoryRequest(string $source, array $data = [], int $variation = 1)
     {
         $request = Request::create('/reports/financial-dashboard/purchase-price-history/'.$source.'/'.$variation, 'GET', $data);
@@ -573,18 +601,22 @@ class FinancialDashboardTest extends TestCase
         foreach (['main', 'accessory', 'service'] as $source) {
             $db = DB::connection('finance_'.$source);
             $db->table('variations')->update(['sub_sku' => $source.'-SKU']);
+            $db->table('contacts')->insert(['id' => 1, 'name' => $source.' Supplier <A>']);
             foreach ([1 => [], 2 => ['transaction_date' => '2026-11-08 12:00:00'], 3 => ['location_id' => 2], 4 => ['business_id' => 2],
                 5 => ['status' => 'ordered'], 6 => ['type' => 'purchase_transfer'], 7 => ['type' => 'sell'], 8 => []] as $id => $attributes) {
                 $db->table('transactions')->insert($attributes + ['id' => $id, 'type' => 'purchase', 'status' => 'received', 'ref_no' => $source.'-'.$id, 'transaction_date' => '2020-01-01 12:00:00']);
                 $db->table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'variation_id' => $id === 8 ? 2 : 1, 'quantity' => 1, 'purchase_price_inc_tax' => $id * 10]);
             }
+            $db->table('transactions')->update(['contact_id' => 1]);
             $view = $this->skuPurchaseHistoryRequest($source);
             $history = $view->getData();
             $this->assertSame($source.'-SKU', $history['product']->sku);
+            $this->assertSame($source.' Supplier <A>', $history['rows']->first()->supplier_name);
             $this->assertEquals([2, 1], $history['rows']->pluck('id')->all());
             $this->assertEquals([20, 10], $history['rows']->pluck('purchase_price_inc_tax')->all());
             $html = $view->render();
             $this->assertStringContainsString($source.'-2', $html);
+            $this->assertStringContainsString($source.' Supplier &lt;A&gt;', $html);
             $this->assertStringNotContainsString($source.'-3', $html);
             $this->assertStringNotContainsString('finance_lot_sell_price', $html);
         }
@@ -1178,6 +1210,80 @@ class FinancialDashboardTest extends TestCase
         $this->assertSame([-2], array_values($report['branches'])[0]['location_ids']);
     }
 
+    private function wordDocument(array $filters): array
+    {
+        $response = $this->controllerRequest($filters + ['download' => 'word']);
+        $this->assertSame('application/vnd.openxmlformats-officedocument.wordprocessingml.document', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('.docx', $response->headers->get('Content-Disposition'));
+        ob_start();
+        $response->sendContent();
+        $bytes = ob_get_clean();
+        $this->assertSame('PK', substr($bytes, 0, 2));
+        $path = tempnam(sys_get_temp_dir(), 'finance-word-');
+        $zipPath = $path.'.zip';
+        rename($path, $zipPath);
+        file_put_contents($zipPath, $bytes);
+        try {
+            $archive = new \PharData($zipPath);
+            foreach (['[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'word/styles.xml', 'word/document.xml'] as $part) {
+                $this->assertTrue(isset($archive[$part]), $part.' is required in the Word package');
+                $xml = new \DOMDocument;
+                $this->assertTrue($xml->loadXML($archive[$part]->getContent()), $part.' must be valid XML');
+            }
+            $document = $archive['word/document.xml']->getContent();
+            unset($archive);
+        } finally { unlink($zipPath); }
+        $dom = new \DOMDocument;
+        $this->assertTrue($dom->loadXML($document));
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+        return [$dom, $xpath];
+    }
+
+    public function test_word_export_is_a_valid_docx_and_preserves_filtered_totals_and_safe_text()
+    {
+        $this->seedSales();
+        session()->put('business.name', "ACME & <Word>\x01");
+        [$dom, $xpath] = $this->wordDocument(['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'report_lang' => 'en', 'location_ids' => [1], 'excluded_expense_categories' => ['Office']]);
+        $this->assertStringContainsString('ACME & <Word>', $dom->textContent);
+        $this->assertStringContainsString('2026-11-01 — 2026-11-30', $dom->textContent);
+        $this->assertStringContainsString('Expense totals, net profit and expense shares', $dom->textContent);
+        $this->assertStringNotContainsString('Office', $dom->textContent);
+        $this->assertSame(0, $dom->getElementsByTagName('Word')->length);
+        $cells = $xpath->query('//w:tr[w:tc[1]/w:p/w:r/w:t="Net profit"]/w:tc');
+        $this->assertSame(3, $cells->length);
+        $this->assertSame('$50.00', trim($cells->item(1)->textContent));
+        $this->assertSame('$50.00', trim($cells->item(2)->textContent));
+        $this->assertSame('landscape', $xpath->query('//w:sectPr/w:pgSz')->item(0)->getAttribute('w:orient'));
+    }
+
+    public function test_word_export_supports_khmer_expense_breakdown_and_unavailable_costs()
+    {
+        $this->seedSales();
+        DB::table('purchase_lines')->delete();
+        [$dom, $xpath] = $this->wordDocument(['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'report_lang' => 'km', 'location_ids' => [1]]);
+        $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('financial_dashboard', 'km'), $dom->textContent);
+        $this->assertStringContainsString('Office', $dom->textContent);
+        $this->assertStringContainsString('$15.00', $dom->textContent);
+        $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('not_available', 'km'), $dom->textContent);
+        $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('finance_missing_costs', 'km'), $dom->textContent);
+        $this->assertSame(2, $xpath->query('/w:document/w:body/w:tbl')->length);
+        $cards = $xpath->query('/w:document/w:body/w:tbl[1]/w:tr/w:tc[w:tcPr/w:shd]');
+        $this->assertSame(4, $cards->length);
+        $this->assertSame('168F7E', $xpath->query('w:tcPr/w:shd', $cards->item(0))->item(0)->getAttribute('w:fill'));
+        $this->assertSame('163D70', $xpath->query('w:tcPr/w:shd', $cards->item(1))->item(0)->getAttribute('w:fill'));
+        $this->assertSame('553180', $xpath->query('w:tcPr/w:shd', $cards->item(2))->item(0)->getAttribute('w:fill'));
+        $workspace = $xpath->query('/w:document/w:body/w:tbl[2]/w:tr/w:tc');
+        $this->assertSame(3, $workspace->length);
+        $this->assertSame(1, $xpath->query('w:tbl', $workspace->item(0))->length);
+        $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('expense_breakdown', 'km'), $workspace->item(0)->textContent);
+        $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('expense_mix', 'km'), $workspace->item(2)->textContent);
+        $this->assertStringContainsString('100.0%', $workspace->item(2)->textContent);
+        $this->assertSame(1, $xpath->query('w:tbl', $workspace->item(2))->length);
+    }
+
+
     public function test_filtered_csv_uses_the_same_expense_totals_and_declares_the_filter()
     {
         $this->seedSales();
@@ -1285,8 +1391,30 @@ class FinancialDashboardTest extends TestCase
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
         $xpath = new \DOMXPath($dom);
 
+        $wordLinks = $xpath->query('//a[contains(@href,"download=word")]');
+        $this->assertSame(1, $wordLinks->length);
+        parse_str(parse_url($wordLinks->item(0)->getAttribute('href'), PHP_URL_QUERY), $wordQuery);
+        $this->assertSame('word', $wordQuery['download']);
+        $this->assertSame('en', $wordQuery['report_lang']);
+        $this->assertSame(['1'], $wordQuery['location_ids']);
+        $this->assertSame('2026-11-01', $wordQuery['start_date']);
+        $this->assertSame('2026-11-30', $wordQuery['end_date']);
+
         $detailHeadings = $xpath->query('//table[contains(@class,"finance-combined-table")]//th[@scope="row"]/a[@data-cost-details="1"]');
-        $this->assertEquals(3, $detailHeadings->length);
+        $this->assertEquals(6, $detailHeadings->length);
+        foreach (['gross_profit' => 'Gross profit', 'net_sales' => 'All-department net sales', 'gross_margin' => 'Gross profit margin'] as $metric => $title) {
+            $links = $xpath->query('//a[@data-detail-title="'.$title.'" and @data-cost-details="1"]');
+            $this->assertEquals($metric === 'gross_margin' ? 3 : 5, $links->length);
+            foreach ($links as $link) {
+                $this->assertStringContainsString('finance-sales-details', $link->getAttribute('class'));
+                $this->assertStringContainsString('/reports/financial-dashboard/cost-sales?', $link->getAttribute('href'));
+                parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $detailQuery);
+                $this->assertSame('2026-11-01', $detailQuery['start_date']);
+                $this->assertSame('2026-11-30', $detailQuery['end_date']);
+                $this->assertSame(['1'], $detailQuery['location_ids']);
+                $this->assertSame('all', $detailQuery['source']);
+            }
+        }
         foreach ($xpath->query('//a[@data-detail-kind="revenue"]') as $link) {
             $this->assertStringContainsString('/reports/financial-dashboard/revenue-sales?', $link->getAttribute('href'));
             $this->assertStringContainsString('finance-sales-details', $link->getAttribute('class'));

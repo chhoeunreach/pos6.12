@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'finance_supplier_name' => 'ឈ្មោះអ្នកផ្គត់ផ្គង់',
+    'export_word' => 'នាំចេញជា Word',
+    'finance_basis_heading' => 'កំណត់សម្គាល់អំពីការគណនា',
     'finance_purchase_price_history' => 'ប្រវត្តិតម្លៃទិញ',
     'finance_purchase_price_history_scope' => 'ការទិញដែលបានទទួលសម្រាប់ SKU នេះ នៅទីតាំងដែលអ្នកមានសិទ្ធិមើល។ គ្រប់កាលបរិច្ឆេទ ដោយបង្ហាញថ្មីបំផុតមុនជាលំនាំដើម។ តម្លៃរួមពន្ធទំនិញ។',
     'finance_view_full_purchase' => 'មើលការទិញពេញលេញ',
