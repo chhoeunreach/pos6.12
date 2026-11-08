@@ -1444,6 +1444,30 @@ function compact_purchase_lines_for_submit($form, done) {
 
 $(document).on('click', 'button#submit_purchase_form', function(e) {
     e.preventDefault();
+    var $button = $(this), $form = $('form#add_purchase_form');
+    if ($form.data('purchase-saving')) return false;
+    var $status = $('#purchase_validation_status');
+    if (!$status.length) $status = $('<p id="purchase_validation_status" role="status">').insertBefore($button);
+
+    function validationFailed() {
+        $button.prop('disabled', false);
+        $status.text('Please check the highlighted fields before saving.');
+    }
+
+    function saveValidatedPurchase(form) {
+        if ($form.data('purchase-saving')) return false;
+        $form.data('purchase-saving', true);
+        $button.prop('disabled', true);
+        $status.text('');
+        show_purchase_submit_progress('Preparing purchase rows...', 1);
+        compact_purchase_lines_for_submit($form, function() {
+            // Validation is complete. Do not validate again after row names
+            // have been moved into the compact JSON payload.
+            window.onbeforeunload = null;
+            window.HTMLFormElement.prototype.submit.call(form);
+        });
+        return false;
+    }
 
     //Check if product is present or not.
     if ($('table#purchase_entry_table tbody tr.purchase_entry_row').length <= 0) {
@@ -1456,12 +1480,26 @@ $(document).on('click', 'button#submit_purchase_form', function(e) {
         return false;
     }
 
-    $('form#add_purchase_form').validate({
+    var validator = $form.validate({
+        submitHandler: saveValidatedPurchase,
+        invalidHandler: validationFailed,
         rules: {
             ref_no: {
                 remote: {
                     url: '/purchases/check_ref_number',
                     type: 'post',
+                    timeout: 15000,
+                    error: function(xhr, textStatus) {
+                        if (textStatus === 'abort') return;
+                        var reference = $form.find('[name="ref_no"]')[0];
+                        validator.formSubmitted = false;
+                        validator.stopRequest(reference, false);
+                        $(reference).removeData('previousValue');
+                        var message = 'Unable to check the purchase reference. Please try Update again.';
+                        validator.showErrors({ref_no: message});
+                        $button.prop('disabled', false);
+                        $status.text(message);
+                    },
                     data: {
                         ref_no: function() {
                             return $('#ref_no').val();
@@ -1534,15 +1572,12 @@ $(document).on('click', 'button#submit_purchase_form', function(e) {
         }
     }
 
-    if ($('form#add_purchase_form').valid()) {
-        var $button = $(this);
-        var $form = $('form#add_purchase_form');
-        $button.attr('disabled', true);
-        show_purchase_submit_progress('Preparing purchase rows...', 1);
-        compact_purchase_lines_for_submit($form, function() {
-            $form.submit();
-        });
-    }
+    // An existing validator may have been initialized by another page script.
+    validator.settings.submitHandler = saveValidatedPurchase;
+    $form.off('invalid-form.purchaseSave').on('invalid-form.purchaseSave', validationFailed);
+    $button.prop('disabled', true);
+    $status.text('Checking purchase details...');
+    $form.trigger('submit');
 });
 
 function toggle_search() {

@@ -77,7 +77,7 @@ class FinancialSalesController extends Controller
                         ->where('t.type', 'purchase')->where('t.status', 'received')
                         ->whereIn('p.lot_number', $lotNumbers)->whereIn('p.variation_id', $records->pluck('variation_id')->unique()->all())
                         ->orderByDesc('t.transaction_date')->orderByDesc('t.id')->orderByDesc('p.id')
-                        ->get(['p.lot_number', 'p.variation_id', 'p.purchase_price_inc_tax', 't.id', 't.ref_no'])
+                        ->get(['p.id as purchase_line_id', 'p.lot_number', 'p.variation_id', 'p.purchase_price_inc_tax', 't.id', 't.ref_no'])
                         ->unique(fn ($purchase) => $purchase->variation_id.':'.$purchase->lot_number)
                         ->keyBy(fn ($purchase) => $purchase->variation_id.':'.$purchase->lot_number);
                 }
@@ -105,7 +105,7 @@ class FinancialSalesController extends Controller
                         $purchase = $latestPurchases->get($row->variation_id.':'.$lot);
                         if ($purchase) $row->purchase_edit_links[] = ['lot' => $lot, 'reference' => $purchase->ref_no ?: '#'.$purchase->id,
                             'purchase_price' => $purchase->purchase_price_inc_tax === null ? null : (float) $purchase->purchase_price_inc_tax,
-                            'url' => route($purchaseRoute, $purchase->id)];
+                            'url' => route('reports.financial-purchase-line.show', ['sourceName' => $source, 'line' => $purchase->purchase_line_id, 'report_lang' => $request->input('report_lang', 'km')])];
                     }
                 }
                 unset($row->purchase_line_ids, $row->enable_stock, $row->variation_id);

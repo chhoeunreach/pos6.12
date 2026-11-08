@@ -4,6 +4,7 @@ namespace Modules\LocalCashierReport\Services;
 
 use App\Services\PurchaseLotCost;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -11,7 +12,61 @@ class FinancialDashboardReport
 {
     public const METRICS = ['units', 'main_sales', 'accessory_sales', 'service_sales', 'sales', 'returns', 'net_sales', 'cost', 'gross_profit', 'gross_margin', 'expenses', 'net_profit', 'margin'];
 
-    public function build(int $businessId, Collection $accessibleLocations, array $filters): array
+    /**
+     * Build the dashboard, reusing a short-lived cached copy for identical
+     * filters. Reports are expensive to aggregate and only change when new
+     * transactions are posted, so a small TTL removes the cost of reopening
+     * the page while keeping the numbers close to real time. Pass
+     * $forceRefresh to bypass the cache after posting new transactions.
+     */
+    public function build(int $businessId, Collection $accessibleLocations, array $filters, bool $forceRefresh = false): array
+    {
+        $ttl = (int) config('localcashierreport.financial_dashboard_cache_ttl', 120);
+        if ($ttl <= 0) {
+            return $this->buildReport($businessId, $accessibleLocations, $filters);
+        }
+
+        $key = $this->cacheKey($businessId, $filters);
+        if (! $forceRefresh) {
+            $cached = Cache::get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $report = $this->buildReport($businessId, $accessibleLocations, $filters);
+        // Never cache a partial report: a source database may be temporarily
+        // unavailable and the next request should retry it.
+        if (empty($report['unavailable'])) {
+            Cache::put($key, $report, now()->addSeconds($ttl));
+        }
+
+        return $report;
+    }
+
+    /**
+     * Cache key for one dashboard filter combination. Arrays are normalised so
+     * the same filters always map to the same key regardless of input order.
+     */
+    private function cacheKey(int $businessId, array $filters): string
+    {
+        $normalise = fn ($values) => collect($values ?? [])->map(fn ($value) => (string) $value)->sort()->values()->all();
+        $payload = [
+            'version' => 3,
+            'business_id' => $businessId,
+            'source' => (string) ($filters['source'] ?? 'all'),
+            'start_date' => (string) ($filters['start_date'] ?? ''),
+            'end_date' => (string) ($filters['end_date'] ?? ''),
+            'location_ids' => collect($filters['location_ids'] ?? [])->map(fn ($id) => (int) $id)->sort()->values()->all(),
+            'expense_filter_applied' => (int) ($filters['expense_filter_applied'] ?? 0),
+            'expense_categories' => $normalise($filters['expense_categories'] ?? []),
+            'excluded_expense_categories' => $normalise($filters['excluded_expense_categories'] ?? []),
+        ];
+
+        return 'financial-dashboard:'.md5((string) json_encode($payload));
+    }
+
+    private function buildReport(int $businessId, Collection $accessibleLocations, array $filters): array
     {
         $branches = [];
         $sourceLocations = [];
@@ -249,17 +304,63 @@ class FinancialDashboardReport
         return $this->costQuery($connection, $businessId, $locationIds, $filters)->get()->keyBy('location_id');
     }
 
+    /**
+     * Resolve the receipt line (and its cost) for every variation/lot pair once.
+     * Transfers may carry an old cost, so the originating purchase is looked up
+     * by exact lot and variation, including receipts at another business branch.
+     * MySQL only; other drivers keep the correlated PurchaseLotCost fallback.
+     */
+    private function receiptLookup($db, int $businessId)
+    {
+        if ($db->getDriverName() !== 'mysql') return null;
+
+        $ranked = $db->table('purchase_lines as receipt_line')
+            ->join('transactions as receipt_tx', 'receipt_tx.id', '=', 'receipt_line.transaction_id')
+            ->where('receipt_tx.business_id', $businessId)
+            ->where('receipt_tx.type', 'purchase')
+            ->where('receipt_tx.status', 'received')
+            ->whereNotNull('receipt_line.purchase_price_inc_tax')
+            ->whereRaw("NULLIF(TRIM(receipt_line.lot_number), '') IS NOT NULL")
+            ->select('receipt_line.variation_id', 'receipt_line.lot_number', 'receipt_line.purchase_price_inc_tax', 'receipt_line.id')
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY receipt_line.variation_id, receipt_line.lot_number ORDER BY receipt_tx.transaction_date DESC, receipt_tx.id DESC, receipt_line.id DESC) as row_num');
+
+        return $db->query()->fromSub($ranked, 'ranked_receipts')
+            ->where('ranked_receipts.row_num', 1)
+            ->select('ranked_receipts.variation_id', 'ranked_receipts.lot_number', 'ranked_receipts.purchase_price_inc_tax', 'ranked_receipts.id');
+    }
+
     public function costQuery(string $connection, int $businessId, array $locationIds, array $filters, bool $byTransaction = false, bool $byLine = false)
     {
         $db = DB::connection($connection);
-        $allocatedReceipt = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id');
-        $allocatedReceiptId = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id', 'id');
+        $receipts = $this->receiptLookup($db, $businessId);
+        $allocatedReceipt = $receipts
+            ? 'allocated_receipt.purchase_price_inc_tax'
+            : PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id');
+        $allocatedReceiptId = $receipts
+            ? 'allocated_receipt.id'
+            : PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id', 'id');
         $allocatedPrice = "COALESCE($allocatedReceipt, p.purchase_price_inc_tax)";
         // Only aggregate allocations used by this report. Returns can refer to
         // an original sale outside the selected dates or at another location.
         $reportSaleLines = $this->transactions($connection, $businessId, $locationIds, $filters)
             ->whereIn('t.type', ['sell', 'sell_return'])
             ->join('transaction_sell_lines as report_line', 'report_line.transaction_id', '=', 't.id')
+            ->leftJoin('transaction_sell_lines as needed_sold', function ($join) {
+                $join->on('needed_sold.id', '=', DB::raw("CASE WHEN t.type = 'sell_return' THEN COALESCE(report_line.parent_sell_line_id, report_line.id) ELSE report_line.id END"));
+            })
+            ->leftJoin('purchase_lines as needed_lot', function ($join) {
+                $join->on('needed_lot.id', '=', 'needed_sold.lot_no_line_id')
+                    ->on('needed_lot.variation_id', '=', 'needed_sold.variation_id');
+            })
+            ->leftJoin('transactions as needed_lot_tx', function ($join) use ($businessId) {
+                $join->on('needed_lot_tx.id', '=', 'needed_lot.transaction_id')
+                    ->on('needed_lot_tx.business_id', '=', DB::raw((int) $businessId));
+            })
+            // Allocations are only a fallback for lines whose lot has no cost
+            // (mostly lines sold without a lot). Skip the rest of the report.
+            ->where(function ($query) {
+                $query->whereNull('needed_lot_tx.id')->orWhereNull('needed_lot.purchase_price_inc_tax');
+            })
             ->selectRaw("CASE WHEN t.type = 'sell_return' THEN COALESCE(report_line.parent_sell_line_id, report_line.id) ELSE report_line.id END");
         $allocations = $db->table('transaction_sell_lines_purchase_lines as a')
             ->whereIn('a.sell_line_id', $reportSaleLines)
@@ -271,6 +372,12 @@ class FinancialDashboardReport
             ->groupBy('a.sell_line_id')->select('a.sell_line_id')
             ->selectRaw("SUM(a.quantity) as quantity, SUM(a.quantity * ($allocatedPrice)) as cost")
             ->selectRaw("SUM(CASE WHEN ($allocatedPrice) IS NOT NULL THEN a.quantity ELSE 0 END) as costed_quantity");
+        if ($receipts) {
+            $allocations->leftJoinSub($receipts, 'allocated_receipt', function ($join) {
+                $join->on('allocated_receipt.variation_id', '=', 'p.variation_id')
+                    ->on('allocated_receipt.lot_number', '=', 'p.lot_number');
+            });
+        }
         if ($byLine) $allocations->selectRaw("GROUP_CONCAT(DISTINCT NULLIF(p.lot_number, '')) as lots, GROUP_CONCAT(DISTINCT COALESCE($allocatedReceiptId, p.id)) as purchase_ids");
         // Returns use the original sale's lot and the same actual purchase cost.
         $query = $this->transactions($connection, $businessId, $locationIds, $filters)
@@ -293,23 +400,48 @@ class FinancialDashboardReport
             })
             ->leftJoin('transactions as lot_tx', function ($join) {
                 $join->on('lot_tx.id', '=', 'lot.transaction_id')->on('lot_tx.business_id', '=', 't.business_id');
-            })
-            ->leftJoinSub($allocations, 'allocated', fn ($join) => $join->on('allocated.sell_line_id', '=', 'sold.id'));
-        $directReceipt = PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id');
-        $directReceiptId = PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id', 'id');
+            });
+        if ($byLine) {
+            $query->leftJoinSub($allocations, 'allocated', fn ($join) => $join->on('allocated.sell_line_id', '=', 'sold.id'));
+        }
+        if ($receipts) {
+            $query->leftJoinSub($receipts, 'direct_receipt', function ($join) {
+                $join->on('direct_receipt.variation_id', '=', 'sold.variation_id')
+                    ->on('direct_receipt.lot_number', '=', 'lot.lot_number');
+            });
+        }
+        $directReceipt = $receipts
+            ? 'direct_receipt.purchase_price_inc_tax'
+            : PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id');
+        $directReceiptId = $receipts
+            ? 'direct_receipt.id'
+            : PurchaseLotCost::receiptValue('lot', 't.business_id', 'sold.variation_id', 'id');
+        // The aggregate path only needs allocations for lines without a usable
+        // lot cost, so resolve them per line (the CASE below short-circuits it)
+        // instead of aggregating every sale line into a derived table.
+        $allocatedPriceFallback = "COALESCE(".PurchaseLotCost::receiptValue('p', 'pt.business_id', 'sold.variation_id').", p.purchase_price_inc_tax)";
+        $allocatedCost = "(SELECT CASE WHEN ABS(SUM(a.quantity) - sold.quantity) < 0.00001
+                AND ABS(SUM(CASE WHEN ($allocatedPriceFallback) IS NOT NULL THEN a.quantity ELSE 0 END) - SUM(a.quantity)) < 0.00001
+                THEN SUM(a.quantity * ($allocatedPriceFallback)) / NULLIF(SUM(a.quantity), 0) END
+            FROM transaction_sell_lines_purchase_lines as a
+            INNER JOIN purchase_lines as p ON p.id = a.purchase_line_id
+            INNER JOIN transactions as pt ON pt.id = p.transaction_id
+            WHERE a.sell_line_id = sold.id AND a.quantity > 0 AND pt.business_id = t.business_id
+                AND p.variation_id = sold.variation_id)";
         $recorded = "COALESCE(
             CASE WHEN lot_tx.id IS NOT NULL THEN COALESCE($directReceipt, lot.purchase_price_inc_tax) END,
-            CASE WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 AND ABS(allocated.costed_quantity - allocated.quantity) < 0.00001 THEN allocated.cost / NULLIF(allocated.quantity, 0) END
+            ".($byLine
+                ? "CASE WHEN ABS(allocated.quantity - sold.quantity) < 0.00001 AND ABS(allocated.costed_quantity - allocated.quantity) < 0.00001 THEN allocated.cost / NULLIF(allocated.quantity, 0) END"
+                : $allocatedCost)."
         )";
-        $historical = "COALESCE($recorded,
-            (SELECT recent.purchase_price_inc_tax FROM purchase_lines as recent
+        $recent = "(SELECT recent.purchase_price_inc_tax FROM purchase_lines as recent
                 INNER JOIN transactions as purchase ON purchase.id = recent.transaction_id
                 WHERE recent.variation_id = sold.variation_id AND purchase.business_id = t.business_id
                     AND purchase.location_id = sale.location_id AND purchase.status = 'received'
                     AND purchase.type IN ('purchase', 'opening_stock', 'production_purchase')
                     AND purchase.transaction_date <= sale.transaction_date AND recent.purchase_price_inc_tax IS NOT NULL
-                ORDER BY purchase.transaction_date DESC, recent.id DESC LIMIT 1)
-        )";
+                ORDER BY purchase.transaction_date DESC, recent.id DESC LIMIT 1)";
+        $historical = "COALESCE($recorded, $recent)";
         $unitCost = "CASE WHEN product.id IS NULL OR sale.id IS NULL THEN NULL WHEN product.enable_stock = 0 THEN 0 ELSE COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) END";
         $quantity = "CASE WHEN t.type = 'sell_return' AND line.parent_sell_line_id IS NULL THEN line.quantity_returned ELSE line.quantity END";
 
@@ -337,14 +469,46 @@ class FinancialDashboardReport
                 ->selectRaw("CASE WHEN product.enable_stock = 1 AND ($recorded) IS NULL AND COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END as estimated");
         }
 
-        $query->whereRaw("($quantity) > 0")->groupBy('t.location_id')->select('t.location_id');
-        if ($byTransaction) $query->groupBy('t.id')->addSelect('t.id as transaction_id');
+        // The cost expression contains correlated subqueries. Compute each
+        // per-line cost source once in a derived table, then aggregate it so
+        // the lookups are not repeated for every summary column.
+        $lines = (clone $query)->whereRaw("($quantity) > 0")
+            ->select('t.location_id', 't.id as transaction_id')
+            ->selectRaw("CASE WHEN line.children_type IN ('combo', 'modifier') THEN 0 WHEN t.type = 'sell_return' THEN -($quantity) ELSE ($quantity) END as counted_units")
+            ->selectRaw("CASE WHEN t.type = 'sell_return' THEN -($quantity) ELSE ($quantity) END as signed_quantity")
+            ->selectRaw("($recorded) as recorded_cost")
+            ->selectRaw("CASE WHEN product.id IS NULL THEN 0 ELSE 1 END as has_product")
+            ->selectRaw("CASE WHEN sale.id IS NULL THEN 0 ELSE 1 END as has_sale")
+            ->selectRaw("product.enable_stock as enable_stock")
+            ->selectRaw("v.dpp_inc_tax as dpp_inc_tax")
+            ->selectRaw("v.default_purchase_price as default_purchase_price")
+            ->selectRaw("sold.variation_id as variation_id")
+            ->selectRaw("sale.location_id as sale_location_id")
+            ->selectRaw("sale.transaction_date as sale_date")
+            ->selectRaw("t.business_id as business_id");
 
-        return $query
-            ->selectRaw('COUNT(DISTINCT t.id) as costed_transactions')
-            ->selectRaw("SUM(CASE WHEN line.children_type IN ('combo', 'modifier') THEN 0 WHEN t.type = 'sell_return' THEN -($quantity) ELSE ($quantity) END) as units")
-            ->selectRaw("SUM(CASE WHEN t.type = 'sell_return' THEN -1 ELSE 1 END * ($quantity) * ($unitCost)) as cost")
-            ->selectRaw("SUM(CASE WHEN ($unitCost) IS NULL THEN 1 ELSE 0 END) as missing")
-            ->selectRaw("SUM(CASE WHEN product.enable_stock = 1 AND ($recorded) IS NULL AND COALESCE($historical, v.dpp_inc_tax, v.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END) as estimated");
+        // Only fall back to the historical price when no recorded cost was
+        // found; CASE keeps the correlated lookup from running otherwise.
+        $recentCosted = "(SELECT recent.purchase_price_inc_tax FROM purchase_lines as recent
+                INNER JOIN transactions as purchase ON purchase.id = recent.transaction_id
+                WHERE recent.variation_id = cost_lines.variation_id AND purchase.business_id = cost_lines.business_id
+                    AND purchase.location_id = cost_lines.sale_location_id AND purchase.status = 'received'
+                    AND purchase.type IN ('purchase', 'opening_stock', 'production_purchase')
+                    AND purchase.transaction_date <= cost_lines.sale_date AND recent.purchase_price_inc_tax IS NOT NULL
+                ORDER BY purchase.transaction_date DESC, recent.id DESC LIMIT 1)";
+        $recentCostedExpr = "CASE WHEN cost_lines.recorded_cost IS NULL THEN $recentCosted END";
+
+        $lineUnitCost = "CASE WHEN cost_lines.has_product = 0 OR cost_lines.has_sale = 0 THEN NULL WHEN cost_lines.enable_stock = 0 THEN 0 ELSE COALESCE(cost_lines.recorded_cost, $recentCostedExpr, cost_lines.dpp_inc_tax, cost_lines.default_purchase_price) END";
+        $lineEstimated = "CASE WHEN cost_lines.enable_stock = 1 AND cost_lines.recorded_cost IS NULL AND COALESCE($recentCostedExpr, cost_lines.dpp_inc_tax, cost_lines.default_purchase_price) IS NOT NULL THEN 1 ELSE 0 END";
+
+        $summary = $db->query()->fromSub($lines, 'cost_lines')->groupBy('cost_lines.location_id')->select('cost_lines.location_id');
+        if ($byTransaction) $summary->groupBy('cost_lines.transaction_id')->addSelect('cost_lines.transaction_id');
+
+        return $summary
+            ->selectRaw('COUNT(DISTINCT cost_lines.transaction_id) as costed_transactions')
+            ->selectRaw('SUM(cost_lines.counted_units) as units')
+            ->selectRaw("SUM(cost_lines.signed_quantity * ($lineUnitCost)) as cost")
+            ->selectRaw("SUM(CASE WHEN ($lineUnitCost) IS NULL THEN 1 ELSE 0 END) as missing")
+            ->selectRaw("SUM($lineEstimated) as estimated");
     }
 }

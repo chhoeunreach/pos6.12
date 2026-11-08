@@ -33,16 +33,23 @@ test('opening the Stock Sell Report normally keeps its existing today and all-lo
     assert.equal(state.options.endDate.format(), '2026-11-05');
 });
 
-test('saving a purchase price refreshes the Stock Sell Report block without resetting its page', () => {
+test('quick price modal refreshes the Stock Sell Report block only after a successful save', () => {
     const source = fs.readFileSync(path.join(__dirname, '../../Modules/SmartStockInventory/Resources/views/report/stock_sell.blade.php'), 'utf8');
-    const start = source.indexOf("        window.initPurchaseLotPriceModal({modal: '#ssi-purchase-price-modal'");
+    const start = source.indexOf("        var purchaseModal = $('#ssi-purchase-reference-modal')");
     const end = source.indexOf("        $(document).on('change'", start);
     const state = {messages: [], reloads: []};
-    const host = {location: {origin: 'http://localhost'}, parent: {postMessage: (...args) => state.messages.push(args)}, initPurchaseLotPriceModal: options => state.options = options};
-    const table = {ajax: {reload: (...args) => state.reloads.push(args)}};
-    new Function('window', 'stock_sell_report_table', source.slice(start, end))(host, table);
-    assert.equal(state.options.modal, '#ssi-purchase-price-modal');
-    state.options.saved();
+    const dom = new JSDOM('<a class="ssi-purchase-reference-edit" href="/purchases/12/edit" target="_blank" rel="noopener">Edit</a><div id="ssi-purchase-reference-modal"></div><iframe id="ssi-purchase-reference-frame" src="about:blank"></iframe>', {url: 'http://localhost', runScripts: 'outside-only'});
+    const $ = jquery(dom.window);
+    dom.window.$ = $;
+    dom.window.stock_sell_report_table = {ajax: {reload: (...args) => state.reloads.push(args)}};
+    Object.defineProperty(dom.window, 'parent', {value: {postMessage: (...args) => state.messages.push(args)}});
+    dom.window.initPurchaseLotPriceModal = options => { state.editor = options; };
+    dom.window.eval(source.slice(start, end));
+    assert.equal(state.editor.modal, '#ssi-purchase-price-modal');
+    assert.equal(state.editor.trigger, '.ssi-purchase-reference-edit');
+    assert.equal(state.reloads.length, 0);
+    assert.equal(state.messages.length, 0);
+    state.editor.saved({success: true});
     assert.deepEqual(state.reloads, [[null, false]]);
     assert.equal(state.messages[0][0].type, 'financial-purchase-cost-updated');
     assert.equal(state.messages[0][1], 'http://localhost');

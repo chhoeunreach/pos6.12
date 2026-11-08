@@ -15,7 +15,7 @@ function fixture() {
     $('body').append('<div id="finance-purchase-price-modal" class="modal"><form class="purchase-lot-price-form"><div class="purchase-lot-price-error" hidden></div><p class="purchase-lot-price-loading"></p><div class="purchase-lot-price-fields"></div><button type="submit" class="purchase-lot-price-save">Save</button><button type="button" class="purchase-lot-price-cancel" data-dismiss="modal">Cancel</button></form></div>');
     $('body').append('<div id="finance-purchase-edit-modal" class="modal"><h4 id="finance-purchase-edit-title"></h4><p id="finance-purchase-edit-loading"></p><iframe id="finance-purchase-edit-frame" src="about:blank"></iframe></div>');
     $('body').append('<a class="finance-pos-report-details" href="/smart-stock-inventory/stock-reports/sell?finance_embed=1&start_date=2026-11-01&end_date=2026-11-05&location_id%5B0%5D=1">POS total</a><div id="finance-pos-report-modal"><span id="finance-pos-report-loading"></span><iframe id="finance-pos-report-frame" src="about:blank"></iframe><a id="finance-pos-report-tab"></a></div>');
-    $('#finance-sales-modal').append('<div class="finance-cost-tools" hidden><input id="finance-cost-search"><button id="finance-cost-clear-search"></button></div><div class="finance-cost-stats" hidden><strong id="finance-cost-stat-qty"></strong><strong id="finance-cost-stat-total"></strong><strong id="finance-cost-stat-profit"></strong></div><div id="finance-cost-quality" hidden></div><span id="finance-sales-range"></span><button id="finance-sales-first"></button><button id="finance-sales-last"></button>');
+    $('#finance-sales-modal').append('<div class="finance-cost-tools" hidden><input id="finance-cost-search"><button id="finance-cost-clear-search"></button></div><div class="finance-cost-stats" hidden><div><strong id="finance-cost-stat-qty"></strong></div><div><strong id="finance-cost-stat-total"></strong></div><div><strong id="finance-cost-stat-profit"></strong></div></div><div id="finance-cost-quality" hidden></div><span id="finance-sales-range"></span><button id="finance-sales-first"></button><button id="finance-sales-last"></button>');
     $('#finance-sales-modal').append('<div class="finance-cost-export-actions"><button class="finance-cost-export" data-format="csv"></button><button class="finance-cost-export" data-format="excel"></button><button class="finance-cost-export" data-format="print"></button></div>');
     $('#finance-sales-table').prepend('<thead id="finance-sales-cost-head"><tr><th>SKU</th><th>Lots</th><th>Product</th><th>Qty</th><th>Purchase</th><th>Selling</th><th>Cost</th><th>Profit</th></tr></thead>');
     $('<div id="finance-sales-controls">').insertBefore('#finance-sales-table').append($('#finance-sales-summary, #finance-sales-page-size, #finance-sales-refresh'));
@@ -175,32 +175,53 @@ function openQuickCost(f, requestIndex) {
     f.requests[requestIndex].success({lots: [{id: 1, lot: 'LOT-01', reference: 'PUR-1', purchase_price: 50}], cost_version: 'a'.repeat(64), update_url: '/cost/main/1'});
     assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
 }
-test('cost price links open the matching purchase page in a new tab and refresh details on return', () => {
+test('quick row price links open a modal and refresh the current report block only after saving', () => {
     const f = fixture();
     f.$('[data-cost-details]').trigger('click');
-    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 2540, cost_edit_url: '/old-quick-cost',
-        purchase_edit_links: [{lot: 'SERIAL-1', reference: 'PUR-12', purchase_price: 2549, url: '/purchases/12/edit'}, {lot: 'SERIAL-2', reference: 'PUR-13', purchase_price: 2540, url: '/purchases/13/edit'}]}]});
-    const links = f.$('.finance-cost-price-edit-link');
-    assert.equal(links.length, 2);
-    assert.equal(links.first().attr('href'), '/purchases/12/edit');
-    assert.match(links.first().text(), /Latest purchase: \$2,549\.00/);
-    assert.match(f.$('#finance-sales-table tbody').text(), /Cost used: \$2,540\.00/);
-    assert.equal(links.first().attr('target'), '_blank');
-    assert.equal(links.first().attr('rel'), 'noopener');
-    assert.match(f.$('#finance-sales-table tbody').text(), /SERIAL-1 · PUR-12/);
-    assert.equal(f.$('.finance-cost-price-edit').length, 0);
-    assert.equal(f.requests.length, 1);
+    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 2540,
+        purchase_edit_links: [{lot: 'SERIAL-1', reference: 'PUR-12', purchase_price: 2549, url: '/reports/financial-dashboard/purchase-price/main/12'}]}]});
+    f.$('#finance-purchase-price-modal form').append('<a class="purchase-lot-price-full" target="_blank" rel="noopener" hidden>View full purchase</a>');
+    const link = f.$('.finance-cost-price-edit-link');
+    assert.equal(link.attr('target'), undefined);
+    assert.equal(link.attr('aria-haspopup'), 'dialog');
     const click = f.$.Event('click');
-    links.first().trigger(click);
-    assert.equal(click.isDefaultPrevented(), false);
-    assert.equal(f.$('#finance-purchase-edit-modal').hasClass('in'), false);
-    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), 'about:blank');
-    assert.equal(f.requests.length, 1);
-    f.$(f.dom.window).triggerHandler('focus');
+    link.trigger(click);
+    assert.equal(click.isDefaultPrevented(), true);
+    assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
+    assert.equal(f.requests[1].url, link.attr('href'));
+    f.requests[1].success({lots: [{id: 12, lot: 'SERIAL-1', reference: 'PUR-12', purchase_price: 2549}], cost_version: 'a'.repeat(64), update_url: link.attr('href'), full_purchase_url: '/purchases/12/edit'});
+    const full = f.$('#finance-purchase-price-modal .purchase-lot-price-full');
+    assert.equal(full.prop('hidden'), false);
+    assert.equal(full.attr('href'), '/purchases/12/edit');
+    assert.equal(full.attr('target'), '_blank');
+    assert.equal(full.attr('rel'), 'noopener');
+    f.$('#finance-purchase-price-modal input[type=number]').val('2600');
+    f.$('#finance-purchase-price-modal form').trigger('submit');
+    assert.equal(f.requests[2].method, 'PUT');
+    assert.match(f.requests[2].data, /purchase_price%5D=2600/);
+    assert.equal(f.requests.length, 3, 'the block waits for a successful save');
+    f.requests[2].success({success: true});
+    f.requests[2].complete();
+    assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), false);
+    assert.equal(f.$('#finance-sales-modal').hasClass('in'), true);
+    assert.equal(full.prop('hidden'), true);
+    assert.equal(full.attr('href'), undefined);
+    assert.equal(f.requests.length, 4);
+    assert.equal(f.requests[3].url, f.requests[0].url);
+    assert.equal(f.requests[3].data.page, 1);
+    assert.equal(f.state.refreshes, 0, 'saving refreshes the detail block without reloading the dashboard');
+});
+
+test('canceling a quick row price modal does not refresh the report', () => {
+    const f = fixture();
+    f.$('[data-cost-details]').trigger('click');
+    f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50,
+        purchase_edit_links: [{lot: 'LOT', reference: 'PUR-12', purchase_price: 50, url: '/quick-price/main/12'}]}]});
+    f.$('.finance-cost-price-edit-link').trigger('click');
+    f.$('#finance-purchase-price-modal').modal('hide');
+    f.$('#finance-sales-modal').modal('hide');
     assert.equal(f.requests.length, 2);
-    assert.equal(f.requests[1].url, f.requests[0].url);
-    f.requests[1].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/old-quick-cost', purchase_edit_links: []}]});
-    assert.equal(f.$('.finance-cost-price-edit, .finance-cost-price-edit-link').length, 0);
+    assert.equal(f.state.refreshes, 0);
 });
 
 test('accessory and service revenue links open source-scoped details with revenue labels', () => {
@@ -216,8 +237,36 @@ test('accessory and service revenue links open source-scoped details with revenu
         rows: [{source: 'accessory', product: 'Accessory', units: 2, purchase_price: 20, selling_price: 50, amount: 100, profit_loss: 60}]});
     assert.match(f.$('#finance-sales-summary').text(), /Net sales: \$100\.00/);
     assert.equal(f.$('#finance-cost-stat-total').text(), '$100.00');
+    assert.equal(f.$('#finance-sales-table tbody tr').first().children().length, 7);
+    assert.equal(f.$('#finance-sales-cost-head th').eq(7).prop('hidden'), true);
+    assert.equal(f.$('#finance-sales-table tbody tr').first().children().last().text(), '$100.00');
+    assert.equal(f.$('#finance-sales-table tbody .finance-profit-positive, #finance-sales-table tbody .finance-profit-negative').length, 0);
     f.$('[data-cost-details]').first().trigger('click');
     assert.equal(f.$('#finance-cost-stat-amount-label').text(), 'Cost');
+    assert.equal(f.$('#finance-sales-cost-head th').eq(7).prop('hidden'), false);
+});
+
+test('service revenue exports selling totals without a profit column or purchase cost deduction', async () => {
+    const f = fixture();
+    f.$('body').append('<a class="finance-sales-details revenue-link" data-cost-details="1" data-detail-kind="revenue" href="/reports/financial-dashboard/revenue-sales?source=service">Service</a>');
+    f.$('.revenue-link').trigger('click');
+    const result = {page: 1, last_page: 1, total: 1, units: 2, amount: 100, profit_loss: -20, estimated_count: 1,
+        rows: [{source: 'service', product: 'Service', units: 2, purchase_price: 60, selling_price: 50, amount: 100, profit_loss: -20}]};
+    f.requests[0].success(result);
+    assert.equal(f.$('#finance-cost-stat-total').text(), '$100.00');
+    assert.equal(f.$('#finance-cost-stat-profit').parent().prop('hidden'), true);
+    assert.equal(f.$('#finance-cost-quality').prop('hidden'), true);
+    f.$('[data-format="csv"]').trigger('click');
+    assert.match(f.requests[1].url, /source=service/);
+    f.requests[1].success(result);
+    const reader = new f.dom.window.FileReader();
+    const csv = await new Promise(resolve => { reader.onload = () => resolve(reader.result); reader.readAsText(f.state.downloads[0]); });
+    const lines = csv.trim().split('\r\n');
+    assert.equal(lines[0].split(',').length, 7);
+    assert.equal(lines[0].includes('Profit'), false);
+    assert.match(lines[1], /"2","60","50","100"$/);
+    assert.match(lines[2], /"100"$/);
+    assert.equal(f.state.filename, 'net-sales-details.csv');
 });
 
 test('each lot opens its source history in a modal without marking purchase data as changed', () => {

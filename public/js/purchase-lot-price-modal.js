@@ -23,16 +23,18 @@
             if (saving) return;
             var current = ++sequence;
             fields.empty(); form.removeAttr('action');
+            modal.find('.purchase-lot-price-full').removeAttr('href').prop('hidden', true);
             modal.find('.purchase-lot-price-error').prop('hidden', true);
             diagnostics.prop('hidden', true);
             modal.find('.purchase-lot-price-loading').prop('hidden', false);
             disable(false); modal.find('.purchase-lot-price-save').prop('disabled', true);
             modal.modal('show');
-            requestUrl = $(this).attr('data-url'); requestMethod = 'GET';
+            requestUrl = $(this).attr('data-url') || $(this).attr('href'); requestMethod = 'GET';
             $.ajax({url: requestUrl, method: 'GET', dataType: 'json',
                 success: function(result) {
                     if (current !== sequence) return;
                     form.attr('action', result.update_url);
+                    if (result.full_purchase_url) modal.find('.purchase-lot-price-full').attr('href', result.full_purchase_url).prop('hidden', false);
                     fields.append($('<input type="hidden" name="cost_version">').val(result.cost_version));
                     (result.lots || []).forEach(function(lot, index) {
                         var group = $('<div class="form-group">').css({background: '#f6f8fc', padding: '12px', borderRadius: '7px'});
@@ -74,6 +76,7 @@
         modal.on('hide.bs.modal', function(event) { if (saving) event.preventDefault(); });
         modal.on('hidden.bs.modal', function() {
             ++sequence; fields.empty(); form.removeAttr('action');
+            modal.find('.purchase-lot-price-full').removeAttr('href').prop('hidden', true);
             var parent = $('.modal.in').last();
             if (parent.length) {
                 $('body').addClass('modal-open');

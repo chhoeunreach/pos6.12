@@ -13,6 +13,7 @@
                 <div class="purchase-lot-price-fields"></div>
             </div>
             <div class="modal-footer">
+                <a class="btn btn-default purchase-lot-price-full" target="_blank" rel="noopener" hidden>{{ $costEditorLabels['full'] ?? __('localcashierreport::report.finance_view_full_purchase') }} ↗</a>
                 <button type="button" class="btn btn-default purchase-lot-price-cancel" data-dismiss="modal">{{ $costEditorLabels['cancel'] ?? 'Cancel' }}</button>
                 <button type="submit" class="btn btn-primary purchase-lot-price-save">{{ $costEditorLabels['save'] ?? 'Save price' }}</button>
             </div>

@@ -228,6 +228,8 @@ class FinancialDashboardTest extends TestCase
         $this->assertEquals($totals['accessory_sales'], $accessoryRows['amount']);
         $this->assertEquals(2, $accessoryRows['total']);
         $this->assertSame(['accessory'], array_values(array_unique(array_column($accessoryRows['rows'], 'source'))));
+        $accessory->table('purchase_lines')->update(['purchase_price_inc_tax' => 500]);
+        $this->assertEquals(50, $this->salesRequest(['source' => 'accessory', 'location_ids' => [-2]], false, true)['amount']);
         $serviceRows = $this->salesRequest(['source' => 'service', 'location_ids' => [-2, -3]], false, true);
         $this->assertEquals(90, $serviceRows['amount']);
         $this->assertEquals($totals['service_sales'], $serviceRows['amount']);
@@ -294,6 +296,26 @@ class FinancialDashboardTest extends TestCase
         } finally {
             \Illuminate\Support\Carbon::setTestNow();
         }
+    }
+
+    public function test_default_locations_exclude_the_configured_names_but_allow_manual_selection()
+    {
+        $names = config('localcashierreport.financial_dashboard_default_excluded_locations');
+        $this->assertCount(16, $names);
+        $excludedIds = [];
+        foreach ($names as $index => $name) {
+            $excludedIds[] = $id = 100 + $index;
+            // Match labels even with case, spacing and invisible Khmer formatting.
+            $label = ' '.str_replace('-', " -\u{200B}\u{200B} ", $name).' ';
+            $this->locations->push((object) ['id' => $id, 'name' => mb_strtoupper($label)]);
+        }
+        $this->locations->push((object) ['id' => 200, 'name' => 'Assets Shop']);
+
+        $default = $this->controllerRequest()->getData();
+        $this->assertSame([1, 2, -2, -3, 200], $default['filters']['location_ids']);
+        $this->assertCount(21, $default['locations']);
+        $manual = $this->controllerRequest(['location_filter_applied' => 1, 'location_ids' => $excludedIds])->getData();
+        $this->assertSame($excludedIds, $manual['filters']['location_ids']);
     }
 
     public function test_sales_modal_matches_pos_units_and_filters_locations_dates_and_sources()
@@ -485,6 +507,95 @@ class FinancialDashboardTest extends TestCase
         try { $this->salesRequest([], true); $this->fail('Sales access is required'); } catch (HttpException $e) { $this->assertEquals(403, $e->getStatusCode()); }
     }
 
+    private function linePriceRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $listing = false, bool $json = false)
+    {
+        $url = route('reports.financial-purchase-line.'.($listing ? 'index' : 'show'), $listing ? ['sourceName' => $source, 'purchase' => 10] : ['sourceName' => $source, 'line' => $line]);
+        $request = Request::create($url, $save ? 'PUT' : 'GET', $data);
+        if ($json) $request->headers->set('Accept', 'application/json');
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->setUserResolver(fn () => auth()->user());
+        $this->app->instance('request', $request);
+        $module = Mockery::mock(\App\Utils\ModuleUtil::class);
+        $module->shouldReceive('isSubscribed')->with(1)->andReturn(true);
+        $cashier = Mockery::mock(LocalCashierReportController::class);
+        $controller = new \Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseLineController(
+            new FinancialDashboardController($cashier, new FinancialDashboardReport), new FinancialDashboardReport, $module);
+        if ($listing) return $controller->index($request, $source, 10);
+        return $save ? $controller->update($request, $source, $line)->getData(true) : $controller->show($request, $source, $line);
+    }
+
+    public function test_single_row_price_update_preserves_the_other_499_rows_and_receipt_total()
+    {
+        $this->salesPermissions = ['purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->update(['quantity' => 1, 'purchase_price' => 60]);
+        $lines = [];
+        for ($id = 2; $id <= 500; $id++) $lines[] = ['id' => $id, 'transaction_id' => 10, 'quantity' => 1, 'purchase_price' => 60, 'purchase_price_inc_tax' => 60, 'lot_number' => 'ROW-'.$id];
+        DB::table('purchase_lines')->insert($lines);
+        DB::table('transactions')->where('id', 10)->update(['total_before_tax' => 30000, 'final_total' => 30000]);
+        $otherRows = DB::table('purchase_lines')->where('id', '!=', 250)->orderBy('id')->get()->toArray();
+        $page = $this->linePriceRequest([], false, 'main', 250)->getData();
+        $this->assertCount(1, $page['details']['lots']);
+        $json = $this->linePriceRequest([], false, 'main', 250, false, true)->getData(true);
+        $this->assertCount(1, $json['lots']);
+        $this->assertEquals(250, $json['lots'][0]['id']);
+        $this->assertSame(route('purchases.edit', 10), $json['full_purchase_url']);
+        $this->assertStringContainsString('/purchase-price/main/250', $json['update_url']);
+        $this->assertEquals(250, $page['row']->id);
+        $source = file_get_contents(base_path('Modules/LocalCashierReport/Resources/views/purchase_line_price.blade.php'));
+        $source = preg_replace('/^@extends\([^\n]*\)\r?$/m', '', $source)."\n@yield('content')\n@yield('javascript')";
+        $html = \Illuminate\Support\Facades\Blade::render($source, $page);
+        $this->assertSame(1, substr_count($html, 'name="prices[0][purchase_price]"'));
+        $this->assertStringNotContainsString('prices[1]', $html);
+        $version = $page['details']['cost_version'];
+        $saved = $this->linePriceRequest(['cost_version' => $version, 'prices' => [['id' => 250, 'purchase_price' => 85]]], true, 'main', 250);
+        $this->assertTrue($saved['success']);
+        $this->assertNotSame($version, $saved['cost_version']);
+        $this->assertEquals(85, DB::table('purchase_lines')->where('id', 250)->value('purchase_price_inc_tax'));
+        $this->assertEquals(30025, DB::table('transactions')->where('id', 10)->value('final_total'));
+        $this->assertEquals($otherRows, DB::table('purchase_lines')->where('id', '!=', 250)->orderBy('id')->get()->toArray());
+        $this->assertEquals(500, DB::table('purchase_lines')->count());
+        $listing = $this->linePriceRequest([], false, 'main', 1, true)->getData()['rows'];
+        $this->assertEquals(500, $listing->total());
+        $this->assertCount(25, $listing->items());
+        $search = $this->linePriceRequest(['q' => 'ROW-250'], false, 'main', 1, true)->getData()['rows'];
+        $this->assertCount(1, $search->items());
+        $this->assertEquals(250, $search->first()->id);
+        try {
+            $this->linePriceRequest(['cost_version' => $version, 'prices' => [['id' => 250, 'purchase_price' => 90]]], true, 'main', 250);
+            $this->fail('A stale price must be rejected');
+        } catch (HttpException $e) { $this->assertSame(409, $e->getStatusCode()); }
+    }
+
+    public function test_single_row_price_editor_respects_source_permissions_location_and_submitted_id()
+    {
+        $this->salesPermissions = ['purchase.update'];
+        foreach (['main', 'accessory', 'service'] as $source) {
+            $db = DB::connection('finance_'.$source);
+            $db->table('transactions')->insert(['id' => 10, 'type' => 'purchase', 'status' => 'received', 'final_total' => 60]);
+            $db->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'quantity' => 1, 'purchase_price' => 60, 'purchase_price_inc_tax' => 60]);
+        }
+        $details = $this->linePriceRequest([], false, 'service')->getData()['details'];
+        $this->linePriceRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 75]]], true, 'service');
+        $this->assertEquals(75, DB::connection('finance_service')->table('purchase_lines')->value('purchase_price_inc_tax'));
+        $this->assertEquals(60, DB::connection('finance_main')->table('purchase_lines')->value('purchase_price_inc_tax'));
+        $this->assertEquals(60, DB::connection('finance_accessory')->table('purchase_lines')->value('purchase_price_inc_tax'));
+        try {
+            $this->linePriceRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 2, 'purchase_price' => 100]]], true, 'service');
+            $this->fail('Cannot replace the selected row ID');
+        } catch (HttpException $e) { $this->assertSame(422, $e->getStatusCode()); }
+        foreach ([['location_id' => 2], ['business_id' => 2], ['status' => 'ordered'], ['type' => 'opening_stock']] as $attributes) {
+            DB::table('transactions')->where('id', 10)->update(['location_id' => 1, 'business_id' => 1, 'status' => 'received', 'type' => 'purchase']);
+            DB::table('transactions')->where('id', 10)->update($attributes);
+            try { $this->linePriceRequest(); $this->fail('Unavailable receipt must be rejected'); }
+            catch (HttpException $e) { $this->assertSame(404, $e->getStatusCode()); }
+        }
+        $this->salesPermissions = [];
+        try { $this->linePriceRequest(); $this->fail('Purchase update permission is required'); }
+        catch (HttpException $e) { $this->assertSame(403, $e->getStatusCode()); }
+    }
+
+
     private function purchaseCostRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $stock = false)
     {
         $request = Request::create('/reports/financial-dashboard/cost-sales/'.$source.'/'.$line, $save ? 'PUT' : 'GET', $data + ['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'location_ids' => [1, -2, -3]]);
@@ -651,7 +762,7 @@ class FinancialDashboardTest extends TestCase
             DB::table('purchase_lines')->insert(['id' => $id, 'transaction_id' => $id, 'lot_number' => 'SERIAL-1', 'variation_id' => $id === 17 ? 2 : 1, 'purchase_price_inc_tax' => 90]);
         }
         $row = $this->salesRequest([], true)['rows'][0];
-        $this->assertSame([['lot' => 'SERIAL-1', 'reference' => 'PUR-12', 'purchase_price' => 90, 'url' => route('purchases.edit', 12)]], $row['purchase_edit_links']);
+        $this->assertSame([['lot' => 'SERIAL-1', 'reference' => 'PUR-12', 'purchase_price' => 90, 'url' => route('reports.financial-purchase-line.show', ['sourceName' => 'main', 'line' => 12, 'report_lang' => 'km'])]], $row['purchase_edit_links']);
         $this->assertEquals(90, $row['purchase_price']);
 
         $this->salesPermissions = ['sell.view'];
@@ -679,7 +790,7 @@ class FinancialDashboardTest extends TestCase
         $this->assertEquals(2549, $row['purchase_price']);
         $this->assertEquals(2549, $row['purchase_edit_links'][0]['purchase_price']);
         $this->assertSame('PO2026/2209', $row['purchase_edit_links'][0]['reference']);
-        $this->assertSame(route('purchases.edit', 32765), $row['purchase_edit_links'][0]['url']);
+        $this->assertSame(route('reports.financial-purchase-line.show', ['sourceName' => 'main', 'line' => 32765, 'report_lang' => 'km']), $row['purchase_edit_links'][0]['url']);
         $this->assertEquals(2549, $this->build()['total']['cost']);
         $this->assertEquals(110 - 2549, $this->build()['total']['gross_profit']);
         // A sale allocated to a stale transfer lot must use the same receipt.
@@ -1215,5 +1326,23 @@ class FinancialDashboardTest extends TestCase
         $this->assertCount(9, $filtersByLabel);
         $this->assertSame(['ផ្សេងៗ'], $filtersByLabel['ផ្សេងៗ']);
         $this->assertSame(['Category 1'], $filtersByLabel['ប្រភេទចំណាយដែលនៅសល់ (1)']);
+    }
+
+    public function test_dashboard_report_is_cached_and_force_refresh_updates_the_cache()
+    {
+        config(['localcashierreport.financial_dashboard_cache_ttl' => 120]);
+        $this->seedSales();
+        $this->assertEquals(220, $this->build()['total']['sales']);
+
+        // Post a sale after the report has been cached.
+        DB::table('transactions')->insert(['id' => 5, 'type' => 'sell', 'final_total' => 50, 'status' => 'final', 'transaction_date' => '2026-11-02 12:00:00']);
+        DB::table('transaction_sell_lines')->insert(['id' => 3, 'transaction_id' => 5, 'quantity' => 1, 'lot_no_line_id' => null, 'parent_sell_line_id' => null]);
+
+        $this->assertEquals(220, $this->build()['total']['sales'], 'A cached report should be reused for identical filters.');
+
+        $filters = ['location_ids' => [1], 'start_date' => '2026-11-01', 'end_date' => '2026-11-30'];
+        $fresh = (new FinancialDashboardReport)->build(1, $this->locations, $filters, true);
+        $this->assertEquals(270, $fresh['total']['sales'], 'Force refresh should aggregate the new sale.');
+        $this->assertEquals(270, $this->build()['total']['sales'], 'Force refresh should replace the cached report.');
     }
 }

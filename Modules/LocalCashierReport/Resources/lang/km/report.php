@@ -1,6 +1,15 @@
 <?php
 
 return [
+    'finance_view_full_purchase' => 'មើលការទិញពេញលេញ',
+    'finance_edit_purchase_price' => 'កែប្រែតម្លៃទិញ',
+    'finance_find_purchase_row' => 'ស្វែងរកជួរតាមផលិតផល SKU លេខឡូត៍ ឬលេខជួរ',
+    'finance_quick_row_price' => 'កែតម្លៃទិញមួយជួររហ័ស',
+    'finance_quick_row_hint' => 'រក្សាទុកតែតម្លៃទិញរួមពន្ធនៃជួរនេះ។ ជួរផ្សេងទៀតនៅដដែល។ សរុបការទិញ និងស្ថានភាពបង់ប្រាក់ត្រូវបានគណនាឡើងវិញ ហើយការលក់ពាក់ព័ន្ធប្រើថ្លៃដើមថ្មី។',
+    'finance_quick_row_saved' => 'បានរក្សាទុកតម្លៃ។ អ្នកអាចត្រឡប់ទៅផ្ទាំងរបាយការណ៍វិញ។',
+    'finance_quick_row_error' => 'មិនអាចរក្សាទុកតម្លៃបានទេ។ សូមព្យាយាមម្តងទៀត។',
+    'finance_open_full_purchase' => 'បើកការទិញពេញលេញ',
+    'finance_edit_purchase_new_tab' => 'កែប្រែការទិញក្នុងផ្ទាំងថ្មី',
     'finance_lot_purchase_price' => 'តម្លៃទិញ',
     'finance_lot_sell_price' => 'តម្លៃលក់',
     'finance_lot_transfer_price' => 'តម្លៃផ្ទេរ',
@@ -19,7 +28,7 @@ return [
     'finance_lot_type_sell_return' => 'លក់ត្រឡប់',
     'finance_lot_type_sell_transfer' => 'ផ្ទេរចេញ',
     'finance_lot_type_stock_adjustment' => 'កែសម្រួលស្តុក',
-    'finance_revenue_line_basis' => 'ការលក់សុទ្ធ = ចំនួន × តម្លៃលក់។ ទំនិញត្រឡប់មានតម្លៃអវិជ្ជមាន។ សមាសធាតុឈុតមិនរាប់បញ្ចូល ដើម្បីជៀសវាងការរាប់ការលក់ស្ទួន។',
+    'finance_revenue_line_basis' => 'សរុប = ចំនួន × តម្លៃលក់ ដោយមិនដកថ្លៃដើមទិញ។ ទំនិញត្រឡប់មានតម្លៃអវិជ្ជមាន។ សមាសធាតុឈុតមិនរាប់បញ្ចូល ដើម្បីជៀសវាងការរាប់ការលក់ស្ទួន។',
     'finance_cost_used' => 'ថ្លៃដើមដែលប្រើក្នុងរបាយការណ៍',
     'finance_latest_purchase' => 'តម្លៃទិញចុងក្រោយ (រួមពន្ធ)',
     'finance_cost_lot_unavailable' => 'ថ្លៃដើមនេះមិនភ្ជាប់នឹងការទិញដែលអាចកែប្រែក្នុងទីតាំងដែលអ្នកមានសិទ្ធិទេ។ សូមផ្ទុកបញ្ជីលក់ឡើងវិញ ហើយបើកបង្កាន់ដៃដើមដើម្បីកែតម្លៃ។',

@@ -119,6 +119,11 @@ class PurchaseController extends Controller
                     }
                     if (auth()->user()->can('purchase.update')) {
                         $html .= '<li><a href="'.action([\App\Http\Controllers\PurchaseController::class, 'edit'], [$row->id]).'"><i class="fas fa-edit"></i>'.__('messages.edit').'</a></li>';
+                        if ($row->status === 'received' && \Illuminate\Support\Facades\Route::has('reports.financial-purchase-line.index')) {
+                            $source = request()->routeIs('accessory.*') ? 'accessory' : (request()->routeIs('service.*') ? 'service' : 'main');
+                            $url = route('reports.financial-purchase-line.index', ['sourceName' => $source, 'purchase' => $row->id]);
+                            $html .= '<li><a href="'.e($url).'" target="_blank" rel="noopener"><i class="fas fa-bolt"></i>'.e(__('localcashierreport::report.finance_quick_row_price')).' ↗</a></li>';
+                        }
                     }
                     if (auth()->user()->can('purchase.delete')) {
                         $html .= '<li><a href="'.action([\App\Http\Controllers\PurchaseController::class, 'destroy'], [$row->id]).'" class="delete-purchase"><i class="fas fa-trash"></i>'.__('messages.delete').'</a></li>';

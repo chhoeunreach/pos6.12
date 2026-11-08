@@ -68,7 +68,7 @@ class StockReportController extends Controller
         if ($allowedLocations !== 'all') $query->whereIn('t.location_id', $allowedLocations);
 
         return $query->orderByDesc('t.transaction_date')->orderByDesc('t.id')->orderByDesc('p.id')
-            ->get(['t.id', 't.ref_no', 'p.lot_number', 'p.purchase_price_inc_tax'])->unique('lot_number')->values();
+            ->get(['t.id', 't.ref_no', 'p.id as purchase_line_id', 'p.lot_number', 'p.purchase_price_inc_tax'])->unique('lot_number')->values();
     }
 
     protected function lotHistoryLinks(?string $lots, bool $canViewHistory): string
@@ -334,11 +334,16 @@ class StockReportController extends Controller
                     $costUsed = $differentCost ? '<small class="ssi-sales-cost-used">'.e(__('localcashierreport::report.finance_cost_used')).': '.$value.'</small>' : '';
                     return $costUsed.$references->map(function ($purchase) use ($differentCost) {
                         $reference = $purchase->ref_no ?: '#'.$purchase->id;
-                        $title = $purchase->lot_number.' · '.$reference;
+                        $title = __('localcashierreport::report.finance_edit_purchase_price').' · '.$purchase->lot_number.' · '.$reference;
                         $value = $purchase->purchase_price_inc_tax === null ? 'Unavailable' : '<span class="display_currency" data-currency_symbol="true" data-orig-value="'.$purchase->purchase_price_inc_tax.'">'.$purchase->purchase_price_inc_tax.'</span>';
                         $label = $differentCost ? '<small class="ssi-sales-cost-used">'.e(__('localcashierreport::report.finance_latest_purchase')).'</small>' : '';
-                        return '<a class="ssi-purchase-reference-edit" href="'.e(ssi_route('purchases.edit', $purchase->id)).'" title="'.e($title).'">'
-                            .$label.$value.' <i class="fa fa-pencil" aria-hidden="true"></i></a><small style="display:block">'.e($title).'</small>';
+                        $priceUrl = \Illuminate\Support\Facades\Route::has('reports.financial-purchase-line.show')
+                            ? route('reports.financial-purchase-line.show', ['sourceName' => request()->routeIs('accessory.*') ? 'accessory' : 'main', 'line' => $purchase->purchase_line_id])
+                            : ssi_route('purchases.edit', $purchase->id);
+                        $linkAttributes = \Illuminate\Support\Facades\Route::has('reports.financial-purchase-line.show')
+                            ? 'class="ssi-purchase-reference-edit" aria-haspopup="dialog"' : 'target="_blank" rel="noopener"';
+                        return '<a '.$linkAttributes.' href="'.e($priceUrl).'" title="'.e($title).'">'
+                            .$label.$value.' <i class="fa fa-pencil" aria-hidden="true"></i></a><small style="display:block">'.e($purchase->lot_number.' · '.$reference).'</small>';
                     })->implode('<br>');
                 })
                 ->editColumn('purchase_profit_loss', function ($row) {

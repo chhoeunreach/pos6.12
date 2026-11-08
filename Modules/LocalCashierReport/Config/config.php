@@ -3,6 +3,27 @@
 return [
     'name' => 'LocalCashierReport',
     'module_version' => '1.0.0',
+    // Seconds to reuse a cached financial dashboard for identical filters.
+    // Set to 0 to always aggregate from the database.
+    'financial_dashboard_cache_ttl' => (int) env('FINANCIAL_DASHBOARD_CACHE_TTL', 120),
+    'financial_dashboard_default_excluded_locations' => [
+        'administration',
+        'Administrator (Accessory)',
+        'Assets',
+        'Pending-Check',
+        'កម្ពុជាក្រោម-ទុកសិន',
+        'កាប់គោ-ទុកសិន',
+        'ច្បារអំពៅ-ទុកសិន',
+        'ច្បាអំពៅ-Demo',
+        'វីអាយភី-Demo',
+        'វីអាយភី-ទុកសិន',
+        'ស្តុកធំ-ប៉ូលា',
+        'ស្តុកធំ-ទុកសិន',
+        'ស្តុកធំ-ស្តុកជាង',
+        'ស្តុកធំ-ស្តុកជាង-កំពុងជួសជុល',
+        'ស្តុកធំ-ស្តុកជាងក្រៅ',
+        'ហ៊ាងសេង',
+    ],
     'common_payment_method_keys' => [
         'cash',
         'custom_pay_1',

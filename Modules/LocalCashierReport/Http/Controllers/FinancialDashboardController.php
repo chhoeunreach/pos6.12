@@ -18,7 +18,7 @@ class FinancialDashboardController extends Controller
     public function index(Request $request)
     {
         [$businessId, $locations, $filters] = $this->context($request);
-        $report = $this->report->build($businessId, $locations, $filters);
+        $report = $this->report->build($businessId, $locations, $filters, $request->boolean('refresh'));
         if ($request->input('download') === 'csv') {
             return $this->csv($report, $filters);
         }
@@ -50,10 +50,22 @@ class FinancialDashboardController extends Controller
             'report_lang' => 'nullable|in:km,en', 'download' => 'nullable|in:csv',
             'print' => 'nullable|boolean',
             'orientation' => 'nullable|in:portrait,landscape',
+            'refresh' => 'nullable|boolean',
         ]);
         $businessId = (int) session('user.business_id');
         $locations = $this->cashierReport->getAccessibleLocations($businessId);
         $allowedIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->all();
+        // Ignore invisible formatting characters and spacing differences in
+        // location labels, including zero-width spaces in Khmer names.
+        $normalizeLocation = static function (string $name): string {
+            $name = preg_replace('/\p{Cf}/u', '', $name);
+            $name = preg_replace('/\s*-\s*/u', '-', $name);
+
+            return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name)));
+        };
+        $excludedNames = array_map($normalizeLocation, config('localcashierreport.financial_dashboard_default_excluded_locations', []));
+        $defaultIds = $locations->reject(fn ($location) => in_array($normalizeLocation($location->name), $excludedNames, true))
+            ->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
         $today = Carbon::today()->format('Y-m-d');
         $filters = [
             'source' => $data['source'] ?? 'all',
@@ -64,7 +76,7 @@ class FinancialDashboardController extends Controller
             'start_date' => $data['start_date'] ?? $today,
             'end_date' => $data['end_date'] ?? $today,
             'location_ids' => $request->boolean('location_filter_applied') || isset($data['location_ids'])
-                ? array_values(array_intersect(array_map('intval', $data['location_ids'] ?? []), $allowedIds)) : $allowedIds,
+                ? array_values(array_intersect(array_map('intval', $data['location_ids'] ?? []), $allowedIds)) : $defaultIds,
         ];
         abort_if($filters['end_date'] < $filters['start_date'], 422, 'End date must be on or after start date.');
 

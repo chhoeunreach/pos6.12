@@ -92,17 +92,19 @@
     <div class="modal-dialog" style="width:96%;max-width:1450px"><div class="modal-content">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-label="{{ __('messages.close') }}">×</button>
-            <h4 class="modal-title" id="ssi-purchase-reference-title">{{ __('purchase.edit_purchase') }}</h4>
+            <h4 class="modal-title" id="ssi-purchase-reference-title">{{ __('lang_v1.lot_history') }}</h4>
         </div>
         <div class="modal-body" style="padding:0">
             <p id="ssi-purchase-reference-loading" role="status" style="padding:16px">{{ __('localcashierreport::report.loading') }}</p>
-            <iframe id="ssi-purchase-reference-frame" title="{{ __('purchase.edit_purchase') }}" src="about:blank" style="display:block;width:100%;height:75vh;border:0"></iframe>
+            <iframe id="ssi-purchase-reference-frame" title="{{ __('lang_v1.lot_history') }}" src="about:blank" style="display:block;width:100%;height:75vh;border:0"></iframe>
         </div>
         <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">{{ __('messages.close') }}</button></div>
     </div></div>
 </div>
+@include('purchase.partials.lot_price_modal', ['costEditorId' => 'ssi-purchase-price-modal'])
 @stop
 @section('module_js')
+<script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
 <style>.ssi-purchase-reference-edit{background:transparent;border:0;border-bottom:1px dashed #8ba5c2;color:#194f8c;font:inherit;cursor:pointer;padding:3px}.ssi-purchase-reference-edit:focus-visible{outline:2px solid #93c5fd}</style>
 <script type="text/javascript">
     $(document).ready(function() {
@@ -247,9 +249,14 @@
         });
 
         var purchaseModal = $('#ssi-purchase-reference-modal'), purchaseFrame = $('#ssi-purchase-reference-frame');
-        $(document).on('click', '.ssi-purchase-reference-edit, .ssi-lot-history-link', function(event) {
+        window.initPurchaseLotPriceModal({modal: '#ssi-purchase-price-modal', trigger: '.ssi-purchase-reference-edit',
+            saved: function() {
+                stock_sell_report_table.ajax.reload(null, false);
+                if (window.parent !== window) window.parent.postMessage({type: 'financial-purchase-cost-updated'}, window.location.origin);
+            }
+        });
+        $(document).on('click', '.ssi-lot-history-link', function(event) {
             event.preventDefault();
-            purchaseModal.data('editingPurchase', $(this).hasClass('ssi-purchase-reference-edit'));
             $('#ssi-purchase-reference-title').text($(this).attr('title'));
             purchaseFrame.attr('title', $(this).attr('title'));
             $('#ssi-purchase-reference-loading').prop('hidden', false);
@@ -272,9 +279,6 @@
         purchaseModal.on('shown.bs.modal', function() { $('.modal-backdrop').last().css('z-index', 1060); });
         purchaseModal.on('hidden.bs.modal', function() {
             purchaseFrame.attr('src', 'about:blank');
-            if (!purchaseModal.data('editingPurchase')) return;
-            stock_sell_report_table.ajax.reload(null, false);
-            if (window.parent !== window) window.parent.postMessage({type: 'financial-purchase-cost-updated'}, window.location.origin);
         });
 
         $(document).on('change', '#sell_list_filter_location_id, #sell_list_filter_customer_id, #sell_list_filter_payment_status, #created_by, #sales_cmsn_agnt, #service_staffs', function() {

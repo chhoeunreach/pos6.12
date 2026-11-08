@@ -1,6 +1,15 @@
 <?php
 
 return [
+    'finance_view_full_purchase' => 'View full purchase',
+    'finance_edit_purchase_price' => 'Edit purchase price',
+    'finance_find_purchase_row' => 'Find row by product, SKU, lot or row ID',
+    'finance_quick_row_price' => 'Quick purchase row price',
+    'finance_quick_row_hint' => 'Save only this row’s tax-inclusive purchase price. Other rows stay unchanged. The receipt total and payment status are recalculated; related sales use the updated purchase cost.',
+    'finance_quick_row_saved' => 'Price saved. You can return to the report tab.',
+    'finance_quick_row_error' => 'Unable to save this price. Please try again.',
+    'finance_open_full_purchase' => 'Open full purchase',
+    'finance_edit_purchase_new_tab' => 'Edit purchase in a new tab',
     'finance_lot_purchase_price' => 'Purchase Price',
     'finance_lot_sell_price' => 'Sell Price',
     'finance_lot_transfer_price' => 'Transfer Price',
@@ -19,7 +28,7 @@ return [
     'finance_lot_type_sell_return' => 'Sales return',
     'finance_lot_type_sell_transfer' => 'Transfer out',
     'finance_lot_type_stock_adjustment' => 'Stock adjustment',
-    'finance_revenue_line_basis' => 'Net sales = quantity × selling price. Returns are negative; combo components are excluded to avoid counting the parent sale twice.',
+    'finance_revenue_line_basis' => 'Total = quantity × selling price, without deducting purchase costs. Returns are negative; combo components are excluded to avoid counting the parent sale twice.',
     'finance_cost_used' => 'Cost used',
     'finance_latest_purchase' => 'Latest purchase (incl. tax)',
     'finance_cost_lot_unavailable' => 'This cost is not linked to an editable purchase receipt in your permitted locations. Refresh the sales list and open the original receipt to correct its price.',

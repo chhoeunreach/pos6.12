@@ -587,7 +587,7 @@
 @endsection
 
 @section('javascript')
-	<script src="{{ asset('js/purchase.js?v=' . $asset_v) }}"></script>
+	<script src="{{ asset('js/purchase.js?v=' . $asset_v . '&m=' . filemtime(public_path('js/purchase.js'))) }}"></script>
 	<script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>
 	<script type="text/javascript">
 		$(document).ready( function(){
