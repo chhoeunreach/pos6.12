@@ -175,7 +175,7 @@ function openQuickCost(f, requestIndex) {
     f.requests[requestIndex].success({lots: [{id: 1, lot: 'LOT-01', reference: 'PUR-1', purchase_price: 50}], cost_version: 'a'.repeat(64), update_url: '/cost/main/1'});
     assert.equal(f.$('#finance-purchase-price-modal').hasClass('in'), true);
 }
-test('cost price links open the matching purchase form in a modal and refresh details on close', () => {
+test('cost price links open the matching purchase page in a new tab and refresh details on return', () => {
     const f = fixture();
     f.$('[data-cost-details]').trigger('click');
     f.requests[0].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 2540, cost_edit_url: '/old-quick-cost',
@@ -185,17 +185,18 @@ test('cost price links open the matching purchase form in a modal and refresh de
     assert.equal(links.first().attr('href'), '/purchases/12/edit');
     assert.match(links.first().text(), /Latest purchase: \$2,549\.00/);
     assert.match(f.$('#finance-sales-table tbody').text(), /Cost used: \$2,540\.00/);
-    assert.equal(links.first().attr('target'), undefined);
+    assert.equal(links.first().attr('target'), '_blank');
+    assert.equal(links.first().attr('rel'), 'noopener');
     assert.match(f.$('#finance-sales-table tbody').text(), /SERIAL-1 · PUR-12/);
     assert.equal(f.$('.finance-cost-price-edit').length, 0);
     assert.equal(f.requests.length, 1);
-    links.first().trigger('click');
-    assert.equal(f.$('#finance-purchase-edit-modal').hasClass('in'), true);
-    assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), '/purchases/12/edit');
-    assert.match(f.$('#finance-purchase-edit-title').text(), /SERIAL-1 · PUR-12/);
-    f.$('#finance-purchase-edit-modal').modal('hide');
+    const click = f.$.Event('click');
+    links.first().trigger(click);
+    assert.equal(click.isDefaultPrevented(), false);
+    assert.equal(f.$('#finance-purchase-edit-modal').hasClass('in'), false);
     assert.equal(f.$('#finance-purchase-edit-frame').attr('src'), 'about:blank');
-    assert.equal(f.$('body').hasClass('modal-open'), true);
+    assert.equal(f.requests.length, 1);
+    f.$(f.dom.window).triggerHandler('focus');
     assert.equal(f.requests.length, 2);
     assert.equal(f.requests[1].url, f.requests[0].url);
     f.requests[1].success({page: 1, last_page: 1, rows: [{units: 1, purchase_price: 50, cost_edit_url: '/old-quick-cost', purchase_edit_links: []}]});

@@ -5,112 +5,23 @@
 @section('hide_action_bar', '1')
 
 @section('css')
-<style>
-    #lot_history_report {
-        color: #111827;
-    }
-
-    #lot_history_report thead th {
-        color: #163b82;
-        font-weight: 700;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-
-    #lot_history_report tbody td {
-        vertical-align: middle;
-        white-space: nowrap;
-    }
-
-    #lot_history_report tbody td.lot-timeline-date {
-        padding-left: 26px;
-        position: relative;
-    }
-
-    #lot_history_report tbody td.lot-timeline-date:before {
-        background: #1d4ed8;
-        border: 2px solid #fff;
-        border-radius: 50%;
-        box-shadow: 0 0 0 1px rgba(29, 78, 216, .35);
-        content: "";
-        height: 8px;
-        left: 7px;
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 8px;
-        z-index: 2;
-    }
-
-    #lot_history_report tbody td.lot-timeline-date:after {
-        background: #d1d5db;
-        content: "";
-        left: 10px;
-        position: absolute;
-        top: -12px;
-        bottom: -12px;
-        width: 1px;
-        z-index: 1;
-    }
-
-    #lot_history_report tbody tr:first-child td.lot-timeline-date:after {
-        top: 50%;
-    }
-
-    #lot_history_report tbody tr:last-child td.lot-timeline-date:after {
-        bottom: 50%;
-    }
-
-    #lot_history_report tbody tr.lot-row-purchase td.lot-timeline-date:before,
-    #lot_history_report tbody tr.lot-row-sell_return td.lot-timeline-date:before {
-        background: #15803d;
-    }
-
-    #lot_history_report tbody tr.lot-row-sell td.lot-timeline-date:before,
-    #lot_history_report tbody tr.lot-row-adjustment td.lot-timeline-date:before {
-        background: #dc2626;
-    }
-
-    #lot_history_report tbody tr.lot-row-transfer td.lot-timeline-date:before {
-        background: #7c3aed;
-    }
-
-    .lot-status {
-        font-weight: 700;
-    }
-
-    .lot-status-stock {
-        color: #15803d;
-    }
-
-    .lot-status-sold {
-        color: #dc2626;
-    }
-
-    .lot-status-transferred {
-        color: #7c3aed;
-    }
-
-    .lot-status-adjusted {
-        color: #1d4ed8;
-    }
-</style>
+<link rel="stylesheet" href="{{ asset('css/lot-history.css') }}?v={{ filemtime(public_path('css/lot-history.css')) }}">
 @endsection
 
 @section('module_content')
 
-<section class="content-header">
-    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">{{ __('lang_v1.lot_history') }}: {{ $lot }}</h1>
+<section class="content-header lot-history-heading">
+    <h1>{{ __('lang_v1.lot_history') }} <span>{{ $lot }}</span></h1>
 </section>
 
-<section class="content">
+<section class="content lot-history-content">
 
     @if($lotInfo)
     <div class="row">
         <div class="col-md-12">
-            <div class="box box-solid">
+            <div class="box box-solid lot-history-summary">
                 <div class="box-body">
-                    <div class="row">
+                    <div class="row lot-history-meta-grid">
                         <div class="col-md-2">
                             <strong>SKU:</strong> {{ $lotInfo->sku ?? '--' }}
                         </div>
@@ -187,7 +98,7 @@
 
     <div class="row">
         <div class="col-md-12">
-            <div class="box box-primary">
+            <div class="box box-primary lot-history-table-card">
                 <div class="box-body">
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped" id="lot_history_report">
@@ -197,7 +108,9 @@
                                     <th>{{ __('lang_v1.lot_number') }}</th>
                                     <th>{{ __('product.sku') }}</th>
                                     <th>{{ __('business.product') }}</th>
-                                    <th class="text-right">{{ __('lang_v1.purchase_price_inc_tax') }}</th>
+                                    @foreach(\App\Services\LotHistoryPrices::COLUMNS as $column => $types)
+                                        <th class="text-right">{{ __('localcashierreport::report.finance_lot_'.$column) }}</th>
+                                    @endforeach
                                     <th>Type</th>
                                     <th>Ref No.</th>
                                     <th>Location</th>
@@ -271,6 +184,10 @@
                 { data: 'sku', name: 'sku' },
                 { data: 'product', name: 'product' },
                 { data: 'purchase_price', name: 'purchase_price', className: 'text-right', searchable: false },
+                { data: 'sell_price', name: 'sell_price', className: 'text-right', searchable: false },
+                { data: 'transfer_price', name: 'transfer_price', className: 'text-right', searchable: false },
+                { data: 'return_price', name: 'return_price', className: 'text-right', searchable: false },
+                { data: 'adjustment_price', name: 'adjustment_price', className: 'text-right', searchable: false },
                 { data: 'movement_type', name: 'movement_type' },
                 { data: 'ref_no', name: 'ref_no' },
                 { data: 'location_display', name: 'location_display' },

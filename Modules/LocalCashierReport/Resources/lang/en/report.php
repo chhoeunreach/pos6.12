@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'finance_lot_purchase_price' => 'Purchase Price',
+    'finance_lot_sell_price' => 'Sell Price',
+    'finance_lot_transfer_price' => 'Transfer Price',
+    'finance_lot_return_price' => 'Return Price',
+    'finance_lot_adjustment_price' => 'Adjustment Price',
     'finance_lot_history_scope' => 'Purchase, sale, return, transfer and adjustment history across your permitted locations. All dates.',
     'finance_lot_in' => 'In',
     'finance_lot_out' => 'Out',

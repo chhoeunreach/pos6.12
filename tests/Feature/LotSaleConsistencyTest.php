@@ -5661,6 +5661,7 @@ class LotSaleConsistencyTest extends TestCase
         Schema::create('stock_adjustment_lines', function (Blueprint $table) {
             $table->integer('id');
             $table->integer('transaction_id');
+            $table->double('unit_price')->nullable();
         });
         DB::connection()->getPdo()->sqliteCreateFunction('CONCAT', fn (...$values) => implode('', $values));
         DB::connection()->getPdo()->sqliteCreateFunction('IF', fn ($condition, $yes, $no) => $condition ? $yes : $no);
@@ -5748,21 +5749,40 @@ class LotSaleConsistencyTest extends TestCase
         $this->assertCount(2, collect($response['data'])->where('movement_type_key', 'transfer'));
     }
 
-    public function test_lot_history_purchase_price_shows_actual_receipt_cost_even_after_a_stale_transfer(): void
+    public function test_lot_history_unit_price_comes_from_each_movement_type(): void
     {
-        [, $transferReceipt] = $this->historyTransferFixture();
+        [$transferOut, $transferReceipt] = $this->historyTransferFixture();
         DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 2549]);
-        DB::table('purchase_lines')->where('transaction_id', $transferReceipt->id)->update(['purchase_price_inc_tax' => 2540]);
+        DB::table('transaction_sell_lines')->where('transaction_id', $transferOut->id)->update(['unit_price_inc_tax' => 2480]);
+        DB::table('purchase_lines')->where('transaction_id', $transferReceipt->id)->update(['purchase_price_inc_tax' => 2480]);
+        $receivedId = DB::table('purchase_lines')->where('transaction_id', $transferReceipt->id)->value('id');
+        DB::table('transactions')->insert(['id' => 100, 'type' => 'sell', 'location_id' => 13, 'invoice_no' => 'SALE-100']);
+        DB::table('transaction_sell_lines')->insert(['id' => 100, 'transaction_id' => 100, 'lot_no_line_id' => $receivedId, 'unit_price_inc_tax' => 2345]);
+        DB::table('transactions')->insert(['id' => 101, 'type' => 'sell_return', 'location_id' => 13, 'return_parent_id' => 100]);
+        DB::table('transaction_sell_lines')->insert(['id' => 101, 'transaction_id' => 101, 'lot_no_line_id' => $receivedId, 'parent_sell_line_id' => 100, 'unit_price_inc_tax' => 2345]);
+        DB::table('transactions')->insert(['id' => 102, 'type' => 'stock_adjustment', 'location_id' => 13]);
+        DB::table('stock_adjustment_lines')->insert(['id' => 102, 'transaction_id' => 102, 'unit_price' => 2400]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 0, 'stock_adjustment_line_id' => 102, 'purchase_line_id' => $receivedId, 'quantity' => .25]);
         $response = $this->lotHistoryResponse('INVOICE-LOT');
         $this->assertArrayNotHasKey('error', $response);
         $this->assertNotEmpty($response['data']);
+        $prices = ['purchase' => 2549, 'sell' => 2345, 'sell_return' => 2345, 'sell_transfer' => 2480, 'purchase_transfer' => 2480, 'stock_adjustment' => 2400];
+        $columns = ['purchase' => 'purchase_price', 'sell' => 'sell_price', 'sell_return' => 'return_price', 'sell_transfer' => 'transfer_price', 'purchase_transfer' => 'transfer_price', 'stock_adjustment' => 'adjustment_price'];
+        $this->assertEqualsCanonicalizing(array_keys($prices), array_column($response['data'], 'transaction_type'));
         foreach ($response['data'] as $movement) {
-            $this->assertStringContainsString('data-orig-value="2549"', $movement['purchase_price']);
+            $this->assertStringContainsString('data-orig-value="'.$prices[$movement['transaction_type']].'"', $movement['unit_price']);
+            foreach (array_unique($columns) as $column) {
+                if ($column === $columns[$movement['transaction_type']]) {
+                    $this->assertStringContainsString('data-orig-value="'.$prices[$movement['transaction_type']].'"', $movement[$column]);
+                } else {
+                    $this->assertSame('—', strip_tags($movement[$column]));
+                }
+            }
         }
-        DB::table('purchase_lines')->where('id', 1)->update(['purchase_price_inc_tax' => 0]);
-        foreach ($this->lotHistoryResponse('INVOICE-LOT')['data'] as $movement) {
-            $this->assertStringContainsString('data-orig-value="0"', $movement['purchase_price']);
-        }
+        DB::table('transaction_sell_lines')->where('id', 100)->update(['unit_price_inc_tax' => 0]);
+        $sale = collect($this->lotHistoryResponse('INVOICE-LOT')['data'])->firstWhere('transaction_type', 'sell');
+        $this->assertStringContainsString('data-orig-value="0"', $sale['unit_price']);
+        $this->assertStringContainsString('data-orig-value="0"', $sale['sell_price']);
     }
 
     public function test_lot_history_does_not_invent_incoming_stock_for_a_different_receiving_lot(): void

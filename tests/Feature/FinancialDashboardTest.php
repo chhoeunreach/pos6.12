@@ -258,7 +258,7 @@ class FinancialDashboardTest extends TestCase
             $db->table('transactions')->insert(['id' => 10, 'type' => 'purchase', 'status' => 'received', 'ref_no' => $source.'-PURCHASE']);
             $db->table('purchase_lines')->insert(['id' => 1, 'transaction_id' => 10, 'lot_number' => 'SHARED-LOT', 'purchase_price_inc_tax' => $price]);
             $db->table('transactions')->insert(['id' => 1, 'type' => 'sell', 'invoice_no' => $source.'-SALE']);
-            $db->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'lot_no_line_id' => 1]);
+            $db->table('transaction_sell_lines')->insert(['id' => 1, 'transaction_id' => 1, 'lot_no_line_id' => 1, 'unit_price_inc_tax' => $price + 50]);
             $db->table('transactions')->insert(['id' => 11, 'type' => 'purchase', 'status' => 'received', 'location_id' => 99, 'transaction_date' => '2000-01-01', 'ref_no' => 'HIDDEN']);
             $db->table('purchase_lines')->insert(['id' => 2, 'transaction_id' => 11, 'lot_number' => 'SHARED-LOT', 'purchase_price_inc_tax' => 999]);
             $view = $this->lotHistoryRequest($source, 'SHARED-LOT');
@@ -266,10 +266,14 @@ class FinancialDashboardTest extends TestCase
             $this->assertSame($source, $history['sourceName']);
             $this->assertEquals(2, $history['movements']->count());
             $this->assertSame([$source.'-SALE', $source.'-PURCHASE'], $history['movements']->pluck('reference')->all());
-            foreach ($history['movements'] as $movement) $this->assertEquals($price, $movement->purchase_price);
+            foreach ($history['movements'] as $movement) $this->assertEquals($movement->type === 'sell' ? $price + 50 : $price, $movement->unit_price);
             $details = $this->salesRequest(['source' => $source, 'location_ids' => [1, -2, -3]], true);
             $this->assertStringContainsString($source === 'main' ? '/smart-stock-inventory/lot/history/SHARED-LOT' : '/lot-history/'.$source.'/1/SHARED-LOT', $details['rows'][0]['lot_history_links'][0]['url']);
-            $this->assertStringContainsString($source.'-PURCHASE', $view->render());
+            $html = $view->render();
+            $this->assertStringContainsString($source.'-PURCHASE', $html);
+            foreach (['purchase_price', 'sell_price', 'transfer_price', 'return_price', 'adjustment_price'] as $column) {
+                $this->assertStringContainsString(\Modules\LocalCashierReport\Support\ReportLanguage::text('finance_lot_'.$column), $html);
+            }
         }
         $this->salesPermissions = ['sell.view'];
         $this->assertSame([], $this->salesRequest([], true)['rows'][0]['lot_history_links']);
@@ -1019,6 +1023,22 @@ class FinancialDashboardTest extends TestCase
         DB::table('purchase_lines')->insert(['id' => 20, 'transaction_id' => 10, 'variation_id' => 2, 'purchase_price_inc_tax' => 999]);
         DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 20, 'quantity' => 2]);
         $this->assertEquals(60, $this->build()['total']['cost']);
+    }
+
+    public function test_return_period_keeps_allocated_cost_from_an_older_sale_at_another_location()
+    {
+        $this->seedSales();
+        DB::table('transactions')->where('id', 1)->update(['location_id' => 2, 'transaction_date' => '2026-10-15 12:00:00']);
+        DB::table('transaction_sell_lines')->where('id', 1)->update(['lot_no_line_id' => null]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert(['sell_line_id' => 1, 'purchase_line_id' => 1, 'quantity' => 2]);
+        // Force allocation-based costing rather than the historical-price fallback.
+        DB::table('transactions')->where('id', 10)->update(['location_id' => 1]);
+
+        $report = $this->build([1], ['start_date' => '2026-11-04', 'end_date' => '2026-11-04']);
+        $this->assertEquals(-1, $report['total']['units']);
+        $this->assertEquals(-60, $report['total']['cost']);
+        $this->assertEquals(0, $report['total']['missing_costs']);
+        $this->assertEquals(0, $report['total']['estimated_costs']);
     }
 
     public function test_combo_component_lines_do_not_inflate_units_sold()

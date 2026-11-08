@@ -255,7 +255,14 @@ class FinancialDashboardReport
         $allocatedReceipt = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id');
         $allocatedReceiptId = PurchaseLotCost::receiptValue('p', 'pt.business_id', 'allocated_line.variation_id', 'id');
         $allocatedPrice = "COALESCE($allocatedReceipt, p.purchase_price_inc_tax)";
+        // Only aggregate allocations used by this report. Returns can refer to
+        // an original sale outside the selected dates or at another location.
+        $reportSaleLines = $this->transactions($connection, $businessId, $locationIds, $filters)
+            ->whereIn('t.type', ['sell', 'sell_return'])
+            ->join('transaction_sell_lines as report_line', 'report_line.transaction_id', '=', 't.id')
+            ->selectRaw("CASE WHEN t.type = 'sell_return' THEN COALESCE(report_line.parent_sell_line_id, report_line.id) ELSE report_line.id END");
         $allocations = $db->table('transaction_sell_lines_purchase_lines as a')
+            ->whereIn('a.sell_line_id', $reportSaleLines)
             ->leftJoin('purchase_lines as p', 'p.id', '=', 'a.purchase_line_id')
             ->leftJoin('transactions as pt', 'pt.id', '=', 'p.transaction_id')
             ->join('transaction_sell_lines as allocated_line', 'allocated_line.id', '=', 'a.sell_line_id')

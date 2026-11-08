@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'finance_lot_purchase_price' => 'តម្លៃទិញ',
+    'finance_lot_sell_price' => 'តម្លៃលក់',
+    'finance_lot_transfer_price' => 'តម្លៃផ្ទេរ',
+    'finance_lot_return_price' => 'តម្លៃត្រឡប់',
+    'finance_lot_adjustment_price' => 'តម្លៃកែសម្រួលស្តុក',
     'finance_lot_history_scope' => 'ប្រវត្តិទិញ លក់ ត្រឡប់ ផ្ទេរ និងកែសម្រួលស្តុក ក្នុងទីតាំងដែលអ្នកមានសិទ្ធិ។ គ្រប់កាលបរិច្ឆេទ។',
     'finance_lot_in' => 'ចូល',
     'finance_lot_out' => 'ចេញ',

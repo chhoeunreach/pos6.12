@@ -307,7 +307,7 @@
                                         .text((labels.costUsed || 'Cost used') + ': ' + price(row.purchase_price)));
                                     row.purchase_edit_links.forEach(function(purchase, index) {
                                         if (index) purchaseCell.append($('<br>'));
-                                        purchaseCell.append($('<a class="finance-cost-price-edit-link">')
+                                        purchaseCell.append($('<a class="finance-cost-price-edit-link" target="_blank" rel="noopener">')
                                             .attr('href', purchase.url).attr('title', purchase.lot + ' · ' + purchase.reference)
                                             .text((differentPurchaseCost ? (labels.latestPurchase || 'Latest purchase') + ': ' : '') +
                                                 price(Object.prototype.hasOwnProperty.call(purchase, 'purchase_price') ? purchase.purchase_price : row.purchase_price) + ' ✎'));
@@ -429,11 +429,10 @@
         $('#finance-sales-page-input').on('change', function() { load(Math.max(1, Math.min(lastPage, Number(this.value) || 1))); });
         $('#finance-sales-refresh').on('click', function() { load(page); });
         var purchaseModal = $('#finance-purchase-edit-modal'), purchaseFrame = $('#finance-purchase-edit-frame');
-        modal.on('click', '.finance-cost-price-edit-link, .finance-lot-history-link', function(event) {
+        modal.on('click', '.finance-cost-price-edit-link', function() { edited = true; });
+        modal.on('click', '.finance-lot-history-link', function(event) {
             event.preventDefault();
-            var editing = $(this).hasClass('finance-cost-price-edit-link');
-            purchaseModal.data('editingPurchase', editing);
-            $('#finance-purchase-edit-title').text((editing ? (labels.edit || 'Edit') : (labels.lotHistory || 'Lot history')) + ' · ' + $(this).attr('title'));
+            $('#finance-purchase-edit-title').text((labels.lotHistory || 'Lot history') + ' · ' + $(this).attr('title'));
             purchaseFrame.attr('title', $('#finance-purchase-edit-title').text());
             $('#finance-purchase-edit-loading').prop('hidden', false);
             purchaseFrame.attr('src', $(this).attr('href'));
@@ -442,7 +441,7 @@
         purchaseFrame.on('load', function() {
             if ($(this).attr('src') === 'about:blank') return;
             $('#finance-purchase-edit-loading').prop('hidden', true);
-            // Keep the original purchase form and its scripts in their own document.
+            // Keep the lot history and its scripts in their own document.
             try {
                 var doc = this.contentDocument;
                 if (doc && !doc.getElementById('finance-purchase-embed-style')) {
@@ -460,10 +459,6 @@
                 $('body').addClass('modal-open');
                 var instance = modal.data('bs.modal');
                 if (instance && typeof instance.enforceFocus === 'function') instance.enforceFocus();
-                if (purchaseModal.data('editingPurchase')) { edited = true; load(page); }
-            } else if (purchaseModal.data('editingPurchase')) {
-                if (typeof options.refreshDashboard === 'function') options.refreshDashboard();
-                else window.location.reload();
             }
         });
         modal.on('click', '.finance-sales-edit', function() { edited = true; });
