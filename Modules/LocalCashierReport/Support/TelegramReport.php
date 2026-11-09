@@ -57,7 +57,7 @@ class TelegramReport
                 $addPayments($groups[$name]['payments'], $group['payments'] ?? []);
             }
         }
-        $qtyLabel = ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity' ? 'ដើម' : 'វិក្កយបត្រ';
+        $qtyLabel = ($filters['qty_type'] ?? 'sold_quantity') === 'sold_quantity' ? 'ដើម' : 'វិក្កយបត្រ';
         $sales = $groups['លក់'] ?? ['qty' => 0, 'payments' => []];
         $lines[] = 'លក់បាន ' . $number($sales['qty']) . $qtyLabel;
         $lines = array_merge($lines, $paymentLines($sales['payments']), [''], $totals($sales['payments']), $separator, ['', '🌻រំលស់🌻']);

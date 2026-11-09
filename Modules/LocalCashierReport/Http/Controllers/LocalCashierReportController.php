@@ -784,7 +784,7 @@ class LocalCashierReportController extends Controller
                 'id' => isset($row->brand_id) ? (int) $row->brand_id : 0,
                 'name' => (string) ($row->name ?? 'No Brand'),
                 'amount' => (float) ($row->amount ?? 0),
-                'qty' => (float) (($filters['qty_type'] ?? 'invoice_count') === 'invoice_count'
+                'qty' => (float) (($filters['qty_type'] ?? 'sold_quantity') === 'invoice_count'
                     ? ($row->invoice_qty ?? 0)
                     : ($row->sold_qty ?? 0)),
             ];
@@ -1159,7 +1159,7 @@ class LocalCashierReportController extends Controller
                         return [
                             'label' => $locationName,
                             'tab_target' => $tabTarget,
-                            'qty_total' => ($filters['qty_type'] ?? 'invoice_count') === 'sold_quantity'
+                            'qty_total' => ($filters['qty_type'] ?? 'sold_quantity') === 'sold_quantity'
                                 ? $rows->sum(fn ($row) => (float) ($row['quantity'] ?? 0))
                                 : $rows->pluck('transaction_id')->filter()->unique()->count(),
                             'total' => $rows->sum(fn ($row) => (float) ($row['line_total'] ?? 0)),
@@ -1223,7 +1223,7 @@ class LocalCashierReportController extends Controller
 
     private function mergeModuleSummaryRows($moduleRows, array $filters, array &$userSummary, array &$locationSummary, array &$customerGroupSummary, array &$brandSummary): void
     {
-        $qtyType = (string) ($filters['qty_type'] ?? 'invoice_count');
+        $qtyType = (string) ($filters['qty_type'] ?? 'sold_quantity');
         $counted = [
             'user' => [],
             'location' => [],
@@ -2374,7 +2374,7 @@ class LocalCashierReportController extends Controller
             'payment_methods' => ! empty($validated['payment_methods']) ? array_values(array_unique($validated['payment_methods'])) : [],
             'customer_group' => trim((string) ($validated['customer_group'] ?? '')),
             'payment_status' => $validated['payment_status'] ?? '',
-            'qty_type' => $validated['qty_type'] ?? 'invoice_count',
+            'qty_type' => $validated['qty_type'] ?? 'sold_quantity',
             'style_mode' => $validated['style_mode'] ?? 'classic_plain',
         ];
     }

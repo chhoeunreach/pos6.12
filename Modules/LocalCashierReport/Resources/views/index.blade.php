@@ -29,7 +29,7 @@
             'payment_methods' => array_values(array_unique($filters['payment_methods'] ?? [])),
             'customer_group' => $filters['customer_group'] ?? '',
             'payment_status' => $filters['payment_status'] ?? '',
-            'qty_type' => $filters['qty_type'] ?? 'invoice_count',
+            'qty_type' => $filters['qty_type'] ?? 'sold_quantity',
             'style_mode' => $filters['style_mode'] ?? 'classic_plain',
             'report_lang' => $currentReportLang,
         ]);
