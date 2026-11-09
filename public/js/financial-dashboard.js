@@ -571,6 +571,27 @@
         });
     }
 
+    function initFinancialPrintPreview() {
+        var modal = $('#finance-print-modal'), frame = $('#finance-print-frame');
+        if (!modal.length) return;
+        $('#finance-print').on('click', function(event) {
+            event.preventDefault();
+            var url = new URL(this.href, window.location.href);
+            if (url.origin !== window.location.origin) return;
+            url.searchParams.set('print_embed', '1');
+            $('#finance-print-loading').prop('hidden', false);
+            frame.attr('src', url.toString());
+            modal.modal('show');
+        });
+        frame.on('load', function() {
+            if (frame.attr('src') !== 'about:blank') $('#finance-print-loading').prop('hidden', true);
+        });
+        modal.on('hidden.bs.modal', function() {
+            frame.attr('src', 'about:blank');
+            $('#finance-print').trigger('focus');
+        });
+    }
+
     window.initFinancialDashboard = function(options) {
         var panel = document.getElementById('finance-filter-panel');
         if (!panel) return;
@@ -579,6 +600,7 @@
         initFinancialSalesDetails(options);
         initFinancialSelection(options);
         initFinancialPosReport(options);
+        initFinancialPrintPreview();
         var preferenceKey = 'financial-dashboard.filters-open';
         try {
             var saved = window.localStorage.getItem(preferenceKey);

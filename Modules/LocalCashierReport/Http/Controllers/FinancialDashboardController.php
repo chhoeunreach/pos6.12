@@ -53,6 +53,7 @@ class FinancialDashboardController extends Controller
             'excluded_expense_categories.*' => 'string|max:255',
             'report_lang' => 'nullable|in:km,en', 'download' => 'nullable|in:csv,word',
             'print' => 'nullable|boolean',
+            'print_embed' => 'nullable|boolean',
             'orientation' => 'nullable|in:portrait,landscape',
             'refresh' => 'nullable|boolean',
         ]);

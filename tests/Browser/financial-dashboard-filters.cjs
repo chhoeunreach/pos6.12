@@ -21,7 +21,7 @@ function fixture({savedOpen = null, datePicker = true} = {}) {
         </form></details><button id="finance-open-category-filter">Filter categories</button>
         <div id="finance-selection-modal"><h4 id="finance-selection-title"></h4><input id="finance-selection-search"><span id="finance-selection-count"></span><div id="finance-selection-options"></div><button id="finance-selection-all"></button><button id="finance-selection-none"></button><button id="finance-selection-apply"></button></div>
         <select id="finance-print-orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select>
-        <a id="finance-print" href="/reports/financial-dashboard?print=1&orientation=landscape&start_date=2026-11-01&location_ids%5B0%5D=-2&excluded_expense_categories%5B0%5D=Office">Print</a>`,
+        <a id="finance-print" href="/reports/financial-dashboard?print=1&orientation=landscape&start_date=2026-11-01&location_ids%5B0%5D=-2&excluded_expense_categories%5B0%5D=Office">Print</a><div id="finance-print-modal"><p id="finance-print-loading" hidden></p><iframe id="finance-print-frame" src="about:blank"></iframe></div>`,
         {url: 'http://localhost', runScripts: 'outside-only'});
     const $ = jquery(dom.window);
     const state = {picker: null, callback: null, scrolled: 0, printed: 0};
@@ -142,4 +142,32 @@ test('category popup searches safely and Apply clears exclusions and makes categ
     $('#finance-selection-apply').trigger('click');
     assert.deepEqual(Array.from($('#finance-expense-categories').val()), []);
     assert.equal($('#finance-choose-expenses').text(), 'None');
+});
+
+test('Print opens a filtered modal preview and closes without printing or navigating the dashboard', () => {
+    const {dom, $, state} = fixture();
+    $('#finance-print-orientation').val('portrait').trigger('change');
+    const click = $.Event('click');
+    $('#finance-print').trigger(click);
+    assert.equal(click.isDefaultPrevented(), true);
+    assert.equal($('#finance-print-modal').hasClass('in'), true);
+    const preview = new URL($('#finance-print-frame').attr('src'));
+    assert.equal(preview.searchParams.get('print'), '1');
+    assert.equal(preview.searchParams.get('print_embed'), '1');
+    assert.equal(preview.searchParams.get('orientation'), 'portrait');
+    assert.equal(preview.searchParams.get('start_date'), '2026-11-01');
+    assert.equal(preview.searchParams.get('location_ids[0]'), '-2');
+    assert.equal(preview.searchParams.get('excluded_expense_categories[0]'), 'Office');
+    assert.equal(dom.window.location.href, 'http://localhost/');
+    assert.equal(state.printed, 0);
+    assert.equal($('#finance-print-loading').prop('hidden'), false);
+    $('#finance-print-frame').trigger('load');
+    assert.equal($('#finance-print-loading').prop('hidden'), true);
+    $('#finance-print-modal').modal('hide');
+    assert.equal($('#finance-print-frame').attr('src'), 'about:blank');
+    assert.equal(dom.window.document.activeElement.id, 'finance-print');
+    $('#finance-print-orientation').val('landscape').trigger('change');
+    $('#finance-print').trigger('click');
+    assert.equal(new URL($('#finance-print-frame').attr('src')).searchParams.get('orientation'), 'landscape');
+    dom.window.close();
 });

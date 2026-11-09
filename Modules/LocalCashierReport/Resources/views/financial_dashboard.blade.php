@@ -88,7 +88,7 @@ a.finance-lot-history-link{border:1px solid #c9dced;color:#245e94;text-decoratio
             <a class="finance-btn" href="{{ route('reports.financial-dashboard', $query + ['download' => 'word']) }}"><i class="fa fa-file-word-o" aria-hidden="true"></i> {{ $t('export_word') }}</a>
             <label class="finance-screen-reader" for="finance-print-orientation">{{ $t('print_orientation') }}</label>
             <select class="finance-btn" id="finance-print-orientation" aria-label="{{ $t('print_orientation') }}"><option value="landscape" @selected(($printOrientation ?? 'landscape') === 'landscape')>{{ $t('landscape') }}</option><option value="portrait" @selected(($printOrientation ?? 'landscape') === 'portrait')>{{ $t('portrait') }}</option></select>
-            <a class="finance-btn primary" id="finance-print" href="{{ $financeLink(['print' => 1, 'orientation' => $printOrientation ?? 'landscape']) }}" target="_blank" rel="noopener"><i class="fa fa-print" aria-hidden="true"></i> {{ $t('print') }}</a>
+            <a class="finance-btn primary" id="finance-print" href="{{ $financeLink(['print' => 1, 'orientation' => $printOrientation ?? 'landscape']) }}" aria-haspopup="dialog"><i class="fa fa-print" aria-hidden="true"></i> {{ $t('print') }}</a>
         </div>
     </div>
     <details class="finance-filter-panel finance-no-print" id="finance-filter-panel" open>
@@ -294,6 +294,15 @@ a.finance-lot-history-link{border:1px solid #c9dced;color:#245e94;text-decoratio
         <div class="modal-footer"><button type="button" class="finance-btn" data-dismiss="modal">{{ $t('close') }}</button></div>
     </div></div>
 </div>
+@if(empty($printMode))
+<div class="modal fade finance-no-print" id="finance-print-modal" tabindex="-1" role="dialog" aria-labelledby="finance-print-title">
+    <div class="modal-dialog" role="document" style="width:98%;max-width:1680px"><div class="modal-content">
+        <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}">×</button><h4 id="finance-print-title" class="modal-title">{{ $t('print') }} · {{ $t('financial_dashboard') }}</h4></div>
+        <div class="modal-body" style="padding:0"><p id="finance-print-loading" role="status" style="padding:16px">{{ $t('loading') }}</p><iframe id="finance-print-frame" src="about:blank" title="{{ $t('print') }}" style="display:block;width:100%;height:78vh;min-height:420px;border:0"></iframe></div>
+        <div class="modal-footer"><button type="button" class="finance-btn" data-dismiss="modal">{{ $t('close') }}</button></div>
+    </div></div>
+</div>
+@endif
     <p class="finance-note">{{ $t('finance_basis') }}</p>
     <div class="finance-footer"><span>{{ $businessName }} · {{ $t('financial_dashboard') }}</span><span>{{ $t('generated') }}: {{ now()->format('d M Y H:i') }}</span></div>
 </section>

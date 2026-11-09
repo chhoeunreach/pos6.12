@@ -301,7 +301,9 @@ class FinancialDashboardTest extends TestCase
     public function test_default_locations_exclude_the_configured_names_but_allow_manual_selection()
     {
         $names = config('localcashierreport.financial_dashboard_default_excluded_locations');
-        $this->assertCount(16, $names);
+        $this->assertCount(18, $names);
+        $this->assertContains('កម្ពុជាក្រោម-Accessory-ស្តុកធំ (Accessory)', $names);
+        $this->assertContains('វីអាយភី-Accessory-ស្តុកធំ (Accessory)', $names);
         $excludedIds = [];
         foreach ($names as $index => $name) {
             $excludedIds[] = $id = 100 + $index;
@@ -313,7 +315,7 @@ class FinancialDashboardTest extends TestCase
 
         $default = $this->controllerRequest()->getData();
         $this->assertSame([1, 2, -2, -3, 200], $default['filters']['location_ids']);
-        $this->assertCount(21, $default['locations']);
+        $this->assertCount(23, $default['locations']);
         $manual = $this->controllerRequest(['location_filter_applied' => 1, 'location_ids' => $excludedIds])->getData();
         $this->assertSame($excludedIds, $manual['filters']['location_ids']);
     }
@@ -1517,6 +1519,19 @@ class FinancialDashboardTest extends TestCase
         $this->assertStringContainsString('name="orientation"', $portraitHtml);
         $this->assertStringContainsString('name="excluded_expense_categories[]" value="Office"', $portraitHtml);
         $this->assertStringContainsString('repeat(4,minmax(0,1fr))!important', $portraitHtml);
+        $embedded = $this->controllerRequest([
+            'start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'report_lang' => 'en',
+            'location_ids' => [1], 'excluded_expense_categories' => ['Office'], 'print' => 1, 'print_embed' => 1,
+        ])->getData();
+        $embeddedHtml = view('localcashierreport::financial_dashboard', $embedded + ['errors' => new \Illuminate\Support\ViewErrorBag])->render();
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$embeddedHtml);
+        $xpath = new \DOMXPath($dom);
+        $this->assertSame(0, $xpath->query('//div[@class="finance-print-toolbar"]/a')->length);
+        $this->assertSame('1', $xpath->query('//input[@name="print_embed"]')->item(0)->getAttribute('value'));
+        $this->assertStringContainsString('name="excluded_expense_categories[]" value="Office"', $embeddedHtml);
+        $this->assertStringNotContainsString('id="finance-print-modal"', $embeddedHtml);
+
     }
 
     public function test_real_other_category_and_remaining_categories_have_distinct_chart_labels_and_filters()

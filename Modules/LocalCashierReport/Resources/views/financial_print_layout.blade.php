@@ -104,13 +104,14 @@
 </head>
 <body>
     <div class="finance-print-toolbar">
-        <a href="{{ route('reports.financial-dashboard', $returnQuery) }}">← {{ $printText('financial_dashboard') }}</a>
+        @unless(request()->boolean('print_embed'))<a href="{{ route('reports.financial-dashboard', $returnQuery) }}">← {{ $printText('financial_dashboard') }}</a>@endunless
         <form method="get" action="{{ route('reports.financial-dashboard') }}">
             @foreach($returnQuery as $key => $value)
                 @if(is_array($value))@foreach($value as $item)<input type="hidden" name="{{ $key }}[]" value="{{ $item }}">@endforeach
                 @else<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
             @endforeach
             <input type="hidden" name="print" value="1">
+            @if(request()->boolean('print_embed'))<input type="hidden" name="print_embed" value="1">@endif
             <label for="finance-preview-orientation">{{ $printText('print_orientation') }}</label>
             <select id="finance-preview-orientation" name="orientation"><option value="landscape" @selected(($printOrientation ?? 'landscape') === 'landscape')>{{ $printText('landscape') }}</option><option value="portrait" @selected(($printOrientation ?? 'landscape') === 'portrait')>{{ $printText('portrait') }}</option></select>
             <button type="submit">{{ $printText('apply') }}</button>

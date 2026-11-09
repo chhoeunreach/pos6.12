@@ -314,8 +314,24 @@ class HrSellController extends Controller
                     ->appends($request->query());
             }
 
-            $rows->getCollection()->transform(function ($row) {
+            $linesByReport = $rows->isEmpty() ? collect() : DB::connection('hr')
+                ->table('sell_out_report_lines')
+                ->whereIn('sell_out_report_id', $rows->getCollection()->pluck('id'))
+                ->orderBy('id')
+                ->get(['sell_out_report_id', 'product_name', 'serial_number', 'imei', 'imei2', 'primary_identifier'])
+                ->groupBy('sell_out_report_id');
+
+            $rows->getCollection()->transform(function ($row) use ($linesByReport) {
                 $row->service_type_label = $this->sellTypeLabel($row->service_type);
+                $row->product_lines = $linesByReport->get($row->id, collect())->map(function ($line) {
+                    $line->serial_identifier = collect([$line->serial_number, $line->imei, $line->imei2, $line->primary_identifier])
+                        ->map(fn ($value) => trim((string) $value))
+                        ->filter(fn ($value) => $value !== '')
+                        ->unique()
+                        ->implode(' / ');
+
+                    return $line;
+                });
 
                 return $row;
             });

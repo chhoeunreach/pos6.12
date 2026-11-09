@@ -1,7 +1,6 @@
 @extends('hrsellmanagement::layouts.master')
 @section('page_title', 'HR Sell List')
 @php
-    $hasActiveFilters = request()->filled('search') || request()->filled('start_date') || request()->filled('end_date') || request()->filled('branch_name') || request()->filled('sell_type') || request()->filled('seller_key');
     $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
     $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
     $selectedSellTypes = array_map('strval', (array) request('sell_type', []));
@@ -119,14 +118,14 @@
         z-index: 99998 !important;
     }
 </style>
-<div class="box {{ $hasActiveFilters ? '' : 'collapsed-box' }}" id="hr_sell_filter_box">
-<div class="box-header with-border hr-sell-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_filter_body" aria-expanded="{{ $hasActiveFilters ? 'true' : 'false' }}">
+<div class="box" id="hr_sell_filter_box">
+<div class="box-header with-border hr-sell-filter-toggle" role="button" tabindex="0" aria-controls="hr_sell_filter_body" aria-expanded="true">
 <h4 class="box-title"><i class="fa fa-filter"></i> Filters</h4>
 <div class="box-tools pull-right">
-<button type="button" class="btn btn-box-tool hr-sell-filter-button" title="{{ $hasActiveFilters ? 'Collapse filters' : 'Expand filters' }}"><i class="fa {{ $hasActiveFilters ? 'fa-minus' : 'fa-plus' }}"></i></button>
+<button type="button" class="btn btn-box-tool hr-sell-filter-button" title="Collapse filters"><i class="fa fa-minus"></i></button>
 </div>
 </div>
-<div class="box-body" id="hr_sell_filter_body" @unless($hasActiveFilters) style="display:none;" @endunless>
+<div class="box-body" id="hr_sell_filter_body">
 <form method="get" action="{{ route('hr-sell.sales.index') }}">
 <div class="row">
 <div class="col-md-3"><div class="form-group"><label>Location / Branch:</label><select name="branch_name" class="form-control select2"><option value="">All</option>@foreach($hrBranches as $branch => $name)<option value="{{ $branch }}" @selected((string) request('branch_name') === (string) $branch)>{{ $name }}</option>@endforeach</select></div></div>
@@ -163,7 +162,7 @@
 <span class="text-muted" style="margin-left: 5px;">records</span>
 </form>
 </div>
-<table class="table table-bordered table-striped" id="pos_hr_sell_table"><thead><tr><th>Invoice</th><th>Date</th><th>Branch</th><th>Customer</th><th>Phone Number</th><th>Seller</th><th>Type</th><th>Total</th><th>Action</th></tr></thead><tbody>
+<table class="table table-bordered table-striped" id="pos_hr_sell_table"><thead><tr><th>Invoice</th><th>Date</th><th>Branch</th><th>Customer</th><th>Phone Number</th><th>Employee Name</th><th>User</th><th>Product Name</th><th>Serial Number</th><th>Type</th><th>Total</th><th>Action</th></tr></thead><tbody>
 @forelse($posHrSales as $sale)
 <tr>
 <td>{{ $sale->invoice_no }}</td>
@@ -171,13 +170,28 @@
 <td>{{ $sale->branch_name }}</td>
 <td>{{ $sale->customer_name }}</td>
 <td class="text-nowrap">{{ $sale->customer_phone ?: '-' }}</td>
-<td>{{ $sale->staff_name ?: $sale->seller_name }} @if(! empty($sale->staff_code))<small class="text-muted">({{ $sale->staff_code }})</small>@endif</td>
+<td>{{ $sale->staff_name ?: ($sale->seller_name ?: '-') }}</td>
+<td>{{ $sale->staff_code ?: '-' }}</td>
+<td>
+@forelse($sale->product_lines as $line)
+<div>{{ $line->product_name ?: '-' }}</div>
+@empty
+-
+@endforelse
+</td>
+<td>
+@forelse($sale->product_lines as $line)
+<div class="text-nowrap">{{ $line->serial_identifier ?: '-' }}</div>
+@empty
+-
+@endforelse
+</td>
 <td>{{ $sale->service_type_label ?? $sale->service_type }}</td>
 <td>{{ number_format((float) $sale->total_amount, 2) }}</td>
 <td><button type="button" class="btn btn-xs btn-primary btn-modal hr-sell-action-btn" data-href="{{ route('hr-sell.sales.pos_detail', [$sale->id]) }}" data-container=".view_modal"><i class="fa fa-eye"></i> View</button></td>
 </tr>
 @empty
-<tr><td colspan="9" class="text-center text-muted">No POS HR sell data found for selected filters.</td></tr>
+<tr><td colspan="12" class="text-center text-muted">No POS HR sell data found for selected filters.</td></tr>
 @endforelse
 </tbody></table>
 <div class="clearfix">
