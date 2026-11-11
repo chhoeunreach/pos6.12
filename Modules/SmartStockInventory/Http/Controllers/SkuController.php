@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Maatwebsite\Excel\Facades\Excel;
 use Modules\SmartStockInventory\Services\SkuInventoryService;
+use Modules\SmartStockInventory\Services\SkuLotService;
 
 class SkuController extends BaseSmartStockController
 {
@@ -32,6 +33,7 @@ class SkuController extends BaseSmartStockController
         $rows = new LengthAwarePaginator($movements->forPage(LengthAwarePaginator::resolveCurrentPage(), 100)->values(), $movements->count(), 100, null, [
             'path' => $request->url(), 'query' => $request->query(),
         ]);
+        $rows->setCollection(app(SkuLotService::class)->attach($rows->getCollection(), $this->businessId(), $variation, $locations->pluck('id')->all()));
 
         return view('smartstockinventory::sku.history', compact('product', 'locations', 'rows'));
     }
@@ -39,18 +41,33 @@ class SkuController extends BaseSmartStockController
     public function export(Request $request, SkuInventoryService $inventory, int $variation)
     {
         abort_unless($request->user()->can('stock_inventory.view') && $request->user()->can('stock_inventory.export'), 403);
-        [$product, , $movements] = $this->historyData($request, $inventory, $variation);
+        [$product, $locations, $movements] = $this->historyData($request, $inventory, $variation);
+        $movements = app(SkuLotService::class)->attach($movements, $this->businessId(), $variation, $locations->pluck('id')->all());
         $rows = $movements->map(fn ($row) => [
             'SKU' => $product->sku, 'Product' => $product->product_name,
             'Date' => $row['date'], 'Location' => $row['location_name'],
             'Type' => $row['type_label'], 'Reference' => $row['ref_no'] ?? '',
             'Contact' => $row['contact_name'] ?? '',
+            'Lots' => collect($row['lots'])->pluck('lot_number')->filter()->unique()->implode(', '),
             'Quantity In' => max(0, $row['quantity_change']),
             'Quantity Out' => max(0, -$row['quantity_change']),
             'Location Balance' => $row['stock'],
         ])->all();
 
         return Excel::download(new ArrayExport($rows), 'sku_history_' . $variation . '_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
+    public function updateLot(Request $request, SkuLotService $lots, int $variation, int $line)
+    {
+        abort_unless($request->user()->can('stock_inventory.view') && $request->user()->can('stock_inventory.update'), 403);
+        $data = $request->validate([
+            'lot_number' => 'required|string|max:191', 'original_lot_number' => 'nullable|string|max:191',
+            'reason' => 'required|string|max:500',
+        ]);
+        [, $locationIds] = $this->locations([]);
+        $lots->update($this->businessId(), $variation, $line, $locationIds, $data, $request->user(), (string) $request->ip());
+
+        return response()->json(['success' => true, 'msg' => 'Lot updated successfully.']);
     }
 
     private function historyData(Request $request, SkuInventoryService $inventory, int $variation): array

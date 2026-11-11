@@ -133,4 +133,118 @@ class SkuManagementTest extends TestCase
         $this->assertTrue(Route::has('ssi.sku.history'));
         $this->assertTrue(Route::has('ssi.sku.export'));
     }
+    private function createLotFixtures(): void
+    {
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->integer('id'); $table->integer('business_id')->default(1); $table->integer('location_id')->default(1);
+            $table->string('type')->default('purchase'); $table->string('status')->default('received'); $table->integer('return_parent_id')->nullable();
+        });
+        Schema::create('purchase_lines', function (Blueprint $table) {
+            $table->integer('id'); $table->integer('transaction_id'); $table->integer('product_id')->default(1); $table->integer('variation_id')->default(11);
+            $table->string('lot_number')->nullable(); $table->double('quantity')->default(10); $table->double('quantity_returned')->default(0); $table->timestamps();
+        });
+        Schema::create('transaction_sell_lines', function (Blueprint $table) {
+            $table->integer('id'); $table->integer('transaction_id'); $table->integer('variation_id')->default(11);
+            $table->integer('lot_no_line_id')->nullable(); $table->integer('parent_sell_line_id')->nullable(); $table->double('quantity_returned')->default(0);
+        });
+        Schema::create('stock_adjustment_lines', function (Blueprint $table) {
+            $table->integer('id'); $table->integer('transaction_id'); $table->integer('variation_id')->default(11); $table->integer('lot_no_line_id')->nullable();
+        });
+        Schema::create('transaction_sell_lines_purchase_lines', function (Blueprint $table) {
+            $table->integer('sell_line_id')->nullable(); $table->integer('stock_adjustment_line_id')->nullable(); $table->integer('purchase_line_id');
+        });
+        Schema::create('smart_stock_action_logs', function (Blueprint $table) {
+            $table->increments('id');
+            foreach (['user_id', 'business_id', 'location_id', 'record_id', 'reference_id'] as $column) { $table->integer($column)->nullable(); }
+            foreach (['user_name', 'module_name', 'table_name', 'action_type', 'reference_type', 'old_data', 'new_data', 'reason', 'ip_address'] as $column) { $table->text($column)->nullable(); }
+            $table->timestamps(); $table->softDeletes();
+        });
+        DB::table('transactions')->insert([
+            ['id' => 1, 'business_id' => 1, 'location_id' => 1],
+            ['id' => 2, 'business_id' => 1, 'location_id' => 1],
+            ['id' => 3, 'business_id' => 1, 'location_id' => 2],
+            ['id' => 4, 'business_id' => 2, 'location_id' => 3],
+        ]);
+        DB::table('purchase_lines')->insert([
+            ['id' => 101, 'transaction_id' => 1, 'lot_number' => 'LOT-A'],
+            ['id' => 102, 'transaction_id' => 2, 'lot_number' => 'LOT-B'],
+            ['id' => 103, 'transaction_id' => 3, 'lot_number' => 'PRIVATE'],
+            ['id' => 104, 'transaction_id' => 4, 'lot_number' => 'OTHER-BUSINESS'],
+        ]);
+    }
+
+    public function test_lots_include_receipts_explicit_sales_fifo_adjustments_and_returns(): void
+    {
+        $this->createLotFixtures();
+        DB::table('transactions')->insert([
+            ['id' => 10, 'type' => 'sell', 'return_parent_id' => null],
+            ['id' => 11, 'type' => 'sell', 'return_parent_id' => null],
+            ['id' => 12, 'type' => 'stock_adjustment', 'return_parent_id' => null],
+            ['id' => 13, 'type' => 'sell_return', 'return_parent_id' => 10],
+            ['id' => 14, 'type' => 'purchase_return', 'return_parent_id' => 1],
+            ['id' => 15, 'type' => 'sell_return', 'return_parent_id' => 10],
+        ]);
+        DB::table('transaction_sell_lines')->insert([
+            ['id' => 201, 'transaction_id' => 10, 'lot_no_line_id' => 101, 'parent_sell_line_id' => null, 'quantity_returned' => 1],
+            ['id' => 202, 'transaction_id' => 11, 'lot_no_line_id' => null, 'parent_sell_line_id' => null, 'quantity_returned' => 0],
+            ['id' => 203, 'transaction_id' => 13, 'lot_no_line_id' => null, 'parent_sell_line_id' => 201, 'quantity_returned' => 0],
+        ]);
+        DB::table('transaction_sell_lines_purchase_lines')->insert([
+            ['sell_line_id' => 201, 'purchase_line_id' => 102],
+            ['sell_line_id' => 202, 'purchase_line_id' => 101],
+            ['sell_line_id' => 202, 'purchase_line_id' => 102],
+            ['sell_line_id' => 202, 'purchase_line_id' => 103],
+            ['sell_line_id' => 202, 'purchase_line_id' => 104],
+        ]);
+        DB::table('stock_adjustment_lines')->insert(['id' => 301, 'transaction_id' => 12, 'lot_no_line_id' => 102]);
+        DB::table('purchase_lines')->where('id', 101)->update(['quantity_returned' => 1]);
+        $rows = collect([1, 10, 11, 12, 13, 14, 15])->map(fn ($id) => ['transaction_id' => $id]);
+        $result = app(\Modules\SmartStockInventory\Services\SkuLotService::class)->attach($rows, 1, 11, [1])->keyBy('transaction_id');
+        $this->assertSame(['LOT-A'], array_column($result[1]['lots'], 'lot_number'));
+        $this->assertSame(['LOT-A'], array_column($result[10]['lots'], 'lot_number'));
+        $this->assertSame(['LOT-A', 'LOT-B'], array_column($result[11]['lots'], 'lot_number'));
+        $this->assertSame(['LOT-B'], array_column($result[12]['lots'], 'lot_number'));
+        foreach ([13, 14, 15] as $id) { $this->assertSame(['LOT-A'], array_column($result[$id]['lots'], 'lot_number')); }
+        $this->assertTrue($result[10]['lots'][0]['editable']);
+    }
+
+    public function test_quick_lot_update_changes_receipt_and_linked_history_and_records_audit(): void
+    {
+        $this->createLotFixtures();
+        $service = app(\Modules\SmartStockInventory\Services\SkuLotService::class);
+        $service->update(1, 11, 101, [1], ['lot_number' => 'NEW-LOT', 'original_lot_number' => 'LOT-A', 'reason' => 'Correct label'], (object) ['id' => 7, 'username' => 'Staff'], '127.0.0.1');
+        $this->assertSame('NEW-LOT', DB::table('purchase_lines')->where('id', 101)->value('lot_number'));
+        $this->assertSame(10.0, (float) DB::table('purchase_lines')->where('id', 101)->value('quantity'));
+        $this->assertSame('LOT-B', DB::table('purchase_lines')->where('id', 102)->value('lot_number'));
+        $audit = DB::table('smart_stock_action_logs')->first();
+        $this->assertSame('update_sku_lot', $audit->action_type);
+        $this->assertSame(['lot_number' => 'LOT-A'], json_decode($audit->old_data, true));
+        $this->assertSame(['lot_number' => 'NEW-LOT'], json_decode($audit->new_data, true));
+        $rows = $service->attach(collect([['transaction_id' => 1]]), 1, 11, [1]);
+        $this->assertSame('NEW-LOT', $rows[0]['lots'][0]['lot_number']);
+        try {
+            $service->update(1, 11, 101, [1], ['lot_number' => 'STALE', 'original_lot_number' => 'LOT-A', 'reason' => 'Stale edit'], (object) ['id' => 7, 'username' => 'Staff'], '127.0.0.1');
+            $this->fail('Expected stale lot update to be rejected');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('lot_number', $e->errors());
+        }
+        $this->assertSame(1, DB::table('smart_stock_action_logs')->count());
+    }
+
+    public function test_quick_lot_update_rejects_wrong_location_business_and_variation(): void
+    {
+        $this->createLotFixtures();
+        $service = app(\Modules\SmartStockInventory\Services\SkuLotService::class);
+        foreach ([[1, 11, 103], [1, 11, 104], [1, 12, 101]] as [$business, $variation, $line]) {
+            try {
+                $service->update($business, $variation, $line, [1], ['lot_number' => 'WRONG', 'original_lot_number' => 'LOT-A', 'reason' => 'Test'], (object) ['id' => 7, 'username' => 'Staff'], '127.0.0.1');
+                $this->fail('Expected out-of-scope lot update to be rejected');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+                $this->assertSame(404, $e->getStatusCode());
+            }
+        }
+        $this->assertSame(0, DB::table('smart_stock_action_logs')->count());
+        $this->assertFalse(DB::table('purchase_lines')->where('lot_number', 'WRONG')->exists());
+    }
+
 }

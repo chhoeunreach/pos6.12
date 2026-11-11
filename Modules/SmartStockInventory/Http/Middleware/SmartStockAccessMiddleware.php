@@ -233,6 +233,7 @@ class SmartStockAccessMiddleware
             'ssi.sku.index' => 'stock_inventory.view',
             'ssi.sku.history' => 'stock_inventory.view',
             'ssi.sku.export' => 'stock_inventory.export',
+            'ssi.sku.lot.update' => 'stock_inventory.update',
             'ssi.report.stock_sell' => 'stock_report.view',
             'ssi.report.purchase_cost.edit' => 'purchase.update',
             'ssi.report.purchase_cost.update' => 'purchase.update',

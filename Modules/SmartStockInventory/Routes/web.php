@@ -91,6 +91,7 @@ Route::middleware([
     Route::get('/imei/history/{imei}', ['\Modules\SmartStockInventory\Http\Controllers\ImeiController', 'history'])->name('ssi.imei.history');
     Route::post('/imei/update', ['\Modules\SmartStockInventory\Http\Controllers\ImeiController', 'updateStatus'])->name('ssi.imei.update');
     Route::get('/sku', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'index'])->name('ssi.sku.index');
+    Route::put('/sku/{variation}/lots/{line}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'updateLot'])->whereNumber(['variation', 'line'])->name('ssi.sku.lot.update');
     Route::get('/sku/history/{variation}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'history'])->whereNumber('variation')->name('ssi.sku.history');
     Route::get('/sku/history/{variation}/export', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'export'])->whereNumber('variation')->name('ssi.sku.export');
     Route::get('/lot', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'index'])->name('ssi.lot.index');
