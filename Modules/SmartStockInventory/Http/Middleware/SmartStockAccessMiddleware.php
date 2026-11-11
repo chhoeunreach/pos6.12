@@ -3,6 +3,7 @@
 namespace Modules\SmartStockInventory\Http\Middleware;
 
 use App\System;
+use Modules\SmartStockInventory\Support\SkuPermissions;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,10 @@ class SmartStockAccessMiddleware
         }
 
         $routeName = $this->baseRouteName((string) optional($request->route())->getName());
+        if (isset(SkuPermissions::ROUTES[$routeName])) {
+            SkuPermissions::authorize($user, SkuPermissions::ROUTES[$routeName]);
+            return $next($request);
+        }
         $isReachAdmin = $this->isReachAdmin($user);
         $staffAllowedRoutes = (array) config('smartstockinventory.staff_allowed_routes', []);
 
@@ -233,6 +238,11 @@ class SmartStockAccessMiddleware
             'ssi.sku.index' => 'stock_inventory.view',
             'ssi.sku.history' => 'stock_inventory.view',
             'ssi.sku.export' => 'stock_inventory.export',
+            'ssi.sku.products.export' => 'stock_inventory.export',
+            'ssi.sku.cost.edit' => 'purchase.update',
+            'ssi.sku.cost.update' => 'purchase.update',
+            'ssi.sku.sale_price.edit' => 'sell.update',
+            'ssi.sku.sale_price.update' => 'sell.update',
             'ssi.sku.lot.update' => 'stock_inventory.update',
             'ssi.report.stock_sell' => 'stock_report.view',
             'ssi.report.purchase_cost.edit' => 'purchase.update',

@@ -2,6 +2,8 @@
 @section('page_title', 'SKU Transaction History')
 @section('module_content')
 @php
+    $skuCanViewCosts = \Modules\SmartStockInventory\Support\SkuPermissions::allows(auth()->user(), 'view_cost');
+    $skuCanEditCosts = \Modules\SmartStockInventory\Support\SkuPermissions::allows(auth()->user(), 'update_cost');
     $types = ['purchase' => 'Purchase', 'sell' => 'Sale / Production Use', 'opening_stock' => 'Opening Stock', 'purchase_transfer' => 'Transfer In', 'sell_transfer' => 'Transfer Out', 'sell_return' => 'Sale Return', 'purchase_return' => 'Purchase Return', 'stock_adjustment' => 'Stock Adjustment', 'production_purchase' => 'Production In'];
 @endphp
 <div class="box box-default">
@@ -42,7 +44,7 @@
 </div>
 <div class="box box-primary"><div class="box-body">
     <div class="table-responsive"><table class="table table-bordered table-striped">
-        <thead><tr><th>Date</th><th>Location</th><th>Transaction Type</th><th>Reference</th><th>Contact</th><th>Lots</th><th>Qty In</th><th>Qty Out</th><th>Location Balance</th></tr></thead>
+        <thead><tr><th>Date</th><th>Location</th><th>Transaction Type</th><th>Reference</th><th>Contact</th><th>Lots</th><th title="Selling price before line discount and item tax">Unit Price</th>@if($skuCanViewCosts)<th>Unit Cost (Before Discount)</th><th>Unit Cost (incl. tax)</th>@endif<th>Qty In</th><th>Qty Out</th><th>Location Balance</th></tr></thead>
         <tbody>
             @forelse($rows as $row)
                 <tr>
@@ -60,7 +62,7 @@
                             };
                         @endphp
                         @if($transactionPath)
-                            <a href="#" class="btn-modal" data-href="{{ ssi_url($transactionPath . $row['transaction_id']) }}" data-container=".view_modal">{{ $row['ref_no'] ?: '#' . $row['transaction_id'] }}</a>
+                            <a href="#" class="btn-modal" data-href="{{ ssi_url($transactionPath . $row['transaction_id']) . (in_array($row['type'], ['purchase', 'opening_stock', 'production_purchase'], true) ? '?sku_history=1' : '') }}" data-container=".view_modal">{{ $row['ref_no'] ?: '#' . $row['transaction_id'] }}</a>
                         @else
                             {{ $row['ref_no'] ?: '#' . $row['transaction_id'] }}
                         @endif
@@ -84,12 +86,67 @@
                             <span class="text-muted">—</span>
                         @endforelse
                     </td>
+                    <td>
+                        @forelse(($row['sale_prices'] ?? []) as $salePrice)
+                            <div style="white-space:nowrap;margin-bottom:4px">
+                                @if(count($row['sale_prices']) > 1)<small>#{{ $salePrice['id'] }}:</small>@endif
+                                <span class="display_currency" data-currency_symbol="true">{{ $salePrice['unit_price'] }}</span>
+                            </div>
+                        @empty
+                            <span class="text-muted">—</span>
+                        @endforelse
+                        @if(!empty($row['sale_prices']))
+                            @can('sell.update')
+                                <button type="button" class="btn btn-xs btn-default sku-quick-sale-price" data-url="{{ ssi_route('ssi.sku.sale_price.edit', ['variation' => $product->variation_id, 'transaction' => $row['transaction_id']]) }}"><i class="fa fa-pencil"></i> Quick Update</button>
+                            @endcan
+                        @endif
+                    </td>
+                    @if($skuCanViewCosts)
+                    <td>
+                        @forelse($row['lots'] as $lot)
+                            <div style="white-space:nowrap;margin-bottom:4px">
+                                @if(count($row['lots']) > 1)<small>{{ $lot['lot_number'] ?: '#' . $lot['id'] }}:</small>@endif
+                                @if($lot['unit_cost_before_discount'] !== null)
+                                    <span class="display_currency" data-currency_symbol="true">{{ $lot['unit_cost_before_discount'] }}</span>
+                                @else
+                                    <span class="text-muted">Unavailable</span>
+                                @endif
+                                @if($skuCanEditCosts)
+                                    @if($lot['cost_editable'])
+                                        <button type="button" class="btn btn-xs btn-default sku-before-cost" data-url="{{ ssi_route('ssi.sku.cost.edit', ['sourceName' => 'main', 'line' => $lot['id'], 'price_basis' => 'before_discount']) }}"><i class="fa fa-pencil"></i> Quick Update</button>
+                                    @endif
+                                @endif
+                            </div>
+                        @empty
+                            <span class="text-muted">—</span>
+                        @endforelse
+                    </td>
+                    <td>
+                        @forelse($row['lots'] as $lot)
+                            <div style="white-space:nowrap;margin-bottom:4px">
+                                @if(count($row['lots']) > 1)<small>{{ $lot['lot_number'] ?: '#' . $lot['id'] }}:</small>@endif
+                                @if($lot['unit_cost'] !== null)
+                                    <span class="display_currency" data-currency_symbol="true">{{ $lot['unit_cost'] }}</span>
+                                @else
+                                    <span class="text-muted">Unavailable</span>
+                                @endif
+                                @if($skuCanEditCosts)
+                                    @if($lot['cost_editable'])
+                                        <button type="button" class="btn btn-xs btn-default sku-quick-cost" data-url="{{ ssi_route('ssi.sku.cost.edit', ['sourceName' => 'main', 'line' => $lot['id']]) }}"><i class="fa fa-pencil"></i> Update Cost</button>
+                                    @endif
+                                @endif
+                            </div>
+                        @empty
+                            <span class="text-muted">—</span>
+                        @endforelse
+                    </td>
+                    @endif
                     @foreach([max(0, $row['quantity_change']), max(0, -$row['quantity_change']), $row['stock']] as $qty)
                         <td><span class="display_currency" data-is_quantity="true" data-currency_symbol="false">{{ $qty }}</span></td>
                     @endforeach
                 </tr>
             @empty
-                <tr><td colspan="9" class="text-center">No stock transactions found.</td></tr>
+                <tr><td colspan="{{ $skuCanViewCosts ? 12 : 10 }}" class="text-center">No stock transactions found.</td></tr>
             @endforelse
         </tbody>
     </table></div>
@@ -117,11 +174,22 @@
     </div></div>
 </div>
 @endcan
+@if($skuCanEditCosts)
+    @include('purchase.partials.lot_price_modal', ['costEditorId' => 'sku-purchase-cost-modal', 'costEditorLabels' => ['shared' => 'Updates the linked receipt cost for all related transactions. Prices include item tax.']])
+    @include('purchase.partials.lot_price_modal', ['costEditorId' => 'sku-before-cost-modal', 'costEditorLabels' => ['title' => 'Unit Cost (Before Discount)', 'shared' => 'Updates the linked receipt cost for all related transactions, before item discount and item tax. Existing discount and tax rates are retained.']])
+@endif
+@can('sell.update')
+    @include('purchase.partials.lot_price_modal', ['costEditorId' => 'sku-sale-price-modal', 'costEditorLabels' => ['title' => 'Update Unit Price', 'shared' => 'Selling price per base unit, before line discount and item tax. Existing discounts and tax rates are retained.']])
+@endcan
 @endsection
 
 @section('module_js')
+<script src="{{ asset('js/purchase-lot-price-modal.js') }}?v={{ filemtime(public_path('js/purchase-lot-price-modal.js')) }}"></script>
 <script>
 $(function () {
+    window.initPurchaseLotPriceModal({modal: '#sku-sale-price-modal', trigger: '.sku-quick-sale-price', priceField: 'unit_price', labels: {error: 'Unable to update unit price.'}, saved: function () { window.location.reload(); }});
+    window.initPurchaseLotPriceModal({modal: '#sku-purchase-cost-modal', trigger: '.sku-quick-cost', saved: function () { window.location.reload(); }});
+    window.initPurchaseLotPriceModal({modal: '#sku-before-cost-modal', trigger: '.sku-before-cost', saved: function () { window.location.reload(); }});
     $('.sku-quick-lot').on('click', function () {
         var button = $(this);
         $('#sku-lot-form').attr('action', button.attr('data-url'));

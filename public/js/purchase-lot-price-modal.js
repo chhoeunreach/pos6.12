@@ -4,6 +4,7 @@
         var modal = $(options.modal), form = modal.find('form'), fields = modal.find('.purchase-lot-price-fields');
         if (!modal.length) return;
         var sequence = 0, saving = false, labels = options.labels || {}, requestUrl = '', requestMethod = 'GET';
+        var priceField = options.priceField || 'purchase_price';
         var diagnostics = $('<pre class="purchase-lot-price-diagnostics">').css({whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: '10px'}).prop('hidden', true);
         modal.find('.purchase-lot-price-error').after(diagnostics);
         function error(xhr, textStatus) {
@@ -41,7 +42,7 @@
                         var id = modal.attr('id') + '-price-' + index;
                         group.append($('<label>').attr('for', id).text((lot.lot || '#' + lot.id) + (lot.reference ? ' · ' + lot.reference : '')));
                         group.append($('<input class="form-control" type="number" min="0" max="999999999999" step="0.0001" required>')
-                            .attr({id: id, name: 'prices[' + index + '][purchase_price]'}).val(lot.purchase_price == null ? '' : lot.purchase_price)
+                            .attr({id: id, name: 'prices[' + index + '][' + priceField + ']'}).val(lot[priceField] == null ? '' : lot[priceField])
                             .css({background: '#fff', color: '#173b67', fontSize: '18px', height: '44px'}));
                         group.append($('<input type="hidden">').attr('name', 'prices[' + index + '][id]').val(lot.id));
                         fields.append(group);

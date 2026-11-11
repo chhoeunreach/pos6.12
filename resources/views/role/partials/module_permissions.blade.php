@@ -12,6 +12,9 @@
       <h4>{{$key}}</h4>
     </div>
     <div class="col-md-9">
+      @if($key === 'SmartStockInventory')
+        @includeIf('smartstockinventory::sku.permission_guide')
+      @endif
       @foreach($value as $module_permission)
       @php
         if(empty($role_permissions) && $module_permission['default']) {

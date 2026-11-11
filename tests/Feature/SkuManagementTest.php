@@ -24,6 +24,7 @@ class SkuManagementTest extends TestCase
         Schema::create('products', function (Blueprint $table) {
             $table->integer('id'); $table->integer('business_id'); $table->string('name'); $table->string('sku');
             $table->integer('unit_id')->nullable(); $table->integer('category_id')->nullable(); $table->integer('brand_id')->nullable();
+            $table->integer('sub_category_id')->nullable(); $table->boolean('is_inactive')->default(false);
         });
         Schema::create('variations', function (Blueprint $table) {
             $table->integer('id'); $table->integer('product_id'); $table->string('name'); $table->string('sub_sku'); $table->softDeletes();
@@ -141,11 +142,12 @@ class SkuManagementTest extends TestCase
         });
         Schema::create('purchase_lines', function (Blueprint $table) {
             $table->integer('id'); $table->integer('transaction_id'); $table->integer('product_id')->default(1); $table->integer('variation_id')->default(11);
-            $table->string('lot_number')->nullable(); $table->double('quantity')->default(10); $table->double('quantity_returned')->default(0); $table->timestamps();
+            $table->string('lot_number')->nullable(); $table->double('purchase_price_inc_tax')->nullable()->default(100); $table->double('pp_without_discount')->nullable()->default(125); $table->double('quantity')->default(10); $table->double('quantity_returned')->default(0); $table->timestamps();
         });
         Schema::create('transaction_sell_lines', function (Blueprint $table) {
             $table->integer('id'); $table->integer('transaction_id'); $table->integer('variation_id')->default(11);
             $table->integer('lot_no_line_id')->nullable(); $table->integer('parent_sell_line_id')->nullable(); $table->double('quantity_returned')->default(0);
+            $table->double('unit_price_before_discount')->default(0); $table->double('unit_price_inc_tax')->default(0);
         });
         Schema::create('stock_adjustment_lines', function (Blueprint $table) {
             $table->integer('id'); $table->integer('transaction_id'); $table->integer('variation_id')->default(11); $table->integer('lot_no_line_id')->nullable();
@@ -206,6 +208,9 @@ class SkuManagementTest extends TestCase
         $this->assertSame(['LOT-B'], array_column($result[12]['lots'], 'lot_number'));
         foreach ([13, 14, 15] as $id) { $this->assertSame(['LOT-A'], array_column($result[$id]['lots'], 'lot_number')); }
         $this->assertTrue($result[10]['lots'][0]['editable']);
+        $this->assertEquals(100, $result[10]['lots'][0]['unit_cost']);
+        $this->assertEquals(125, $result[10]['lots'][0]['unit_cost_before_discount']);
+        $this->assertTrue($result[10]['lots'][0]['cost_editable']);
     }
 
     public function test_quick_lot_update_changes_receipt_and_linked_history_and_records_audit(): void
@@ -245,6 +250,134 @@ class SkuManagementTest extends TestCase
         }
         $this->assertSame(0, DB::table('smart_stock_action_logs')->count());
         $this->assertFalse(DB::table('purchase_lines')->where('lot_number', 'WRONG')->exists());
+    }
+
+    public function test_sku_ajax_sorts_stock_across_pages_and_filters_product_attributes(): void
+    {
+        session(['user.business_id' => 1]);
+        DB::table('products')->where('id', 1)->update(['unit_id' => 1, 'category_id' => 2, 'sub_category_id' => 3]);
+        DB::table('products')->where('id', 2)->update(['is_inactive' => true]);
+        $data = ['search' => '', 'draw' => 1, 'start' => 0, 'length' => 1, 'order' => [['column' => 0, 'dir' => 'desc']],
+            'columns' => [['data' => 'current_stock', 'name' => 'current_stock', 'orderable' => 'true', 'searchable' => 'false']]];
+        $request = Request::create('/smart-stock-inventory/sku', 'GET', $data, [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $this->app->instance('request', $request);
+        $request->setUserResolver(fn () => new class { public function can($permission) { return true; } });
+        $controller = \Mockery::mock(SkuController::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $controller->shouldReceive('permittedLocationIds')->with(1)->andReturn([1]);
+        $service = new SkuInventoryService(\Mockery::mock(ProductUtil::class));
+        $result = $controller->index($request, $service)->getData(true);
+        $this->assertSame(3, $result['recordsFiltered']);
+        $this->assertSame(11, $result['data'][0]['variation_id']);
+        $this->assertEquals(5, $result['data'][0]['current_stock']);
+        $request->merge(['start' => 1]);
+        $result = $controller->index($request, $service)->getData(true);
+        $this->assertSame(21, $result['data'][0]['variation_id']);
+        $request->merge(['start' => 0, 'unit_id' => 1, 'category_id' => 2, 'sub_category_id' => 3, 'product_status' => 'active']);
+        $result = $controller->index($request, $service)->getData(true);
+        $this->assertSame(2, $result['recordsFiltered']);
+        $request->merge(['product_status' => 'inactive']);
+        $result = $controller->index($request, $service)->getData(true);
+        $this->assertSame(0, $result['recordsFiltered']);
+        $request->replace([
+            'draw' => 2, 'start' => 0, 'length' => 10, 'sku_search' => 'PHONE',
+            'search' => ['value' => 'Blue', 'regex' => 'false'], 'order' => [['column' => 0, 'dir' => 'asc']],
+            'columns' => [['data' => 'product_name', 'name' => 'product_display', 'searchable' => 'true', 'orderable' => 'true']],
+        ]);
+        $result = $controller->index($request, $service)->getData(true);
+        $this->assertSame(1, $result['recordsFiltered']);
+        $this->assertSame(11, $result['data'][0]['variation_id']);
+        $this->assertSame([11], $service->products(1, [1], ['search' => 'PHONE', 'table_search' => 'Blue'])->get()->pluck('variation_id')->all());
+    }
+
+    public function test_sku_cost_editor_only_accepts_permitted_received_purchase_lots(): void
+    {
+        $this->createLotFixtures();
+        $request = Request::create('/smart-stock-inventory/sku/purchase-cost/main/101');
+        $request->setLaravelSession($this->app['session']->driver());
+        $request->session()->put('user.business_id', 1);
+        $request->setUserResolver(fn () => new class {
+            public function can($permission) { return in_array($permission, ['stock_inventory.view', 'view_purchase_price', 'purchase.update'], true); }
+            public function permitted_locations() { return [1]; }
+        });
+        $class = new \ReflectionClass(\Modules\SmartStockInventory\Http\Controllers\SkuPurchaseCostController::class);
+        $controller = $class->newInstanceWithoutConstructor();
+        $scope = $class->getMethod('scope'); $scope->setAccessible(true);
+        $this->assertSame([1, 'sku_test', [1], [101]], $scope->invoke($controller, $request, 'main', 101));
+        DB::table('transactions')->where('id', 2)->update(['type' => 'purchase_transfer']);
+        $this->assertSame([1, 'sku_test', [1], [102]], $scope->invoke($controller, $request, 'main', 102));
+        DB::table('transactions')->where('id', 2)->update(['status' => 'ordered']);
+        foreach ([102, 103, 104] as $line) {
+            try { $scope->invoke($controller, $request, 'main', $line); $this->fail('Unavailable cost must be rejected'); }
+            catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(404, $e->getStatusCode()); }
+        }
+        $request->setUserResolver(fn () => new class { public function can($permission) { return $permission === 'stock_inventory.view'; } });
+        try { $scope->invoke($controller, $request, 'main', 101); $this->fail('Purchase update permission is required'); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(403, $e->getStatusCode()); }
+    }
+
+    public function test_cost_quick_update_is_available_for_every_stock_history_transaction_type(): void
+    {
+        $this->createLotFixtures();
+        DB::table('transactions')->where('id', 2)->update(['type' => 'purchase_transfer']);
+        DB::table('transactions')->insert([
+            ['id' => 5, 'type' => 'opening_stock', 'return_parent_id' => null],
+            ['id' => 6, 'type' => 'production_purchase', 'return_parent_id' => null],
+            ['id' => 10, 'type' => 'sell', 'return_parent_id' => null],
+            ['id' => 11, 'type' => 'sell_transfer', 'return_parent_id' => null],
+            ['id' => 12, 'type' => 'production_sell', 'return_parent_id' => null],
+            ['id' => 13, 'type' => 'sell_return', 'return_parent_id' => 10],
+            ['id' => 14, 'type' => 'purchase_return', 'return_parent_id' => 1],
+            ['id' => 15, 'type' => 'stock_adjustment', 'return_parent_id' => null],
+        ]);
+        DB::table('purchase_lines')->insert([
+            ['id' => 105, 'transaction_id' => 5, 'lot_number' => 'OPENING'],
+            ['id' => 106, 'transaction_id' => 6, 'lot_number' => 'PRODUCED'],
+        ]);
+        DB::table('purchase_lines')->where('id', 101)->update(['quantity_returned' => 1]);
+        DB::table('transaction_sell_lines')->insert([
+            ['id' => 201, 'transaction_id' => 10, 'lot_no_line_id' => 102, 'parent_sell_line_id' => null],
+            ['id' => 202, 'transaction_id' => 11, 'lot_no_line_id' => 101, 'parent_sell_line_id' => null],
+            ['id' => 203, 'transaction_id' => 12, 'lot_no_line_id' => 106, 'parent_sell_line_id' => null],
+            ['id' => 204, 'transaction_id' => 13, 'lot_no_line_id' => null, 'parent_sell_line_id' => 201],
+        ]);
+        DB::table('stock_adjustment_lines')->insert(['id' => 301, 'transaction_id' => 15, 'lot_no_line_id' => 101]);
+        $ids = [1, 2, 5, 6, 10, 11, 12, 13, 14, 15];
+        $rows = app(\Modules\SmartStockInventory\Services\SkuLotService::class)->attach(collect($ids)->map(fn ($id) => ['transaction_id' => $id]), 1, 11, [1]);
+        $this->assertCount(count($ids), $rows);
+        foreach ($rows as $row) {
+            $this->assertNotEmpty($row['lots'], 'Expected linked cost for transaction ' . $row['transaction_id']);
+            foreach ($row['lots'] as $lot) { $this->assertTrue($lot['cost_editable'], 'Cost edit unavailable on transaction ' . $row['transaction_id']); }
+        }
+    }
+
+    public function test_sku_export_omits_purchase_costs_without_the_role_permission(): void
+    {
+        $this->createLotFixtures();
+        session(['user.business_id' => 1]);
+        $util = \Mockery::mock(ProductUtil::class);
+        $util->shouldReceive('getVariationStockHistory')->with(1, 11, 1)->andReturn([
+            ['transaction_id' => 1, 'date' => '2026-11-11', 'type' => 'purchase', 'type_label' => 'Purchase', 'ref_no' => 'PO-1', 'quantity_change' => 10, 'stock' => 10],
+        ]);
+        $inventory = new SkuInventoryService($util);
+        $request = Request::create('/smart-stock-inventory/sku/history/11/export');
+        $actor = new class {
+            public $permissions = ['stock_inventory.view', 'stock_inventory.export'];
+            public function can($permission) { return in_array($permission, $this->permissions, true); }
+        };
+        $request->setUserResolver(fn () => $actor);
+        $controller = \Mockery::mock(SkuController::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $controller->shouldReceive('permittedLocationIds')->with(1)->andReturn([1]);
+        $exports = [];
+        \Maatwebsite\Excel\Facades\Excel::shouldReceive('download')->twice()->withArgs(function ($export, $filename) use (&$exports) {
+            $exports[] = $export->array(); return true;
+        })->andReturn(response('download'));
+        $controller->export($request, $inventory, 11);
+        $this->assertNotContains('Unit Cost (Before Discount)', $exports[0][0]);
+        $this->assertNotContains('Unit Cost (incl. tax)', $exports[0][0]);
+        $actor->permissions[] = 'view_purchase_price';
+        $controller->export($request, $inventory, 11);
+        $this->assertContains('Unit Cost (Before Discount)', $exports[1][0]);
+        $this->assertContains('Unit Cost (incl. tax)', $exports[1][0]);
     }
 
 }

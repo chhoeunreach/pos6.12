@@ -60,16 +60,16 @@ class DataController extends Controller
     public function user_permissions(): array
     {
         return [
-            ['value' => 'stock_inventory.view', 'label' => 'Stock Inventory (view)', 'default' => false],
+            ['value' => 'stock_inventory.view', 'label' => 'Stock Inventory (view, SKU list, filters and history)', 'default' => false],
             ['value' => 'stock_inventory.create', 'label' => 'Stock Inventory (create)', 'default' => false],
             ['value' => 'stock_inventory.edit', 'label' => 'Stock Inventory (edit)', 'default' => false],
             ['value' => 'stock_inventory.delete', 'label' => 'Stock Inventory (delete)', 'default' => false],
             ['value' => 'stock_inventory.fix', 'label' => 'Stock Inventory (fix)', 'default' => false],
             ['value' => 'stock_inventory.authority', 'label' => 'Stock Inventory (Authority: major corrections)', 'default' => false],
             ['value' => 'stock_inventory.verify', 'label' => 'Stock Inventory (verify)', 'default' => false],
-            ['value' => 'stock_inventory.export', 'label' => 'Stock Inventory (export)', 'default' => false],
+            ['value' => 'stock_inventory.export', 'label' => 'Stock Inventory (export, copy and print SKU data)', 'default' => false],
             ['value' => 'stock_inventory.settings', 'label' => 'Stock Inventory (settings)', 'default' => false],
-            ['value' => 'stock_inventory.update', 'label' => 'Stock Inventory (update)', 'default' => false],
+            ['value' => 'stock_inventory.update', 'label' => 'Stock Inventory (update, including SKU lot numbers)', 'default' => false],
             ['value' => 'stock_inventory.rollback', 'label' => 'Stock Inventory (rollback)', 'default' => false],
             ['value' => 'stock_inventory.logs', 'label' => 'Stock Inventory (logs)', 'default' => false],
             ['value' => 'stock_inventory.approve', 'label' => 'Stock Inventory (approve)', 'default' => false],

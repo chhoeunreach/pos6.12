@@ -31,7 +31,14 @@ class SkuInventoryService
                         ->orWhere('p.name', 'like', $term)->orWhere('v.name', 'like', $term);
                 });
             })
+            ->when(trim($filters['table_search'] ?? '') !== '', function ($query) use ($filters) {
+                $term = '%' . trim($filters['table_search']) . '%';
+                $query->where(fn ($q) => $q->where('v.sub_sku', 'like', $term)->orWhere('p.sku', 'like', $term)->orWhere('p.name', 'like', $term)->orWhere('v.name', 'like', $term));
+            })
             ->when(! empty($filters['category_id']), fn ($q) => $q->where('p.category_id', $filters['category_id']))
+            ->when(! empty($filters['sub_category_id']), fn ($q) => $q->where('p.sub_category_id', $filters['sub_category_id']))
+            ->when(! empty($filters['unit_id']), fn ($q) => $q->where('p.unit_id', $filters['unit_id']))
+            ->when(in_array($filters['product_status'] ?? '', ['active', 'inactive'], true), fn ($q) => $q->where('p.is_inactive', $filters['product_status'] === 'inactive' ? 1 : 0))
             ->when(! empty($filters['brand_id']), fn ($q) => $q->where('p.brand_id', $filters['brand_id']))
             ->when(($filters['stock_status'] ?? '') === 'positive', fn ($q) => $q->whereRaw('COALESCE(stock.current_stock, 0) > 0'))
             ->when(($filters['stock_status'] ?? '') === 'zero', fn ($q) => $q->whereRaw('COALESCE(stock.current_stock, 0) = 0'))

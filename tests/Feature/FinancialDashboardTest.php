@@ -70,6 +70,7 @@ class FinancialDashboardTest extends TestCase
             $schema->create('purchase_lines', function (Blueprint $table) {
                 $table->integer('id');
                 $table->integer('transaction_id');
+                $table->integer('product_id')->default(1);
                 $table->integer('variation_id')->default(1);
                 $table->decimal('purchase_price_inc_tax')->nullable();
                 $table->string('lot_number')->nullable();
@@ -727,7 +728,7 @@ class FinancialDashboardTest extends TestCase
     }
 
 
-    private function purchaseCostRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $stock = false)
+    private function purchaseCostRequest(array $data = [], bool $save = false, string $source = 'main', int $line = 1, bool $stock = false, bool $sku = false)
     {
         $request = Request::create('/reports/financial-dashboard/cost-sales/'.$source.'/'.$line, $save ? 'PUT' : 'GET', $data + ['start_date' => '2026-11-01', 'end_date' => '2026-11-30', 'location_ids' => [1, -2, -3]]);
         $request->setLaravelSession($this->app['session']->driver());
@@ -739,8 +740,95 @@ class FinancialDashboardTest extends TestCase
         $module = Mockery::mock(\App\Utils\ModuleUtil::class);
         $module->shouldReceive('isSubscribed')->with(1)->andReturn(true);
         $class = $stock ? \Modules\SmartStockInventory\Http\Controllers\StockPurchaseCostController::class : \Modules\LocalCashierReport\Http\Controllers\FinancialPurchaseCostController::class;
+        if ($sku) {
+            DB::table('business_locations')->updateOrInsert(['id' => 1], ['business_id' => 1, 'name' => 'Branch A']);
+            $class = \Modules\SmartStockInventory\Http\Controllers\SkuPurchaseCostController::class;
+        }
         $controller = new $class($dashboard, new FinancialDashboardReport, $module);
         return ($save ? $controller->update($request, $source, $line) : $controller->edit($request, $source, $line))->getData(true);
+    }
+
+    public function test_sku_transfer_receipt_cost_can_be_updated_in_both_price_modes()
+    {
+        $this->salesPermissions = ['stock_inventory.view', 'view_purchase_price', 'purchase.update'];
+        $this->seedSales();
+        DB::table('transactions')->where('id', 10)->update(['type' => 'purchase_transfer', 'status' => 'received']);
+        $details = $this->purchaseCostRequest(['price_basis' => 'before_discount'], false, 'main', 1, false, true);
+        $this->purchaseCostRequest(['price_basis' => 'before_discount', 'cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 75]]], true, 'main', 1, false, true);
+        $this->assertEquals(75, DB::table('purchase_lines')->where('id', 1)->value('pp_without_discount'));
+        $this->assertEquals(75, DB::table('purchase_lines')->where('id', 1)->value('purchase_price_inc_tax'));
+        $details = $this->purchaseCostRequest([], false, 'main', 1, false, true);
+        $this->purchaseCostRequest(['cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 90]]], true, 'main', 1, false, true);
+        $this->assertEquals(90, DB::table('purchase_lines')->where('id', 1)->value('purchase_price_inc_tax'));
+        $this->assertEquals(90, DB::table('transactions')->where('id', 10)->value('final_total'));
+        $this->assertEquals(1, DB::table('purchase_lines')->where('id', 1)->value('quantity'));
+        $this->assertSame(2, DB::table('activity_log')->count());
+    }
+
+    public function test_sku_before_discount_cost_editor_preserves_rates_and_recalculates_totals()
+    {
+        $this->salesPermissions = ['stock_inventory.view', 'view_purchase_price', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['quantity' => 2, 'pp_without_discount' => 111.1111, 'purchase_price' => 100, 'purchase_price_inc_tax' => 110, 'item_tax' => 10, 'discount_percent' => 10]);
+        DB::table('transactions')->where('id', 10)->update(['total_before_tax' => 200, 'tax_amount' => 9.9, 'discount_type' => 'percentage', 'discount_amount' => 10, 'shipping_charges' => 5]);
+        DB::table('transaction_payments')->insert(['transaction_id' => 10, 'amount' => 225]);
+        $details = $this->purchaseCostRequest(['price_basis' => 'before_discount'], false, 'main', 1, false, true);
+        $this->assertEquals(111.1111, $details['lots'][0]['purchase_price']);
+        $this->purchaseCostRequest(['price_basis' => 'before_discount', 'cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 200]]], true, 'main', 1, false, true);
+        $lot = DB::table('purchase_lines')->where('id', 1)->first();
+        $this->assertEquals(200, $lot->pp_without_discount);
+        $this->assertEquals(180, $lot->purchase_price);
+        $this->assertEquals(198, $lot->purchase_price_inc_tax);
+        $this->assertEquals(18, $lot->item_tax);
+        $this->assertEquals(10, $lot->discount_percent);
+        $purchase = DB::table('transactions')->where('id', 10)->first();
+        $this->assertEquals(360, $purchase->total_before_tax);
+        $this->assertEqualsWithDelta(17.82, $purchase->tax_amount, .0001);
+        $this->assertEqualsWithDelta(379.22, $purchase->final_total, .0001);
+        $this->assertEquals('partial', $purchase->payment_status);
+        $details = $this->purchaseCostRequest(['price_basis' => 'before_discount'], false, 'main', 1, false, true);
+        $this->purchaseCostRequest(['price_basis' => 'before_discount', 'cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 0]]], true, 'main', 1, false, true);
+        $this->assertEquals(0, DB::table('purchase_lines')->where('id', 1)->value('pp_without_discount'));
+        $this->assertEquals(5, DB::table('transactions')->where('id', 10)->value('final_total'));
+        $this->assertSame(2, DB::table('activity_log')->count());
+    }
+
+    public function test_sku_before_discount_cost_editor_retains_fully_discounted_price()
+    {
+        $this->salesPermissions = ['stock_inventory.view', 'view_purchase_price', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['pp_without_discount' => 100, 'discount_percent' => 100, 'purchase_price' => 0, 'purchase_price_inc_tax' => 0]);
+        DB::table('transactions')->where('id', 10)->update(['total_before_tax' => 0, 'final_total' => 0]);
+        $details = $this->purchaseCostRequest(['price_basis' => 'before_discount'], false, 'main', 1, false, true);
+        $this->purchaseCostRequest(['price_basis' => 'before_discount', 'cost_version' => $details['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 250]]], true, 'main', 1, false, true);
+        $lot = DB::table('purchase_lines')->where('id', 1)->first();
+        $this->assertEquals(250, $lot->pp_without_discount);
+        $this->assertEquals(0, $lot->purchase_price_inc_tax);
+        $this->assertEquals(100, $lot->discount_percent);
+    }
+
+    public function test_sku_history_cost_editor_updates_tax_totals_and_rejects_stale_prices()
+    {
+        $this->salesPermissions = ['stock_inventory.view', 'view_purchase_price', 'purchase.update'];
+        $this->seedSales();
+        DB::table('purchase_lines')->where('id', 1)->update(['quantity' => 2, 'purchase_price' => 100, 'purchase_price_inc_tax' => 110, 'item_tax' => 10, 'discount_percent' => 10]);
+        DB::table('transactions')->where('id', 10)->update(['total_before_tax' => 200, 'tax_amount' => 9.9, 'discount_type' => 'percentage', 'discount_amount' => 10, 'shipping_charges' => 5]);
+        DB::table('transaction_payments')->insert(['transaction_id' => 10, 'amount' => 225]);
+        $metadata = $this->purchaseCostRequest([], false, 'main', 1, false, true);
+        $this->assertEquals(110, $metadata['lots'][0]['purchase_price']);
+        $response = $this->purchaseCostRequest(['cost_version' => $metadata['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 132]]], true, 'main', 1, false, true);
+        $this->assertTrue($response['success']);
+        $lot = DB::table('purchase_lines')->where('id', 1)->first();
+        $this->assertEquals(132, $lot->purchase_price_inc_tax);
+        $this->assertEquals(120, $lot->purchase_price);
+        $this->assertEquals(12, $lot->item_tax);
+        $this->assertEqualsWithDelta(133.3333, $lot->pp_without_discount, .0001);
+        $this->assertEquals('partial', DB::table('transactions')->where('id', 10)->value('payment_status'));
+        $this->assertSame(1, DB::table('activity_log')->count());
+        try {
+            $this->purchaseCostRequest(['cost_version' => $metadata['cost_version'], 'prices' => [['id' => 1, 'purchase_price' => 90]]], true, 'main', 1, false, true);
+            $this->fail('Stale cost must be rejected');
+        } catch (HttpException $e) { $this->assertSame(409, $e->getStatusCode()); }
     }
 
     public function test_quick_purchase_cost_updates_the_original_lot_all_sales_returns_and_purchase_totals()

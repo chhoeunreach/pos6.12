@@ -19,7 +19,7 @@ class SkuLotService
                 ->where('t.business_id', $businessId)->where('receipt.business_id', $businessId)
                 ->whereIn('t.location_id', $locationIds)->whereIn('receipt.location_id', $locationIds)
                 ->whereIn('t.id', $ids)->where('pl.variation_id', $variationId)
-                ->select('t.id as transaction_id', 'pl.id', 'pl.lot_number', 'receipt.location_id', 'receipt.status', 'receipt.type');
+                ->select('t.id as transaction_id', 'pl.id', 'pl.lot_number', 'receipt.location_id', 'receipt.status', 'receipt.type', 'pl.purchase_price_inc_tax', 'pl.pp_without_discount');
         };
         $purchases = $select(DB::table('transactions as t')->join('purchase_lines as pl', 'pl.transaction_id', '=', 't.id'))->get();
 
@@ -59,7 +59,8 @@ class SkuLotService
 
         $lots = $purchases->concat($sales)->concat($adjustments)->concat($purchaseReturns)->concat($legacyReturns)
             ->groupBy('transaction_id')->map(fn ($items) => $items->unique('id')->values()->map(fn ($lot) => [
-                'id' => $lot->id, 'lot_number' => $lot->lot_number,
+                'id' => $lot->id, 'lot_number' => $lot->lot_number, 'unit_cost' => $lot->purchase_price_inc_tax, 'unit_cost_before_discount' => $lot->pp_without_discount,
+                'cost_editable' => $lot->status === 'received' && in_array($lot->type, ['purchase', 'opening_stock', 'production_purchase', 'purchase_transfer'], true),
                 'editable' => $lot->status === 'received' && in_array($lot->type, ['purchase', 'opening_stock', 'purchase_transfer', 'production_purchase'], true),
             ])->all());
 

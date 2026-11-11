@@ -49,11 +49,16 @@ class FinancialPurchaseCostController extends Controller
         return [$business, $connection, $allowed, $ids];
     }
 
+    protected function editableReceiptTypes(): array
+    {
+        return ['purchase', 'opening_stock', 'production_purchase'];
+    }
+
     private function lots(string $connection, int $business, array $allowed, array $ids, bool $lock = false)
     {
         $query = DB::connection($connection)->table('purchase_lines as p')->join('transactions as t', 't.id', '=', 'p.transaction_id')
             ->where('t.business_id', $business)->whereIn('t.location_id', $allowed)
-            ->whereIn('t.type', ['purchase', 'opening_stock', 'production_purchase'])->where('t.status', 'received')->whereIn('p.id', $ids)
+            ->whereIn('t.type', $this->editableReceiptTypes())->where('t.status', 'received')->whereIn('p.id', $ids)
             ->select('p.*', 't.ref_no as purchase_reference')->orderBy('p.id');
         if ($lock) $query->lockForUpdate();
         $lots = $query->get();
@@ -69,10 +74,12 @@ class FinancialPurchaseCostController extends Controller
 
     public function edit(Request $request, string $sourceName, int $line)
     {
+        $request->validate(['price_basis' => 'nullable|in:inclusive,before_discount']);
+        $beforeDiscount = $request->input('price_basis') === 'before_discount';
         [$business, $connection, $allowed, $ids] = $this->scope($request, $sourceName, $line);
         $lots = $this->lots($connection, $business, $allowed, $ids);
 
-        return response()->json(['lots' => $lots->map(fn ($lot) => ['id' => $lot->id, 'lot' => $lot->lot_number, 'reference' => $lot->purchase_reference, 'purchase_price' => $lot->purchase_price_inc_tax]),
+        return response()->json(['lots' => $lots->map(fn ($lot) => ['id' => $lot->id, 'lot' => $lot->lot_number, 'reference' => $lot->purchase_reference, 'purchase_price' => $beforeDiscount ? $lot->pp_without_discount : $lot->purchase_price_inc_tax]),
             'cost_version' => $this->version($lots), 'update_url' => $request->fullUrl()]);
     }
 
@@ -80,7 +87,7 @@ class FinancialPurchaseCostController extends Controller
     {
         [$business, $connection, $allowed, $ids] = $this->scope($request, $sourceName, $line);
         abort_unless($this->modules->isSubscribed($business), 403);
-        $data = $request->validate(['cost_version' => 'required|string|size:64', 'prices' => 'required|array|min:1|max:100',
+        $data = $request->validate(['price_basis' => 'nullable|in:inclusive,before_discount', 'cost_version' => 'required|string|size:64', 'prices' => 'required|array|min:1|max:100',
             'prices.*.id' => 'required|integer|distinct', 'prices.*.purchase_price' => 'required|numeric|min:0|max:999999999999']);
         $submittedIds = array_map('intval', array_column($data['prices'], 'id'));
         sort($submittedIds);
@@ -93,22 +100,26 @@ class FinancialPurchaseCostController extends Controller
             abort_unless(hash_equals($this->version($lots), $data['cost_version']), 409, ReportLanguage::text('finance_cost_stale'));
             $before = $lots->map(fn ($lot) => (array) $lot)->all();
             $prices = collect($data['prices'])->keyBy('id');
+            $beforeDiscount = ($data['price_basis'] ?? '') === 'before_discount';
+            $effectivePrices = [];
             foreach ($lots as $lot) {
-                $incTax = round((float) $prices[$lot->id]['purchase_price'], 4);
+                $submitted = round((float) $prices[$lot->id]['purchase_price'], 4);
                 $discount = (float) ($lot->discount_percent ?? 0);
-                abort_if($discount >= 100 && $incTax > 0, 422, ReportLanguage::text('finance_cost_full_edit'));
+                abort_if($discount < 0 || $discount > 100 || (!$beforeDiscount && $discount >= 100 && $submitted > 0), 422, ReportLanguage::text('finance_cost_full_edit'));
                 $rate = (float) $lot->purchase_price > 0 ? max(0, (float) $lot->purchase_price_inc_tax / (float) $lot->purchase_price - 1) : 0;
                 if ((float) $lot->purchase_price <= 0 && !empty($lot->tax_id)) {
                     $rate = (float) $db->table('tax_rates')->where('business_id', $business)->where('id', $lot->tax_id)->value('amount') / 100;
                 }
-                $base = round($incTax / (1 + $rate), 4);
+                $base = $beforeDiscount ? round($submitted * (1 - $discount / 100), 4) : round($submitted / (1 + $rate), 4);
+                $incTax = $beforeDiscount ? round($base * (1 + $rate), 4) : $submitted;
+                $effectivePrices[$lot->id] = $incTax;
                 $db->table('purchase_lines')->where('id', $lot->id)->update(['purchase_price_inc_tax' => $incTax, 'purchase_price' => $base,
-                    'pp_without_discount' => $discount >= 100 ? 0 : round($base / (1 - $discount / 100), 4), 'item_tax' => round($incTax - $base, 4), 'updated_at' => now()]);
+                    'pp_without_discount' => $beforeDiscount ? $submitted : ($discount >= 100 ? 0 : round($base / (1 - $discount / 100), 4)), 'item_tax' => round($incTax - $base, 4), 'updated_at' => now()]);
             }
             foreach ($transactions as $purchase) {
                 $allLines = $db->table('purchase_lines')->where('transaction_id', $purchase->id)->get();
                 $oldSubtotal = $allLines->sum(fn ($row) => $row->quantity * $row->purchase_price_inc_tax);
-                foreach ($lots->where('transaction_id', $purchase->id) as $old) $oldSubtotal += $old->quantity * ((float) $old->purchase_price_inc_tax - round((float) $prices[$old->id]['purchase_price'], 4));
+                foreach ($lots->where('transaction_id', $purchase->id) as $old) $oldSubtotal += $old->quantity * ((float) $old->purchase_price_inc_tax - $effectivePrices[$old->id]);
                 $subtotal = $allLines->sum(fn ($row) => $row->quantity * $row->purchase_price_inc_tax);
                 $discountValue = fn ($total) => $purchase->discount_type === 'percentage' ? $total * (float) $purchase->discount_amount / 100 : (float) $purchase->discount_amount;
                 $oldTaxable = $oldSubtotal - $discountValue($oldSubtotal);

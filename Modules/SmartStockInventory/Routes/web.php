@@ -90,6 +90,11 @@ Route::middleware([
     Route::get('/imei/export', ['\Modules\SmartStockInventory\Http\Controllers\ImeiController', 'export'])->name('ssi.imei.export');
     Route::get('/imei/history/{imei}', ['\Modules\SmartStockInventory\Http\Controllers\ImeiController', 'history'])->name('ssi.imei.history');
     Route::post('/imei/update', ['\Modules\SmartStockInventory\Http\Controllers\ImeiController', 'updateStatus'])->name('ssi.imei.update');
+    Route::get('/sku/export', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'exportProducts'])->name('ssi.sku.products.export');
+    Route::get('/sku/purchase-cost/{sourceName}/{line}', [\Modules\SmartStockInventory\Http\Controllers\SkuPurchaseCostController::class, 'edit'])->where(['sourceName' => 'main', 'line' => '[0-9]+'])->name('ssi.sku.cost.edit');
+    Route::put('/sku/purchase-cost/{sourceName}/{line}', [\Modules\SmartStockInventory\Http\Controllers\SkuPurchaseCostController::class, 'update'])->where(['sourceName' => 'main', 'line' => '[0-9]+'])->name('ssi.sku.cost.update');
+    Route::get('/sku/{variation}/sales/{transaction}/unit-price', [\Modules\SmartStockInventory\Http\Controllers\SkuSalePriceController::class, 'edit'])->whereNumber(['variation', 'transaction'])->name('ssi.sku.sale_price.edit');
+    Route::put('/sku/{variation}/sales/{transaction}/unit-price', [\Modules\SmartStockInventory\Http\Controllers\SkuSalePriceController::class, 'update'])->whereNumber(['variation', 'transaction'])->name('ssi.sku.sale_price.update');
     Route::get('/sku', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'index'])->name('ssi.sku.index');
     Route::put('/sku/{variation}/lots/{line}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'updateLot'])->whereNumber(['variation', 'line'])->name('ssi.sku.lot.update');
     Route::get('/sku/history/{variation}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'history'])->whereNumber('variation')->name('ssi.sku.history');

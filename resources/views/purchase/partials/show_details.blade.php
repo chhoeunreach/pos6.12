@@ -221,7 +221,15 @@
                 @endif
 
               </td>
-              <td class="text-right"><span class="display_currency" data-currency_symbol="true">{{ $purchase_line->pp_without_discount}}</span></td>
+              <td class="text-right"><span class="display_currency" data-currency_symbol="true">{{ $purchase_line->pp_without_discount}}</span>
+                @if(request()->boolean('sku_history') && \Modules\SmartStockInventory\Support\SkuPermissions::allows(auth()->user(), 'update_cost') && $purchase->status === 'received' && in_array($purchase->type, ['purchase', 'opening_stock', 'production_purchase'], true))
+                  @can('purchase.update')
+                    @can('stock_inventory.view')
+                      <button type="button" class="btn btn-xs btn-default no-print sku-before-cost" data-url="{{ ssi_route('ssi.sku.cost.edit', ['sourceName' => 'main', 'line' => $purchase_line->id, 'price_basis' => 'before_discount']) }}"><i class="fa fa-pencil"></i> Quick Update</button>
+                    @endcan
+                  @endcan
+                @endif
+              </td>
               <td class="text-right"><span class="display_currency">{{ $purchase_line->discount_percent}}</span> %</td>
               <td class="no-print text-right"><span class="display_currency" data-currency_symbol="true">{{ $purchase_line->purchase_price }}</span></td>
               <td class="no-print text-right"><span class="display_currency" data-currency_symbol="true">{{ $purchase_line->quantity * $purchase_line->purchase_price }}</span></td>
