@@ -25,6 +25,7 @@
                 ['label' => 'Movement History', 'url' => $ssiRoute('ssi.movement.index'), 'active' => ['smart-stock-inventory/movement']],
                 ['label' => 'IMEI Management', 'url' => $ssiRoute('ssi.imei.index'), 'active' => ['smart-stock-inventory/imei']],
                 ['label' => 'Lot Management', 'url' => $ssiRoute('ssi.lot.index'), 'active' => ['smart-stock-inventory/lot']],
+                ['label' => 'SKU Management', 'url' => $ssiRoute('ssi.sku.index'), 'active' => ['smart-stock-inventory/sku']],
                 ['label' => 'Fix Logs', 'url' => $ssiRoute('ssi.fix_logs'), 'active' => ['smart-stock-inventory/fix-logs']],
                 ['label' => 'Inventory Reports', 'url' => $ssiRoute('ssi.count.reports'), 'active' => ['smart-stock-inventory/count/reports']],
                 ['label' => 'Stock Sell Report', 'url' => $ssiRoute('ssi.report.stock_sell'), 'active' => ['smart-stock-inventory/stock-reports/sell']],
