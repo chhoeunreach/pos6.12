@@ -333,6 +333,7 @@ class DashboardController extends Controller
             ->orderBy('service_type')
             ->pluck('service_type')
             ->mapWithKeys(fn ($type) => [$this->normalizeSellTypeKey($type) => $this->sellTypeLabel($type)])
+            ->put('sellsim', $this->sellTypeLabel('sellsim'))
             ->unique();
     }
 
@@ -402,6 +403,7 @@ class DashboardController extends Controller
     {
         return [
             'sell' => ['label' => 'Sell / លក់', 'values' => ['sell', 'Sell', 'លក់', 'Sell / លក់', 'Sell/លក់']],
+            'sellsim' => ['label' => 'Sellsim / លក់ស៊ីម', 'values' => ['sellsim', 'Sellsim', 'SellSim', 'sell sim', 'Sell Sim', 'sell_sim', 'លក់ស៊ីម', 'Sellsim / លក់ស៊ីម', 'Sellsim/លក់ស៊ីម']],
             'buy_in' => ['label' => 'Buy In / ទិញចូល', 'values' => ['buy in', 'Buy In', 'buy_in', 'buyin', 'ទិញចូល', 'Buy In / ទិញចូល', 'Buy In/ទិញចូល', 'ទិញចូល / Buy In', 'ទិញចូល/Buy In']],
             'repair' => ['label' => 'Repair / ជួសជុល', 'values' => ['repair', 'Repair', 'ជួសជុល', 'Repair / ជួសជុល', 'Repair/ជួសជុល', 'ជួសជុល / Repair', 'ជួសជុល/Repair']],
             'material' => ['label' => 'Material / សម្ភារ', 'values' => ['material', 'Material', 'materials', 'Materials', 'សម្ភារ', 'Material / សម្ភារ', 'Material/សម្ភារ', 'សម្ភារ / Material', 'សម្ភារ/Material']],

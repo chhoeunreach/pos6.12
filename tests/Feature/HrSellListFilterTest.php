@@ -57,8 +57,9 @@ class HrSellListFilterTest extends TestCase
             $method = new \ReflectionMethod($controller, 'posHrSellListData');
             $method->setAccessible(true);
             $request = Request::create('/hr-sell/sales', 'GET', ['sell_type' => ['sell', 'repair']]);
-            [$rows] = $method->invoke($controller, $request);
+            [$rows, , $sellTypes] = $method->invoke($controller, $request);
 
+            $this->assertSame('Sellsim / លក់ស៊ីម', $sellTypes->get('sellsim'));
             $this->assertSame(3, $rows->total());
             $this->assertSame(['Sell', 'repair', 'sell'], $rows->pluck('service_type')->sort()->values()->all());
             $this->assertSame('012345678', $rows->first()->customer_phone);
@@ -77,6 +78,19 @@ class HrSellListFilterTest extends TestCase
             $this->assertSame(2, $singleTypeRows->total());
             [$allRows] = $method->invoke($controller, Request::create('/hr-sell/sales'));
             $this->assertSame(4, $allRows->total());
+
+            foreach (['Sellsim', 'លក់ស៊ីម', 'Sellsim / លក់ស៊ីម'] as $type) {
+                DB::connection('hr')->table('sell_out_reports')->insert([
+                    'invoice_no' => $type, 'customer_phone' => '012345678', 'customer_name' => 'Customer',
+                    'seller_name' => 'Staff', 'branch_name' => 'Branch', 'service_type' => $type,
+                    'created_at' => '2026-10-01 08:00:00', 'total_amount' => 10,
+                ]);
+            }
+
+            [$simRows, , $sellTypes] = $method->invoke($controller, Request::create('/hr-sell/sales', 'GET', ['sell_type' => ['sellsim']]));
+            $this->assertSame(3, $simRows->total());
+            $this->assertSame(['Sellsim / លក់ស៊ីម'], $simRows->pluck('service_type_label')->unique()->values()->all());
+            $this->assertSame('Sellsim / លក់ស៊ីម', $sellTypes->get('sellsim'));
         } finally {
             DB::purge('hr');
             config(['database.connections.hr' => $original]);

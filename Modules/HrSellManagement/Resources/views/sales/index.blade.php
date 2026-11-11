@@ -4,6 +4,8 @@
     $posHrPerPageOptions = ['25' => '25', '50' => '50', '100' => '100', '200' => '200', '500' => '500', 'all' => 'All'];
     $posHrPerPage = array_key_exists((string) request('pos_hr_per_page', '50'), $posHrPerPageOptions) ? (string) request('pos_hr_per_page', '50') : '50';
     $selectedSellTypes = array_map('strval', (array) request('sell_type', []));
+    $hasActiveFilters = request()->filled('search') || request()->filled('branch_name') || request()->filled('seller_key')
+        || request()->filled('start_date') || request()->filled('end_date') || request()->filled('sell_type');
 @endphp
 @section('module_content')
 <style>
