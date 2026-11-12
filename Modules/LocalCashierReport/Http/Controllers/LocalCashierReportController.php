@@ -206,44 +206,29 @@ class LocalCashierReportController extends Controller
 
     public function getCashiers(int $businessId, array $locationIds = [])
     {
-        $query = DB::table('users as u')
+        // Show every user in the business so the cashier filter is never missing a
+        // user just because they have no sale in the currently selected locations.
+        $cashiers = DB::table('users as u')
             ->where('u.business_id', $businessId)
-            ->where('u.status', 'active')
+            ->whereNull('u.deleted_at')
             ->select(
                 'u.id',
                 DB::raw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as name")
             )
-            ->orderBy('u.first_name');
+            ->orderBy('u.first_name')
+            ->get();
 
-        if (! empty($locationIds)) {
-            $query->whereExists(function ($sub) use ($businessId, $locationIds) {
-                $sub->select(DB::raw(1))
-                    ->from('transactions as t')
-                    ->whereColumn('t.created_by', 'u.id')
-                    ->where('t.business_id', $businessId)
-                    ->where('t.type', 'sell')
-                    ->where('t.status', 'final')
-                    ->whereIn('t.location_id', $locationIds);
-            });
-        }
-
-        $cashiers = $query->get();
         foreach (['accessory', 'service'] as $source) {
             $moduleLocationIds = $this->moduleLocationIds($locationIds, $source);
             $connection = (string) config($source . '.database_connection', $source);
-            if (empty($moduleLocationIds) || ! $this->hasRequiredReportTables($connection, ['users', 'transactions'])) {
+            if (empty($moduleLocationIds) || ! $this->hasRequiredReportTables($connection, ['users'])) {
                 continue;
             }
 
             $moduleCashiers = DB::connection($connection)->table('users as u')
                 ->where('u.business_id', 1)
-                ->whereExists(function ($sub) use ($moduleLocationIds) {
-                    $sub->selectRaw('1')->from('transactions as t')
-                        ->whereColumn('t.created_by', 'u.id')
-                        ->where('t.business_id', 1)
-                        ->where('t.type', 'sell')
-                        ->where('t.status', 'final')
-                        ->whereIn('t.location_id', $moduleLocationIds);
+                ->when(Schema::connection($connection)->hasColumn('users', 'deleted_at'), function ($query) {
+                    $query->whereNull('u.deleted_at');
                 })
                 ->select('u.id', DB::raw("TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) as name"))
                 ->get()
