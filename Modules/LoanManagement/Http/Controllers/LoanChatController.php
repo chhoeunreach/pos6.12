@@ -74,6 +74,14 @@ class LoanChatController extends Controller
                 $request->merge(['location_ids' => $bankBranchLocationIds]);
             }
         }
+
+        if ($request->boolean('snapshot') && trim((string) $request->input('search', '')) === '') {
+            return $this->ok(
+                'Chat snapshot loaded',
+                $this->chatService->staffInboxSnapshot((int) auth()->id(), $adminInbox, $filters)
+            );
+        }
+
         $rows = $this->chatService->getStaffInbox((int) auth()->id(), $adminInbox, $filters)->take(200);
         $request->attributes->set('loan_chat_viewer_type', $this->isAdmin() ? 'admin' : 'staff');
         $request->attributes->set('loan_chat_viewer_id', (int) auth()->id());
@@ -201,12 +209,14 @@ class LoanChatController extends Controller
                 $data['local_uuid'] ?? null
             );
         } elseif ($type === 'audio') {
+            $rawDuration = $data['audio_duration_seconds'] ?? $data['duration_seconds'] ?? null;
+            $audioDuration = $rawDuration === null ? null : (int) round((float) $rawDuration);
             $msg = $this->chatService->sendAudioMessage(
                 $row,
                 $senderType,
                 (int) auth()->id(),
                 $request->file('file'),
-                $data['audio_duration_seconds'] ?? null,
+                $audioDuration,
                 $data['message'] ?? null,
                 $metadata,
                 $data['local_uuid'] ?? null
@@ -525,14 +535,27 @@ class LoanChatController extends Controller
         return $threads;
     }
 
-    public function serveFile($file)
+    public function serveFile(Request $request, $file)
     {
+        $customerWebGuard = (string) config('loanmanagement.customer_web_guard', 'customer_loan');
+        $actor = $request->user() ?: auth()->user() ?: auth($customerWebGuard)->user();
+        $isCustomer = $actor instanceof \Modules\LoanManagement\Entities\LoanCustomer;
+        $customer = $isCustomer ? $actor : null;
+        $staff = $isCustomer ? null : $actor;
+
+        if (! $customer && ! $staff) {
+            abort(401);
+        }
+        if ($staff && ! $customer && ! ($staff->can('loan_management.chat.view') || $staff->can('loan_management.chat.admin'))) {
+            abort(403);
+        }
+
         $fileId = is_numeric($file) ? (int) $file : 0;
         if ($fileId <= 0) {
             abort(404);
         }
 
-        $connection = config('loanmanagement.connection', 'mysql_loan');
+        $connection = config('loanmanagement.connection', config('loanmanagement.db_connection', 'mysql_loan'));
         $row = null;
         if (Schema::connection($connection)->hasTable('loan_files')) {
             $row = DB::connection($connection)->table('loan_files')->where('id', $fileId)->first();
@@ -540,6 +563,41 @@ class LoanChatController extends Controller
 
         if (! $row || empty($row->path)) {
             abort(404);
+        }
+
+        $authorized = false;
+        if (Schema::connection($connection)->hasTable('loan_chat_messages') && Schema::connection($connection)->hasColumn('loan_chat_messages', 'file_id')) {
+            $msgThreadId = DB::connection($connection)->table('loan_chat_messages')
+                ->where('file_id', $fileId)
+                ->value('thread_id');
+
+            if ($msgThreadId) {
+                $thread = LoanChatThread::query()->find((int) $msgThreadId);
+                if ($thread) {
+                    if ($customer && (int) ($thread->customer_id ?? 0) === (int) $customer->id) {
+                        $authorized = true;
+                    } elseif ($staff && $this->canViewThreadForUser($thread, $staff)) {
+                        $authorized = true;
+                    }
+                }
+            }
+        }
+
+        if (! $authorized && Schema::connection($connection)->hasTable('loan_customers') && Schema::connection($connection)->hasColumn('loan_customers', 'customer_photo_file_id')) {
+            $photoCustomerId = (int) DB::connection($connection)->table('loan_customers')
+                ->where('customer_photo_file_id', $fileId)
+                ->value('id');
+            if ($photoCustomerId > 0) {
+                if ($customer && (int) $customer->id === $photoCustomerId) {
+                    $authorized = true;
+                } elseif ($staff) {
+                    $authorized = true;
+                }
+            }
+        }
+
+        if (! $authorized) {
+            abort(403);
         }
 
         $path = ltrim(str_replace('\\', '/', $row->path), '/');
@@ -565,10 +623,29 @@ class LoanChatController extends Controller
         }
 
         $mime = $row->mime_type ?: (function_exists('mime_content_type') ? mime_content_type($found) : null) ?: 'application/octet-stream';
-
-        return response()->file($found, [
+        $headers = [
             'Content-Type' => $mime,
-            'Cache-Control' => 'public, max-age=86400',
-        ]);
+            'Cache-Control' => 'private, max-age=3600',
+        ];
+
+        if ($request->boolean('download')) {
+            $fileName = basename((string) ($row->original_name ?: $found));
+            return response()->download($found, $fileName, $headers);
+        }
+
+        return response()->file($found, $headers);
+    }
+
+    protected function canViewThreadForUser(LoanChatThread $thread, $user): bool
+    {
+        if ($user && ($user->can('loan_management.chat.admin') || $user->can('loan_management.chat.view'))) {
+            return true;
+        }
+
+        $userId = (int) ($user->id ?? 0);
+        return (int) ($thread->staff_id ?? 0) === $userId
+            || (int) ($thread->assigned_staff_id ?? 0) === $userId
+            || empty($thread->staff_id)
+            || empty($thread->assigned_staff_id);
     }
 }

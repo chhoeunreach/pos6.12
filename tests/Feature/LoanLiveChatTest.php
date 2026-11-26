@@ -152,4 +152,27 @@ class LoanLiveChatTest extends LoanModuleFeatureTestCase
         $this->assertSame($first->id, $retry->id);
         $this->assertSame(1, $thread->messages()->count());
     }
+
+    public function test_inbox_renders_registered_chat_and_folder_endpoints_and_snapshot_works(): void
+    {
+        $thread = $this->thread();
+        $this->service->sendTextMessage($thread, 'customer', 10, 'Need help');
+
+        $html = $this->controller->webInbox($this->request('/loan-management/chat'))->render();
+        $this->assertStringContainsString(route('loan-management.chat-api.index'), $html);
+        $this->assertStringContainsString(route('loan-management.chat-api.folders.index'), $html);
+        $this->assertStringNotContainsString('telegram-chat-api', $html);
+
+        $snapshot = $this->controller->index($this->request('/loan-management/chat-api/chats', ['snapshot' => 1]))->getData(true)['data'];
+        $this->assertArrayHasKey('version', $snapshot);
+        $this->assertNotEmpty($snapshot['version']);
+        $this->assertSame(1, $snapshot['unread_total']);
+    }
+
+    public function test_serve_file_rejects_unauthenticated_requests(): void
+    {
+        auth()->forgetUser();
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->controller->serveFile($this->request('/loan-management/chat-files/1'), 1);
+    }
 }

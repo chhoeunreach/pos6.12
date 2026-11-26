@@ -459,77 +459,131 @@
         transform: scale(1.15);
     }
 
-    /* Payment Methods Grid */
+    /* Payment Methods Grid (Compact Custom-Labels Style) */
     .lm-methods-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
-        margin-bottom: 24px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
     }
     .lm-method-card {
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
+        border-radius: 10px;
         background: #fff;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(15,23,42,0.03);
-        transition: all 0.2s ease;
+        padding: 12px 14px;
+        box-shadow: 0 1px 4px rgba(15,23,42,0.03);
+        transition: all 0.15s ease;
     }
     .lm-method-card:hover {
         border-color: #cbd5e1;
-        box-shadow: 0 6px 16px rgba(15,23,42,0.06);
+        box-shadow: 0 4px 12px rgba(15,23,42,0.05);
     }
     .lm-method-card.inactive {
         background: #f8fafc;
-        opacity: 0.75;
+        opacity: 0.72;
     }
     .lm-method-topline {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 14px;
+        gap: 8px;
+        margin-bottom: 8px;
     }
     .lm-method-header-title {
         display: flex;
         align-items: center;
-        gap: 10px;
-        font-size: 14px;
+        gap: 7px;
+        font-size: 12.5px;
         font-weight: 800;
         color: #0f172a;
+        min-width: 0;
     }
-    .lm-method-icon-circle {
-        width: 34px;
-        height: 34px;
-        border-radius: 8px;
-        background: var(--lm-primary-50, #eef2ff);
-        color: var(--lm-primary, #6366f1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 15px;
+    .lm-method-code-pill {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #4f46e5;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: monospace;
     }
     .lm-method-row-2 {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 90px;
-        gap: 10px;
-        margin-top: 10px;
+        grid-template-columns: minmax(0, 1fr) 74px;
+        gap: 8px;
+        margin-top: 8px;
     }
     .lm-method-stats {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-top: 14px;
-        padding-top: 12px;
+        margin-top: 9px;
+        padding-top: 8px;
         border-top: 1px solid #f1f5f9;
-        font-size: 12px;
+        font-size: 11px;
         color: #64748b;
     }
-    .lm-method-stats strong { color: #0f172a; font-size: 13px; }
+    .lm-method-stats strong { color: #0f172a; font-size: 11.5px; }
     .lm-add-method-card {
-        border: 2px dashed #cbd5e1;
-        border-radius: 12px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 10px;
         background: #f8fafc;
-        padding: 20px;
-        margin-bottom: 24px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+    .lm-preset-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .lm-preset-pill {
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .lm-preset-pill:hover {
+        border-color: var(--lm-primary, #6366f1);
+        color: var(--lm-primary, #6366f1);
+        background: #eef2ff;
+    }
+    .lm-effective-channels {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+    }
+    .lm-effective-channels-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .lm-effective-channel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 12px;
+        color: #0f172a;
+        font-weight: 600;
+    }
+    .lm-effective-channel-badge code {
+        font-size: 11px;
+        color: #4f46e5;
+        background: #eef2ff;
+        padding: 1px 5px;
+        border-radius: 4px;
     }
 
     /* CMS Accordions & Mockup */
@@ -1389,16 +1443,25 @@
                     </div>
                 </div>
 
-                <!-- TAB 5: PAYMENT METHODS (EMBEDDED NATIVELY) -->
+                <!-- TAB 5: PAYMENT METHODS (SIMPLE CUSTOM-LABELS STYLE) -->
                 <div class="lm-tab-pane" id="tab-payment">
                     <div class="lm-section-head">
                         <div>
-                            <h2>{{ $lmText('Custom Collection Payment Channels', 'ច្រកប្រមូលប្រាក់ និងវិធីទូទាត់') }}</h2>
-                            <p>{{ $lmText('Configure display names, channel identifiers, and enable or disable methods for cashiers and field agents.', 'កំណត់ឈ្មោះបង្ហាញ កូដសម្គាល់ និងបើក/បិទវិធីបង់ប្រាក់សម្រាប់បេឡា និងភ្នាក់ងារ។') }}</p>
+                            <h2>{{ $lmText('Payment Methods & Custom Labels', 'ឈ្មោះវិធីទូទាត់ និងការកំណត់ស្តង់ដារ') }}</h2>
+                            <p>{{ $lmText('Simple label configuration like POS Custom Labels. Keys stay fixed so filters, receipts, and history always match.', 'កំណត់ឈ្មោះបង្ហាញសាមញ្ញដូច POS Custom Labels ដោយរក្សាកូដជាគោលដើម្បីឱ្យតារាង ការចម្រាញ់ និងបង្កាន់ដៃដំណើរការត្រូវគ្នា។') }}</p>
                         </div>
                     </div>
 
-                    <!-- Payment Methods Grid -->
+                    @php
+                        $configuredCodes = $paymentMethods
+                            ->map(fn ($row) => strtolower(trim((string) ($row->code ?? '')) ?: strtolower(str_replace(' ', '_', trim((string) ($row->name ?? ''))))))
+                            ->filter()
+                            ->all();
+                        $availablePresets = collect($presetChannels ?? [])->reject(fn ($preset) => in_array(strtolower($preset['code']), $configuredCodes, true))->values();
+                        $effectivePaymentMethods = $effectivePaymentMethods ?? [];
+                    @endphp
+
+                    <!-- Simple Custom-Labels-Style Grid -->
                     <div class="lm-methods-grid" id="embeddedPaymentMethodsGrid">
                         @forelse($paymentMethods as $index => $method)
                             @php
@@ -1406,96 +1469,110 @@
                                 $number = $index + 1;
                                 $isActive = (bool) old('methods.'.$method->id.'.is_active', $method->is_active);
                                 $code = $method->code ?? '';
+                                $hasHistory = ($usageRow['payments_count'] ?? 0) > 0;
                             @endphp
                             <div class="lm-method-card {{ $isActive ? '' : 'inactive' }}" data-search-target>
                                 <div class="lm-method-topline">
                                     <div class="lm-method-header-title">
-                                        <div class="lm-method-icon-circle">
-                                            @if(stripos($method->name, 'aba') !== false)
-                                                <i class="fa fa-bank"></i>
-                                            @elseif(stripos($method->name, 'cash') !== false)
-                                                <i class="fa fa-money"></i>
-                                            @elseif(stripos($method->name, 'card') !== false)
-                                                <i class="fa fa-credit-card"></i>
-                                            @else
-                                                <i class="fa fa-exchange"></i>
-                                            @endif
-                                        </div>
-                                        <span>#{{ $number }} {{ $method->name }}</span>
+                                        <span>#{{ $number }}</span>
+                                        @if($code !== '')
+                                            <span class="lm-method-code-pill">{{ $code }}</span>
+                                        @endif
                                     </div>
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                        <span style="font-size:11.5px; font-weight:700; color:{{ $isActive ? '#059669' : '#94a3b8' }};">
-                                            {{ $isActive ? $lmText('Active', 'ដំណើរការ') : $lmText('Inactive', 'បិទ') }}
-                                        </span>
-                                        <label class="lm-switch" title="Toggle active status">
-                                            <input type="hidden" name="methods[{{ $method->id }}][is_active]" value="0">
-                                            <input type="checkbox" name="methods[{{ $method->id }}][is_active]" value="1" {{ $isActive ? 'checked' : '' }} onchange="this.closest('.lm-method-card').classList.toggle('inactive', !this.checked)">
-                                            <span class="lm-slider"></span>
-                                        </label>
-                                    </div>
+                                    <label class="lm-switch" title="{{ $lmText('Toggle active status', 'បើក ឬបិទ') }}">
+                                        <input type="hidden" name="methods[{{ $method->id }}][is_active]" value="0">
+                                        <input type="checkbox" name="methods[{{ $method->id }}][is_active]" value="1" {{ $isActive ? 'checked' : '' }} onchange="this.closest('.lm-method-card').classList.toggle('inactive', !this.checked)">
+                                        <span class="lm-slider"></span>
+                                    </label>
                                 </div>
 
-                                <div style="margin-top:10px;">
-                                    <label class="lm-field-label">{{ $lmText('Display Name', 'ឈ្មោះបង្ហាញលើប្រព័ន្ធ') }}</label>
-                                    <input type="text" name="methods[{{ $method->id }}][name]" class="lm-input" value="{{ old('methods.'.$method->id.'.name', $method->name) }}" maxlength="191" {{ ($usageRow['payments_count'] ?? 0) > 0 ? 'readonly' : '' }} placeholder="e.g. ABA Bank / Cash">
+                                <div>
+                                    <label class="lm-field-label" style="font-size:11.5px; margin-bottom:4px;">
+                                        <span>{{ $lmText('Label', 'ឈ្មោះបង្ហាញ') }}</span>
+                                        @if($hasHistory)
+                                            <span style="font-size:10.5px; color:#64748b;" title="{{ $lmText('Locked because payments exist with this name', 'ជាប់សោរដោយសារមានប្រវត្តិបង់ប្រាក់រួចហើយ') }}"><i class="fa fa-lock"></i></span>
+                                        @endif
+                                    </label>
+                                    <input type="text" name="methods[{{ $method->id }}][name]" class="lm-input" style="height:34px; font-size:13px;" value="{{ old('methods.'.$method->id.'.name', $method->name) }}" maxlength="191" {{ $hasHistory ? 'readonly' : '' }} placeholder="e.g. ABA Bank">
                                 </div>
 
                                 <div class="lm-method-row-2">
                                     <div>
-                                        <label class="lm-field-label">{{ $lmText('Channel Code', 'កូដសម្គាល់') }}</label>
-                                        <input type="text" name="methods[{{ $method->id }}][code]" class="lm-input" value="{{ old('methods.'.$method->id.'.code', $code) }}" maxlength="60" placeholder="e.g. aba, cash">
+                                        <label class="lm-field-label" style="font-size:11px; margin-bottom:3px;">{{ $lmText('Code', 'កូដ') }}</label>
+                                        <input type="text" name="methods[{{ $method->id }}][code]" class="lm-input" style="height:32px; font-size:12px;" value="{{ old('methods.'.$method->id.'.code', $code) }}" maxlength="60" placeholder="aba, cash">
                                     </div>
                                     <div>
-                                        <label class="lm-field-label">{{ $lmText('Sort Order', 'លំដាប់') }}</label>
-                                        <input type="number" name="methods[{{ $method->id }}][sort_order]" class="lm-input" value="{{ old('methods.'.$method->id.'.sort_order', $method->sort_order ?? 0) }}" min="0" max="999">
+                                        <label class="lm-field-label" style="font-size:11px; margin-bottom:3px;">{{ $lmText('Order', 'លំដាប់') }}</label>
+                                        <input type="number" name="methods[{{ $method->id }}][sort_order]" class="lm-input" style="height:32px; font-size:12px;" value="{{ old('methods.'.$method->id.'.sort_order', $method->sort_order ?? 0) }}" min="0" max="999">
                                     </div>
                                 </div>
 
                                 <div class="lm-method-stats">
-                                    <span>
-                                        <i class="fa fa-history" style="margin-right:4px;"></i>
-                                        <strong>{{ number_format($usageRow['payments_count'] ?? 0) }}</strong> {{ $lmText('payments', 'ប្រតិបត្តិការ') }}
-                                    </span>
-                                    <span>
-                                        <strong>{{ $savedCurrencySymbol }}{{ number_format((float) ($usageRow['total_amount'] ?? 0), (int) $settings['currency_precision']) }}</strong> {{ $lmText('collected', 'ប្រមូលបាន') }}
-                                    </span>
+                                    <span><strong>{{ number_format($usageRow['payments_count'] ?? 0) }}</strong> {{ $lmText('payments', 'ប្រតិបត្តិការ') }}</span>
+                                    <span><strong>{{ $savedCurrencySymbol }}{{ number_format((float) ($usageRow['total_amount'] ?? 0), (int) $settings['currency_precision']) }}</strong></span>
                                 </div>
                             </div>
                         @empty
-                            <div class="lm-col-full text-center" style="padding:40px 20px; color:#64748b;">
-                                <i class="fa fa-credit-card" style="font-size:36px; opacity:0.3; margin-bottom:10px;"></i>
-                                <p>{{ $lmText('No payment channels configured yet.', 'មិនទាន់មានវិធីបង់ប្រាក់នៅឡើយ។') }}</p>
+                            <div class="lm-col-full text-center" style="grid-column:1 / -1; padding:24px 16px; color:#64748b; border:1px dashed #cbd5e1; border-radius:10px; background:#f8fafc;">
+                                <i class="fa fa-credit-card" style="font-size:28px; opacity:0.35; margin-bottom:8px;"></i>
+                                <p style="margin:0;">{{ $lmText('No custom loan payment labels yet. POS payment types are used automatically, or add one below.', 'មិនទាន់មានឈ្មោះវិធីបង់ប្រាក់ផ្ទាល់ខ្លួនទេ។ ប្រព័ន្ធកំពុងប្រើ POS Payment Types ជាស្វ័យប្រវត្តិ ឬអ្នកអាចបន្ថែមខាងក្រោម។') }}</p>
                             </div>
                         @endforelse
                     </div>
 
-                    <!-- Add New Payment Method Card -->
+                    <!-- Add New Payment Method (Compact 1-Row Strip) -->
                     <div class="lm-add-method-card" data-search-target>
-                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                            <div style="width:32px; height:32px; border-radius:8px; background:var(--lm-primary-50, #eef2ff); color:var(--lm-primary, #6366f1); display:flex; align-items:center; justify-content:center; font-size:14px;">
-                                <i class="fa fa-plus"></i>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                            <strong style="font-size:13.5px; color:#0f172a;">
+                                <i class="fa fa-plus-circle" style="color:var(--lm-primary, #6366f1); margin-right:5px;"></i>
+                                {{ $lmText('Add Payment Label', 'បន្ថែមវិធីទូទាត់ថ្មី') }}
+                            </strong>
+                            <span style="font-size:11.5px; color:#64748b;">{{ $lmText('Matches POS & Loan dropdowns using System Code', 'ភ្ជាប់ជាមួយ POS និង Loan តាមរយៈកូដប្រព័ន្ធ') }}</span>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr) 90px; gap:10px;">
+                            <div>
+                                <label class="lm-field-label" style="font-size:11.5px; margin-bottom:4px;">{{ $lmText('Display Label', 'ឈ្មោះបង្ហាញ') }}</label>
+                                <input type="text" id="newPaymentMethodNameInput" name="new_method[name]" value="{{ old('new_method.name') }}" maxlength="191" class="lm-input" style="height:34px; font-size:13px;" placeholder="e.g. ABA Bank / Wing Money / ACLEDA">
                             </div>
                             <div>
-                                <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">{{ $lmText('Add New Payment Channel', 'បន្ថែមវិធីបង់ប្រាក់ថ្មី') }}</h3>
-                                <p style="margin:2px 0 0; font-size:12px; color:#64748b;">{{ $lmText('Create an additional payment option for field agents or loan cashiers.', 'បង្កើតជម្រើសបង់ប្រាក់បន្ថែមសម្រាប់បុគ្គលិក ឬអតិថិជន។') }}</p>
+                                <label class="lm-field-label" style="font-size:11.5px; margin-bottom:4px;">{{ $lmText('System Code', 'កូដប្រព័ន្ធ') }}</label>
+                                <input type="text" id="newPaymentMethodCodeInput" name="new_method[code]" value="{{ old('new_method.code') }}" maxlength="60" class="lm-input" style="height:34px; font-size:13px;" placeholder="e.g. aba, wing, custom_pay_1">
+                            </div>
+                            <div>
+                                <label class="lm-field-label" style="font-size:11.5px; margin-bottom:4px;">{{ $lmText('Order', 'លំដាប់') }}</label>
+                                <input type="number" name="new_method[sort_order]" class="lm-input" style="height:34px; font-size:13px;" value="{{ old('new_method.sort_order', $paymentMethods->count() + 1) }}" min="0" max="999">
                             </div>
                         </div>
 
-                        <div style="display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr) 100px; gap:14px;">
-                            <div>
-                                <label class="lm-field-label">{{ $lmText('Method Name', 'ឈ្មោះវិធីបង់ប្រាក់') }}</label>
-                                <input type="text" name="new_method[name]" value="{{ old('new_method.name') }}" maxlength="191" class="lm-input" placeholder="e.g. ACLEDA Unity / Wing / Bakong">
+                        @if($availablePresets->isNotEmpty())
+                            <div class="lm-preset-pills">
+                                <span style="font-size:11.5px; color:#64748b; align-self:center; margin-right:2px;">{{ $lmText('Quick fill:', 'បំពេញរហ័ស៖') }}</span>
+                                @foreach($availablePresets as $preset)
+                                    <button type="button" class="lm-preset-pill js-fill-payment-preset" data-preset-name="{{ $preset['name'] }}" data-preset-code="{{ $preset['code'] }}">
+                                        + {{ $preset['name'] }} ({{ $preset['code'] }})
+                                    </button>
+                                @endforeach
                             </div>
-                            <div>
-                                <label class="lm-field-label">{{ $lmText('System Code', 'កូដប្រព័ន្ធ') }}</label>
-                                <input type="text" name="new_method[code]" value="{{ old('new_method.code') }}" maxlength="60" class="lm-input" placeholder="e.g. acleda_bank">
+                        @endif
+                    </div>
+
+                    @if(!empty($effectivePaymentMethods))
+                        <div class="lm-effective-channels" data-search-target>
+                            <div style="font-size:12px; font-weight:800; color:#334155;">
+                                <i class="fa fa-check-circle" style="color:#059669; margin-right:5px;"></i>
+                                {{ $lmText('Active Unified Channels (Used across Payments, Add/Edit Payment, Filter & Receipts)', 'វិធីទូទាត់រួមដែលកំពុងប្រើប្រាស់ទូទាំងប្រព័ន្ធ (Payments, Filter, បន្ថែម/កែ និងបង្កាន់ដៃ)') }}
                             </div>
-                            <div>
-                                <label class="lm-field-label">{{ $lmText('Sort Order', 'លំដាប់') }}</label>
-                                <input type="number" name="new_method[sort_order]" class="lm-input" value="{{ old('new_method.sort_order', $paymentMethods->count() + 1) }}" min="0" max="999">
+                            <div class="lm-effective-channels-list">
+                                @foreach($effectivePaymentMethods as $effKey => $effLabel)
+                                    <span class="lm-effective-channel-badge">
+                                        <code>{{ $effKey }}</code>
+                                        <span>{{ $effLabel }}</span>
+                                    </span>
+                                @endforeach
                             </div>
                         </div>
-                    </div>
+                    @endif
 
                     @if(isset($legacyRows) && $legacyRows->isNotEmpty())
                         <details style="margin-top:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px;">

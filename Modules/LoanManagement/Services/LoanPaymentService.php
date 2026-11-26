@@ -15,14 +15,20 @@ class LoanPaymentService
             $paymentMethodId = Arr::get($detail, 'payment_method_id');
             $paymentMethod = null;
 
-            if (! empty($paymentMethodId) && Schema::hasTable('payment_methods')) {
+            if (! empty($paymentMethodId) && Schema::connection('mysql_loan')->hasTable('loan_payment_methods')) {
+                $paymentMethod = DB::connection('mysql_loan')->table('loan_payment_methods')->find($paymentMethodId);
+            } elseif (! empty($paymentMethodId) && Schema::hasTable('payment_methods')) {
                 $paymentMethod = DB::table('payment_methods')->find($paymentMethodId);
             }
+
+            $methodService = app(LoanPaymentMethodService::class);
+            $rawName = $paymentMethod->name ?? Arr::get($detail, 'payment_method_snapshot', Arr::get($detail, 'method', 'Unknown'));
+            $resolvedName = $methodService->resolveDisplayLabel((string) $rawName, [], 'mysql_loan');
 
             LoanPaymentDetail::create([
                 'payment_id' => $paymentId,
                 'payment_method_id' => $paymentMethod->id ?? null,
-                'payment_method_snapshot' => $paymentMethod->name ?? Arr::get($detail, 'payment_method_snapshot', 'Unknown'),
+                'payment_method_snapshot' => $resolvedName !== '-' ? $resolvedName : (string) $rawName,
                 'currency' => Arr::get($detail, 'currency', 'USD'),
                 'amount' => (float) Arr::get($detail, 'amount', 0),
                 'exchange_rate' => (float) Arr::get($detail, 'exchange_rate', 1),
@@ -35,6 +41,19 @@ class LoanPaymentService
 
     public function syncPaymentMethodsFromPos(): array
     {
+        if (Schema::connection('mysql_loan')->hasTable('loan_payment_methods')) {
+            $rows = DB::connection('mysql_loan')->table('loan_payment_methods')
+                ->select('id', 'name', 'is_active')
+                ->orderBy('name')
+                ->get();
+
+            return $rows->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'name' => (string) $row->name,
+                'is_active' => (bool) $row->is_active,
+            ])->all();
+        }
+
         if (! Schema::hasTable('payment_methods')) {
             return [];
         }

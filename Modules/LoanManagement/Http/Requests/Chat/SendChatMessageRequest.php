@@ -18,6 +18,7 @@ class SendChatMessageRequest extends FormRequest
             'message' => 'nullable|string',
             'file' => 'nullable|file|max:51200',
             'audio_duration_seconds' => 'nullable|numeric|min:0|max:3600',
+            'duration_seconds' => 'nullable|numeric|min:0|max:3600',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'address' => 'nullable|string|max:255',

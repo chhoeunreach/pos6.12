@@ -510,5 +510,20 @@
 
         syncSocialPreview();
 
+        // Quick-fill preset buttons for adding payment channels
+        document.querySelectorAll('.js-fill-payment-preset').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var nameInput = document.getElementById('newPaymentMethodNameInput');
+                var codeInput = document.getElementById('newPaymentMethodCodeInput');
+                if (nameInput) {
+                    nameInput.value = btn.getAttribute('data-preset-name') || '';
+                    nameInput.focus();
+                }
+                if (codeInput) {
+                    codeInput.value = btn.getAttribute('data-preset-code') || '';
+                }
+            });
+        });
+
         syncPreview();
     })();

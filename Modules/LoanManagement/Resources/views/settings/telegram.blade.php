@@ -17,7 +17,7 @@
                 This bot is used only for the customer chat feature - it's separate from any other Telegram bot your business uses.
             </p>
 
-            <form method="POST" action="{{ route('loan-management.settings.telegram.update') }}" id="telegramSettingsForm">
+            <form method="POST" action="{{ \Illuminate\Support\Facades\Route::has('loan-management.settings.telegram.update') ? route('loan-management.settings.telegram.update') : route('loan-management.settings.business.update') }}" id="telegramSettingsForm">
                 @csrf
                 <div class="form-group">
                     <label>Bot Token</label>
@@ -120,7 +120,9 @@
     });
 
     $('#btnGenerateSecret').on('click', function(){
-        apiPost('{{ route("loan-management.settings.telegram.secret") }}', {}).then(function(r){
+        var secretUrl = '{{ \Illuminate\Support\Facades\Route::has("loan-management.settings.telegram.secret") ? route("loan-management.settings.telegram.secret") : "" }}';
+        if (!secretUrl) return;
+        apiPost(secretUrl, {}).then(function(r){
             if (r.body && r.body.secret) {
                 $('#webhookSecretInput').val(r.body.secret);
             }
@@ -130,9 +132,9 @@
     $('#btnTestConnection').on('click', function(){
         var $btn = $(this).prop('disabled', true);
         var $result = $('#testConnectionResult').html('<span class="text-muted">Testing...</span>');
-        apiPost('{{ route("loan-management.settings.telegram.test") }}', {bot_token: $('#botTokenInput').val()}).then(function(r){
+        apiPost('{{ route("loan-management.settings.telegram.test") }}', {telegram_bot_token: $('#botTokenInput').val(), bot_token: $('#botTokenInput').val()}).then(function(r){
             if (r.body && r.body.success) {
-                $result.html('<span class="text-green"><i class="fa fa-check-circle"></i> Connected as <strong>' + (r.body.bot_name || '') + '</strong> (@' + (r.body.bot_username || '') + ')</span>');
+                $result.html('<span class="text-green"><i class="fa fa-check-circle"></i> ' + (r.body.message || ('Connected as ' + (r.body.bot_name || '') + ' (@' + (r.body.bot_username || '') + ')')) + '</span>');
             } else {
                 $result.html('<span class="text-red"><i class="fa fa-times-circle"></i> ' + ((r.body && r.body.message) || 'Connection failed.') + '</span>');
             }
@@ -140,9 +142,11 @@
     });
 
     $('#btnRegisterWebhook').on('click', function(){
+        var webhookUrl = '{{ \Illuminate\Support\Facades\Route::has("loan-management.settings.telegram.webhook") ? route("loan-management.settings.telegram.webhook") : "" }}';
+        if (!webhookUrl) return;
         var $btn = $(this).prop('disabled', true);
         var $result = $('#registerWebhookResult').html('<span class="text-muted">Registering...</span>');
-        apiPost('{{ route("loan-management.settings.telegram.webhook") }}', {}).then(function(r){
+        apiPost(webhookUrl, {}).then(function(r){
             if (r.body && r.body.success) {
                 $result.html('<span class="text-green"><i class="fa fa-check-circle"></i> ' + r.body.message + '</span>');
             } else {

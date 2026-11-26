@@ -231,8 +231,13 @@
     </div>
 
     @php
-        $curr = $loan->currency ?? 'USD';
-        $paidAmount = (float) ($payment->amount ?? 0);
+        $curr = $loan->currency ?? ($payment->currency ?? 'USD');
+        $paidAmount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
+        $methodParts = is_array($payment->payment_method_parts ?? null) ? $payment->payment_method_parts : [];
+        $methodDisplay = trim((string) ($payment->payment_method ?? ''))
+            ?: (trim((string) ($payment->payment_method_snapshot ?? ''))
+            ?: (trim((string) ($payment->channel ?? ''))
+            ?: (trim((string) ($payment->method ?? '')) ?: 'Cash')));
         $receiptNo = $payment->receipt_number ?? ('PMT-'.$payment->id);
         $paidDate = $payment->paid_date ? \Carbon\Carbon::parse($payment->paid_date)->format('d-M-Y H:i') : now()->format('d-M-Y H:i');
         $custName = $customer->khmer_name ?? ($customer->name ?? ($loan->customer_name_snapshot ?? 'Customer'));
@@ -250,7 +255,7 @@
             <div class="thermal-center">
                 <div class="thermal-title">{{ $location->name ?? 'LOAN INSTALLMENT' }}</div>
                 <div class="thermal-sub">
-                    {{ $location->location_code ? 'Branch: '.$location->location_code.' | ' : '' }}
+                    {{ !empty($location->location_code) ? 'Branch: '.$location->location_code.' | ' : '' }}
                     Tel: {{ $location->telegram_number ?? '023 999 888' }}
                 </div>
                 <div style="font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;">
@@ -293,15 +298,15 @@
             @if($schedule)
             <div class="thermal-row">
                 <span>Installment Term:</span>
-                <span>Term #{{ $schedule->installment_no }}</span>
+                <span>Term #{{ $schedule->installment_no ?? $schedule->id ?? '-' }}</span>
             </div>
             <div class="thermal-row">
                 <span>Principal Paid:</span>
-                <span>{{ number_format($schedule->principal_due ?? 0, 2) }} {{ $curr }}</span>
+                <span>{{ number_format((float) ($schedule->principal_due ?? $schedule->principal_amount ?? 0), 2) }} {{ $curr }}</span>
             </div>
             <div class="thermal-row">
                 <span>Interest Paid:</span>
-                <span>{{ number_format($schedule->interest_due ?? 0, 2) }} {{ $curr }}</span>
+                <span>{{ number_format((float) ($schedule->interest_due ?? $schedule->interest_amount ?? 0), 2) }} {{ $curr }}</span>
             </div>
             @endif
 
@@ -320,8 +325,16 @@
             </div>
             <div class="thermal-row">
                 <span>Payment Method:</span>
-                <span>{{ strtoupper($payment->payment_method ?? 'CASH') }}</span>
+                <span>{{ $methodDisplay }}</span>
             </div>
+            @if(count($methodParts) > 1)
+                @foreach($methodParts as $part)
+                    <div class="thermal-row" style="font-size:11px; padding-left:8px;">
+                        <span>- {{ $part['label'] }}:</span>
+                        <span>{{ $part['formatted_amount'] }}</span>
+                    </div>
+                @endforeach
+            @endif
 
             <hr class="thermal-sep">
 
@@ -332,11 +345,11 @@
             @if($nextSchedule)
             <div class="thermal-row">
                 <span>Next Due Date:</span>
-                <span>{{ \Carbon\Carbon::parse($nextSchedule->due_date)->format('d-M-Y') }}</span>
+                <span>{{ !empty($nextSchedule->due_date) ? \Carbon\Carbon::parse($nextSchedule->due_date)->format('d-M-Y') : '-' }}</span>
             </div>
             <div class="thermal-row">
                 <span>Next Due Amount:</span>
-                <span>{{ number_format($nextSchedule->amount_balance, 2) }} {{ $curr }}</span>
+                <span>{{ number_format((float) ($nextSchedule->amount_balance ?? $nextSchedule->balance_amount ?? 0), 2) }} {{ $curr }}</span>
             </div>
             @else
             <div class="thermal-row" style="color:#16a34a;">
@@ -365,7 +378,7 @@
                 <div>
                     <h2 style="margin:0;font-size:22px;color:#0f172a;">{{ $location->name ?? 'LOAN MANAGEMENT SYSTEM' }}</h2>
                     <p style="margin:4px 0 0;color:#64748b;font-size:13px;">
-                        {{ $location->location_code ? 'Branch: '.$location->location_code.' | ' : '' }}
+                        {{ !empty($location->location_code) ? 'Branch: '.$location->location_code.' | ' : '' }}
                         Official Repayment Receipt Voucher
                     </p>
                 </div>
@@ -404,11 +417,11 @@
                         <td>
                             <strong>Installment Repayment</strong>
                             @if($schedule)
-                                <br><small class="text-muted">Due date: {{ \Carbon\Carbon::parse($schedule->due_date)->format('d-M-Y') }} (Principal: {{ number_format($schedule->principal_due, 2) }}, Interest: {{ number_format($schedule->interest_due, 2) }})</small>
+                                <br><small class="text-muted">Due date: {{ !empty($schedule->due_date) ? \Carbon\Carbon::parse($schedule->due_date)->format('d-M-Y') : '-' }} (Principal: {{ number_format((float) ($schedule->principal_due ?? $schedule->principal_amount ?? 0), 2) }}, Interest: {{ number_format((float) ($schedule->interest_due ?? $schedule->interest_amount ?? 0), 2) }})</small>
                             @endif
                         </td>
-                        <td class="text-center">{{ $schedule->installment_no ?? '-' }}</td>
-                        <td class="text-right">{{ strtoupper($payment->payment_method ?? 'Cash') }}</td>
+                        <td class="text-center">{{ $schedule->installment_no ?? ($schedule->id ?? '-') }}</td>
+                        <td class="text-right">{{ $methodDisplay }}</td>
                         <td class="text-right font-bold">{{ number_format($paidAmount, 2) }}</td>
                     </tr>
                     @if(!empty($payment->penalty_amount) && (float)$payment->penalty_amount > 0)
@@ -430,7 +443,7 @@
                             <div style="display:flex;justify-content:space-between;font-size:13px;">
                                 <span>Remaining Loan Principal Balance: <strong>${{ number_format((float)($loan->balance_amount ?? 0), 2) }} {{ $curr }}</strong></span>
                                 @if($nextSchedule)
-                                    <span>Next Schedule Due: <strong>{{ \Carbon\Carbon::parse($nextSchedule->due_date)->format('d-M-Y') }} (${{ number_format($nextSchedule->amount_balance, 2) }})</strong></span>
+                                    <span>Next Schedule Due: <strong>{{ !empty($nextSchedule->due_date) ? \Carbon\Carbon::parse($nextSchedule->due_date)->format('d-M-Y') : '-' }} (${{ number_format((float) ($nextSchedule->amount_balance ?? $nextSchedule->balance_amount ?? 0), 2) }})</strong></span>
                                 @else
                                     <span style="color:#16a34a;font-weight:700;">Loan Completed & Settled</span>
                                 @endif

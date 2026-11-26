@@ -1000,23 +1000,26 @@
 
         function quickSearchRowHtml(row) {
             var urls = quickSearchUrls(row);
-            var telegramLinkUrl = row.customer_id ? "{{ url('loan-management/customers') }}/" + row.customer_id + "/telegram/link" : '';
+            var hasTelegramLinkRoute = {{ \Illuminate\Support\Facades\Route::has('loan-management.customers.telegram.link') ? 'true' : 'false' }};
+            var telegramLinkUrl = (hasTelegramLinkRoute && row.customer_id) ? "{{ url('loan-management/customers') }}/" + row.customer_id + "/telegram/link" : '';
             var telegramAction = '';
             var tgStatus = row.telegram_linked
                 ? '<span class="lm-customer-hover__status linked"><i class="fa fa-check-circle"></i> ' + i18n.telegramConnected + '</span>'
-                : '<span class="lm-customer-hover__status"><i class="fa fa-paper-plane"></i> ' + i18n.telegramNotConnected + '</span>';
+                : '<span class="lm-customer-hover__status"><i class="fa fa-comments-o"></i> ' + i18n.chat + '</span>';
             var hoverTelegram = row.customer_id
                 ? '<div class="lm-customer-hover__panel">' +
                     tgStatus +
                     '<div class="lm-customer-hover__actions">' +
-                        '<button type="button" class="primary js-dashboard-open-telegram" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-id="' + esc(row.id) + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-telegram"></i> ' + i18n.chat + '</button>' +
+                        '<button type="button" class="primary js-dashboard-open-telegram" data-customer-id="' + esc(row.customer_id) + '" data-customer-name="' + esc(row.customer_name) + '" data-telegram-linked="' + (row.telegram_linked ? '1' : '0') + '" data-loan-id="' + esc(row.id) + '" data-loan-number="' + esc(row.loan_number) + '" data-balance="' + esc(row.balance_amount) + '"><i class="fa fa-comments"></i> ' + i18n.chat + '</button>' +
                     '</div>' +
                 '</div>'
                 : '';
-            if (row.telegram_linked) {
-                telegramAction = '<li><button type="button" disabled class="text-muted"><i class="fa fa-check-circle"></i> ' + i18n.telegramConnected + '</button></li>';
-            } else if (telegramLinkUrl) {
-                telegramAction = '<li><button type="button" class="js-dashboard-telegram-link" data-url="' + telegramLinkUrl + '" data-customer="' + esc(row.customer_name) + '"><i class="fa fa-paper-plane"></i> ' + i18n.connectTelegram + '</button></li>';
+            if (hasTelegramLinkRoute) {
+                if (row.telegram_linked) {
+                    telegramAction = '<li><button type="button" disabled class="text-muted"><i class="fa fa-check-circle"></i> ' + i18n.telegramConnected + '</button></li>';
+                } else if (telegramLinkUrl) {
+                    telegramAction = '<li><button type="button" class="js-dashboard-telegram-link" data-url="' + telegramLinkUrl + '" data-customer="' + esc(row.customer_name) + '"><i class="fa fa-paper-plane"></i> ' + i18n.connectTelegram + '</button></li>';
+                }
             }
             var notice = payDateNotice(row.next_due_date);
             var dueLabel = row.next_due_date
@@ -1449,7 +1452,14 @@
 
             var $button = $(this);
             var customerId = $button.data('customer-id');
-            if (!customerId || typeof window.loanManagementOpenTelegramCustomer !== 'function') {
+            if (!customerId) {
+                return;
+            }
+
+            if (typeof window.loanManagementOpenTelegramCustomer !== 'function') {
+                var customerName = $button.data('customer-name') || (isKhmer ? 'អតិថិជន' : 'Customer');
+                var chatModalUrl = liveChatFrameBaseUrl + '?customer_id=' + encodeURIComponent(customerId) + '&_lm_embed=1';
+                openDashboardIframeModal(i18n.chat + ' - ' + customerName, chatModalUrl);
                 return;
             }
 

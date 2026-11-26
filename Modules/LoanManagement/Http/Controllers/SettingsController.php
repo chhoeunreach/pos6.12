@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use Modules\LoanManagement\Services\BusinessSettingsService;
 use Illuminate\Support\Facades\Http;
 use Modules\LoanManagement\Services\CmsHomeService;
+use Modules\LoanManagement\Services\LoanPaymentMethodService;
 use Throwable;
 
 class SettingsController extends Controller
@@ -33,6 +34,9 @@ class SettingsController extends Controller
             ->get();
         $usage = $this->loanPaymentMethodUsage();
         $legacyRows = $this->legacyPaymentMethodRows();
+        $methodService = app(LoanPaymentMethodService::class);
+        $presetChannels = $methodService->presetChannels();
+        $effectivePaymentMethods = $methodService->options(null, $this->connection);
 
         return view('loanmanagement::settings.business', compact(
             'settings',
@@ -40,7 +44,9 @@ class SettingsController extends Controller
             'timezones',
             'paymentMethods',
             'usage',
-            'legacyRows'
+            'legacyRows',
+            'presetChannels',
+            'effectivePaymentMethods'
         ));
     }
 

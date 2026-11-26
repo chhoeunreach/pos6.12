@@ -3018,28 +3018,7 @@ class DashboardController extends Controller
 
     protected function dashboardPaymentMethodBucket(string $method): string
     {
-        $method = strtoupper(trim($method));
-
-        if ($method === '' || str_contains($method, 'CASH')) {
-            return 'cash';
-        }
-        if (str_contains($method, 'ABA')) {
-            return 'aba';
-        }
-        if (str_contains($method, 'ACLEDA')) {
-            return 'acleda';
-        }
-        if (str_contains($method, 'WING')) {
-            return 'wing';
-        }
-        if (str_contains($method, 'E&T') || str_contains($method, 'E T') || str_contains($method, 'ET')) {
-            return 'et';
-        }
-        if (str_contains($method, 'CARD') || str_contains($method, 'VISA') || str_contains($method, 'MASTER')) {
-            return 'card';
-        }
-
-        return 'other';
+        return app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->bucket($method, 'mysql_loan');
     }
 
     protected function dashboardRecentLoans(array $filters)
@@ -3351,28 +3330,41 @@ class DashboardController extends Controller
             return $payments;
         }
 
-        $methodExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_method_snapshot')
-            ? 'd.payment_method_snapshot'
-            : (Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'method') ? 'd.method' : '"Cash"');
+        $hasSnapshot = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'payment_method_snapshot');
+        $hasMethod = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'method');
+        $methodExpr = $hasSnapshot ? 'd.payment_method_snapshot' : ($hasMethod ? 'd.method' : '"Cash"');
         $amountExpr = $this->coalesceSql('loan_payment_details', 'd', ['amount_base', 'amount'], '0');
         $transactionExpr = Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'transaction_no')
             ? 'd.transaction_no'
             : (Schema::connection('mysql_loan')->hasColumn('loan_payment_details', 'reference_number') ? 'd.reference_number' : 'NULL');
 
-        $details = DB::connection('mysql_loan')
+        $detailQuery = DB::connection('mysql_loan')
             ->table('loan_payment_details as d')
             ->whereIn('d.payment_id', $paymentIds)
             ->selectRaw('d.payment_id')
             ->selectRaw('COALESCE(NULLIF('.$methodExpr.', ""), "Cash") as method_name')
             ->selectRaw($amountExpr.' as amount')
-            ->selectRaw($transactionExpr.' as transaction_no')
+            ->selectRaw($transactionExpr.' as transaction_no');
+
+        if ($hasMethod) {
+            $detailQuery->selectRaw('d.method as method_code');
+        }
+
+        $details = $detailQuery
             ->orderBy('d.id')
             ->get()
             ->groupBy('payment_id');
 
+        $methodService = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class);
+        $methodOptions = $methodService->options(null, 'mysql_loan', true);
+
         foreach ($payments as $payment) {
             $rows = $details->get($payment->id, collect());
             if ($rows->isEmpty()) {
+                $payment->payment_method = $methodService->resolveDisplayLabel((string) ($payment->payment_method ?? ''), $methodOptions, 'mysql_loan');
+                if ($payment->payment_method === '-') {
+                    $payment->payment_method = 'Cash';
+                }
                 $bucket = $this->dashboardPaymentMethodBucket((string) ($payment->payment_method ?? ''));
                 foreach (['cash', 'aba', 'acleda', 'wing', 'et', 'card', 'other'] as $methodBucket) {
                     $payment->{$methodBucket.'_amount'} = $bucket === $methodBucket ? (float) ($payment->amount ?? 0) : 0.0;
@@ -3382,6 +3374,17 @@ class DashboardController extends Controller
                 $payment->transaction_no = null;
                 continue;
             }
+
+            $rows->each(function ($row) use ($methodService, $methodOptions) {
+                $rawSource = trim((string) ($row->method_code ?? '')) !== ''
+                    ? (string) $row->method_code
+                    : (string) ($row->method_name ?? '');
+                $resolved = $methodService->resolveDisplayLabel($rawSource, $methodOptions, 'mysql_loan');
+                if ($resolved === '-' && ! empty($row->method_name)) {
+                    $resolved = $methodService->resolveDisplayLabel((string) $row->method_name, $methodOptions, 'mysql_loan');
+                }
+                $row->method_name = $resolved !== '-' ? $resolved : (string) ($row->method_name ?? 'Cash');
+            });
 
             $payment->payment_method = $rows
                 ->map(fn ($row) => trim((string) $row->method_name).' $'.number_format((float) ($row->amount ?? 0), 2))

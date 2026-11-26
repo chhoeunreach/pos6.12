@@ -2,15 +2,16 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Auth\GenericUser;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Modules\LoanManagement\Http\Controllers\LoanPaymentController;
-use Tests\TestCase;
+use Tests\Support\LoanModuleFeatureTestCase;
 
-class LoanPaymentSplitTest extends TestCase
+class LoanPaymentSplitTest extends LoanModuleFeatureTestCase
 {
     private $controller;
 
@@ -171,5 +172,134 @@ class LoanPaymentSplitTest extends TestCase
         $this->assertSame('KHR', $row->currency);
         $this->assertEquals(200000, $row->amount);
         $this->assertEquals(4000, $row->exchange_rate);
+    }
+
+    public function test_index_filter_receipt_show_and_edit_resolve_unified_and_split_methods(): void
+    {
+        $db = DB::connection('loan_split_test');
+        Schema::connection('loan_split_test')->create('loan_payment_methods', function (Blueprint $t) {
+            $t->increments('id');
+            $t->string('name');
+            $t->string('code')->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->boolean('is_active')->default(true);
+        });
+        $db->table('loan_payment_methods')->insert([
+            ['id' => 1, 'name' => 'Cash Money', 'code' => 'cash', 'sort_order' => 1, 'is_active' => 1],
+            ['id' => 2, 'name' => 'ABA Bank', 'code' => 'aba', 'sort_order' => 2, 'is_active' => 1],
+            ['id' => 3, 'name' => 'Disabled Card', 'code' => 'card', 'sort_order' => 3, 'is_active' => 0],
+        ]);
+        $db->table('loan_payments')->insert([
+            'id' => 2,
+            'loan_id' => 1,
+            'schedule_id' => 1,
+            'total_paid_base' => 55,
+            'payment_method_snapshot' => 'ធនាគារអេប៊ីអេ (ABA)',
+        ]);
+
+        // Use real LoanPaymentMethodService via base controller on loan_split_test connection
+        auth()->setUser(new class(['id' => 90002, 'name' => 'Payment Tester']) extends GenericUser implements \Illuminate\Contracts\Auth\Access\Authorizable {
+            public function __get($key) { return $this->attributes[$key] ?? null; }
+            public function hasRole($roles, $guard = null): bool { return false; }
+            public function can($ability, $arguments = []): bool { return true; }
+        });
+        view()->share('errors', new \Illuminate\Support\ViewErrorBag);
+
+        $controller = new class extends LoanPaymentController {
+            protected string $connection = 'loan_split_test';
+        };
+
+        // 1. Active methods exclude deactivated 'card' and reflect unified names
+        $indexView = $controller->index(Request::create('/loan-management/payments', 'GET', ['method' => 'aba']));
+        $indexData = $indexView->getData();
+        $this->assertArrayHasKey('aba', $indexData['methods']);
+        $this->assertSame('ABA Bank', $indexData['methods']['aba']);
+        $this->assertArrayNotHasKey('card', $indexData['methods']);
+
+        $rows = $indexData['payments']->getCollection()->keyBy('id');
+        $this->assertTrue($rows->has(1)); // split row containing ABA
+        $this->assertTrue($rows->has(2)); // legacy snapshot 'ធនាគារអេប៊ីអេ (ABA)'
+        $this->assertSame('Cash Money ($60.00), ABA Bank ($40.00)', $rows[1]->payment_method);
+        $this->assertSame('ABA Bank', $rows[2]->payment_method);
+
+        // 2. Show enriches both payment and split details cleanly
+        $showData = $controller->show(1)->getData();
+        $this->assertSame('Cash Money ($60.00), ABA Bank ($40.00)', $showData['payment']->payment_method);
+        $this->assertSame('Cash Money', $showData['details'][0]->display_method);
+        $this->assertSame('ABA Bank', $showData['details'][1]->display_method);
+
+        // 3. Receipt renders resolved method (and split breakdown) rather than fallback 'CASH'
+        $thermalHtml = $controller->receipt(Request::create('/loan-management/payments/2/receipt', 'GET'), 2)->render();
+        $this->assertStringContainsString('ABA Bank', $thermalHtml);
+        $this->assertStringNotContainsString('<span>CASH</span>', $thermalHtml);
+
+        $splitReceiptHtml = $controller->receipt(Request::create('/loan-management/payments/1/receipt', 'GET'), 1)->render();
+        $this->assertStringContainsString('Cash Money ($60.00), ABA Bank ($40.00)', $splitReceiptHtml);
+        $this->assertStringContainsString('- Cash Money:', $splitReceiptHtml);
+
+        // 4. Edit dropdown partial pre-selects canonical key 'aba' for legacy snapshot without duplicating options
+        $editData = $controller->edit(2)->getData();
+        $methodRowHtml = view('loanmanagement::payments.partials.method_row', [
+            'index' => 0,
+            'methods' => $editData['methods'],
+            'methodRow' => ['method' => $editData['payment']->payment_method_snapshot, 'amount' => 55, 'reference_number' => ''],
+            'loanCurrency' => 'USD',
+            'lmText' => fn ($en, $km) => $en,
+        ])->render();
+        $this->assertMatchesRegularExpression('/<option value="aba"[^>]*selected[^>]*>ABA Bank<\/option>/', $methodRowHtml);
+        $this->assertStringNotContainsString('<option value="ធនាគារអេប៊ីអេ (ABA)"', $methodRowHtml);
+
+        // 5. Soft-deleted and cancelled records are handled accurately in index/summary/receipt
+        Schema::connection('loan_split_test')->table('loan_payments', function (Blueprint $t) {
+            $t->timestamp('deleted_at')->nullable();
+        });
+        $db->table('loan_payments')->insert([
+            [
+                'id' => 3,
+                'loan_id' => 1,
+                'schedule_id' => 1,
+                'total_paid_base' => 999,
+                'payment_method_snapshot' => 'Cash',
+                'status' => 'confirmed',
+                'deleted_at' => now(),
+            ],
+            [
+                'id' => 4,
+                'loan_id' => 1,
+                'schedule_id' => 1,
+                'total_paid_base' => 500,
+                'payment_method_snapshot' => 'Cash',
+                'status' => 'cancelled',
+                'deleted_at' => null,
+            ],
+        ]);
+        $unfilteredData = $controller->index(Request::create('/loan-management/payments', 'GET'))->getData();
+        $unfilteredIds = $unfilteredData['payments']->getCollection()->pluck('id')->all();
+        $this->assertNotContains(3, $unfilteredIds);
+        $this->assertContains(4, $unfilteredIds);
+        $this->assertEquals(155.0, $unfilteredData['summary']['amount']); // excludes soft-deleted (999) and cancelled (500)
+
+        // Same paid_date rows show the newest payment ID first on top
+        $db->table('loan_payments')->where('id', 1)->update(['paid_date' => '2026-11-25']);
+        $db->table('loan_payments')->where('id', 2)->update(['paid_date' => '2026-11-25']);
+        $sameDayIds = $controller->index(Request::create('/loan-management/payments', 'GET'))
+            ->getData()['payments']->getCollection()->whereIn('id', [1, 2])->pluck('id')->values()->all();
+        $this->assertSame([2, 1], $sameDayIds);
+
+        // 6. Khmer/English cash and bank bucket classification works consistently
+        $methodService = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class);
+        $this->assertTrue($methodService->isCash('សាច់ប្រាក់សុទ្ធ', 'loan_split_test'));
+        $this->assertSame('aba', $methodService->bucket('ធនាគារអេប៊ីអេ (ABA)', 'loan_split_test'));
+        $this->assertSame('et', $methodService->bucket('E&T Transfer', 'loan_split_test'));
+        // 7. Embedded modal triggers and postMessage refresh hooks render cleanly
+        $indexBlade = file_get_contents(module_path('LoanManagement', 'Resources/views/payments/index.blade.php'));
+        $this->assertStringContainsString('js-payment-modal', $indexBlade);
+        $this->assertStringContainsString("modalUrl.indexOf('_lm_modal=1')", $indexBlade);
+
+        $showModalRequest = Request::create('/loan-management/payments/2?_lm_modal=1&_lm_updated=1', 'GET', ['_lm_modal' => 1, '_lm_updated' => 1]);
+        $this->app->instance('request', $showModalRequest);
+        $showModalHtml = $controller->show(2)->render();
+        $this->assertStringContainsString('window.parent.jQuery', $showModalHtml);
+        $this->assertStringContainsString('lm-payment-updated', $showModalHtml);
     }
 }

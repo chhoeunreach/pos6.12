@@ -1176,9 +1176,11 @@ class CreateStandaloneLoanService
             $paymentMethodId = ! empty($payment['payment_method_id']) ? (int) $payment['payment_method_id'] : null;
             $paymentMethod = trim((string) ($payment['method'] ?? ''));
             $paymentMethodName = 'Unknown';
+            $methodService = app(LoanPaymentMethodService::class);
 
             if ($paymentMethod !== '') {
-                $paymentMethodName = (string) ($paymentTypes[$paymentMethod] ?? ucfirst(str_replace('_', ' ', $paymentMethod)));
+                $unifiedTypes = $methodService->options((object) ['main_location_id' => $loanPayload['main_location_id'] ?? null], 'mysql_loan');
+                $paymentMethodName = $methodService->canonicalName($paymentMethod, $unifiedTypes, 'mysql_loan');
             } elseif (! empty($paymentMethodId) && Schema::hasTable('payment_methods')) {
                 $paymentMethodName = (string) (DB::table('payment_methods')->where('id', $paymentMethodId)->value('name') ?: 'Unknown');
             }

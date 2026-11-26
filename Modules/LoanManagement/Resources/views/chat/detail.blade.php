@@ -162,8 +162,9 @@
             '</div>' +
         '</div>';
     }
+    var chatApiBase = '{{ url("loan-management/chat-api/chats") }}';
     function loadDetail(){
-        $.get('/api/loan-management/chats/'+threadId, function(resp){
+        $.get(chatApiBase + '/'+threadId, function(resp){
             var d = resp.data || {};
             var msgs = d.messages || [];
             var box = $('#chat-box'); box.html('');
@@ -200,12 +201,12 @@
     $('#lmChatImageViewerClose').on('click', closeImageViewer);
     $('#lmChatImageViewer').on('click', function(e){ if (e.target === this) closeImageViewer(); });
     $('#btnSend').on('click', function(){
-        $.post('/api/loan-management/chats/'+threadId+'/messages', {_token: '{{ csrf_token() }}', message_type:'text', message:$('#msg').val()}, function(){
+        $.post(chatApiBase + '/'+threadId+'/messages', {_token: '{{ csrf_token() }}', message_type:'text', message:$('#msg').val()}, function(){
             $('#msg').val(''); loadDetail();
         });
     });
-    $('#btnClose').on('click', function(){ $.post('/api/loan-management/chats/'+threadId+'/close', {_token:'{{ csrf_token() }}'}, loadDetail); });
-    $('#btnReopen').on('click', function(){ $.post('/api/loan-management/chats/'+threadId+'/reopen', {_token:'{{ csrf_token() }}'}, loadDetail); });
+    $('#btnClose').on('click', function(){ $.post(chatApiBase + '/'+threadId+'/close', {_token:'{{ csrf_token() }}'}, loadDetail); });
+    $('#btnReopen').on('click', function(){ $.post(chatApiBase + '/'+threadId+'/reopen', {_token:'{{ csrf_token() }}'}, loadDetail); });
     $(document).one('pointerdown keydown', unlockNotificationAudio);
     loadDetail();
     setInterval(loadDetail, {{ (int) config('loanmanagement.chat_polling_seconds', 5) * 1000 }});

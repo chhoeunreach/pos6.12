@@ -667,14 +667,7 @@
                         <select name="method" class="form-control" onchange="this.form.submit()">
                             <option value="">{{ $lmText('All', 'ទាំងអស់') }}</option>
                             @foreach($methods as $key => $label)
-                                @php
-                                    $displayFilterMethod = (string) $label;
-                                    if (str_starts_with($displayFilterMethod, 'lang_v1.') || str_starts_with($displayFilterMethod, 'messages.')) {
-                                        $rawFilterKey = str_replace(['lang_v1.', 'messages.'], '', $displayFilterMethod);
-                                        $displayFilterMethod = $rawFilterKey === 'advance' ? $lmText('Advance Payment', 'ប្រាក់បង់មុន / បុរេប្រទាន') : ucfirst(str_replace('_', ' ', $rawFilterKey));
-                                    }
-                                @endphp
-                                <option value="{{ $label }}" {{ ($filters['method'] ?? '') == $label || ($filters['method'] ?? '') == $key ? 'selected' : '' }}>{{ $displayFilterMethod }}</option>
+                                <option value="{{ $key }}" {{ ($filters['method'] ?? '') == $key || ($filters['method'] ?? '') == $label ? 'selected' : '' }}>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -726,30 +719,45 @@
                                 default => 'fa fa-calendar-check-o',
                             };
 
-                            $rawMethod = strtolower(trim((string)($payment->payment_method ?? 'cash')));
-                            $methodClass = match(true) {
-                                str_contains($rawMethod, 'cash') => 'lm-method-cash',
-                                str_contains($rawMethod, 'aba') => 'lm-method-aba',
-                                str_contains($rawMethod, 'acleda') => 'lm-method-acleda',
-                                str_contains($rawMethod, 'wing') => 'lm-method-wing',
-                                str_contains($rawMethod, 'bank') || str_contains($rawMethod, 'transfer') => 'lm-method-bank',
-                                default => '',
+                            $methodStyleFor = static function (string $value): array {
+                                $lower = strtolower(trim($value));
+                                $cls = match (true) {
+                                    str_contains($lower, 'cash') => 'lm-method-cash',
+                                    str_contains($lower, 'aba') => 'lm-method-aba',
+                                    str_contains($lower, 'acleda') => 'lm-method-acleda',
+                                    str_contains($lower, 'wing') => 'lm-method-wing',
+                                    str_contains($lower, 'bank') || str_contains($lower, 'transfer') => 'lm-method-bank',
+                                    default => '',
+                                };
+                                $icon = match (true) {
+                                    str_contains($lower, 'cash') => 'fa fa-money',
+                                    str_contains($lower, 'aba') || str_contains($lower, 'acleda') || str_contains($lower, 'bank') || str_contains($lower, 'transfer') => 'fa fa-university',
+                                    str_contains($lower, 'wing') => 'fa fa-mobile',
+                                    str_contains($lower, 'card') => 'fa fa-credit-card',
+                                    default => 'fa fa-credit-card-alt',
+                                };
+
+                                return [$cls, $icon];
                             };
-                            $methodIcon = match(true) {
-                                str_contains($rawMethod, 'cash') => 'fa fa-money',
-                                str_contains($rawMethod, 'aba') || str_contains($rawMethod, 'acleda') || str_contains($rawMethod, 'bank') || str_contains($rawMethod, 'transfer') => 'fa fa-university',
-                                str_contains($rawMethod, 'wing') => 'fa fa-mobile',
-                                str_contains($rawMethod, 'card') => 'fa fa-credit-card',
-                                default => 'fa fa-credit-card-alt',
-                            };
+                            $methodParts = is_array($payment->payment_method_parts ?? null) ? $payment->payment_method_parts : [];
+                            [$methodClass, $methodIcon] = $methodStyleFor((string) ($payment->payment_method_raw ?? $payment->payment_method ?? 'cash'));
                         @endphp
                         <tr>
                             <td>
-                                <a href="{{ route('loan-management.payments.show', $payment->id) }}" style="font-weight: 700; color: #2563eb;">
+                                <a href="{{ route('loan-management.payments.show', $payment->id) }}"
+                                   class="js-payment-modal"
+                                   data-title="{{ $lmText('Payment Receipt', 'បង្កាន់ដៃទូទាត់') }} #{{ $payment->receipt_number ?? $payment->id }}"
+                                   style="font-weight: 700; color: #2563eb;">
                                     {{ $payment->receipt_number ?? ('#'.$payment->id) }}
                                 </a>
                             </td>
-                            <td>{{ ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('Y-m-d') : '-' }}</td>
+                            @php
+                                $paidDateDisplay = ! empty($payment->paid_date) ? \Carbon\Carbon::parse($payment->paid_date)->format('Y-m-d') : '-';
+                                $paidTimeSource = $payment->paid_at ?? ($payment->created_at ?? $payment->paid_date ?? null);
+                                $paidTimestampKey = ! empty($paidTimeSource) ? \Carbon\Carbon::parse($paidTimeSource)->format('YmdHis') : '00000000000000';
+                                $paidSortKey = ($paidDateDisplay !== '-' ? str_replace('-', '', $paidDateDisplay) : '00000000').'-'.$paidTimestampKey.'-'.str_pad((string) ((int) ($payment->id ?? 0)), 10, '0', STR_PAD_LEFT);
+                            @endphp
+                            <td data-order="{{ $paidSortKey }}">{{ $paidDateDisplay }}</td>
                             <td>
                                 @if(Route::has('loan-management.loans.view') && ! empty($payment->loan_id))
                                     <a href="{{ route('loan-management.loans.view', $payment->loan_id) }}" target="_blank" style="font-weight: 600; color: #0f172a;">
@@ -771,12 +779,24 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="lm-method-badge {{ $methodClass }}">
-                                    <i class="{{ $methodIcon }}"></i> {{ $payment->payment_method ?? '-' }}
-                                </span>
+                                @if(count($methodParts) > 1)
+                                    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                                        @foreach($methodParts as $part)
+                                            @php([$partClass, $partIcon] = $methodStyleFor((string) ($part['key'] ?: $part['label'])))
+                                            <span class="lm-method-badge {{ $partClass }}">
+                                                <i class="{{ $partIcon }}"></i> {{ $part['label'] }} ({{ $part['formatted_amount'] }})
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <span class="lm-method-badge {{ $methodClass }}">
+                                        <i class="{{ $methodIcon }}"></i> {{ $payment->payment_method ?: '-' }}
+                                    </span>
+                                @endif
                             </td>
+                            @php($rowCurrSymbol = match (strtoupper((string) ($payment->currency ?? 'USD'))) { 'KHR' => '៛', 'THB' => '฿', default => '$' })
                             <td class="text-right" style="font-weight: 700; color: #16a34a; font-size: 13px;">
-                                $ {{ number_format((float) ($payment->amount ?? 0), 2) }}
+                                {{ $rowCurrSymbol }} {{ number_format((float) ($payment->amount ?? 0), 2) }}
                             </td>
                             <td class="text-center">
                                 <span class="lm-badge {{ $isPaid ? 'lm-badge-success' : 'lm-badge-warning' }}">
@@ -786,11 +806,17 @@
                             <td>{{ $payment->reference_number ?? '-' }}</td>
                             <td>{{ $payment->received_by ?? '-' }}</td>
                             <td class="text-center" style="white-space: nowrap;">
-                                <a href="{{ route('loan-management.payments.show', $payment->id) }}" class="lm-btn-tbl lm-btn-tbl-info" title="{{ $lmText('View Receipt', 'មើល') }}">
+                                <a href="{{ route('loan-management.payments.show', $payment->id) }}"
+                                   class="lm-btn-tbl lm-btn-tbl-info js-payment-modal"
+                                   data-title="{{ $lmText('Payment Receipt', 'បង្កាន់ដៃទូទាត់') }} #{{ $payment->receipt_number ?? $payment->id }}"
+                                   title="{{ $lmText('View Receipt', 'មើល') }}">
                                     <i class="fa fa-eye"></i>
                                 </a>
                                 @if(\Modules\LoanManagement\Helpers\LoanMenuHelper::loanUserCan('loan_management.payment|loan_management.payments.create|loan_management.edit'))
-                                    <a href="{{ route('loan-management.payments.edit', $payment->id) }}" class="lm-btn-tbl lm-btn-tbl-edit" title="{{ $lmText('Edit', 'កែប្រែ') }}">
+                                    <a href="{{ route('loan-management.payments.edit', $payment->id) }}"
+                                       class="lm-btn-tbl lm-btn-tbl-edit js-payment-modal"
+                                       data-title="{{ $lmText('Edit Payment', 'កែប្រែការទូទាត់') }} #{{ $payment->receipt_number ?? $payment->id }}"
+                                       title="{{ $lmText('Edit', 'កែប្រែ') }}">
                                         <i class="fa fa-pencil"></i>
                                     </a>
                                     <form method="POST" action="{{ route('loan-management.payments.destroy', $payment->id) }}" style="display:inline;" onsubmit="return confirm('{{ $lmText('Delete this payment? This will update loan balance.', 'តើអ្នកពិតជាចង់លុបការទូទាត់នេះមែនទេ?') }}');">
@@ -930,7 +956,7 @@
                 buttons: tableButtons,
                 pageLength: 25,
                 lengthMenu: [[10, 25, 50, 100, 250, -1], [10, 25, 50, 100, 250, "{{ $lmText('All', 'ទាំងអស់') }}"]],
-                order: [[1, 'desc']],
+                order: [],
                 autoWidth: false,
                 language: {
                     search: '',
@@ -954,6 +980,63 @@
                 ]
             });
         }
+
+        // Open Payment View & Edit in embedded modal form
+        var paymentModalUpdated = false;
+        $(document).off('click.loanPaymentModal').on('click.loanPaymentModal', '.js-payment-modal', function (event) {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.which === 2) {
+                return;
+            }
+
+            var url = $(this).data('href') || $(this).attr('href');
+            var title = $(this).data('title') || @json($lmText('Payment Detail', 'ព័ត៌មានការទូទាត់'));
+            if (!url || !$('.view_modal').length) {
+                return;
+            }
+
+            event.preventDefault();
+            paymentModalUpdated = false;
+
+            var modalUrl = url;
+            if (modalUrl.indexOf('_lm_modal=1') === -1) {
+                modalUrl += (modalUrl.indexOf('?') === -1 ? '?' : '&') + '_lm_modal=1';
+            }
+
+            $('.view_modal')
+                .off('hidden.bs.modal.loanPaymentIframe')
+                .on('hidden.bs.modal.loanPaymentIframe', function (closeEvent) {
+                    if (closeEvent.target !== this || !$(this).find('.lm-payment-iframe-modal').length) {
+                        return;
+                    }
+                    $(this).empty();
+                    if (paymentModalUpdated) {
+                        window.location.reload();
+                    }
+                })
+                .html(
+                    '<div class="modal-dialog modal-xl lm-payment-iframe-modal" role="document" style="width:96%;max-width:1180px;">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                                '<h4 class="modal-title">' + $('<div>').text(title).html() + '</h4>' +
+                            '</div>' +
+                            '<div class="modal-body" style="padding:0;height:86vh;">' +
+                                '<iframe src="' + $('<div>').text(modalUrl).html() + '" style="width:100%;height:100%;border:0;" title="' + $('<div>').text(title).html() + '"></iframe>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>'
+                )
+                .modal('show');
+        });
+
+        window.addEventListener('message', function (event) {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+            if (event.data && event.data.type === 'lm-payment-updated') {
+                paymentModalUpdated = true;
+            }
+        });
     });
 </script>
 @endsection

@@ -34,7 +34,16 @@ class LoanDashboardController extends Controller
         $currencies = ['USD', 'KHR'];
         $paymentMethods = [];
         try {
-            if (Schema::hasTable('payment_methods')) {
+            if (Schema::connection('mysql_loan')->hasTable('loan_payment_methods')) {
+                $paymentMethods = DB::connection('mysql_loan')->table('loan_payment_methods')
+                    ->select('id', 'name')
+                    ->where('is_active', 1)
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+                    ->all();
+            } elseif (Schema::hasTable('payment_methods')) {
                 $paymentMethods = DB::table('payment_methods')
                     ->select('id', 'name')
                     ->where('is_active', 1)

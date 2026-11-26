@@ -8,6 +8,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Modules\LoanManagement\Services\LoanPaymentMethodService;
 
 class LoanPaymentController extends Controller
 {
@@ -47,6 +48,9 @@ class LoanPaymentController extends Controller
         $this->applyFilters($query, $filters);
 
         $summaryQuery = clone $query;
+        if (empty($filters['status']) && $this->hasColumn('loan_payments', 'status')) {
+            $summaryQuery->whereRaw('LOWER(COALESCE(p.status, "")) NOT IN ("cancelled", "canceled", "failed", "void", "deleted", "rejected")');
+        }
         $amountExpr = $this->paymentAmountExpression();
         $summary = [
             'count' => (int) (clone $summaryQuery)->count(),
@@ -66,6 +70,14 @@ class LoanPaymentController extends Controller
 
         $payments = $query
             ->orderByDesc('p.'.$this->paymentDateColumn())
+            ->when(
+                $this->hasColumn('loan_payments', 'paid_at') && $this->paymentDateColumn() !== 'paid_at',
+                fn ($q) => $q->orderByDesc('p.paid_at')
+            )
+            ->when(
+                $this->hasColumn('loan_payments', 'created_at'),
+                fn ($q) => $q->orderByDesc('p.created_at')
+            )
             ->orderByDesc('p.id')
             ->paginate($perPage)
             ->appends($request->query());
@@ -92,11 +104,14 @@ class LoanPaymentController extends Controller
             }
         } catch (\Throwable $e) {}
 
+        $methods = $this->paymentMethodOptions();
+        $this->methodService()->enrichPaymentsWithMethods($payments->getCollection(), $this->connection, $methods);
+
         return view('loanmanagement::payments.index', [
             'payments' => $payments,
             'summary' => $summary,
             'filters' => $filters,
-            'methods' => $this->paymentMethodOptions(),
+            'methods' => $methods,
             'statuses' => $this->distinctOptions('loan_payments', 'status'),
             'locations' => $this->locationOptions(),
             'users' => $users,
@@ -186,12 +201,15 @@ class LoanPaymentController extends Controller
         $details = Schema::connection($this->connection)->hasTable('loan_payment_details')
             ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->get()
             : collect();
+        $methods = $this->paymentMethodOptions($loan);
+        $this->methodService()->enrichSinglePayment($row, $details, $this->connection, $methods);
 
         return view('loanmanagement::payments.show', [
             'payment' => $row,
             'loan' => $loan,
             'schedule' => $schedule,
             'details' => $details,
+            'methods' => $methods,
         ]);
     }
 
@@ -214,6 +232,9 @@ class LoanPaymentController extends Controller
             ->orderByDesc('p.id')
             ->limit(50)
             ->get();
+
+        $methods = $this->paymentMethodOptions($loanRow);
+        $this->methodService()->enrichPaymentsWithMethods($payments, $this->connection, $methods);
 
         $summary = [
             'count' => $payments->count(),
@@ -264,9 +285,13 @@ class LoanPaymentController extends Controller
         if (count($details) > 1 && ! Schema::connection($this->connection)->hasTable('loan_payment_details')) {
             throw ValidationException::withMessages(['payment_details' => 'Payment details storage is unavailable. Please run the loan payment migrations.']);
         }
+        $methodService = $this->methodService();
         $methodName = mb_substr(implode(' + ', array_unique(array_map(
             fn ($detail) => $this->paymentMethodName($detail['method'], $paymentTypes), $details
         ))), 0, 100);
+        $singleMethodKey = count($details) === 1
+            ? ($methodService->resolveKey((string) $details[0]['method'], $paymentTypes, $this->connection) ?: $details[0]['method'])
+            : 'multiple';
         $oldAmount = (float) ($row->total_paid_base ?? $row->total_paid ?? $row->amount ?? 0);
         $newScheduleId = ! empty($payload['schedule_id']) ? (int) $payload['schedule_id'] : null;
         $oldScheduleId = ! empty($row->schedule_id) ? (int) $row->schedule_id : null;
@@ -274,13 +299,13 @@ class LoanPaymentController extends Controller
         $paidAt = $paidDate.' '.now()->format('H:i:s');
         $paymentTypeVal = trim((string) ($payload['payment_type'] ?? ($row->payment_type ?? 'monthly'))) ?: 'monthly';
 
-        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $details, $loan, $paymentTypes, $methodName, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt, $paymentTypeVal) {
+        DB::connection($this->connection)->transaction(function () use ($payment, $row, $payload, $details, $loan, $paymentTypes, $methodService, $methodName, $singleMethodKey, $newAmount, $oldAmount, $newScheduleId, $oldScheduleId, $paidDate, $paidAt, $paymentTypeVal) {
             DB::connection($this->connection)->table('loan_payments')->where('id', $payment)->update($this->safeColumns('loan_payments', [
                 'schedule_id' => $newScheduleId,
                 'payment_type' => $paymentTypeVal,
                 'payment_method_snapshot' => $methodName,
                 'channel' => $methodName,
-                'method' => count($details) === 1 ? $details[0]['method'] : 'multiple',
+                'method' => $singleMethodKey,
                 'amount' => $newAmount,
                 'total_paid' => $newAmount,
                 'total_paid_base' => $newAmount,
@@ -306,10 +331,11 @@ class LoanPaymentController extends Controller
                     $ratio = $saved && (float) ($saved->amount_base ?? 0) > 0
                         ? (float) $saved->amount / (float) $saved->amount_base : 1;
                     $name = $this->paymentMethodName($detail['method'], $paymentTypes);
+                    $detailKey = $methodService->resolveKey((string) $detail['method'], $paymentTypes, $this->connection) ?: ($detail['method'] ?: $name);
                     $detailPayload = $this->safeColumns('loan_payment_details', [
                         'payment_method_snapshot' => $name,
                         'payment_method_id' => $saved && ($saved->payment_method_snapshot ?? '') === $name ? ($saved->payment_method_id ?? null) : null,
-                        'method' => $detail['method'] ?: $name,
+                        'method' => $detailKey,
                         'currency' => $saved->currency ?? $loan->currency ?? $row->currency ?? 'USD',
                         'exchange_rate' => $saved->exchange_rate ?? 1,
                         'amount' => round($baseAmount * $ratio, 4),
@@ -407,9 +433,16 @@ class LoanPaymentController extends Controller
             : ($this->hasColumn('loans', 'customer_id') ? 'l.customer_id' : 'NULL');
         $scheduleIdExpression = $this->hasColumn('loan_payments', 'schedule_id') ? 'p.schedule_id' : 'NULL';
         $paymentTypeExpression = $this->hasColumn('loan_payments', 'payment_type') ? 'p.payment_type' : "'monthly'";
+        $currencyExpression = $this->hasColumn('loan_payments', 'currency')
+            ? ($this->hasColumn('loans', 'currency') ? "COALESCE(NULLIF(p.currency, ''), NULLIF(l.currency, ''), 'USD')" : "COALESCE(NULLIF(p.currency, ''), 'USD')")
+            : ($this->hasColumn('loans', 'currency') ? "COALESCE(NULLIF(l.currency, ''), 'USD')" : "'USD'");
 
         $query = DB::connection($this->connection)->table('loan_payments as p')
             ->leftJoin('loans as l', 'l.id', '=', 'p.loan_id')
+            ->when($this->hasColumn('loan_payments', 'deleted_at'), fn ($q) => $q->whereNull('p.deleted_at'))
+            ->when($this->hasColumn('loans', 'deleted_at'), fn ($q) => $q->where(function ($sub) {
+                $sub->whereNull('l.deleted_at')->orWhereNull('l.id');
+            }))
             ->selectRaw("
                 p.id,
                 p.loan_id,
@@ -418,7 +451,10 @@ class LoanPaymentController extends Controller
                 {$scheduleIdExpression} as schedule_id,
                 {$receiptExpression} as receipt_number,
                 p.{$dateColumn} as paid_date,
+                ".($this->hasColumn('loan_payments', 'paid_at') ? 'p.paid_at' : 'NULL')." as paid_at,
+                ".($this->hasColumn('loan_payments', 'created_at') ? 'p.created_at' : 'NULL')." as created_at,
                 p.{$amountColumn} as amount,
+                {$currencyExpression} as currency,
                 {$methodColumn} as payment_method,
                 ".($this->hasColumn('loan_payments', 'status') ? 'p.status' : "'confirmed'")." as status,
                 ".($this->hasColumn('loan_payments', 'reference_number') ? 'p.reference_number' : 'NULL')." as reference_number,
@@ -480,8 +516,13 @@ class LoanPaymentController extends Controller
             });
         }
         if (! empty($filters['method'])) {
-            $methodColumn = $this->paymentMethodColumn();
-            $query->whereRaw($methodColumn.' LIKE ?', ['%'.$filters['method'].'%']);
+            $this->methodService()->applyMethodFilter(
+                $query,
+                (string) $filters['method'],
+                $this->connection,
+                $this->paymentMethodOptions(),
+                'p'
+            );
         }
         if (! empty($filters['payment_type']) && $this->hasColumn('loan_payments', 'payment_type')) {
             $query->where('p.payment_type', $filters['payment_type']);
@@ -546,7 +587,11 @@ class LoanPaymentController extends Controller
 
     protected function paymentRow(int $payment)
     {
-        return DB::connection($this->connection)->table('loan_payments')->where('id', $payment)->first();
+        return DB::connection($this->connection)
+            ->table('loan_payments')
+            ->where('id', $payment)
+            ->when($this->hasColumn('loan_payments', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
+            ->first();
     }
 
     protected function adjustSchedulePayment(int $scheduleId, float $diff, string $paidAt): void
@@ -636,70 +681,14 @@ class LoanPaymentController extends Controller
         return $row ? (string) ($row->{$this->paymentDateColumn()} ?? null) : null;
     }
 
+    protected function methodService(): LoanPaymentMethodService
+    {
+        return app(LoanPaymentMethodService::class);
+    }
+
     protected function paymentMethodOptions($loan = null): array
     {
-        try {
-            $types = app(TransactionUtil::class)->payment_types($loan->main_location_id ?? null, true, (int) (session('user.business_id') ?? 0));
-        } catch (\Throwable $e) {
-            $types = ['cash' => 'Cash', 'aba' => 'ធនាគារអេប៊ីអេ (ABA)', 'wing' => 'វីងវេលុយ (Wing)'];
-        }
-
-        $isKhmer = session('user.language', config('app.locale')) === 'km';
-        $known = [
-            'advance' => $isKhmer ? 'ប្រាក់បង់មុន / បុរេប្រទាន (Advance)' : 'Advance Payment',
-            'cash' => $isKhmer ? 'សាច់ប្រាក់សុទ្ធ (Cash)' : 'Cash',
-            'card' => $isKhmer ? 'កាតឥណទាន / ឥណពន្ធ (Card)' : 'Card',
-            'cheque' => $isKhmer ? 'មូលប្បទានប័ត្រ (Cheque)' : 'Cheque',
-            'bank_transfer' => $isKhmer ? 'ផ្ទេរប្រាក់តាមធនាគារ (Bank Transfer)' : 'Bank Transfer',
-            'aba' => 'ធនាគារអេប៊ីអេ (ABA Bank)',
-            'wing' => 'វីងវេលុយ (Wing Money)',
-            'acleda' => 'ធនាគារអេស៊ីលីដា (ACLEDA)',
-            'custom_pay_1' => $isKhmer ? 'វិធីទូទាត់ពិសេស ១' : 'Custom Payment 1',
-            'custom_pay_2' => $isKhmer ? 'វិធីទូទាត់ពិសេស ២' : 'Custom Payment 2',
-            'custom_pay_3' => $isKhmer ? 'វិធីទូទាត់ពិសេស ៣' : 'Custom Payment 3',
-            'other' => $isKhmer ? 'ផ្សេងៗ (Other)' : 'Other',
-        ];
-
-        $cleaned = [];
-        if (Schema::connection($this->connection)->hasTable('loan_payment_methods')) {
-            $methodQuery = DB::connection($this->connection)
-                ->table('loan_payment_methods')
-                ->orderBy($this->hasColumn('loan_payment_methods', 'sort_order') ? 'sort_order' : 'name')
-                ->orderBy('name');
-
-            if ($this->hasColumn('loan_payment_methods', 'is_active')) {
-                $methodQuery->where('is_active', 1);
-            }
-
-            foreach ($methodQuery->get() as $row) {
-                $name = trim((string) ($row->name ?? ''));
-                if ($name === '') {
-                    continue;
-                }
-
-                $code = trim((string) ($row->code ?? ''));
-                $key = $code !== '' ? $code : strtolower(str_replace(' ', '_', $name));
-                $cleaned[$key] = $name;
-            }
-        }
-
-        foreach ($types as $key => $label) {
-            $keyStr = (string) $key;
-            $labelStr = trim((string) $label);
-
-            if (array_key_exists($keyStr, $cleaned)) {
-                continue;
-            } elseif (isset($known[$keyStr])) {
-                $cleaned[$keyStr] = $known[$keyStr];
-            } elseif (str_starts_with($labelStr, 'lang_v1.') || str_starts_with($labelStr, 'messages.')) {
-                $subKey = str_replace(['lang_v1.', 'messages.'], '', $labelStr);
-                $cleaned[$keyStr] = $known[$subKey] ?? ucfirst(str_replace('_', ' ', $subKey));
-            } else {
-                $cleaned[$keyStr] = $labelStr !== '' ? $labelStr : ucfirst(str_replace('_', ' ', $keyStr));
-            }
-        }
-
-        return $cleaned;
+        return $this->methodService()->options($loan, $this->connection);
     }
 
     protected function ensurePaymentTypeColumn(): void
@@ -715,22 +704,7 @@ class LoanPaymentController extends Controller
 
     protected function paymentMethodName(string $method, array $paymentTypes): string
     {
-        $method = trim($method);
-        if ($method === '') {
-            $method = array_key_exists('cash', $paymentTypes) ? 'cash' : (array_key_first($paymentTypes) ?? 'cash');
-        }
-
-        $normalized = strtolower(str_replace([' ', '-', '_'], '', $method));
-        $known = [
-            'aba' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'ababank' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'abapay' => 'ធនាគារអេប៊ីអេ (ABA)',
-            'wing' => 'វីងវេលុយ (Wing)',
-            'wingmoney' => 'វីងវេលុយ (Wing)',
-            'cash' => 'Cash',
-        ];
-
-        return $known[$normalized] ?? (string) ($paymentTypes[$method] ?? ucfirst(str_replace('_', ' ', $method)));
+        return $this->methodService()->canonicalName($method, $paymentTypes, $this->connection);
     }
 
     protected function locationOptions()
@@ -799,9 +773,20 @@ class LoanPaymentController extends Controller
 
     protected function paymentMethodColumn(): string
     {
-        if ($this->hasColumn('loan_payments', 'payment_method_snapshot')) return 'p.payment_method_snapshot';
-        if ($this->hasColumn('loan_payments', 'channel')) return 'p.channel';
-        return "'Payment'";
+        $candidates = [];
+        foreach (['payment_method_snapshot', 'channel', 'method'] as $col) {
+            if ($this->hasColumn('loan_payments', $col)) {
+                $candidates[] = "NULLIF(p.{$col}, '')";
+            }
+        }
+
+        if (empty($candidates)) {
+            return "'Payment'";
+        }
+
+        return count($candidates) === 1
+            ? "COALESCE({$candidates[0]}, '')"
+            : 'COALESCE('.implode(', ', $candidates).", '')";
     }
 
     protected function receiptExpression(): string
@@ -869,14 +854,29 @@ class LoanPaymentController extends Controller
 
         $nextSchedule = null;
         if (Schema::connection($this->connection)->hasTable('loan_payment_schedules')) {
-            $nextSchedule = DB::connection($this->connection)->table('loan_payment_schedules')
-                ->where('loan_id', $row->loan_id)
-                ->whereNotIn('status', ['paid'])
-                ->where('amount_balance', '>', 0)
-                ->whereNull('deleted_at')
-                ->orderBy('due_date')
+            $nextQuery = DB::connection($this->connection)->table('loan_payment_schedules')
+                ->where('loan_id', $row->loan_id);
+            if ($this->hasColumn('loan_payment_schedules', 'status')) {
+                $nextQuery->whereNotIn('status', ['paid']);
+            }
+            if ($this->hasColumn('loan_payment_schedules', 'amount_balance')) {
+                $nextQuery->where('amount_balance', '>', 0);
+            } elseif ($this->hasColumn('loan_payment_schedules', 'balance_amount')) {
+                $nextQuery->where('balance_amount', '>', 0);
+            }
+            if ($this->hasColumn('loan_payment_schedules', 'deleted_at')) {
+                $nextQuery->whereNull('deleted_at');
+            }
+            $nextSchedule = $nextQuery
+                ->orderBy($this->hasColumn('loan_payment_schedules', 'due_date') ? 'due_date' : 'id')
                 ->first();
         }
+
+        $details = Schema::connection($this->connection)->hasTable('loan_payment_details')
+            ? DB::connection($this->connection)->table('loan_payment_details')->where('payment_id', $payment)->orderBy('id')->get()
+            : collect();
+        $methods = $this->paymentMethodOptions($loan);
+        $this->methodService()->enrichSinglePayment($row, $details, $this->connection, $methods);
 
         $format = $request->input('format', 'thermal');
 
@@ -887,6 +887,8 @@ class LoanPaymentController extends Controller
             'customer' => $customer,
             'location' => $location,
             'nextSchedule' => $nextSchedule,
+            'details' => $details,
+            'methods' => $methods,
             'format' => $format,
             'isKhmer' => session('user.language', config('app.locale')) === 'km',
         ]);

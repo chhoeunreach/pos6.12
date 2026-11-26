@@ -34,6 +34,10 @@
             'report_lang' => $currentReportLang,
         ]);
         $classicPlainQuery = array_merge($baseQuery, ['style_mode' => 'classic_plain', 'report_lang' => $currentReportLang]);
+        $branchDashboardQuery = collect($baseQuery)
+            ->except(['location_ids', 'location_filter_applied'])
+            ->merge(['style_mode' => 'branch_dashboard', 'report_lang' => $currentReportLang])
+            ->all();
         $viewReportQuery = array_merge($baseQuery, ['style_mode' => 'view_report']);
         $businessLocationQuery = array_merge($baseQuery, ['style_mode' => 'business_location_report']);
         $englishQuery = array_merge($baseQuery, ['report_lang' => 'en']);
@@ -48,6 +52,11 @@
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'classic_plain' ? 'btn-primary' : 'btn-default' }}">
             {{ $t('dashboard') }}
         </a>
+        <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($branchDashboardQuery) }}"
+           class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'branch_dashboard' ? 'btn-primary' : 'btn-default' }}"
+           data-load-all-branches="1">
+            <i class="fa fa-sitemap" aria-hidden="true"></i> {{ $t('branch_dashboard') }}
+        </a>
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($viewReportQuery) }}"
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'view_report' ? 'btn-primary' : 'btn-default' }}">
             {{ $t('view_report') }}
@@ -56,7 +65,9 @@
            class="btn report-tab-btn {{ ($filters['style_mode'] ?? 'classic_plain') === 'business_location_report' ? 'btn-primary' : 'btn-default' }}">
             {{ $t('business_location_report') }}
         </a>
-        <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}" target="_blank" class="btn btn-info">
+        <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}"
+           class="btn btn-info js-local-cashier-print-modal"
+           data-print-title="{{ $t('print_dashboard') }}">
             <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
         </a>
         <span class="btn-group" style="margin-left:8px;">
@@ -99,7 +110,37 @@
     </div>
 </div>
 
-<section class="content no-print {{ in_array($filters['style_mode'], ['classic','classic_plain','business_location_report']) ? 'classic-theme' : 'sheet-theme' }}" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
+<div class="modal fade no-print" id="local_cashier_print_modal" tabindex="-1" role="dialog" aria-labelledby="local_cashier_print_modal_title">
+    <div class="modal-dialog modal-lg" role="document" style="width:96%; max-width:1280px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ $t('close') }}"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="local_cashier_print_modal_title">
+                    <i class="fa fa-print" aria-hidden="true"></i> <span id="local_cashier_print_modal_heading">{{ $t('local_cashier_report') }}</span>
+                </h4>
+            </div>
+            <div class="modal-body" style="padding:0; position:relative; min-height:420px; background:#fff;">
+                <div id="local_cashier_print_loading" style="padding:40px 15px; text-align:center; color:#64748b;">
+                    <i class="fa fa-spinner fa-spin fa-2x" aria-hidden="true"></i>
+                </div>
+                <iframe id="local_cashier_print_iframe"
+                        title="{{ $t('local_cashier_report') }}"
+                        style="width:100%; height:78vh; border:0; display:block; background:#fff;"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a href="#" target="_blank" id="local_cashier_print_new_tab" class="btn btn-default btn-sm pull-left">
+                    <i class="fa fa-external-link" aria-hidden="true"></i> {{ $t('print') }}
+                </a>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
+                <button type="button" class="btn btn-info" id="local_cashier_print_trigger">
+                    <i class="fa fa-print" aria-hidden="true"></i> {{ $t('print') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="content no-print {{ in_array($filters['style_mode'], ['classic','classic_plain','business_location_report','branch_dashboard']) ? 'classic-theme' : 'sheet-theme' }}" id="local_cashier_report_app" style="font-family: {{ $khmerFontFamily }};">
     @php
         $fmt = function ($value) {
             if ($value === null || abs((float) $value) < 0.00001) {
@@ -198,10 +239,14 @@
             <div class="col-md-12">
                 <button type="submit" class="btn btn-primary">{{ $t('search') }}</button>
                 <a href="{{ route('local-cashier-report.export', $baseQuery) }}" class="btn btn-success">{{ $t('export_excel') }}</a>
-                <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}" target="_blank" class="btn btn-info">
+                <a href="{{ route('local-cashier-report.print', $printDashboardQuery) }}"
+                   class="btn btn-info js-local-cashier-print-modal"
+                   data-print-title="{{ $t('print_dashboard') }}">
                     <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
                 </a>
-                <a href="{{ route('local-cashier-report.print', $baseQuery) }}" target="_blank" class="btn btn-info">{{ $t('print') }}</a>
+                <a href="{{ route('local-cashier-report.print', $baseQuery) }}"
+                   class="btn btn-info js-local-cashier-print-modal"
+                   data-print-title="{{ $t('print') }}">{{ $t('print') }}</a>
             </div>
         </form>
     @endcomponent
@@ -284,6 +329,204 @@
             </tfoot>
         </table>
     </div>
+    @elseif($filters['style_mode'] === 'branch_dashboard')
+    @php
+        $branchDashboards = collect($report['branch_dashboards'] ?? []);
+    @endphp
+    <div class="branch-dashboard-toolbar">
+        <div class="branch-switch-header">
+            <span class="branch-toolbar-hint">
+                <i class="fa fa-info-circle" aria-hidden="true"></i> {{ $t('branch_no_combine_hint') }}
+            </span>
+            <div class="branch-search-wrap">
+                <input type="search" id="branch_quick_search" class="form-control input-sm" placeholder="{{ $t('search_branch') }}" autocomplete="off">
+            </div>
+        </div>
+        @if($branchDashboards->isNotEmpty())
+            <div class="branch-pill-strip" id="branch_pill_strip" role="tablist" aria-label="{{ $t('branch_dashboard') }}">
+                <button type="button" class="btn btn-sm branch-pill-btn is-active" data-branch-key="__all__">
+                    <i class="fa fa-th-large" aria-hidden="true"></i> {{ $t('all_branches') }}
+                    <span class="branch-pill-count">{{ $branchDashboards->count() }}</span>
+                </button>
+                @foreach($branchDashboards as $branch)
+                    <button type="button"
+                            class="btn btn-sm branch-pill-btn"
+                            data-branch-key="{{ $branch['branch_key'] }}"
+                            data-branch-name="{{ mb_strtolower((string) $branch['branch_name']) }}">
+                        <span>{{ $branch['branch_name'] }}</span>
+                        <span class="branch-pill-net {{ ($branch['actual_income'] ?? 0) < 0 ? 'is-negative' : '' }}">
+                            {{ $fmtStrict($branch['actual_income'] ?? 0) }}
+                        </span>
+                    </button>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
+    <div id="branch_dashboard_empty_filter" class="alert alert-info" style="display:none; margin-top:12px;">
+        {{ $t('no_branches_found') }}
+    </div>
+
+    @forelse($branchDashboards as $branch)
+        @php
+            $branchLocIds = array_values(array_unique(array_map('intval', $branch['location_ids'] ?? [])));
+            $branchPrintQuery = array_merge($baseQuery, [
+                'style_mode' => 'classic_plain',
+                'location_ids' => $branchLocIds,
+            ]);
+            $lastBranchGroup = null;
+        @endphp
+        <div class="branch-dashboard-card"
+             data-branch-key="{{ $branch['branch_key'] }}"
+             data-branch-name="{{ mb_strtolower((string) $branch['branch_name']) }}">
+            <div class="branch-card-header">
+                <div class="branch-card-title-wrap">
+                    <h3 class="branch-card-title">
+                        <i class="fa fa-building-o" aria-hidden="true"></i> {{ $branch['branch_name'] }}
+                    </h3>
+                    <div class="branch-source-tags">
+                        @foreach(($branch['location_labels'] ?? []) as $srcLabel)
+                            <span class="branch-source-tag">{{ $srcLabel }}</span>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="branch-card-actions">
+                    <a href="{{ route('local-cashier-report.print', $branchPrintQuery) }}"
+                       class="btn btn-xs btn-info js-local-cashier-print-modal"
+                       data-preserve-locations="1"
+                       data-print-title="{{ $t('print_dashboard') }} — {{ $branch['branch_name'] }}">
+                        <i class="fa fa-print" aria-hidden="true"></i> {{ $t('print_dashboard') }}
+                    </a>
+                </div>
+            </div>
+
+            <div class="branch-kpi-strip">
+                <div class="branch-kpi-box">
+                    <small>{{ $t('total_sale') }}</small>
+                    <strong>{{ $fmtStrict($branch['total'] ?? 0) }}</strong>
+                </div>
+                <div class="branch-kpi-box is-paid">
+                    <small>{{ $t('total') }} ({{ $t('paid') }})</small>
+                    <strong>{{ $fmtStrict($branch['paid'] ?? 0) }}</strong>
+                </div>
+                <div class="branch-kpi-box is-expense">
+                    <small>{{ $t('expenses') }}</small>
+                    <strong>{{ $fmtStrict($branch['expenses'] ?? 0) }}</strong>
+                </div>
+                <div class="branch-kpi-box is-net {{ ($branch['actual_income'] ?? 0) < 0 ? 'is-negative' : '' }}">
+                    <small>{{ $t('actual_income') }}</small>
+                    <strong>{{ $fmtStrict($branch['actual_income'] ?? 0) }}</strong>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table sheet-table branch-dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>{{ $t('business_location_qty') }}</th>
+                            <th class="text-right">{{ $t('total_price') }}</th>
+                            @foreach($report['payment_columns'] as $method)
+                                <th class="text-right">{{ $paymentLabel($method) }}</th>
+                            @endforeach
+                            <th class="text-right">{{ $t('total') }}</th>
+                            <th class="text-right">{{ $t('due') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse(($branch['rows'] ?? []) as $bRow)
+                            @php
+                                $bGroup = (string) ($bRow['name'] ?? 'លក់');
+                                $bRowKind = (string) ($bRow['row_kind'] ?? 'main');
+                                $bLocId = (int) ($bRow['location_id'] ?? 0);
+                                $bDetailQuery = array_merge($baseQuery, [
+                                    'style_mode' => 'branch_dashboard',
+                                    'location_ids' => $bLocId !== 0 ? [$bLocId] : $branchLocIds,
+                                    'customer_group' => $bGroup,
+                                ]);
+                                $bQtyText = rtrim(rtrim(number_format((float) ($bRow['qty_total'] ?? 0), 2), '0'), '.');
+                            @endphp
+                            @if($lastBranchGroup !== $bGroup)
+                                <tr class="dashboard-customer-group-separator {{ $bGroup === 'រំលស់' ? 'installment-separator' : ($bGroup === 'អ៊ីអន' ? 'aeon-separator' : ($bGroup === 'Collection Payment' ? 'loan-payment-separator' : ($bGroup === 'Customer Payment' ? 'customer-payment-separator' : 'normal-separator'))) }}">
+                                    <td colspan="{{ 4 + count($report['payment_columns']) }}">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label($bGroup) }}</td>
+                                </tr>
+                                @php $lastBranchGroup = $bGroup; @endphp
+                            @endif
+                            <tr class="cashier-group-breakdown-row {{ $bGroup === 'រំលស់' ? 'installment-breakdown-row' : ($bGroup === 'អ៊ីអន' ? 'aeon-breakdown-row' : ($bGroup === 'Collection Payment' ? 'loan-payment-breakdown-row' : ($bGroup === 'Customer Payment' ? 'customer-payment-breakdown-row' : 'normal-breakdown-row'))) }} {{ $bRowKind !== 'main' ? 'module-dashboard-breakdown-row' : '' }}">
+                                <td class="name-main">
+                                    @if(!empty($bRow['tab_target']))
+                                        <a class="summary-link local-detail-tab-link" href="{{ $bRow['tab_target'] }}" data-target-tab="{{ $bRow['tab_target'] }}">
+                                            {{ $bRow['label'] }} ({{ $bQtyText }})
+                                            <span class="branch-kind-badge">{{ ucfirst($bRowKind) }}</span>
+                                        </a>
+                                    @else
+                                        <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($bDetailQuery) . '#local_cashier_sales_detail_table' }}">
+                                            {{ $bRow['label'] }} ({{ $bQtyText }})
+                                        </a>
+                                    @endif
+                                </td>
+                                <td class="text-right">
+                                    @if(!empty($bRow['tab_target']))
+                                        <a class="summary-link local-detail-tab-link" href="{{ $bRow['tab_target'] }}" data-target-tab="{{ $bRow['tab_target'] }}">{{ $fmt($bRow['total'] ?? null) }}</a>
+                                    @else
+                                        <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($bDetailQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($bRow['total'] ?? null) }}</a>
+                                    @endif
+                                </td>
+                                @foreach($report['payment_columns'] as $method)
+                                    @php $bPayQuery = array_merge($bDetailQuery, ['payment_methods' => [(string) $method]]); @endphp
+                                    <td class="text-right">
+                                        @if(!empty($bRow['tab_target']))
+                                            <a class="summary-link local-detail-tab-link" href="{{ $bRow['tab_target'] }}" data-target-tab="{{ $bRow['tab_target'] }}">{{ $fmt($bRow['payments'][$method] ?? null) }}</a>
+                                        @else
+                                            <a class="summary-link" href="{{ route('local-cashier-report.index') . '?' . http_build_query($bPayQuery) . '#local_cashier_sales_detail_table' }}">{{ $fmt($bRow['payments'][$method] ?? null) }}</a>
+                                        @endif
+                                    </td>
+                                @endforeach
+                                <td class="text-right">{{ $fmt($bRow['paid'] ?? null) }}</td>
+                                <td class="text-right @if(! in_array($bGroup, ['រំលស់', 'អ៊ីអន'], true) && ($bRow['due'] ?? 0) != 0) due-negative @endif">
+                                    {{ in_array($bGroup, ['រំលស់', 'អ៊ីអន'], true) ? '$ -' : $fmt($bRow['due'] ?? null) }}
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="{{ 4 + count($report['payment_columns']) }}" class="text-center">{{ $t('no_data') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                    <tfoot>
+                        <tr class="row-total">
+                            <th class="text-right">{{ $t('grand_total') }}</th>
+                            <th class="text-right">{{ $fmt($branch['total'] ?? null) }}</th>
+                            @foreach($report['payment_columns'] as $method)
+                                <th class="text-right">{{ $fmt($branch['payments'][$method] ?? null) }}</th>
+                            @endforeach
+                            <th class="text-right">{{ $fmt($branch['paid'] ?? null) }}</th>
+                            <th class="text-right @if(($branch['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($branch['due'] ?? null) }}</th>
+                        </tr>
+                        <tr class="row-summary">
+                            <th class="text-right">{{ $t('expenses') }}</th>
+                            <th class="text-right">$ -</th>
+                            @foreach($report['payment_columns'] as $method)
+                                <th class="text-right">{{ $fmt($branch['expense_payments'][$method] ?? null) }}</th>
+                            @endforeach
+                            <th class="text-right">{{ $fmt($branch['expenses'] ?? null) }}</th>
+                            <th class="text-right">$ -</th>
+                        </tr>
+                        <tr class="row-summary branch-actual-income-row">
+                            <th class="text-right">{{ $t('actual_income') }}</th>
+                            <th class="text-right">$ -</th>
+                            @foreach($report['payment_columns'] as $method)
+                                <th class="text-right">{{ $fmt($branch['actual_income_payments'][$method] ?? null) }}</th>
+                            @endforeach
+                            <th class="text-right">{{ $fmt($branch['actual_income'] ?? null) }}</th>
+                            <th class="text-right @if(($branch['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($branch['due'] ?? null) }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    @empty
+        <div class="alert alert-info">{{ $t('no_data') }}</div>
+    @endforelse
     @elseif($filters['style_mode'] === 'business_location_report')
     <div class="table-responsive">
         <table class="table sheet-table business-location-table">
@@ -1750,12 +1993,33 @@
             syncLocationSelection();
         });
 
+        window.closeLocalCashierPrintModal = function () {
+            $('#local_cashier_print_modal').modal('hide');
+        };
+
+        $('#local_cashier_print_iframe').on('load', function () {
+            $('#local_cashier_print_loading').hide();
+        });
+
+        $('#local_cashier_print_trigger').on('click', function () {
+            var iframe = document.getElementById('local_cashier_print_iframe');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            }
+        });
+
+        $('#local_cashier_print_modal').on('hidden.bs.modal', function () {
+            $('#local_cashier_print_iframe').attr('src', 'about:blank');
+            $('#local_cashier_print_loading').show();
+        });
+
         $('a[href]').filter(function () {
             var path = new URL(this.href, window.location.href).pathname;
             return path === @json(parse_url(route('local-cashier-report.print'), PHP_URL_PATH))
                 || path === @json(parse_url(route('local-cashier-report.export'), PHP_URL_PATH))
                 || $(this).is('.report-tab-btn, .report-language-link');
-        }).on('click', function () {
+        }).on('click', function (e) {
             syncLocationSelection();
             syncCashierSelection();
             var target = new URL(this.href, window.location.href);
@@ -1763,8 +2027,21 @@
             fields = fields.filter(function (field) {
                 return !(['style_mode', 'report_lang'].indexOf(field.name) !== -1 && target.searchParams.has(field.name));
             });
+            var loadAllBranches = $(this).is('[data-load-all-branches="1"]');
+            var preserveLocations = $(this).is('[data-preserve-locations="1"]');
+            if (loadAllBranches || preserveLocations) {
+                fields = fields.filter(function (field) {
+                    return !(/^location_ids(\[\])?$/.test(field.name) || field.name === 'location_filter_applied');
+                });
+            }
             var fieldNames = fields.map(function (field) { return field.name.replace(/\[.*$/, ''); });
-            fieldNames.push('location_ids', 'user_ids');
+            if (!preserveLocations) {
+                fieldNames.push('location_ids');
+            }
+            fieldNames.push('user_ids');
+            if (loadAllBranches) {
+                fieldNames.push('location_filter_applied');
+            }
             Array.from(target.searchParams.keys()).forEach(function (key) {
                 if (fieldNames.indexOf(key.replace(/\[.*$/, '')) !== -1) {
                     target.searchParams.delete(key);
@@ -1772,7 +2049,50 @@
             });
             fields.forEach(function (field) { target.searchParams.append(field.name, field.value); });
             this.href = target.toString();
+
+            if ($(this).is('.js-local-cashier-print-modal') && !(e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2)) {
+                e.preventDefault();
+                var modalTarget = new URL(target.toString(), window.location.href);
+                modalTarget.searchParams.set('embed_modal', '1');
+                var heading = $(this).attr('data-print-title') || @json($t('local_cashier_report'));
+                $('#local_cashier_print_modal_heading').text(heading);
+                $('#local_cashier_print_new_tab').attr('href', target.toString());
+                $('#local_cashier_print_loading').show();
+                $('#local_cashier_print_iframe').attr('src', modalTarget.toString());
+                $('#local_cashier_print_modal').modal('show');
+            }
         });
+
+        // Instant client-side Branch switcher & search on Branch Dashboard tab (no reload/filter needed)
+        var selectedBranchKey = '__all__';
+        function filterBranchDashboardCards() {
+            var cards = $('.branch-dashboard-card');
+            if (!cards.length) return;
+            var term = ($('#branch_quick_search').val() || '').trim().toLowerCase();
+            var visibleCount = 0;
+
+            cards.each(function () {
+                var $card = $(this);
+                var key = String($card.data('branch-key') || '');
+                var name = String($card.data('branch-name') || '');
+                var matchPill = selectedBranchKey === '__all__' || key === selectedBranchKey;
+                var matchTerm = term === '' || name.indexOf(term) !== -1;
+                var show = matchPill && matchTerm;
+                $card.toggle(show);
+                if (show) visibleCount++;
+            });
+
+            $('#branch_dashboard_empty_filter').toggle(visibleCount === 0);
+        }
+
+        $(document).on('click', '.branch-pill-btn', function () {
+            selectedBranchKey = String($(this).data('branch-key') || '__all__');
+            $('.branch-pill-btn').removeClass('is-active');
+            $(this).addClass('is-active');
+            filterBranchDashboardCards();
+        });
+
+        $(document).on('input', '#branch_quick_search', filterBranchDashboardCards);
 
         function syncCashierSelection() {
             var selectedNames = [];
@@ -3114,6 +3434,154 @@
 #local_cashier_report_app .business-location-table tfoot tr.row-summary th,
 #local_cashier_report_app .business-location-table tfoot tr.row-summary td {
     border-top: 1px solid #fed7aa !important;
+}
+#local_cashier_report_app .branch-dashboard-toolbar {
+    background: #fff;
+    border: 1px solid #dbe4f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+}
+#local_cashier_report_app .branch-switch-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+#local_cashier_report_app .branch-toolbar-hint {
+    font-size: 12.5px;
+    color: #475569;
+    font-weight: 600;
+}
+#local_cashier_report_app .branch-search-wrap {
+    min-width: 220px;
+}
+#local_cashier_report_app .branch-search-wrap .form-control {
+    height: 32px;
+    font-size: 13px;
+}
+#local_cashier_report_app .branch-pill-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+#local_cashier_report_app .branch-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #1e293b;
+    font-weight: 700;
+    padding: 5px 12px;
+}
+#local_cashier_report_app .branch-pill-btn.is-active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #fff;
+}
+#local_cashier_report_app .branch-pill-count,
+#local_cashier_report_app .branch-pill-net {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: rgba(15, 23, 42, 0.08);
+}
+#local_cashier_report_app .branch-pill-btn.is-active .branch-pill-count,
+#local_cashier_report_app .branch-pill-btn.is-active .branch-pill-net {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+#local_cashier_report_app .branch-pill-net.is-negative {
+    color: #dc2626;
+}
+#local_cashier_report_app .branch-dashboard-card {
+    background: #fff;
+    border: 1px solid #dbe4f0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+#local_cashier_report_app .branch-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+#local_cashier_report_app .branch-card-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+}
+#local_cashier_report_app .branch-source-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+}
+#local_cashier_report_app .branch-source-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-weight: 600;
+}
+#local_cashier_report_app .branch-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+#local_cashier_report_app .branch-kpi-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 12px;
+    background: #f8fafc;
+}
+#local_cashier_report_app .branch-kpi-box small {
+    display: block;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 700;
+}
+#local_cashier_report_app .branch-kpi-box strong {
+    display: block;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-top: 2px;
+}
+#local_cashier_report_app .branch-kpi-box.is-paid { background: #f0fdf4; border-color: #bbf7d0; }
+#local_cashier_report_app .branch-kpi-box.is-paid strong { color: #166534; }
+#local_cashier_report_app .branch-kpi-box.is-expense { background: #fff7ed; border-color: #fed7aa; }
+#local_cashier_report_app .branch-kpi-box.is-expense strong { color: #c2410c; }
+#local_cashier_report_app .branch-kpi-box.is-net { background: #eff6ff; border-color: #bfdbfe; }
+#local_cashier_report_app .branch-kpi-box.is-net strong { color: #1d4ed8; }
+#local_cashier_report_app .branch-kpi-box.is-net.is-negative strong { color: #dc2626; }
+#local_cashier_report_app .branch-kind-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+#local_cashier_report_app .branch-dashboard-table tfoot tr.branch-actual-income-row {
+    background: #ecfdf5 !important;
+    font-weight: 800;
 }
 </style>
 @endsection

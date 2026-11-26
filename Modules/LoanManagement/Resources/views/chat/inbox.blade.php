@@ -2006,8 +2006,8 @@
 <script>
 (function($){
     var csrf = '{{ csrf_token() }}';
-    var apiBaseUrl = '{{ url("loan-management/telegram-chat-api/chats") }}';
-    var apiFolderBaseUrl = '{{ url("loan-management/telegram-chat-api/folders") }}';
+    var apiBaseUrl = '{{ route("loan-management.chat-api.index") }}';
+    var apiFolderBaseUrl = '{{ route("loan-management.chat-api.folders.index") }}';
     var pollMs = {{ (int) config("loanmanagement.chat_polling_seconds", 5) * 1000 }};
     var initialThreadId = @json($initialThreadId ?? null);
     var initialCustomerId = @json($initialCustomerId ?? null);
@@ -2579,7 +2579,7 @@
         $('#tgCustomerFoldersModal').data('target-cid', customerId);
 
         $.ajax({
-            url: '{{ url("loan-management/telegram-chat-api/customers") }}/' + customerId + '/folders',
+            url: '{{ url("loan-management/chat-api/customers") }}/' + customerId + '/folders',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             success: function(resp){
                 var activeFids = (resp && resp.data && Array.isArray(resp.data.folder_ids)) ? resp.data.folder_ids.map(String) : [];
@@ -2621,7 +2621,7 @@
         var $btn = $(this).prop('disabled', true).text('Saving...');
 
         $.ajax({
-            url: '{{ url("loan-management/telegram-chat-api/customers") }}/' + cid + '/folders',
+            url: '{{ url("loan-management/chat-api/customers") }}/' + cid + '/folders',
             method: 'POST',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
             data: {
@@ -2637,22 +2637,6 @@
                 $btn.prop('disabled', false).text('Save');
             }
         });
-    });
-
-    // Customer search in Folder Edit modal
-    $('#tgFolderCustSearch').on('input', function(){
-        var currentSelected = [];
-        $('.js-folder-cust-cb:checked').each(function(){
-            currentSelected.push(Number($(this).val()));
-        });
-        renderCustomerChecklist(currentSelected);
-    });
-
-    $('#tgBtnCustSelectAll').on('click', function(){
-        $('.js-folder-cust-cb').prop('checked', true);
-    });
-    $('#tgBtnCustClearAll').on('click', function(){
-        $('.js-folder-cust-cb').prop('checked', false);
     });
 
     // Close Modals
@@ -3599,28 +3583,38 @@
         }
     });
 
-    // Send Invoice
+    // Send Invoice summary message
     $('#tgAttachInvoice, #tgMenuSendInvoice').on('click', function(){
         $('#tgAttachSheet').removeClass('open');
         $('#tgChatDropdown').removeClass('open');
-        if (!activeThreadId) return;
+        if (!activeThreadId || !activeContact) return;
 
-        var invoiceNum = activeContact ? (activeContact.invoice_no || activeContact.loan_number || '') : '';
-        if (!confirm('Send installment invoice snapshot' + (invoiceNum ? ' (' + invoiceNum + ')' : '') + ' to customer?')) {
+        var loanId = activeContact.loan_id || '';
+        if (!loanId) {
+            alert('No active installment loan found for this customer.');
+            return;
+        }
+        var invoiceNum = activeContact.invoice_no || activeContact.loan_number || ('#' + loanId);
+        if (!confirm('Send installment invoice details (' + invoiceNum + ') to customer?')) {
             return;
         }
 
+        var customerName = activeContact.display_name || activeContact.customer_name || 'Customer';
+        var invoiceUrl = '{{ url("loan-management/loans") }}/' + encodeURIComponent(loanId) + '/print';
+        var text = 'Dear ' + customerName + ', here is your installment invoice (' + invoiceNum + '): ' + invoiceUrl;
+
         activeThreadMarkedUnread = false;
         $.ajax({
-            url: apiBaseUrl + '/' + activeThreadId + '/invoice-image',
+            url: apiBaseUrl + '/' + activeThreadId + '/messages',
             method: 'POST',
-            data: { _token: csrf },
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            data: { _token: csrf, message_type: 'text', message: text },
             success: function(){
                 loadThreadMessages(activeThreadId, false);
                 loadChatList(true);
             },
             error: function(err){
-                alert('Cannot generate invoice image. ' + (err.responseJSON && err.responseJSON.message ? err.responseJSON.message : ''));
+                alert('Cannot send invoice details. ' + (err.responseJSON && err.responseJSON.message ? err.responseJSON.message : ''));
             }
         });
     });

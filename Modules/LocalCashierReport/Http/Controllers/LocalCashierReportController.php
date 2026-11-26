@@ -30,7 +30,10 @@ class LocalCashierReportController extends Controller
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
         $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
-        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
+        $defaultLocationIds = $request->input('style_mode') === 'branch_dashboard'
+            ? $accessibleLocationIds
+            : $this->defaultLocationIds($request, $businessId, $accessibleLocationIds);
+        $filters = $this->validatedFilters($request, $defaultLocationIds, $accessibleLocationIds);
         $cashiers = $this->getCashiers($businessId, $filters['location_ids']);
         $report = $this->getReportData($filters);
 
@@ -63,7 +66,10 @@ class LocalCashierReportController extends Controller
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
         $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
-        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
+        $defaultLocationIds = $request->input('style_mode') === 'branch_dashboard'
+            ? $accessibleLocationIds
+            : $this->defaultLocationIds($request, $businessId, $accessibleLocationIds);
+        $filters = $this->validatedFilters($request, $defaultLocationIds, $accessibleLocationIds);
         $report = $this->getReportData($filters);
 
         $rows = [];
@@ -93,7 +99,10 @@ class LocalCashierReportController extends Controller
         $businessId = (int) session('user.business_id');
         $locations = $this->getAccessibleLocations($businessId);
         $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
-        $filters = $this->validatedFilters($request, $this->defaultLocationIds($request, $businessId, $accessibleLocationIds), $accessibleLocationIds);
+        $defaultLocationIds = $request->input('style_mode') === 'branch_dashboard'
+            ? $accessibleLocationIds
+            : $this->defaultLocationIds($request, $businessId, $accessibleLocationIds);
+        $filters = $this->validatedFilters($request, $defaultLocationIds, $accessibleLocationIds);
         $report = $this->getReportData($filters);
 
         $selectedLocations = $locations->whereIn('id', $filters['location_ids'])->pluck('name')->all();
@@ -860,15 +869,21 @@ class LocalCashierReportController extends Controller
             ->all();
 
         $expensePaymentSummaryMap = [];
+        $expensePaymentByLocation = [];
         if (! empty($expenseTxnIds)) {
             $expensePaymentRows = DB::table('transaction_payments as tp')
+                ->join('transactions as t', 't.id', '=', 'tp.transaction_id')
                 ->whereIn('tp.transaction_id', $expenseTxnIds)
-                ->select('tp.method', DB::raw('SUM(tp.amount) as amount'))
-                ->groupBy('tp.method')
+                ->select('t.location_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+                ->groupBy('t.location_id', 'tp.method')
                 ->get();
 
             foreach ($expensePaymentRows as $row) {
-                $expensePaymentSummaryMap[(string) $row->method] = (float) $row->amount;
+                $locId = (int) $row->location_id;
+                $method = (string) $row->method;
+                $amount = (float) $row->amount;
+                $expensePaymentSummaryMap[$method] = ($expensePaymentSummaryMap[$method] ?? 0) + $amount;
+                $expensePaymentByLocation[$locId][$method] = ($expensePaymentByLocation[$locId][$method] ?? 0) + $amount;
             }
         }
 
@@ -1156,8 +1171,21 @@ class LocalCashierReportController extends Controller
             );
         }
 
+        $branchDashboards = $this->buildBranchDashboards(
+            $locationRows,
+            $accessorySaleSummaryRows,
+            $serviceSaleSummaryRows,
+            $expenseByLocationQuery->all(),
+            $expensePaymentByLocation,
+            $sellReturnByLocationQuery->all(),
+            $paymentColumns,
+            $filters,
+            $locationMap->all()
+        );
+
         return [
             'module_dashboard_rows' => $moduleDashboardRows->values()->all(),
+            'branch_dashboards' => $branchDashboards,
             'rows' => $rows,
             'rows_by_location' => $locationRows,
             'payment_columns' => $paymentColumns,
@@ -2338,7 +2366,7 @@ class LocalCashierReportController extends Controller
             'customer_group' => 'nullable|string',
             'payment_status' => 'nullable|in:paid,partial,due',
             'qty_type' => 'nullable|in:invoice_count,sold_quantity',
-            'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report,business_location_report',
+            'style_mode' => 'nullable|in:sheet,classic,classic_plain,view_report,business_location_report,branch_dashboard',
         ]);
 
         $accessibleLocationIds = array_values(array_unique(array_map('intval', $accessibleLocationIds)));
@@ -2437,5 +2465,303 @@ class LocalCashierReportController extends Controller
     private function abortIfUninstalled(): void
     {
         abort_if(empty(System::getProperty('localcashierreport_version')), 404);
+    }
+
+    /**
+     * Normalize any location name (POS main, -Accessory, -Service, -Expense) to its branch prefix before '-'.
+     */
+    private function extractBranchIdentity(string $locationName): array
+    {
+        $clean = preg_replace('/\s*\((Accessory|Service)\)$/iu', '', $locationName);
+        $clean = preg_replace('/\p{Cf}/u', '', (string) $clean);
+        $clean = trim(preg_replace('/\s+/u', ' ', (string) $clean));
+        $prefix = trim((string) explode('-', $clean, 2)[0]);
+        $name = $prefix !== '' ? $prefix : ($clean !== '' ? $clean : 'N/A');
+
+        return [
+            'key' => mb_strtolower($name),
+            'name' => $name,
+        ];
+    }
+
+    /**
+     * Build independent per-branch Dashboard payloads grouped by '-' branch prefix across all sources.
+     */
+    private function buildBranchDashboards(
+        array $locationRows,
+        array $accessoryRows,
+        array $serviceRows,
+        array $expenseByLocation,
+        array $expensePaymentByLocation,
+        array $sellReturnByLocation,
+        array $paymentColumns,
+        array $filters,
+        array $locationMap
+    ): array {
+        $branches = [];
+        $zeroPayments = [];
+        foreach ($paymentColumns as $method) {
+            $zeroPayments[$method] = 0.0;
+        }
+
+        $ensureBranch = function (string $locationName) use (&$branches, $zeroPayments): string {
+            $identity = $this->extractBranchIdentity($locationName);
+            $key = $identity['key'];
+            if (! isset($branches[$key])) {
+                $branches[$key] = [
+                    'branch_key' => $key,
+                    'branch_name' => $identity['name'],
+                    'location_ids' => [],
+                    'location_labels' => [],
+                    'customer_groups' => [],
+                    'module_rows' => [],
+                    'total' => 0.0,
+                    'paid' => 0.0,
+                    'due' => 0.0,
+                    'payments' => $zeroPayments,
+                    'expenses' => 0.0,
+                    'expense_payments' => $zeroPayments,
+                    'sell_return' => 0.0,
+                    'actual_income' => 0.0,
+                    'actual_income_payments' => $zeroPayments,
+                ];
+            }
+
+            return $key;
+        };
+
+        $addBranchLocationTag = function (string $branchKey, int $filterLocationId, string $label) use (&$branches): void {
+            if ($filterLocationId !== 0 && ! in_array($filterLocationId, $branches[$branchKey]['location_ids'], true)) {
+                $branches[$branchKey]['location_ids'][] = $filterLocationId;
+            }
+            $label = trim($label);
+            if ($label !== '' && ! in_array($label, $branches[$branchKey]['location_labels'], true)) {
+                $branches[$branchKey]['location_labels'][] = $label;
+            }
+        };
+
+        foreach ($locationRows as $locationRow) {
+            $locId = (int) ($locationRow['location_id'] ?? 0);
+            $locName = (string) ($locationRow['location_name'] ?? 'N/A');
+            $branchKey = $ensureBranch($locName);
+            $addBranchLocationTag($branchKey, $locId, $locName);
+
+            foreach (($locationRow['customer_groups'] ?? []) as $groupKey => $groupRow) {
+                $groupName = (string) ($groupRow['name'] ?? 'លក់');
+                $sort = (int) ($groupRow['sort'] ?? 1);
+                $rowKey = $sort . '|' . $locId . '|' . $groupName;
+                $payments = $zeroPayments;
+                foreach ($paymentColumns as $method) {
+                    $payments[$method] = (float) ($groupRow['payments'][$method] ?? 0);
+                }
+
+                $branches[$branchKey]['customer_groups'][$rowKey] = [
+                    'row_kind' => 'main',
+                    'name' => $groupName,
+                    'sort' => $sort,
+                    'location_id' => $locId,
+                    'location_name' => $locName,
+                    'label' => $locName,
+                    'qty_total' => (float) ($groupRow['qty_total'] ?? 0),
+                    'total' => (float) ($groupRow['total'] ?? 0),
+                    'paid' => (float) ($groupRow['paid'] ?? 0),
+                    'due' => in_array($groupName, ['រំលស់', 'អ៊ីអន'], true) ? 0.0 : (float) ($groupRow['due'] ?? 0),
+                    'payments' => $payments,
+                    'tab_target' => null,
+                ];
+            }
+
+            $branches[$branchKey]['total'] += (float) ($locationRow['total'] ?? 0);
+            $branches[$branchKey]['paid'] += (float) ($locationRow['paid'] ?? 0);
+            foreach ($paymentColumns as $method) {
+                $branches[$branchKey]['payments'][$method] += (float) ($locationRow['payments'][$method] ?? 0);
+            }
+        }
+
+        // Group Accessory & Service sale rows into their matching branch prefix (before '-')
+        foreach ([
+            'accessory' => ['#accessory_sales_detail_tab', $accessoryRows],
+            'service' => ['#service_sales_detail_tab', $serviceRows],
+        ] as $modulePrefix => [$tabTarget, $moduleRows]) {
+            if (empty($moduleRows)) {
+                continue;
+            }
+            $groupedByLocation = collect($moduleRows)->groupBy(fn ($row) => (int) ($row['location_id'] ?? 0));
+            foreach ($groupedByLocation as $rawLocId => $locRows) {
+                $firstRow = $locRows->first();
+                $locName = (string) ($firstRow['location_name'] ?? 'N/A');
+                $branchKey = $ensureBranch($locName);
+                $filterLocId = $this->moduleLocationFilterId((int) $rawLocId, $modulePrefix);
+                $addBranchLocationTag($branchKey, $filterLocId, $locName . ' (' . ucfirst($modulePrefix) . ')');
+
+                $qty = ($filters['qty_type'] ?? 'sold_quantity') === 'sold_quantity'
+                    ? (float) $locRows->sum(fn ($r) => (float) ($r['quantity'] ?? 0))
+                    : (float) $locRows->pluck('transaction_id')->filter()->unique()->count();
+                $total = (float) $locRows->sum(fn ($r) => (float) ($r['line_total'] ?? 0));
+                $paid = (float) $locRows->sum(fn ($r) => (float) ($r['paid'] ?? 0));
+                $due = (float) $locRows->sum(fn ($r) => (float) ($r['due'] ?? 0));
+                $payments = $zeroPayments;
+                foreach ($paymentColumns as $method) {
+                    $amt = (float) $locRows->sum(fn ($r) => (float) data_get($r, 'payments.' . $method, 0));
+                    $payments[$method] = $amt;
+                    $branches[$branchKey]['payments'][$method] += $amt;
+                }
+
+                $branches[$branchKey]['total'] += $total;
+                $branches[$branchKey]['paid'] += $paid;
+                $branches[$branchKey]['due'] += $due;
+                $branches[$branchKey]['module_rows'][] = [
+                    'row_kind' => $modulePrefix,
+                    'name' => 'លក់',
+                    'sort' => 1,
+                    'location_id' => $filterLocId,
+                    'location_name' => $locName,
+                    'label' => $locName,
+                    'qty_total' => $qty,
+                    'total' => $total,
+                    'paid' => $paid,
+                    'due' => $due,
+                    'payments' => $payments,
+                    'tab_target' => $tabTarget,
+                ];
+            }
+        }
+
+        // Main POS expenses & sell returns by location (rolled into branch prefix)
+        $extraLocationIds = array_unique(array_merge(array_keys($expenseByLocation), array_keys($sellReturnByLocation)));
+        if (! empty($extraLocationIds)) {
+            $missingIds = array_diff($extraLocationIds, array_keys($locationMap));
+            if (! empty($missingIds)) {
+                $extraMap = DB::table('business_locations')->whereIn('id', $missingIds)->pluck('name', 'id')->all();
+                $locationMap = $locationMap + $extraMap;
+            }
+        }
+        foreach ($expenseByLocation as $locId => $expenseAmount) {
+            $locId = (int) $locId;
+            $locName = (string) ($locationMap[$locId] ?? 'N/A');
+            $branchKey = $ensureBranch($locName);
+            $addBranchLocationTag($branchKey, $locId, $locName);
+            $branches[$branchKey]['expenses'] += (float) $expenseAmount;
+            foreach ($paymentColumns as $method) {
+                $branches[$branchKey]['expense_payments'][$method] += (float) ($expensePaymentByLocation[$locId][$method] ?? 0);
+            }
+        }
+        foreach ($sellReturnByLocation as $locId => $returnAmount) {
+            $locId = (int) $locId;
+            $locName = (string) ($locationMap[$locId] ?? 'N/A');
+            $branchKey = $ensureBranch($locName);
+            $addBranchLocationTag($branchKey, $locId, $locName);
+            $branches[$branchKey]['sell_return'] += (float) $returnAmount;
+        }
+
+        // Module (Accessory / Service) expenses & sell returns if recorded in their separate DBs
+        foreach (['accessory', 'service'] as $modulePrefix) {
+            $modLocationIds = $this->moduleLocationIds($filters['location_ids'] ?? [], $modulePrefix);
+            if (empty($modLocationIds)) {
+                continue;
+            }
+            $connection = (string) config($modulePrefix . '.database_connection', $modulePrefix);
+            if (! $this->hasRequiredReportTables($connection, ['transactions', 'business_locations'])) {
+                continue;
+            }
+            try {
+                $modDb = DB::connection($connection);
+                $modLocNames = $modDb->table('business_locations')->whereIn('id', $modLocationIds)->pluck('name', 'id')->all();
+                $modUserIds = ! empty($filters['user_ids']) ? $this->moduleCashierIds($filters['user_ids'], $modulePrefix) : [];
+
+                $modExpenseRows = $modDb->table('transactions as t')
+                    ->where('t.business_id', 1)
+                    ->whereIn('t.type', ['expense', 'sell_return'])
+                    ->where('t.status', 'final')
+                    ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+                    ->whereIn('t.location_id', $modLocationIds)
+                    ->when(! empty($modUserIds), fn ($q) => $q->whereIn('t.created_by', $modUserIds))
+                    ->select('t.location_id', 't.type', DB::raw('SUM(t.final_total) as amount'))
+                    ->groupBy('t.location_id', 't.type')
+                    ->get();
+
+                foreach ($modExpenseRows as $row) {
+                    $rawLocId = (int) $row->location_id;
+                    $locName = (string) ($modLocNames[$rawLocId] ?? 'N/A');
+                    $branchKey = $ensureBranch($locName);
+                    $filterLocId = $this->moduleLocationFilterId($rawLocId, $modulePrefix);
+                    $addBranchLocationTag($branchKey, $filterLocId, $locName . ' (' . ucfirst($modulePrefix) . ')');
+
+                    if ($row->type === 'expense') {
+                        $branches[$branchKey]['expenses'] += (float) $row->amount;
+                    } else {
+                        $branches[$branchKey]['sell_return'] += (float) $row->amount;
+                    }
+                }
+
+                if ($this->hasRequiredReportTables($connection, ['transaction_payments'])) {
+                    $modExpensePayments = $modDb->table('transaction_payments as tp')
+                        ->join('transactions as t', 't.id', '=', 'tp.transaction_id')
+                        ->where('t.business_id', 1)
+                        ->where('t.type', 'expense')
+                        ->where('t.status', 'final')
+                        ->whereBetween(DB::raw('DATE(t.transaction_date)'), [$filters['start_date'], $filters['end_date']])
+                        ->whereIn('t.location_id', $modLocationIds)
+                        ->when(! empty($modUserIds), fn ($q) => $q->whereIn('t.created_by', $modUserIds))
+                        ->select('t.location_id', 'tp.method', DB::raw('SUM(tp.amount) as amount'))
+                        ->groupBy('t.location_id', 'tp.method')
+                        ->get();
+
+                    foreach ($modExpensePayments as $row) {
+                        $locName = (string) ($modLocNames[(int) $row->location_id] ?? 'N/A');
+                        $branchKey = $ensureBranch($locName);
+                        $method = (string) $row->method;
+                        if (array_key_exists($method, $branches[$branchKey]['expense_payments'])) {
+                            $branches[$branchKey]['expense_payments'][$method] += (float) $row->amount;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Keep branch dashboard resilient if optional module connection is unavailable.
+            }
+        }
+
+        // Finalize row sorting, due, and actual income per branch (never combined across branches)
+        foreach ($branches as &$branch) {
+            $dueSum = 0.0;
+            $rows = array_values($branch['customer_groups']);
+            foreach ($rows as $r) {
+                if (! in_array((int) ($r['sort'] ?? 0), [2, 3], true)) {
+                    $dueSum += (float) ($r['due'] ?? 0);
+                }
+            }
+            foreach ($branch['module_rows'] as $mr) {
+                $dueSum += (float) ($mr['due'] ?? 0);
+                $rows[] = $mr;
+            }
+            usort($rows, function ($a, $b) {
+                $orderA = [
+                    (int) ($a['sort'] ?? 99),
+                    ($a['row_kind'] ?? 'main') === 'main' ? 0 : (($a['row_kind'] ?? '') === 'accessory' ? 1 : 2),
+                    (string) ($a['label'] ?? ''),
+                ];
+                $orderB = [
+                    (int) ($b['sort'] ?? 99),
+                    ($b['row_kind'] ?? 'main') === 'main' ? 0 : (($b['row_kind'] ?? '') === 'accessory' ? 1 : 2),
+                    (string) ($b['label'] ?? ''),
+                ];
+
+                return $orderA <=> $orderB;
+            });
+
+            $branch['rows'] = $rows;
+            $branch['due'] = $dueSum;
+            $branch['actual_income'] = (float) $branch['paid'] - (float) $branch['expenses'] - (float) $branch['sell_return'];
+            foreach ($paymentColumns as $method) {
+                $branch['actual_income_payments'][$method] =
+                    (float) ($branch['payments'][$method] ?? 0) - (float) ($branch['expense_payments'][$method] ?? 0);
+            }
+            unset($branch['customer_groups'], $branch['module_rows']);
+        }
+        unset($branch);
+
+        uasort($branches, fn ($a, $b) => strnatcasecmp((string) $a['branch_name'], (string) $b['branch_name']));
+
+        return array_values($branches);
     }
 }

@@ -3,7 +3,10 @@
     $receipt = $payment->receipt_number ?? $payment->payment_ref_no ?? ('Payment #'.$payment->id);
     $amount = (float) ($payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
     $paidDate = $payment->paid_date ?? $payment->paid_at ?? null;
-    $method = $payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? '-';
+    $method = trim((string) ($payment->payment_method ?? ''))
+        ?: (trim((string) ($payment->payment_method_snapshot ?? ''))
+        ?: (trim((string) ($payment->channel ?? ''))
+        ?: (trim((string) ($payment->method ?? '')) ?: '-')));
     $loanNumber = $loan->loan_number ?? $payment->loan_number_snapshot ?? ($payment->loan_id ? 'LN-'.$payment->loan_id : '-');
     $customerName = $loan->customer_name_snapshot ?? $payment->customer_name_snapshot ?? ($customerRow->name ?? '-');
     $customerPhone = $loan->customer_phone_snapshot ?? ($customerRow->phone ?? ($customerRow->mobile ?? '-'));
@@ -256,7 +259,7 @@
             @if($isEmbeddedModal)
             <button type="button"
                     class="lm-btn-nav"
-                    onclick="window.jQuery && window.jQuery('.view_modal').modal('hide');"
+                    onclick="if (window.parent && window.parent !== window && window.parent.jQuery) { window.parent.jQuery('.view_modal').modal('hide'); } else if (window.jQuery) { window.jQuery('.view_modal').modal('hide'); }"
                     title="{{ $lmText('Close', 'បិទ') }}">
                 <i class="fa fa-times"></i>
             </button>
@@ -312,7 +315,7 @@
             </div>
             <div class="lm-kpi-card">
                 <div class="lm-kpi-lbl">{{ $lmText('Payment Method', 'វិធីទូទាត់') }}</div>
-                <div class="lm-kpi-val" style="font-size: 13px;">{{ ucfirst($method) }}</div>
+                <div class="lm-kpi-val" style="font-size: 13px;">{{ $method }}</div>
             </div>
             <div class="lm-kpi-card">
                 <div class="lm-kpi-lbl">{{ $lmText('Payment Type', 'ប្រភេទ') }}</div>
@@ -404,7 +407,7 @@
                             <tbody>
                             @forelse($details as $detail)
                                 <tr>
-                                    <td><strong>{{ $detail->payment_method_snapshot ?? ($detail->method ?? '-') }}</strong></td>
+                                    <td><strong>{{ $detail->display_method ?? ($detail->payment_method_snapshot ?? ($detail->method ?? '-')) }}</strong></td>
                                     <td class="text-right" style="color: #16a34a; font-weight: 700;">{{ number_format((float) ($detail->amount_base ?? ($detail->amount ?? 0)), 2) }}</td>
                                     <td>{{ $detail->currency ?? $loanCurrency }}</td>
                                     <td>{{ $detail->reference_number ?? ($detail->transaction_no ?? '-') }}</td>
@@ -503,3 +506,13 @@
     </div>
 </div>
 @endsection
+
+@if($isEmbeddedModal && (request()->boolean('_lm_updated') || session('status')))
+@section('loan_js')
+<script>
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'lm-payment-updated', paymentId: {{ (int) $payment->id }} }, window.location.origin);
+    }
+</script>
+@endsection
+@endif

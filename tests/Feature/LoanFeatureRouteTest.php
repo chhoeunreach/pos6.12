@@ -41,4 +41,32 @@ class LoanFeatureRouteTest extends TestCase
         $this->assertTrue(view()->exists('loanmanagement::reports.cbc_export'));
         $this->assertTrue(view()->exists('loanmanagement::payments.print_receipt'));
     }
+
+    public function test_static_create_routes_are_not_shadowed_and_chat_file_and_folder_routes_are_protected(): void
+    {
+        $router = app('router')->getRoutes();
+
+        $cases = [
+            ['GET', '/loan-management/customers/create', 'loan-management.customers.create', 'LoanCustomerController@create'],
+            ['GET', '/loan-management/customers/clone-from-pos', 'loan-management.customers.clone-from-pos', 'LoanCustomerController@cloneFromUltimatePos'],
+            ['GET', '/loan-management/products/create', 'loan-management.products.create', 'LoanProductController@create'],
+            ['GET', '/loan-management/tools/import/12/progress', 'loan-management.import.progress', 'LoanImportExportController@importProgress'],
+            ['GET', '/loan-management/chat-api/folders', 'loan-management.chat-api.folders.index', 'ChatFolderController@index'],
+            ['POST', '/loan-management/locations/1/telegram-test', 'loan-management.locations.telegram-test', 'LoanLocationController@testTelegram'],
+            ['GET', '/loan-management/chat-files/1', 'loan-management.chat-files.show', 'LoanChatController@serveFile'],
+        ];
+
+        foreach ($cases as [$method, $uri, $expectedName, $expectedControllerAction]) {
+            $route = $router->match(\Illuminate\Http\Request::create($uri, $method));
+            $this->assertSame($expectedName, $route->getName(), $uri);
+            $this->assertStringEndsWith($expectedControllerAction, $route->getActionName(), $uri);
+            $this->assertContains('auth', $route->middleware(), $uri);
+        }
+
+        $apiStaffFile = $router->match(\Illuminate\Http\Request::create('/api/loan-management/telegram/chat-files/1', 'GET'));
+        $this->assertContains('auth:api', $apiStaffFile->middleware());
+
+        $apiCustomerFile = $router->match(\Illuminate\Http\Request::create('/api/loan-management/customer/telegram/chat-files/1', 'GET'));
+        $this->assertContains('auth:customer_loan_api', $apiCustomerFile->middleware());
+    }
 }

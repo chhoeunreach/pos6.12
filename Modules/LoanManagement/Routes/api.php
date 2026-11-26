@@ -21,8 +21,6 @@ use Modules\LoanManagement\Http\Controllers\StaffMobileLoanController;
 Route::prefix('loan-management')->group(function () {
     Route::get('/app-settings', [PublicAppController::class, 'appSettings']);
     Route::get('/app-version', [PublicAppController::class, 'appVersion']);
-    Route::get('/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile']);
-    Route::get('/customer/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile']);
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
         Route::post('/customer/login', [CustomerAppAuthController::class, 'login']);
@@ -89,9 +87,11 @@ Route::prefix('loan-management')->group(function () {
 
         Route::post('/aba-payway/create', [LoanAbaPaywayController::class, 'create']);
         Route::post('/aba-payway/check-status', [LoanAbaPaywayController::class, 'checkStatus']);
+        Route::get('/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile'])->whereNumber('file');
     });
 
     Route::middleware('auth:api')->group(function () {
+        Route::get('/telegram/chat-files/{file}', [LoanChatController::class, 'serveFile'])->whereNumber('file')->middleware('loan.permission:loan_management.chat.view');
         Route::get('/chats', [LoanChatController::class, 'index']);
         Route::post('/chats', [LoanChatController::class, 'store']);
         Route::get('/chats/{thread}', [LoanChatController::class, 'show']);

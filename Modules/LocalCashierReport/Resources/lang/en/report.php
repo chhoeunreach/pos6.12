@@ -330,4 +330,9 @@ return [
     'cashiers' => 'cashiers',
     'detail_limit' => 'Detail tables are limited to :count rows per section for faster loading.',
     'detail_limit_hint' => 'Use narrower filters or export/print for full detail.',
+    'branch_dashboard' => 'Branch Dashboard',
+    'all_branches' => 'All Branches',
+    'search_branch' => 'Quick search branch...',
+    'branch_no_combine_hint' => 'Income and expenses are calculated independently per branch (grouped before "-") without combining across branches.',
+    'no_branches_found' => 'No branches match your search.',
 ];

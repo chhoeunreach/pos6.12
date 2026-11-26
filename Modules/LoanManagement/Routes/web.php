@@ -31,10 +31,6 @@ Route::middleware(['web'])
     ->get('/loan-management/settings/business/public-logo', [SettingsController::class, 'businessPublicLogo'])
     ->name('loan-management.settings.business.public-logo');
 
-Route::middleware(['web'])
-    ->get('/loan-management/chat-files/{file}', [LoanChatController::class, 'serveFile'])
-    ->name('loan-management.chat-files.show');
-
 Route::middleware(['web'])->group(function () {
     Route::get('/', [PublicAppController::class, 'home'])->name('loan-management.public.home');
     Route::get('/register', [PublicAppController::class, 'register'])->name('loan-management.public.register');
@@ -163,8 +159,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get('/customers', [LoanCustomerController::class, 'index'])->name('loan-management.customers');
             Route::get('/customers/index', [LoanCustomerController::class, 'index'])->name('loan-management.customers.index');
             Route::get('/customers/search-main-contacts', [LoanCustomerController::class, 'searchMainContacts'])->name('loan-management.customers.search-main-contacts');
-            Route::get('/customers/{customer}/ledger', [LoanCustomerController::class, 'ledger'])->middleware('loan.permission:loan_management.loans.view|loan_management.payments.view|loan_management.payment|loan_management.view')->name('loan-management.customers.ledger');
-            Route::get('/customers/{customer}', [LoanCustomerController::class, 'show'])->name('loan-management.customers.show');
+            Route::get('/customers/{customer}/ledger', [LoanCustomerController::class, 'ledger'])->whereNumber('customer')->middleware('loan.permission:loan_management.loans.view|loan_management.payments.view|loan_management.payment|loan_management.view')->name('loan-management.customers.ledger');
+            Route::get('/customers/{customer}', [LoanCustomerController::class, 'show'])->whereNumber('customer')->name('loan-management.customers.show');
         });
         Route::middleware('loan.permission:loan_management.customers.create|loan_management.create')->group(function () {
             Route::get('/customers/create', [LoanCustomerController::class, 'create'])->name('loan-management.customers.create');
@@ -190,8 +186,8 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::get('/products/index', [LoanProductController::class, 'index'])->name('loan-management.products.index');
             Route::get('/products/export-csv', [LoanProductController::class, 'exportCsv'])->name('loan-management.products.export-csv');
             Route::get('/products/ajax-search', [LoanProductController::class, 'ajaxSearch'])->name('loan-management.products.ajax-search');
-            Route::get('/products/{product}', [LoanProductController::class, 'show'])->name('loan-management.products.show');
-            Route::get('/products/{product}/calculator-data', [LoanProductController::class, 'calculatorData'])->name('loan-management.products.calculator-data');
+            Route::get('/products/{product}', [LoanProductController::class, 'show'])->whereNumber('product')->name('loan-management.products.show');
+            Route::get('/products/{product}/calculator-data', [LoanProductController::class, 'calculatorData'])->whereNumber('product')->name('loan-management.products.calculator-data');
         });
         Route::middleware('loan.permission:loan_management.products.create|loan_management.create')->group(function () {
             Route::get('/products/create', [LoanProductController::class, 'create'])->name('loan-management.products.create');
@@ -215,7 +211,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::middleware('loan.permission:loan_management.payments.view|loan_management.payment|loan_management.view')->group(function () {
             Route::get('/payments', [LoanPaymentController::class, 'index'])->name('loan-management.payments');
             Route::get('/payments/index', [LoanPaymentController::class, 'index'])->name('loan-management.payments.index');
-            Route::get('/payments/{payment}', [LoanPaymentController::class, 'show'])->name('loan-management.payments.show');
+            Route::get('/payments/{payment}', [LoanPaymentController::class, 'show'])->whereNumber('payment')->name('loan-management.payments.show');
         });
         Route::middleware('loan.permission:loan_management.payment|loan_management.edit')->group(function () {
             Route::get('/payments/{payment}/edit', [LoanPaymentController::class, 'edit'])->name('loan-management.payments.edit');
@@ -225,9 +221,10 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
 
         Route::middleware('loan.permission:loan_management.chat.view')->group(function () {
             Route::get('/live-chat', [LoanChatController::class, 'webInbox'])->name('loan-management.live-chat');
-            Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.live-chat.detail');
+            Route::get('/live-chat/{thread}', [LoanChatController::class, 'webDetail'])->whereNumber('thread')->name('loan-management.live-chat.detail');
+            Route::get('/chat-files/{file}', [LoanChatController::class, 'serveFile'])->whereNumber('file')->name('loan-management.chat-files.show');
             Route::get('/chat', [LoanChatController::class, 'webInbox'])->name('loan-management.chat.index');
-            Route::get('/chat/{thread}', [LoanChatController::class, 'webDetail'])->name('loan-management.chat.detail');
+            Route::get('/chat/{thread}', [LoanChatController::class, 'webDetail'])->whereNumber('thread')->name('loan-management.chat.detail');
         });
         Route::delete('/chat/{thread}', [LoanChatController::class, 'destroy'])->middleware('loan.permission:loan_management.chat.delete')->name('loan-management.chat.destroy');
         Route::get('/chat-api/chats', [LoanChatController::class, 'index'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.index');
@@ -243,6 +240,12 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
         Route::post('/chat-api/chats/{thread}/reopen', [LoanChatController::class, 'reopen'])->middleware('loan.permission:loan_management.chat.close')->name('loan-management.chat-api.reopen');
         Route::post('/chat-api/chats/{thread}/pin', [LoanChatController::class, 'pin'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.pin');
         Route::post('/chat-api/chats/{thread}/mute', [LoanChatController::class, 'mute'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.mute');
+        Route::get('/chat-api/folders', [ChatFolderController::class, 'index'])->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.folders.index');
+        Route::post('/chat-api/folders', [ChatFolderController::class, 'store'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.chat-api.folders.store');
+        Route::put('/chat-api/folders/{id}', [ChatFolderController::class, 'update'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.chat-api.folders.update');
+        Route::delete('/chat-api/folders/{id}', [ChatFolderController::class, 'destroy'])->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.chat-api.folders.destroy');
+        Route::get('/chat-api/customers/{customer}/folders', [ChatFolderController::class, 'customerFolders'])->whereNumber('customer')->middleware('loan.permission:loan_management.chat.view')->name('loan-management.chat-api.folders.customer');
+        Route::post('/chat-api/customers/{customer}/folders', [ChatFolderController::class, 'updateCustomerFolders'])->whereNumber('customer')->middleware('loan.permission:loan_management.chat.reply|loan_management.chat.view')->name('loan-management.chat-api.folders.customer.update');
         Route::middleware('loan.permission:loan_management.settings.view|loan_management.setting|loan_management.view')->group(function () {
             Route::get('/locations', [LoanLocationController::class, 'index'])->name('loan-management.locations.index');
             Route::get('/locations/asset-gallery', [LoanLocationController::class, 'assetGalleryModal'])->name('loan-management.locations.asset-gallery');
@@ -256,6 +259,7 @@ Route::middleware(['web', 'auth', 'SetSessionData', 'language', 'timezone', 'Adm
             Route::put('/locations/{location}', [LoanLocationController::class, 'updateDetails'])->name('loan-management.locations.update');
             Route::delete('/locations/{location}', [LoanLocationController::class, 'destroy'])->name('loan-management.locations.destroy');
             Route::post('/locations/{location}/assets', [LoanLocationController::class, 'update'])->name('loan-management.locations.assets.update');
+            Route::post('/locations/{location}/telegram-test', [LoanLocationController::class, 'testTelegram'])->whereNumber('location')->name('loan-management.locations.telegram-test');
         });
         Route::get('/location-assets/{location}/{filename}', [LoanLocationController::class, 'asset'])->name('loan-management.locations.assets.show');
 

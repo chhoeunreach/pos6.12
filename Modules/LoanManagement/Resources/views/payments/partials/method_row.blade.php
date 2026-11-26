@@ -8,11 +8,14 @@
             <select name="payment_details[{{ $index }}][method]" class="lm-control lm-method-select" required>
                 @php
                     $currentMethod = (string) ($methodRow['method'] ?? 'cash');
+                    $resolvedCurrentKey = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->resolveKey($currentMethod, $methods);
                     $currentMethodShown = false;
                 @endphp
                 @foreach($methods as $key => $label)
                     @php
-                        $selected = $currentMethod === (string) $key || $currentMethod === (string) $label;
+                        $selected = $resolvedCurrentKey === (string) $key
+                            || $currentMethod === (string) $key
+                            || $currentMethod === (string) $label;
                         $currentMethodShown = $currentMethodShown || $selected;
                     @endphp
                     <option value="{{ $key }}" {{ $selected ? 'selected' : '' }}>{{ $label }}</option>

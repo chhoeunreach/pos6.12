@@ -322,8 +322,8 @@ class LoanInstallmentListController extends Controller
                     continue;
                 }
 
-                $method = strtolower(trim((string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? '')));
-                if ($method === 'cash') {
+                $method = trim((string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? ''));
+                if (app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->isCash($method, 'mysql_loan')) {
                     $cash += $amount;
                 } else {
                     $bank += $amount;
@@ -650,9 +650,13 @@ class LoanInstallmentListController extends Controller
 
             return $details->map(function ($detail) use ($payment) {
                 $line = clone $payment;
-                $method = trim((string) ($detail->payment_method_snapshot ?? $detail->method ?? ''));
+                $rawMethod = trim((string) ($detail->method ?? $detail->payment_method_snapshot ?? ''));
+                $method = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->resolveDisplayLabel($rawMethod, [], 'mysql_loan');
+                if ($method === '-' && ! empty($detail->payment_method_snapshot)) {
+                    $method = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->resolveDisplayLabel((string) $detail->payment_method_snapshot, [], 'mysql_loan');
+                }
 
-                if ($method !== '' && strtolower($method) !== 'unknown') {
+                if ($method !== '' && $method !== '-' && strtolower($method) !== 'unknown') {
                     $line->payment_method_snapshot = $method;
                     $line->channel = $method;
                     $line->method = $detail->method ?? $method;
@@ -3773,17 +3777,12 @@ class LoanInstallmentListController extends Controller
 
     protected function ultimatePosPaymentTypes(object $loanRow): array
     {
-        $businessId = (int) (session('user.business_id') ?? 0);
-        $locationId = $loanRow->main_location_id ?? null;
-
-        $paymentTypes = app(TransactionUtil::class)->payment_types($locationId, true, $businessId);
-
-        return ! empty($paymentTypes) ? $paymentTypes : ['cash' => 'Cash'];
+        return app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->options($loanRow, 'mysql_loan');
     }
 
     protected function paymentMethodName(string $method, array $paymentTypes): string
     {
-        return (string) ($paymentTypes[$method] ?? ucfirst(str_replace('_', ' ', $method)));
+        return app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->canonicalName($method, $paymentTypes, 'mysql_loan');
     }
 
     protected function generateUniquePaymentNumber(int $loanId): string
@@ -4874,7 +4873,9 @@ class LoanInstallmentListController extends Controller
                 ->map(function ($payment) {
                     $date = $payment->paid_date ?? $payment->paid_at ?? null;
                     $dateText = $date ? \Carbon\Carbon::parse($date)->format('d-m-Y') : '-';
-                    $method = trim((string) ($payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? ''));
+                    $rawMethod = trim((string) ($payment->payment_method_snapshot ?? $payment->channel ?? $payment->method ?? ''));
+                    $method = app(\Modules\LoanManagement\Services\LoanPaymentMethodService::class)->resolveDisplayLabel($rawMethod, [], 'mysql_loan');
+                    $method = $method !== '-' ? $method : 'Payment';
                     $reference = trim((string) ($payment->receipt_number ?? $payment->payment_ref_no ?? $payment->reference_number ?? ''));
                     $amount = (float) ($payment->amount_base ?? $payment->total_paid_base ?? $payment->total_paid ?? $payment->amount ?? 0);
 

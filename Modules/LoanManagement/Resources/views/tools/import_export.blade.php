@@ -320,7 +320,7 @@
 
                 $.ajax({
                     method: 'GET',
-                    url: "{{ url('/loan-management/tools/import/progress') }}/" + batchId,
+                    url: "{{ url('/loan-management/tools/import') }}/" + encodeURIComponent(batchId) + "/progress",
                     dataType: 'json',
                     success: function(response) {
                         if (!response.success) {

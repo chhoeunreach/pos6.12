@@ -134,6 +134,38 @@ class LoanChatService
         return $this->listStaffThreads($staffId, $admin, $filters, 200);
     }
 
+    public function staffInboxSnapshot(?int $staffId = null, bool $admin = false, array $filters = []): array
+    {
+        $staffId = $staffId ?? (int) (auth()->id() ?? 0);
+
+        $q = LoanChatThread::query();
+        if (! $admin) {
+            $q->where(function ($inner) use ($staffId) {
+                $inner->where('staff_id', $staffId)->orWhereNull('staff_id');
+                if (self::hasThreadColumn('assigned_staff_id')) {
+                    $inner->orWhere('assigned_staff_id', $staffId)->orWhereNull('assigned_staff_id');
+                }
+            });
+        }
+        $this->applyInboxFilters($q, $filters, $staffId, $admin);
+
+        $stats = $q->selectRaw('COUNT(*) as total_threads, COALESCE(MAX(id), 0) as max_id, MAX(updated_at) as max_updated_at, MAX(last_message_at) as max_last_message_at, COALESCE(SUM(unread_staff_count), 0) as total_unread')
+            ->first();
+
+        $version = sha1(implode('|', [
+            (string) ($stats->total_threads ?? 0),
+            (string) ($stats->max_id ?? 0),
+            (string) ($stats->max_updated_at ?? ''),
+            (string) ($stats->max_last_message_at ?? ''),
+            (string) ($stats->total_unread ?? 0),
+        ]));
+
+        return [
+            'version' => $version,
+            'unread_total' => (int) ($stats->total_unread ?? 0),
+        ];
+    }
+
     public function createThread(array $data): LoanChatThread
     {
         return DB::connection('mysql_loan')->transaction(function () use ($data) {
@@ -779,6 +811,9 @@ class LoanChatService
         if (! empty($customer->customer_photo_file_id)) {
             $file = $this->cachedLoanFile((int) $customer->customer_photo_file_id);
             if ($file) {
+                if (! request()->is('api/*') && (request()->is('loan-management/*') || request()->is('loan-management'))) {
+                    return url('loan-management/chat-files/'.(int) $file->id);
+                }
                 return (string) ($this->safeFileUrl($file) ?? '');
             }
         }
@@ -865,7 +900,10 @@ class LoanChatService
         $file = null;
 
         if (! empty($message->file_id)) {
-            $fileUrl = (string) ($message->file_url ?? '');
+            $isWebSession = ! request()->is('api/*') && (request()->is('loan-management/chat-api/*') || request()->is('loan-management/chat*') || request()->is('loan-management/live-chat*'));
+            $fileUrl = $isWebSession
+                ? url('loan-management/chat-files/'.(int) $message->file_id)
+                : (string) ($message->file_url ?? '');
             if ($fileUrl === '') {
                 $fileUrl = url('loan-management/chat-files/'.(int) $message->file_id);
             }

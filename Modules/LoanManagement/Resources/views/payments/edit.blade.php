@@ -383,7 +383,7 @@
             @if($isEmbeddedModal)
             <button type="button"
                     class="lm-btn-nav"
-                    onclick="window.jQuery && window.jQuery('.view_modal').modal('hide');"
+                    onclick="if (window.parent && window.parent !== window && window.parent.jQuery) { window.parent.jQuery('.view_modal').modal('hide'); } else if (window.jQuery) { window.jQuery('.view_modal').modal('hide'); }"
                     title="{{ $lmText('Close', 'បិទ') }}">
                 <i class="fa fa-times"></i>
             </button>
@@ -466,7 +466,7 @@
             @csrf
             @method('PUT')
             @if($isEmbeddedModal)
-                <input type="hidden" name="return_to" value="{{ route('loan-management.payments.show', ['payment' => $payment->id, '_lm_modal' => 1]) }}">
+                <input type="hidden" name="return_to" value="{{ route('loan-management.payments.show', ['payment' => $payment->id, '_lm_modal' => 1, '_lm_updated' => 1]) }}">
             @elseif(!empty($backCustomerId))
                 <input type="hidden" name="return_to" value="{{ route('loan-management.customers.edit', $backCustomerId) }}">
             @endif

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
+use Modules\LoanManagement\Services\LoanPaymentMethodService;
 use Modules\LoanManagement\Services\TelegramChatService;
 use Modules\LoanManagement\Services\TelegramSettingsService;
 
@@ -50,6 +51,19 @@ class StaffMobileActionController extends Controller
 
             $payAt = ! empty($data['paid_at']) ? $data['paid_at'] : now()->toDateTimeString();
             $amount = (float) $data['amount'];
+            $methodService = app(LoanPaymentMethodService::class);
+            $methodOptions = $methodService->options($loan, $this->conn);
+            $detailNames = [];
+            $detailKeys = [];
+            foreach ($data['details'] as $detail) {
+                $rawDetailMethod = (string) ($detail['method'] ?? 'cash');
+                $detailKey = $methodService->resolveKey($rawDetailMethod, $methodOptions, $this->conn) ?: $rawDetailMethod;
+                $detailSnapshot = $methodService->canonicalName($rawDetailMethod, $methodOptions, $this->conn);
+                $detailKeys[] = $detailKey;
+                $detailNames[] = $detailSnapshot;
+            }
+            $methodSummary = mb_substr(implode(' + ', array_unique($detailNames)), 0, 100);
+            $singleMethodKey = count($detailKeys) === 1 ? $detailKeys[0] : 'multiple';
 
             $paymentPayload = [
                 'loan_id' => $data['loan_id'],
@@ -61,6 +75,8 @@ class StaffMobileActionController extends Controller
                 'total_paid_base' => $amount,
                 'paid_at' => $payAt,
                 'paid_date' => substr($payAt, 0, 10),
+                'payment_method_snapshot' => $methodSummary ?: null,
+                'method' => $singleMethodKey,
                 'channel' => 'mobile',
                 'status' => 'confirmed',
                 'note' => trim((string) ($data['note'] ?? '')) ?: null,
@@ -89,7 +105,7 @@ class StaffMobileActionController extends Controller
             }
 
             $totalDetail = 0.0;
-            foreach ($data['details'] as $detail) {
+            foreach ($data['details'] as $detailIndex => $detail) {
                 $dAmount = (float) $detail['amount'];
                 $rate = (float) ($detail['exchange_rate'] ?? 1);
                 $dCurrency = (string) ($detail['currency'] ?? $data['currency']);
@@ -98,7 +114,8 @@ class StaffMobileActionController extends Controller
 
                 $detailPayload = [
                     'payment_id' => $paymentId,
-                    'method' => $detail['method'],
+                    'method' => $detailKeys[$detailIndex] ?? $detail['method'],
+                    'payment_method_snapshot' => $detailNames[$detailIndex] ?? $detail['method'],
                     'amount' => $dAmount,
                     'transaction_no' => $detail['transaction_no'] ?? null,
                     'meta_json' => json_encode([
@@ -266,15 +283,20 @@ class StaffMobileActionController extends Controller
         $paidDate = ! empty($data['paid_date']) ? $data['paid_date'] : substr((string) ($payment->{$this->paymentDateColumn()} ?? now()->toDateString()), 0, 10);
         $paidAt = $paidDate.' '.now()->format('H:i:s');
         $method = trim((string) ($data['method'] ?? ''));
+        $methodService = app(LoanPaymentMethodService::class);
+        $methodOptions = $methodService->options(null, $this->conn);
+        $methodKey = $method !== '' ? ($methodService->resolveKey($method, $methodOptions, $this->conn) ?: $method) : '';
+        $methodSnapshot = $method !== '' ? $methodService->canonicalName($method, $methodOptions, $this->conn) : '';
 
-        DB::connection($this->conn)->transaction(function () use ($paymentId, $payment, $data, $oldAmount, $newAmount, $oldScheduleId, $newScheduleId, $paidDate, $paidAt, $method) {
+        DB::connection($this->conn)->transaction(function () use ($paymentId, $payment, $data, $oldAmount, $newAmount, $oldScheduleId, $newScheduleId, $paidDate, $paidAt, $method, $methodKey, $methodSnapshot) {
             DB::connection($this->conn)->table('loan_payments')->where('id', $paymentId)->update($this->safeColumns('loan_payments', [
                 'schedule_id' => $newScheduleId,
                 'amount' => $newAmount,
                 'total_paid' => $newAmount,
                 'total_paid_base' => $newAmount,
-                'payment_method_snapshot' => $method !== '' ? $method : null,
-                'channel' => $method !== '' ? $method : ($payment->channel ?? 'mobile'),
+                'payment_method_snapshot' => $methodSnapshot !== '' ? $methodSnapshot : null,
+                'method' => $methodKey !== '' ? $methodKey : ($payment->method ?? null),
+                'channel' => $methodSnapshot !== '' ? $methodSnapshot : ($payment->channel ?? 'mobile'),
                 'reference_number' => trim((string) ($data['reference_number'] ?? '')) ?: null,
                 'paid_date' => $paidDate,
                 'paid_at' => $paidAt,
@@ -286,8 +308,8 @@ class StaffMobileActionController extends Controller
             if (Schema::connection($this->conn)->hasTable('loan_payment_details')) {
                 $detail = DB::connection($this->conn)->table('loan_payment_details')->where('payment_id', $paymentId)->orderBy('id')->first();
                 $detailPayload = $this->safeColumns('loan_payment_details', [
-                    'method' => $method !== '' ? $method : ($payment->channel ?? 'cash'),
-                    'payment_method_snapshot' => $method !== '' ? $method : null,
+                    'method' => $methodKey !== '' ? $methodKey : ($payment->channel ?? 'cash'),
+                    'payment_method_snapshot' => $methodSnapshot !== '' ? $methodSnapshot : null,
                     'amount' => $newAmount,
                     'amount_base' => $newAmount,
                     'transaction_no' => trim((string) ($data['reference_number'] ?? '')) ?: null,
@@ -558,7 +580,11 @@ class StaffMobileActionController extends Controller
     {
         $dateColumn = $this->paymentDateColumn();
         $amount = $this->paymentAmount($payment);
-        $method = (string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? '');
+        $rawMethod = (string) ($payment->payment_method_snapshot ?? $payment->method ?? $payment->channel ?? '');
+        $method = app(LoanPaymentMethodService::class)->resolveDisplayLabel($rawMethod, [], $this->conn);
+        if ($method === '-') {
+            $method = '';
+        }
         $reference = (string) ($payment->reference_number ?? $payment->payment_ref_no ?? $payment->receipt_number ?? '');
 
         return [

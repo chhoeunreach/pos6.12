@@ -2,6 +2,7 @@
     $reportLang = \Modules\LocalCashierReport\Support\ReportLanguage::current();
     $t = fn ($key) => \Modules\LocalCashierReport\Support\ReportLanguage::text($key, $reportLang);
     $paymentLabel = fn ($method) => \Modules\LocalCashierReport\Support\ReportLanguage::payment((string) $method, (string) ($report['payment_labels'][$method] ?? $method));
+    $isEmbeddedModal = request()->boolean('embed_modal');
     $languageQuery = function ($language) {
         return array_merge(request()->query(), ['report_lang' => $language]);
     };
@@ -155,7 +156,7 @@
             <option value="{{ route('local-cashier-report.print', $languageQuery('en')) }}" @if($reportLang === 'en') selected @endif>{{ $t('english') }}</option>
             <option value="{{ route('local-cashier-report.print', $languageQuery('km')) }}" @if($reportLang === 'km') selected @endif>ខ្មែរ</option>
         </select>
-        <button type="button" class="btn-close-print" onclick="window.close()">✕ {{ $t('close') }}</button>
+        <button type="button" class="btn-close-print" onclick="closePrintView()">✕ {{ $t('close') }}</button>
     </div>
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
@@ -465,12 +466,22 @@
         colState = getColState();
         applyColState(colState);
 
+        function closePrintView() {
+            if (window.parent && window.parent !== window && typeof window.parent.closeLocalCashierPrintModal === 'function') {
+                window.parent.closeLocalCashierPrintModal();
+                return;
+            }
+            window.close();
+        }
+
         function initAndPrint() {
             colState = getColState();
             applyColState(colState);
+            @if(!$isEmbeddedModal)
             window.setTimeout(function () {
                 window.print();
             }, 100);
+            @endif
         }
     </script>
 </body>

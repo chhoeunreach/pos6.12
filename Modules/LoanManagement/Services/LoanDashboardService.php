@@ -744,11 +744,32 @@ class LoanDashboardService
     public function getPaymentMethodChart($filters): array
     {
         if (! $this->tableExists('loan_payment_details') || ! $this->tableExists('loan_payments')) return ['labels' => [], 'amount' => []];
-        $rows = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payment_details as d')->join('loan_payments as p', 'p.id', '=', 'd.payment_id'), $filters, 'p')
-            ->selectRaw('COALESCE(d.payment_method_snapshot, "Unknown") as label, COALESCE(SUM(d.amount_base),0) as amount')
-            ->groupBy('label')->orderByDesc('amount')->get();
+        $hasMethod = $this->columnExists('loan_payment_details', 'method');
+        $hasSnapshot = $this->columnExists('loan_payment_details', 'payment_method_snapshot');
+        $query = $this->applyPaymentFilters(DB::connection($this->connection)->table('loan_payment_details as d')->join('loan_payments as p', 'p.id', '=', 'd.payment_id'), $filters, 'p')
+            ->selectRaw(($hasSnapshot ? 'd.payment_method_snapshot' : 'NULL').' as snapshot_label')
+            ->selectRaw(($hasMethod ? 'd.method' : 'NULL').' as method_code')
+            ->selectRaw('COALESCE(d.amount_base, 0) as amount');
 
-        return ['labels' => $rows->pluck('label')->all(), 'amount' => $rows->pluck('amount')->map(fn ($v) => (float) $v)->all()];
+        $methodService = app(LoanPaymentMethodService::class);
+        $options = $methodService->options(null, $this->connection, true);
+        $grouped = [];
+        foreach ($query->get() as $row) {
+            $raw = trim((string) ($row->method_code ?? '')) !== ''
+                ? (string) $row->method_code
+                : (string) ($row->snapshot_label ?? '');
+            $label = $methodService->resolveDisplayLabel($raw, $options, $this->connection);
+            if ($label === '-' && ! empty($row->snapshot_label)) {
+                $label = $methodService->resolveDisplayLabel((string) $row->snapshot_label, $options, $this->connection);
+            }
+            if ($label === '-') {
+                $label = 'Unknown';
+            }
+            $grouped[$label] = ($grouped[$label] ?? 0.0) + (float) ($row->amount ?? 0);
+        }
+        arsort($grouped);
+
+        return ['labels' => array_keys($grouped), 'amount' => array_values($grouped)];
     }
 
     public function getOverdueAgingChart($filters): array
@@ -1184,6 +1205,16 @@ class LoanDashboardService
     {
         if (empty($paymentMethodId)) {
             return null;
+        }
+
+        if (Schema::connection($this->connection)->hasTable('loan_payment_methods')) {
+            $name = DB::connection($this->connection)
+                ->table('loan_payment_methods')
+                ->where('id', $paymentMethodId)
+                ->value('name');
+            if (! empty($name)) {
+                return (string) $name;
+            }
         }
 
         if (! Schema::hasTable('payment_methods')) {
