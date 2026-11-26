@@ -335,4 +335,10 @@ return [
     'search_branch' => 'Quick search branch...',
     'branch_no_combine_hint' => 'Income and expenses are calculated independently per branch (grouped before "-") without combining across branches.',
     'no_branches_found' => 'No branches match your search.',
+    'branch' => 'Branch',
+    'branch_pdf_title' => 'Branch Income & Expenses Report (PDF)',
+    'export_branch_pdf' => 'Branch PDF + Summary',
+    'download_pdf' => 'Download PDF',
+    'overall_combined_summary' => 'Overall Combined Income & Expenses (All Branches)',
+    'branch_summary_comparison' => 'Branch Summary Comparison',
 ];

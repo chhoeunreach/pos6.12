@@ -43,9 +43,16 @@
         $englishQuery = array_merge($baseQuery, ['report_lang' => 'en']);
         $khmerQuery = array_merge($baseQuery, ['report_lang' => 'km']);
         $printDashboardQuery = array_merge($baseQuery, [
-            'style_mode' => 'classic_plain',
+            'style_mode' => ($filters['style_mode'] ?? 'classic_plain') === 'branch_dashboard' ? 'branch_dashboard' : 'classic_plain',
             'report_lang' => $currentReportLang,
         ]);
+        $branchPdfQuery = collect($baseQuery)
+            ->when(($filters['style_mode'] ?? 'classic_plain') !== 'branch_dashboard', fn ($c) => $c->except(['location_ids', 'location_filter_applied']))
+            ->merge([
+                'style_mode' => 'branch_dashboard',
+                'report_lang' => $currentReportLang,
+            ])
+            ->all();
     @endphp
     <div style="margin-top:10px;">
         <a href="{{ route('local-cashier-report.index') . '?' . http_build_query($classicPlainQuery) }}"
@@ -69,6 +76,13 @@
            class="btn btn-info js-local-cashier-print-modal"
            data-print-title="{{ $t('print_dashboard') }}">
             <i class="fa fa-print"></i> {{ $t('print_dashboard') }}
+        </a>
+        <a href="{{ route('local-cashier-report.pdf', $branchPdfQuery) }}"
+           class="btn btn-danger js-local-cashier-print-modal"
+           data-pdf-preview="1"
+           @if(($filters['style_mode'] ?? 'classic_plain') !== 'branch_dashboard') data-load-all-branches="1" @endif
+           data-print-title="{{ $t('branch_pdf_title') }}">
+            <i class="fa fa-file-pdf-o" aria-hidden="true"></i> {{ $t('export_branch_pdf') }}
         </a>
         <span class="btn-group" style="margin-left:8px;">
             <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -130,6 +144,9 @@
             <div class="modal-footer">
                 <a href="#" target="_blank" id="local_cashier_print_new_tab" class="btn btn-default btn-sm pull-left">
                     <i class="fa fa-external-link" aria-hidden="true"></i> {{ $t('print') }}
+                </a>
+                <a href="#" id="local_cashier_modal_download_pdf" class="btn btn-danger">
+                    <i class="fa fa-download" aria-hidden="true"></i> {{ $t('download_pdf') }}
                 </a>
                 <button type="button" class="btn btn-default" data-dismiss="modal">{{ $t('close') }}</button>
                 <button type="button" class="btn btn-info" id="local_cashier_print_trigger">
@@ -338,8 +355,20 @@
             <span class="branch-toolbar-hint">
                 <i class="fa fa-info-circle" aria-hidden="true"></i> {{ $t('branch_no_combine_hint') }}
             </span>
-            <div class="branch-search-wrap">
-                <input type="search" id="branch_quick_search" class="form-control input-sm" placeholder="{{ $t('search_branch') }}" autocomplete="off">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                <a href="{{ route('local-cashier-report.pdf', $branchPdfQuery) }}"
+                   class="btn btn-sm btn-danger js-local-cashier-print-modal"
+                   data-pdf-preview="1"
+                   data-print-title="{{ $t('branch_pdf_title') }}">
+                    <i class="fa fa-file-pdf-o" aria-hidden="true"></i> {{ $t('export_branch_pdf') }}
+                </a>
+                <a href="{{ route('local-cashier-report.pdf', array_merge($branchPdfQuery, ['download' => 1])) }}"
+                   class="btn btn-sm btn-default">
+                    <i class="fa fa-download" aria-hidden="true"></i> {{ $t('download_pdf') }}
+                </a>
+                <div class="branch-search-wrap">
+                    <input type="search" id="branch_quick_search" class="form-control input-sm" placeholder="{{ $t('search_branch') }}" autocomplete="off">
+                </div>
             </div>
         </div>
         @if($branchDashboards->isNotEmpty())
@@ -396,6 +425,13 @@
                        data-preserve-locations="1"
                        data-print-title="{{ $t('print_dashboard') }} — {{ $branch['branch_name'] }}">
                         <i class="fa fa-print" aria-hidden="true"></i> {{ $t('print_dashboard') }}
+                    </a>
+                    <a href="{{ route('local-cashier-report.pdf', array_merge($branchPrintQuery, ['style_mode' => 'branch_dashboard'])) }}"
+                       class="btn btn-xs btn-danger js-local-cashier-print-modal"
+                       data-pdf-preview="1"
+                       data-preserve-locations="1"
+                       data-print-title="{{ $t('branch_pdf_title') }} — {{ $branch['branch_name'] }}">
+                        <i class="fa fa-file-pdf-o" aria-hidden="true"></i> PDF
                     </a>
                 </div>
             </div>
@@ -2017,6 +2053,7 @@
         $('a[href]').filter(function () {
             var path = new URL(this.href, window.location.href).pathname;
             return path === @json(parse_url(route('local-cashier-report.print'), PHP_URL_PATH))
+                || path === @json(parse_url(route('local-cashier-report.pdf'), PHP_URL_PATH))
                 || path === @json(parse_url(route('local-cashier-report.export'), PHP_URL_PATH))
                 || $(this).is('.report-tab-btn, .report-language-link');
         }).on('click', function (e) {
@@ -2025,7 +2062,7 @@
             var target = new URL(this.href, window.location.href);
             var fields = $('#local_cashier_filter_form').serializeArray();
             fields = fields.filter(function (field) {
-                return !(['style_mode', 'report_lang'].indexOf(field.name) !== -1 && target.searchParams.has(field.name));
+                return !(['style_mode', 'report_lang', 'download'].indexOf(field.name) !== -1 && target.searchParams.has(field.name));
             });
             var loadAllBranches = $(this).is('[data-load-all-branches="1"]');
             var preserveLocations = $(this).is('[data-preserve-locations="1"]');
@@ -2052,11 +2089,21 @@
 
             if ($(this).is('.js-local-cashier-print-modal') && !(e.ctrlKey || e.metaKey || e.shiftKey || e.which === 2)) {
                 e.preventDefault();
+                var isPdfPreview = $(this).is('[data-pdf-preview="1"]');
                 var modalTarget = new URL(target.toString(), window.location.href);
-                modalTarget.searchParams.set('embed_modal', '1');
+                if (!isPdfPreview) {
+                    modalTarget.searchParams.set('embed_modal', '1');
+                }
+                var pdfDownloadTarget = new URL(@json(route('local-cashier-report.pdf')), window.location.href);
+                target.searchParams.forEach(function (value, key) {
+                    pdfDownloadTarget.searchParams.append(key, value);
+                });
+                pdfDownloadTarget.searchParams.set('style_mode', 'branch_dashboard');
+                pdfDownloadTarget.searchParams.set('download', '1');
                 var heading = $(this).attr('data-print-title') || @json($t('local_cashier_report'));
                 $('#local_cashier_print_modal_heading').text(heading);
                 $('#local_cashier_print_new_tab').attr('href', target.toString());
+                $('#local_cashier_modal_download_pdf').attr('href', pdfDownloadTarget.toString());
                 $('#local_cashier_print_loading').show();
                 $('#local_cashier_print_iframe').attr('src', modalTarget.toString());
                 $('#local_cashier_print_modal').modal('show');

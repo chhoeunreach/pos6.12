@@ -335,4 +335,10 @@ return [
     'search_branch' => 'ស្វែងរកសាខារហ័ស...',
     'branch_no_combine_hint' => 'ចំណូល និងចំណាយត្រូវបានគណនាដាច់ដោយឡែកតាមសាខានីមួយៗ (កំណត់ត្រឹម "-") ដោយមិនសរុបបញ្ចូលគ្នាទេ។',
     'no_branches_found' => 'រកមិនឃើញសាខាដែលត្រូវគ្នាទេ។',
+    'branch' => 'សាខា',
+    'branch_pdf_title' => 'របាយការណ៍ចំណូល-ចំណាយតាមសាខា (PDF)',
+    'export_branch_pdf' => 'PDF តាមសាខា + សរុបរួម',
+    'download_pdf' => 'ទាញយក PDF',
+    'overall_combined_summary' => 'សរុបរួមចំណូល-ចំណាយទាំងអស់ (គ្រប់សាខា)',
+    'branch_summary_comparison' => 'សេចក្តីសង្ខេបប្រៀបធៀបតាមសាខា',
 ];

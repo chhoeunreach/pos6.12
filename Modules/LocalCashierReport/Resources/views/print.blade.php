@@ -161,7 +161,7 @@
     <h2>{{ $t('local_cashier_report') }}</h2>
     <div class="meta"><b>{{ $t('business') }}:</b> {{ $businessName }}</div>
     <div class="meta"><b>{{ $t('date_range') }}:</b> {{ \Carbon\Carbon::parse($filters['start_date'])->format('Y-m-d') }} ~ {{ \Carbon\Carbon::parse($filters['end_date'])->format('Y-m-d') }}</div>
-    <div class="meta"><b>{{ $t('style_option') }}:</b> {{ $t($styleMode === 'view_report' ? 'view_report' : ($styleMode === 'business_location_report' ? 'business_location_report' : 'old_dashboard')) }}</div>
+    <div class="meta"><b>{{ $t('style_option') }}:</b> {{ $t($styleMode === 'view_report' ? 'view_report' : ($styleMode === 'business_location_report' ? 'business_location_report' : ($styleMode === 'branch_dashboard' ? 'branch_dashboard' : 'old_dashboard'))) }}</div>
     <div class="meta"><b>{{ $t('generated') }}:</b> {{ now()->format('Y-m-d H:i:s') }}</div>
 
     @if($styleMode === 'view_report')
@@ -273,6 +273,191 @@
                             <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($report['actual_income_payment_summary'][$method] ?? null) }}</th>
                         @endforeach
                         <th data-col="total_payment" class="text-right">{{ $fmt($report['grand_actual_income'] ?? 0) }}</th>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    @elseif($styleMode === 'branch_dashboard')
+        @php
+            $branchDashboards = $report['branch_dashboards'] ?? [];
+            $paymentColumns = $report['payment_columns'] ?? [];
+            $overallTotal = 0.0;
+            $overallPaid = 0.0;
+            $overallExpenses = 0.0;
+            $overallActualIncome = 0.0;
+            $overallDue = 0.0;
+            $overallPayments = [];
+            $overallExpensePayments = [];
+            $overallActualIncomePayments = [];
+            foreach ($paymentColumns as $method) {
+                $overallPayments[$method] = 0.0;
+                $overallExpensePayments[$method] = 0.0;
+                $overallActualIncomePayments[$method] = 0.0;
+            }
+            foreach ($branchDashboards as $b) {
+                $overallTotal += (float) ($b['total'] ?? 0);
+                $overallPaid += (float) ($b['paid'] ?? 0);
+                $overallExpenses += (float) ($b['expenses'] ?? 0);
+                $overallActualIncome += (float) ($b['actual_income'] ?? 0);
+                $overallDue += (float) ($b['due'] ?? 0);
+                foreach ($paymentColumns as $method) {
+                    $overallPayments[$method] += (float) ($b['payments'][$method] ?? 0);
+                    $overallExpensePayments[$method] += (float) ($b['expense_payments'][$method] ?? 0);
+                    $overallActualIncomePayments[$method] += (float) ($b['actual_income_payments'][$method] ?? 0);
+                }
+            }
+        @endphp
+        <div class="section">
+            @forelse($branchDashboards as $branch)
+                @php $lastBranchGroup = null; @endphp
+                <div class="section" style="border: 1px solid #cbd5e1; padding: 10px; margin-bottom: 14px;">
+                    <h3>{{ $branch['branch_name'] }}</h3>
+                    <div class="meta">{{ implode(' | ', $branch['location_labels'] ?? []) }}</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-col="business_location_qty">{{ $t('business_location_qty') }}</th>
+                                <th data-col="total_price" class="text-right">{{ $t('total_price') }}</th>
+                                @foreach($paymentColumns as $method)
+                                    <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
+                                @endforeach
+                                <th data-col="total" class="text-right">{{ $t('total') }}</th>
+                                <th data-col="due" class="text-right">{{ $t('due') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($branch['rows'] ?? []) as $bRow)
+                                @php
+                                    $bGroup = (string) ($bRow['name'] ?? 'លក់');
+                                    $bRowKind = (string) ($bRow['row_kind'] ?? 'main');
+                                    $bQtyText = rtrim(rtrim(number_format((float) ($bRow['qty_total'] ?? 0), 2), '0'), '.');
+                                @endphp
+                                @if($lastBranchGroup !== $bGroup)
+                                    <tr class="row-summary">
+                                        <th colspan="{{ count($paymentColumns) + 4 }}">{{ \Modules\LocalCashierReport\Support\ReportLanguage::label($bGroup) }}</th>
+                                    </tr>
+                                    @php $lastBranchGroup = $bGroup; @endphp
+                                @endif
+                                <tr class="row-sale">
+                                    <td data-col="business_location_qty" class="name-main">
+                                        {{ $bRow['label'] }} ({{ $bQtyText }})
+                                        @if($bRowKind !== 'main')
+                                            <small>[{{ ucfirst($bRowKind) }}]</small>
+                                        @endif
+                                    </td>
+                                    <td data-col="total_price" class="text-right">{{ $fmt($bRow['total'] ?? null) }}</td>
+                                    @foreach($paymentColumns as $method)
+                                        <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($bRow['payments'][$method] ?? null) }}</td>
+                                    @endforeach
+                                    <td data-col="total" class="text-right">{{ $fmt($bRow['paid'] ?? null) }}</td>
+                                    <td data-col="due" class="text-right @if(! in_array($bGroup, ['រំលស់', 'អ៊ីអន'], true) && ($bRow['due'] ?? 0) != 0) due-negative @endif">{{ in_array($bGroup, ['រំលស់', 'អ៊ីអន'], true) ? '$ -' : $fmt($bRow['due'] ?? null) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="{{ count($paymentColumns) + 4 }}" style="text-align:center;">{{ $t('no_data') }}</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tbody class="table-totals">
+                            <tr class="row-total">
+                                <th data-col="business_location_qty" class="text-right">{{ $t('grand_total') }}</th>
+                                <th data-col="total_price" class="text-right">{{ $fmt($branch['total'] ?? null) }}</th>
+                                @foreach($paymentColumns as $method)
+                                    <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($branch['payments'][$method] ?? null) }}</th>
+                                @endforeach
+                                <th data-col="total" class="text-right">{{ $fmt($branch['paid'] ?? null) }}</th>
+                                <th data-col="due" class="text-right @if(($branch['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($branch['due'] ?? null) }}</th>
+                            </tr>
+                            <tr class="row-summary">
+                                <th data-col="business_location_qty" class="text-right">{{ $t('expenses') }}</th>
+                                <th data-col="total_price" class="text-right">$ -</th>
+                                @foreach($paymentColumns as $method)
+                                    <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($branch['expense_payments'][$method] ?? null) }}</th>
+                                @endforeach
+                                <th data-col="total" class="text-right">{{ $fmt($branch['expenses'] ?? null) }}</th>
+                                <th data-col="due" class="text-right">$ -</th>
+                            </tr>
+                            <tr class="row-summary">
+                                <th data-col="business_location_qty" class="text-right">{{ $t('actual_income') }}</th>
+                                <th data-col="total_price" class="text-right">$ -</th>
+                                @foreach($paymentColumns as $method)
+                                    <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($branch['actual_income_payments'][$method] ?? null) }}</th>
+                                @endforeach
+                                <th data-col="total" class="text-right">{{ $fmt($branch['actual_income'] ?? null) }}</th>
+                                <th data-col="due" class="text-right @if(($branch['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($branch['due'] ?? null) }}</th>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            @empty
+                <div class="meta">{{ $t('no_data') }}</div>
+            @endforelse
+        </div>
+
+        <div class="section" style="border: 2px solid #1b62d1; padding: 10px; margin-top: 18px; page-break-inside: avoid;">
+            <h3>{{ $t('overall_combined_summary') }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th data-col="business_location_qty">{{ $t('branch') }}</th>
+                        <th data-col="total_price" class="text-right">{{ $t('total_price') }}</th>
+                        @foreach($paymentColumns as $method)
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $paymentLabel($method) }}</th>
+                        @endforeach
+                        <th data-col="total" class="text-right">{{ $t('total') }} ({{ $t('paid') }})</th>
+                        <th class="text-right">{{ $t('expenses') }}</th>
+                        <th class="text-right">{{ $t('actual_income') }}</th>
+                        <th data-col="due" class="text-right">{{ $t('due') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($branchDashboards as $branch)
+                        <tr class="row-sale">
+                            <td data-col="business_location_qty" class="name-main">{{ $branch['branch_name'] }}</td>
+                            <td data-col="total_price" class="text-right">{{ $fmt($branch['total'] ?? null) }}</td>
+                            @foreach($paymentColumns as $method)
+                                <td data-col="pay_{{ $method }}" class="text-right">{{ $fmt($branch['payments'][$method] ?? null) }}</td>
+                            @endforeach
+                            <td data-col="total" class="text-right">{{ $fmt($branch['paid'] ?? null) }}</td>
+                            <td class="text-right">{{ $fmt($branch['expenses'] ?? null) }}</td>
+                            <td class="text-right @if(($branch['actual_income'] ?? 0) < 0) due-negative @endif">{{ $fmtStrict($branch['actual_income'] ?? 0) }}</td>
+                            <td data-col="due" class="text-right @if(($branch['due'] ?? 0) != 0) due-negative @endif">{{ $fmt($branch['due'] ?? null) }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tbody class="table-totals">
+                    <tr class="row-total">
+                        <th data-col="business_location_qty" class="text-right">{{ $t('grand_total') }}</th>
+                        <th data-col="total_price" class="text-right">{{ $fmt($overallTotal) }}</th>
+                        @foreach($paymentColumns as $method)
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($overallPayments[$method] ?? null) }}</th>
+                        @endforeach
+                        <th data-col="total" class="text-right">{{ $fmt($overallPaid) }}</th>
+                        <th class="text-right">{{ $fmt($overallExpenses) }}</th>
+                        <th class="text-right">{{ $fmtStrict($overallActualIncome) }}</th>
+                        <th data-col="due" class="text-right @if($overallDue != 0) due-negative @endif">{{ $fmt($overallDue) }}</th>
+                    </tr>
+                    <tr class="row-summary">
+                        <th data-col="business_location_qty" class="text-right">{{ $t('expenses') }}</th>
+                        <th data-col="total_price" class="text-right">$ -</th>
+                        @foreach($paymentColumns as $method)
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($overallExpensePayments[$method] ?? null) }}</th>
+                        @endforeach
+                        <th data-col="total" class="text-right">$ -</th>
+                        <th class="text-right">{{ $fmt($overallExpenses) }}</th>
+                        <th class="text-right">$ -</th>
+                        <th data-col="due" class="text-right">$ -</th>
+                    </tr>
+                    <tr class="row-summary">
+                        <th data-col="business_location_qty" class="text-right">{{ $t('actual_total_income') }}</th>
+                        <th data-col="total_price" class="text-right">$ -</th>
+                        @foreach($paymentColumns as $method)
+                            <th data-col="pay_{{ $method }}" class="text-right">{{ $fmt($overallActualIncomePayments[$method] ?? null) }}</th>
+                        @endforeach
+                        <th data-col="total" class="text-right">{{ $fmt($overallPaid) }}</th>
+                        <th class="text-right">{{ $fmt($overallExpenses) }}</th>
+                        <th class="text-right @if($overallActualIncome < 0) due-negative @endif">{{ $fmtStrict($overallActualIncome) }}</th>
+                        <th data-col="due" class="text-right @if($overallDue != 0) due-negative @endif">{{ $fmt($overallDue) }}</th>
                     </tr>
                 </tbody>
             </table>

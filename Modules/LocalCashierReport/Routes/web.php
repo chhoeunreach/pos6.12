@@ -38,6 +38,7 @@ Route::middleware([
         Route::get('/', [LocalCashierReportController::class, 'index'])->name('local-cashier-report.index');
         Route::get('/export', [LocalCashierReportController::class, 'export'])->name('local-cashier-report.export');
         Route::get('/print', [LocalCashierReportController::class, 'print'])->name('local-cashier-report.print');
+        Route::get('/pdf', [LocalCashierReportController::class, 'pdf'])->name('local-cashier-report.pdf');
         Route::get('/expenses-list', [ExpenseListReportController::class, 'index'])->name('local-cashier-report.expenses-list');
     });
 
