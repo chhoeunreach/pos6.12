@@ -50,6 +50,11 @@ class Kernel extends ConsoleKernel
             ->cron('0 2,9,14,17,21 * * *')
             ->withoutOverlapping();
 
+        // Daily Local Cashier Branch Income & Expenses PDF to Telegram group at 08:00 AM
+        $schedule->command('local-cashier-report:send-telegram-pdf')
+            ->dailyAt('08:00')
+            ->withoutOverlapping();
+
         if ($env === 'demo') {
             //IMPORTANT NOTE: This command will delete all business details and create dummy business, run only in demo server.
             $schedule->command('pos:dummyBusiness')

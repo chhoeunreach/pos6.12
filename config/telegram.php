@@ -32,4 +32,12 @@ return [
             'គ្នាយើង-វីអាយភី (Display)' => '-1002880212656',
         ],
     ],
+
+    // Daily Local Cashier Branch Income & Expenses PDF schedule settings
+    'local_cashier_branch_pdf' => [
+        'chat_id' => env('LOCAL_CASHIER_TELEGRAM_CHAT_ID', '-1004312634734'),
+        'business_id' => (int) env('LOCAL_CASHIER_TELEGRAM_BUSINESS_ID', 1),
+        'date_mode' => env('LOCAL_CASHIER_TELEGRAM_DATE_MODE', 'yesterday'),
+        'report_lang' => env('LOCAL_CASHIER_TELEGRAM_LANG', 'km'),
+    ],
 ];

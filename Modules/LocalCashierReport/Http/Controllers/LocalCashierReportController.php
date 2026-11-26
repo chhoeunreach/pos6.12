@@ -153,18 +153,7 @@ class LocalCashierReportController extends Controller
         $tempPdfPath = $tempDir . DIRECTORY_SEPARATOR . 'local_cashier_branch_' . Str::random(12) . '.pdf';
 
         try {
-            /** @var WkhtmltopdfPdfService $pdfService */
-            $pdfService = app(WkhtmltopdfPdfService::class);
-            $pdfService->saveHtmlToPdf($html, $tempPdfPath, [
-                'page-size' => 'A4',
-                'orientation' => 'Landscape',
-                'encoding' => 'utf-8',
-                'enable-local-file-access' => true,
-                'margin-top' => '8mm',
-                'margin-right' => '8mm',
-                'margin-bottom' => '10mm',
-                'margin-left' => '8mm',
-            ]);
+            $this->writeBranchPdfToPath($html, $tempPdfPath);
             $pdfContent = (string) file_get_contents($tempPdfPath);
         } finally {
             if (is_file($tempPdfPath)) {
@@ -180,9 +169,97 @@ class LocalCashierReportController extends Controller
         ]);
     }
 
-    public function getAccessibleLocations(int $businessId)
+    /**
+     * Build Branch PDF HTML and report payload safely for CLI / scheduled jobs without an HTTP user session.
+     */
+    public function buildBranchPdfPayload(
+        int $businessId,
+        string $startDate,
+        string $endDate,
+        string $reportLang = 'km',
+        ?string $businessName = null
+    ): array {
+        $locations = $this->getAccessibleLocations($businessId, true);
+        $accessibleLocationIds = $locations->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $reportLang = in_array($reportLang, ['en', 'km'], true) ? $reportLang : 'km';
+
+        $cliRequest = Request::create('/local-cashier-report/pdf', 'GET', [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'style_mode' => 'branch_dashboard',
+            'report_lang' => $reportLang,
+        ]);
+
+        $filters = $this->validatedFilters($cliRequest, $accessibleLocationIds, $accessibleLocationIds);
+        $filters['business_id'] = $businessId;
+        $report = $this->getReportData($filters);
+        $selectedLocations = $locations->whereIn('id', $filters['location_ids'])->pluck('name')->all();
+
+        $resolvedBusinessName = $businessName;
+        if ($resolvedBusinessName === null || trim($resolvedBusinessName) === '') {
+            $resolvedBusinessName = (string) (DB::table('business')->where('id', $businessId)->value('name') ?: config('app.name'));
+        }
+
+        $currencySymbol = '$';
+        $currencyId = DB::table('business')->where('id', $businessId)->value('currency_id');
+        if ($currencyId) {
+            $dbSymbol = DB::table('currencies')->where('id', (int) $currencyId)->value('symbol');
+            if (! empty($dbSymbol)) {
+                $currencySymbol = (string) $dbSymbol;
+            }
+        }
+
+        $previousLang = request('report_lang');
+        request()->merge(['report_lang' => $reportLang]);
+        try {
+            $html = view('localcashierreport::pdf_branch', [
+                'businessName' => $resolvedBusinessName,
+                'filters' => $filters,
+                'selectedLocations' => $selectedLocations,
+                'currencySymbol' => $currencySymbol,
+                'staticPaymentColumns' => $this->getStaticPaymentColumns(),
+                'report' => $report,
+            ])->render();
+        } finally {
+            if ($previousLang === null) {
+                request()->request->remove('report_lang');
+            } else {
+                request()->merge(['report_lang' => $previousLang]);
+            }
+        }
+
+        return [
+            'html' => $html,
+            'report' => $report,
+            'filters' => $filters,
+            'businessName' => $resolvedBusinessName,
+            'selectedLocations' => $selectedLocations,
+        ];
+    }
+
+    /**
+     * Render Branch PDF HTML to a destination PDF file path using WkhtmltopdfPdfService.
+     */
+    public function writeBranchPdfToPath(string $html, string $outputPath): void
     {
-        $permitted = auth()->user()->permitted_locations($businessId);
+        /** @var WkhtmltopdfPdfService $pdfService */
+        $pdfService = app(WkhtmltopdfPdfService::class);
+        $pdfService->saveHtmlToPdf($html, $outputPath, [
+            'page-size' => 'A4',
+            'orientation' => 'Landscape',
+            'encoding' => 'utf-8',
+            'enable-local-file-access' => true,
+            'margin-top' => '8mm',
+            'margin-right' => '8mm',
+            'margin-bottom' => '10mm',
+            'margin-left' => '8mm',
+        ]);
+    }
+
+    public function getAccessibleLocations(int $businessId, bool $ignoreAuthPermissions = false)
+    {
+        $user = $ignoreAuthPermissions ? null : auth()->user();
+        $permitted = $user ? $user->permitted_locations($businessId) : 'all';
 
         $locations = DB::table('business_locations')
             ->where('business_id', $businessId)
@@ -333,7 +410,7 @@ class LocalCashierReportController extends Controller
 
     public function getReportData(array $filters): array
     {
-        $businessId = (int) session('user.business_id');
+        $businessId = (int) ($filters['business_id'] ?? session('user.business_id'));
         $paymentColumns = [];
 
         $baseTransactions = DB::table('transactions as t')

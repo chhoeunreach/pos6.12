@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Console\Commands\SendBranchCashierPdfToTelegram;
 use Illuminate\Config\Repository;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\RouteCollection;
 use Illuminate\Routing\UrlGenerator;
+use Illuminate\Support\Carbon;
 use Illuminate\Translation\FileLoader;
 use Illuminate\Translation\Translator;
 use Illuminate\View\Compilers\BladeCompiler;
@@ -198,6 +200,32 @@ class LocalCashierBranchPdfTest extends TestCase
         $this->assertStringContainsString('$ 570.00', $printHtml);
 
         $this->assertTrue(method_exists(LocalCashierReportController::class, 'pdf'));
+        $this->assertTrue(method_exists(LocalCashierReportController::class, 'buildBranchPdfPayload'));
         $this->assertTrue(is_file($this->app->basePath('vendor/mpdf/mpdf/ttfonts/KhmerOS.ttf')));
+    }
+
+    public function test_send_telegram_pdf_command_date_resolution_and_caption_summary(): void
+    {
+        $command = new SendBranchCashierPdfToTelegram();
+
+        $this->assertSame(Carbon::yesterday()->format('Y-m-d'), $command->resolveTargetDate('yesterday'));
+        $this->assertSame(Carbon::today()->format('Y-m-d'), $command->resolveTargetDate('today'));
+        $this->assertSame('2026-11-20', $command->resolveTargetDate('2026-11-20'));
+
+        $caption = $command->buildTelegramCaption('KY Shop & Co', '2026-11-25', [
+            ['total' => 500.0, 'paid' => 450.0, 'expenses' => 70.0, 'actual_income' => 380.0, 'due' => 50.0],
+            ['total' => 200.0, 'paid' => 200.0, 'expenses' => 10.0, 'actual_income' => 190.0, 'due' => 0.0],
+        ]);
+
+        $this->assertStringContainsString('KY Shop &amp; Co', $caption);
+        $this->assertStringContainsString('2026-11-25', $caption);
+        $this->assertStringContainsString('$ 700.00', $caption);
+        $this->assertStringContainsString('$ 650.00', $caption);
+        $this->assertStringContainsString('$ 80.00', $caption);
+        $this->assertStringContainsString('$ 570.00', $caption);
+        $this->assertStringContainsString('$ 50.00', $caption);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $command->resolveTargetDate('invalid-date');
     }
 }
