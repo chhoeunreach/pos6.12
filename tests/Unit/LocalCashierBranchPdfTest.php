@@ -198,6 +198,6 @@ class LocalCashierBranchPdfTest extends TestCase
         $this->assertStringContainsString('$ 570.00', $printHtml);
 
         $this->assertTrue(method_exists(LocalCashierReportController::class, 'pdf'));
-        $this->assertTrue(is_file($this->app->basePath('public/fonts/khmer/NotoSansKhmer-Regular.ttf')));
+        $this->assertTrue(is_file($this->app->basePath('vendor/mpdf/mpdf/ttfonts/KhmerOS.ttf')));
     }
 }

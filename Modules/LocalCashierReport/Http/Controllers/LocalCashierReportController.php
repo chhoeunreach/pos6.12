@@ -10,7 +10,9 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\WkhtmltopdfPdfService;
 use Modules\LocalCashierReport\Support\ReportLanguage;
 use Modules\LocalCashierReport\Support\TelegramReport;
 
@@ -144,10 +146,31 @@ class LocalCashierReportController extends Controller
         ])->render();
 
         $fileName = 'local_cashier_branch_report_' . now()->format('Ymd_His') . '.pdf';
-        $mpdf = $this->createLocalCashierMpdf();
-        $mpdf->SetTitle(ReportLanguage::text('branch_pdf_title', ReportLanguage::current()));
-        $mpdf->WriteHTML($html);
-        $pdfContent = $mpdf->Output($fileName, \Mpdf\Output\Destination::STRING_RETURN);
+        $tempDir = storage_path('app' . DIRECTORY_SEPARATOR . 'temp');
+        if (! is_dir($tempDir)) {
+            @mkdir($tempDir, 0755, true);
+        }
+        $tempPdfPath = $tempDir . DIRECTORY_SEPARATOR . 'local_cashier_branch_' . Str::random(12) . '.pdf';
+
+        try {
+            /** @var WkhtmltopdfPdfService $pdfService */
+            $pdfService = app(WkhtmltopdfPdfService::class);
+            $pdfService->saveHtmlToPdf($html, $tempPdfPath, [
+                'page-size' => 'A4',
+                'orientation' => 'Landscape',
+                'encoding' => 'utf-8',
+                'enable-local-file-access' => true,
+                'margin-top' => '8mm',
+                'margin-right' => '8mm',
+                'margin-bottom' => '10mm',
+                'margin-left' => '8mm',
+            ]);
+            $pdfContent = (string) file_get_contents($tempPdfPath);
+        } finally {
+            if (is_file($tempPdfPath)) {
+                @unlink($tempPdfPath);
+            }
+        }
 
         $disposition = $request->boolean('download') ? 'attachment' : 'inline';
 
@@ -155,66 +178,6 @@ class LocalCashierReportController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => $disposition . '; filename="' . $fileName . '"',
         ]);
-    }
-
-    protected function createLocalCashierMpdf(): \Mpdf\Mpdf
-    {
-        $tempDir = null;
-        foreach ([
-            storage_path('app' . DIRECTORY_SEPARATOR . 'temp' . DIRECTORY_SEPARATOR . 'mpdf'),
-            sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'local_cashier_mpdf',
-        ] as $candidate) {
-            $cacheDir = $candidate . DIRECTORY_SEPARATOR . 'mpdf';
-            if (! is_dir($cacheDir)) {
-                @mkdir($cacheDir, 0755, true);
-            }
-            if (is_dir($cacheDir) && is_writable($cacheDir)) {
-                $tempDir = $candidate;
-                break;
-            }
-        }
-        $tempDir = $tempDir ?? sys_get_temp_dir();
-
-        $defaultConfig = (new \Mpdf\Config\ConfigVariables())->getDefaults();
-        $fontDirs = $defaultConfig['fontDir'] ?? [];
-        $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
-        $fontData = $defaultFontConfig['fontdata'] ?? [];
-
-        $khmerFontDir = public_path('fonts/khmer');
-        $defaultFont = 'dejavusans';
-        if (is_dir($khmerFontDir)) {
-            $fontDirs[] = $khmerFontDir;
-            $khmerFontFile = is_file($khmerFontDir . DIRECTORY_SEPARATOR . 'NotoSansKhmer-Regular.ttf')
-                ? 'NotoSansKhmer-Regular.ttf'
-                : (is_file($khmerFontDir . DIRECTORY_SEPARATOR . 'KhmerOSbattambang.ttf')
-                    ? 'KhmerOSbattambang.ttf'
-                    : (is_file($khmerFontDir . DIRECTORY_SEPARATOR . 'Battambang-Regular.ttf') ? 'Battambang-Regular.ttf' : null));
-
-            if ($khmerFontFile !== null) {
-                $fontData['khmerfont'] = [
-                    'R' => $khmerFontFile,
-                    'useOTL' => 0xFF,
-                ];
-                $defaultFont = 'khmerfont';
-            }
-        }
-
-        $mpdf = new \Mpdf\Mpdf([
-            'tempDir' => $tempDir,
-            'mode' => 'utf-8',
-            'format' => 'A4-L',
-            'fontDir' => $fontDirs,
-            'fontdata' => $fontData,
-            'default_font' => $defaultFont,
-            'autoScriptToLang' => true,
-            'autoLangToFont' => true,
-            'margin_left' => 8,
-            'margin_right' => 8,
-            'margin_top' => 10,
-            'margin_bottom' => 12,
-        ]);
-
-        return $mpdf;
     }
 
     public function getAccessibleLocations(int $businessId)

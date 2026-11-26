@@ -55,8 +55,20 @@
     <meta charset="utf-8">
     <title>{{ $t('branch_pdf_title') }}</title>
     <style>
+        @font-face {
+            font-family: 'KhmerOSBattambangLocal';
+            src: url('fonts/KhmerOSbattambang.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'NotoSansKhmerLocal';
+            src: url('fonts/NotoSansKhmer-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
         body {
-            font-family: khmerfont, dejavusans, sans-serif;
+            font-family: 'KhmerOSBattambangLocal', 'NotoSansKhmerLocal', dejavusans, khmeros, sans-serif;
             font-size: 10px;
             color: #111827;
             line-height: 1.45;
