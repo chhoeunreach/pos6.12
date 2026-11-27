@@ -65,14 +65,48 @@ class SkuController extends BaseSmartStockController
     public function history(Request $request, SkuInventoryService $inventory, int $variation)
     {
         SkuPermissions::authorize($request->user(), 'history');
+        $filters = $this->filters($request);
         [$product, $locations, $movements] = $this->historyData($request, $inventory, $variation);
+
+        if ($request->ajax()) {
+            $locationIds = $locations->pluck('id')->all();
+            $movements = app(SkuLotService::class)->attach($movements, $this->businessId(), $variation, $locationIds);
+            $movements = app(SkuSalePriceService::class)->attach($movements, $this->businessId(), $variation, $locationIds);
+
+            $user = $request->user();
+            $canViewCosts = SkuPermissions::allows($user, 'view_cost');
+            $canEditCosts = SkuPermissions::allows($user, 'update_cost');
+            $canUpdateLot = (bool) $user->can('stock_inventory.update');
+            $canUpdateSalePrice = (bool) $user->can('sell.update');
+
+            $formatted = $this->formatHistoryRows(
+                $movements,
+                $product->variation_id,
+                $canViewCosts,
+                $canEditCosts,
+                $canUpdateLot,
+                $canUpdateSalePrice
+            );
+
+            return response()->json([
+                'data' => $formatted,
+                'summary' => [
+                    'current_stock' => (float) ($product->current_stock ?? 0),
+                    'unit' => (string) ($product->unit ?? ''),
+                    'total_in' => round((float) $movements->sum(fn ($r) => max(0, (float) ($r['quantity_change'] ?? 0))), 4),
+                    'total_out' => round((float) $movements->sum(fn ($r) => max(0, -(float) ($r['quantity_change'] ?? 0))), 4),
+                    'count' => $movements->count(),
+                ],
+            ]);
+        }
+
         $rows = new LengthAwarePaginator($movements->forPage(LengthAwarePaginator::resolveCurrentPage(), 100)->values(), $movements->count(), 100, null, [
             'path' => $request->url(), 'query' => $request->query(),
         ]);
         $rows->setCollection(app(SkuLotService::class)->attach($rows->getCollection(), $this->businessId(), $variation, $locations->pluck('id')->all()));
         $rows->setCollection(app(SkuSalePriceService::class)->attach($rows->getCollection(), $this->businessId(), $variation, $locations->pluck('id')->all()));
 
-        return view('smartstockinventory::sku.history', compact('product', 'locations', 'rows'));
+        return view('smartstockinventory::sku.history', compact('product', 'locations', 'rows', 'filters'));
     }
 
     public function export(Request $request, SkuInventoryService $inventory, int $variation)
@@ -126,16 +160,60 @@ class SkuController extends BaseSmartStockController
 
     private function filters(Request $request): array
     {
-        $filters = $request->validate([
-            'location_id' => 'nullable|integer|min:1', 'sku_search' => 'nullable|string|max:191', 'table_search' => 'nullable|string|max:191',
-            'category_id' => 'nullable|integer|min:1', 'brand_id' => 'nullable|integer|min:1',
-            'sub_category_id' => 'nullable|integer|min:1', 'unit_id' => 'nullable|integer|min:1',
+        $validTypes = ['purchase', 'sell', 'opening_stock', 'stock_adjustment', 'purchase_transfer', 'sell_transfer', 'purchase_return', 'sell_return', 'production_purchase'];
+        $rawLocation = $request->input('location_id');
+        $rawType = $request->input('type');
+
+        $rules = [
+            'sku_search' => 'nullable|string|max:191',
+            'table_search' => 'nullable|string|max:191',
+            'category_id' => 'nullable|integer|min:1',
+            'brand_id' => 'nullable|integer|min:1',
+            'sub_category_id' => 'nullable|integer|min:1',
+            'unit_id' => 'nullable|integer|min:1',
             'product_status' => 'nullable|in:active,inactive',
             'stock_status' => 'nullable|in:positive,zero,negative',
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d' . ($request->filled('start_date') ? '|after_or_equal:start_date' : ''),
-            'type' => 'nullable|in:purchase,sell,opening_stock,stock_adjustment,purchase_transfer,sell_transfer,purchase_return,sell_return,production_purchase',
-        ]);
+            'direction' => 'nullable|in:all,in,out',
+        ];
+
+        if (is_array($rawLocation)) {
+            $rules['location_id'] = 'nullable|array';
+            $rules['location_id.*'] = 'nullable|string|max:20';
+        } elseif ($rawLocation !== 'all') {
+            $rules['location_id'] = 'nullable|integer|min:1';
+        }
+
+        if (is_array($rawType)) {
+            $rules['type'] = 'nullable|array';
+            $rules['type.*'] = 'nullable|in:all,' . implode(',', $validTypes);
+        } elseif ($rawType !== 'all') {
+            $rules['type'] = 'nullable|in:' . implode(',', $validTypes);
+        }
+
+        $filters = $request->validate($rules);
+
+        $locationIds = [];
+        foreach ((array) $rawLocation as $value) {
+            if ($value === null || $value === '' || $value === 'all') {
+                continue;
+            }
+            $locationIds[] = (int) $value;
+        }
+        $filters['location_ids'] = array_values(array_unique(array_filter($locationIds, fn ($id) => $id > 0)));
+        if (count($filters['location_ids']) === 1) {
+            $filters['location_id'] = $filters['location_ids'][0];
+        } elseif (empty($filters['location_ids'])) {
+            $filters['location_id'] = null;
+        }
+
+        $filters['types'] = collect((array) $rawType)
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '' && $v !== 'all')
+            ->values()
+            ->all();
+        $filters['type'] = count($filters['types']) === 1 ? $filters['types'][0] : ($filters['types'] ?: null);
         $filters['search'] = $filters['sku_search'] ?? (is_string($request->input('search')) ? mb_substr($request->input('search'), 0, 191) : '');
 
         return $filters;
@@ -146,9 +224,125 @@ class SkuController extends BaseSmartStockController
         $businessId = $this->businessId();
         $allowed = $this->permittedLocationIds($businessId);
         $locations = $this->locationOptions($businessId)->whereIn('id', $allowed)->values();
-        $selected = (int) ($filters['location_id'] ?? 0);
-        abort_if($selected > 0 && ! $locations->contains('id', $selected), 403);
+        $requestedIds = ! empty($filters['location_ids'])
+            ? array_values(array_unique(array_map('intval', $filters['location_ids'])))
+            : ((int) ($filters['location_id'] ?? 0) > 0 ? [(int) $filters['location_id']] : []);
 
-        return [$locations, $selected > 0 ? [$selected] : $locations->pluck('id')->all()];
+        foreach ($requestedIds as $selected) {
+            abort_if($selected > 0 && ! $locations->contains('id', $selected), 403);
+        }
+
+        return [$locations, ! empty($requestedIds) ? $requestedIds : $locations->pluck('id')->all()];
+    }
+
+    private function formatHistoryRows($movements, int $variationId, bool $canViewCosts, bool $canEditCosts, bool $canUpdateLot, bool $canUpdateSalePrice): array
+    {
+        return collect($movements)->map(function ($row) use ($variationId, $canViewCosts, $canEditCosts, $canUpdateLot, $canUpdateSalePrice) {
+            $type = (string) ($row['type'] ?? '');
+            $txnId = (int) ($row['transaction_id'] ?? 0);
+            $refText = (string) (($row['ref_no'] ?? '') !== '' ? $row['ref_no'] : '#' . $txnId);
+            $transactionPath = match ($type) {
+                'sell' => '/sells/',
+                'sell_return' => '/sell-return/',
+                'purchase', 'opening_stock', 'production_purchase' => '/purchases/',
+                'purchase_return' => '/purchase-return/',
+                'stock_adjustment' => '/stock-adjustments/',
+                'sell_transfer', 'purchase_transfer' => '/stock-transfers/',
+                default => null,
+            };
+            if ($transactionPath) {
+                $modalUrl = ssi_url($transactionPath . $txnId) . (in_array($type, ['purchase', 'opening_stock', 'production_purchase'], true) ? '?sku_history=1' : '');
+                $refHtml = '<a href="#" class="btn-modal" data-href="' . e($modalUrl) . '" data-container=".view_modal" data-export-value="' . e($refText) . '">' . e($refText) . '</a>';
+            } else {
+                $refHtml = '<span data-export-value="' . e($refText) . '">' . e($refText) . '</span>';
+            }
+
+            $lots = collect($row['lots'] ?? []);
+            $lotsExport = $lots->pluck('lot_number')->filter()->unique()->implode(', ');
+            $lotsHtml = $lots->map(function ($lot) use ($variationId, $canUpdateLot) {
+                $lotNo = (string) ($lot['lot_number'] ?? '');
+                $lotDisplay = $lotNo !== ''
+                    ? '<a href="' . e(ssi_route('ssi.lot.history', ['lot' => $lotNo])) . '">' . e($lotNo) . '</a>'
+                    : '<span class="text-muted">No lot number</span>';
+                $btn = ($canUpdateLot && ! empty($lot['editable']))
+                    ? ' <button type="button" class="btn btn-xs btn-default sku-quick-lot" data-url="' . e(ssi_route('ssi.sku.lot.update', ['variation' => $variationId, 'line' => $lot['id']])) . '" data-lot-number="' . e($lotNo) . '" data-line-id="' . e((string) $lot['id']) . '"><i class="fa fa-pencil"></i> Quick Update</button>'
+                    : '';
+
+                return '<div style="white-space:nowrap;margin-bottom:4px">' . $lotDisplay . $btn . '</div>';
+            })->implode('');
+            if ($lotsHtml === '') {
+                $lotsHtml = '<span class="text-muted">—</span>';
+            }
+            $lotsHtml = '<span data-export-value="' . e($lotsExport) . '"></span>' . $lotsHtml;
+
+            $salePrices = collect($row['sale_prices'] ?? []);
+            $saleExport = $salePrices->map(fn ($line) => (count($salePrices) > 1 ? '#' . $line['id'] . ': ' : '') . $line['unit_price'])->implode('; ');
+            $saleHtml = $salePrices->map(function ($salePrice) use ($salePrices) {
+                $prefix = count($salePrices) > 1 ? '<small>#' . e((string) $salePrice['id']) . ':</small> ' : '';
+                return '<div style="white-space:nowrap;margin-bottom:4px">' . $prefix . '<span class="display_currency" data-currency_symbol="true">' . e((string) $salePrice['unit_price']) . '</span></div>';
+            })->implode('');
+            if ($saleHtml === '') {
+                $saleHtml = '<span class="text-muted">—</span>';
+            }
+            if ($salePrices->isNotEmpty() && $canUpdateSalePrice) {
+                $saleHtml .= '<button type="button" class="btn btn-xs btn-default sku-quick-sale-price" data-url="' . e(ssi_route('ssi.sku.sale_price.edit', ['variation' => $variationId, 'transaction' => $txnId])) . '"><i class="fa fa-pencil"></i> Quick Update</button>';
+            }
+            $saleHtml = '<span data-export-value="' . e($saleExport) . '"></span>' . $saleHtml;
+
+            $costBeforeHtml = '';
+            $costIncHtml = '';
+            if ($canViewCosts) {
+                $beforeExport = $lots->map(fn ($lot) => ($lot['lot_number'] ?: '#' . $lot['id']) . ': ' . ($lot['unit_cost_before_discount'] ?? 'Unavailable'))->implode('; ');
+                $beforeInner = $lots->map(function ($lot) use ($lots, $canEditCosts) {
+                    $prefix = count($lots) > 1 ? '<small>' . e((string) ($lot['lot_number'] ?: '#' . $lot['id'])) . ':</small> ' : '';
+                    $val = $lot['unit_cost_before_discount'] !== null
+                        ? '<span class="display_currency" data-currency_symbol="true">' . e((string) $lot['unit_cost_before_discount']) . '</span>'
+                        : '<span class="text-muted">Unavailable</span>';
+                    $btn = ($canEditCosts && ! empty($lot['cost_editable']))
+                        ? ' <button type="button" class="btn btn-xs btn-default sku-before-cost" data-url="' . e(ssi_route('ssi.sku.cost.edit', ['sourceName' => 'main', 'line' => $lot['id'], 'price_basis' => 'before_discount'])) . '"><i class="fa fa-pencil"></i> Quick Update</button>'
+                        : '';
+                    return '<div style="white-space:nowrap;margin-bottom:4px">' . $prefix . $val . $btn . '</div>';
+                })->implode('');
+                $costBeforeHtml = '<span data-export-value="' . e($beforeExport) . '"></span>' . ($beforeInner !== '' ? $beforeInner : '<span class="text-muted">—</span>');
+
+                $incExport = $lots->map(fn ($lot) => ($lot['lot_number'] ?: '#' . $lot['id']) . ': ' . ($lot['unit_cost'] ?? 'Unavailable'))->implode('; ');
+                $incInner = $lots->map(function ($lot) use ($lots, $canEditCosts) {
+                    $prefix = count($lots) > 1 ? '<small>' . e((string) ($lot['lot_number'] ?: '#' . $lot['id'])) . ':</small> ' : '';
+                    $val = $lot['unit_cost'] !== null
+                        ? '<span class="display_currency" data-currency_symbol="true">' . e((string) $lot['unit_cost']) . '</span>'
+                        : '<span class="text-muted">Unavailable</span>';
+                    $btn = ($canEditCosts && ! empty($lot['cost_editable']))
+                        ? ' <button type="button" class="btn btn-xs btn-default sku-quick-cost" data-url="' . e(ssi_route('ssi.sku.cost.edit', ['sourceName' => 'main', 'line' => $lot['id']])) . '"><i class="fa fa-pencil"></i> Update Cost</button>'
+                        : '';
+                    return '<div style="white-space:nowrap;margin-bottom:4px">' . $prefix . $val . $btn . '</div>';
+                })->implode('');
+                $costIncHtml = '<span data-export-value="' . e($incExport) . '"></span>' . ($incInner !== '' ? $incInner : '<span class="text-muted">—</span>');
+            }
+
+            $qtyChange = (float) ($row['quantity_change'] ?? 0);
+            $qtyIn = max(0.0, $qtyChange);
+            $qtyOut = max(0.0, -$qtyChange);
+            $stock = (float) ($row['stock'] ?? 0);
+            $dateText = (string) ($row['date'] ?? '');
+
+            return [
+                'date' => '<span data-export-value="' . e($dateText) . '">' . e($dateText) . '</span>',
+                'date_raw' => $dateText,
+                'location_name' => (string) ($row['location_name'] ?? ''),
+                'type_label' => (string) ($row['type_label'] ?? $type),
+                'ref_html' => $refHtml,
+                'contact_name' => (string) ($row['contact_name'] ?? $row['supplier_business_name'] ?? ''),
+                'lots_html' => $lotsHtml,
+                'sale_price_html' => $saleHtml,
+                'cost_before_html' => $costBeforeHtml,
+                'cost_inc_html' => $costIncHtml,
+                'qty_in' => $qtyIn,
+                'qty_out' => $qtyOut,
+                'stock' => $stock,
+                'qty_in_html' => '<span class="display_currency" data-is_quantity="true" data-currency_symbol="false" data-orig-value="' . e((string) $qtyIn) . '">' . e((string) $qtyIn) . '</span>',
+                'qty_out_html' => '<span class="display_currency" data-is_quantity="true" data-currency_symbol="false" data-orig-value="' . e((string) $qtyOut) . '">' . e((string) $qtyOut) . '</span>',
+                'stock_html' => '<span class="display_currency" data-is_quantity="true" data-currency_symbol="false" data-orig-value="' . e((string) $stock) . '">' . e((string) $stock) . '</span>',
+            ];
+        })->values()->all();
     }
 }

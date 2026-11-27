@@ -380,4 +380,52 @@ class SkuManagementTest extends TestCase
         $this->assertContains('Unit Cost (incl. tax)', $exports[1][0]);
     }
 
+    public function test_history_ajax_filters_by_locations_types_and_direction_and_formats_export_cells(): void
+    {
+        $this->createLotFixtures();
+        session(['user.business_id' => 1]);
+        $util = \Mockery::mock(ProductUtil::class);
+        $util->shouldReceive('getVariationStockHistory')->with(1, 11, 1)->andReturn([
+            ['transaction_id' => 1, 'date' => '2026-11-10 09:00:00', 'type' => 'purchase', 'type_label' => 'Purchase', 'ref_no' => 'PO-1', 'quantity_change' => 10, 'stock' => 10],
+            ['transaction_id' => 2, 'date' => '2026-11-11 10:00:00', 'type' => 'sell', 'type_label' => 'Sell', 'ref_no' => 'INV-2', 'quantity_change' => -3, 'stock' => 7],
+        ]);
+        $util->shouldReceive('getVariationStockHistory')->with(1, 11, 2)->andReturn([
+            ['transaction_id' => 3, 'date' => '2026-11-12 11:00:00', 'type' => 'purchase_transfer', 'type_label' => 'Transfer In', 'ref_no' => 'TR-3', 'quantity_change' => 4, 'stock' => 104],
+        ]);
+
+        $inventory = new SkuInventoryService($util);
+        $actor = new class { public function can($permission) { return true; } };
+        $controller = \Mockery::mock(SkuController::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $controller->shouldReceive('permittedLocationIds')->with(1)->andReturn([1, 2]);
+
+        $request = Request::create('/smart-stock-inventory/sku/history/11', 'GET', [
+            'location_id' => ['1', '2'],
+            'type' => ['purchase', 'purchase_transfer'],
+            'direction' => 'in',
+        ], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $request->setUserResolver(fn () => $actor);
+
+        $response = $controller->history($request, $inventory, 11);
+        $payload = $response->getData(true);
+
+        $this->assertSame(2, $payload['summary']['count']);
+        $this->assertEquals(14.0, $payload['summary']['total_in']);
+        $this->assertEquals(0.0, $payload['summary']['total_out']);
+        $this->assertCount(2, $payload['data']);
+        $this->assertStringContainsString('data-export-value="TR-3"', $payload['data'][0]['ref_html']);
+        $this->assertStringContainsString('data-export-value="LOT-A"', $payload['data'][1]['lots_html']);
+
+        // Reject unpermitted location inside multi-location array
+        $deniedRequest = Request::create('/smart-stock-inventory/sku/history/11', 'GET', [
+            'location_id' => ['1', '3'],
+        ], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $deniedRequest->setUserResolver(fn () => $actor);
+
+        try {
+            $controller->history($deniedRequest, $inventory, 11);
+            $this->fail('Expected unpermitted location in array to be rejected');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
 }

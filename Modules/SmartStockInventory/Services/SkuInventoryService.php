@@ -49,16 +49,28 @@ class SkuInventoryService
 
     public function history(int $businessId, int $variationId, array $locationIds, array $filters = [])
     {
+        $selectedTypes = collect(is_array($filters['type'] ?? null) ? $filters['type'] : [($filters['type'] ?? null)])
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn ($value) => $value !== '' && $value !== 'all')
+            ->values()
+            ->all();
+        $direction = trim((string) ($filters['direction'] ?? ''));
+
         // Calculate each location's full history before date filtering, preserving opening balances.
         return DB::table('business_locations')->where('business_id', $businessId)->whereIn('id', $locationIds)
             ->get(['id', 'name'])->flatMap(function ($location) use ($businessId, $variationId) {
                 return collect($this->productUtil->getVariationStockHistory($businessId, $variationId, $location->id))
                     ->map(fn ($row) => array_merge($row, ['location_id' => $location->id, 'location_name' => $location->name]));
-            })->filter(function ($row) use ($filters) {
+            })->filter(function ($row) use ($filters, $selectedTypes, $direction) {
                 $date = substr((string) $row['date'], 0, 10);
+                $qtyChange = (float) ($row['quantity_change'] ?? 0);
+
                 return (empty($filters['start_date']) || $date >= $filters['start_date'])
                     && (empty($filters['end_date']) || $date <= $filters['end_date'])
-                    && (empty($filters['type']) || $row['type'] === $filters['type']);
+                    && (empty($selectedTypes) || in_array((string) ($row['type'] ?? ''), $selectedTypes, true))
+                    && ($direction === '' || $direction === 'all'
+                        || ($direction === 'in' && $qtyChange > 0)
+                        || ($direction === 'out' && $qtyChange < 0));
             })->sort(function ($a, $b) {
                 return [$b['date'], $b['transaction_id'], $b['location_id']] <=> [$a['date'], $a['transaction_id'], $a['location_id']];
             })->values();
