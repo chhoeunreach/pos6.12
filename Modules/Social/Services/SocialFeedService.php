@@ -37,9 +37,10 @@ class SocialFeedService
     public function listPublicFeed(
         ?int $locationId = null,
         ?string $postType = null,
-        ?int $customerId = null,
+        ?int $actorId = null,
         ?int $cursor = null,
-        int $limit = 15
+        int $limit = 15,
+        string $actorType = 'customer'
     ): array {
         $limit = max(1, min($limit, 40));
         $version = (int)Cache::get('social_feed:version', 1);
@@ -84,17 +85,17 @@ class SocialFeedService
                 ->get();
         });
 
-        if ($customerId !== null && $customerId > 0) {
-            $blockedCustomerIds = SocialUserBlock::query()
-                ->where('blocker_type', 'customer')
-                ->where('blocker_id', $customerId)
-                ->where('blocked_type', 'customer')
-                ->pluck('blocked_id')
+        if ($actorId !== null && $actorId > 0) {
+            $blockedPairs = SocialUserBlock::query()
+                ->where('blocker_type', $actorType)
+                ->where('blocker_id', $actorId)
+                ->get(['blocked_type', 'blocked_id'])
+                ->map(fn ($b) => $b->blocked_type . ':' . (int)$b->blocked_id)
                 ->all();
-            if (!empty($blockedCustomerIds)) {
+            if (!empty($blockedPairs)) {
+                $blockedLookup = array_flip($blockedPairs);
                 $rows = $rows->reject(
-                    fn (SocialPost $p) => $p->author_type === 'customer'
-                        && in_array((int)$p->author_id, $blockedCustomerIds, true)
+                    fn (SocialPost $p) => isset($blockedLookup[$p->author_type . ':' . (int)$p->author_id])
                 )->values();
             }
         }
@@ -105,17 +106,17 @@ class SocialFeedService
 
         $reactionsByPost = [];
         $bookmarkedPostIds = [];
-        if ($customerId !== null && $customerId > 0 && $items->isNotEmpty()) {
+        if ($actorId !== null && $actorId > 0 && $items->isNotEmpty()) {
             $postIds = $items->pluck('id')->all();
             $reactionsByPost = SocialReaction::query()
-                ->where('actor_type', 'customer')
-                ->where('actor_id', $customerId)
+                ->where('actor_type', $actorType)
+                ->where('actor_id', $actorId)
                 ->whereIn('post_id', $postIds)
                 ->pluck('reaction_type', 'post_id')
                 ->all();
             $bookmarkedPostIds = SocialBookmark::query()
-                ->where('actor_type', 'customer')
-                ->where('actor_id', $customerId)
+                ->where('actor_type', $actorType)
+                ->where('actor_id', $actorId)
                 ->whereIn('post_id', $postIds)
                 ->pluck('post_id')
                 ->all();
@@ -136,25 +137,25 @@ class SocialFeedService
         ];
     }
 
-    public function showPublicPost(int $postId, ?int $customerId = null): SocialPost
+    public function showPublicPost(int $postId, ?int $actorId = null, string $actorType = 'customer'): SocialPost
     {
         $post = SocialPost::query()
             ->with(['media', 'sharedPost'])
             ->where('status', 'published')
             ->findOrFail($postId);
 
-        $reaction = $customerId
+        $reaction = $actorId
             ? SocialReaction::query()
                 ->where('post_id', $post->id)
-                ->where('actor_type', 'customer')
-                ->where('actor_id', $customerId)
+                ->where('actor_type', $actorType)
+                ->where('actor_id', $actorId)
                 ->value('reaction_type')
             : null;
-        $isBookmarked = $customerId
+        $isBookmarked = $actorId
             ? SocialBookmark::query()
                 ->where('post_id', $post->id)
-                ->where('actor_type', 'customer')
-                ->where('actor_id', $customerId)
+                ->where('actor_type', $actorType)
+                ->where('actor_id', $actorId)
                 ->exists()
             : false;
 
@@ -178,17 +179,17 @@ class SocialFeedService
         }
     }
 
-    public function toggleReaction(int $postId, int $customerId, string $reactionType = 'like'): array
+    public function toggleReaction(int $postId, int $actorId, string $reactionType = 'like', string $actorType = 'customer'): array
     {
         $allowed = ['like', 'love', 'care', 'haha', 'wow', 'sad', 'angry'];
         $reactionType = in_array($reactionType, $allowed, true) ? $reactionType : 'like';
         $post = SocialPost::query()->where('status', 'published')->findOrFail($postId);
 
-        return DB::connection('mysql_feed')->transaction(function () use ($post, $customerId, $reactionType) {
+        return DB::connection('mysql_feed')->transaction(function () use ($post, $actorId, $actorType, $reactionType) {
             $existing = SocialReaction::query()
                 ->where('post_id', $post->id)
-                ->where('actor_type', 'customer')
-                ->where('actor_id', $customerId)
+                ->where('actor_type', $actorType)
+                ->where('actor_id', $actorId)
                 ->first();
 
             if ($existing && $existing->reaction_type === $reactionType) {
@@ -204,8 +205,8 @@ class SocialFeedService
             } else {
                 SocialReaction::create([
                     'post_id' => $post->id,
-                    'actor_type' => 'customer',
-                    'actor_id' => $customerId,
+                    'actor_type' => $actorType,
+                    'actor_id' => $actorId,
                     'reaction_type' => $reactionType,
                 ]);
                 $post->increment('likes_count');
@@ -223,14 +224,14 @@ class SocialFeedService
         });
     }
 
-    public function toggleBookmark(int $postId, int $customerId): array
+    public function toggleBookmark(int $postId, int $actorId, string $actorType = 'customer'): array
     {
         SocialPost::query()->where('status', 'published')->findOrFail($postId);
 
         $existing = SocialBookmark::query()
             ->where('post_id', $postId)
-            ->where('actor_type', 'customer')
-            ->where('actor_id', $customerId)
+            ->where('actor_type', $actorType)
+            ->where('actor_id', $actorId)
             ->first();
 
         if ($existing) {
@@ -240,8 +241,8 @@ class SocialFeedService
 
         SocialBookmark::create([
             'post_id' => $postId,
-            'actor_type' => 'customer',
-            'actor_id' => $customerId,
+            'actor_type' => $actorType,
+            'actor_id' => $actorId,
         ]);
 
         return ['bookmarked' => true];
@@ -269,11 +270,12 @@ class SocialFeedService
         return ['following' => true];
     }
 
-    public function sharePost(int $postId, $customer, ?string $caption = null): SocialPost
+    public function sharePost(int $postId, $actor, ?string $caption = null, string $actorType = 'customer'): SocialPost
     {
         $original = SocialPost::query()->where('status', 'published')->findOrFail($postId);
+        $actorName = $this->resolveActorName($actor, $actorType);
 
-        return DB::connection('mysql_feed')->transaction(function () use ($original, $customer, $caption) {
+        return DB::connection('mysql_feed')->transaction(function () use ($original, $actor, $actorType, $actorName, $caption) {
             $original->increment('shares_count');
 
             $shared = SocialPost::create([
@@ -281,9 +283,9 @@ class SocialFeedService
                 'business_id' => $original->business_id,
                 'location_id' => $original->location_id,
                 'location_name' => $original->location_name,
-                'author_type' => 'customer',
-                'author_id' => (int)($customer->id ?? 0),
-                'author_name' => (string)($customer->name ?? $customer->phone ?? 'Customer'),
+                'author_type' => $actorType,
+                'author_id' => (int)($actor->id ?? 0),
+                'author_name' => $actorName,
                 'post_type' => 'share',
                 'shared_post_id' => $original->id,
                 'title' => $original->title,
@@ -340,6 +342,11 @@ class SocialFeedService
 
     public function createCustomerPost($customer, array $payload, ?UploadedFile $imageFile = null): SocialPost
     {
+        return $this->createActorPost($customer, 'customer', $payload, $imageFile);
+    }
+
+    public function createActorPost($actor, string $actorType, array $payload, ?UploadedFile $imageFile = null): SocialPost
+    {
         $mediaUrls = isset($payload['media_urls']) && is_array($payload['media_urls'])
             ? array_values(array_filter(array_map('strval', $payload['media_urls'])))
             : [];
@@ -353,14 +360,21 @@ class SocialFeedService
             }
         }
 
-        return DB::connection('mysql_feed')->transaction(function () use ($customer, $payload, $mediaUrls, $thumbnailUrl) {
+        $actorName = $this->resolveActorName($actor, $actorType);
+        $businessId = $actorType === 'staff' ? $this->branchPerms->getBusinessId($actor) : null;
+        $locationId = $actorType === 'staff'
+            ? $this->branchPerms->resolveRequestedLocationId($actor, $payload['location_id'] ?? null)
+            : ($payload['location_id'] ?? null);
+
+        return DB::connection('mysql_feed')->transaction(function () use ($actor, $actorType, $actorName, $businessId, $locationId, $payload, $mediaUrls, $thumbnailUrl) {
             $post = SocialPost::create([
                 'uuid' => (string)Str::uuid(),
-                'location_id' => $payload['location_id'] ?? null,
+                'business_id' => $businessId,
+                'location_id' => $locationId,
                 'location_name' => $payload['location_name'] ?? null,
-                'author_type' => 'customer',
-                'author_id' => (int)($customer->id ?? 0),
-                'author_name' => (string)($customer->name ?? $customer->phone ?? 'Customer'),
+                'author_type' => $actorType,
+                'author_id' => (int)($actor->id ?? 0),
+                'author_name' => $actorName,
                 'post_type' => $payload['post_type'] ?? (empty($mediaUrls) ? 'tips' : 'photo'),
                 'title' => (string)$payload['title'],
                 'content' => $payload['content'] ?? null,
@@ -384,10 +398,22 @@ class SocialFeedService
 
     public function deleteCustomerPost(int $customerId, int $postId): void
     {
+        $this->deleteActorPost('customer', $customerId, $postId);
+    }
+
+    public function deleteActorPost(string $actorType, int $actorId, int $postId, $actorUser = null): void
+    {
         $post = SocialPost::query()->findOrFail($postId);
-        if ($post->author_type !== 'customer' || (int)$post->author_id !== $customerId) {
+        $isOwner = $post->author_type === $actorType && (int)$post->author_id === $actorId;
+        $canModerate = $actorType === 'staff' && $actorUser && (
+            $this->branchPerms->isOwnerOrAdmin($actorUser)
+            || $this->branchPerms->hasPermission($actorUser, 'loan.feed.delete')
+        );
+
+        if (!$isOwner && !$canModerate) {
             abort(403, 'You can only delete your own post.');
         }
+
         $post->delete();
         $this->bumpFeedCacheVersion();
     }
@@ -405,14 +431,29 @@ class SocialFeedService
         ]);
     }
 
-    public function blockActor(int $blockerCustomerId, string $blockedType, int $blockedId): void
+    public function blockActor(int $blockerId, string $blockedType, int $blockedId, string $blockerType = 'customer'): void
     {
         SocialUserBlock::query()->firstOrCreate([
-            'blocker_type' => 'customer',
-            'blocker_id' => $blockerCustomerId,
+            'blocker_type' => $blockerType,
+            'blocker_id' => $blockerId,
             'blocked_type' => $blockedType,
             'blocked_id' => $blockedId,
         ]);
+    }
+
+    protected function resolveActorName($actor, string $actorType): string
+    {
+        if ($actorType === 'staff') {
+            $name = trim((string)(
+                $actor->name
+                ?? trim(((string)($actor->first_name ?? '')) . ' ' . ((string)($actor->last_name ?? '')))
+                ?: ($actor->username ?? 'Staff')
+            ));
+            return $name !== '' ? $name : 'Staff';
+        }
+
+        $name = trim((string)($actor->khmer_name ?: ($actor->name ?: ($actor->phone ?? 'Customer'))));
+        return $name !== '' ? $name : 'Customer';
     }
 
     public function generatePresignedUpload(string $extension, string $mimeType): array
