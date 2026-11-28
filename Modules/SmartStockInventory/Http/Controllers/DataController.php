@@ -115,6 +115,7 @@ class DataController extends Controller
                         $sub->url(ssi_route('ssi.imei.index'), 'IMEI Management', ['icon' => 'fa fa-mobile']);
                         $sub->url(ssi_route('ssi.lot.index'), 'Lot Management', ['icon' => 'fa fa-tags']);
                         $sub->url(ssi_route('ssi.sku.index'), 'SKU Management', ['icon' => 'fa fa-barcode']);
+                        $sub->url(ssi_route('ssi.compare_price.index'), 'Compare Price', ['icon' => 'fa fa-balance-scale']);
                     }
                     if ($hasSuperAdminAccess || $user->can('ssi.audit.view')) {
                         $sub->url(ssi_route('ssi.enterprise.audit.index'), 'Enterprise Audit', ['icon' => 'fa fa-clipboard']);

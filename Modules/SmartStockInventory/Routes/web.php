@@ -99,6 +99,18 @@ Route::middleware([
     Route::put('/sku/{variation}/lots/{line}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'updateLot'])->whereNumber(['variation', 'line'])->name('ssi.sku.lot.update');
     Route::get('/sku/history/{variation}', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'history'])->whereNumber('variation')->name('ssi.sku.history');
     Route::get('/sku/history/{variation}/export', [\Modules\SmartStockInventory\Http\Controllers\SkuController::class, 'export'])->whereNumber('variation')->name('ssi.sku.export');
+
+    Route::get('/compare-price', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'index'])->name('ssi.compare_price.index');
+    Route::get('/compare-price/create', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'create'])->name('ssi.compare_price.create');
+    Route::post('/compare-price', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'store'])->name('ssi.compare_price.store');
+    Route::get('/compare-price/template', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'template'])->name('ssi.compare_price.template');
+    Route::post('/compare-price/import-preview', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'importPreview'])->name('ssi.compare_price.import_preview');
+    Route::get('/compare-price/search-sku', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'searchSku'])->name('ssi.compare_price.search_sku');
+    Route::get('/compare-price/{id}', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'show'])->whereNumber('id')->name('ssi.compare_price.show');
+    Route::get('/compare-price/{id}/edit', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'edit'])->whereNumber('id')->name('ssi.compare_price.edit');
+    Route::put('/compare-price/{id}', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'update'])->whereNumber('id')->name('ssi.compare_price.update');
+    Route::delete('/compare-price/{id}', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'destroy'])->whereNumber('id')->name('ssi.compare_price.destroy');
+    Route::get('/compare-price/{id}/export', [\Modules\SmartStockInventory\Http\Controllers\PriceCompareController::class, 'export'])->whereNumber('id')->name('ssi.compare_price.export');
     Route::get('/lot', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'index'])->name('ssi.lot.index');
     Route::get('/lot/export', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'export'])->name('ssi.lot.export');
     Route::get('/lot/history/{lot}', ['\Modules\SmartStockInventory\Http\Controllers\LotController', 'history'])->name('ssi.lot.history');
