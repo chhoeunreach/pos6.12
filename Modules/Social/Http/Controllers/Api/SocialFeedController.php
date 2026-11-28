@@ -5,17 +5,32 @@ namespace Modules\Social\Http\Controllers\Api;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Modules\Social\Services\SocialActorResolver;
 use Modules\Social\Services\SocialFeedService;
+use Modules\Social\Services\SocialSettingsService;
 
 class SocialFeedController extends Controller
 {
     public function __construct(
         protected SocialFeedService $feed,
+        protected ?SocialActorResolver $actors = null,
     ) {
+        $this->actors = $actors ?? new SocialActorResolver();
+        $this->middleware(function ($request, $next) {
+            $settings = SocialSettingsService::get();
+            if (empty($settings['api_enabled'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Social Platform API is currently disabled by administrator.',
+                ], 503);
+            }
+            return $next($request);
+        })->except(['health']);
     }
 
     public function health()
     {
+        $settings = SocialSettingsService::get();
         $connected = false;
         $tablesReady = false;
         $database = null;
@@ -34,6 +49,7 @@ class SocialFeedController extends Controller
                 'social_follows',
                 'social_reports',
                 'social_user_blocks',
+                'social_settings',
             ])->every(fn (string $table) => $schema->hasTable($table));
         } catch (\Throwable $e) {
             $connected = false;
@@ -46,10 +62,15 @@ class SocialFeedController extends Controller
         }
 
         return response()->json([
-            'success' => $ready,
+            'success' => $ready && !empty($settings['api_enabled']),
             'message' => $message,
             'data' => [
                 'module' => 'Social',
+                'platform_name' => $settings['platform_name'],
+                'mode' => $settings['mode'],
+                'api_enabled' => (bool)$settings['api_enabled'],
+                'public_feed_enabled' => (bool)$settings['public_feed_enabled'],
+                'customer_posting_enabled' => (bool)$settings['customer_posting_enabled'],
                 'connection' => 'mysql_feed',
                 'database' => $database,
                 'connected' => $connected,
@@ -58,21 +79,44 @@ class SocialFeedController extends Controller
         ], $ready ? 200 : 503);
     }
 
+    protected function resolveActor(Request $request, ?string $preferredType = null): ?array
+    {
+        return ($this->actors ?? new SocialActorResolver())->resolve($request, $preferredType);
+    }
+
+    protected function requireActor(Request $request, ?string $preferredType = null): array
+    {
+        return ($this->actors ?? new SocialActorResolver())->requireActor($request, $preferredType);
+    }
+
     protected function resolveCustomerId(Request $request): ?int
     {
-        $user = $request->user('customer_loan_api') ?? $request->user('api');
-        return $user ? (int)$user->id : null;
+        $actor = $this->resolveActor($request);
+        return $actor ? (int)$actor['id'] : null;
     }
 
     public function publicIndex(Request $request)
     {
+        $settings = SocialSettingsService::get();
+        if (empty($settings['public_feed_enabled'])) {
+            abort(403, 'Public Social Feed is disabled in Admin Social Panel.');
+        }
+
         $locationId = $request->query('location_id') ? (int)$request->query('location_id') : null;
         $postType = $request->query('post_type') ? (string)$request->query('post_type') : null;
         $cursor = $request->query('cursor') ? (int)$request->query('cursor') : null;
-        $limit = (int)$request->query('limit', $request->query('per_page', 15));
-        $customerId = $this->resolveCustomerId($request);
+        $defaultLimit = (int)($settings['per_page_limit'] ?? 15);
+        $limit = (int)$request->query('limit', $request->query('per_page', $defaultLimit));
+        $actor = $this->resolveActor($request);
 
-        $result = $this->feed->listPublicFeed($locationId, $postType, $customerId, $cursor, $limit);
+        $result = $this->feed->listPublicFeed(
+            $locationId,
+            $postType,
+            $actor ? (int)$actor['id'] : null,
+            $cursor,
+            $limit,
+            $actor['type'] ?? 'customer'
+        );
 
         return response()->json([
             'success' => true,
@@ -81,14 +125,25 @@ class SocialFeedController extends Controller
             'meta' => [
                 'next_cursor' => $result['next_cursor'],
                 'has_more' => $result['has_more'],
+                'mode' => $settings['mode'],
+                'platform_name' => $settings['platform_name'],
             ],
         ]);
     }
 
     public function publicShow(Request $request, $post)
     {
-        $customerId = $this->resolveCustomerId($request);
-        $item = $this->feed->showPublicPost((int)$post, $customerId);
+        $settings = SocialSettingsService::get();
+        if (empty($settings['public_feed_enabled'])) {
+            abort(403, 'Public Social Feed is disabled in Admin Social Panel.');
+        }
+
+        $actor = $this->resolveActor($request);
+        $item = $this->feed->showPublicPost(
+            (int)$post,
+            $actor ? (int)$actor['id'] : null,
+            $actor['type'] ?? 'customer'
+        );
 
         return response()->json([
             'success' => true,
@@ -120,19 +175,32 @@ class SocialFeedController extends Controller
 
     public function customerStore(Request $request)
     {
+        return $this->actorStore($request, SocialActorResolver::ACTOR_CUSTOMER);
+    }
+
+    public function actorStore(Request $request, ?string $preferredType = null)
+    {
+        $actor = $this->requireActor($request, $preferredType);
+        $settings = SocialSettingsService::get();
+        if ($actor['type'] === SocialActorResolver::ACTOR_CUSTOMER && empty($settings['customer_posting_enabled'])) {
+            abort(403, 'Customer posting is disabled in Admin Social Panel.');
+        }
+
         $validated = $request->validate([
             'location_id' => ['nullable', 'integer', 'min:1'],
             'location_name' => ['nullable', 'string', 'max:120'],
-            'post_type' => ['nullable', 'in:photo,album,video,tips'],
+            'post_type' => ['nullable', 'in:product_promo,photo,album,video,announcement,tips'],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['nullable', 'string'],
+            'language' => ['nullable', 'string', 'max:10'],
             'thumbnail_url' => ['nullable', 'string', 'max:512'],
             'media_urls' => ['nullable', 'array'],
             'file' => ['nullable', 'file', 'max:20480'],
         ]);
 
-        $created = $this->feed->createCustomerPost(
-            $request->user(),
+        $created = $this->feed->createActorPost(
+            $actor['user'],
+            $actor['type'],
             $validated,
             $request->file('file')
         );
@@ -146,7 +214,13 @@ class SocialFeedController extends Controller
 
     public function customerDestroy(Request $request, $post)
     {
-        $this->feed->deleteCustomerPost((int)($request->user()->id ?? 0), (int)$post);
+        return $this->actorDestroy($request, $post, SocialActorResolver::ACTOR_CUSTOMER);
+    }
+
+    public function actorDestroy(Request $request, $post, ?string $preferredType = null)
+    {
+        $actor = $this->requireActor($request, $preferredType);
+        $this->feed->deleteActorPost($actor['type'], (int)$actor['id'], (int)$post, $actor['user']);
 
         return response()->json([
             'success' => true,
@@ -157,9 +231,9 @@ class SocialFeedController extends Controller
 
     public function toggleLike(Request $request, $post)
     {
-        $customerId = (int)($request->user()->id ?? 0);
+        $actor = $this->requireActor($request);
         $reactionType = (string)$request->input('reaction_type', 'like');
-        $result = $this->feed->toggleReaction((int)$post, $customerId, $reactionType);
+        $result = $this->feed->toggleReaction((int)$post, (int)$actor['id'], $reactionType, $actor['type']);
 
         return response()->json([
             'success' => true,
@@ -170,11 +244,11 @@ class SocialFeedController extends Controller
 
     public function toggleBookmark(Request $request, $post)
     {
-        $customerId = (int)($request->user()->id ?? 0);
+        $actor = $this->requireActor($request);
         return response()->json([
             'success' => true,
             'message' => 'Updated',
-            'data' => $this->feed->toggleBookmark((int)$post, $customerId),
+            'data' => $this->feed->toggleBookmark((int)$post, (int)$actor['id'], $actor['type']),
         ]);
     }
 
@@ -184,12 +258,12 @@ class SocialFeedController extends Controller
             'target_type' => ['required', 'in:branch,business,author'],
             'target_id' => ['required', 'integer', 'min:1'],
         ]);
-        $customerId = (int)($request->user()->id ?? 0);
+        $actor = $this->requireActor($request);
 
         return response()->json([
             'success' => true,
             'message' => 'Updated',
-            'data' => $this->feed->toggleFollow($customerId, $validated['target_type'], (int)$validated['target_id']),
+            'data' => $this->feed->toggleFollow((int)$actor['id'], $validated['target_type'], (int)$validated['target_id']),
         ]);
     }
 
@@ -198,7 +272,8 @@ class SocialFeedController extends Controller
         $validated = $request->validate([
             'caption' => ['nullable', 'string', 'max:500'],
         ]);
-        $shared = $this->feed->sharePost((int)$post, $request->user(), $validated['caption'] ?? null);
+        $actor = $this->requireActor($request);
+        $shared = $this->feed->sharePost((int)$post, $actor['user'], $validated['caption'] ?? null, $actor['type']);
 
         return response()->json([
             'success' => true,
@@ -214,12 +289,12 @@ class SocialFeedController extends Controller
             'parent_comment_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $customer = $request->user();
+        $actor = $this->requireActor($request);
         $comment = $this->feed->addComment(
             (int)$post,
-            'customer',
-            (int)($customer->id ?? 0),
-            (string)($customer->name ?? $customer->phone ?? 'Customer'),
+            $actor['type'],
+            (int)$actor['id'],
+            $actor['name'],
             $validated['content'],
             $validated['parent_comment_id'] ?? null
         );
@@ -240,9 +315,10 @@ class SocialFeedController extends Controller
             'details' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $actor = $this->requireActor($request);
         $report = $this->feed->reportTarget(
-            'customer',
-            (int)($request->user()->id ?? 0),
+            $actor['type'],
+            (int)$actor['id'],
             $validated['target_type'],
             (int)$validated['target_id'],
             $validated['reason'],
@@ -263,10 +339,12 @@ class SocialFeedController extends Controller
             'blocked_id' => ['required', 'integer', 'min:1'],
         ]);
 
+        $actor = $this->requireActor($request);
         $this->feed->blockActor(
-            (int)($request->user()->id ?? 0),
+            (int)$actor['id'],
             $validated['blocked_type'] ?? 'customer',
-            (int)$validated['blocked_id']
+            (int)$validated['blocked_id'],
+            $actor['type']
         );
 
         return response()->json([

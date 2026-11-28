@@ -17,8 +17,14 @@ class SocialServiceProvider extends ServiceProvider
     {
         $this->registerFeedConnection();
         $this->registerConfig();
+        $this->registerViews();
         $this->registerMigrations();
         $this->registerConsoleCommands();
+    }
+
+    protected function registerViews(): void
+    {
+        $this->loadViewsFrom(__DIR__ . '/../Resources/views', 'social');
     }
 
     protected function registerConfig(): void
