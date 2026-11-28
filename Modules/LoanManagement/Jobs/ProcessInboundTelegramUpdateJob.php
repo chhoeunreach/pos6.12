@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Modules\LoanManagement\Entities\LoanCustomer;
 use Modules\LoanManagement\Entities\LoanTelegramChatThread;
+use Modules\LoanManagement\Services\TelegramAuthService;
 use Modules\LoanManagement\Services\TelegramChatService;
 use Modules\LoanManagement\Services\TelegramSettingsService;
 
@@ -34,6 +35,12 @@ class ProcessInboundTelegramUpdateJob implements ShouldQueue
 
         $chatId = (string) $message['chat']['id'];
         $text = trim((string) ($message['text'] ?? ''));
+
+        if (str_starts_with($text, '/start auth_') || (isset($message['contact']) && is_array($message['contact']))) {
+            app(TelegramAuthService::class)->handleWebhook($this->update);
+            return;
+        }
+
         $telegram = new TelegramBotService(TelegramSettingsService::botToken());
 
         if (str_starts_with($text, '/start')) {

@@ -3,9 +3,11 @@
 namespace Modules\LoanManagement\Providers;
 
 use App\Transaction;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
+use Modules\LoanManagement\Console\Commands\FlushLoanFeedViews;
 use Modules\LoanManagement\Console\InstallLoanManagementCommand;
 use Modules\LoanManagement\Console\RunCollectionAutomationCommand;
 use Modules\LoanManagement\Console\SystemCheckCommand;
@@ -21,6 +23,7 @@ class LoanManagementServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->registerFeedConnection();
         $this->registerConfig();
         $this->registerCustomerLoanAuth();
         $this->registerRouteMiddlewareAlias();
@@ -38,7 +41,23 @@ class LoanManagementServiceProvider extends ServiceProvider
                 RunCollectionAutomationCommand::class,
                 TestChatSchemaCommand::class,
                 UninstallLoanManagementCommand::class,
+                FlushLoanFeedViews::class,
             ]);
+
+            $this->app->booted(function () {
+                if (\Module::find('Social')?->isEnabled()) {
+                    return;
+                }
+
+                try {
+                    $schedule = $this->app->make(Schedule::class);
+                    $schedule->command('loan-feed:flush-views')
+                        ->everyMinute()
+                        ->withoutOverlapping();
+                } catch (\Throwable $e) {
+                    // Scheduler unavailable in this host context.
+                }
+            });
         }
     }
 
@@ -102,5 +121,35 @@ class LoanManagementServiceProvider extends ServiceProvider
     private function registerGlobalHelpers(): void
     {
         require_once __DIR__.'/../Helpers/global_helpers.php';
+    }
+
+    /**
+     * Registers dedicated `mysql_feed` connection when not explicitly defined
+     * in config/database.php, allowing zero-downtime split to a separate DB server.
+     */
+    private function registerFeedConnection(): void
+    {
+        if (config('database.connections.mysql_feed')) {
+            return;
+        }
+
+        $base = config('database.connections.mysql_loan')
+            ?? config('database.connections.mysql')
+            ?? [];
+
+        if (empty($base)) {
+            return;
+        }
+
+        config([
+            'database.connections.mysql_feed' => array_merge($base, [
+                'host' => env('DB_FEED_HOST') ?: ($base['host'] ?? '127.0.0.1'),
+                'port' => env('DB_FEED_PORT') ?: ($base['port'] ?? '3306'),
+                'database' => env('DB_FEED_DATABASE') ?: 'social',
+                'username' => env('DB_FEED_USERNAME') ?: ($base['username'] ?? 'root'),
+                'password' => env('DB_FEED_PASSWORD') ?: ($base['password'] ?? ''),
+                'unix_socket' => env('DB_FEED_SOCKET') ?: ($base['unix_socket'] ?? ''),
+            ]),
+        ]);
     }
 }

@@ -1,6 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\LoanManagement\Http\Controllers\Api\AuthProfileController;
+use Modules\LoanManagement\Http\Controllers\Api\CustomerLocationRequestController;
+use Modules\LoanManagement\Http\Controllers\Api\CustomerPaymentController;
+use Modules\LoanManagement\Http\Controllers\Api\FeedController;
+use Modules\LoanManagement\Http\Controllers\Api\NotificationController;
+use Modules\LoanManagement\Http\Controllers\Api\StaffLocationRequestController;
+use Modules\LoanManagement\Http\Controllers\Api\StaffPaymentProofController;
+use Modules\LoanManagement\Http\Controllers\Api\TelegramAuthController;
 use Modules\LoanManagement\Http\Controllers\AuthController;
 use Modules\LoanManagement\Http\Controllers\LoanAbaPaywayController;
 use Modules\LoanManagement\Http\Controllers\LoanFileUploadController;
@@ -106,5 +114,78 @@ Route::prefix('loan-management')->group(function () {
         Route::post('/chats/{thread}/reopen', [LoanChatController::class, 'reopen']);
         Route::post('/chats/{thread}/pin', [LoanChatController::class, 'pin']);
         Route::post('/chats/{thread}/mute', [LoanChatController::class, 'mute']);
+
+        // Staff Role, Permission & Accessible Branches
+        Route::get('/me', [AuthProfileController::class, 'staffProfile']);
+
+        // Staff Payment Proof Verification (Branch Scoped)
+        Route::get('/payments/proofs', [StaffPaymentProofController::class, 'index']);
+        Route::post('/payments/proofs/{submission}/review', [StaffPaymentProofController::class, 'review']);
+
+        // Staff Notifications & Device Tokens
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
+        Route::delete('/device-tokens', [NotificationController::class, 'deactivateToken']);
+
+        // Staff Live Location Requests (Branch & Permission Scoped)
+        Route::post('/location-requests', [StaffLocationRequestController::class, 'store']);
+        Route::get('/location-requests/{locationRequest}', [StaffLocationRequestController::class, 'show']);
+        Route::post('/location-requests/{locationRequest}/stop', [StaffLocationRequestController::class, 'stop']);
+        Route::get('/customers/{customer}/location-requests', [StaffLocationRequestController::class, 'customerHistory']);
+
+        // Staff News Feed Management & Moderation
+        Route::get('/feed', [FeedController::class, 'staffIndex']);
+        Route::post('/feed', [FeedController::class, 'store']);
+        Route::delete('/feed/{post}', [FeedController::class, 'destroy']);
+        Route::post('/feed/presign-upload', [FeedController::class, 'presignUpload']);
+        Route::get('/feed/reports', [FeedController::class, 'reports']);
+        Route::post('/feed/reports/{report}/resolve', [FeedController::class, 'resolveReport']);
+    });
+
+    // Public bank/KHQR & Telegram Bot webhooks.
+    Route::post('/webhooks/khqr', [CustomerPaymentController::class, 'khqrWebhook']);
+    Route::post('/webhooks/telegram-auth', [TelegramAuthController::class, 'webhook']);
+
+    // Public News Feed & Telegram Deep-Link Auth (accessible without login, rate-limited).
+    Route::prefix('public')->middleware(['throttle:60,1'])->group(function () {
+        Route::get('/feed', [FeedController::class, 'publicIndex']);
+        Route::get('/feed/{post}', [FeedController::class, 'publicShow']);
+        Route::get('/feed/{post}/comments', [FeedController::class, 'publicComments']);
+        Route::post('/feed/{post}/view', [FeedController::class, 'recordView']);
+
+        Route::post('/auth/telegram/init', [TelegramAuthController::class, 'init']);
+        Route::get('/auth/telegram/{token}/status', [TelegramAuthController::class, 'status']);
+    });
+
+    // Customer Mobile Feed, KHQR/Proof Payments, Notifications & Consent Location Sharing.
+    Route::prefix('customer')->middleware('auth:customer_loan_api')->group(function () {
+        Route::post('/feed', [FeedController::class, 'customerStore']);
+        Route::delete('/feed/{post}', [FeedController::class, 'customerDestroy']);
+        Route::post('/feed/{post}/like', [FeedController::class, 'toggleLike']);
+        Route::post('/feed/{post}/bookmark', [FeedController::class, 'toggleBookmark']);
+        Route::post('/feed/{post}/share', [FeedController::class, 'sharePost']);
+        Route::post('/feed/{post}/comments', [FeedController::class, 'storeComment']);
+        Route::post('/feed/follow', [FeedController::class, 'toggleFollow']);
+        Route::post('/feed/report', [FeedController::class, 'report']);
+        Route::post('/feed/block', [FeedController::class, 'blockUser']);
+        Route::post('/feed/presign-upload', [FeedController::class, 'presignUpload']);
+
+        Route::get('/payment-submissions', [CustomerPaymentController::class, 'index']);
+        Route::post('/payments/khqr', [CustomerPaymentController::class, 'generateKhqr']);
+        Route::get('/payments/{reference}/status', [CustomerPaymentController::class, 'status']);
+        Route::post('/payments/proof', [CustomerPaymentController::class, 'submitProof']);
+
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
+        Route::delete('/device-tokens', [NotificationController::class, 'deactivateToken']);
+
+        Route::get('/location-requests/pending', [CustomerLocationRequestController::class, 'pending']);
+        Route::post('/location-requests/{locationRequest}/respond', [CustomerLocationRequestController::class, 'respond']);
+        Route::post('/location-requests/{locationRequest}/ping', [CustomerLocationRequestController::class, 'ping']);
+        Route::post('/location-requests/{locationRequest}/stop', [CustomerLocationRequestController::class, 'stop']);
     });
 });

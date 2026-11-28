@@ -1,0 +1,14 @@
+{
+    "name": "Social",
+    "alias": "social",
+    "description": "Facebook-style global social & commerce News Feed module backed by dedicated `social` database",
+    "keywords": ["social", "feed", "community", "news-feed", "media"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\Social\\Providers\\SocialServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

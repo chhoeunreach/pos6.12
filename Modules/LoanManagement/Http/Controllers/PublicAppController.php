@@ -780,12 +780,29 @@ class PublicAppController extends Controller
 
     public function appSettings()
     {
+        $loanDbConnected = false;
+        $feedDbConnected = false;
+        try {
+            DB::connection('mysql_loan')->getPdo();
+            $loanDbConnected = true;
+        } catch (\Throwable $e) {
+            $loanDbConnected = false;
+        }
+        try {
+            $feedDbConnected = Schema::connection('mysql_feed')->hasTable('social_posts');
+        } catch (\Throwable $e) {
+            $feedDbConnected = false;
+        }
+
         return $this->ok('App settings loaded', [
             'app_name' => 'LoanManagement',
             'support_chat' => true,
             'support_gps' => true,
             'support_aba_payway' => true,
             'support_file_upload' => true,
+            'support_public_feed' => true,
+            'loan_database_connected' => $loanDbConnected,
+            'feed_database_connected' => $feedDbConnected,
             'chat_polling_seconds' => (int) config('loanmanagement.chat.polling_interval_seconds', config('loanmanagement.chat_polling_seconds', 5)),
             'customer_api_guard' => (string) config('loanmanagement.customer_api_guard', 'customer_loan_api'),
         ]);

@@ -31,6 +31,7 @@ class LoanCustomer extends Authenticatable
         'login_phone',
         'email',
         'telegram',
+        'telegram_user_id',
         'telegram_chat_id',
         'telegram_username',
         'telegram_linked_at',

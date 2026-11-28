@@ -94,6 +94,28 @@ return [
             ],
         ],
 
+        'mysql_feed' => [
+            'driver' => 'mysql',
+            'host' => env('DB_FEED_HOST') ?: env('DB_LOAN_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_FEED_PORT') ?: env('DB_LOAN_PORT', env('DB_PORT', '3306')),
+            'database' => env('DB_FEED_DATABASE', 'social'),
+            'username' => env('DB_FEED_USERNAME') ?: (env('DB_LOAN_USERNAME') ?: env('DB_USERNAME', 'forge')),
+            'password' => env('DB_FEED_PASSWORD') ?: (env('DB_LOAN_PASSWORD') ?: env('DB_PASSWORD', '')),
+            'unix_socket' => env('DB_FEED_SOCKET') ?: env('DB_LOAN_SOCKET', env('DB_SOCKET', '')),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+            'engine' => 'InnoDB',
+            'modes' => [
+                'STRICT_TRANS_TABLES',
+                'NO_ZERO_IN_DATE',
+                'NO_ZERO_DATE',
+                'ERROR_FOR_DIVISION_BY_ZERO',
+                'NO_ENGINE_SUBSTITUTION',
+            ],
+        ],
+
         'accessory' => [
             'driver' => 'mysql',
             'url' => env('ACCESSORY_DATABASE_URL'),

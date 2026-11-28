@@ -11,7 +11,7 @@ class LoanChatThread extends BaseLoanModel
     protected $table = 'loan_chat_threads';
 
     protected $fillable = [
-        'thread_number', 'customer_id', 'staff_id', 'assigned_staff_id', 'assigned_team', 'loan_id',
+        'thread_number', 'business_id', 'location_id', 'customer_id', 'staff_id', 'assigned_staff_id', 'assigned_team', 'loan_id',
         'subject', 'display_name', 'display_subtitle', 'type', 'status', 'priority',
         'avatar_url', 'is_group', 'is_closed', 'is_pinned', 'is_muted',
         'last_message', 'last_message_type', 'last_message_at', 'unread_customer_count', 'unread_staff_count',
